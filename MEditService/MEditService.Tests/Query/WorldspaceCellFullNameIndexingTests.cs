@@ -21,7 +21,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     private readonly PluginKey _plugin = new(PluginName, Origin);
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-cell-fullname-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-cell-fullname-game-").FullName;
-    private readonly LoadOrderMirror _mirror;
+    private readonly IndexProjector _index;
     private readonly string _worldspaceFormKey;
 
     public WorldspaceCellFullNameIndexingTests()
@@ -50,19 +50,19 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 
         _worldspaceFormKey = worldspace.FormKey.ToString();
 
-        _mirror = new LoadOrderMirror(
+        _index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
+        _index.Reconcile(
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(_index.LoadOrder!, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
+        _index.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -77,7 +77,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_ExteriorCellWithFullNameSet_CarriesItThrough()
     {
-        var cells = _mirror.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _index.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var extCell = Assert.Single(cells, c => c.EditorId == "ExtCell");
         Assert.Equal("Sanctuary Hills", extCell.FullName);
@@ -86,7 +86,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_TopCellWithNoFullNameSet_FullNameIsNull()
     {
-        var cells = _mirror.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _index.Projected().GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var topCell = Assert.Single(cells, c => c.EditorId == "TopCell");
         Assert.Null(topCell.FullName);

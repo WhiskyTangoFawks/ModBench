@@ -13,8 +13,8 @@ public sealed class RecordRefDivergenceCellReadsTests
     public void AtHead_GetWorldspaceCells_ShowsTheCommittedEditorId_WhenEffectiveWasRenamed()
     {
         using var fixture = new IndexedContainerFixture();
-        fixture.Mirror.Settle();
-        var index = fixture.Mirror.Index!;
+        fixture.Index.Settle();
+        var index = fixture.Index.Store!;
         var before = index.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.Plugin)!;
 
         index.ProjectDocuments(
@@ -35,8 +35,8 @@ public sealed class RecordRefDivergenceCellReadsTests
     public void AtHead_GetInteriorCells_ShowsTheCommittedEditorId_WhenEffectiveWasRenamed()
     {
         using var fixture = new IndexedContainerFixture();
-        fixture.Mirror.Settle();
-        var index = fixture.Mirror.Index!;
+        fixture.Index.Settle();
+        var index = fixture.Index.Store!;
         var before = index.At(RecordRef.Effective).GetDocument(fixture.Cell.ToString(), fixture.Plugin)!;
 
         index.ProjectDocuments(
@@ -57,8 +57,8 @@ public sealed class RecordRefDivergenceCellReadsTests
     public void AtHead_GetCellReferences_ShowsTheCommittedEditorId_WhenEffectiveWasRenamed()
     {
         using var fixture = new IndexedContainerFixture();
-        fixture.Mirror.Settle();
-        var index = fixture.Mirror.Index!;
+        fixture.Index.Settle();
+        var index = fixture.Index.Store!;
         var before = index.At(RecordRef.Effective).GetDocument(fixture.TemporaryRef.ToString(), fixture.Plugin)!;
 
         index.ProjectDocuments(

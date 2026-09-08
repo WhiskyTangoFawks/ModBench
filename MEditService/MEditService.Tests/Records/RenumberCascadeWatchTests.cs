@@ -25,7 +25,7 @@ public sealed class RenumberCascadeWatchTests
                 && reads.GetReferencedBy(NewRaceFormKey).Select(r => r.FormKey).Distinct().Count() == 3),
             "the renumbered race and its three rewritten referencers never reached the index");
 
-        var landed = fixture.Mirror!.Index!.At(RecordRef.Effective);
+        var landed = fixture.Index!.Store!.At(RecordRef.Effective);
         Assert.Null(landed.GetDocument(fixture.Race.ToString(), fixture.TargetPlugin));
         Assert.Empty(landed.GetReferencedBy(fixture.Race.ToString()));
 
@@ -59,7 +59,7 @@ public sealed class RenumberCascadeWatchTests
                 && reads.GetDocument(NewRaceFormKey, fixture.TargetPlugin) == null),
             "the restored trees never brought the index back to the old identity");
 
-        Assert.NotNull(fixture.Mirror!.Index!.At(RecordRef.Effective)
+        Assert.NotNull(fixture.Index!.Store!.At(RecordRef.Effective)
             .GetDocument(fixture.Race.ToString(), fixture.TargetPlugin));
     }
 }

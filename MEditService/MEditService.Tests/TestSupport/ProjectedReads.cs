@@ -9,19 +9,19 @@ namespace MEditService.Tests.TestSupport;
 internal static class ProjectedReads
 {
     /// <summary>The index, once every tracked copy's rows agree with the source tree again.</summary>
-    internal static IRecordReads Projected(this ILoadOrderMirror mirror, RecordRef recordRef = RecordRef.Effective)
+    internal static IRecordReads Projected(this IndexProjector index, RecordRef recordRef = RecordRef.Effective)
     {
-        mirror.Settle();
-        return mirror.Index!.At(recordRef);
+        index.Settle();
+        return index.Store!.At(recordRef);
     }
 
-    /// <summary>The mirror's own reads — filter-aware and load-order-wide — behind the same
+    /// <summary>The Index's own reads — filter-aware and load-order-wide — behind the same
     /// projection.</summary>
-    internal static IRecordReads SettledReads(this ILoadOrderMirror mirror)
+    internal static IRecordReads SettledReads(this IndexProjector index)
     {
-        mirror.Settle();
-        return mirror.Reads!;
+        index.Settle();
+        return index.Reads!;
     }
 
-    internal static void Settle(this ILoadOrderMirror mirror) => mirror.ValidateIndex(null);
+    internal static void Settle(this IndexProjector index) => index.ValidateIndex(null);
 }

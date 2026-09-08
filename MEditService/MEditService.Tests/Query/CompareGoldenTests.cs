@@ -16,7 +16,7 @@ namespace MEditService.Tests.Query;
 public sealed class CompareGoldenTests : IDisposable
 {
     private readonly PluginFixtureData _fixture;
-    private readonly LoadOrderMirror _manager;
+    private readonly IndexProjector _manager;
     private readonly RecordQueryService _service;
     // Kept so WinnerAndListings_MatchGolden can inline the record-type count against the reflector.
     private readonly SchemaReflector _reflector;
@@ -98,9 +98,9 @@ public sealed class CompareGoldenTests : IDisposable
 
         var reflector = SharedSchemaReflector.Instance;
         _reflector = reflector;
-        _manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        _service = new RecordQueryService(_manager.Projector, reflector, new ConflictClassifier());
+        _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

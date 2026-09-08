@@ -22,7 +22,7 @@ public sealed class PartialFormCompareTests : IDisposable
     private const float OverrideOwnWaterHeight = 999f;
 
     private readonly PluginFixtureData _fixture;
-    private readonly LoadOrderMirror _manager;
+    private readonly IndexProjector _manager;
     private readonly RecordQueryService _service;
 
     public static readonly FormKey CellKey = new(ModKey.FromFileName("Base.esm"), 0x800);
@@ -73,9 +73,9 @@ public sealed class PartialFormCompareTests : IDisposable
         RefKey = refKey;
 
         var reflector = SharedSchemaReflector.Instance;
-        _manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        _service = new RecordQueryService(_manager.Projector, reflector, new ConflictClassifier());
+        _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

@@ -14,10 +14,10 @@ namespace MEditService.Tests.Plugins;
 // ADR-0001: loading a load order the index has seen registers its plugins rather than indexing them.
 public sealed class WarmReconcileTests
 {
-    private static LoadOrderMirror MakeManager(ILogger<LoadOrderMirror>? logger = null)
+    private static IndexProjector MakeManager(ILogger<IndexProjector>? logger = null)
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
+        return new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
     }
 
     private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
@@ -50,7 +50,7 @@ public sealed class WarmReconcileTests
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(loggerFactory.CreateLogger<LoadOrderMirror>());
+        using var warm = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
         warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(0, Indexed(entries, "A.esp"));
@@ -60,7 +60,7 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        Assert.NotEmpty(warm.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
     // The "during" half of progress, observed from inside the load loop. A load publishing its count
@@ -77,8 +77,8 @@ public sealed class WarmReconcileTests
         var observed = new List<int>();
         var factory = new ProgressWatchingFactory(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), observed);
-        using var warm = new LoadOrderMirror(factory);
-        factory.Mirror = warm;
+        using var warm = new IndexProjector(factory);
+        factory.Index = warm;
 
         warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
@@ -90,7 +90,7 @@ public sealed class WarmReconcileTests
     // that moment.
     private sealed class ProgressWatchingFactory(IRecordIndexFactory inner, List<int> observed) : IRecordIndexFactory
     {
-        public LoadOrderMirror? Mirror { get; set; }
+        public IndexProjector? Index { get; set; }
 
         public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
             new ProgressWatchingIndex(inner.Create(gameRelease, instanceRoot), this, observed);
@@ -103,7 +103,7 @@ public sealed class WarmReconcileTests
     {
         public override void Register(PluginKey key, Registration registration)
         {
-            observed.Add(owner.Mirror!.Status.IndexedPlugins.Count);
+            observed.Add(owner.Index!.Status.IndexedPlugins.Count);
             base.Register(key, registration);
         }
     }
@@ -144,7 +144,7 @@ public sealed class WarmReconcileTests
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(loggerFactory.CreateLogger<LoadOrderMirror>());
+        using var warm = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
         warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
@@ -153,7 +153,7 @@ public sealed class WarmReconcileTests
         Assert.Equal(0, Registered(entries, "B.esp"));
 
         // And the re-index is what the load order serves: the edited record, not the stale one.
-        var documents = warm.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey("B.esp", PluginOrigin.DataDirectory));
+        var documents = warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }
@@ -174,7 +174,7 @@ public sealed class WarmReconcileTests
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(loggerFactory.CreateLogger<LoadOrderMirror>());
+        using var warm = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
         warm.Reconcile(data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
@@ -215,7 +215,7 @@ public sealed class WarmReconcileTests
             using (var second = MakeManager())
             {
                 second.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
-                var npc = second.Index!.At(RecordRef.Effective)
+                var npc = second.Store!.At(RecordRef.Effective)
                     .GetDocuments(new PluginKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
                 npcSourceFile = SourceDocumentPath.Of(
                     modFolder, plugin, npc.RecordType, npc.FormKey, npc.EditorId, GameRelease.Fallout4);
@@ -223,7 +223,7 @@ public sealed class WarmReconcileTests
 
             var (loggerFactory, entries) = Capturing();
             using var _ = loggerFactory;
-            using var third = MakeManager(loggerFactory.CreateLogger<LoadOrderMirror>());
+            using var third = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
             third.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
 
             // An unmoved tree: registered and validated, never re-derived.
@@ -239,7 +239,7 @@ public sealed class WarmReconcileTests
             using var fourth = MakeManager();
             fourth.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
             Assert.Contains(
-                fourth.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey(plugin, origin)),
+                fourth.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey(plugin, origin)),
                 d => d.EditorId == "EditedBetweenLoads");
         }
         finally

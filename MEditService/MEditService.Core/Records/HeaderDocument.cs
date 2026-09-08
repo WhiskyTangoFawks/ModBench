@@ -98,7 +98,7 @@ internal static class HeaderDocument
         public void Dispose() => _root.Dispose();
     }
 
-    // The read-side mirror: the root document from memory, an empty stream for anything else.
+    // The read-side counterpart: the root document from memory, an empty stream for anything else.
     private sealed class SupplyRootDocument(string rootPath, byte[] body) : ICreateStream
     {
         public Stream GetStreamFor(IFileSystem fileSystem, FilePath path, bool write) =>

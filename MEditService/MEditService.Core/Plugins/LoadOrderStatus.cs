@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.Core.Plugins;
 
-/// <summary>Where the load order mirror is right now (ADR-0035, ADR-0044). Reconciling is
+/// <summary>Where the Index's reconcile is right now (ADR-0035, ADR-0044). Reconciling is
 /// observable rather than an internal phase: a plugin's records are browsable the moment it is
 /// indexed, well before the reconcile finishes.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]

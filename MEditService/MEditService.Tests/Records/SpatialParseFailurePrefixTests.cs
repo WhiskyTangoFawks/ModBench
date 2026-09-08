@@ -64,7 +64,7 @@ public sealed class SpatialParseFailurePrefixTests
         internal const string Origin = PluginOrigin.DataDirectory;
 
         private readonly string _dataFolder = Directory.CreateTempSubdirectory("medit-spatial-").FullName;
-        private readonly LoadOrderMirror _mirror;
+        private readonly IndexProjector _index;
 
         internal string WorldspaceFormKey { get; }
         internal string CellFormKey { get; }
@@ -100,19 +100,19 @@ public sealed class SpatialParseFailurePrefixTests
             var path = Path.Combine(_dataFolder, PluginName);
             mod.WriteToBinary(path);
 
-            _mirror = new LoadOrderMirror(
+            _index = new IndexProjector(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
+            _index.Reconcile(
                 _dataFolder,
                 [new LoadOrderEntry(PluginName, path, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
-            Query = new WorldspaceQueryService(_mirror.Projector);
+            Query = new WorldspaceQueryService(_index);
         }
 
         internal void MarkUnreadable(string formKey)
         {
-            using var cmd = ((DuckDbRecordIndex)_mirror.Index!).Connection.CreateCommand();
+            using var cmd = ((DuckDbRecordIndex)_index.Store!).Connection.CreateCommand();
             cmd.CommandText = "UPDATE mirror.records SET parse_diagnosis = 'could not be read' WHERE form_key = $1";
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
             cmd.ExecuteNonQuery();
@@ -120,7 +120,7 @@ public sealed class SpatialParseFailurePrefixTests
 
         public void Dispose()
         {
-            _mirror.Dispose();
+            _index.Dispose();
             try { Directory.Delete(_dataFolder, recursive: true); } catch (IOException) { }
         }
     }

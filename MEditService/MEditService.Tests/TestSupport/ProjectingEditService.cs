@@ -10,14 +10,14 @@ namespace MEditService.Tests.TestSupport;
 /// <summary>The write API with the projection behind it. ADR-0046 makes the write and the Index
 /// learning of it two events, so a test reading after a write lets the projector catch up
 /// first.</summary>
-internal sealed class ProjectingEditService(ILoadOrderMirror mirror, LoadOrderHolder holder, RecordEditService inner)
+internal sealed class ProjectingEditService(IndexProjector index, LoadOrderHolder holder, RecordEditService inner)
 {
-    /// <summary>The service every test writes through, over <paramref name="mirror"/>'s own index and
+    /// <summary>The service every test writes through, over <paramref name="index"/>'s own store and
     /// schemas.</summary>
-    internal static ProjectingEditService Over(ILoadOrderMirror mirror)
+    internal static ProjectingEditService Over(IndexProjector index)
     {
-        var holder = TestEditService.HolderOver(mirror);
-        return new ProjectingEditService(mirror, holder, TestEditService.Over(holder));
+        var holder = TestEditService.HolderOver(index);
+        return new ProjectingEditService(index, holder, TestEditService.Over(holder));
     }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
@@ -46,17 +46,17 @@ internal sealed class ProjectingEditService(ILoadOrderMirror mirror, LoadOrderHo
     /// <summary>A read, so nothing follows it.</summary>
     internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) => Current().PeekNextFreeFormKey(plugin);
 
-    // The two load orders are one in the product, where a snapshot reaches the holder and the mirror
-    // together; here the mirror is the one a test reconciles, so the holder follows it per gesture.
+    // The two load orders are one in the product, where a snapshot reaches the holder and the Index
+    // together; here the Index is the one a test reconciles, so the holder follows it per gesture.
     private RecordEditService Current()
     {
-        TestEditService.Sync(holder, mirror);
+        TestEditService.Sync(holder, index);
         return inner;
     }
 
     private RecordEditResult Projected(RecordEditResult result)
     {
-        mirror.Settle();
+        index.Settle();
         return result;
     }
 }

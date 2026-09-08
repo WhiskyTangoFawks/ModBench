@@ -8,7 +8,7 @@ namespace MEditService.Api;
 /// <summary>ADR-0001's runtime half. Nothing escapes <see cref="Apply"/>, which runs on a timer
 /// thread where an exception is a process crash; a false answer keeps the watcher from believing
 /// the index matches bytes it never read.</summary>
-internal sealed class IndexMirror(IndexProjector index, INotificationPublisher notifications, ILogger logger)
+internal sealed class BinaryChangeApplier(IndexProjector index, INotificationPublisher notifications, ILogger logger)
 {
     internal bool Apply(IndexedBinaryEvent change)
     {
@@ -46,8 +46,8 @@ internal sealed class IndexMirror(IndexProjector index, INotificationPublisher n
         }
     }
 
-    /// <summary>ADR-0046 invariant 6: an OS overflow on the mirror watch, mirroring
-    /// <see cref="SourceMirror"/>'s own overflow-to-validate shape for the Source side.</summary>
+    /// <summary>ADR-0046 invariant 6: an OS overflow on the indexed-binary watch, the same
+    /// overflow-to-validate shape <see cref="SourceChangeApplier"/> has for the Source side.</summary>
     internal void ApplyOverflow(string pluginName, string origin)
     {
         var key = new PluginKey(pluginName, origin);

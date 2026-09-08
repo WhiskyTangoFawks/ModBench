@@ -168,7 +168,7 @@ public static class LoadOrderEndpoints
             // The hash check and the live watches for every plugin now held, in one pass after the
             // sweep; the crash-repair offers ride the response the same way Failures does.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(
-                index.LoadOrder, index.Index, externalChangeWatcher, logger);
+                index.LoadOrder, index.Store, externalChangeWatcher, logger);
             return Results.Ok(new LoadOrderResponse("reconciled", index.Status.Failures, crashRepairOffers));
         }
         catch (OperationCanceledException ex)

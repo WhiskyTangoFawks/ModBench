@@ -18,7 +18,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     private const GameCategory Category = GameCategory.Fallout4;
 
     // Record-header metadata and Loqui's Registration handle, never per-record data at any depth. A
-    // hand-kept mirror by name rather than a reference, so a drift fails as a loud false-positive gap.
+    // hand-kept copy by name rather than a reference, so a drift fails as a loud false-positive gap.
     private static readonly HashSet<string> BaseSkip = new(StringComparer.Ordinal)
     {
         "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl", "MajorRecordFlagsRaw",

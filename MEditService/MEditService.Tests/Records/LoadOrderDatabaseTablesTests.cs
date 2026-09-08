@@ -34,7 +34,7 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     }
 
     private DuckDbRecordIndex Index() =>
-        (DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Index!;
+        (DuckDbRecordIndex)loaded.Services.GetRequiredService<IndexProjector>().Store!;
 
     private DuckDBConnection Connection() => Index().Connection;
 

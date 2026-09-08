@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -13,22 +14,22 @@ internal static class TestEditService
         new(holder, Resolver, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    /// <summary>The same service for a test still holding a mirror: its held copies are the load
-    /// order value the write side reads, and the mirror itself never reaches the service.</summary>
-    internal static RecordEditService Over(ILoadOrderMirror mirror) => Over(HolderOver(mirror));
+    /// <summary>The same service for a test holding the Index: its held copies are the load order
+    /// value the write side reads, and the Index itself never reaches the service.</summary>
+    internal static RecordEditService Over(IndexProjector index) => Over(HolderOver(index));
 
-    /// <summary>A holder carrying whatever <paramref name="mirror"/> holds right now — reapplied per
+    /// <summary>A holder carrying whatever <paramref name="index"/> holds right now — reapplied per
     /// gesture, since a test can register a copy mid-run.</summary>
-    internal static LoadOrderHolder HolderOver(ILoadOrderMirror mirror)
+    internal static LoadOrderHolder HolderOver(IndexProjector index)
     {
         var holder = new LoadOrderHolder();
-        Sync(holder, mirror);
+        Sync(holder, index);
         return holder;
     }
 
-    internal static void Sync(LoadOrderHolder holder, ILoadOrderMirror mirror)
+    internal static void Sync(LoadOrderHolder holder, IndexProjector index)
     {
-        if (mirror.LoadOrder is { } held) holder.Apply(LoadOrder.From(held));
+        if (index.LoadOrder is { } held) holder.Apply(LoadOrder.From(held));
     }
 
     private static FormLinkResolver Resolver(LoadOrder held) =>

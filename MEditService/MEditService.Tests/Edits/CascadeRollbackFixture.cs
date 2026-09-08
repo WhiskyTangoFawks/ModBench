@@ -36,7 +36,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
     /// <summary>Null unless <see cref="Watched"/> built one: the write side reads the load order
     /// value, and only the projection question needs an Index.</summary>
-    public LoadOrderMirror? Mirror { get; }
+    public IndexProjector? Index { get; }
 
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
@@ -111,17 +111,17 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         if (!watched) return;
 
-        Mirror = new LoadOrderMirror(
+        Index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)Mirror).Reconcile(_data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
+        Index.Reconcile(_data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
 
         // Short, because a test waits on the projection rather than on the clock; the composition
         // root's own window is 300 ms.
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceMirror = new SourceMirror(Mirror.Projector, Mirror.WriteGate, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
-        _watcher.SourceChanged = sourceMirror.Apply;
-        ((ILoadOrderMirror)Mirror).LoadOrderChanged = sourceMirror.RefreshWatches;
-        sourceMirror.RefreshWatches();
+        var sourceChanges = new SourceChangeApplier(Index, Index.WriteGate, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
+        _watcher.SourceChanged = sourceChanges.Apply;
+        Index.LoadOrderChanged = sourceChanges.RefreshWatches;
+        sourceChanges.RefreshWatches();
     }
 
     public string ModFolderOf(PluginKey plugin) => ModFolders.Of(LoadOrder, plugin)!;
@@ -154,10 +154,10 @@ public sealed class CascadeRollbackFixture : IDisposable
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
-            if (condition(Mirror!.Index!.At(RecordRef.Effective))) return true;
-            await ((ILoadOrderMirror)Mirror).AwaitSequenceAsync(Mirror.Sequence + 1, TimeSpan.FromSeconds(2));
+            if (condition(Index!.Store!.At(RecordRef.Effective))) return true;
+            await Index.AwaitSequenceAsync(Index.Sequence + 1, TimeSpan.FromSeconds(2));
         }
-        return condition(Mirror!.Index!.At(RecordRef.Effective));
+        return condition(Index!.Store!.At(RecordRef.Effective));
     }
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Snapshots() =>
@@ -177,7 +177,7 @@ public sealed class CascadeRollbackFixture : IDisposable
     public void Dispose()
     {
         _watcher?.Dispose();
-        Mirror?.Dispose();
+        Index?.Dispose();
         try { _data.Dispose(); }
         catch (IOException) { /* scratch directory, best effort */ }
         catch (UnauthorizedAccessException) { /* ditto */ }

@@ -14,7 +14,7 @@ public sealed class ValidateTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private IRecordIndex Index => _mod.Mirror.Index!;
+    private IRecordIndex Index => _mod.Index.Store!;
 
     private ValidationReport Validate() => Index.Validate(_mod.Plugin, _mod.ModFolder);
 

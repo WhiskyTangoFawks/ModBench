@@ -8,12 +8,12 @@ namespace MEditService.Tests.Architecture;
 /// allowlist that stays empty.</summary>
 public sealed class WriteSideIndexScanTests
 {
-    // The index and its factory, the read surface, the ref enum, the mirror, the projector, the
+    // The index and its factory, the read surface, the ref enum, the index, the projector, the
     // query surface and the store. Naming one is how a write path starts reading its own effect.
     private static readonly string[] Symbols =
     [
         "IRecordIndex", "IRecordIndexFactory", "DuckDbRecordIndex", "DuckDbRecordIndexFactory",
-        "IRecordReads", "RecordRef", "ILoadOrderMirror", "LoadOrderMirror", "IndexProjector",
+        "IRecordReads", "RecordRef", "IndexProjector", "IndexProjector", "IndexProjector",
         "IQueryIndex", "IndexStore",
     ];
 
@@ -47,7 +47,7 @@ public sealed class WriteSideIndexScanTests
             Directory.CreateDirectory(Path.Combine(root, "Edits", "obj"));
             File.WriteAllText(
                 Path.Combine(root, "Edits", "EditService.cs"),
-                "IRecordReads reads = mirror.Reads!;\nvar rows = reads.At(RecordRef.Effective);\n");
+                "IRecordReads reads = index.Reads!;\nvar rows = reads.At(RecordRef.Effective);\n");
             // The longer name is its own symbol: a prefix match would count it as the interface too.
             File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new IRecordIndexFactory();");
             File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "IRecordIndex index;");

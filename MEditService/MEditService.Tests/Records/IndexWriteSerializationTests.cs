@@ -15,10 +15,10 @@ public sealed class IndexWriteSerializationTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private ILoadOrderMirror Mirror => _mod.Mirror;
+    private IndexProjector Index => _mod.Index;
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_mod.Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_mod.Index, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private static (Task Work, bool Finished) RunAndWait(Action work, TimeSpan within)
     {
@@ -39,10 +39,10 @@ public sealed class IndexWriteSerializationTests : IDisposable
     public async Task UnindexPlugin_WaitsForAnInFlightWriteToRelease()
     {
         Task work;
-        using (new GateHeldElsewhere(Mirror.WriteGate))
+        using (new GateHeldElsewhere(Index.WriteGate))
         {
             bool finished;
-            (work, finished) = RunAndWait(() => Mirror.UnindexPlugin(_mod.Plugin), BlockedWindow);
+            (work, finished) = RunAndWait(() => Index.UnindexPlugin(_mod.Plugin), BlockedWindow);
             Assert.False(finished, "UnindexPlugin wrote to the index without taking the write gate");
         }
 
@@ -53,10 +53,10 @@ public sealed class IndexWriteSerializationTests : IDisposable
     public async Task ReindexPlugin_WaitsForAnInFlightWriteToRelease()
     {
         Task work;
-        using (new GateHeldElsewhere(Mirror.WriteGate))
+        using (new GateHeldElsewhere(Index.WriteGate))
         {
             bool finished;
-            (work, finished) = RunAndWait(() => Mirror.ReindexPlugin(_mod.Plugin), BlockedWindow);
+            (work, finished) = RunAndWait(() => Index.ReindexPlugin(_mod.Plugin), BlockedWindow);
             Assert.False(finished, "ReindexPlugin wrote to the index without taking the write gate");
         }
 
@@ -69,10 +69,10 @@ public sealed class IndexWriteSerializationTests : IDisposable
     public async Task SetFilter_WaitsForAnInFlightWriteToRelease()
     {
         Task work;
-        using (new GateHeldElsewhere(Mirror.WriteGate))
+        using (new GateHeldElsewhere(Index.WriteGate))
         {
             bool finished;
-            (work, finished) = RunAndWait(() => Mirror.SetFilter("SELECT form_key FROM records"), BlockedWindow);
+            (work, finished) = RunAndWait(() => Index.SetFilter("SELECT form_key FROM records"), BlockedWindow);
             Assert.False(finished, "SetFilter materialized _filter without taking the write gate");
         }
 
@@ -83,11 +83,11 @@ public sealed class IndexWriteSerializationTests : IDisposable
     public async Task CreatePlugin_WaitsForAnInFlightWriteToRelease()
     {
         Task work;
-        using (new GateHeldElsewhere(Mirror.WriteGate))
+        using (new GateHeldElsewhere(Index.WriteGate))
         {
             bool finished;
             (work, finished) = RunAndWait(
-                () => Mirror.CreatePlugin("GatedCreate.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
+                () => Index.CreatePlugin("GatedCreate.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
                 BlockedWindow);
             Assert.False(finished, "CreatePlugin indexed a new plugin without taking the write gate");
         }
@@ -101,11 +101,11 @@ public sealed class IndexWriteSerializationTests : IDisposable
     public async Task RefreshKeys_WaitsForAnInFlightWriteToRelease()
     {
         Task work;
-        using (new GateHeldElsewhere(Mirror.WriteGate))
+        using (new GateHeldElsewhere(Index.WriteGate))
         {
             bool finished;
             (work, finished) = RunAndWait(
-                () => Mirror.RefreshKeys(_mod.Plugin, [_mod.Npc.ToString()]), BlockedWindow);
+                () => Index.RefreshKeys(_mod.Plugin, [_mod.Npc.ToString()]), BlockedWindow);
             Assert.False(finished, "RefreshKeys wrote to the index without taking the write gate");
         }
 
@@ -117,7 +117,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
     [Fact]
     public void ARecordListing_IsServedWhileAnUnrelatedWriteHoldsTheGate()
     {
-        using var _ = new GateHeldElsewhere(Mirror.WriteGate);
+        using var _ = new GateHeldElsewhere(Index.WriteGate);
 
         PagedResult<RecordSummary>? listing = null;
         var (_, finished) = RunAndWait(

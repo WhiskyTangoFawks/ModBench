@@ -25,10 +25,10 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
 
-    private static LoadOrderMirror MakeManager()
+    private static IndexProjector MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        return new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
     }
 
     private string AnInstance(string name, string editorId)
@@ -46,13 +46,13 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     // Records only: the plugin header is a document too, and its EditorID is null by definition, so
     // including it would put a meaningless null in front of every expectation here.
-    private static IReadOnlyList<string?> EditorIdsIn(LoadOrderMirror manager) =>
-        [.. manager.Index!.At(RecordRef.Effective).GetDocuments(Key)
+    private static IReadOnlyList<string?> EditorIdsIn(IndexProjector manager) =>
+        [.. manager.Store!.At(RecordRef.Effective).GetDocuments(Key)
             .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];
 
     // Warm on both sides: the second load of each instance is the one that would register the other's
-    // file_path if the mirror were shared.
+    // file_path if the store were shared.
     [Fact]
     public void TwoInstancesWithSameNamedModFolders_NeverSeeEachOthersRows()
     {

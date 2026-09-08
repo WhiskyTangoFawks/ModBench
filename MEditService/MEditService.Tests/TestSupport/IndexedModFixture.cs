@@ -23,7 +23,7 @@ public sealed class IndexedModFixture : IDisposable
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public LoadOrderMirror Mirror { get; }
+    public IndexProjector Index { get; }
     public PluginKey Plugin { get; }
 
     // PluginName unless a caller asked otherwise: ref-unsafe names need a real tracked load order.
@@ -57,10 +57,10 @@ public sealed class IndexedModFixture : IDisposable
         mod.WriteToBinary(pluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        Mirror = new LoadOrderMirror(
+        Index = new IndexProjector(
             new DuckDbRecordIndexFactory(
                 SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
-        ((ILoadOrderMirror)Mirror).Reconcile(
+        Index.Reconcile(
             GameDirectory,
             [Entry],
             GameRelease.Fallout4,
@@ -69,7 +69,7 @@ public sealed class IndexedModFixture : IDisposable
         if (track)
         {
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Mirror.LoadOrder!, ModFolderOrigin, SourcePreset.Edits)
+                .TrackAsync(Index.LoadOrder!, ModFolderOrigin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
     }
@@ -82,11 +82,11 @@ public sealed class IndexedModFixture : IDisposable
         new(track: true, PluginName, notifications: notifications);
 
     /// <summary>Tracked, over a persistent index file keyed on <see cref="InstanceRoot"/>, so a second
-    /// mirror over the same instance starts warm — the shape a restart has.</summary>
+    /// Index over the same instance starts warm — the shape a restart has.</summary>
     public static IndexedModFixture TrackedPersistent() => new(track: true, PluginName, persistent: true);
 
     /// <summary>The load order snapshot this fixture's one plugin copy is, for a caller reconciling a
-    /// second mirror over the same instance.</summary>
+    /// second Index over the same instance.</summary>
     public LoadOrderEntry Entry =>
         new(ActualPluginName, Path.Combine(ModFolder, ActualPluginName), ModFolderOrigin, Slot: 0, Enabled: true, Winning: true);
 
@@ -152,7 +152,7 @@ public sealed class IndexedModFixture : IDisposable
 
     public void Dispose()
     {
-        Mirror.Dispose();
+        Index.Dispose();
         TryDelete(InstanceRoot);
         TryDelete(GameDirectory);
     }

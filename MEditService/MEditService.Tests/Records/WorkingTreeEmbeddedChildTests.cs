@@ -21,7 +21,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private IRecordIndex Index => _fixture.Mirror.Index!;
+    private IRecordIndex Index => _fixture.Index.Store!;
     private IRecordReads Effective => Index.At(RecordRef.Effective);
     private IRecordReads Head => Index.At(RecordRef.Head);
 

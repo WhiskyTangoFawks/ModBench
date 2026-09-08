@@ -14,16 +14,16 @@ namespace MEditService.Tests.Query;
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class CommittedOnlyReadPathTests : IDisposable
 {
-    private readonly LoadOrderMirror _manager;
+    private readonly IndexProjector _manager;
     private readonly RecordQueryService _svc;
 
     public CommittedOnlyReadPathTests(TestPluginFixture fixture)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new LoadOrderMirror(factory);
+        _manager = new IndexProjector(factory);
         _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager.Projector, reflector, new ConflictClassifier());
+        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
     public void Dispose() => _manager.Dispose();
@@ -72,7 +72,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
 /// class above deliberately loads a plugin whose records reference nothing.</summary>
 public sealed class CommittedOnlyReferencesTests : IDisposable
 {
-    private readonly LoadOrderMirror _manager;
+    private readonly IndexProjector _manager;
     private readonly RecordQueryService _svc;
     private readonly ReferencePluginFixture _fixture = new();
 
@@ -80,9 +80,9 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new LoadOrderMirror(factory);
+        _manager = new IndexProjector(factory);
         _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager.Projector, reflector, new ConflictClassifier());
+        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

@@ -254,7 +254,7 @@ public sealed class HeldPlugins : ILoadOrder
         return metadata;
     }
 
-    /// <summary>Lets the mirror report a post-open failure (an indexing throw from malformed record
+    /// <summary>Lets the projector report a post-open failure (an indexing throw from malformed record
     /// data Mutagen can't parse) through the same channel as open failures.</summary>
     internal void SetFailure(PluginKey key, string reason)
     {
@@ -305,7 +305,7 @@ public sealed class HeldPlugins : ILoadOrder
         return count;
     }
 
-    /// <summary>Idempotent: a cancelled reconcile and the mirror's own teardown can both reach here
+    /// <summary>Idempotent: a cancelled reconcile and the projector's own teardown can both reach here
     /// for one load order, and disposing a Mutagen overlay twice is not benign.</summary>
     public void Dispose()
     {

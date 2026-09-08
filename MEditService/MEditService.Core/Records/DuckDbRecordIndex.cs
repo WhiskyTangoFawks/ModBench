@@ -191,7 +191,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         _pluginIngest.DeleteAllRowsFor(plugin, origin);
         // The file claim goes with the rows it describes — Unindex is the file-gone verb, so leaving
-        // it behind would leave the mirror asserting rows the index does not hold.
+        // it behind would leave the files table asserting rows the index does not hold.
         _indexStore.DeleteIndexedFile(plugin, origin);
         DeleteRegistration(plugin, origin);
         _indexStore.BumpSequence();

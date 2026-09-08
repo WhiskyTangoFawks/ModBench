@@ -15,8 +15,8 @@ public sealed class SourceParityFixture : IDisposable
     public const string Origin = "FixtureMod";
 
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-parity-").FullName;
-    public LoadOrderMirror FromBinary { get; }
-    public LoadOrderMirror FromSource { get; }
+    public IndexProjector FromBinary { get; }
+    public IndexProjector FromSource { get; }
     public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-parity-game-").FullName;
@@ -35,15 +35,15 @@ public sealed class SourceParityFixture : IDisposable
         FromSource = NewLoadOrder(pluginPath);
     }
 
-    private LoadOrderMirror NewLoadOrder(string pluginPath)
+    private IndexProjector NewLoadOrder(string pluginPath)
     {
-        var mirror = new LoadOrderMirror(
+        var index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)mirror).Reconcile(
+        index.Reconcile(
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        return mirror;
+        return index;
     }
 
     public void Dispose()

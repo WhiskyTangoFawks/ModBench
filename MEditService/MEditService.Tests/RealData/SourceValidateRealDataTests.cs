@@ -11,7 +11,7 @@ namespace MEditService.Tests.RealData;
 public sealed class SourceValidateRealDataTests(SourceParityFixture fixture, ITestOutputHelper output)
     : IClassFixture<SourceParityFixture>
 {
-    private IRecordIndex Index => fixture.FromSource.Index!;
+    private IRecordIndex Index => fixture.FromSource.Store!;
 
     [Fact]
     public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()
@@ -34,7 +34,7 @@ public sealed class SourceValidateRealDataTests(SourceParityFixture fixture, ITe
     public void ReconcilingEveryPlugin_CompletesAndReportsHowManyRowsChanged()
     {
         var timer = Stopwatch.StartNew();
-        var reports = ((ILoadOrderMirror)fixture.FromSource).ValidateIndex(plugin: null);
+        var reports = fixture.FromSource.ValidateIndex(plugin: null);
         output.WriteLine(
             $"reconcile of {reports.Count} plugin(s) took {timer.ElapsedMilliseconds} ms; " +
             $"{reports.Sum(r => r.ChangedKeys.Count)} rows changed");

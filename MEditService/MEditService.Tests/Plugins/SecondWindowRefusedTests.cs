@@ -10,10 +10,10 @@ namespace MEditService.Tests.Plugins;
 // window, so a second window is refused plainly, with no read-only mode and no second file.
 public sealed class SecondWindowRefusedTests
 {
-    private static LoadOrderMirror MakeMirror()
+    private static IndexProjector MakeIndex()
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        return new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
     }
 
     // One story, because the three assertions are one lifecycle: refused while the first
@@ -25,29 +25,29 @@ public sealed class SecondWindowRefusedTests
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .Build();
         // The file exists with real rows before the other window takes it, so the final load is warm.
-        using (var earlier = MakeMirror()) earlier.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var earlier = MakeIndex()) earlier.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         var indexPath = IndexFile.For(data.InstanceRoot);
         var indexDir = Path.GetDirectoryName(indexPath)!;
 
         using var otherWindow = ForeignIndexHolder.Hold(indexPath);
         var filesWhileHeld = Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList();
 
-        using var mirror = MakeMirror();
+        using var index = MakeIndex();
         var ex = Assert.Throws<IndexHeldElsewhereException>(() =>
-            mirror.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot));
+            index.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot));
 
         // Refused by name, and nothing held.
         Assert.Contains("another Modbench window", ex.Message, StringComparison.Ordinal);
         Assert.Equal(indexPath, ex.IndexPath);
-        Assert.Equal(LoadOrderState.None, mirror.Status.State);
+        Assert.Equal(LoadOrderState.None, index.Status.State);
         // Never a second file — and the held one was not deleted out from under the other
         // window: the directory is exactly as the holder had it.
         Assert.Equal(filesWhileHeld, Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList());
 
         // The other window closing admits this one — warm, over the rows the file already had.
         otherWindow.Dispose();
-        mirror.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        Assert.Equal(LoadOrderState.Ready, mirror.Status.State);
-        Assert.NotEmpty(mirror.Index!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        index.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.NotEmpty(index.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 }

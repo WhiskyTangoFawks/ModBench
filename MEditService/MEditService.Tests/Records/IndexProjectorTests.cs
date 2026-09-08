@@ -66,7 +66,7 @@ public sealed class IndexProjectorTests
 
     private static IReadOnlyList<RegisteredCopy> RegistrationRows(IndexProjector projector)
     {
-        var connection = ((DuckDbRecordIndex)projector.Index!).Connection;
+        var connection = ((DuckDbRecordIndex)projector.Store!).Connection;
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT plugin, origin, load_order_idx, enabled, winning FROM registrations";
         using var reader = cmd.ExecuteReader();
@@ -168,17 +168,17 @@ public sealed class IndexProjectorTests
     public async Task ATrackedCopyReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
     {
         using var fixture = IndexedModFixture.Tracked();
-        var mirror = (ILoadOrderMirror)fixture.Mirror;
+        var index = (IndexProjector)fixture.Index;
         // Dirty, so the head reconcile has baselines to write: a clean tree short-circuits it and
         // would leave the multi-advance case untested.
         var text = File.ReadAllText(fixture.NpcSourceFile);
         File.WriteAllText(fixture.NpcSourceFile, text.Replace(
             $"\"{IndexedModFixture.NpcEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
-        var before = mirror.Sequence;
+        var before = index.Sequence;
 
-        await mirror.ReindexPlugin(fixture.Plugin);
+        await index.ReindexPlugin(fixture.Plugin);
 
-        Assert.Equal(before + 1, mirror.Sequence);
+        Assert.Equal(before + 1, index.Sequence);
     }
 
     [Fact]
@@ -251,28 +251,28 @@ public sealed class IndexProjectorTests
     }
 
     [Fact]
-    public void SourceMirrorApply_LandsTheWholeSettledBatchAsOneAdvance()
+    public void SourceChangeApplierApply_LandsTheWholeSettledBatchAsOneAdvance()
     {
         var notifications = new InMemoryNotificationPublisher();
         using var fixture = IndexedModFixture.Tracked(notifications);
-        var mirror = (ILoadOrderMirror)fixture.Mirror;
+        var index = (IndexProjector)fixture.Index;
         using var watcher = new SourceChangeWatcher();
-        var sourceMirror = new SourceMirror(fixture.Mirror.Projector, mirror.WriteGate, watcher, notifications, NullLogger.Instance);
+        var sourceChanges = new SourceChangeApplier(fixture.Index, index.WriteGate, watcher, notifications, NullLogger.Instance);
 
         var otherNpcSource = fixture.SourceFileFor(
             fixture.OtherNpc, "npc_", IndexedModFixture.OtherNpcEditorId);
         RenameByHand(fixture.NpcSourceFile, IndexedModFixture.NpcEditorId, "RenamedByHand");
         RenameByHand(otherNpcSource, IndexedModFixture.OtherNpcEditorId, "AlsoRenamedByHand");
-        var before = mirror.Sequence;
+        var before = index.Sequence;
 
         // Two documents the watcher settled together: projected one at a time, they are two
         // advances, so this only holds while Apply opens a projection around the batch.
-        sourceMirror.Apply([
+        sourceChanges.Apply([
             Settled(fixture, fixture.NpcSourceFile),
             Settled(fixture, otherNpcSource),
         ]);
 
-        Assert.Equal(before + 1, mirror.Sequence);
+        Assert.Equal(before + 1, index.Sequence);
     }
 
     private static SourceChangeEvent Settled(IndexedModFixture fixture, string documentPath) =>
@@ -306,20 +306,20 @@ public sealed class IndexProjectorTests
     {
         var notifications = new InMemoryNotificationPublisher();
         using var fixture = IndexedModFixture.Tracked(notifications);
-        var mirror = (ILoadOrderMirror)fixture.Mirror;
+        var index = (IndexProjector)fixture.Index;
         var text = File.ReadAllText(fixture.NpcSourceFile);
         File.WriteAllText(fixture.NpcSourceFile, text.Replace(
             $"\"{IndexedModFixture.NpcEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        using (mirror.BeginProjection())
+        using (index.BeginProjection())
         {
-            mirror.RefreshKeys(fixture.Plugin, [fixture.Npc.ToString()]);
+            index.RefreshKeys(fixture.Plugin, [fixture.Npc.ToString()]);
             Assert.Empty(notifications.Notifications.OfType<RowsChangedNotification>());
         }
 
         var landed = notifications.Notifications.OfType<RowsChangedNotification>().Single();
         Assert.Contains(fixture.Npc.ToString(), landed.Keys);
-        Assert.Equal(mirror.Sequence, landed.Sequence);
+        Assert.Equal(index.Sequence, landed.Sequence);
     }
 
     [Fact]

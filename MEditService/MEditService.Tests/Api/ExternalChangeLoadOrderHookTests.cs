@@ -35,7 +35,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         externalMod.WriteToBinary(pluginPath);
 
         var watcher = new ExternalChangeWatcher();
-        ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);
+        ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index.LoadOrder, _mod.Index.Store, watcher, NullLogger.Instance);
 
         var unanswered = Assert.Single(watcher.Unanswered());
         Assert.Equal(_mod.ModFolder, unanswered.ModFolder);
@@ -47,7 +47,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     {
         var watcher = new ExternalChangeWatcher();
 
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index.LoadOrder, _mod.Index.Store, watcher, NullLogger.Instance);
 
         Assert.Empty(watcher.Unanswered());
         Assert.Empty(offers); // clean state produces no repair activity either.
@@ -64,7 +64,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder)); // sanity: the marker really is there.
 
         var watcher = new ExternalChangeWatcher();
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index.LoadOrder, _mod.Index.Store, watcher, NullLogger.Instance);
 
         var offer = Assert.Single(offers);
         Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
@@ -83,7 +83,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         File.Delete(pluginPath);
 
         var watcher = new ExternalChangeWatcher();
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index.LoadOrder, _mod.Index.Store, watcher, NullLogger.Instance);
 
         var offer = Assert.Single(offers);
         Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
@@ -101,7 +101,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         File.Delete(Path.Combine(untracked.ModFolder, IndexedModFixture.PluginName));
 
         var watcher = new ExternalChangeWatcher();
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(untracked.Mirror.LoadOrder, untracked.Mirror.Index, watcher, NullLogger.Instance);
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(untracked.Index.LoadOrder, untracked.Index.Store, watcher, NullLogger.Instance);
 
         Assert.Empty(offers);
         Assert.Empty(watcher.Unanswered());
@@ -113,7 +113,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
 
-        ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);
+        ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index.LoadOrder, _mod.Index.Store, watcher, NullLogger.Instance);
         Assert.Empty(watcher.Unanswered());
 
         File.WriteAllBytes(pluginPath, "changed-live-after-load"u8.ToArray());

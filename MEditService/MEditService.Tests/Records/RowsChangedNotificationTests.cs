@@ -77,7 +77,7 @@ public sealed class RowsChangedNotificationTests : IDisposable
             File.ReadAllText(document).Replace(
                 $"\"{ContainerModFixture.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        fixture.Mirror.Index!.RefreshByKeys(fixture.Plugin, fixture.ModFolder, [cell]);
+        fixture.Index.Store!.RefreshByKeys(fixture.Plugin, fixture.ModFolder, [cell]);
 
         var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
         Assert.Contains(cell, rowsChanged.Keys);

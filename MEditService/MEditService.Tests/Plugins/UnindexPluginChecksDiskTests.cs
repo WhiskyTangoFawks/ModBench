@@ -14,28 +14,28 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
         .WithPlugin("Held.esp", mod => mod.Npcs.AddNew("HeldNpc"))
         .Build();
 
-    private readonly LoadOrderMirror _mirror = new(
+    private readonly IndexProjector _index = new(
         new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
 
     private PluginKey Key => new(_data.Plugins[0].Name, _data.Plugins[0].Origin);
 
     public UnindexPluginChecksDiskTests() =>
-        ((ILoadOrderMirror)_mirror).Reconcile(_data.DataFolder, _data.Plugins, GameRelease.Fallout4);
+        _index.Reconcile(_data.DataFolder, _data.Plugins, GameRelease.Fallout4);
 
     public void Dispose()
     {
-        _mirror.Dispose();
+        _index.Dispose();
         _data.Dispose();
     }
 
-    private int HeldRows() => _mirror.SettledReads().GetRecordTypeCounts(Key).Sum(c => c.Count);
+    private int HeldRows() => _index.SettledReads().GetRecordTypeCounts(Key).Sum(c => c.Count);
 
     [Fact]
     public void UnindexPlugin_WhileTheHeldCopyIsStillOnDisk_KeepsItsRows()
     {
         Assert.True(HeldRows() > 0, "positive control: the plugin indexed");
 
-        _mirror.UnindexPlugin(Key);
+        _index.UnindexPlugin(Key);
 
         Assert.True(HeldRows() > 0, "a stale 'gone from disk' report removed a copy that is still on disk");
     }
@@ -45,7 +45,7 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
     {
         File.Delete(_data.Plugins[0].Path);
 
-        _mirror.UnindexPlugin(Key);
+        _index.UnindexPlugin(Key);
 
         Assert.Equal(0, HeldRows());
     }

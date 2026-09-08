@@ -28,12 +28,12 @@ public sealed class SourceWatchTests : IDisposable
     {
         _mod = IndexedModFixture.Tracked(_notifications);
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceMirror = new SourceMirror(_mod.Mirror.Projector, _mod.Mirror.WriteGate, _watcher, _notifications, NullLogger.Instance);
-        _watcher.SourceChanged = sourceMirror.Apply;
-        _mod.Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
-        // The watch set arrives the way it does in the composition root: the mirror announces the
+        var sourceChanges = new SourceChangeApplier(_mod.Index, _mod.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
+        _watcher.SourceChanged = sourceChanges.Apply;
+        _mod.Index.LoadOrderChanged = sourceChanges.RefreshWatches;
+        // The watch set arrives the way it does in the composition root: the Index announces the
         // load order it now holds, and every tracked copy in it is watched.
-        ((ILoadOrderMirror)_mod.Mirror).Reconcile(_mod.GameDirectory, [_mod.Entry], GameRelease.Fallout4);
+        _mod.Index.Reconcile(_mod.GameDirectory, [_mod.Entry], GameRelease.Fallout4);
     }
 
     public void Dispose()
@@ -42,7 +42,7 @@ public sealed class SourceWatchTests : IDisposable
         _mod.Dispose();
     }
 
-    private IRecordIndex Index => _mod.Mirror.Index!;
+    private IRecordIndex Index => _mod.Index.Store!;
 
     private string? EditorIdAt(RecordRef recordRef) =>
         Index.At(recordRef).GetDocument(_mod.Npc.ToString(), _mod.Plugin)?.EditorId;
@@ -57,7 +57,7 @@ public sealed class SourceWatchTests : IDisposable
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 
     private async Task<bool> Settles(long from) =>
-        await _mod.Mirror.AwaitSequenceAsync(from + 1, TimeSpan.FromSeconds(15));
+        await _mod.Index.AwaitSequenceAsync(from + 1, TimeSpan.FromSeconds(15));
 
     // The sequence says a projection landed, not which one, and a commit and the checkout after it
     // are two: what the committed view says is the condition to wait on.
@@ -79,7 +79,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AHandEditToASourceDocument_LandsInTheIndex_AndNamesItsKeyOnTheRecorder()
     {
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
 
         RenameTheNpcByHand("RenamedByHand");
 
@@ -91,12 +91,12 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task ACommitMadeOutsideModbench_MovesTheCommittedView()
     {
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
         RenameTheNpcByHand("RenamedByHand");
         Assert.True(await Settles(before));
         Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Head));
 
-        var beforeCommit = _mod.Mirror.Sequence;
+        var beforeCommit = _mod.Index.Sequence;
         Git("add", "-A");
         Git("commit", "-q", "-m", "committed outside Modbench");
 
@@ -108,7 +108,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task ACheckoutMadeOutsideModbench_MovesTheCommittedViewWithIt()
     {
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
         RenameTheNpcByHand("RenamedByHand");
         Assert.True(await Settles(before));
         Git("add", "-A");
@@ -126,8 +126,8 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AWriteThroughTheWriteApi_LandsThroughTheWatcher_AndChangesNoRowASecondTime()
     {
-        var service = TestEditService.Over(_mod.Mirror);
-        var before = _mod.Mirror.Sequence;
+        var service = TestEditService.Over(_mod.Index);
+        var before = _mod.Index.Sequence;
 
         var edit = service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied);
@@ -137,14 +137,14 @@ public sealed class SourceWatchTests : IDisposable
             "0.75",
             Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
             StringComparison.Ordinal);
-        var afterTheProjection = _mod.Mirror.Sequence;
+        var afterTheProjection = _mod.Index.Sequence;
         var projections = _notifications.Notifications.Count;
 
         // The same bytes, signalled again: a projection idempotent by content writes no row.
         File.SetLastWriteTimeUtc(_mod.NpcSourceFile, DateTime.UtcNow);
         WaitOutTheWatcher();
 
-        Assert.Equal(afterTheProjection, _mod.Mirror.Sequence);
+        Assert.Equal(afterTheProjection, _mod.Index.Sequence);
         Assert.Equal(projections, _notifications.Notifications.Count);
         // The watch is live all the same: the next hand edit lands through it.
         RenameTheNpcByHand("RenamedByHand");
@@ -160,7 +160,7 @@ public sealed class SourceWatchTests : IDisposable
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(_mod.ActualPluginName));
         var headerFile = Path.Combine(_mod.ModFolder, "source", _mod.ActualPluginName, "RecordData.json");
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
 
         var text = File.ReadAllText(headerFile);
         File.WriteAllText(headerFile, text.Replace(
@@ -178,14 +178,14 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task DiscardingAWorkingTreeChangeThroughGit_RestoresTheCommittedValue()
     {
-        var service = TestEditService.Over(_mod.Mirror);
-        var before = _mod.Mirror.Sequence;
+        var service = TestEditService.Over(_mod.Index);
+        var before = _mod.Index.Sequence;
         Assert.True(service.Set(
             _mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement).Applied);
         Assert.True(await Settles(before));
 
         var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId).Replace('\\', '/');
-        var afterEdit = _mod.Mirror.Sequence;
+        var afterEdit = _mod.Index.Sequence;
         Git("restore", "--", relativePath);
 
         Assert.True(await Settles(afterEdit));
@@ -199,14 +199,14 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public void ASourceFileRewrittenWithAUtf8Bom_DoesNotSettleAsPerpetualDirt()
     {
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
         var original = File.ReadAllBytes(_mod.NpcSourceFile);
         var bomPrefixed = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(original).ToArray();
         File.WriteAllBytes(_mod.NpcSourceFile, bomPrefixed);
 
         WaitOutTheWatcher();
 
-        Assert.Equal(before, _mod.Mirror.Sequence);
+        Assert.Equal(before, _mod.Index.Sequence);
         var entry = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal(entry.Head.Body, entry.Effective.Body);
@@ -217,10 +217,10 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AHandEditThatMatchesAnActiveFilter_ReachesTheFilteredListing()
     {
-        _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
-        Assert.Equal(0, _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        _mod.Index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
+        Assert.Equal(0, _mod.Index.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
         RenameTheNpcByHand("RenamedByHand");
 
         Assert.True(await Settles(before));
@@ -230,7 +230,7 @@ public sealed class SourceWatchTests : IDisposable
     }
 
     // The sequence says the projection landed, not that ReapplyFilter's own re-materialization of
-    // _filter has finished on the mirror's lock — the two are two statements, not one.
+    // _filter has finished on the Index's lock — the two are two statements, not one.
     private async Task<PagedResult<RecordSummary>> FilteredNpcListingReachesOneRow()
     {
         var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
@@ -238,7 +238,7 @@ public sealed class SourceWatchTests : IDisposable
         PagedResult<RecordSummary> result;
         do
         {
-            result = _mod.Mirror.Reads!.Search(query);
+            result = _mod.Index.Reads!.Search(query);
             if (result.Total > 0) return result;
             await Task.Delay(50);
         } while (DateTime.UtcNow < deadline);
@@ -251,7 +251,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public void RenamingASourceFileByHand_WithItsContentUnchanged_StillReadsCorrectly()
     {
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
         var originalPath = _mod.NpcSourceFile;
         var renamed = Path.Combine(
             Path.GetDirectoryName(originalPath)!, $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
@@ -259,7 +259,7 @@ public sealed class SourceWatchTests : IDisposable
         File.Move(originalPath, renamed);
         WaitOutTheWatcher();
 
-        Assert.Equal(before, _mod.Mirror.Sequence);
+        Assert.Equal(before, _mod.Index.Sequence);
         Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
         Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
@@ -271,14 +271,14 @@ public sealed class SourceWatchTests : IDisposable
     {
         Directory.Delete(Path.Combine(_mod.ModFolder, ".git"), recursive: true);
         WaitOutTheWatcher();
-        var before = _mod.Mirror.Sequence;
+        var before = _mod.Index.Sequence;
 
         RenameTheNpcByHand("RenamedAfterTheRepositoryWent");
         WaitOutTheWatcher();
 
         Assert.False(SourceRepository.IsTracked(_mod.ModFolder));
         Assert.False(ModFolders.IsEditable(IndexedModFixture.ModFolderOrigin, Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName)));
-        Assert.Equal(before, _mod.Mirror.Sequence);
+        Assert.Equal(before, _mod.Index.Sequence);
         Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
     }
 }

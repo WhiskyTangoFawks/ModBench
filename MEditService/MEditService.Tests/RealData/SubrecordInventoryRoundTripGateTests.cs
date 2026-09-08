@@ -44,7 +44,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
     private sealed class TrueStormsScratch : IDisposable
     {
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-truestorms-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
+        private readonly IndexProjector _index;
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-truestorms-").FullName;
 
@@ -66,17 +66,17 @@ public sealed class SubrecordInventoryRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, "TrueStormsMod", Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _mirror = new LoadOrderMirror(
+            _index = new IndexProjector(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_mirror.LoadOrder!, "TrueStormsMod", SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index.LoadOrder!, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()
         {
-            _mirror.Dispose();
+            _index.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

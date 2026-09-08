@@ -9,7 +9,7 @@ namespace MEditService.Api;
 /// <summary>ADR-0046 invariant 4's runtime half: the Source watcher's signals become projections.
 /// The gate arrives separately from the Index because a batch is one write across several of the
 /// Index's own gated doors.</summary>
-internal sealed class SourceMirror(
+internal sealed class SourceChangeApplier(
     IndexProjector index, IndexWriteGate writeGate, SourceChangeWatcher watcher,
     INotificationPublisher notifications, ILogger logger)
 {

@@ -10,7 +10,7 @@ namespace MEditService.Tests.Architecture;
 /// silently. Each test names the ADR it enforces.</summary>
 public sealed class ArchitectureTests
 {
-    private static readonly Assembly Core = typeof(ILoadOrderMirror).Assembly;
+    private static readonly Assembly Core = typeof(IndexProjector).Assembly;
 
     // ADR-0036: a bare filename compiles and passes single-copy tests, then misidentifies.
     [Fact]
@@ -60,7 +60,7 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
     }
 
-    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the mirror's Status lie,
+    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the Index's Status lie,
     // and a second writer makes the shared kernel's load order disagree with the index.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
@@ -68,9 +68,9 @@ public sealed class ArchitectureTests
         // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
         // goes through cannot disarm this.
         string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs"];
-        // LoadOrderMirror is the endpoint's own delegating shell: the reconcile it forwards is
-        // the endpoint's, not a second arrival.
-        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs", "LoadOrderMirror.cs"])
+        // IndexProjector.cs holds the reconcile itself, which the endpoint calls: it is the verb,
+        // not a second arrival.
+        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs", "IndexProjector.cs"])
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Apply("], writers))
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Register("], writers))
             .Distinct()
@@ -97,19 +97,6 @@ public sealed class ArchitectureTests
             .ToList();
         Assert.True(uncalled.Count == 0,
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
-    }
-
-    // ADR-0046 invariants 3 and 10: the read side and the watchers take the Index itself. The
-    // composition root still names the mirror, which is the write side's shell over that same
-    // instance.
-    [Fact]
-    public void TheReadSideAndTheWatchers_NameTheIndex_NotTheMirror()
-    {
-        var offenders = Offenders(
-            SolutionDirectory(), ["MEditService.Api", Path.Combine("MEditService.Core", "Queries")],
-            nameof(ILoadOrderMirror), allowedFiles: ["Program.cs"]);
-        Assert.True(offenders.Count == 0,
-            "The mirror is named outside the composition root in:\n" + string.Join("\n", offenders));
     }
 
     // ADR-0008: PluginWriter backs the binary up first; IndexProjector writes only a brand-new

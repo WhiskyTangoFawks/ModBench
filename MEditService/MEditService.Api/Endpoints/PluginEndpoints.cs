@@ -366,7 +366,7 @@ public static class PluginEndpoints
         return Results.Ok(responses);
     }
 
-    // Shared with ExternalChangeMirror's own notification and overflow paths, which start from the
+    // Shared with ExternalChangeApplier's own notification and overflow paths, which start from the
     // same bare (modFolder, pluginName) identity the watcher carries.
     internal static string OriginOfExternalChange(ILoadOrder? loadOrder, string modFolder, string pluginName) =>
         loadOrder?.Plugins.FirstOrDefault(pl =>

@@ -19,7 +19,7 @@ public sealed class RefreshByKeysTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private IRecordIndex Index => _mod.Mirror.Index!;
+    private IRecordIndex Index => _mod.Index.Store!;
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);

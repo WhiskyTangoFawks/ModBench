@@ -19,15 +19,15 @@ namespace MEditService.Tests.Source;
 /// self-heal would make a binary-seeded ingest look source-seeded.</summary>
 public sealed class SourceIngestTests
 {
-    private static LoadOrderMirror Reload(IndexedModFixture mod)
+    private static IndexProjector Reload(IndexedModFixture mod)
     {
-        var mirror = new LoadOrderMirror(
+        var index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)mirror).Reconcile(
+        index.Reconcile(
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        return mirror;
+        return index;
     }
 
     // ---- The working tree is Effective ----
@@ -45,7 +45,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        var record = reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var record = reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(record);
         Assert.Equal("ExternallyRenamed", record!.EditorId);
     }
@@ -61,10 +61,10 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        Assert.Null(reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
         // Positive control: the load really happened and really indexed this plugin, or "absent"
         // would be true of a load that did nothing at all.
-        Assert.NotNull(reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
+        Assert.NotNull(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
         Assert.Equal(IndexedModFixture.NpcEditorId, head!.EditorId);
         // The Head row is HEAD's own bytes, not a reconstruction: same text `git show` serves.
@@ -97,10 +97,10 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        Assert.Equal("ExternallyRenamed", reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+        Assert.Equal("ExternallyRenamed", reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
         Assert.Equal(
             IndexedModFixture.NpcEditorId,
-            reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+            reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
     }
 
     [Fact]
@@ -119,8 +119,8 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        var effective = reloaded.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin);
-        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(headerFormKey, mod.Plugin);
+        var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin);
+        var head = reloaded.Store!.At(RecordRef.Head).GetDocument(headerFormKey, mod.Plugin);
 
         Assert.NotNull(effective);
         Assert.NotNull(head);
@@ -144,10 +144,10 @@ public sealed class SourceIngestTests
 
         // HEAD moved with the working tree, so the record is clean against its *new* baseline —
         // not dirty against a baseline no ref holds any more.
-        Assert.Equal("CommittedRename", reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+        Assert.Equal("CommittedRename", reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
         Assert.Equal(
             "CommittedRename",
-            reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+            reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(mod);
 
-        var byFormKey = reloaded.Index!
+        var byFormKey = reloaded.Store!
             .At(RecordRef.Effective).Search(new RecordQuery { Plugin = IndexedModFixture.PluginName, Limit = 100 })
             .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
 
@@ -177,16 +177,16 @@ public sealed class SourceIngestTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        var before = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var before = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
         Assert.Equal(IndexedModFixture.NpcEditorId, before.EditorId);
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
             IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
-        await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin);
+        await mod.Index.ReindexPlugin(mod.Plugin);
 
-        var after = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var after = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
         Assert.Equal("ExternallyRenamed", after.EditorId);
     }
 
@@ -206,7 +206,7 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(mod);
 
         // Degraded, not dropped — the plugin's records are still queryable from the binary.
-        Assert.NotNull(reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.NotNull(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
 
         // ...and the degradation is *visible*, which is the whole mitigation: a user reading
         // pre-Track binary content while believing they are reading their tracked source is the hazard.
@@ -220,7 +220,7 @@ public sealed class SourceIngestTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        var edited = ProjectingEditService.Over(mod.Mirror)
+        var edited = ProjectingEditService.Over(mod.Index)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
@@ -228,14 +228,14 @@ public sealed class SourceIngestTests
             Path.Combine(mod.ModFolder, SourceRepository.RootFor(IndexedModFixture.PluginName), "RecordData.json"),
             "{ this is not json");
 
-        await Assert.ThrowsAnyAsync<Exception>(() => ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin));
+        await Assert.ThrowsAnyAsync<Exception>(() => mod.Index.ReindexPlugin(mod.Plugin));
 
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
-        var document = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var document = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
-        var failure = Assert.Single(mod.Mirror.Status.Failures);
+        var failure = Assert.Single(mod.Index.Status.Failures);
         Assert.Equal(IndexedModFixture.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
     }
@@ -265,7 +265,7 @@ public sealed class SourceIngestTests
         // Precondition: the ingest really did fail partway and fall back, or this proves nothing.
         Assert.NotEmpty(reloaded.Status.Failures);
 
-        var atHead = reloaded.Index!.At(RecordRef.Head)
+        var atHead = reloaded.Store!.At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Keyword.ToString(), StringComparison.Ordinal));
 
@@ -279,7 +279,7 @@ public sealed class SourceIngestTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        var edit = ProjectingEditService.Over(mod.Mirror)
+        var edit = ProjectingEditService.Over(mod.Index)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedAcrossReload\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
@@ -287,14 +287,14 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(mod);
 
         // Effective is the working tree: the new name.
-        var effective = reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedAcrossReload", effective!.EditorId);
 
         // Head is HEAD: the old name, served from the blob at the record's former path. Without the pairing
         // this is null, the new path marking the record working-tree-only while the old path seeds it as
         // committed-only.
-        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
         Assert.Equal(IndexedModFixture.NpcEditorId, head!.EditorId);
     }
@@ -304,13 +304,13 @@ public sealed class SourceIngestTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        ProjectingEditService.Over(mod.Mirror)
+        ProjectingEditService.Over(mod.Index)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedOnce\"").RootElement);
 
         using var reloaded = Reload(mod);
 
-        var atHead = reloaded.Index!.At(RecordRef.Head)
+        var atHead = reloaded.Store!.At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
 

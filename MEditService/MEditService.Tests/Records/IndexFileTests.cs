@@ -29,7 +29,7 @@ public class IndexFileTests
     }
 
     // Two instances on one game have their own same-named mod folders holding different bytes, so
-    // they must never share a mirror.
+    // they must never share a store.
     [Fact]
     public void For_IsADifferentFile_ForADifferentInstance()
     {

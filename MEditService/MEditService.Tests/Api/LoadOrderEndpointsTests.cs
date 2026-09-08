@@ -54,7 +54,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var result = await PluginEndpoints.CreatePlugin(
             new CreatePluginRequest("Minted.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
-            _mod.Mirror.Projector, holder, new TrackService(NullLogger<TrackService>.Instance), NullLoggerFactory.Instance);
+            _mod.Index, holder, new TrackService(NullLogger<TrackService>.Instance), NullLoggerFactory.Instance);
 
         Assert.IsAssignableFrom<Ok<PluginResponse>>(result);
         var registered = holder.Current.Copy(new PluginKey("Minted.esp", IndexedModFixture.ModFolderOrigin));
@@ -70,7 +70,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
 
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Mirror.Projector, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         var offer = Assert.Single(ok.Value!.CrashRepairOffers);
@@ -83,7 +83,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     public void PutLoadOrder_ReportsNoCrashRepairOffers_WhenNothingIsUnanswered()
     {
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Mirror.Projector, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         Assert.Empty(ok.Value!.CrashRepairOffers);

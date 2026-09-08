@@ -71,8 +71,8 @@ try
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
-    // ADR-0046 invariant 10: the Index is the registered instance. The mirror is the write side's
-    // shell over that same one, until the write side takes the Index itself.
+    // ADR-0046 invariant 10: one Index instance for the whole process, so the write side and the
+    // read side never project into two stores.
     builder.Services.AddSingleton(sp => new IndexProjector(
         sp.GetRequiredService<IRecordIndexFactory>(),
         sp.GetRequiredService<ILoggerFactory>().CreateLogger<IndexProjector>(),
@@ -80,7 +80,6 @@ try
         sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<INotificationPublisher>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
-    builder.Services.AddSingleton<ILoadOrderMirror>(sp => new LoadOrderMirror(sp.GetRequiredService<IndexProjector>()));
     // Resolved from the Index rather than registered on its own, so there is exactly one write
     // gate — a bare `AddSingleton<IndexWriteGate>()` would inject cleanly and serialize nothing.
     builder.Services.AddSingleton(sp => sp.GetRequiredService<IndexProjector>().WriteGate);
@@ -112,33 +111,33 @@ try
     // per reconcile instead.
     var index = app.Services.GetRequiredService<IndexProjector>();
     var externalChangeWatcher = app.Services.GetRequiredService<ExternalChangeWatcher>();
-    var indexMirror = new IndexMirror(
+    var binaryChanges = new BinaryChangeApplier(
         index,
         app.Services.GetRequiredService<INotificationPublisher>(),
-        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
-    externalChangeWatcher.IndexedBinaryChanged = indexMirror.Apply;
-    externalChangeWatcher.IndexedWatchOverflowed = indexMirror.ApplyOverflow;
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(BinaryChangeApplier)));
+    externalChangeWatcher.IndexedBinaryChanged = binaryChanges.Apply;
+    externalChangeWatcher.IndexedWatchOverflowed = binaryChanges.ApplyOverflow;
 
     // ADR-0046: the plugin watcher's own external-change signals, subscribed once for the same
     // reason.
-    var externalChangeMirror = new ExternalChangeMirror(
+    var externalChanges = new ExternalChangeApplier(
         index,
         app.Services.GetRequiredService<INotificationPublisher>(),
-        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ExternalChangeMirror)));
-    externalChangeWatcher.ExternalChangeReported = externalChangeMirror.ApplyPending;
-    externalChangeWatcher.WatchOverflowed = externalChangeMirror.ApplyOverflow;
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ExternalChangeApplier)));
+    externalChangeWatcher.ExternalChangeReported = externalChanges.ApplyPending;
+    externalChangeWatcher.WatchOverflowed = externalChanges.ApplyOverflow;
 
     // ADR-0046: the Source watcher's other half, subscribed once for the same reason. The Index
     // announces each reconcile and Track the repository it has created, so a watch starts with no
     // restart.
     var sourceWatcher = app.Services.GetRequiredService<SourceChangeWatcher>();
-    var sourceMirror = new SourceMirror(
+    var sourceChanges = new SourceChangeApplier(
         index, app.Services.GetRequiredService<IndexWriteGate>(), sourceWatcher,
         app.Services.GetRequiredService<INotificationPublisher>(),
-        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceMirror)));
-    sourceWatcher.SourceChanged = sourceMirror.Apply;
-    index.LoadOrderChanged = sourceMirror.RefreshWatches;
-    app.Services.GetRequiredService<TrackService>().RepositoryCreated = sourceMirror.WatchTracking;
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceChangeApplier)));
+    sourceWatcher.SourceChanged = sourceChanges.Apply;
+    index.LoadOrderChanged = sourceChanges.RefreshWatches;
+    app.Services.GetRequiredService<TrackService>().RepositoryCreated = sourceChanges.WatchTracking;
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings

@@ -8,9 +8,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0044: PUT /load-order's one verb, at the mirror seam. Every loadout gesture is the same
+// ADR-0044: PUT /load-order's one verb, at the Index seam. Every loadout gesture is the same
 // reconcile, and the counting factory below tells a cheap SQL-only one from a cold indexing one.
-public sealed class LoadOrderMirrorReconcileTests
+public sealed class ReconcileDiffTests
 {
     // Counts the two verbs whose cost the acceptance criteria are about: Index (a re-read plus a re-
     // index) and UpdateWinners (the whole-set sweep).
@@ -39,11 +39,11 @@ public sealed class LoadOrderMirrorReconcileTests
         }
     }
 
-    private static (LoadOrderMirror Mirror, CountingFactory Counts) MakeMirror()
+    private static (IndexProjector Index, CountingFactory Counts) MakeIndex()
     {
         var reflector = SharedSchemaReflector.Instance;
         var counts = new CountingFactory(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        return (new LoadOrderMirror(counts), counts);
+        return (new IndexProjector(counts), counts);
     }
 
     // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack every winner assertion
@@ -58,13 +58,13 @@ public sealed class LoadOrderMirrorReconcileTests
             })
             .BuildScattered();
 
-    private static string SharedNpc(LoadOrderMirror mirror) =>
-        mirror.Reads!
+    private static string SharedNpc(IndexProjector index) =>
+        index.Reads!
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esm"), Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
-    private static string? WinnerOf(LoadOrderMirror mirror, string formKey) =>
-        mirror.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
+    private static string? WinnerOf(IndexProjector index, string formKey) =>
+        index.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
 
     private static IReadOnlyList<LoadOrderEntry> With(IReadOnlyList<LoadOrderEntry> plugins, string name, Func<LoadOrderEntry, LoadOrderEntry> change) =>
         plugins.Select(p => p.Name == name ? change(p) : p).ToList();
@@ -73,40 +73,40 @@ public sealed class LoadOrderMirrorReconcileTests
     public void IdenticalSnapshotTwice_SecondIsANoOp_NoSweepNoProgress()
     {
         using var fx = TwoProviders("reconcile-noop");
-        var (mirror, counts) = MakeMirror();
-        using var _ = mirror;
+        var (index, counts) = MakeIndex();
+        using var _ = index;
 
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var indexedAfterFirst = counts.Indexed;
-        var statusAfterFirst = mirror.Status;
+        var statusAfterFirst = index.Status;
         Assert.Equal(1, counts.Sweeps);
 
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(1, counts.Sweeps);
         Assert.Equal(indexedAfterFirst, counts.Indexed);
-        Assert.Equal(statusAfterFirst.IndexedPlugins, mirror.Status.IndexedPlugins);
-        Assert.Equal(statusAfterFirst.State, mirror.Status.State);
-        Assert.True(mirror.Status.ConflictsComputed);
+        Assert.Equal(statusAfterFirst.IndexedPlugins, index.Status.IndexedPlugins);
+        Assert.Equal(statusAfterFirst.State, index.Status.State);
+        Assert.True(index.Status.ConflictsComputed);
     }
 
     [Fact]
     public void Reorder_IsSqlOnly_AndWinnersFollowTheNewOrder()
     {
         using var fx = TwoProviders("reconcile-reorder");
-        var (mirror, counts) = MakeMirror();
-        using var _ = mirror;
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var npc = SharedNpc(mirror);
-        Assert.Equal("B.esp", WinnerOf(mirror, npc));
+        var (index, counts) = MakeIndex();
+        using var _ = index;
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        var npc = SharedNpc(index);
+        Assert.Equal("B.esp", WinnerOf(index, npc));
         var indexed = counts.Indexed;
 
         // Swap the two slots: A now loads after B.
         var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
-        mirror.Reconcile(fx.GameDirectory, swapped, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, swapped, GameRelease.Fallout4);
 
         Assert.Equal(indexed, counts.Indexed);
-        Assert.Equal("A.esm", WinnerOf(mirror, npc));
+        Assert.Equal("A.esm", WinnerOf(index, npc));
         Assert.Equal(2, counts.Sweeps);
     }
 
@@ -114,24 +114,24 @@ public sealed class LoadOrderMirrorReconcileTests
     public void Disable_IsSqlOnly_AndTheOtherProviderWins()
     {
         using var fx = TwoProviders("reconcile-disable");
-        var (mirror, counts) = MakeMirror();
-        using var _ = mirror;
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var npc = SharedNpc(mirror);
+        var (index, counts) = MakeIndex();
+        using var _ = index;
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        var npc = SharedNpc(index);
         var indexed = counts.Indexed;
 
-        mirror.Reconcile(fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(indexed, counts.Indexed);
-        var b = mirror.LoadOrder!.Plugins.Single(p => p.Name == "B.esp");
+        var b = index.LoadOrder!.Plugins.Single(p => p.Name == "B.esp");
         Assert.False(b.Participates);
         Assert.True(b.InLoadOrder);
         Assert.False(b.IsImmutable);
-        Assert.Equal("A.esm", WinnerOf(mirror, npc));
+        Assert.Equal("A.esm", WinnerOf(index, npc));
 
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         Assert.Equal(indexed, counts.Indexed);
-        Assert.Equal("B.esp", WinnerOf(mirror, npc));
+        Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
     // A losing copy and the winning copy of one filename are both held and both registered
@@ -147,31 +147,31 @@ public sealed class LoadOrderMirrorReconcileTests
         var snapshot = fx.Plugins
             .Select(p => p.Origin == "ModB" ? p with { Slot = winner.Slot, Winning = false } : p)
             .ToList();
-        var (mirror, _) = MakeMirror();
-        using var __ = mirror;
+        var (index, _) = MakeIndex();
+        using var __ = index;
 
-        mirror.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var copies = mirror.LoadOrder!.Plugins.Where(p => p.Name == "Shared.esp").ToDictionary(p => p.Origin);
+        var copies = index.LoadOrder!.Plugins.Where(p => p.Name == "Shared.esp").ToDictionary(p => p.Origin);
         Assert.True(copies["ModA"].Participates);
         Assert.False(copies["ModB"].Participates);
         Assert.True(copies["ModB"].IsImmutable);
         Assert.Equal(copies["ModA"].LoadOrderIndex, copies["ModB"].LoadOrderIndex);
 
-        var stack = mirror.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
+        var stack = index.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Origin == "ModA").IsWinner);
         Assert.False(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
 
         // Both copies are registered — the losing one is browsable, not absent.
-        Assert.Contains(mirror.Index!.RegisteredPlugins(), k => k.Origin == "ModB");
+        Assert.Contains(index.Store!.RegisteredPlugins(), k => k.Origin == "ModB");
 
         // Reprioritising the mods flips which copy wins — SQL-only, like every other move.
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
-        mirror.Reconcile(fx.GameDirectory, flipped, GameRelease.Fallout4);
-        stack = mirror.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
+        index.Reconcile(fx.GameDirectory, flipped, GameRelease.Fallout4);
+        stack = index.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
         Assert.True(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
-        Assert.False(mirror.LoadOrder!.Plugins.Single(p => p.Origin == "ModA").InLoadOrder);
+        Assert.False(index.LoadOrder!.Plugins.Single(p => p.Origin == "ModA").InLoadOrder);
     }
 
     // Uninstall: a copy absent from the snapshot is unregistered, its rows kept for its return.
@@ -179,26 +179,26 @@ public sealed class LoadOrderMirrorReconcileTests
     public void CopyAbsentFromSnapshot_IsUnregistered_AndReturnsWithoutAReindex()
     {
         using var fx = TwoProviders("reconcile-leave");
-        var (mirror, counts) = MakeMirror();
-        using var _ = mirror;
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var npc = SharedNpc(mirror);
+        var (index, counts) = MakeIndex();
+        using var _ = index;
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        var npc = SharedNpc(index);
         var indexed = counts.Indexed;
         var bKey = new PluginKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
 
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
-        Assert.DoesNotContain(mirror.LoadOrder!.Plugins, p => p.Name == "B.esp");
-        Assert.DoesNotContain(mirror.Index!.RegisteredPlugins(), k => k.Name == "B.esp");
-        Assert.DoesNotContain(mirror.Status.IndexedPlugins, p => p.Name == "B.esp");
-        Assert.NotNull(mirror.Index!.IndexedContentHash(bKey));
-        Assert.Equal("A.esm", WinnerOf(mirror, npc));
+        Assert.DoesNotContain(index.LoadOrder!.Plugins, p => p.Name == "B.esp");
+        Assert.DoesNotContain(index.Store!.RegisteredPlugins(), k => k.Name == "B.esp");
+        Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
+        Assert.NotNull(index.Store!.IndexedContentHash(bKey));
+        Assert.Equal("A.esm", WinnerOf(index, npc));
 
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(indexed, counts.Indexed);
-        Assert.Contains(mirror.LoadOrder!.Plugins, p => p.Name == "B.esp");
-        Assert.Equal("B.esp", WinnerOf(mirror, npc));
+        Assert.Contains(index.LoadOrder!.Plugins, p => p.Name == "B.esp");
+        Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
     // No clear-on-open: after a restart the file still carries its registrations, and the next
@@ -207,13 +207,13 @@ public sealed class LoadOrderMirrorReconcileTests
     public void AfterRestart_IdenticalSnapshot_ReindexesNothing_AndADifferentOne_CorrectsTheRegistrations()
     {
         using var fx = TwoProviders("reconcile-restart");
-        var (first, _) = MakeMirror();
+        var (first, _) = MakeIndex();
         using (first)
         {
             first.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
         }
 
-        var (second, counts) = MakeMirror();
+        var (second, counts) = MakeIndex();
         using (second)
         {
             second.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
@@ -223,13 +223,13 @@ public sealed class LoadOrderMirrorReconcileTests
             Assert.Equal(fx.Plugins.Count, second.Status.IndexedPlugins.Count);
         }
 
-        var (third, thirdCounts) = MakeMirror();
+        var (third, thirdCounts) = MakeIndex();
         using (third)
         {
             third.Reconcile(fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, thirdCounts.Indexed);
-            Assert.DoesNotContain(third.Index!.RegisteredPlugins(), k => k.Name == "B.esp");
+            Assert.DoesNotContain(third.Store!.RegisteredPlugins(), k => k.Name == "B.esp");
             Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third)));
         }
     }
@@ -241,40 +241,40 @@ public sealed class LoadOrderMirrorReconcileTests
         var badPath = Path.Combine(fx.Root, "Bad.esp");
         File.WriteAllBytes(badPath, [0xDE, 0xAD, 0xBE, 0xEF]);
         var snapshot = fx.Plugins.Append(new LoadOrderEntry("Bad.esp", badPath, "BadMod", 1, Enabled: true, Winning: true)).ToList();
-        var (mirror, counts) = MakeMirror();
-        using var _ = mirror;
+        var (index, counts) = MakeIndex();
+        using var _ = index;
 
-        mirror.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        Assert.Contains(mirror.Status.Failures, f => f.Name == "Bad.esp");
-        Assert.Equal(LoadOrderState.Ready, mirror.Status.State);
-        Assert.DoesNotContain(mirror.LoadOrder!.Plugins, p => p.Name == "Bad.esp");
+        Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.DoesNotContain(index.LoadOrder!.Plugins, p => p.Name == "Bad.esp");
 
         // The same snapshot again is a no-op — the failed parse is not paid twice.
         var sweeps = counts.Sweeps;
-        mirror.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
         Assert.Equal(sweeps, counts.Sweeps);
 
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
-        mirror.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        index.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        Assert.Empty(mirror.Status.Failures);
-        Assert.Contains(mirror.LoadOrder!.Plugins, p => p.Name == "Bad.esp");
+        Assert.Empty(index.Status.Failures);
+        Assert.Contains(index.LoadOrder!.Plugins, p => p.Name == "Bad.esp");
     }
 
     [Fact]
     public void ADifferentInstance_ReplacesWhatIsHeld()
     {
         using var fx = TwoProviders("reconcile-other-instance");
-        var (mirror, _) = MakeMirror();
-        using var __ = mirror;
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
-        var first = mirror.LoadOrder;
+        var (index, _) = MakeIndex();
+        using var __ = index;
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
+        var first = index.LoadOrder;
         var otherInstance = Directory.CreateDirectory(Path.Combine(fx.Root, "other-instance")).FullName;
 
-        mirror.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, otherInstance);
+        index.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.NotSame(first, mirror.LoadOrder);
-        Assert.Equal(otherInstance, mirror.LoadOrder!.InstanceRoot);
+        Assert.NotSame(first, index.LoadOrder);
+        Assert.Equal(otherInstance, index.LoadOrder!.InstanceRoot);
     }
 }

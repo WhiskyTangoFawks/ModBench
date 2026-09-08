@@ -15,7 +15,7 @@ public sealed class MalformedFormKeyEndpointTests
 {
     private const string MalformedFormKey = "not-a-formkey";
 
-    private static RecordEditService ServiceFor(IndexedModFixture mod) => TestEditService.Over(mod.Mirror);
+    private static RecordEditService ServiceFor(IndexedModFixture mod) => TestEditService.Over(mod.Index);
 
     [Fact]
     public void CreateRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
@@ -23,7 +23,7 @@ public sealed class MalformedFormKeyEndpointTests
         using var mod = IndexedModFixture.Tracked();
         var req = new RecordCreateRequest(IndexedModFixture.ModFolderOrigin, "npc_", "Broken", MalformedFormKey);
 
-        var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, ServiceFor(mod), mod.Mirror.WriteGate, NullLoggerFactory.Instance);
+        var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, ServiceFor(mod), mod.Index.WriteGate, NullLoggerFactory.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
@@ -35,7 +35,7 @@ public sealed class MalformedFormKeyEndpointTests
         using var mod = IndexedModFixture.Tracked();
         var req = new RecordRenumberRequest(mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
-        var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Mirror.WriteGate, NullLogger.Instance);
+        var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Index.WriteGate, NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
@@ -49,7 +49,7 @@ public sealed class MalformedFormKeyEndpointTests
             mod.Plugin.Name, IndexedModFixture.ModFolderOrigin,
             mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
-        var result = RecordEndpoints.CopyRecordAsNewRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Mirror.WriteGate, NullLogger.Instance);
+        var result = RecordEndpoints.CopyRecordAsNewRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Index.WriteGate, NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

@@ -9,18 +9,18 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Plugins;
 
 [Collection(TestPluginFixtureCollection.Name)]
-public class LoadOrderMirrorThreadSafetyTests(TestPluginFixture fixture)
+public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static LoadOrderMirror MakeManager()
+    private static IndexProjector MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new LoadOrderMirror(factory);
+        return new IndexProjector(factory);
     }
 
-    private LoadOrderMirror MakeLoadedManager()
+    private IndexProjector MakeLoadedManager()
     {
         var m = MakeManager();
         m.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
@@ -62,7 +62,7 @@ public class LoadOrderMirrorThreadSafetyTests(TestPluginFixture fixture)
     }
 
     // Load order-membership and guard-clause behavior (NoLoadOrder/InvalidExtension/FileAlreadyExists)
-    // are covered by LoadOrderMirrorTests; this class keeps only the concurrency-specific cases.
+    // are covered by HeldLoadOrderTests; this class keeps only the concurrency-specific cases.
 
     // --- Dispose idempotency ---
 

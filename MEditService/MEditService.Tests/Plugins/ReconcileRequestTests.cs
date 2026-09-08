@@ -16,7 +16,7 @@ public sealed class ReconcileRequestTests : IDisposable
 
     private void CorruptTheStoredBody(string formKey) =>
         DuckDbSql.ExecuteFor(
-            ((DuckDbRecordIndex)_mod.Mirror.Index!).Connection,
+            ((DuckDbRecordIndex)_mod.Index.Store!).Connection,
             "UPDATE mirror.records SET body = '{\"EditorID\": \"CorruptedInTheStore\"}' WHERE form_key = $1",
             formKey);
 
@@ -25,24 +25,24 @@ public sealed class ReconcileRequestTests : IDisposable
     {
         var formKey = _mod.Npc.ToString();
         CorruptTheStoredBody(formKey);
-        var before = _mod.Mirror.Index!.Sequence;
+        var before = _mod.Index.Store!.Sequence;
 
-        var reports = ((ILoadOrderMirror)_mod.Mirror).ValidateIndex(_mod.Plugin);
+        var reports = _mod.Index.ValidateIndex(_mod.Plugin);
 
         Assert.Equal(
             IndexedModFixture.NpcEditorId,
-            _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)!.EditorId);
+            _mod.Index.Store!.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)!.EditorId);
         Assert.Contains(formKey, Assert.Single(reports).ChangedKeys, StringComparer.Ordinal);
-        Assert.True(_mod.Mirror.Index!.Sequence > before);
+        Assert.True(_mod.Index.Store!.Sequence > before);
     }
 
     [Fact]
     public void ReconcilingEveryPlugin_CoversEveryRegisteredCopy()
     {
-        var reports = ((ILoadOrderMirror)_mod.Mirror).ValidateIndex(plugin: null);
+        var reports = _mod.Index.ValidateIndex(plugin: null);
 
         Assert.Equal(
-            _mod.Mirror.Index!.RegisteredPlugins().OrderBy(k => k.Name, StringComparer.Ordinal).Select(k => k.Name),
+            _mod.Index.Store!.RegisteredPlugins().OrderBy(k => k.Name, StringComparer.Ordinal).Select(k => k.Name),
             reports.Select(r => r.Plugin.Name).OrderBy(n => n, StringComparer.Ordinal));
     }
 }

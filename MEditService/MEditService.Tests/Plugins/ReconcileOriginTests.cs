@@ -8,15 +8,15 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0036: the LoadOrderMirror-level Reconcile call that carries a caller-supplied
+// ADR-0036: the IndexProjector-level Reconcile call that carries a caller-supplied
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.
-public sealed class LoadOrderMirrorReconcileOriginTests
+public sealed class ReconcileOriginTests
 {
-    private static LoadOrderMirror MakeManager()
+    private static IndexProjector MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new LoadOrderMirror(factory);
+        return new IndexProjector(factory);
     }
 
     [Fact]
@@ -28,8 +28,8 @@ public sealed class LoadOrderMirrorReconcileOriginTests
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var manager = MakeManager();
-        ILoadOrderMirror mirror = manager;
-        mirror.Reconcile(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+        IndexProjector index = manager;
+        index.Reconcile(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var plugin = manager.LoadOrder!.Plugins.Single(p => p.Name == "A.esp");
         Assert.Equal("SomeMod", plugin.Origin);
@@ -46,8 +46,8 @@ public sealed class LoadOrderMirrorReconcileOriginTests
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
         using var manager = MakeManager();
-        ILoadOrderMirror mirror = manager;
-        mirror.Reconcile(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+        IndexProjector index = manager;
+        index.Reconcile(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esp"), Limit: 10, Offset: 0));
 
