@@ -576,9 +576,8 @@ describe('modbench.downloads tree', () => {
   const downloadsDir = root ? path.join(root, 'downloads') : '';
   const provider = () => (ext?.exports as { downloadsProvider?: DownloadsProviderLike } | undefined)?.downloadsProvider;
 
-  // The committed test workspace fixture has no downloads/ folder — created and
-  // torn down here so the "no downloads/ folder" empty state stays exercisable against
-  // the same workspace elsewhere (mirrors the Overwrite suite's overwriteDir cleanup).
+  // The committed test workspace fixture has no downloads/ folder — created and torn down
+  // here (mirrors the Overwrite suite's overwriteDir cleanup).
   after(() => {
     if (!root) return;
     fs.rmSync(downloadsDir, { recursive: true, force: true });
@@ -588,14 +587,16 @@ describe('modbench.downloads tree', () => {
     assert.ok(provider(), 'activate() should return { downloadsProvider } for the open workspace');
   });
 
+  // Rows come from the Instance value (ADR-0047): written through writeAndAwaitInstance and
+  // read back with no direct call to the provider's own invalidate().
   it('renders one row per archive, .meta sidecars suppressed', async () => {
-    fs.mkdirSync(downloadsDir, { recursive: true });
-    fs.writeFileSync(path.join(downloadsDir, 'foo.zip'), 'data');
-    fs.writeFileSync(path.join(downloadsDir, 'foo.zip.meta'), '[General]\r\n');
+    await writeAndAwaitInstance(() => {
+      fs.mkdirSync(downloadsDir, { recursive: true });
+      fs.writeFileSync(path.join(downloadsDir, 'foo.zip'), 'data');
+      fs.writeFileSync(path.join(downloadsDir, 'foo.zip.meta'), '[General]\r\n');
+    });
 
-    const p = provider()!;
-    p.invalidate();
-    const rows = await p.getChildren();
+    const rows = await provider()!.getChildren();
     assert.deepStrictEqual(rows.map((r) => r.row?.name), ['foo.zip']);
   });
 

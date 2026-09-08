@@ -136,9 +136,9 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   });
 });
 
-// ErrorNode is shared with ModListProvider/DownloadsProvider (./ErrorNode.ts); this provider
-// never constructs one, but its checkbox/lock absence is worth guarding here too, alongside
-// EmptyNode's, as both are "rows outside the load order".
+// ErrorNode is shared with ModListProvider (./ErrorNode.ts); this provider never constructs
+// one, but its checkbox/lock absence is worth guarding here too, alongside EmptyNode's, as
+// both are "rows outside the load order".
 describe('leading slot — rows outside the load order render neither checkbox nor lock', () => {
   it('ErrorNode has no checkbox and no lock', () => {
     const node = new ErrorNode('boom');

@@ -37,7 +37,7 @@ export interface DownloadRow {
 export type DownloadSortColumn = 'name' | 'status' | 'size' | 'mtimeMs';
 
 export function sortDownloadRows(
-  rows: DownloadRow[],
+  rows: readonly DownloadRow[],
   column: DownloadSortColumn,
   descending: boolean,
 ): DownloadRow[] {
@@ -126,8 +126,8 @@ export function setHiddenInText(text: string, hidden: boolean): string {
 
 /** A view concern, so it runs over already-built rows. `showHidden` keeps the
  *  flags intact, so the dimming decoration can still tell hidden rows apart. */
-export function filterHiddenRows(rows: DownloadRow[], showHidden: boolean): DownloadRow[] {
-  return showHidden ? rows : rows.filter((r) => !r.hidden);
+export function filterHiddenRows(rows: readonly DownloadRow[], showHidden: boolean): DownloadRow[] {
+  return showHidden ? [...rows] : rows.filter((r) => !r.hidden);
 }
 
 // A space-separated flag string, because `when` clauses match it with
