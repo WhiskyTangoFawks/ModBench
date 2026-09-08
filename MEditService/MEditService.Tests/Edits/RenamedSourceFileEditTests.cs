@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Tests.TestSupport;
 
@@ -12,7 +13,7 @@ public sealed class RenamedSourceFileEditTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService EditService() => _mod.Edits;
+    private EditRecordHandler EditService() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

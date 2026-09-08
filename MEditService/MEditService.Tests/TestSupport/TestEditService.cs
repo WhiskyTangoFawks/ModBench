@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -6,12 +7,23 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>The write service as the composition root builds it: the held load order, one resolver
+/// <summary>The write side as the composition root builds it: the held load order, one resolver
 /// per gesture over it, the codec and the schema.</summary>
 internal static class TestEditService
 {
+    internal static EditRecordHandler EditHandler(LoadOrderHolder holder)
+    {
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var targets = new WriteTargets(
+            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
+        return new EditRecordHandler(
+            targets, holder, Resolver, codec, SharedSchemaReflector.Instance, NullLogger<EditRecordHandler>.Instance);
+    }
+
+    internal static EditRecordHandler EditHandler(IndexProjector index) => EditHandler(HolderOver(index));
+
     internal static RecordEditService Over(LoadOrderHolder holder) =>
-        new(holder, Resolver, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+        new(holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     /// <summary>The same service for a test holding the Index: its held copies are the load order

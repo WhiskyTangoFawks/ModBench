@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
@@ -15,7 +16,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() => _mod.Edits;
+    private EditRecordHandler Service() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -32,7 +33,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     private string SeedDebrisWithTwoModelsCarryingBlobs()
     {
-        var created = Service().CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
+        var created = _mod.Edits.CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
         Assert.True(created.Applied, created.Message);
 
         var seed = Service().Set(_mod.Plugin, created.NewFormKey!, "Models",

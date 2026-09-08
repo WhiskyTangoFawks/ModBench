@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -563,6 +564,7 @@ public sealed class VmadEditTests : IDisposable
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrder LoadOrder { get; }
         public RecordEditService Edits { get; }
+        public EditRecordHandler EditHandler { get; }
         public FormKey Npc { get; }
         public FormKey Quest { get; }
         public FormKey Perk { get; }
@@ -635,6 +637,7 @@ public sealed class VmadEditTests : IDisposable
             var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
             Edits = TestEditService.Over(holder);
+            EditHandler = TestEditService.EditHandler(holder);
         }
 
         // Alpha's properties are written out of key order too, and cover every shape a gesture
@@ -665,7 +668,7 @@ public sealed class VmadEditTests : IDisposable
             return script;
         }
 
-        public RecordEditService Service() => Edits;
+        public EditRecordHandler Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
             TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;

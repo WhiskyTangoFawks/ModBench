@@ -20,7 +20,7 @@ public sealed class ExternalChangeClassifierTests
         var mod = SourceEditFixture.Tracked();
         try
         {
-            var editService = mod.Edits;
+            var editService = mod.EditHandler;
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
             var compileService = CompileServices.Over(mod.LoadOrder);
@@ -85,7 +85,7 @@ public sealed class ExternalChangeClassifierTests
         var mod = SourceEditFixture.Tracked();
         try
         {
-            var editService = mod.Edits;
+            var editService = mod.EditHandler;
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
             var compileService = CompileServices.Over(mod.LoadOrder);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());

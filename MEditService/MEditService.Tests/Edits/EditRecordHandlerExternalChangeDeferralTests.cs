@@ -1,21 +1,21 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
 /// <summary>An unanswered external-change question refuses every gesture on the single write path
 /// (ADR-0041), checked once ahead of anything the write would touch.</summary>
-public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
+public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() => _mod.Edits;
+    private EditRecordHandler Service() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

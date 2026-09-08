@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -21,7 +22,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() => _mod.Edits;
+    private EditRecordHandler Service() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

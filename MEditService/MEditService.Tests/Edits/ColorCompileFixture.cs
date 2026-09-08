@@ -1,4 +1,5 @@
 using System.Drawing;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -27,6 +28,7 @@ public sealed class ColorCompileFixture : IDisposable
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
+    public EditRecordHandler EditHandler { get; }
 
     // Neither 0 nor 255, so surviving a 3-leaf edit cannot pass by coincidence against a default.
     public const byte SeededLightAlpha = 137;
@@ -81,6 +83,7 @@ public sealed class ColorCompileFixture : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
+        EditHandler = TestEditService.EditHandler(holder);
     }
 
     public void Dispose()

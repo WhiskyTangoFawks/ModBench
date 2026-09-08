@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -21,7 +22,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() => _mod.Edits;
+    private EditRecordHandler Service() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -98,7 +99,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
         using var glob = GlobMod(out var globalShort, out var globalFloat);
         var before = glob.Body(globalShort);
 
-        var result = glob.Edits.Set(glob.Plugin, globalShort.ToString(), "OutputChar", Json("true"));
+        var result = glob.EditHandler.Set(glob.Plugin, globalShort.ToString(), "OutputChar", Json("true"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
@@ -110,7 +111,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
     {
         using var glob = GlobMod(out var globalShort, out var globalFloat);
 
-        var result = glob.Edits.Set(glob.Plugin, globalFloat.ToString(), "OutputChar", Json("true"));
+        var result = glob.EditHandler.Set(glob.Plugin, globalFloat.ToString(), "OutputChar", Json("true"));
 
         Assert.True(result.Applied, result.Message);
     }
@@ -144,7 +145,7 @@ public sealed class ScalarValueRefusalTests : IDisposable
         using var omod = OmodMod(out var armorMod);
         var before = omod.Body(armorMod);
 
-        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties",
+        var result = omod.EditHandler.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":"not-a-number","Value2":7,"FunctionType":"Set"}]"""));
 
         Assert.False(result.Applied);

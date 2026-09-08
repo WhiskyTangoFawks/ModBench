@@ -126,7 +126,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AWriteThroughTheWriteApi_LandsThroughTheWatcher_AndChangesNoRowASecondTime()
     {
-        var service = TestEditService.Over(_mod.Index);
+        var service = TestEditService.EditHandler(_mod.Index);
         var before = _mod.Index.Sequence;
 
         var edit = service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
@@ -178,7 +178,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task DiscardingAWorkingTreeChangeThroughGit_RestoresTheCommittedValue()
     {
-        var service = TestEditService.Over(_mod.Index);
+        var service = TestEditService.EditHandler(_mod.Index);
         var before = _mod.Index.Sequence;
         Assert.True(service.Set(
             _mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement).Applied);

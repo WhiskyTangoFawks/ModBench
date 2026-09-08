@@ -4,6 +4,7 @@ using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Api.Notifications;
 using MEditService.Bridge;
+using MEditService.Core.Composition;
 using MEditService.Core.Edits;
 using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
@@ -89,6 +90,9 @@ try
     builder.Services.AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
         held, sp.GetRequiredService<IModImporter>(), sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILogger<FormLinkResolver>>()));
+    // ADR-0046 invariant 3: one handler per gesture, registered where the module they share is
+    // visible, and resolved by the route that names the gesture.
+    builder.Services.AddCommandHandlers();
     builder.Services.AddSingleton<RecordEditService>();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();

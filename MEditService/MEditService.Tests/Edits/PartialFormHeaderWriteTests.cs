@@ -1,4 +1,5 @@
 using System.Globalization;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -30,6 +31,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
+    public EditRecordHandler EditHandler { get; }
     public FormKey PartialCell { get; }
     public FormKey OrdinaryNpc { get; }
 
@@ -66,6 +68,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
+        EditHandler = TestEditService.EditHandler(holder);
     }
 
     public void Dispose()
@@ -74,7 +77,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         try { Directory.Delete(_gameDirectory, recursive: true); } catch { /* best-effort cleanup */ }
     }
 
-    private RecordEditService Service() => Edits;
+    private EditRecordHandler Service() => EditHandler;
 
     // xEdit's SetIsPartialForm (wbImplementation.pas:14146-14221) re-populates a cleared override from
     // its nearest non-partial predecessor; mEdit's minimum is narrower, and is that the record becomes

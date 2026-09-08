@@ -56,6 +56,12 @@
          the child-record folder creation a container write would otherwise do), and a type used
          directly should not depend on another package continuing to drag it in. -->
     <PackageReference Include="System.IO.Abstractions" Version="22.0.16" />
+    <!-- Not a new dependency: it already resolves transitively at this exact version, so the graph
+         is unchanged. Referenced explicitly because MEditService.Core/Composition names
+         IServiceCollection directly, which is what lets a handler registration see the internal
+         module the handlers share, and a type used directly should not depend on another package
+         continuing to drag it in. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.1" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

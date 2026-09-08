@@ -40,7 +40,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             [PathHop.Member("HeightMax")], JsonDocument.Parse("0.75").RootElement);
 
         var result = RecordEndpoints.EditRecord(
-            _mod.SourceNpc.ToString(), request, _mod.Edits, _gate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.EditHandler, _gate, NullLogger.Instance);
 
         AssertRefused(result);
     }

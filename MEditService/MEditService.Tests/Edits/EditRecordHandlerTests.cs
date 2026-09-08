@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
@@ -10,7 +11,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>Asserted against a real git repo through the real CLI, because "visible in the Source
 /// Control panel" is a claim about what <c>git status</c> says (ADR-0041).</summary>
-public sealed class RecordEditServiceTests : IDisposable
+public sealed class EditRecordHandlerTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
@@ -26,7 +27,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId);
         Assert.True(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
 
-        var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
@@ -45,7 +46,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId)
             .Replace('\\', '/');
 
-        Assert.True(_mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
+        Assert.True(_mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
 
         // Resolved after the rename: resolving both paths up front would have them collide on the
         // same still-old file and make the assertions below pass without checking anything.
@@ -76,7 +77,7 @@ public sealed class RecordEditServiceTests : IDisposable
         // is this edit's own doing — the positive control for every status assertion below.
         Assert.Empty(_mod.GitStatus());
 
-        var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
         var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
@@ -86,7 +87,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public async Task EditField_WritesTheNewValueIntoTheSourceFile_AsRealCodecText()
     {
-        _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // Re-parsed through the codec rather than string-matched: the file has to remain a document
         // the source can round-trip, not merely text that happens to contain the right number.
@@ -99,7 +100,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_ChangesOnlyTheEditedRecordsFile()
     {
-        _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         var status = _mod.GitStatus();
         Assert.Single(status);
@@ -111,7 +112,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_LeavesTheCommittedTextAsItWas_UntilItIsCommitted()
     {
-        _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId);
         Assert.Contains("0.75", File.ReadAllText(Path.Combine(_mod.ModFolder, relative)), StringComparison.Ordinal);
@@ -121,8 +122,8 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_TwiceOnTheSameRecord_BuildsOnTheFirstEditRatherThanTheCommittedText()
     {
-        _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
-        _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMin", Json("0.5"));
+        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMin", Json("0.5"));
 
         // The second edit reads what the first wrote, not the committed baseline, so both values are
         // in the file the second edit produced.
@@ -135,7 +136,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_WithAnUnknownFieldName_RefusesAndLeavesTheWorkingTreeClean()
     {
-        var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "NoSuchField", Json("1"));
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
@@ -145,7 +146,7 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditField_ForAFormKeyThePluginDoesNotHold_RefusesAndLeavesTheWorkingTreeClean()
     {
-        var result = _mod.Edits.Set(_mod.Plugin, "ABCDEF:NotHere.esp", "HeightMax", Json("0.75"));
+        var result = _mod.EditHandler.Set(_mod.Plugin, "ABCDEF:NotHere.esp", "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
@@ -161,7 +162,7 @@ public sealed class RecordEditServiceTests : IDisposable
         // own class carries a number.
         var corrupted = Corrupt("\"MajorRecordFlagsRaw\": \"notanumber\",\n  \"EditorID\"");
 
-        var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
@@ -179,7 +180,7 @@ public sealed class RecordEditServiceTests : IDisposable
     {
         var corrupted = Corrupt("\"EditorID\": \"Twice\",\n  \"EditorID\"");
 
-        var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
@@ -202,7 +203,7 @@ public sealed class RecordEditServiceTests : IDisposable
         const string garbage = "this is not a document";
         File.WriteAllText(_mod.NpcSourceFile, garbage);
 
-        var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
@@ -215,7 +216,7 @@ public sealed class RecordEditServiceTests : IDisposable
     {
         File.Delete(_mod.NpcSourceFile);
 
-        var result = _mod.Edits.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

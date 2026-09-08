@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
@@ -21,7 +22,7 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private RecordEditService EditService() => _fixture.Edits;
+    private EditRecordHandler EditService() => _fixture.EditHandler;
 
     private IFallout4ModGetter CompileAndReparse()
     {

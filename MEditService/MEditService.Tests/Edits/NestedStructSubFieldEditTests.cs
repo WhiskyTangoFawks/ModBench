@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -108,6 +109,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrder LoadOrder { get; }
         public RecordEditService Edits { get; }
+        public EditRecordHandler EditHandler { get; }
         public FormKey Faction { get; }
 
         public FactionFixture()
@@ -140,9 +142,10 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
             var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
             Edits = TestEditService.Over(holder);
+            EditHandler = TestEditService.EditHandler(holder);
         }
 
-        public RecordEditService Service() => Edits;
+        public EditRecordHandler Service() => EditHandler;
 
         public string Body() => TrackedTree.Document(_modFolder, Plugin, Faction.ToString())!.Body;
 

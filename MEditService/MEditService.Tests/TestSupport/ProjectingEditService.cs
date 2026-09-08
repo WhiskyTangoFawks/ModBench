@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -10,21 +11,23 @@ namespace MEditService.Tests.TestSupport;
 /// <summary>The write API with the projection behind it. ADR-0046 makes the write and the Index
 /// learning of it two events, so a test reading after a write lets the projector catch up
 /// first.</summary>
-internal sealed class ProjectingEditService(IndexProjector index, LoadOrderHolder holder, RecordEditService inner)
+internal sealed class ProjectingEditService(
+    IndexProjector index, LoadOrderHolder holder, RecordEditService inner, EditRecordHandler edits)
 {
     /// <summary>The service every test writes through, over <paramref name="index"/>'s own store and
     /// schemas.</summary>
     internal static ProjectingEditService Over(IndexProjector index)
     {
         var holder = TestEditService.HolderOver(index);
-        return new ProjectingEditService(index, holder, TestEditService.Over(holder));
+        return new ProjectingEditService(
+            index, holder, TestEditService.Over(holder), TestEditService.EditHandler(holder));
     }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
-        Projected(Current().Edit(plugin, formKey, envelope));
+        Projected(CurrentEdits().Edit(plugin, formKey, envelope));
 
     internal RecordEditResult Set(PluginKey plugin, string formKey, string member, JsonElement value) =>
-        Projected(Current().Set(plugin, formKey, member, value));
+        Projected(CurrentEdits().Set(plugin, formKey, member, value));
 
     internal RecordEditResult DeleteRecord(PluginKey plugin, string formKey) =>
         Projected(Current().DeleteRecord(plugin, formKey));
@@ -52,6 +55,12 @@ internal sealed class ProjectingEditService(IndexProjector index, LoadOrderHolde
     {
         TestEditService.Sync(holder, index);
         return inner;
+    }
+
+    private EditRecordHandler CurrentEdits()
+    {
+        TestEditService.Sync(holder, index);
+        return edits;
     }
 
     private RecordEditResult Projected(RecordEditResult result)

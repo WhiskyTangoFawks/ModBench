@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -24,7 +25,7 @@ public sealed class UntrackedReadOnlyTests
         using var mod = SourceEditFixture.Untracked();
         Assert.False(SourceRepository.IsTracked(mod.ModFolder)); // the whole of "untracked": no .git
 
-        var result = mod.Edits.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -42,7 +43,7 @@ public sealed class UntrackedReadOnlyTests
     {
         using var mod = SourceEditFixture.Untracked();
 
-        var result = mod.Edits.Set(mod.Plugin, $"ABCDEF:{SourceEditFixture.PluginName}", "HeightMax", Json("0.75"));
+        var result = mod.EditHandler.Set(mod.Plugin, $"ABCDEF:{SourceEditFixture.PluginName}", "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -53,7 +54,7 @@ public sealed class UntrackedReadOnlyTests
     {
         using var mod = SourceEditFixture.Untracked();
 
-        mod.Edits.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // Not merely "no dirt" — there is no repo to have dirt in. Hard read-only means the refusal
         // did not quietly create the source tree on its way out.
@@ -66,7 +67,7 @@ public sealed class UntrackedReadOnlyTests
     {
         using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var result = vanilla.Edits
+        var result = vanilla.EditHandler
             .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
@@ -80,9 +81,9 @@ public sealed class UntrackedReadOnlyTests
         using var untracked = SourceEditFixture.Untracked();
         using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var trackable = untracked.Edits
+        var trackable = untracked.EditHandler
             .Set(untracked.Plugin, untracked.Npc.ToString(), "HeightMax", Json("0.75"));
-        var notTrackable = vanilla.Edits
+        var notTrackable = vanilla.EditHandler
             .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
 
         // Collapsing these into one refusal would leave half the users following advice that cannot work:
@@ -101,7 +102,7 @@ public sealed class UntrackedReadOnlyTests
         // is one command, once, per mod. Same plugin, same record, same field — only .git differs.
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.Edits.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.None, result.Refusal);
