@@ -1,35 +1,32 @@
 import * as vscode from 'vscode';
+import { join } from 'node:path';
 import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
 import { groupModlist, type ModlistTree } from './modlistTree';
-import { buildFileConflictIndex } from './fileConflictIndex';
-import { computeModStatuses, type ModStatus, type ModStatusResult } from './statusChecker';
-import { readVanillaMasters } from './vanillaMasters';
-import { countOverwriteFiles } from './overwriteFolder';
-import * as path from 'node:path';
+import type { ModStatus, ModStatusResult } from './statusChecker';
 // Pure drop-index reconciliation, shared with PluginListProvider. A neutral
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from './deployer';
-import { ErrorNode } from './ErrorNode';
+import type { Instance, InstanceValue } from './instance';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
-// Hoisted out of the constructor so an omitted `dataFolder` isn't a fresh closure per instance.
-const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
-
-/** The only `IModlistSource` members this provider calls. */
+/** The only `IModlistSource` members this provider calls — reading the modlist itself is the
+ *  Instance's job now (ADR-0047). */
 export type ModListSource = Pick<
-  IModlistSource, 'setEnabled' | 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock' | 'setActiveProfile' | 'readModlist'
+  IModlistSource, 'setEnabled' | 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock' | 'setActiveProfile'
 >;
 
-/** `dataFolder` is a getter, not a settled `Promise` — the game-directory setting is
- *  editable while Modbench runs, so a value captured at construction could go stale. */
 export interface ModListProviderOptions {
+  /** Mods/separators in override order, per-mod conflict/override/missing status and the
+   *  overwrite/ file count — the tree's only data input (ADR-0047). */
+  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
   source: ModListSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
-  instanceRoot?: string;
-  dataFolder?: () => Promise<string | undefined>;
+  /** Only for the pinned Overwrite row's resourceUri (Explorer reveal / the decoration
+   *  provider's key) — never read from disk by this provider. */
+  instanceRoot: string;
 }
 
 function statusIconId(status?: ModStatusResult): string {
@@ -116,15 +113,17 @@ export class OverwriteNode extends vscode.TreeItem {
   }
 }
 
-export type ModlistNode = CountNode | SeparatorNode | ModNode | ErrorNode | OverwriteNode;
+export type ModlistNode = CountNode | SeparatorNode | ModNode | OverwriteNode;
 
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
 
-/** Sidebar Mod List (Loadout) tree over an MO2 instance's active profile. */
+/** Sidebar Mod List (Loadout) tree over an MO2 instance's active profile — rows, statuses and
+ *  the overwrite count all read entirely from the Instance value (ADR-0047); this provider owns
+ *  no cache or watcher over MO2's files itself. */
 export class ModListProvider
-  implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>
+  implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>, vscode.Disposable
 {
   readonly dropMimeTypes = [DND_MIME] as const;
   readonly dragMimeTypes = [DND_MIME] as const;
@@ -134,8 +133,6 @@ export class ModListProvider
 
   private tree?: ModlistTree;
   private cachedEntries?: ModlistEntry[];
-  private statuses?: Map<string, ModStatusResult>;
-  private loadError?: string;
   private filterText = '';
   private filterLower = '';
   private groupingOn = true;
@@ -146,26 +143,43 @@ export class ModListProvider
   private readonly source: ModListSource;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
-  private readonly instanceRoot?: string;
-  private readonly dataFolder: () => Promise<string | undefined>;
+  private readonly instanceRoot: string;
+  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  private instanceValue: InstanceValue;
+  private readonly instanceSubscription: vscode.Disposable;
+  // Resolves once the Instance lands its first recompute. `sequence === 0` means "not read
+  // yet", never "genuinely empty" — lets `getChildren()` await it instead of rendering early.
+  private readonly firstValue: Promise<void>;
+  private resolveFirstValue: (() => void) | undefined;
 
-  /** `instanceRoot` gates the status badges — without files on disk there is no conflict
-   *  index and no missing-master check; an undefined `dataFolder` degrades that check to an
-   *  empty master set. */
   constructor(options: ModListProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
     this.instanceRoot = options.instanceRoot;
-    this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
+    this.instance = options.instance;
+    this.instanceValue = options.instance.value;
+    this.firstValue = options.instance.sequence > 0
+      ? Promise.resolve()
+      : new Promise((resolve) => { this.resolveFirstValue = resolve; });
+    this.instanceSubscription = options.instance.subscribe((value) => {
+      this.instanceValue = value;
+      this.resolveFirstValue?.();
+      this.invalidate();
+    });
   }
 
-  /** Drops cached data so the next read re-walks the source; `render` only redraws. */
+  dispose(): void {
+    this.instanceSubscription.dispose();
+  }
+
+  /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
+   *  a caller forcing a resync (a failed write, a gesture's own callback) gets whatever the
+   *  Instance is currently holding, not a snapshot that predates it. */
   invalidate(): void {
+    this.instanceValue = this.instance.value;
     this.tree = undefined;
     this.cachedEntries = undefined;
-    this.statuses = undefined;
-    this.loadError = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -173,7 +187,7 @@ export class ModListProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Render-only: a filter keystroke narrows already-built rows and never re-reads disk. */
+  /** Render-only: a filter keystroke narrows already-built rows and never re-reads the value. */
   setFilter(text: string, grouping: boolean): void {
     this.filterText = text;
     this.filterLower = text.toLowerCase();
@@ -274,12 +288,20 @@ export class ModListProvider
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
     if (element instanceof SeparatorNode) return this.separatorChildren(element);
     if (element) return [];
+    await this.firstValue; // never render before the Instance has actually read once
 
-    const tree = await this.load();
-    if (!tree) return [new ErrorNode(this.loadError ?? 'unknown error')];
+    const tree = this.ensureLoaded();
     const roots = this.rootNodes(tree);
-    const overwrite = await this.overwriteNode();
+    const overwrite = this.overwriteNode();
     return overwrite ? [...roots, overwrite] : roots;
+  }
+
+  private ensureLoaded(): ModlistTree {
+    if (!this.tree) {
+      this.cachedEntries = [...this.instanceValue.mods];
+      this.tree = groupModlist(this.cachedEntries);
+    }
+    return this.tree;
   }
 
   private rootNodes(tree: ModlistTree): ModlistNode[] {
@@ -289,14 +311,13 @@ export class ModListProvider
   }
 
   // Appended last, outside grouping and sort: a fixture over the folder, not a modlist.txt entry.
-  private async overwriteNode(): Promise<OverwriteNode | undefined> {
-    if (!this.instanceRoot) return undefined;
-    const dir = path.join(this.instanceRoot, 'overwrite');
-    const count = await countOverwriteFiles(dir);
-    return count > 0 ? new OverwriteNode(vscode.Uri.file(dir), count) : undefined;
+  private overwriteNode(): OverwriteNode | undefined {
+    const count = this.instanceValue.overwriteFileCount;
+    if (count <= 0) return undefined;
+    return new OverwriteNode(vscode.Uri.file(join(this.instanceRoot, 'overwrite')), count);
   }
 
-  private toModNode = (m: Mod): ModNode => new ModNode(m, this.statuses?.get(m.name));
+  private toModNode = (m: Mod): ModNode => new ModNode(m, this.instanceValue.modStatuses.get(m.name));
 
   private separatorChildren(element: SeparatorNode): ModlistNode[] {
     const mods = this.filterText && !this.matches(element.separator.name)
@@ -367,35 +388,5 @@ export class ModListProvider
 
   private err(e: unknown): string {
     return e instanceof Error ? e.message : String(e);
-  }
-
-  private async load(): Promise<ModlistTree | undefined> {
-    if (this.tree) return this.tree;
-    let entries: ModlistEntry[];
-    try {
-      entries = await this.source.readModlist();
-    } catch (e) {
-      this.loadError = this.err(e);
-      this.log(`[ModListProvider] readModlist failed: ${this.loadError}`);
-      return undefined;
-    }
-    this.loadError = undefined;
-    this.cachedEntries = entries;
-    this.tree = groupModlist(entries);
-    if (this.instanceRoot) {
-      try {
-        const [index, vanillaMasters] = await Promise.all([
-          buildFileConflictIndex(entries, this.instanceRoot, this.log),
-          this.dataFolder().then((df) => readVanillaMasters(df, this.log)),
-        ]);
-        this.statuses = await computeModStatuses(entries, this.instanceRoot, index, vanillaMasters, this.log);
-      } catch (e) {
-        const message = this.err(e);
-        this.log(`[ModListProvider] status computation failed: ${message}`);
-        this.reporter?.report('warning', 'Could not compute mod conflict/missing-master status — badges may be inaccurate.', message);
-        this.statuses = undefined;
-      }
-    }
-    return this.tree;
   }
 }

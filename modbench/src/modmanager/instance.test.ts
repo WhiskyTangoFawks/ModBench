@@ -1,8 +1,10 @@
 import { describe, it, expect, afterEach, vi, type Mock } from 'vitest';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from './test/corpusFixture';
+import { buildTes4Buffer } from './test/buildTes4Buffer';
 import { setEnabledInText } from './mo2/modlistText';
 import { setSelectedProfileInText } from './mo2/modOrganizerIni';
 import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
@@ -365,8 +367,9 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(instance.value).toBe(value);
     expect(instance.sequence).toBe(before);
-    expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
-    expect(logs[0]).toContain('ModOrganizer.ini');
+    const failureLogs = logs.filter((m) => m.includes('recompute failed'));
+    expect(failureLogs).toHaveLength(1);
+    expect(failureLogs[0]).toContain('ModOrganizer.ini');
   });
 
   it('keeps the mods when modlist.txt reads as empty mid-write, and logs', async () => {
@@ -578,5 +581,72 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     }
 
     expect(instance.sequence).toBe(before);
+  });
+});
+
+// A bespoke minimal instance (not the corpus clone), so a mod's declared masters are exactly
+// what the test wrote — real xEdit-produced corpus bytes carry unknown master lists of their own.
+async function minimalInstance(): Promise<{
+  root: string; instance: Instance; logs: string[]; setDetectPaths: (detect: DetectPaths) => void;
+}> {
+  const root = await mkdtemp(join(tmpdir(), 'medit-instance-status-'));
+  roots.push(root);
+  await mkdir(join(root, 'profiles', 'Default'), { recursive: true });
+  await writeFile(join(root, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\ngameName=Fallout 4\n');
+  await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '+Consumer\n');
+  await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), '');
+  await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
+  const mo2 = new Mo2ModlistSource(root);
+  const logs: string[] = [];
+  let detectPaths: DetectPaths = () => Promise.resolve(null);
+  const instance = new Instance({
+    instanceRoot: root,
+    source: mo2,
+    config: () => fakeConfig(undefined),
+    detectPaths: () => detectPaths(),
+    detectWinePrefix: noDetectWinePrefix,
+    onConfigChange: fakeOnConfigChange().subscribe,
+    log: (msg) => logs.push(msg),
+  });
+  instances.push(instance);
+  return { root, instance, logs, setDetectPaths: (detect) => { detectPaths = detect; } };
+}
+
+describe('Instance — per-mod status and the overwrite count', () => {
+  it('computes a missing-master status for a mod whose plugin declares a master nothing provides', async () => {
+    const { root, instance } = await minimalInstance();
+    await writeFile(join(root, 'mods', 'Consumer', 'Child.esp'), buildTes4Buffer(['NoSuchMaster.esm']));
+
+    await instance.refresh();
+
+    expect(instance.value.modStatuses.get('Consumer')).toEqual({
+      status: { kind: 'missingMaster', masters: ['NoSuchMaster.esm'] },
+      conflictLines: [],
+    });
+  });
+
+  it('resolves a declared master from the injected Data folder, so no missing-master status', async () => {
+    const { root, instance, setDetectPaths } = await minimalInstance();
+    const dataFolder = join(root, 'Game', 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    setDetectPaths(() => Promise.resolve({ dataFolder, pluginsTxt: dataFolder }));
+    await writeFile(join(root, 'mods', 'Consumer', 'Child.esp'), buildTes4Buffer(['Fallout4.esm']));
+
+    await instance.refresh();
+
+    expect(instance.value.modStatuses.get('Consumer')?.status).toEqual({ kind: 'ok' });
+  });
+
+  it('carries the overwrite/ folder\'s file count, recursive', async () => {
+    const { root, instance } = await minimalInstance();
+    await instance.refresh();
+    expect(instance.value.overwriteFileCount).toBe(0);
+
+    await mkdir(join(root, 'overwrite', 'F4SE'), { recursive: true });
+    await writeFile(join(root, 'overwrite', 'F4SE', 'plugin.log'), 'x');
+    await instance.refresh();
+
+    expect(instance.value.overwriteFileCount).toBe(1);
   });
 });

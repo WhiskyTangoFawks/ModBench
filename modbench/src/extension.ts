@@ -851,7 +851,9 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     // this kicks off the first real read. PluginListProvider's own `sequence === 0` guard is
     // what keeps activation from being blocking here.
     void instance.refresh();
-    const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
+    // ADR-0047: rows, statuses and the overwrite count all come from the Instance value now —
+    // this provider builds no index and reads no disk of its own.
+    const modListProvider = new ModListProvider({ instance, source: modlistSource, log, instanceRoot, reporter: modListReporter });
     // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
     // and enterEditing below need the session slot filled first.
     session.loadOrderSync = makeLoadOrderSync({
@@ -905,6 +907,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
       ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
       ...pluginListDisposables,
+      modListProvider, // disposes its Instance subscription
       instance,
     );
     // The watchers above cover changes made while Modbench runs; these one-time passes reconcile
