@@ -35,7 +35,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_index.LoadOrder!, _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_index, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

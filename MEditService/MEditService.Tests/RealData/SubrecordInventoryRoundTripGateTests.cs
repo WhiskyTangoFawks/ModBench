@@ -72,7 +72,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         }
 
         public Task TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index.LoadOrder!, "TrueStormsMod", SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()
         {

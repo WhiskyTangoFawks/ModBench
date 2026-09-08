@@ -33,7 +33,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Index.LoadOrder!, Plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(Index, Plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         CopyDirectory(ModFolder, TrackedTemplateFolder);

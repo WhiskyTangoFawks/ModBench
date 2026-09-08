@@ -29,7 +29,7 @@ public sealed class SourceParityFixture : IDisposable
         FromBinary = NewLoadOrder(pluginPath);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(FromBinary.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(FromBinary, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         FromSource = NewLoadOrder(pluginPath);

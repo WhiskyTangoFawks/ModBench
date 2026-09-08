@@ -1,10 +1,10 @@
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Plugins;
 
-/// <summary>The plugin copies Editing currently holds, each with its registration (ADR-0044).
-/// A mirror of Mod Management's snapshot, kept true by reconcile — nothing is loaded or exited.</summary>
+/// <summary>The plugin copies Editing currently holds, each with its registration (ADR-0044): the
+/// live view of Mod Management's snapshot, kept true by reconcile — nothing is loaded or exited.
+/// Opening a copy is the adapter's (<see cref="HeldPlugins"/>), never this view's.</summary>
 public interface ILoadOrder : IDisposable
 {
     string DataFolderPath { get; }
@@ -16,7 +16,4 @@ public interface ILoadOrder : IDisposable
 
     GameRelease GameRelease { get; }
     IReadOnlyList<PluginMetadata> Plugins { get; }
-    // ADR-0036: origin is required, not optional — the load order can hold two copies of one
-    // filename, so the filename alone does not identify which mod to return.
-    IModGetter? GetMod(string pluginName, string origin);
 }

@@ -219,7 +219,7 @@ public sealed class InjectedChildTests
         {
             var track = new TrackService(NullLogger<TrackService>.Instance);
             foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
-                track.TrackAsync(Index.LoadOrder!, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+                track.TrackAsync(Index, origin, SourcePreset.Edits).GetAwaiter().GetResult();
         }
 
         public IModDisposeGetter CompileAndReimport(PluginKey plugin)

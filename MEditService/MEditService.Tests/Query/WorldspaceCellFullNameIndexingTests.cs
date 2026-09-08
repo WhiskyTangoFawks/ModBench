@@ -56,7 +56,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_index.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(_index, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

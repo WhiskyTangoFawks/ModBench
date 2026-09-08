@@ -50,8 +50,8 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
         string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries) =>
         new(gameDirectory, instanceRoot, gameRelease, HeldPlugins.Resolve(gameDirectory, gameRelease, entries));
 
-    /// <summary>The copies a mirror holds, as the value — the bridge for callers still handed the
-    /// held view rather than the snapshot.</summary>
+    /// <summary>The held copies as the value: what the Index projects its live view back into, for
+    /// every caller that reads the load order rather than opening a copy.</summary>
     public static LoadOrder From(ILoadOrder held) =>
         new(held.DataFolderPath, held.InstanceRoot, held.GameRelease,
             [.. held.Plugins.Select(p => new RegisteredCopy(

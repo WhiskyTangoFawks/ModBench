@@ -52,7 +52,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
         sourceChanges.RefreshWatches();
 
         new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = sourceChanges.WatchTracking }
-            .TrackAsync(Index.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(Index, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         DocumentsWritten = Directory

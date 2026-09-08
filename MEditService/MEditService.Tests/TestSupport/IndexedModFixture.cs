@@ -69,7 +69,7 @@ public sealed class IndexedModFixture : IDisposable
         if (track)
         {
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Index.LoadOrder!, ModFolderOrigin, SourcePreset.Edits)
+                .TrackAsync(Index, ModFolderOrigin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
     }

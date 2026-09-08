@@ -11,11 +11,15 @@ namespace MEditService.Api;
 /// carries the bare (modFolder, pluginName) identity.</summary>
 internal sealed class ExternalChangeApplier(IndexProjector index, INotificationPublisher notifications, ILogger logger)
 {
+    // Projected per signal rather than held: the load order can be reconciled between two of them.
+    private static LoadOrder HeldOrder(IndexProjector index) =>
+        index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
+
     /// <summary>A question was queued: publishes it exactly as <c>GET /plugins/external-changes/status</c>
     /// would report it.</summary>
     internal void ApplyPending(UnansweredExternalChange change)
     {
-        var origin = PluginEndpoints.OriginOfExternalChange(index.LoadOrder, change.ModFolder, change.PluginName);
+        var origin = PluginEndpoints.OriginOfExternalChange(HeldOrder(index), change.ModFolder, change.PluginName);
         notifications.Publish(new ExternalChangePendingNotification(
             new PluginKey(change.PluginName, origin),
             change.Classification.MetaChanged, change.Classification.OldVersion, change.Classification.NewVersion));
@@ -25,7 +29,7 @@ internal sealed class ExternalChangeApplier(IndexProjector index, INotificationP
     /// overflow-to-validate shape <see cref="SourceChangeApplier"/> has for the Source side.</summary>
     internal void ApplyOverflow(string modFolder, string pluginName)
     {
-        var origin = PluginEndpoints.OriginOfExternalChange(index.LoadOrder, modFolder, pluginName);
+        var origin = PluginEndpoints.OriginOfExternalChange(HeldOrder(index), modFolder, pluginName);
         var key = new PluginKey(pluginName, origin);
         try
         {

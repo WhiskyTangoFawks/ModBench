@@ -206,7 +206,7 @@ public sealed class WarmReconcileTests
             {
                 cold.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
                 await new TrackService(NullLogger<TrackService>.Instance)
-                    .TrackAsync(cold.LoadOrder!, origin, SourcePreset.Edits);
+                    .TrackAsync(cold, origin, SourcePreset.Edits);
             }
 
             // Loaded twice *after* tracking, so both loads see a tracked plugin whose binary the

@@ -357,7 +357,8 @@ public static class PluginEndpoints
     // question with an empty Origin rather than dropping it, since the question is still real.
     internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, IndexProjector index)
     {
-        var loadOrder = index.LoadOrder;
+        // Projected once, not per question: the whole list is answered against one value.
+        var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
         var responses = watcher.Unanswered().Select(p =>
             new UnansweredExternalChangeResponse(
                 p.PluginName, OriginOfExternalChange(loadOrder, p.ModFolder, p.PluginName),
@@ -368,10 +369,10 @@ public static class PluginEndpoints
 
     // Shared with ExternalChangeApplier's own notification and overflow paths, which start from the
     // same bare (modFolder, pluginName) identity the watcher carries.
-    internal static string OriginOfExternalChange(ILoadOrder? loadOrder, string modFolder, string pluginName) =>
-        loadOrder?.Plugins.FirstOrDefault(pl =>
-            pl.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
-            && ModFolders.Of(pl.Origin, pl.Path) == modFolder)?.Origin ?? "";
+    internal static string OriginOfExternalChange(LoadOrder loadOrder, string modFolder, string pluginName) =>
+        loadOrder.Copies.FirstOrDefault(copy =>
+            copy.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
+            && ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
     // Absorb Upstream Update. The plugin name and origin resolve the target the same way
     // Compile does; GameRelease comes off the loaded load order, never guessed.

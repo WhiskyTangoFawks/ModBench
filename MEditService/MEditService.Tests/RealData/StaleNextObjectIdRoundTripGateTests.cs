@@ -140,7 +140,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
         public Task TrackAsync(Func<string, CancellationToken, Task<IFallout4Mod>>? deserialize = null) =>
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_index.LoadOrder!, Plugin.Origin!, SourcePreset.Edits, deserialize);
+                .TrackAsync(_index, Plugin.Origin!, SourcePreset.Edits, deserialize);
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(_index);

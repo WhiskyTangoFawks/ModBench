@@ -14,17 +14,6 @@ public static class ModFolders
     public static string? Of(LoadOrder loadOrder, PluginKey plugin) =>
         loadOrder.Copy(plugin) is { } copy ? Of(copy.Origin, copy.Path) : null;
 
-    // The same rule for a caller still holding the mirror's view. Scans the view rather than
-    // projecting it to a value: this is called per plugin inside per-plugin loops.
-    public static string? Of(ILoadOrder? loadOrder, PluginKey plugin)
-    {
-        var metadata = loadOrder?.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-            && p.Origin.Equals(plugin.Origin, StringComparison.OrdinalIgnoreCase));
-
-        return metadata is null ? null : Of(metadata.Origin, metadata.Path);
-    }
-
     /// <summary>The same rule for callers already holding a plugin's metadata.</summary>
     public static string? Of(string origin, string pluginPath)
     {
@@ -41,10 +30,6 @@ public static class ModFolders
     /// <summary>The mod folder only when it is tracked — the single condition under which a plugin has
     /// source text at all.</summary>
     public static string? TrackedOf(LoadOrder loadOrder, PluginKey plugin) =>
-        Tracked(Of(loadOrder, plugin));
-
-    /// <summary>The same rule for a caller still holding the mirror's view.</summary>
-    public static string? TrackedOf(ILoadOrder? loadOrder, PluginKey plugin) =>
         Tracked(Of(loadOrder, plugin));
 
     private static string? Tracked(string? modFolder) =>
