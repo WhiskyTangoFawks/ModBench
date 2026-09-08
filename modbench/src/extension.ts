@@ -48,12 +48,13 @@ import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePending, type MinimalRepository } from './medit/editorCommands';
-import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcile';
 import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled, type PluginsCommandResult } from './modmanager/commands/plugins';
+import { createEmptyMod } from './modmanager/commands/modlist';
+import { registerModsReconcile } from './modmanager/modsReconcile';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
@@ -543,15 +544,11 @@ async function pickPluginDestination(
 
   const modName = await vscode.window.showInputBox({ prompt: 'New mod name' });
   if (!modName) return undefined;
-  const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'medit-newmod-'));
-  try {
-    // Accepted residue: the mod folder is registered before the create POST runs. If that POST
-    // fails, the mod stays registered — empty and disabled, same as any fresh install — rather
-    // than being rolled back.
-    await modlistSource.installMod(modName, staging, {});
-  } finally {
-    await fs.promises.rm(staging, { recursive: true, force: true });
-  }
+  // Accepted residue: the mod folder is created before the create POST runs. If that POST
+  // fails, the mod stays there — empty and disabled, same as any fresh install — rather than
+  // being rolled back.
+  const outcome = await createEmptyMod(instanceRoot, await modlistSource.getActiveProfile(), modName);
+  if (!outcome.applied) throw new Error(outcome.refusal);
   return resolvePluginDestination(instanceRoot, { kind: 'newMod', modName });
 }
 
@@ -870,7 +867,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     void instance.refresh();
     // ADR-0047: rows, statuses and the overwrite count all come from the Instance value now —
     // this provider builds no index and reads no disk of its own.
-    const modListProvider = new ModListProvider({ instance, source: modlistSource, log, instanceRoot, reporter: modListReporter });
+    const modListProvider = new ModListProvider({ instance, log, instanceRoot, reporter: modListReporter });
     // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
     // and enterEditing below need the session slot filled first.
     session.loadOrderSync = makeLoadOrderSync({
@@ -918,7 +915,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       modListFilter,
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
       ...registerModListCoreCommands(
-        modListProvider, modlistSource, updateProfileDescription,
+        instanceRoot, modListProvider, modlistSource, outputChannel, updateProfileDescription,
         () => session.loadoutHeaderProvider?.refresh(), () => session.loadOrderSync?.request(),
       ),
       ...registerDeployCommands(
@@ -926,22 +923,17 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       ),
       registerLaunchCommand(outputChannel),
       gameDirResolver,
-      ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
+      ...registerModInstallCommands({ instanceRoot, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands(instanceRoot, modlistSource, outputChannel, runModAction),
       ...registerSeparatorCommands(instanceRoot, modlistSource, runModAction),
       registerCreateEmptyModCommand(instanceRoot, modlistSource, runModAction),
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
-      registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
+      registerModsReconcile(instanceRoot, modlistSource, () => modListProvider.invalidate(), outputChannel),
       registerPluginsReconcile(instance, runPluginsReconcile),
       ...pluginListDisposables,
       modListProvider, // disposes its Instance subscription
       instance,
     );
-    // The watchers above cover changes made while Modbench runs; this one-time pass reconciles
-    // what happened while it wasn't. The refresh is what carries the mods it registered into the
-    // plugins reconcile, which runs off the Instance's value.
-    void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel)
-      .then(() => instance.refresh());
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, instance, outputChannel);
     context.subscriptions.push(...downloadsDisposables);
     // ADR-0046: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);

@@ -1,14 +1,12 @@
-// Install and uninstall are multi-file writers, so the composition risk is at their seams: one
-// leg succeeding while silently touching something it should not.
+// Uninstall is a multi-file writer, so the composition risk is at its seams: one leg
+// succeeding while silently touching something it should not.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Mo2ModlistSource } from './Mo2ModlistSource';
 import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree } from '../test/corpusFixture';
-import type { Mod } from '../model';
 
-describe('mod lifecycle corpus (install / uninstall)', () => {
+describe('mod lifecycle corpus (uninstall)', () => {
   let dir: string;
   let src: Mo2ModlistSource;
 
@@ -17,57 +15,6 @@ describe('mod lifecycle corpus (install / uninstall)', () => {
     src = new Mo2ModlistSource(dir);
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
-
-  it('installMod copies the source tree, writes meta.ini, and inserts one modlist line — nothing else', async () => {
-    const sourceDir = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
-    try {
-      await writeFile(join(sourceDir, 'Installed.esp'), 'placeholder plugin bytes: Installed.esp');
-      await mkdir(join(sourceDir, 'textures'), { recursive: true });
-      await writeFile(join(sourceDir, 'textures', 'added.dds'), 'placeholder texture bytes');
-
-      const before = await snapshotTree(dir);
-      await src.installMod('Freshly Installed Mod', sourceDir, { modid: '1234', version: '1.0.0' });
-      const after = await snapshotTree(dir);
-
-      assertOnlyChanged(
-        before,
-        after,
-        new Set([
-          MODLIST,
-          'mods/Freshly Installed Mod/Installed.esp',
-          'mods/Freshly Installed Mod/textures/added.dds',
-          'mods/Freshly Installed Mod/meta.ini',
-        ]),
-      );
-
-      // Copied content is exact — an independent byte comparison against the source,
-      // not a re-derivation of what the writer just did.
-      expect(after.get('mods/Freshly Installed Mod/Installed.esp')?.toString('utf8')).toBe(
-        'placeholder plugin bytes: Installed.esp',
-      );
-      expect(after.get('mods/Freshly Installed Mod/textures/added.dds')?.toString('utf8')).toBe(
-        'placeholder texture bytes',
-      );
-
-      const entries = await src.readModlist();
-      expect(entries[0].name).toBe('Freshly Installed Mod'); // winning end
-      expect((entries[0] as Mod).enabled).toBe(false); // installed disabled, per IModlistSource contract
-    } finally {
-      await rm(sourceDir, { recursive: true, force: true });
-    }
-  });
-
-  it('installMod rejects a name collision, touching nothing', async () => {
-    const sourceDir = await mkdtemp(join(tmpdir(), 'medit-install-source-'));
-    try {
-      const before = await snapshotTree(dir);
-      await expect(src.installMod('Harder VATS', sourceDir, {})).rejects.toThrow();
-      const after = await snapshotTree(dir);
-      assertOnlyChanged(before, after, new Set());
-    } finally {
-      await rm(sourceDir, { recursive: true, force: true });
-    }
-  });
 
   // "Unofficial Fallout 4 Patch"'s meta.ini names a real archive under downloads/
   // (installationFile=...) — removeMod's downstream writeback must land on exactly

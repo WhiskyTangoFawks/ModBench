@@ -36,7 +36,7 @@ async function setup() {
     log: () => {},
   });
   await instance.refresh();
-  const provider = new ModListProvider({ instance, source, instanceRoot: root });
+  const provider = new ModListProvider({ instance, instanceRoot: root });
   await provider.getChildren(); // populate the cache off the first value
   return { root, instance, provider };
 }
