@@ -17,12 +17,19 @@ done
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 
-# One backend gate run per machine: concurrent runs flake timing tests, and api-drift kills every
-# MEditService.Api and binds 5172. -o keeps the lock out of child processes, so a lingering build
-# server cannot hold it.
+# Two backend gate runs per machine, measured: a third leaves no memory headroom, and api-drift
+# kills every MEditService.Api and binds 5172, so it takes a slot too. -o keeps the lock out of
+# child processes, so a lingering build server cannot hold it. A waiter queues on the first slot
+# rather than whichever frees first, which costs a wait, never correctness.
+GATE_SLOTS=2
 if { $BACKEND || $API_DRIFT; } && [[ -z ${GATE_SLOT:-} ]]; then
-  flock -n /tmp/medit-backend-gate.lock true || echo "=== Waiting for the backend gate slot ==="
-  GATE_SLOT=1 exec flock -o /tmp/medit-backend-gate.lock "$0" "${ORIG_ARGS[@]}"
+  for slot in $(seq 1 $GATE_SLOTS); do
+    GATE_SLOT=$slot flock -n -E 99 -o "/tmp/medit-backend-gate.$slot.lock" "$0" "${ORIG_ARGS[@]}"
+    status=$?
+    [[ $status -ne 99 ]] && exit $status
+  done
+  echo "=== Waiting for a backend gate slot ==="
+  GATE_SLOT=1 exec flock -o /tmp/medit-backend-gate.1.lock "$0" "${ORIG_ARGS[@]}"
 fi
 
 echo "=== Gate 1: Comment discipline ==="
