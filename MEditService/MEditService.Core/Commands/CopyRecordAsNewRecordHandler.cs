@@ -140,7 +140,6 @@ public sealed class CopyRecordAsNewRecordHandler
         return null;
     }
 
-    // A self-link is remapped onto the new FormKey, as xEdit does.
     private static void RemapSelfLink(IMajorRecordGetter record, string oldFormKey, string newFormKey)
     {
         if (record is IFormLinkContainer links)

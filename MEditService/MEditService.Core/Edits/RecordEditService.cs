@@ -13,9 +13,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>Renumber (ADR-0041): it lands as a working-tree change to the record's source JSON,
-/// the source text is the source rather than the index, and every refusal precedes any
-/// write.</summary>
+/// <summary>Renumber (ADR-0041), plus the statics the copy, create and scan sides all reach into:
+/// every write here lands as a working-tree change to the record's source JSON, and every refusal
+/// precedes it.</summary>
 public sealed class RecordEditService(
     LoadOrderHolder loadOrder,
     IModImporter importer,
@@ -23,8 +23,8 @@ public sealed class RecordEditService(
     SchemaReflector schemaReflector,
     ILogger<RecordEditService> logger)
 {
-    // The write side's shared concerns (ADR-0046): the renumber below resolves its target, takes the
-    // pre-write gate, renames on an EditorID change and draws FormKeys through this one module.
+    // The write side's shared concerns (ADR-0046): the renumber below resolves its edit target
+    // behind the pre-write gate and draws its new FormKey, both through this one module.
     private readonly WriteTargets _targets = new(loadOrder, importer, codec, schemaReflector, logger);
 
     /// <summary>The codec is the one constructor: a record begins as the document naming its identity,
