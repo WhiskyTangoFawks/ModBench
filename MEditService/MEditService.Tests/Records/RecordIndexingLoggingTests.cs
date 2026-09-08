@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// A per-plugin summary line duplicates the progress milestone LoadOrderMirror logs at Info, so it
+// A per-plugin summary line duplicates the progress milestone IndexProjector logs at Info, so it
 // logs at Debug and per-record processing logs at Trace. Only log level and content are asserted
 // here; DuckDbRecordIndexTests covers whether the rows land.
 public sealed class RecordIndexingLoggingTests : IDisposable

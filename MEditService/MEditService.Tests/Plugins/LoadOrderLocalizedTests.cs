@@ -35,7 +35,7 @@ public sealed class LoadOrderLocalizedTests
             File.WriteAllBytes(Path.Combine(data.DataFolder, "UnrelatedMod - Main.ba2"), []);
 
             var reflector = SharedSchemaReflector.Instance;
-            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+            using var manager = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             // Asserted directly, not just implied by GetDocument coming back null below: a

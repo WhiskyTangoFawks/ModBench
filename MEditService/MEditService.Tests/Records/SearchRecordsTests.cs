@@ -12,11 +12,11 @@ public class SearchRecordsTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private LoadOrderMirror MakeLoadedManager()
+    private IndexProjector MakeLoadedManager()
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new LoadOrderMirror(factory);
+        var manager = new IndexProjector(factory);
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return manager;
     }

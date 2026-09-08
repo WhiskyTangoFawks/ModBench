@@ -55,7 +55,7 @@ public sealed class ReconcileApiTests : IDisposable
 
     private void CorruptTheStoredBody(string formKey)
     {
-        var index = (DuckDbRecordIndex)_app.Services.GetRequiredService<ILoadOrderMirror>().Index!;
+        var index = (DuckDbRecordIndex)_app.Services.GetRequiredService<IndexProjector>().Store!;
         DuckDbSql.ExecuteFor(index.Connection,
             "UPDATE mirror.records SET body = '{\"EditorID\": \"CorruptedInTheStore\"}' WHERE form_key = $1", formKey);
     }

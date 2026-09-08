@@ -17,15 +17,15 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private LoadOrderMirror NewLoadOrder()
+    private IndexProjector NewLoadOrder()
     {
-        var mirror = new LoadOrderMirror(
+        var index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)mirror).Reconcile(
+        index.Reconcile(
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        return mirror;
+        return index;
     }
 
     // ---- Embedded children survive the round trip through the tree ----
@@ -35,10 +35,10 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         using var reloaded = NewLoadOrder();
 
-        var record = reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        var record = reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(record);
         Assert.Equal(ContainerModFixture.TemporaryRefEditorId, record!.EditorId);
-        Assert.NotNull(reloaded.Index!.At(RecordRef.Effective).Resolve(_fixture.TemporaryRef.ToString()));
+        Assert.NotNull(reloaded.Store!.At(RecordRef.Effective).Resolve(_fixture.TemporaryRef.ToString()));
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         using var reloaded = NewLoadOrder();
 
-        var placement = reloaded.Index!.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        var placement = reloaded.Store!.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(placement);
         // The spatial facts survive containment being expressed as a directory rather than a GRUP.
         Assert.Equal(_fixture.EmbedCell.ToString(), placement!.Value.ParentCell);
@@ -60,8 +60,8 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         // Nothing is dirty, so the one parse serves both refs — ADR-0041's clean fast path, asserted
         // rather than assumed, and asserted for a record that exists only inside its parent's document.
-        var effective = reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
-        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        var head = reloaded.Store!.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(head);
         Assert.Equal(effective!.Body, head!.Body);
     }
@@ -71,7 +71,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         using var reloaded = NewLoadOrder();
 
-        var cell = reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
+        var cell = reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(cell);
         Assert.Equal(ContainerModFixture.EmbedCellEditorId, cell!.EditorId);
         // The child is embedded in the parent's document, which is what gives it no file of its own.
@@ -92,12 +92,12 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         // The load completed and the edit is visible — no throw, no dropped plugin, no fallback.
         Assert.Empty(reloaded.Status.Failures);
-        Assert.Equal("RenamedCell", reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.EditorId);
+        Assert.Equal("RenamedCell", reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.EditorId);
 
         // Head now holds the true, pre-edit baseline — not Effective's own value.
         Assert.Equal(
             ContainerModFixture.EmbedCellEditorId,
-            reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.EditorId);
+            reloaded.Store!.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.EditorId);
     }
 
     [Fact]
@@ -114,10 +114,10 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         using var reloaded = NewLoadOrder();
 
-        Assert.Equal("RenamedNpc", reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
+        Assert.Equal("RenamedNpc", reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
         Assert.Equal(
             ContainerModFixture.NpcEditorId,
-            reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
+            reloaded.Store!.At(RecordRef.Head).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
     }
 
     [Fact]
@@ -135,10 +135,10 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.Empty(reloaded.Status.Failures);
         Assert.Equal(
             "RenamedTempRef",
-            reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.EditorId);
+            reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.EditorId);
         Assert.Equal(
             ContainerModFixture.TemporaryRefEditorId,
-            reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.EditorId);
+            reloaded.Store!.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.EditorId);
     }
 
     [Fact]
@@ -184,10 +184,10 @@ public sealed class SourceIngestContainerTests : IDisposable
         using var reloaded = NewLoadOrder();
 
         Assert.Empty(reloaded.Status.Failures);
-        var effective = reloaded.Index!.At(RecordRef.Effective).GetDocument(newFormKey, _fixture.Plugin);
+        var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(newFormKey, _fixture.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("BrandNewRef", effective!.EditorId);
-        Assert.Null(reloaded.Index!.At(RecordRef.Head).GetDocument(newFormKey, _fixture.Plugin));
+        Assert.Null(reloaded.Store!.At(RecordRef.Head).GetDocument(newFormKey, _fixture.Plugin));
     }
 
     [Fact]
@@ -215,9 +215,9 @@ public sealed class SourceIngestContainerTests : IDisposable
         using var reloaded = NewLoadOrder();
 
         Assert.Empty(reloaded.Status.Failures);
-        Assert.Null(reloaded.Index!.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
+        Assert.Null(reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
 
-        var atHead = reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin);
+        var atHead = reloaded.Store!.At(RecordRef.Head).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin);
         Assert.NotNull(atHead);
         Assert.Equal(ContainerModFixture.PersistentRefEditorId, atHead!.EditorId);
     }

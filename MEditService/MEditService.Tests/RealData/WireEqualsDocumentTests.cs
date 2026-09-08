@@ -16,7 +16,7 @@ public sealed class CutDownPluginCompareFixture : IDisposable
 {
     public const string Origin = "Data";
 
-    public LoadOrderMirror Mirror { get; }
+    public IndexProjector Index { get; }
     public RecordQueryService Compare { get; }
     public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
 
@@ -25,19 +25,19 @@ public sealed class CutDownPluginCompareFixture : IDisposable
     public CutDownPluginCompareFixture()
     {
         var reflector = SharedSchemaReflector.Instance;
-        Mirror = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        ((ILoadOrderMirror)Mirror).Reconcile(
+        Index = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        Index.Reconcile(
             _gameDirectory,
             [new LoadOrderEntry(
                 CutDownPluginFixture.PluginFileName, CutDownPluginFixture.PluginPath, Origin,
                 Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Compare = new RecordQueryService(Mirror.Projector, reflector, new ConflictClassifier());
+        Compare = new RecordQueryService(Index, reflector, new ConflictClassifier());
     }
 
     public void Dispose()
     {
-        Mirror.Dispose();
+        Index.Dispose();
         try { Directory.Delete(_gameDirectory, recursive: true); }
         catch (IOException) { /* scratch, best-effort */ }
     }
@@ -52,7 +52,7 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
     [Fact]
     public void EveryCompareValue_IsTheStoredDocumentsOwnNode()
     {
-        var reads = fixture.Mirror.Index!.At(RecordRef.Effective);
+        var reads = fixture.Index.Store!.At(RecordRef.Effective);
         var formKeys = GoldenFormKeys();
 
         Assert.NotEmpty(formKeys);

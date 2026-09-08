@@ -32,7 +32,7 @@ public class RecordIndexFactoryTests : IDisposable
 
     // Writes a one-Npc plugin under the instance and indexes it, mirroring the two-instance shape:
     // both instances use the same mod folder name, so the PluginKey is identical in each.
-    private static PluginKey IndexOnePlugin(IRecordIndex index, string instanceRoot, string editorId)
+    private static PluginKey IndexOnePlugin(DuckDbRecordIndex index, string instanceRoot, string editorId)
     {
         var folder = Path.Combine(instanceRoot, "mods", "Unofficial Patch");
         Directory.CreateDirectory(folder);
@@ -69,7 +69,7 @@ public class RecordIndexFactoryTests : IDisposable
         var factory = MakeFactory();
 
         PluginKey key;
-        using (var first = factory.Create(GameRelease.Fallout4, a)) key = IndexOnePlugin(first, a, "NpcFromA");
+        using (var first = factory.Create(GameRelease.Fallout4, a)) key = IndexOnePlugin((DuckDbRecordIndex)first, a, "NpcFromA");
 
         using (var other = factory.Create(GameRelease.Fallout4, b))
         {
@@ -88,7 +88,7 @@ public class RecordIndexFactoryTests : IDisposable
     {
         var factory = MakeFactory();
         PluginKey key;
-        using (var first = factory.Create(GameRelease.Fallout4)) key = IndexOnePlugin(first, Folder("no-home"), "NpcNowhere");
+        using (var first = factory.Create(GameRelease.Fallout4)) key = IndexOnePlugin((DuckDbRecordIndex)first, Folder("no-home"), "NpcNowhere");
 
         using var second = factory.Create(GameRelease.Fallout4);
         Assert.Null(second.IndexedContentHash(key));
@@ -103,7 +103,7 @@ public class RecordIndexFactoryTests : IDisposable
         var instance = Folder("rebuild-instance");
         var factory = MakeFactory();
         PluginKey key;
-        using (var first = factory.Create(GameRelease.Fallout4, instance)) key = IndexOnePlugin(first, instance, "NpcBeforeRebuild");
+        using (var first = factory.Create(GameRelease.Fallout4, instance)) key = IndexOnePlugin((DuckDbRecordIndex)first, instance, "NpcBeforeRebuild");
 
         using var rebuilt = factory.Rebuild(GameRelease.Fallout4, instance, atLeastSequence: 0);
 
@@ -122,7 +122,7 @@ public class RecordIndexFactoryTests : IDisposable
         long priorSequence;
         using (var first = factory.Create(GameRelease.Fallout4, instance))
         {
-            IndexOnePlugin(first, instance, "NpcForSequence");
+            IndexOnePlugin((DuckDbRecordIndex)first, instance, "NpcForSequence");
             priorSequence = first.Sequence;
         }
         Assert.True(priorSequence > 0, "sanity: indexing must have advanced the sequence past 0");
@@ -140,7 +140,7 @@ public class RecordIndexFactoryTests : IDisposable
     {
         var instance = Folder("rebuild-held-instance");
         var factory = MakeFactory();
-        using (var first = factory.Create(GameRelease.Fallout4, instance)) IndexOnePlugin(first, instance, "NpcBeforeHold");
+        using (var first = factory.Create(GameRelease.Fallout4, instance)) IndexOnePlugin((DuckDbRecordIndex)first, instance, "NpcBeforeHold");
 
         var indexPath = IndexFile.For(instance);
         var bytesBeforeHold = File.ReadAllBytes(indexPath);

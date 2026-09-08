@@ -18,7 +18,7 @@ public sealed class CutDownPluginFixture : IDisposable
     public static string PluginPath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", PluginFileName);
 
-    public DuckDbRecordIndex Repo { get; }
+    internal DuckDbRecordIndex Repo { get; }
 
     private readonly IModDisposeGetter _overlay;
 

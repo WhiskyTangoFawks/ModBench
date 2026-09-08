@@ -47,7 +47,6 @@ public class WorldspaceQueryServiceTests
         public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginKey p) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
         public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => [];
-        public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => [];
         public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int l, int o)
         {
             LastGetInteriorCellsOrigin = plugin.Origin;
@@ -83,7 +82,6 @@ public class WorldspaceQueryServiceTests
         public string? InstanceRoot => null;
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
-        public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
         public void Dispose() { }
     }
 

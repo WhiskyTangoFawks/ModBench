@@ -180,17 +180,6 @@ public sealed class RecordRefDivergenceTests : IDisposable
     }
 
     [Fact]
-    public void AtHead_GetEffectiveMasters_StillRequiresTheEffectivelyDeletedOverridesMaster()
-    {
-        using var repo = RepositoryWithWinnerOverrideDeleted();
-
-        // Winner.esp's only record was its deleted override of KeepMe, so nothing in its Effective rows
-        // still forces Base.esm as a master. Head's committed row does.
-        Assert.DoesNotContain("Base.esm", repo.At(RecordRef.Effective).GetEffectiveMasters(WinnerKey));
-        Assert.Contains("Base.esm", repo.At(RecordRef.Head).GetEffectiveMasters(WinnerKey));
-    }
-
-    [Fact]
     public void AtHead_GetRecordTypeCounts_ExcludesAWorkingTreeOnlyCreatedRecord()
     {
         using var repo = LoadedRepository();

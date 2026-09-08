@@ -39,25 +39,9 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         CancellationToken cancel = default) =>
         TrackAsync(loadOrder, heldCopies, origin, preset, deserializeForVerification: null, cancel);
 
-    /// <summary>The same gesture for a caller still holding the mirror's view, whose copies are by
-    /// definition the ones Editing holds.</summary>
-    public Task TrackAsync(ILoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
-        TrackAsync(LoadOrder.From(loadOrder), HeldKeysOf(loadOrder), origin, preset, null, cancel);
-
-    private static IReadOnlyCollection<PluginKey> HeldKeysOf(ILoadOrder loadOrder) =>
-        [.. loadOrder.Plugins.Select(p => p.Key)];
-
     /// <summary>Same gesture with one extra seam: how the round-trip gate reads the tree back. Null gets
     /// the real whole-mod door. Only a negative test overrides it: no known codec defect can trigger
     /// the gate for real.</summary>
-    internal Task TrackAsync(
-        ILoadOrder loadOrder,
-        string origin,
-        SourcePreset preset,
-        Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
-        CancellationToken cancel = default) =>
-        TrackAsync(LoadOrder.From(loadOrder), HeldKeysOf(loadOrder), origin, preset, deserializeForVerification, cancel);
-
     internal async Task TrackAsync(
         LoadOrder loadOrder,
         IReadOnlyCollection<PluginKey> heldCopies,
@@ -69,7 +53,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         var deserialize = deserializeForVerification
             ?? ((folder, ct) => RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct));
 
-        // A copy the mirror could not open has no bytes to deep-parse, so Track passes over it
+        // A copy the Index could not open has no bytes to deep-parse, so Track passes over it
         // rather than failing the whole origin on it.
         var plugins = loadOrder.Copies
             .Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase) && Held(heldCopies, p))

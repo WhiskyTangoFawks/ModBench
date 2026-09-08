@@ -77,10 +77,10 @@ Per [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md): every loadout
 gesture — reorder, enable, disable, install, uninstall, reprioritise, profile switch — reaches
 Editing the same way: Mod Management sends the whole Plugin load order as one idempotent snapshot
 (`PUT /load-order`) and Editing reconciles it against its registration table. All of them are
-SQL-only on a copy the mirror already holds: `UPDATE` of slot or flags, a winner re-sweep. A
+SQL-only on a copy the Index already holds: `UPDATE` of slot or flags, a winner re-sweep. A
 mod-level change that moves which copy wins a name is the `winning` flag moving from one
 registered row to another — nothing is re-read, because both copies were already indexed. Only a
-copy the mirror has never seen is indexed, progressively, with the ordinary presentation. There
+copy the Index has never seen is indexed, progressively, with the ordinary presentation. There
 is no drift and no reread verb. VS Code's own file model is the precedent: a clean buffer follows
 the disk silently.
 

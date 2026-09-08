@@ -148,7 +148,6 @@ public class RegistrationScopingTests
         Assert.DoesNotContain(repo.At(RecordRef.Effective).Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(repo.At(RecordRef.Effective).GetRecordTypeCounts(BetaKey));
         Assert.Empty(repo.At(RecordRef.Effective).GetNativeFormKeys(BetaKey));
-        Assert.Empty(repo.At(RecordRef.Effective).GetEffectiveMasters(BetaKey));
 
         // Extracted tables.
         Assert.Null(repo.At(RecordRef.Effective).Resolve(fx.BetaNpcFk));

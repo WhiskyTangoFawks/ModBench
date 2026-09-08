@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>The write side as ADR-0046 invariant 7 has it: a temporary tracked tree, a load order
-/// value, the codec and the schema. No index, no factory and no mirror anywhere in it.</summary>
+/// value, the codec and the schema. No index and no factory anywhere in it.</summary>
 public sealed class SourceEditFixture : IDisposable
 {
     public const string ModFolderOrigin = "FixtureMod";

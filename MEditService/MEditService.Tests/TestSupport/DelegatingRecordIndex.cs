@@ -1,3 +1,4 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using Mutagen.Bethesda;
@@ -27,7 +28,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void Register(PluginKey key, Registration registration) =>
         Inner.Register(key, registration);
     public virtual void Unregister(PluginKey key) => Inner.Unregister(key);
-    public virtual void UpdateWinners() => Inner.UpdateWinners();
+    public virtual void UpdateWinners(IReadOnlyList<RegisteredCopy> participating) => Inner.UpdateWinners(participating);
     public virtual IReadOnlyList<PluginKey> RegisteredPlugins() => Inner.RegisteredPlugins();
     public virtual void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines) =>
         Inner.SetCommittedBaseline(key, baselines);

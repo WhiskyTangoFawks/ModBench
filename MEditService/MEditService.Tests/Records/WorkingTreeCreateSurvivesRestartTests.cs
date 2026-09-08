@@ -18,13 +18,13 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterARestart()
     {
         using var mod = IndexedModFixture.Tracked();
-        var created = ProjectingEditService.Over(mod.Mirror)
+        var created = ProjectingEditService.Over(mod.Index)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
         Assert.True(created.Applied, created.Message);
 
-        using var reloaded = new LoadOrderMirror(
+        using var reloaded = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)reloaded).Reconcile(
+        reloaded.Reconcile(
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -32,31 +32,31 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // A silently-failed source ingest degrades to the binary, which never held this uncompiled create,
         // so "the record is not found" reads identically whether ingest never ran or genuinely excluded
         // it.
-        Assert.Empty(((ILoadOrderMirror)reloaded).Status.Failures);
-        var reread = reloaded.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin);
+        Assert.Empty(reloaded.Status.Failures);
+        var reread = reloaded.Store!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin);
         Assert.NotNull(reread);
         Assert.Equal("SurvivesRestart", reread!.EditorId);
-        Assert.Null(reloaded.Index!.At(RecordRef.Head).GetDocument(created.NewFormKey!, mod.Plugin));
+        Assert.Null(reloaded.Store!.At(RecordRef.Head).GetDocument(created.NewFormKey!, mod.Plugin));
     }
 
     [Fact]
     public void ARecordCreated_IsWinner_AfterARestart()
     {
         using var mod = IndexedModFixture.Tracked();
-        var created = ProjectingEditService.Over(mod.Mirror)
+        var created = ProjectingEditService.Over(mod.Index)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
 
-        using var reloaded = new LoadOrderMirror(
+        using var reloaded = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)reloaded).Reconcile(
+        reloaded.Reconcile(
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         // Regression guard, same reasoning as the sibling test above.
-        Assert.Empty(((ILoadOrderMirror)reloaded).Status.Failures);
+        Assert.Empty(reloaded.Status.Failures);
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.
-        Assert.True(reloaded.Index!.At(RecordRef.Effective).GetDocument(created.NewFormKey!)!.IsWinner);
+        Assert.True(reloaded.Store!.At(RecordRef.Effective).GetDocument(created.NewFormKey!)!.IsWinner);
     }
 }

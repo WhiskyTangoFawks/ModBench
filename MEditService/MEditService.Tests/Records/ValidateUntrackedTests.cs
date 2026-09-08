@@ -21,13 +21,13 @@ public sealed class ValidateUntrackedTests : IDisposable
     [Fact]
     public void AnUnchangedBinary_ValidatesClean()
     {
-        var before = _mod.Mirror.Index!.Sequence;
+        var before = _mod.Index.Store!.Sequence;
 
-        var report = _mod.Mirror.Index!.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = _mod.Index.Store!.Validate(_mod.Plugin, _mod.ModFolder);
 
         Assert.False(report.NeedsRebuild);
         Assert.Empty(report.ChangedKeys);
-        Assert.Equal(before, _mod.Mirror.Index!.Sequence);
+        Assert.Equal(before, _mod.Index.Store!.Sequence);
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class ValidateUntrackedTests : IDisposable
         rewritten.Npcs.AddNew("WrittenByAnotherTool");
         rewritten.WriteToBinary(PluginPath);
 
-        var report = _mod.Mirror.Index!.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = _mod.Index.Store!.Validate(_mod.Plugin, _mod.ModFolder);
 
         Assert.True(report.NeedsRebuild);
     }
@@ -47,9 +47,9 @@ public sealed class ValidateUntrackedTests : IDisposable
     {
         File.Delete(PluginPath);
 
-        var report = _mod.Mirror.Index!.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = _mod.Index.Store!.Validate(_mod.Plugin, _mod.ModFolder);
 
         Assert.False(report.NeedsRebuild);
-        Assert.Empty(_mod.Mirror.Projected().GetDocuments(_mod.Plugin));
+        Assert.Empty(_mod.Index.Projected().GetDocuments(_mod.Plugin));
     }
 }

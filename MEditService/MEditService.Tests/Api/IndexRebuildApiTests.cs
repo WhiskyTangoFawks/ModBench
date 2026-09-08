@@ -59,13 +59,13 @@ public sealed class IndexRebuildApiTests : IDisposable
 
     private void CorruptTheStoredBody(string formKey)
     {
-        var index = (DuckDbRecordIndex)_app.Services.GetRequiredService<ILoadOrderMirror>().Index!;
+        var index = (DuckDbRecordIndex)_app.Services.GetRequiredService<IndexProjector>().Store!;
         DuckDbSql.ExecuteFor(index.Connection,
             "UPDATE mirror.records SET body = '{\"EditorID\": \"CorruptedInTheStore\"}' WHERE form_key = $1", formKey);
     }
 
     // A second connection succeeding proves the backend released its own handle by the time the
-    // rebuild POST answers — the mirror's own Connection is gone by then.
+    // rebuild POST answers — the old store's own Connection is gone by then.
     private static long RecordRowCount(string indexPath)
     {
         using var connection = new DuckDBConnection($"DataSource={indexPath}");

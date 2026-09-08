@@ -20,7 +20,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
     public const string Origin = "FixtureMod";
 
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-watch-").FullName;
-    public LoadOrderMirror Mirror { get; }
+    public IndexProjector Index { get; }
     public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
     internal InMemoryNotificationPublisher Notifications { get; } = new();
 
@@ -38,21 +38,21 @@ public sealed class SourceWatchRealDataFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        Mirror = new LoadOrderMirror(new DuckDbRecordIndexFactory(
+        Index = new IndexProjector(new DuckDbRecordIndexFactory(
             SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), Notifications));
-        ((ILoadOrderMirror)Mirror).Reconcile(
+        Index.Reconcile(
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(150));
-        var sourceMirror = new SourceMirror(Mirror.Projector, Mirror.WriteGate, _watcher, Notifications, NullLogger.Instance);
-        _watcher.SourceChanged = sourceMirror.Apply;
-        Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
-        sourceMirror.RefreshWatches();
+        var sourceChanges = new SourceChangeApplier(Index, Index.WriteGate, _watcher, Notifications, NullLogger.Instance);
+        _watcher.SourceChanged = sourceChanges.Apply;
+        Index.LoadOrderChanged = sourceChanges.RefreshWatches;
+        sourceChanges.RefreshWatches();
 
-        new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = sourceMirror.WatchTracking }
-            .TrackAsync(Mirror.LoadOrder!, Origin, SourcePreset.Edits)
+        new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = sourceChanges.WatchTracking }
+            .TrackAsync(Index, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         DocumentsWritten = Directory
@@ -66,7 +66,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
 
         // The reconcile request every tracked copy takes at load, so the rows the burst below drifts
         // from are the source tree's own.
-        ((ILoadOrderMirror)Mirror).ValidateIndex(Plugin);
+        Index.ValidateIndex(Plugin);
     }
 
     // Every document that is a record's own file, in tree order: a container's own RecordData.json
@@ -81,7 +81,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
     public void Dispose()
     {
         _watcher.Dispose();
-        Mirror.Dispose();
+        Index.Dispose();
         TryDelete(ModFolder);
         TryDelete(_gameDirectory);
     }
@@ -121,17 +121,17 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         // Wider than the batch a per-key refresh would name, which is what makes this a validate.
         Assert.True(documents.Count > 32, $"only {documents.Count} documents carry an EditorID");
         var renamed = documents.ToDictionary(d => FormKeyOf(d), d => $"{EditorIdOf(d)}_ByHand", StringComparer.Ordinal);
-        var before = fixture.Mirror.Sequence;
+        var before = fixture.Index.Sequence;
 
         foreach (var document in documents)
             File.WriteAllText(document, File.ReadAllText(document).Replace($"\"{EditorIdOf(document)}\"", $"\"{EditorIdOf(document)}_ByHand\"", StringComparison.Ordinal));
 
         // 60s, not 30s: under CPU contention from parallel test runs this measured 37s once, and the
         // margin below is a wait bound, not a cost this test pays every run.
-        Assert.True(await fixture.Mirror.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(60)));
+        Assert.True(await fixture.Index.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(60)));
         await WaitForEveryRow(renamed);
         foreach (var (formKey, editorId) in renamed)
-            Assert.Equal(editorId, fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
+            Assert.Equal(editorId, fixture.Index.Store!.At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
     }
 
     // 60s to match the sequence await above: the same load that delays the projection delays this
@@ -141,7 +141,7 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         while (DateTime.UtcNow < deadline)
         {
-            if (renamed.All(r => fixture.Mirror.Index!.At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
+            if (renamed.All(r => fixture.Index.Store!.At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
                 return;
             await Task.Delay(50);
         }

@@ -17,7 +17,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public string TrackedTemplateFolder { get; } =
         Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
     public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
-    public LoadOrderMirror Mirror { get; }
+    public IndexProjector Index { get; }
     public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public CompileRoundTripGateFixture()
@@ -25,15 +25,15 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        Mirror = new LoadOrderMirror(
+        Index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)Mirror).Reconcile(
+        Index.Reconcile(
             GameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Mirror.LoadOrder!, Plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(Index, Plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         CopyDirectory(ModFolder, TrackedTemplateFolder);
@@ -41,14 +41,14 @@ public sealed class CompileRoundTripGateFixture : IDisposable
 
     public void Dispose()
     {
-        Mirror.Dispose();
+        Index.Dispose();
         TryDelete(ModFolder);
         TryDelete(TrackedTemplateFolder);
         TryDelete(GameDirectory);
     }
 
     public PluginCompileService CompileService() =>
-        CompileServices.Over(Mirror);
+        CompileServices.Over(Index);
 
     public string SourceRoot => SourceRootFor(ModFolder);
 

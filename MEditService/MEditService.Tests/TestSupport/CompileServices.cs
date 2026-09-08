@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -22,8 +23,8 @@ public static class CompileServices
             NullLogger<PluginCompileService>.Instance);
     }
 
-    /// <summary>The same, for a suite outside the compile suite that still holds the mirror: its
-    /// load order as the value, read at the call.</summary>
-    public static PluginCompileService Over(ILoadOrderMirror mirror) =>
-        Over(LoadOrder.From(mirror.LoadOrder!));
+    /// <summary>The same, for a suite outside the compile suite that holds the Index: its held load
+    /// order as the value, read at the call.</summary>
+    public static PluginCompileService Over(IndexProjector index) =>
+        Over(LoadOrder.From(index.LoadOrder!));
 }

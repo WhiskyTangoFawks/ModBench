@@ -46,7 +46,7 @@ public sealed class BinaryRoundTripGateTests
         }
     }
 
-    // Built fresh from the plugin's current on-disk state each call, the same shape LoadOrderMirror
+    // Built fresh from the plugin's current on-disk state each call, the same shape IndexProjector
     // builds from a live load order.
     private static async Task ProductionSave(string pluginPath, PluginWriter writer)
     {

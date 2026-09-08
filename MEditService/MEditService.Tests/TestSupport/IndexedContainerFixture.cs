@@ -9,20 +9,20 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>The container mod with an index over it, for the suites that are the Index side. The
-/// mirror reconciles over the untracked binary and Track follows, which is the order the process
+/// Index reconciles over the untracked binary and Track follows, which is the order the process
 /// itself has.</summary>
 public sealed class IndexedContainerFixture : IDisposable
 {
     private readonly ContainerModFixture _source = new(track: false);
 
-    public LoadOrderMirror Mirror { get; }
+    public IndexProjector Index { get; }
 
     public IndexedContainerFixture(INotificationPublisher? notifications = null)
     {
-        Mirror = new LoadOrderMirror(
+        Index = new IndexProjector(
             new DuckDbRecordIndexFactory(
                 SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
-        ((ILoadOrderMirror)Mirror).Reconcile(_source.GameDirectory, _source.Entries, GameRelease.Fallout4);
+        Index.Reconcile(_source.GameDirectory, _source.Entries, GameRelease.Fallout4);
         _source.Track();
     }
 
@@ -54,7 +54,7 @@ public sealed class IndexedContainerFixture : IDisposable
 
     public void Dispose()
     {
-        Mirror.Dispose();
+        Index.Dispose();
         _source.Dispose();
     }
 }

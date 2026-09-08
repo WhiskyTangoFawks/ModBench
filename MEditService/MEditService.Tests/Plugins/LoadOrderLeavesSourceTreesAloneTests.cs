@@ -35,10 +35,10 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
 
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new LoadOrderMirror(factory);
-            ILoadOrderMirror mirror = manager;
+            using var manager = new IndexProjector(factory);
+            IndexProjector index = manager;
 
-            mirror.Reconcile(
+            index.Reconcile(
                 gameDir,
                 [new LoadOrderEntry("StillHere.esp", stillHerePath, "ModA", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);

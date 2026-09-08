@@ -54,11 +54,6 @@ public interface IRecordReads
     /// plugin) — ESL-eligibility validation.</summary>
     IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin);
 
-    /// <summary>The masters <paramref name="plugin"/>'s content actually requires at this ref —
-    /// derived, never the declared header list (ADR-0038): owners of every outward reference and of
-    /// every non-native FormKey it carries, in load order.</summary>
-    IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin);
-
     // Worldspace tree reads (ADR-0023) (from the placement / cell_location side tables).
     IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey);
     PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset);

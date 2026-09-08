@@ -13,34 +13,34 @@ namespace MEditService.Tests.Records;
 public sealed class IndexAfterACopyTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
-    private readonly LoadOrderMirror _mirror = new(
+    private readonly IndexProjector _index = new(
         new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
 
     public IndexAfterACopyTests() =>
-        ((ILoadOrderMirror)_mirror).Reconcile(_fixture.GameDirectory, _fixture.Entries, GameRelease.Fallout4);
+        _index.Reconcile(_fixture.GameDirectory, _fixture.Entries, GameRelease.Fallout4);
 
     public void Dispose()
     {
-        _mirror.Dispose();
+        _index.Dispose();
         _fixture.Dispose();
     }
 
-    private ProjectingEditService Service() => ProjectingEditService.Over(_mirror);
+    private ProjectingEditService Service() => ProjectingEditService.Over(_index);
 
     // A brand-new row must be evaluated against an active filter's one-shot snapshot, or the copy
     // lands and the listing never shows it.
     [Fact]
     public void ACopiedOverride_AppearsInAnActiveFilteredListing()
     {
-        _mirror.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
+        _index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
         var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: _fixture.DestinationPlugin, Limit: 50, Offset: 0);
-        var before = _mirror.SettledReads().Search(query).Total;
+        var before = _index.SettledReads().Search(query).Total;
 
         var result = Service().CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.FlatNpc.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before + 1, _mirror.SettledReads().Search(query).Total);
+        Assert.Equal(before + 1, _index.SettledReads().Search(query).Total);
     }
 
     // The spatial mint writes directories rather than one document, and its rows reach the filter by
@@ -50,15 +50,15 @@ public sealed class IndexAfterACopyTests : IDisposable
     {
         // Scoped to the destination plugin: the source already holds a "cell" row under this FormKey, so
         // an unscoped filter would match pre-copy and pass whether or not the new row was re-evaluated.
-        _mirror.SetFilter($"SELECT form_key FROM cell WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
+        _index.SetFilter($"SELECT form_key FROM cell WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
         var query = new RecordQuery(RecordTypes: ["cell"], Plugin: _fixture.DestinationPlugin, Limit: 50, Offset: 0);
-        var before = _mirror.SettledReads().Search(query).Total;
+        var before = _index.SettledReads().Search(query).Total;
 
         var result = Service().CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before + 1, _mirror.SettledReads().Search(query).Total);
+        Assert.Equal(before + 1, _index.SettledReads().Search(query).Total);
     }
 
     // Block and sub-block are the directories the mint wrote and the grid is a field the mint carried
@@ -70,7 +70,7 @@ public sealed class IndexAfterACopyTests : IDisposable
             _fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(result.Applied, result.Message);
 
-        var reads = _mirror.Projected();
+        var reads = _index.Projected();
         var source = reads.GetCellLocation(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())!.Value;
         var minted = reads.GetCellLocation(_fixture.DestinationPlugin, _fixture.ExteriorCell.ToString())!.Value;
         Assert.Equal(
@@ -91,7 +91,7 @@ public sealed class IndexAfterACopyTests : IDisposable
 
         Assert.Equal(
             "temporary",
-            _mirror.Projected().GetPlacement(_fixture.ExteriorTemporaryRef.ToString(), _fixture.DestinationPlugin)
+            _index.Projected().GetPlacement(_fixture.ExteriorTemporaryRef.ToString(), _fixture.DestinationPlugin)
                 ?.PlacementGroup);
     }
 
@@ -104,7 +104,7 @@ public sealed class IndexAfterACopyTests : IDisposable
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
         Assert.True(result.Applied, result.Message);
 
-        var reads = _mirror.Projected();
+        var reads = _index.Projected();
         var children = reads.GetContainerChildren(_fixture.DestinationPlugin, result.NewFormKey!);
         Assert.Equal(2, children.Count);
         Assert.Equal(

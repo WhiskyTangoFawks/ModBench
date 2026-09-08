@@ -1,3 +1,4 @@
+using MEditService.Core.Plugins;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -5,7 +6,7 @@ namespace MEditService.Core.Records;
 
 /// <summary>Ingest plus every read, over one game's indexed plugins. One implementation over DuckDB;
 /// no SQL crosses this seam except <see cref="SetFilter"/> (invariant 8).</summary>
-public interface IRecordIndex : IDisposable
+internal interface IRecordIndex : IDisposable
 {
     /// <summary>Repositions every read at <paramref name="recordRef"/>. Named <c>recordRef</c>, not
     /// <c>ref</c>: CA1716 rejects an interface parameter named after a reserved keyword, even
@@ -58,10 +59,10 @@ public interface IRecordIndex : IDisposable
     /// the next sweep.</summary>
     void Unregister(PluginKey key);
 
-    /// <summary>Rebuilds the whole load order's winners at each ref. ADR-0001: the answer lives in a
-    /// load-order-owned table, so this replaces it rather than updating rows in place. Only
-    /// participating registrations compete.</summary>
-    void UpdateWinners();
+    /// <summary>Rebuilds every ref's winners among <paramref name="participating"/>. ADR-0044: who
+    /// competes is the load order value's answer, handed in here and remembered for the re-sweeps a
+    /// working-tree write triggers.</summary>
+    void UpdateWinners(IReadOnlyList<RegisteredCopy> participating);
 
     /// <summary>Re-establishes what "committed" means for these records after <c>HEAD</c> moved under
     /// the working tree (a commit, rebase or checkout made outside Modbench, ADR-0041). Records the

@@ -22,7 +22,7 @@ namespace MEditService.Core.Records;
 // The single DuckDB implementation of IRecordIndex/IRecordReads, split into three collaborators:
 // IndexStore, PluginIngest and WorkingTreeOverlay. This class owns every transaction boundary,
 // registration, the winner sweep, reads and the SQL door.
-public sealed class DuckDbRecordIndex : IRecordIndex
+internal sealed class DuckDbRecordIndex : IRecordIndex
 {
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger _logger;
@@ -149,8 +149,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // deletes and appender flushes roll back together on Dispose-without-Commit.
         using var tx = Connection.BeginTransaction();
 
-        // One `registrations` row per indexed plugin — UpdateWinners() joins against it so a
-        // non-participating copy's rows never win regardless of load_order_idx.
+        // One `registrations` row per indexed plugin, in the same transaction as its rows: ADR-0001
+        // makes registration visibility, so rows arriving without it would answer nothing.
         UpsertRegistration(plugin, origin, registration);
         // And the disk claim these rows are about, replaced with them rather than beside them.
         _indexStore.StampIndexedFile(plugin, origin, filePath);
@@ -179,8 +179,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
 
-    // The `registrations` row is dropped last: it is the row UpdateWinners joins against, and while
-    // it exists this (origin, plugin) is still a known member of the read model.
+    // The `registrations` row is dropped last: while it exists this (origin, plugin) is still a
+    // known member of the read model, so no read can meet rows that have already gone.
     private void Unindex(string plugin, string origin)
     {
         if (_logger.IsEnabled(LogLevel.Information))
@@ -191,7 +191,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         _pluginIngest.DeleteAllRowsFor(plugin, origin);
         // The file claim goes with the rows it describes — Unindex is the file-gone verb, so leaving
-        // it behind would leave the mirror asserting rows the index does not hold.
+        // it behind would leave the files table asserting rows the index does not hold.
         _indexStore.DeleteIndexedFile(plugin, origin);
         DeleteRegistration(plugin, origin);
         _indexStore.BumpSequence();
@@ -200,7 +200,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // ADR-0035: one row per registered copy. ADR-0044: participation is derived from the three facts
-    // here (TableDdlBuilder.ParticipatesPredicate), never a column.
+    // here by Registration.Participates, never a column.
     private void UpsertRegistration(string plugin, string origin, Registration registration)
     {
         DeleteRegistration(plugin, origin);
@@ -261,12 +261,39 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
     /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms for
     /// both refs on a 48,000-record, 60-plugin fixture.</summary>
-    public void UpdateWinners()
+    public void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)
+    {
+        using var tx = Connection.BeginTransaction();
+        ReplaceParticipating(participating);
+        UpdateWinnersCore();
+        _indexStore.BumpSequence();
+        tx.Commit();
+    }
+
+    // The same sweep for a projection that moved rows without moving the load order: who
+    // participates cannot change here, so the set the last sweep was handed still holds.
+    private void ResweepWinners()
     {
         using var tx = Connection.BeginTransaction();
         UpdateWinnersCore();
         _indexStore.BumpSequence();
         tx.Commit();
+    }
+
+    // ADR-0044: replaced whole, never diffed. The rule that decided membership ran in the load order
+    // value (Registration.Participates); nothing here re-asks it.
+    private void ReplaceParticipating(IReadOnlyList<RegisteredCopy> participating)
+    {
+        Execute($"DELETE FROM {TableDdlBuilder.ParticipatingRelation}");
+        foreach (var copy in participating)
+        {
+            using var cmd = Connection.CreateCommand();
+            cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ParticipatingRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
+            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Origin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Slot!.Value });
+            cmd.ExecuteNonQuery();
+        }
     }
 
     // The sweep itself, unwrapped: a caller already inside a transaction (the projection verbs
@@ -286,16 +313,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         InsertWinners(RecordRef.Head, $"SELECT form_key, plugin, origin FROM {TableDdlBuilder.HeadRowsRelation}");
     }
 
-    // The winner rule: among the rows, the participating plugin latest in the load order wins its
-    // FormKey. QUALIFY makes the result a function — a tie on load_order_idx yields one winner —
-    // and the (plugin, origin) tiebreak makes which one deterministic.
+    // The participating plugin latest in the load order wins its FormKey. The join is
+    // `participating` alone, so no SQL re-spells who competes; QUALIFY and the (plugin, origin)
+    // tiebreak make a load_order_idx tie deterministic.
     private void InsertWinners(RecordRef @ref, string rowsSql) =>
         Execute($"""
             INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
             SELECT '{WinnerRef.Of(@ref)}', r.form_key, r.plugin, r.origin
             FROM ({rowsSql}) r
-            JOIN {TableDdlBuilder.RegistrationsRelation} p
-              ON p.plugin = r.plugin AND p.origin = r.origin AND {TableDdlBuilder.ParticipatesPredicate("p")}
+            JOIN {TableDdlBuilder.ParticipatingRelation} p
+              ON p.plugin = r.plugin AND p.origin = r.origin
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY r.form_key
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
@@ -363,7 +390,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         using var tx = Connection.BeginTransaction();
         _workingTreeOverlay.SeedCommittedOnly(key, records);
-        // The mirror of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
+        // The counterpart of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
         // demote whoever was winning it at that ref. Effective is untouched either way.
         UpdateWinnersCore();
         _indexStore.BumpSequence();
@@ -463,7 +490,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             SourceIngest.Ingest(
                 this, modFolder, sourceTree, registration, key, _indexStore.IndexedFile(key)?.FilePath,
                 _release, _schemaReflector, _logger);
-            UpdateWinners();
+            ResweepWinners();
         }
 
         // ADR-0046: too many rows to name, exactly as the plugin watcher's own re-index reports it.
@@ -798,57 +825,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => owner.GetReferences(targetFormKey);
 
-        /// <summary>Derived, not declared (ADR-0038): owners of every outward reference plus owners
-        /// of every non-native FormKey this plugin carries, in load order, excluding itself.</summary>
-        public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin)
-        {
-            var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            using (var cmd = owner.Connection.CreateCommand())
-            {
-                cmd.CommandText = "SELECT DISTINCT target_form_key FROM form_references WHERE source_plugin = $1 AND source_origin = $2";
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    if (ModKeyNameOf(reader.GetString(0)) is { } name) required.Add(name);
-                }
-            }
-
-            using (var cmd = owner.Connection.CreateCommand())
-            {
-                cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    var fk = reader.GetString(0);
-                    if (ModKeyNameOf(fk) is { } name && !string.Equals(name, plugin.Name, StringComparison.OrdinalIgnoreCase))
-                        required.Add(name);
-                }
-            }
-
-            required.Remove(plugin.Name);
-            if (required.Count == 0) return [];
-
-            // A master the load order holds sorts by its load_order_idx; one it doesn't falls after
-            // every listed master, alphabetically among themselves, so the result is stable either way.
-            var order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            using (var cmd = owner.Connection.CreateCommand())
-            {
-                cmd.CommandText = $"SELECT plugin, MIN(load_order_idx) FROM {TableDdlBuilder.RegistrationsRelation} WHERE load_order_idx IS NOT NULL GROUP BY plugin";
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                    order[reader.GetString(0)] = reader.GetInt32(1);
-            }
-
-            return [.. required
-                .OrderBy(n => order.GetValueOrDefault(n, int.MaxValue))
-                .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)];
-        }
-
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
         {
             var types = tableNames.ToList();
@@ -1079,12 +1055,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             if (reader.GetString(6) != SourceRef.WorkingTree) return WorkingTreeState.None;
             return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
-        }
-
-        private static string? ModKeyNameOf(string formKey)
-        {
-            var colon = formKey.IndexOf(':');
-            return colon > 0 ? formKey[(colon + 1)..] : null;
         }
 
         // Column 8 is the correlated container_child EXISTS Search's SELECT adds, 9 this record's

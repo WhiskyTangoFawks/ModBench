@@ -150,7 +150,7 @@ public sealed class MasterPruningRoundTripGateTests
         private readonly string _fixtureFileName;
         private readonly string _origin;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masterprune-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
+        private readonly IndexProjector _index;
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-masterprune-").FullName;
 
@@ -175,17 +175,17 @@ public sealed class MasterPruningRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(_fixtureFileName, pluginPath, _origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _mirror = new LoadOrderMirror(
+            _index = new IndexProjector(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_mirror.LoadOrder!, _origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, _origin, SourcePreset.Edits);
 
         public void Dispose()
         {
-            _mirror.Dispose();
+            _index.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

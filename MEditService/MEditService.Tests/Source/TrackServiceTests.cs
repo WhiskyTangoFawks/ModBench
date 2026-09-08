@@ -21,10 +21,10 @@ public sealed class TrackServiceTests
     private static IReadOnlyCollection<PluginKey> HeldIn(LoadOrder loadOrder) =>
         [.. loadOrder.Copies.Select(copy => copy.Key)];
 
-    // A copy the mirror could not open is registered like any other but has no bytes to deep-parse,
+    // A copy the Index could not open is registered like any other but has no bytes to deep-parse,
     // so Track passes over it instead of failing the whole origin on it.
     [Fact]
-    public async Task TrackAsync_SkipsARegisteredCopyTheMirrorCouldNotOpen()
+    public async Task TrackAsync_SkipsARegisteredCopyTheIndexCouldNotOpen()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-track-unopened-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-track-unopened-game-").FullName;
@@ -172,7 +172,7 @@ public sealed class TrackServiceTests
         }
     }
 
-    // Positive control's mirror: no meta.ini beside the plugin (an authored/manually-installed
+    // Positive control's index: no meta.ini beside the plugin (an authored/manually-installed
     // mod, ADR-0041 amendment) means no Meta-SHA256 trailer at all — every TrackProvenance field
     // is optional, this must not fabricate one.
     [Fact]

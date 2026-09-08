@@ -251,7 +251,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         using var scope = new MutationScope(fixture);
 
-        var npc = scope.Mirror.Index!
+        var npc = scope.Index.Store!
             .At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin, Limit: 1))
             .Items[0];
         // Asked of the repository rather than computed: FlatPathFor needs an order index this test
@@ -262,7 +262,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var before = CompileRoundTripGateFixture.ReadSourceTree(scope.ModFolder);
         Assert.Contains(expectedPath, before.Keys);
 
-        var edit = ProjectingEditService.Over(scope.Mirror)
+        var edit = ProjectingEditService.Over(scope.Index)
             .Set(scope.Plugin, npc.FormKey, "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
@@ -298,7 +298,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
 
         using var scope = new MutationScope(fixture);
 
-        var edit = ProjectingEditService.Over(scope.Mirror)
+        var edit = ProjectingEditService.Over(scope.Index)
             .Set(scope.Plugin, responseToRename.FormKey.ToString(), "EditorID",
                 JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
@@ -323,7 +323,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     private sealed class MutationScope : IDisposable
     {
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;
-        public LoadOrderMirror Mirror { get; }
+        public IndexProjector Index { get; }
         public PluginKey Plugin { get; }
 
         public MutationScope(CompileRoundTripGateFixture fixture)
@@ -331,20 +331,20 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             CompileRoundTripGateFixture.CopyDirectory(fixture.TrackedTemplateFolder, ModFolder);
             Plugin = fixture.Plugin;
 
-            Mirror = new LoadOrderMirror(
+            Index = new IndexProjector(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)Mirror).Reconcile(
+            Index.Reconcile(
                 fixture.GameDirectory,
                 [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
         }
 
         public PluginCompileService CompileService() =>
-            CompileServices.Over(Mirror);
+            CompileServices.Over(Index);
 
         public void Dispose()
         {
-            Mirror.Dispose();
+            Index.Dispose();
             CompileRoundTripGateFixture.TryDelete(ModFolder);
         }
     }

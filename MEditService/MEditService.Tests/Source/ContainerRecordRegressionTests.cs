@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -25,10 +26,10 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+        ProjectingEditService.Over(_fixture.Index);
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Index, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     // ---- Reads never throw on a container ----
 
@@ -69,7 +70,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             File.ReadAllText(file));
         // The source unit's own indexed document moved with the file.
         Assert.Contains(
-            "250.0", _fixture.Mirror.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
+            "250.0", _fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -130,7 +131,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Mirror.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
     }
 
     [Fact]
@@ -159,8 +160,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Mirror.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
-        Assert.NotNull(_fixture.Mirror.Projected().GetDocument(result.NewFormKey!, _fixture.Plugin));
+        Assert.Null(_fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.NotNull(_fixture.Index.Projected().GetDocument(result.NewFormKey!, _fixture.Plugin));
     }
 
     [Fact]
@@ -182,7 +183,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
         var beforeMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
-        ExternalChangeAbsorber.Absorb(_fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, _fixture.Mirror.LoadOrder!);
+        ExternalChangeAbsorber.Absorb(_fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, LoadOrder.From(_fixture.Index.LoadOrder!));
 
         var afterMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);

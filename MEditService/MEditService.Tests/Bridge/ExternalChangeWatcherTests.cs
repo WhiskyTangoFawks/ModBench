@@ -138,9 +138,9 @@ public sealed class ExternalChangeWatcherTests
             using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
             watcher.Watch(mod.ModFolder, IndexedModFixture.PluginName, pluginPath);
 
-            var editService = ProjectingEditService.Over(mod.Mirror);
+            var editService = ProjectingEditService.Over(mod.Index);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
-            var compileService = CompileServices.Over(mod.Mirror);
+            var compileService = CompileServices.Over(mod.Index);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 

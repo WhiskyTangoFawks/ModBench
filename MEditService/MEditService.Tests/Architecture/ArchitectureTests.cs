@@ -10,7 +10,7 @@ namespace MEditService.Tests.Architecture;
 /// silently. Each test names the ADR it enforces.</summary>
 public sealed class ArchitectureTests
 {
-    private static readonly Assembly Core = typeof(ILoadOrderMirror).Assembly;
+    private static readonly Assembly Core = typeof(IndexProjector).Assembly;
 
     // ADR-0036: a bare filename compiles and passes single-copy tests, then misidentifies.
     [Fact]
@@ -60,7 +60,7 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
     }
 
-    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the mirror's Status lie,
+    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the Index's Status lie,
     // and a second writer makes the shared kernel's load order disagree with the index.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
@@ -68,9 +68,9 @@ public sealed class ArchitectureTests
         // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
         // goes through cannot disarm this.
         string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs"];
-        // LoadOrderMirror is the endpoint's own delegating shell: the reconcile it forwards is
-        // the endpoint's, not a second arrival.
-        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs", "LoadOrderMirror.cs"])
+        // IndexProjector.cs holds the reconcile itself, which the endpoint calls: it is the verb,
+        // not a second arrival.
+        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs", "IndexProjector.cs"])
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Apply("], writers))
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Register("], writers))
             .Distinct()
@@ -99,17 +99,36 @@ public sealed class ArchitectureTests
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
-    // ADR-0046 invariants 3 and 10: the read side and the watchers take the Index itself. The
-    // composition root still names the mirror, which is the write side's shell over that same
-    // instance.
+    // ADR-0044: participation is derived — enabled, winning, and named by a plugins.txt line — and
+    // the load order value is the one place that rule is spelled. A second spelling is how two
+    // answers start disagreeing.
     [Fact]
-    public void TheReadSideAndTheWatchers_NameTheIndex_NotTheMirror()
+    public void TheParticipationRule_IsSpelledOnceInProduction()
     {
-        var offenders = Offenders(
-            SolutionDirectory(), ["MEditService.Api", Path.Combine("MEditService.Core", "Queries")],
-            nameof(ILoadOrderMirror), allowedFiles: ["Program.cs"]);
-        Assert.True(offenders.Count == 0,
-            "The mirror is named outside the composition root in:\n" + string.Join("\n", offenders));
+        var root = SolutionDirectory();
+        var spellings = Projects
+            .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
+            .Where(file => ParticipationRule.IsMatch(File.ReadAllText(file)))
+            .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(["MEditService.Core/Records/Registration.cs"], spellings);
+    }
+
+    // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning
+    // AND` both match, and either one alone does not — a read of a single fact is ordinary.
+    private static readonly Regex ParticipationRule = new(
+        @"enabled\s*(?:&&|AND)\s*[^\n]{0,24}?winning\s*(?:&&|AND)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(5));
+
+    [Fact]
+    public void TheParticipationRulePattern_MatchesBothSpellings_AndNotASingleFact()
+    {
+        Assert.Matches(ParticipationRule, "Enabled && Winning && LoadOrderIndex is not null");
+        Assert.Matches(ParticipationRule, "$\"{alias}.enabled AND {alias}.winning AND {alias}.load_order_idx IS NOT NULL\"");
+        Assert.DoesNotMatch(ParticipationRule, "reader.GetBoolean(3) is var enabled && winning is null");
+        Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
     }
 
     // ADR-0008: PluginWriter backs the binary up first; IndexProjector writes only a brand-new

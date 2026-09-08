@@ -10,14 +10,14 @@ namespace MEditService.Tests.Plugins;
 
 /// <summary>Each test drives a load to a known point with <see cref="GatedIndexRepositoryFactory"/>
 /// and asserts at that instant: no sleeps, no timing assumptions (ADR-0035).</summary>
-public sealed class LoadOrderMirrorProgressiveLoadTests
+public sealed class ProgressiveIndexingTests
 {
-    private static (LoadOrderMirror Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(string gateBefore)
+    private static (IndexProjector Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(string gateBefore)
     {
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var gate = new GatedIndexRepositoryFactory(inner, gateBefore);
-        var manager = new LoadOrderMirror(gate);
+        var manager = new IndexProjector(gate);
         return (manager, gate);
     }
 
@@ -103,7 +103,7 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp", poisonPlugin: "A.esp");
-        using var manager = new LoadOrderMirror(gate);
+        using var manager = new IndexProjector(gate);
 
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();

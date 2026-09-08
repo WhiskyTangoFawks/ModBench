@@ -37,7 +37,24 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     private bool _conflictsComputed;
     private int _plannedCount;
 
+    /// <summary>The composition root's door: the Index opens its own store, so nothing outside
+    /// <c>Core/Records</c> names the store, its factory or how a file is opened (ADR-0001).</summary>
     public IndexProjector(
+        SchemaReflector schemaReflector,
+        ILoggerFactory? loggerFactory = null,
+        IModImporter? modImporter = null,
+        INotificationPublisher? notifications = null)
+        : this(
+            new DuckDbRecordIndexFactory(
+                schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
+                loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>()),
+            loggerFactory?.CreateLogger<IndexProjector>(), modImporter, schemaReflector, notifications)
+    {
+    }
+
+    /// <summary>The store's factory as a seam, for a test that faults or counts what the store
+    /// does.</summary>
+    internal IndexProjector(
         IRecordIndexFactory indexFactory,
         ILogger? logger = null,
         IModImporter? modImporter = null,
@@ -82,14 +99,31 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     public ILoadOrder? LoadOrder { get { lock (_lock) return _heldPlugins; } }
     public IRecordReads? Reads { get { lock (_lock) return _index?.At(RecordRef.Effective); } }
-    public IRecordIndex? Index { get { lock (_lock) return _index; } }
+    /// <summary>The store the projections land in. Internal: ADR-0046 invariant 10 makes the Index
+    /// one module, and the rows behind this are its own. Null with no load order held.</summary>
+    internal IRecordIndex? Store { get { lock (_lock) return _index; } }
+
+    /// <summary>Whether the store registers this copy — an endpoint's 404 question, answered without
+    /// handing out the store.</summary>
+    public bool Registers(PluginKey key)
+    {
+        lock (_lock) return _index?.RegisteredPlugins().Contains(key) == true;
+    }
+
+    /// <summary>ADR-0001: the hash the store's rows for this copy were built from, or null when it
+    /// holds no validated rows for it — the watch registration's one question of the store.</summary>
+    public string? IndexedContentHash(PluginKey key)
+    {
+        lock (_lock) return _index?.IndexedContentHash(key);
+    }
 
     /// <summary>One per projector, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
     public IndexWriteGate WriteGate { get; } = new();
 
-    /// <summary>See <see cref="ILoadOrderMirror.LoadOrderChanged"/>.</summary>
+    /// <summary>Raised once a reconcile settles and once <see cref="Close"/> empties the Index, so the
+    /// composition root re-registers the Source watches. Core names no watcher type.</summary>
     public Action? LoadOrderChanged { get; set; }
 
     // Raised outside _lock and outside the exclusive right, so a subscriber that reads the projector
@@ -107,7 +141,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>See <see cref="ILoadOrderMirror.RequireScope"/>.</summary>
+    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: the held copies and the store
+    /// are only ever both set or both null, so this can never observe one without the other.</summary>
     public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope()
     {
         var (loadOrder, index) = RequireScopeCore();
@@ -155,7 +190,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         lock (_lock) return _index?.BeginProjection() ?? IndexStore.NoProjectionScope;
     }
 
-    /// <summary>See <see cref="ILoadOrderMirror.Announce"/>.</summary>
+    /// <summary>Runs <paramref name="publish"/> once the projection it was raised in has landed, so
+    /// nothing names a sequence the store has not reached. Runs at once with no store held.</summary>
     public void Announce(Action publish)
     {
         IRecordIndex? index;
@@ -169,6 +205,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     // answers within one interval of landing.
     private static readonly TimeSpan SequencePollInterval = TimeSpan.FromMilliseconds(20);
 
+    /// <summary>Polls <see cref="Sequence"/> until it reaches <paramref name="atLeast"/> or
+    /// <paramref name="timeout"/> elapses. True the moment it lands; false, never a throw, on a
+    /// timeout — the answer is "not yet", not a failure.</summary>
     public async Task<bool> AwaitSequenceAsync(long atLeast, TimeSpan timeout)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -181,8 +220,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0046 invariant 11: the store's registration rows are made equal to the
-    /// snapshot's copies, copies the store has never held are indexed, then one winner sweep.</summary>
+    /// <summary>ADR-0044's one verb: the store's registrations are made equal to the snapshot's
+    /// copies, copies it has never held are indexed, then one winner sweep. A superseded reconcile
+    /// throws, leaving its work for its successor.</summary>
     public void Reconcile(LoadOrder snapshot)
     {
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -394,7 +434,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         // arrived earlier was browsable but its winner state was not yet decided (ADR-0035).
         _logger.LogDebug("Computing winners");
         var winnersTimer = Stopwatch.StartNew();
-        index.UpdateWinners();
+        index.UpdateWinners(snapshot.Participating);
         lock (_lock) _conflictsComputed = true;
         // Ready: the last status transition a subscriber sees for this reconcile.
         PublishStatus();
@@ -633,7 +673,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>See <see cref="ILoadOrderMirror.ValidateIndex"/>.</summary>
+    /// <summary>ADR-0046 invariant 6's reconcile request: validates <paramref name="plugin"/>, or
+    /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
+    /// this call re-derived whole.</summary>
     public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin)
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
@@ -664,7 +706,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         return reports;
     }
 
-    /// <summary>See <see cref="ILoadOrderMirror.RefreshKeys"/>.</summary>
+    /// <summary>ADR-0046 invariant 4's narrow signal: re-projects these keys from the source tree
+    /// under the write gate. An untracked or unheld copy is a no-op.</summary>
     public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys)
     {
         // Taken before anything reaches _lock or the index: this runs on the Source watcher's timer,
@@ -683,6 +726,13 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         ReapplyFilter();
     }
 
+    // ADR-0044: the sweep is handed who competes, projected from the load order value the held
+    // copies are — the rule is Registration.Participates and runs there. Read whole, not per plugin.
+    private IReadOnlyList<RegisteredCopy> Participating()
+    {
+        lock (_lock) return _heldPlugins is { } held ? Plugins.LoadOrder.From(held).Participating : [];
+    }
+
     // Never null, and never one without the other, for the same reason RequireScope is not.
     private (ILoadOrder LoadOrder, IRecordIndex Index) RequireHeldIndex()
     {
@@ -693,7 +743,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>See <see cref="ILoadOrderMirror.ReindexPlugin(PluginKey)"/>.</summary>
+    /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
+    /// copy from its source tree (ADR-0041), because reading a tracked copy's binary would discard
+    /// uncommitted edits.</summary>
     public Task ReindexPlugin(PluginKey key)
     {
         // Taken before anything reaches _lock or the index: this runs on the watcher's timer, with
@@ -764,7 +816,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
                 throw;
             }
 
-            index.UpdateWinners();
+            index.UpdateWinners(Participating());
             // Re-derived content can flip filter membership either way.
             ReapplyFilter();
         }
@@ -791,7 +843,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         lock (_lock)
         {
             index.Index(loaded.Getter, metadata.Registration, metadata.Key, metadata.Path);
-            index.UpdateWinners();
+            index.UpdateWinners(Participating());
             // Re-indexed content can flip filter membership either way.
             ReapplyFilter();
         }
@@ -799,7 +851,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         return Task.CompletedTask;
     }
 
-    /// <summary>See <see cref="ILoadOrderMirror.UnindexPlugin"/>.</summary>
+    /// <summary>The file is gone, so its rows go with it. A no-op while the held copy still exists
+    /// or with no load order: the watcher that calls this races teardowns and superseding load
+    /// orders.</summary>
     public void UnindexPlugin(PluginKey key)
     {
         // The watcher's timer's other index write — a vanished binary — gated like its sibling
@@ -821,7 +875,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             }
             _index.Unindex(key);
             // A removal moves winners for every FormKey it held, exactly as a re-index does.
-            _index.UpdateWinners();
+            _index.UpdateWinners(Participating());
             // Deleted rows cannot match a filter that a stale _filter still lists them in.
             ReapplyFilter();
         }
@@ -830,6 +884,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     /// <summary>See <see cref="IQueryIndex.FilterSql"/>.</summary>
     public string? FilterSql { get { lock (_lock) return _filterSql; } }
 
+    /// <summary>Throws <see cref="ArgumentException"/> if the SQL does not return a form_key
+    /// column.</summary>
     public void SetFilter(string sql) => ApplyFilter(sql);
     public void ClearFilter() => ApplyFilter(null);
 
@@ -854,7 +910,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     // `_lock` is reentrant, so every projection path calls this from inside the lock scope it
     // already holds around its own Index/UpdateWinners calls rather than dropping and retaking it.
-    public void ReapplyFilter()
+    private void ReapplyFilter()
     {
         lock (_lock)
         {
@@ -875,6 +931,18 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
+    /// <summary>ADR-0046's Refresh: closes what is held, drops the instance's index file and
+    /// reopens it empty, flooring the new file's sequence at what this process has already handed
+    /// out. The next reconcile fills it.</summary>
+    public void RebuildStore(GameRelease gameRelease, string instanceRoot)
+    {
+        var previousSequence = Sequence;
+        Close();
+        using var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence);
+    }
+
+    /// <summary>Drops everything held: the load order and the store's connection. Cancels an
+    /// in-flight reconcile and waits for it to stop first.</summary>
     public void Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything —

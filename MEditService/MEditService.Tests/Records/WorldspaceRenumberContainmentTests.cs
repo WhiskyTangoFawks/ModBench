@@ -13,7 +13,7 @@ using Noggog;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>The mirror gap to <see cref="ContainmentRederivationTests"/>: a Worldspace's exterior
+/// <summary>The counterpart to <see cref="ContainmentRederivationTests"/>: a Worldspace's exterior
 /// cells are unreachable from <c>EnumerateChildren</c> (<c>SubCells</c> holds blocks, not records).
 /// A self-built mod, since widening the shared fixture is the riskier change.</summary>
 public sealed class WorldspaceRenumberContainmentTests : IDisposable
@@ -23,7 +23,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     private readonly PluginKey _plugin = new(PluginName, Origin);
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-wrld-renumber-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-wrld-renumber-game-").FullName;
-    private readonly LoadOrderMirror _mirror;
+    private readonly IndexProjector _index;
     private readonly string _topCellFormKey;
     private readonly string _extCellFormKey;
     private readonly string _worldspaceFormKey;
@@ -51,19 +51,19 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         _topCellFormKey = topCell.FormKey.ToString();
         _extCellFormKey = extCell.FormKey.ToString();
 
-        _mirror = new LoadOrderMirror(
+        _index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
+        _index.Reconcile(
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(_index, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
+        _index.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -76,14 +76,14 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     }
 
     private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_mirror);
+        ProjectingEditService.Over(_index);
 
     // ---- the confirmed gap ----
 
     [Fact]
     public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameLoadOrder()
     {
-        var index = _mirror.Index!;
+        var index = _index.Store!;
         Assert.Equal(_worldspaceFormKey, index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
@@ -106,7 +106,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void RenumberingAWorldspace_LeavesExactlyOneCellLocationRowForItsTopCell_NoDuplicate()
     {
-        var index = _mirror.Index!;
+        var index = _index.Store!;
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
@@ -126,18 +126,18 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
 
-        var live = _mirror.Projected().GetWorldspaceCells(_plugin, newFormKey)
+        var live = _index.Projected().GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
-        using var reloaded = new LoadOrderMirror(
+        using var reloaded = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)reloaded).Reconcile(
+        reloaded.Reconcile(
             _gameDirectory,
             [new LoadOrderEntry(PluginName, Path.Combine(_modFolder, PluginName), Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Assert.Empty(((ILoadOrderMirror)reloaded).Status.Failures);
+        Assert.Empty(reloaded.Status.Failures);
 
-        var freshlyIngested = reloaded.Index!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
+        var freshlyIngested = reloaded.Store!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
         Assert.Equal(freshlyIngested, live);

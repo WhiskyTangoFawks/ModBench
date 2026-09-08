@@ -26,7 +26,7 @@ public sealed class IndexedBinaryWatchTests
 
     private static Fixture NewIndexedBinary(byte[] bytes)
     {
-        var folder = Directory.CreateTempSubdirectory("medit-mirror-").FullName;
+        var folder = Directory.CreateTempSubdirectory("medit-index-").FullName;
         var pluginPath = Path.Combine(folder, Plugin);
         File.WriteAllBytes(pluginPath, bytes);
         return new Fixture(folder, pluginPath, Sha256Of(bytes));
@@ -120,7 +120,7 @@ public sealed class IndexedBinaryWatchTests
         }
     }
 
-    // A file that comes back after being deleted is a change again — the mirror follows the disk in
+    // A file that comes back after being deleted is a change again — the watch follows the disk in
     // both directions, which is what a mod reinstall or a Steam file verify actually looks like.
     [Fact]
     public void AnIndexedBinaryThatComesBack_IsReportedAsModified()
@@ -191,7 +191,7 @@ public sealed class IndexedBinaryWatchTests
     // A watch must not outlive the load order that asked for it, or a plugin the load order has
     // dropped would keep re-indexing itself into it.
     [Fact]
-    public void UnwatchAllIndexed_StopsTheMirror()
+    public void UnwatchAllIndexed_StopsTheWatch()
     {
         var fixture = NewIndexedBinary("original"u8.ToArray());
         try

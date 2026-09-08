@@ -30,8 +30,8 @@ public record PluginResponse(
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
-    // Participates (ADR-0044): derived — Enabled AND Winning AND listed. The only copies that
-    // compete for winner or count in a conflict.
+    // Participates (ADR-0044): Registration.Participates, as the wire sees it — the only copies
+    // that compete for winner or count in a conflict.
     bool Participates,
     string Origin,
     // MasterIssues (ADR-0037): this plugin's own unresolvable masters, never a transitive fact.

@@ -162,7 +162,7 @@ public sealed class ParseFailedRecordTests
         var counts = scratch.Query.GetPluginRecordTypes(CorruptGroupFixture.PluginName, Origin);
 
         Assert.Equal(1, counts.Single(t => t.Type == "weap").Count);
-        Assert.DoesNotContain(scratch.Mirror.Status.Failures, f => f.Name == CorruptGroupFixture.PluginName);
+        Assert.DoesNotContain(scratch.Index.Status.Failures, f => f.Name == CorruptGroupFixture.PluginName);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture, corruptWholeFile: true);
 
-        Assert.Contains(scratch.Mirror.Status.Failures, f => f.Name == Fixture);
+        Assert.Contains(scratch.Index.Status.Failures, f => f.Name == Fixture);
     }
 
     // One NPC whose signature inside the NPC_ GRUP is mangled, plus one readable WEAP, so
@@ -215,15 +215,15 @@ public sealed class ParseFailedRecordTests
         }
     }
 
-    // Stub masters come from the fixture's own declared list: the mirror needs the names present,
+    // Stub masters come from the fixture's own declared list: the Index needs the names present,
     // not their content.
     private sealed class Scratch : IDisposable
     {
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-parsefail-game-").FullName;
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 
-        public LoadOrderMirror Mirror { get; }
-        public IRecordReads Reads => Mirror.SettledReads();
+        public IndexProjector Index { get; }
+        public IRecordReads Reads => Index.SettledReads();
         public PluginKey Plugin { get; }
         public IRecordQueryService Query { get; }
         public string PluginPath { get; }
@@ -255,15 +255,15 @@ public sealed class ParseFailedRecordTests
             // Truncated below a TES4 header: no record identity exists to hang a status on.
             if (corruptWholeFile) File.WriteAllBytes(pluginPath, [0x54, 0x45, 0x53, 0x34, 0xFF]);
 
-            Mirror = new LoadOrderMirror(
+            Index = new IndexProjector(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)Mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
-            Query = new RecordQueryService(Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
+            Index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            Query = new RecordQueryService(Index, SharedSchemaReflector.Instance, new ConflictClassifier());
         }
 
         public void Dispose()
         {
-            Mirror.Dispose();
+            Index.Dispose();
             try { Directory.Delete(_modFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

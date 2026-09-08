@@ -36,7 +36,7 @@ public sealed record PluginChangedNotification(PluginKey Plugin, long Sequence)
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin ?? "", [], Sequence);
 }
 
-/// <summary>The mirror's <see cref="LoadOrderStatus"/> whenever it changes — reconciling through to
+/// <summary>The Index's <see cref="LoadOrderStatus"/> whenever it changes — reconciling through to
 /// Ready, the same transitions <c>GET /load-order/status</c> polling would have observed.</summary>
 public sealed record LoadOrderStatusNotification(LoadOrderStatus Status) : Notification("load-order-status")
 {

@@ -108,7 +108,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     private sealed class TrackedScratch : IDisposable
     {
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-stale-header-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
+        private readonly IndexProjector _index;
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-stale-header-").FullName;
         public string PluginPath { get; }
@@ -133,21 +133,21 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin!, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _mirror = new LoadOrderMirror(
+            _index = new IndexProjector(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task TrackAsync(Func<string, CancellationToken, Task<IFallout4Mod>>? deserialize = null) =>
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Plugin.Origin!, SourcePreset.Edits, deserialize);
+                .TrackAsync(_index, Plugin.Origin!, SourcePreset.Edits, deserialize);
 
         public PluginCompileService CompileService() =>
-            CompileServices.Over(_mirror);
+            CompileServices.Over(_index);
 
         public void Dispose()
         {
-            _mirror.Dispose();
+            _index.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

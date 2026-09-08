@@ -1,3 +1,4 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
@@ -72,9 +73,9 @@ internal sealed class GatedIndexRepository(
         Indexed.Add(pluginName);
     }
 
-    public override void UpdateWinners()
+    public override void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)
     {
-        base.UpdateWinners();
+        base.UpdateWinners(participating);
         WinnersComputed = true;
     }
 

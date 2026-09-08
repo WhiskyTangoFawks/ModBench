@@ -222,7 +222,7 @@ public sealed class RecordEditService(
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.FieldReadOnly,
-                "'position' is mirrored into the placement index (which cell a reference is in, and " +
+                "'position' is copied into the placement index (which cell a reference is in, and " +
                 "where) — nothing on this path re-derives that side table, so a placed reference's " +
                 "position is not writable through a field edit.");
         }

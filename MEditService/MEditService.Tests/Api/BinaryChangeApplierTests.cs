@@ -13,7 +13,7 @@ namespace MEditService.Tests.Api;
 
 /// <summary>Wired the way the composition root wires it (ADR-0001); what is asserted is what the
 /// load order answers afterwards, while the backend runs, with no reload anywhere.</summary>
-public sealed class IndexMirrorTests
+public sealed class BinaryChangeApplierTests
 {
     private static void WaitUntil(Func<bool> condition, TimeSpan timeout)
     {
@@ -25,13 +25,12 @@ public sealed class IndexMirrorTests
         }
     }
 
-    private static ExternalChangeWatcher StartMirroring(IndexedModFixture fixture, INotificationPublisher? notifications = null)
+    private static ExternalChangeWatcher StartWatching(IndexedModFixture fixture, INotificationPublisher? notifications = null)
     {
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var mirror = new IndexMirror(fixture.Mirror.Projector, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
-        watcher.IndexedBinaryChanged = mirror.Apply;
-        ExternalChangeLoadOrderHook.RunAfterReconcile(
-            fixture.Mirror.LoadOrder, fixture.Mirror.Index, watcher, NullLogger.Instance);
+        var index = new BinaryChangeApplier(fixture.Index, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
+        watcher.IndexedBinaryChanged = index.Apply;
+        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
         return watcher;
     }
 
@@ -45,7 +44,7 @@ public sealed class IndexMirrorTests
     }
 
     private static IReadOnlyList<string?> EditorIds(IndexedModFixture fixture, PluginKey key) =>
-        [.. fixture.Mirror.Projected().GetDocuments(key).Select(d => d.EditorId)];
+        [.. fixture.Index.Projected().GetDocuments(key).Select(d => d.EditorId)];
 
     // An untracked plugin's bytes move while the backend runs and the index follows, with no reload — the
     // whole point of extending the watcher past the tracked binaries.
@@ -53,7 +52,7 @@ public sealed class IndexMirrorTests
     public void AnUntrackedPluginChangedMidReconcile_IsReindexedWithNoReload()
     {
         using var fixture = IndexedModFixture.Untracked();
-        using var watcher = StartMirroring(fixture);
+        using var watcher = StartWatching(fixture);
         Assert.DoesNotContain("ArrivedExternally", EditorIds(fixture, fixture.Plugin));
 
         RewriteBinaryWithExtraNpc(fixture, "ArrivedExternally");
@@ -69,7 +68,7 @@ public sealed class IndexMirrorTests
     {
         using var fixture = IndexedModFixture.Untracked();
         var notifications = new InMemoryNotificationPublisher();
-        using var watcher = StartMirroring(fixture, notifications);
+        using var watcher = StartWatching(fixture, notifications);
 
         RewriteBinaryWithExtraNpc(fixture, "ArrivedExternally");
 
@@ -84,14 +83,14 @@ public sealed class IndexMirrorTests
     public void AnIndexedPluginDeletedMidReconcile_StopsAnswering()
     {
         using var fixture = IndexedModFixture.Untracked();
-        using var watcher = StartMirroring(fixture);
+        using var watcher = StartWatching(fixture);
         Assert.NotEmpty(EditorIds(fixture, fixture.Plugin));
 
         File.Delete(Path.Combine(fixture.ModFolder, IndexedModFixture.PluginName));
 
         WaitUntil(() => EditorIds(fixture, fixture.Plugin).Count == 0, TimeSpan.FromSeconds(10));
         Assert.Empty(EditorIds(fixture, fixture.Plugin));
-        Assert.Null(fixture.Mirror.Index!.IndexedContentHash(fixture.Plugin));
+        Assert.Null(fixture.Index.Store!.IndexedContentHash(fixture.Plugin));
     }
 
     // A tracked plugin's binary changing is a question for the
@@ -101,30 +100,31 @@ public sealed class IndexMirrorTests
     public void ATrackedPluginChangedMidReconcile_AsksTheUser_AndIsNeverSilentlyReindexed()
     {
         using var fixture = IndexedModFixture.Tracked();
-        var mirrored = new List<IndexedBinaryEvent>();
+        var reindexed = new List<IndexedBinaryEvent>();
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        watcher.IndexedBinaryChanged = e => { lock (mirrored) mirrored.Add(e); return true; };
-        ExternalChangeLoadOrderHook.RunAfterReconcile(
-            fixture.Mirror.LoadOrder, fixture.Mirror.Index, watcher, NullLogger.Instance);
+        watcher.IndexedBinaryChanged = e => { lock (reindexed) reindexed.Add(e); return true; };
+        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
 
         RewriteBinaryWithExtraNpc(fixture, "ChangedByXEdit");
 
         WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(5));
         Assert.NotEmpty(watcher.Unanswered());
-        // Well past the debounce window, so "no mirror event" is a decision rather than a race.
+        // Well past the debounce window, so "no re-index" is a decision rather than a race.
         Thread.Sleep(500);
-        lock (mirrored) Assert.Empty(mirrored);
+        lock (reindexed) Assert.Empty(reindexed);
         Assert.DoesNotContain("ChangedByXEdit", EditorIds(fixture, fixture.Plugin));
     }
 
-    // A change to a plugin the index holds no rows for is not the mirror's business — there is
+    // A change to a plugin the index holds no rows for is not this applier's business — there is
     // nothing to compare against and nothing to refresh.
     [Fact]
-    public void RunAfterReconcile_MirrorsNothing_WhenThereIsNoLoadOrder()
+    public void RunAfterReconcile_WatchesNothing_WhenThereIsNoLoadOrder()
     {
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
 
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(null, null, watcher, NullLogger.Instance);
+        using var noLoadOrder = new IndexProjector(SharedSchemaReflector.Instance);
+
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(noLoadOrder, watcher, NullLogger.Instance);
 
         Assert.Empty(offers);
         Assert.Empty(watcher.Unanswered());

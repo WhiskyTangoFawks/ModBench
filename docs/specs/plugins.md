@@ -557,7 +557,7 @@ Mod Management recomputes it (`buildLoadOrderSnapshot`: the winning copy of ever
 line at its slot with its `*`, every losing copy at the name's slot, every unlisted file with no
 slot — origin, path and the three registration facts, nothing richer) and sends it whole as
 `PUT /load-order`; the backend reconciles it against what it holds (open and register what is new,
-indexing only files the mirror has never seen; unregister what is gone; move the slot/flags of
+indexing only files the Index has never seen; unregister what is gone; move the slot/flags of
 what stayed, SQL-only; one winner sweep). An identical snapshot is a no-op. There is no decoration,
 no confirmation, no command, and no user-facing "drift" or "re-read" concept — a mod-level change
 that moves which copy wins is just the `winning` flag moving on two rows the backend already holds.
@@ -583,7 +583,7 @@ indexed is a row in an error state (`LoadOrderStatus.failures`, decorated on its
 once its bytes change. There is no "exit to Loadout on load failure" any more.
 
 **Uninstalling the only provider of a held plugin** unregisters that copy — its rows stay in the
-mirror for its return (a reinstall registers them again with no re-index), and its row in this tree
+index for its return (a reinstall registers them again with no re-index), and its row in this tree
 (built from `plugins.txt`, not from what the backend holds) simply stops expanding.
 
 **A tracked plugin's copy switching folders follows its new folder, the same way any reconcile
@@ -740,7 +740,7 @@ overflow, then native **Collapse All** last.
 - **Checkbox toggles and drag reorders are live (ADR-0044).** Both write `plugins.txt` and
   then become the next snapshot (`loadOrderSync.request()` — the toggle asks explicitly, the
   plugins.txt watcher covers both); the backend moves the affected registrations SQL-only — no
-  reload, no re-read, no re-index (proved at the mirror seam: a reorder or a disable changes the
+  reload, no re-read, no re-index (proved at the Index seam: a reorder or a disable changes the
   index's `Index` call count by zero) — and re-sweeps winners once. Winner status and any open
   record editor both reflect the change via the same `notifyConflictsComputed`
   broadcast every completed reconcile fires; the view-header progress indicator

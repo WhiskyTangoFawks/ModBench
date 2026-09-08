@@ -12,13 +12,13 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-public sealed class LoadOrderMirrorReconcileScatteredTests
+public sealed class ReconcileScatteredTests
 {
-    private static LoadOrderMirror MakeManager()
+    private static IndexProjector MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new LoadOrderMirror(factory);
+        return new IndexProjector(factory);
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
         var reflector = SharedSchemaReflector.Instance;
         var innerFactory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var factory = new ThrowingOnIndexRepositoryFactory(innerFactory, "Bad.esp");
-        using var manager = new LoadOrderMirror(factory);
+        using var manager = new IndexProjector(factory);
 
         manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 

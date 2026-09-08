@@ -158,7 +158,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     private static async Task<IMajorRecord> DeserializeCoreAsync(
         Stream stream, string directory, GameRelease gameRelease, string? recordType, CancellationToken cancel)
     {
-        // The mirror of SerializeCoreAsync's dispatch, driven by the same RecordTypeDispatch fact so
+        // The reverse of SerializeCoreAsync's dispatch, driven by the same RecordTypeDispatch fact so
         // the two directions cannot disagree. An unknown recordType reads as ambiguous, so it takes
         // the self-describing path and fails loudly rather than constructing a guessed type.
         var dispatch = RecordTypeDispatch.For(gameRelease);

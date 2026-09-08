@@ -83,7 +83,7 @@ public sealed class InjectedChildTests
         using var fixture = new TwoPlugins();
         var (container, child, _) = fixture.Case(injection);
         fixture.TrackBoth();
-        var service = ProjectingEditService.Over(fixture.Mirror);
+        var service = ProjectingEditService.Over(fixture.Index);
 
         var edit = service.Set(
             fixture.Injector, child.ToString(), "EditorID", JsonDocument.Parse("\"Renamed\"").RootElement);
@@ -143,7 +143,7 @@ public sealed class InjectedChildTests
         private readonly string _injectorModFolder;
         private readonly string _gameDirectory;
 
-        public LoadOrderMirror Mirror { get; }
+        public IndexProjector Index { get; }
         public PluginKey Base { get; } = new(BasePluginName, BaseOrigin);
         public PluginKey Injector { get; } = new(InjectorPluginName, InjectorOrigin);
 
@@ -192,9 +192,9 @@ public sealed class InjectedChildTests
             (InjectedTopic, InjectedBranch, InjectedScene, InjectedResponse) =
                 (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
-            Mirror = new LoadOrderMirror(
+            Index = new IndexProjector(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)Mirror).Reconcile(
+            Index.Reconcile(
                 _gameDirectory,
                 [
                     new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
@@ -213,18 +213,18 @@ public sealed class InjectedChildTests
         };
 
         public IReadOnlyList<ContainerChildSummary> Children(PluginKey plugin, FormKey container) =>
-            new ContainerChildQueryService(Mirror.Projector).GetChildren(plugin.Name, container.ToString(), plugin.Origin);
+            new ContainerChildQueryService(Index).GetChildren(plugin.Name, container.ToString(), plugin.Origin);
 
         public void TrackBoth()
         {
             var track = new TrackService(NullLogger<TrackService>.Instance);
             foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
-                track.TrackAsync(Mirror.LoadOrder!, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+                track.TrackAsync(Index, origin, SourcePreset.Edits).GetAwaiter().GetResult();
         }
 
         public IModDisposeGetter CompileAndReimport(PluginKey plugin)
         {
-            var result = CompileServices.Over(Mirror)
+            var result = CompileServices.Over(Index)
                 .Compile(plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -235,7 +235,7 @@ public sealed class InjectedChildTests
 
         public void Dispose()
         {
-            Mirror.Dispose();
+            Index.Dispose();
             TryDelete(_baseModFolder);
             TryDelete(_injectorModFolder);
             TryDelete(_gameDirectory);

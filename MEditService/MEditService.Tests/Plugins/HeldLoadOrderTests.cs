@@ -16,17 +16,17 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Plugins;
 
 [Collection(TestPluginFixtureCollection.Name)]
-public class LoadOrderMirrorTests(TestPluginFixture fixture)
+public class HeldLoadOrderTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
-    private static LoadOrderMirror MakeManager(IModImporter? modImporter = null)
+    private static IndexProjector MakeManager(IModImporter? modImporter = null)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new LoadOrderMirror(factory,
+        return new IndexProjector(factory,
             modImporter: modImporter);
     }
 
@@ -57,7 +57,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             var reflector = SharedSchemaReflector.Instance;
             var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             var faulting = new FaultingUpdateWinnersRepositoryFactory(inner);
-            using var manager = new LoadOrderMirror(faulting);
+            using var manager = new IndexProjector(faulting);
 
             Assert.Throws<InvalidOperationException>(() =>
                 manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4));
@@ -77,7 +77,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
-        using var manager = new LoadOrderMirror(spy);
+        using var manager = new IndexProjector(spy);
 
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
@@ -258,7 +258,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     {
         using var manager = MakeLoadedManager();
         manager.SetFilter("SELECT form_key FROM \"NPC_\"");
-        Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.Projector.FilterSql);
+        Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.FilterSql);
     }
 
     [Fact]
@@ -267,7 +267,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         using var manager = MakeLoadedManager();
         manager.SetFilter("SELECT form_key FROM \"NPC_\"");
         manager.ClearFilter();
-        Assert.Null(manager.Projector.FilterSql);
+        Assert.Null(manager.FilterSql);
     }
 
     // --- Filter re-materialization ---
@@ -352,7 +352,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
                 b.SetMinimumLevel(LogLevel.Debug);
                 b.AddProvider(new CollectingLoggerProvider(entries));
             });
-            using var manager = new LoadOrderMirror(faulting, loggerFactory.CreateLogger<LoadOrderMirror>());
+            using var manager = new IndexProjector(faulting, loggerFactory.CreateLogger<IndexProjector>());
 
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             manager.SetFilter("SELECT form_key FROM npc_");
@@ -430,7 +430,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
     private sealed class FaultingUpdateWinnersRepository(IRecordIndex inner) : DelegatingRecordIndex(inner)
     {
-        public override void UpdateWinners() => throw new InvalidOperationException("simulated mid-load winner-sweep fault");
+        public override void UpdateWinners(IReadOnlyList<RegisteredCopy> participating) =>
+            throw new InvalidOperationException("simulated mid-load winner-sweep fault");
     }
 
 
@@ -591,7 +592,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
     // --- helpers ---
 
-    private LoadOrderMirror MakeLoadedManager()
+    private IndexProjector MakeLoadedManager()
     {
         var m = MakeManager();
         m.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);

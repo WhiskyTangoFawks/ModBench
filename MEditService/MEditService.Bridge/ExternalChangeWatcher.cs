@@ -13,7 +13,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     private readonly object _gate = new();
     private readonly Dictionary<string, WatchEntry> _entries = new(StringComparer.Ordinal);
     private readonly Dictionary<string, UnansweredExternalChange> _unanswered = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, MirrorEntry> _mirrors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IndexedEntry> _indexed = new(StringComparer.Ordinal);
 
     /// <param name="debounce">Collapses the several write events one plugin save raises into a single
     /// classification. Defaults to 300ms; tests shorten it.</param>
@@ -43,7 +43,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// PluginKey.</summary>
     public Action<string, string>? WatchOverflowed { get; set; }
 
-    /// <summary>The mirror-watch counterpart: <see cref="WatchIndexed"/> already carries an origin.</summary>
+    /// <summary>The indexed-binary counterpart: <see cref="WatchIndexed"/> already carries an origin.</summary>
     public Action<string, string>? IndexedWatchOverflowed { get; set; }
 
     private WatchEntry StartWatch(string directory, string pluginPath, Action onSettle, Action onOverflow)
@@ -61,7 +61,7 @@ public sealed class ExternalChangeWatcher : IDisposable
         fsWatcher.Changed += (_, _) => Restart(debounceTimer);
         fsWatcher.Created += (_, _) => Restart(debounceTimer);
         fsWatcher.Renamed += (_, _) => Restart(debounceTimer);
-        // A deletion is a settle like any other: the whole point of a mirror watch, and a no-op for
+        // A deletion is a settle like any other: the whole point of an indexed-binary watch, and a no-op for
         // a classification watch, whose Settle finds no bytes and returns.
         fsWatcher.Deleted += (_, _) => Restart(debounceTimer);
         fsWatcher.Error += (_, _) => RaiseSafely(onOverflow);
@@ -87,7 +87,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// lock, since the handler re-indexes a plugin.</summary>
     public Func<IndexedBinaryEvent, bool>? IndexedBinaryChanged { get; set; }
 
-    /// <summary>ADR-0001: mirrors one indexed binary into the index with no reload.
+    /// <summary>ADR-0001: projects one indexed binary into the index with no reload.
     /// <paramref name="contentHash"/> is what the rows were built from, so a settle hashing to the
     /// same bytes raises nothing: a touch is free.</summary>
     public void WatchIndexed(string pluginName, string origin, string pluginPath, string contentHash)
@@ -97,14 +97,14 @@ public sealed class ExternalChangeWatcher : IDisposable
 
         lock (_gate)
         {
-            var key = MirrorKey(origin, pluginName);
-            if (_mirrors.TryGetValue(key, out var existing)) existing.Dispose();
-            var mirror = new MirrorEntry(contentHash, pluginPath)
+            var key = IndexedKey(origin, pluginName);
+            if (_indexed.TryGetValue(key, out var existing)) existing.Dispose();
+            var indexed = new IndexedEntry(contentHash, pluginPath)
             {
                 Watch = StartWatch(directory, pluginPath, () => SettleIndexed(pluginName, origin, pluginPath),
                     () => IndexedWatchOverflowed?.Invoke(pluginName, origin)),
             };
-            _mirrors[key] = mirror;
+            _indexed[key] = indexed;
         }
     }
 
@@ -114,8 +114,8 @@ public sealed class ExternalChangeWatcher : IDisposable
     {
         lock (_gate)
         {
-            foreach (var mirror in _mirrors.Values) mirror.Dispose();
-            _mirrors.Clear();
+            foreach (var entry in _indexed.Values) entry.Dispose();
+            _indexed.Clear();
         }
     }
 
@@ -185,15 +185,15 @@ public sealed class ExternalChangeWatcher : IDisposable
     // of the handler and is put back on failure only if nothing newer has landed.
     private void SettleIndexed(string pluginName, string origin, string pluginPath)
     {
-        var key = MirrorKey(origin, pluginName);
+        var key = IndexedKey(origin, pluginName);
         IndexedBinaryEvent notification;
         string? previousHash;
         string? reportedHash;
         lock (_gate)
         {
             // A superseded watch's settle names the key its successor now holds at another path.
-            if (!_mirrors.TryGetValue(key, out var mirror) || mirror.PluginPath != pluginPath) return;
-            previousHash = mirror.ContentHash;
+            if (!_indexed.TryGetValue(key, out var indexed) || indexed.PluginPath != pluginPath) return;
+            previousHash = indexed.ContentHash;
 
             if (!File.Exists(pluginPath))
             {
@@ -212,7 +212,7 @@ public sealed class ExternalChangeWatcher : IDisposable
                 notification = new IndexedBinaryEvent(pluginName, origin, pluginPath, IndexedBinaryChange.Modified);
             }
 
-            mirror.ContentHash = reportedHash;
+            indexed.ContentHash = reportedHash;
         }
 
         bool applied;
@@ -234,17 +234,17 @@ public sealed class ExternalChangeWatcher : IDisposable
 
         lock (_gate)
         {
-            if (_mirrors.TryGetValue(key, out var mirror) && mirror.ContentHash == reportedHash)
-                mirror.ContentHash = previousHash;
+            if (_indexed.TryGetValue(key, out var indexed) && indexed.ContentHash == reportedHash)
+                indexed.ContentHash = previousHash;
         }
     }
 
     private static string Key(string modFolder, string pluginName) =>
         $"{modFolder} {pluginName}";
 
-    // (origin, plugin) — the compound plugin identity, not a mod folder: an index-mirror watch
+    // (origin, plugin) — the compound plugin identity, not a mod folder: an indexed-binary watch
     // covers plugins that have no mod folder at all, the game's own Data/ masters above all.
-    private static string MirrorKey(string origin, string pluginName) =>
+    private static string IndexedKey(string origin, string pluginName) =>
         string.Concat(origin, "\u0000", pluginName);
 
     public void Dispose()
@@ -253,8 +253,8 @@ public sealed class ExternalChangeWatcher : IDisposable
         {
             foreach (var entry in _entries.Values) entry.Dispose();
             _entries.Clear();
-            foreach (var mirror in _mirrors.Values) mirror.Dispose();
-            _mirrors.Clear();
+            foreach (var entry in _indexed.Values) entry.Dispose();
+            _indexed.Clear();
         }
     }
 
@@ -268,7 +268,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 
     // ContentHash is null once the file's disappearance has been reported. Guarded by _gate.
-    private sealed class MirrorEntry(string contentHash, string pluginPath) : IDisposable
+    private sealed class IndexedEntry(string contentHash, string pluginPath) : IDisposable
     {
         public string? ContentHash { get; set; } = contentHash;
         public string PluginPath { get; } = pluginPath;

@@ -25,12 +25,12 @@ public sealed class SourceWatchContainerTests : IDisposable
     {
         _fixture = new IndexedContainerFixture(_notifications);
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceMirror = new SourceMirror(_fixture.Mirror.Projector, _fixture.Mirror.WriteGate, _watcher, _notifications, NullLogger.Instance);
-        _watcher.SourceChanged = sourceMirror.Apply;
-        _fixture.Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
+        var sourceChanges = new SourceChangeApplier(_fixture.Index, _fixture.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
+        _watcher.SourceChanged = sourceChanges.Apply;
+        _fixture.Index.LoadOrderChanged = sourceChanges.RefreshWatches;
         // The fixture's own constructor already reconciled, before any watch could be
         // registered from that reconcile's own signal.
-        sourceMirror.RefreshWatches();
+        sourceChanges.RefreshWatches();
     }
 
     public void Dispose()
@@ -40,7 +40,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     }
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Index, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, args);
@@ -48,15 +48,15 @@ public sealed class SourceWatchContainerTests : IDisposable
     private string RelativePath(string absolutePath) => Path.GetRelativePath(_fixture.ModFolder, absolutePath);
 
     private async Task<bool> Settles(long from) =>
-        await _fixture.Mirror.AwaitSequenceAsync(from + 1, TimeSpan.FromSeconds(15));
+        await _fixture.Index.AwaitSequenceAsync(from + 1, TimeSpan.FromSeconds(15));
 
     [Fact]
     public async Task RevertingAQuestsSourceFile_ReachesTheRecordEditorThroughTheWatcher()
     {
-        var service = TestEditService.Over(_fixture.Mirror);
+        var service = TestEditService.Over(_fixture.Index);
         var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
-        var before = _fixture.Mirror.Sequence;
+        var before = _fixture.Index.Sequence;
         var applied = service.Set(
             _fixture.Plugin, _fixture.Quest.ToString(), "Filter", JsonDocument.Parse("\"EditedFilter\"").RootElement);
         Assert.True(applied.Applied, applied.Message);
@@ -65,7 +65,7 @@ public sealed class SourceWatchContainerTests : IDisposable
             "EditedFilter",
             Reads().GetRecord(_fixture.Quest.ToString())!.Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
 
-        var afterEdit = _fixture.Mirror.Sequence;
+        var afterEdit = _fixture.Index.Sequence;
         Git("restore", "--", RelativePath(file).Replace('\\', '/'));
 
         Assert.True(await Settles(afterEdit));
@@ -77,10 +77,10 @@ public sealed class SourceWatchContainerTests : IDisposable
     [Fact]
     public async Task RevertingAPlacedRefsOwningCellFile_ReachesTheRecordEditorThroughTheWatcher()
     {
-        var service = TestEditService.Over(_fixture.Mirror);
+        var service = TestEditService.Over(_fixture.Index);
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
 
-        var before = _fixture.Mirror.Sequence;
+        var before = _fixture.Index.Sequence;
         var applied = service.Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", JsonDocument.Parse("2.5").RootElement);
         Assert.True(applied.Applied, applied.Message);
         Assert.True(await Settles(before));
@@ -89,7 +89,7 @@ public sealed class SourceWatchContainerTests : IDisposable
             Assert.IsType<JsonElement>(
                 Reads().GetRecord(_fixture.TemporaryRef.ToString())!.Fields.Single(f => f.Metadata.Name == "Scale").Value).GetSingle());
 
-        var afterEdit = _fixture.Mirror.Sequence;
+        var afterEdit = _fixture.Index.Sequence;
         Git("restore", "--", RelativePath(file).Replace('\\', '/'));
 
         Assert.True(await Settles(afterEdit));

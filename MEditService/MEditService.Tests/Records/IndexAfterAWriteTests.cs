@@ -15,7 +15,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() => ProjectingEditService.Over(_mod.Mirror);
+    private ProjectingEditService Service() => ProjectingEditService.Over(_mod.Index);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -24,7 +24,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Assert.True(Service().Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
 
-        Assert.Equal("RenamedNpc", _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
+        Assert.Equal("RenamedNpc", _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Assert.True(Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75")).Applied);
 
-        var field = _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+        var field = _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
             .Fields.Single(f => f.Metadata.Name == "HeightMax");
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(field.Value).GetSingle());
     }
@@ -44,7 +44,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The file write and the projection are two events (ADR-0046), and both have to have landed:
         // dirt on disk with the editor showing the old value is half a write path.
-        var index = _mod.Mirror.Index!;
+        var index = _mod.Index.Store!;
         Assert.Contains(
             "0.75", index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
             StringComparison.Ordinal);
@@ -64,7 +64,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The second edit must not re-baseline against the first: Head is what the last commit
         // holds, not "the value before the most recent keystroke".
-        var index = _mod.Mirror.Index!;
+        var index = _mod.Index.Store!;
         Assert.Contains(
             "0.5", index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
             StringComparison.Ordinal);
@@ -78,13 +78,13 @@ public sealed class IndexAfterAWriteTests : IDisposable
     [Fact]
     public void AnEditThatMakesARecordMatchAnActiveFilter_PutsItInTheFilteredListing()
     {
-        _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE HeightMax = 0.75");
+        _mod.Index.SetFilter("SELECT form_key FROM npc_ WHERE HeightMax = 0.75");
         Assert.Equal(
-            0, _mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            0, _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var result = _mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
     }
@@ -95,8 +95,8 @@ public sealed class IndexAfterAWriteTests : IDisposable
         var result = Service().CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal("BrandNewNpc", _mod.Mirror.Projected().GetDocument(result.NewFormKey!, _mod.Plugin)!.EditorId);
-        Assert.Null(_mod.Mirror.Projected(RecordRef.Head).GetDocument(result.NewFormKey!, _mod.Plugin));
+        Assert.Equal("BrandNewNpc", _mod.Index.Projected().GetDocument(result.NewFormKey!, _mod.Plugin)!.EditorId);
+        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(result.NewFormKey!, _mod.Plugin));
     }
 
     // _filter never evaluated a brand-new row against its SQL, so it stays hidden until the create
@@ -104,13 +104,13 @@ public sealed class IndexAfterAWriteTests : IDisposable
     [Fact]
     public void ACreatedRecord_AppearsInAnActiveFilteredListing()
     {
-        _mod.Mirror.SetFilter("SELECT form_key FROM npc_");
-        var before = _mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
+        _mod.Index.SetFilter("SELECT form_key FROM npc_");
+        var before = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
 
         var result = Service().CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        var after = _mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
+        var after = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
         Assert.Equal(before + 1, after.Total);
         Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
     }
@@ -124,7 +124,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         Assert.True(service.Set(_mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\"")).Applied);
 
-        var document = _mod.Mirror.Projected().GetDocument(created.NewFormKey!, _mod.Plugin)!;
+        var document = _mod.Index.Projected().GetDocument(created.NewFormKey!, _mod.Plugin)!;
         Assert.Equal("RenamedNpc", document.EditorId);
         Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
     }
@@ -136,7 +136,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         Assert.False(Service().DeleteRecord(_mod.Plugin, headerFormKey).Applied);
 
-        Assert.NotNull(_mod.Mirror.Projected().GetDocument(headerFormKey, _mod.Plugin));
+        Assert.NotNull(_mod.Index.Projected().GetDocument(headerFormKey, _mod.Plugin));
     }
 
     [Fact]
@@ -144,8 +144,8 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Assert.True(Service().DeleteRecord(_mod.Plugin, _mod.Npc.ToString()).Applied);
 
-        Assert.Null(_mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin));
-        Assert.NotNull(_mod.Mirror.Projected(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.Null(_mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Index.Projected(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
     [Fact]
@@ -157,8 +157,8 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         Assert.True(service.DeleteRecord(_mod.Plugin, created.NewFormKey!).Applied);
 
-        Assert.Null(_mod.Mirror.Projected().GetDocument(created.NewFormKey!, _mod.Plugin));
-        Assert.Null(_mod.Mirror.Projected(RecordRef.Head).GetDocument(created.NewFormKey!, _mod.Plugin));
+        Assert.Null(_mod.Index.Projected().GetDocument(created.NewFormKey!, _mod.Plugin));
+        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(created.NewFormKey!, _mod.Plugin));
     }
 
     [Fact]
@@ -166,6 +166,6 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Service().DeleteRecord(_mod.Plugin, _mod.Npc.ToString());
 
-        Assert.NotNull(_mod.Mirror.Projected().GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Index.Projected().GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin));
     }
 }

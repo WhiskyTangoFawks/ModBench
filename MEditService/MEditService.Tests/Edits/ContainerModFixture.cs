@@ -97,7 +97,7 @@ public sealed class ContainerModFixture : IDisposable
 
     public ContainerModFixture() : this(track: true) { }
 
-    /// <summary>Deferred tracking, for the indexed wrapper: the mirror reconciles over the untracked
+    /// <summary>Deferred tracking, for the indexed wrapper: the Index reconciles over the untracked
     /// binary first, exactly as the process does before Track ever runs.</summary>
     internal ContainerModFixture(bool track)
     {

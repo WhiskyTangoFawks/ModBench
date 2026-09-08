@@ -32,10 +32,10 @@ public sealed class ReconcileLoggingTests
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var reflector = SharedSchemaReflector.Instance;
-        using var mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), loggerFactory.CreateLogger<LoadOrderMirror>());
+        using var index = new IndexProjector(
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), loggerFactory.CreateLogger<IndexProjector>());
 
-        mirror.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+        index.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
         foreach (var plugin in new[] { "A.esp", "B.esp" })
         {

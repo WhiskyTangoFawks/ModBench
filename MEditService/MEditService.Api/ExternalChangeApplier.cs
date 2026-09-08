@@ -7,25 +7,29 @@ using MEditService.Core.Records;
 namespace MEditService.Api;
 
 /// <summary>ADR-0046: the plugin watcher's external-change signals become notifications and a
-/// validate. Origin resolution mirrors <c>GetExternalChangeStatus</c> — the watcher only ever
+/// validate. Origin resolution follows <c>GetExternalChangeStatus</c> — the watcher only ever
 /// carries the bare (modFolder, pluginName) identity.</summary>
-internal sealed class ExternalChangeMirror(IndexProjector index, INotificationPublisher notifications, ILogger logger)
+internal sealed class ExternalChangeApplier(IndexProjector index, INotificationPublisher notifications, ILogger logger)
 {
+    // Projected per signal rather than held: the load order can be reconciled between two of them.
+    private static LoadOrder HeldOrder(IndexProjector index) =>
+        index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
+
     /// <summary>A question was queued: publishes it exactly as <c>GET /plugins/external-changes/status</c>
     /// would report it.</summary>
     internal void ApplyPending(UnansweredExternalChange change)
     {
-        var origin = PluginEndpoints.OriginOfExternalChange(index.LoadOrder, change.ModFolder, change.PluginName);
+        var origin = PluginEndpoints.OriginOfExternalChange(HeldOrder(index), change.ModFolder, change.PluginName);
         notifications.Publish(new ExternalChangePendingNotification(
             new PluginKey(change.PluginName, origin),
             change.Classification.MetaChanged, change.Classification.OldVersion, change.Classification.NewVersion));
     }
 
-    /// <summary>ADR-0046 invariant 6: an OS overflow on the classification watch, mirroring
-    /// <see cref="SourceMirror"/>'s own overflow-to-validate shape for the Source side.</summary>
+    /// <summary>ADR-0046 invariant 6: an OS overflow on the classification watch, the same
+    /// overflow-to-validate shape <see cref="SourceChangeApplier"/> has for the Source side.</summary>
     internal void ApplyOverflow(string modFolder, string pluginName)
     {
-        var origin = PluginEndpoints.OriginOfExternalChange(index.LoadOrder, modFolder, pluginName);
+        var origin = PluginEndpoints.OriginOfExternalChange(HeldOrder(index), modFolder, pluginName);
         var key = new PluginKey(pluginName, origin);
         try
         {

@@ -19,7 +19,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-order-damage-game-").FullName;
-    private readonly LoadOrderMirror _mirror;
+    private readonly IndexProjector _index;
     private readonly PluginKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public DialogueOrderDamageTests()
@@ -27,21 +27,21 @@ public sealed class DialogueOrderDamageTests : IDisposable
         var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        _mirror = new LoadOrderMirror(
+        _index = new IndexProjector(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
+        _index.Reconcile(
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_index, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
+        _index.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }

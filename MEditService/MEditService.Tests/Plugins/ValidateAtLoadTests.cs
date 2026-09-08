@@ -20,7 +20,7 @@ public sealed class ValidateAtLoadTests
         var formKey = mod.Npc.ToString();
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"EditedWhileStopped\"", StringComparison.Ordinal));
-        mod.Mirror.Dispose();
+        mod.Index.Dispose();
 
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -29,16 +29,16 @@ public sealed class ValidateAtLoadTests
             b.AddProvider(new CollectingLoggerProvider(entries));
         });
         var reflector = SharedSchemaReflector.Instance;
-        using var restarted = new LoadOrderMirror(
+        using var restarted = new IndexProjector(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)),
-            loggerFactory.CreateLogger<LoadOrderMirror>());
+            loggerFactory.CreateLogger<IndexProjector>());
 
-        ((ILoadOrderMirror)restarted).Reconcile(
+        restarted.Reconcile(
             mod.GameDirectory, [mod.Entry], GameRelease.Fallout4, mod.InstanceRoot);
 
         Assert.Equal(
             "EditedWhileStopped",
-            restarted.Index!.At(RecordRef.Effective).GetDocument(formKey, mod.Plugin)!.EditorId);
+            restarted.Store!.At(RecordRef.Effective).GetDocument(formKey, mod.Plugin)!.EditorId);
         Assert.DoesNotContain(
             entries, e => e.Message.StartsWith($"Indexing {IndexedModFixture.PluginName} ", StringComparison.Ordinal));
     }
