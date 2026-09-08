@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { IModlistSource, ModlistEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
-import { buildLoadOrderSnapshot, type LoadOrderPlugin } from './loadOrderSnapshot';
+import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { createModsWatcher } from './modsWatcher';
 import { createModlistWatcher } from './modlistWatcher';
 import { createOverwriteWatcher } from './overwriteWatcher';
@@ -39,8 +39,10 @@ export interface InstanceValue {
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
   readonly filesByMod: ReadonlyMap<string, readonly { relativePath: string; absolutePath: string }[]>;
-  /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0044). */
-  readonly plugins: readonly LoadOrderPlugin[];
+  /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0044). A listed
+   *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
+   *  undefined — when the game directory is unresolved. */
+  readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
   /** downloads/ rows, `.meta` sidecars folded in — status and hidden included. */
   readonly downloads: readonly DownloadRow[];
   /** ModOrganizer.ini's `selected_profile`. */
@@ -184,9 +186,9 @@ export class Instance implements vscode.Disposable {
     }
   }
 
-  // A truncated modlist.txt parses to no entries rather than failing, and zero mods is legal, so
-  // an empty parse is re-read after a settle: a torn write has finished by then, a mass delete
-  // has not. A partial parse is indistinguishable from a real removal and is not covered.
+  // A truncated modlist.txt parses to no entries, and zero mods is legal, so an empty parse is
+  // re-read after a settle before being believed. A partial parse is not covered — it reads as
+  // a real removal.
   private async readMods(): Promise<ModlistEntry[]> {
     const entries = await this.options.source.readModlist();
     if (entries.length > 0) return entries;
@@ -208,23 +210,21 @@ export class Instance implements vscode.Disposable {
       scanDownloads(instanceRoot),
       isDeployed(instanceRoot),
     ]);
-    // An unresolved game directory has no Data/ to resolve an unlisted plugin's fallback path
-    // against; loadOrderReconcile treats the same state as "no game directory" and skips the
-    // snapshot rather than build one against a made-up path.
-    const plugins = gameDirectory
-      ? await buildLoadOrderSnapshot(
-          // The modlist is read once per recompute and handed on, so the snapshot cannot see a
-          // different generation of it than the file index did.
-          {
-            readModlist: () => Promise.resolve(entries),
-            readPluginOrder: () => source.readPluginOrder(),
-            readEnabledPlugins: () => source.readEnabledPlugins(),
-          },
-          instanceRoot,
-          gameDirectory.dataFolder,
-          () => Promise.resolve(index),
-        )
-      : [];
+    // An unresolved game directory loses only the Data-folder copies' paths: every plugins.txt
+    // line still gets a row, existence/slot/enabled coming from the line itself (see
+    // `LoadOrderPluginLine`), not from the game directory.
+    const plugins = await buildLoadOrderRows(
+      // The modlist is read once per recompute and handed on, so the snapshot cannot see a
+      // different generation of it than the file index did.
+      {
+        readModlist: () => Promise.resolve(entries),
+        readPluginOrder: () => source.readPluginOrder(),
+        readEnabledPlugins: () => source.readEnabledPlugins(),
+      },
+      instanceRoot,
+      gameDirectory?.dataFolder,
+      () => Promise.resolve(index),
+    );
     return {
       mods: entries,
       files: index.files,

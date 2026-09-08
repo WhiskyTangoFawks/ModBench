@@ -505,13 +505,12 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     expect(instance.value.deployed).toBe(false);
   });
 
-  // Same reasoning again: the empty value already has `gameDirectory: undefined` and
-  // `plugins: []`, so a prior resolved refresh plus the sequence bump prove tolerance.
-  it('yields a value with no game directory and no plugins, rather than a failure, when nothing resolves', async () => {
+  // Same reasoning again: the empty value already has `gameDirectory: undefined`, so a prior
+  // resolved refresh plus the sequence bump prove tolerance rather than a swallowed failure.
+  it('yields a value with no game directory, rather than a failure, when nothing resolves', async () => {
     const { instance, setDetectPaths } = await realInstance();
     await instance.refresh();
     expect(instance.value.gameDirectory).toBeDefined();
-    expect(instance.value.plugins.length).toBeGreaterThan(0);
     const before = instance.sequence;
 
     setDetectPaths(() => Promise.resolve(null));
@@ -519,7 +518,34 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
 
     expect(instance.sequence).toBe(before + 1);
     expect(instance.value.gameDirectory).toBeUndefined();
-    expect(instance.value.plugins).toEqual([]);
+  });
+
+  // A mod- or overwrite-provided row keeps its real path; a listed name only Data/ could provide
+  // still gets a row — existence, slot and enabled come from plugins.txt alone — with `path:
+  // undefined` rather than a guess or a drop.
+  it('keeps every plugins.txt line as a row when the game directory is unresolved, Data-only rows line-only', async () => {
+    const { instance, setDetectPaths } = await realInstance();
+    await instance.refresh();
+    const withGameDirectory = instance.value.plugins;
+    // Sanity: the fixture has at least one Data-folder-only listed plugin today, so its path is
+    // resolved through the game directory this test is about to take away.
+    const dataOnlyBefore = withGameDirectory.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
+    expect(dataOnlyBefore?.origin).toBe('Data');
+    expect(dataOnlyBefore?.path).toEqual(expect.any(String));
+    const modProvidedBefore = withGameDirectory.find((p) => p.name === 'NonAsciiRetexture.esp');
+    expect(modProvidedBefore?.path).toEqual(expect.any(String));
+
+    setDetectPaths(() => Promise.resolve(null));
+    await instance.refresh();
+
+    const modProvided = instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp');
+    expect(modProvided).toEqual(modProvidedBefore); // unaffected — a mod winner needs no game directory
+    const dataOnly = instance.value.plugins.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
+    expect(dataOnly).toBeDefined(); // the row survives — this is the bug this test guards
+    expect(dataOnly?.slot).toBe(dataOnlyBefore?.slot);
+    expect(dataOnly?.enabled).toBe(dataOnlyBefore?.enabled);
+    expect(dataOnly?.origin).toBe('Data');
+    expect(dataOnly?.path).toBeUndefined(); // no Data/ to resolve it against — not a guess
   });
 
   it('recomputes with a new game directory when the setting changes, yielding a new value and sequence', async () => {
