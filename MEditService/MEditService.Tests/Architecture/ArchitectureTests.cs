@@ -60,17 +60,20 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
     }
 
-    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the Index's Status lie,
-    // and a second writer makes the shared kernel's load order disagree with the index.
+    // ADR-0044: a load order arrives from Mod Management only through PUT /load-order; a second
+    // arrival makes the Index's Status lie, and a second writer makes the shared kernel disagree
+    // with the index.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
     {
         // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
         // goes through cannot disarm this.
-        string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs"];
-        // IndexProjector.cs holds the reconcile itself, which the endpoint calls: it is the verb,
-        // not a second arrival.
-        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs", "IndexProjector.cs"])
+        string[] writers =
+            ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs", "CreatePluginHandler.cs"];
+        // IndexProjector.cs holds the reconcile itself; the create route reconciles the snapshot the
+        // kernel already holds, one copy longer (ADR-0041), which is a projection, not an arrival.
+        string[] reconcilers = ["LoadOrderEndpoints.cs", "IndexProjector.cs", "PluginEndpoints.cs"];
+        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], reconcilers)
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Apply("], writers))
             .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Register("], writers))
             .Distinct()
@@ -131,12 +134,12 @@ public sealed class ArchitectureTests
         Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
     }
 
-    // ADR-0008: PluginWriter backs the binary up first; IndexProjector writes only a brand-new
+    // ADR-0008: PluginWriter backs the binary up first; the create gesture writes only a brand-new
     // file and TrackService only a scratch copy, so neither has anything to back up.
     [Fact]
     public void ExistingPluginBinary_IsWrittenOnlyByPluginWriter()
     {
-        string[] allowed = ["PluginWriter.cs", "IndexProjector.cs", "TrackService.cs"];
+        string[] allowed = ["PluginWriter.cs", "CreatePluginHandler.cs", "TrackService.cs"];
         var offenders = Offenders(SolutionDirectory(), Projects, "WriteToBinary(", allowed)
             .Concat(Offenders(SolutionDirectory(), Projects, "BeginWrite", allowed))
             .ToList();

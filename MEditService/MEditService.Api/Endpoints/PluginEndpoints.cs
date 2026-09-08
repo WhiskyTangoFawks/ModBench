@@ -58,7 +58,11 @@ public static class PluginEndpoints
                 "writer, or a script/agent consumer per ADR-0024) is responsible for that.")
             .Produces<PluginResponse>()
             .ProducesProblem(400)
+            // 404 and 422 are Track's own refusal map, which this route answers with rather than
+            // repeating inline: the destination is Tracked inside this gesture.
+            .ProducesProblem(404)
             .ProducesProblem(409)
+            .ProducesProblem(422)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
@@ -175,7 +179,8 @@ public static class PluginEndpoints
     // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, IndexProjector index, LoadOrderHolder holder, TrackService trackService, ILoggerFactory loggerFactory)
+        CreatePluginRequest req, IndexProjector index, LoadOrderHolder holder, CreatePluginHandler create,
+        ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Name))
@@ -185,29 +190,24 @@ public static class PluginEndpoints
 
         try
         {
-            var plugin = index.CreatePlugin(req.Name, req.Path, req.Origin);
-            // ADR-0041: a participant at once, so the gesture below and every later reader see it
-            // without waiting for the snapshot that appends its plugins.txt line.
-            holder.Register(new RegisteredCopy(
-                plugin.Name, plugin.Origin, plugin.Path, plugin.LoadOrderIndex, Enabled: true, Winning: true));
-
-            if (!SourceRepository.IsTracked(req.Path))
+            var result = await create.CreatePlugin(HeldCopies(index), req.Name, req.Path, req.Origin);
+            if (!result.Applied)
             {
-                var track = await trackService.TrackAsync(holder.Current, HeldCopies(index), req.Origin, SourcePreset.Edits);
-                if (!track.Applied)
-                {
-                    // Loud, not silent: the plugin file and load order entry already landed, but
-                    // plugins.txt is never appended without a 2xx, so no load order can name this
-                    // half-created plugin. The orphaned entry is accepted residue.
-                    logger.LogError("Refused to track {Origin} while creating {Name}: {Refusal}", req.Origin, req.Name, track.Refusal);
-                    // Not WriteEndpointMapping.Refusal's map, which answers 404 and 422 this route
-                    // does not declare; widening the declared set is the create route's own work
-                    // (debt #797).
-                    return Results.Problem(track.Message, statusCode: track.Refusal == TrackRefusal.AlreadyTracked ? 409 : 500);
-                }
+                // Loud, not silent: the plugin file and load order entry already landed, but
+                // plugins.txt is never appended without a 2xx, so no load order can name this
+                // half-created plugin. The orphaned entry is accepted residue.
+                logger.LogError(
+                    "Refused to track {Origin} while creating {Name}: {Refusal}",
+                    req.Origin, req.Name, result.Track!.Refusal);
+                return WriteEndpointMapping.Refusal(result.Track);
             }
 
-            return Results.Ok(plugin);
+            // ADR-0046 invariant 1: the created copy reaches the Index the way every other load
+            // order change does, from the kernel's snapshot. Gated, since an edit can be in flight.
+            using (index.WriteGate.Enter()) index.Reconcile(holder.Current);
+            return Projected(index, result.Copy.Key) is { } plugin
+                ? Results.Ok(plugin)
+                : Results.Problem($"{req.Name} was created but could not be indexed.", statusCode: 500);
         }
         catch (ArgumentException ex)
         {
@@ -219,12 +219,33 @@ public static class PluginEndpoints
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
         }
+        catch (IndexWriteGateTimeoutException ex)
+        {
+            logger.LogWarning(ex, "Write gate busy after creating plugin {Name}", req.Name);
+            return WriteEndpointMapping.WriteGateBusy(ex);
+        }
+        catch (OperationCanceledException ex)
+        {
+            logger.LogWarning(ex, "Superseded reconcile after creating plugin {Name}", req.Name);
+            return Results.Problem(
+                $"{req.Name} was created; the load order moved before it could be indexed. Try again.",
+                statusCode: 503);
+        }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
+
+    // The read side answers what the new plugin is: masters, flags and record count are the
+    // projection's to state, never the write's.
+    private static PluginResponse? Projected(IndexProjector index, PluginKey key) =>
+        (index.LoadOrder?.Plugins ?? []).FirstOrDefault(p =>
+            p.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
+            && p.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase)) is { } metadata
+            ? PluginResponse.FromMetadata(metadata)
+            : null;
 
     // Which registered copies Editing actually holds. A copy the Index could not open is
     // registered like any other but has no bytes to read.
@@ -420,53 +441,49 @@ public static class PluginEndpoints
 
     // The offered rebase, origin-scoped — the repo is the unit of baselines and rebase, not
     // any one plugin inside it.
-    internal static IResult Rebase(RebaseRequest req, IndexProjector index, ILoggerFactory loggerFactory)
+    internal static IResult Rebase(RebaseRequest req, RebaseEditBranchHandler handler, ILoggerFactory loggerFactory)
     {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (matched, _) = ResolveAnyPhysicalCopy(index, req.Origin, pluginName: null, logger);
-        if (matched is null || Path.GetDirectoryName(matched.Path) is not { } modFolder)
-            return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
-
-        var result = SourceRepository.RebaseEditBranch(modFolder);
-        return Results.Ok(ToRebaseResponse(result));
+        return Rebased(
+            handler.RebaseEditBranch(req.Origin), req.Origin, loggerFactory.CreateLogger(nameof(PluginEndpoints)));
     }
 
-    internal static IResult ContinueRebase(RebaseRequest req, IndexProjector index, ILoggerFactory loggerFactory)
+    internal static IResult ContinueRebase(
+        RebaseRequest req, ContinueRebaseEditBranchHandler handler, ILoggerFactory loggerFactory)
     {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (matched, _) = ResolveAnyPhysicalCopy(index, req.Origin, pluginName: null, logger);
-        if (matched is null || Path.GetDirectoryName(matched.Path) is not { } modFolder)
-            return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
-
-        var result = SourceRepository.ContinueRebase(modFolder);
-        return Results.Ok(ToRebaseResponse(result));
+        return Rebased(
+            handler.ContinueRebase(req.Origin), req.Origin, loggerFactory.CreateLogger(nameof(PluginEndpoints)));
     }
 
-    private static RebaseResponse ToRebaseResponse(RebaseResult result) =>
-        new(result.Outcome, result.RefusalReason, result.ConflictedPaths);
+    // An origin no registered copy carries names no repository, which is a 404 rather than one of
+    // the three outcomes a rebase reports.
+    private static IResult Rebased(RebaseResult? result, string origin, ILogger logger)
+    {
+        if (result is null)
+        {
+            logger.LogWarning("No loaded plugin has origin {Origin}", origin);
+            return Results.Problem($"No loaded plugin has origin '{origin}'.", statusCode: 404);
+        }
+        return Results.Ok(new RebaseResponse(result.Outcome, result.RefusalReason, result.ConflictedPaths));
+    }
 
     // Deliberately not PluginOriginResolver, which filters to load-order members: a copy shadowed
-    // by a higher-priority mod of the same filename still has its question to answer. A null
-    // pluginName means whichever plugin this origin holds.
+    // by a higher-priority mod of the same filename still has its question to answer.
     private static (RegisteredCopy? Plugin, LoadOrder LoadOrder) ResolveAnyPhysicalCopy(
-        IndexProjector index, string origin, string? pluginName, ILogger logger)
+        IndexProjector index, string origin, string pluginName, ILogger logger)
     {
         var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
         var plugin = loadOrder.Copies.FirstOrDefault(p =>
             p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)
-            && (pluginName is null || p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)));
+            && p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase));
         if (plugin == null)
         {
-            if (pluginName is null)
-                logger.LogWarning("No loaded plugin has origin {Origin}", origin);
-            else
-                logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
+            logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
             return (null, LoadOrder.Empty);
         }
         return (plugin, loadOrder);

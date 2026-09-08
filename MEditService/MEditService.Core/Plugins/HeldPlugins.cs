@@ -238,22 +238,6 @@ public sealed class HeldPlugins : ILoadOrder
         return metadata;
     }
 
-    /// <summary>ADR-0041: a created plugin is a genuine load-order member at once, though
-    /// plugins.txt has not been appended yet. One past the highest slot, not the count: a reused
-    /// slot would give two participants one index.</summary>
-    public PluginMetadata AddCreatedPlugin(string filePath, string origin)
-    {
-        var nextIndex = _plugins.Count == 0 ? 0 : _plugins.Max(p => p.LoadOrderIndex ?? 0) + 1;
-        var fileName = Path.GetFileName(filePath);
-        var mod = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(fileName), filePath), GameRelease,
-            LocalizedStrings.ForRead(ModFolders.Of(origin, filePath), DataFolderPath));
-        var metadata = BuildPluginMetadata(
-            mod, new RegisteredCopy(fileName, origin, filePath, nextIndex, Enabled: true, Winning: true));
-        Hold(mod, metadata);
-        return metadata;
-    }
-
     /// <summary>Lets the projector report a post-open failure (an indexing throw from malformed record
     /// data Mutagen can't parse) through the same channel as open failures.</summary>
     internal void SetFailure(PluginKey key, string reason)

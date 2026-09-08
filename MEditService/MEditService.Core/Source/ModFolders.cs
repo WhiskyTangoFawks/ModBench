@@ -23,6 +23,14 @@ public static class ModFolders
         return Path.GetDirectoryName(pluginPath);
     }
 
+    /// <summary>The folder every copy under one origin shares, for a gesture the repository is the
+    /// unit of — rebase. Null when no registered copy carries the origin.</summary>
+    public static string? OfOrigin(LoadOrder loadOrder, string origin) =>
+        loadOrder.Copies.FirstOrDefault(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))
+            is { } copy
+            ? Of(copy.Origin, copy.Path)
+            : null;
+
     /// <summary>"Editing requires tracking; viewing never does" (ADR-0041).</summary>
     public static bool IsEditable(string origin, string pluginPath) =>
         Of(origin, pluginPath) is { } modFolder && SourceRepository.IsTracked(modFolder);

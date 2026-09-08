@@ -49,12 +49,11 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     [Fact]
     public async Task CreatePlugin_RegistersTheCopyInTheSharedKernel()
     {
-        var holder = new LoadOrderHolder();
-        holder.Apply(LoadOrder.From(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, []));
+        var holder = TestEditService.HolderOver(_mod.Index);
 
         var result = await PluginEndpoints.CreatePlugin(
             new CreatePluginRequest("Minted.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
-            _mod.Index, holder, new TrackService(NullLogger<TrackService>.Instance), NullLoggerFactory.Instance);
+            _mod.Index, holder, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance);
 
         Assert.IsAssignableFrom<Ok<PluginResponse>>(result);
         var registered = holder.Current.Copy(new PluginKey("Minted.esp", IndexedModFixture.ModFolderOrigin));

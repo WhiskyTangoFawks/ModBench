@@ -26,6 +26,9 @@ public sealed class CommandHandlerConventionTests
         (typeof(RenumberRecordHandler), "Applied"),
         (typeof(AbsorbExternalChangeHandler), "Applied"),
         (typeof(KeepExternalChangeHandler), "Applied"),
+        (typeof(CreatePluginHandler), "Applied"),
+        (typeof(RebaseEditBranchHandler), "Applied"),
+        (typeof(ContinueRebaseEditBranchHandler), "Applied"),
     ];
 
     private const string CommandsNamespace = "MEditService.Core.Commands";
