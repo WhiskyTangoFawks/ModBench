@@ -18,6 +18,10 @@ export interface ConfigLike {
 
 export type DetectPaths = () => Promise<{ dataFolder: string; pluginsTxt: string } | null>;
 
+/** ModOrganizer.ini's text. Defaults to reading the file; a caller already holding the same
+ *  generation's text (the Instance, ADR-0047) injects it instead, so the ini is read once. */
+export type ReadIniText = () => Promise<string>;
+
 /** The Proton prefix root (`.../compatdata/<appid>/pfx`), or null if undeterminable. Injected
  *  so this file stays free of a vscode import. */
 export type DetectWinePrefix = () => Promise<string | null>;
@@ -66,6 +70,7 @@ export async function resolveGameDirectory(
   config: ConfigLike,
   detectPaths: DetectPaths,
   detectWinePrefix: DetectWinePrefix,
+  readIniText: ReadIniText = () => readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'),
 ): Promise<GameDirectory | null> {
   const explicit = (config.get('mods.gameDirectory') ?? '').trim();
   if (explicit) {
@@ -75,7 +80,7 @@ export async function resolveGameDirectory(
     return { root: explicit, dataFolder: join(explicit, 'Data') };
   }
 
-  const fromIni = await readIniGamePath(instanceRoot, detectWinePrefix);
+  const fromIni = await readIniGamePath(readIniText, detectWinePrefix);
   if (fromIni && (await hasDataFolder(fromIni))) {
     return { root: fromIni, dataFolder: join(fromIni, 'Data') };
   }
@@ -89,10 +94,10 @@ export async function resolveGameDirectory(
 }
 
 // Only the ini read/parse is tolerated as "not found"; a translation failure must propagate.
-async function readIniGamePath(instanceRoot: string, detectWinePrefix: DetectWinePrefix): Promise<string | null> {
+async function readIniGamePath(readIniText: ReadIniText, detectWinePrefix: DetectWinePrefix): Promise<string | null> {
   let raw: string;
   try {
-    raw = readGamePath(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'));
+    raw = readGamePath(await readIniText());
   } catch {
     return null;
   }

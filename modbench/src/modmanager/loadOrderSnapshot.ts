@@ -33,15 +33,25 @@ export interface LoadOrderPlugin {
   winning: boolean;
 }
 
+/** A plugins.txt line with no resolvable physical copy: no mod or overwrite/ provides it, and
+ *  there is no Data/ to fall back to. Existence, slot and enabled still come from plugins.txt. */
+export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
+  readonly path: undefined;
+}
+
 /** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
- *  files only: a nested file sharing a plugin's basename must not shadow the real plugin. */
+ *  files only. A name with no mod winner and no `dataFolder` has no entry — nothing to fall
+ *  back to. */
 export function resolvePluginPaths(
   names: string[],
   index: FileConflictIndex,
-  dataFolder: string,
+  dataFolder: string | undefined,
 ): Map<string, string> {
   const winnerByName = rootLevelWinners(index);
-  return new Map(names.map((name) => [name, winnerByName.get(name.toLowerCase()) ?? join(dataFolder, name)]));
+  const entries = names
+    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? (dataFolder !== undefined ? join(dataFolder, name) : undefined)])
+    .filter((entry): entry is [string, string] => entry[1] !== undefined);
+  return new Map(entries);
 }
 
 // MO2's VFS makes overwrite/ winning-most of all, so a plugin found here wins path resolution
@@ -62,16 +72,15 @@ type BuildIndex = (
   instanceRoot: string,
 ) => Promise<FileConflictIndex>;
 
-/** A disabled plugins.txt line is still sent: its missing `*` becomes `enabled: false` rather
- *  than deciding whether the line appears at all (ADR-0035). */
-export async function buildLoadOrderSnapshot(
+// Shared by both public entry points below: `dataFolder` optional yields a line-only row
+// (`path: undefined`) for a listed name neither a mod nor overwrite/ provides; a definite
+// `dataFolder` never does, since `resolvePluginPaths` then covers every name.
+async function buildRows(
   source: Source,
   instanceRoot: string,
-  dataFolder: string,
-  // The real caller passes an outputChannel-backed buildIndex, so the walker's surfacing does
-  // reach the Output channel; this no-op default only fires for a caller that supplies none.
-  buildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {}),
-): Promise<LoadOrderPlugin[]> {
+  dataFolder: string | undefined,
+  buildIndex: BuildIndex,
+): Promise<(LoadOrderPlugin | LoadOrderPluginLine)[]> {
   const [names, enabled, index, overwriteFiles] = await Promise.all([
     source.readPluginOrder(),
     source.readEnabledPlugins(),
@@ -87,7 +96,7 @@ export async function buildLoadOrderSnapshot(
   const slotByName = new Map<string, number>();
   for (const [name, slot] of pluginSlots(names)) slotByName.set(foldPath(name), slot);
 
-  const listed: LoadOrderPlugin[] = names.map((name, slot) => {
+  const listed = names.map((name, slot) => {
     const overwriteFile = overwriteFiles.get(foldPath(name));
     const enabledLine = enabledNames.has(foldPath(name));
     if (overwriteFile !== undefined) {
@@ -95,7 +104,7 @@ export async function buildLoadOrderSnapshot(
     }
     return {
       name,
-      path: pathByName.get(name)!,
+      path: pathByName.get(name),
       origin: winnerModByName.get(foldPath(name)) ?? DATA_DIRECTORY_ORIGIN,
       slot,
       enabled: enabledLine,
@@ -108,7 +117,7 @@ export async function buildLoadOrderSnapshot(
   const isWinningCopy = (copy: { name: string; origin: string }) =>
     !overwriteFiles.has(foldPath(copy.name))
     && foldPath(winnerModByName.get(foldPath(copy.name)) ?? '') === foldPath(copy.origin);
-  const losers: LoadOrderPlugin[] = findUnlistedPlugins(index, listed.map((p) => ({ name: p.name, origin: p.origin })))
+  const losers = findUnlistedPlugins(index, listed.map((p) => ({ name: p.name, origin: p.origin })))
     .map((copy) => ({
       name: copy.name,
       path: copy.path,
@@ -119,11 +128,41 @@ export async function buildLoadOrderSnapshot(
     }));
 
   // overwrite/'s own unlisted plugins — winning-most, but no line names them.
-  const strays: LoadOrderPlugin[] = [...overwriteFiles]
+  const strays = [...overwriteFiles]
     .filter(([folded, real]) => !slotByName.has(folded) && isPluginFile(real))
     .map(([, real]) => ({
       name: real, path: join(instanceRoot, 'overwrite', real), origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
     }));
 
   return [...listed, ...losers, ...strays];
+}
+
+const defaultBuildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {});
+
+/** A disabled plugins.txt line is still sent: its missing `*` becomes `enabled: false` rather
+ *  than deciding whether the line appears at all (ADR-0035). */
+export async function buildLoadOrderSnapshot(
+  source: Source,
+  instanceRoot: string,
+  dataFolder: string,
+  // The real caller passes an outputChannel-backed buildIndex, so the walker's surfacing does
+  // reach the Output channel; this no-op default only fires for a caller that supplies none.
+  buildIndex: BuildIndex = defaultBuildIndex,
+): Promise<LoadOrderPlugin[]> {
+  const rows = await buildRows(source, instanceRoot, dataFolder, buildIndex);
+  // A definite dataFolder means resolvePluginPaths covers every name, so no row here is ever a
+  // line-only one — the cast is exact, not a narrowing guess.
+  return rows as LoadOrderPlugin[];
+}
+
+/** Same rows `buildLoadOrderSnapshot` computes, over the one read `dataFolder` optional: a listed
+ *  name with no mod or overwrite/ copy still gets a row (existence, slot, enabled) rather than
+ *  being dropped, its `path` undefined instead of a guess. */
+export async function buildLoadOrderRows(
+  source: Source,
+  instanceRoot: string,
+  dataFolder: string | undefined,
+  buildIndex: BuildIndex = defaultBuildIndex,
+): Promise<(LoadOrderPlugin | LoadOrderPluginLine)[]> {
+  return buildRows(source, instanceRoot, dataFolder, buildIndex);
 }

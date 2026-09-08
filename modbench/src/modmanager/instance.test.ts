@@ -4,6 +4,9 @@ import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from './test/corpusFixture';
 import { setEnabledInText } from './mo2/modlistText';
+import { setSelectedProfileInText } from './mo2/modOrganizerIni';
+import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
+import type { ConfigChangeEvent } from './gameDirectoryResolver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -21,13 +24,45 @@ afterEach(async () => {
 
 const DATA_FOLDER = '/game/Data';
 
-// `readModlist` counts recomputes: the Instance reads the modlist exactly once per recompute and
-// hands the entries on, so its call count is the number of recomputes that started.
-// `afterModlistRead` is how a test lands a write inside the Instance's own read window, which is
-// the only deterministic way to reproduce a torn read of a real file.
-interface Hooks { afterModlistRead?: () => Promise<void> }
+// The fixture's own `gamePath` resolves to a path absent on the test machine, so every test's
+// game directory resolves through this autodetect fallback instead.
+const autodetectsDataFolder: DetectPaths = () => Promise.resolve({ dataFolder: DATA_FOLDER, pluginsTxt: DATA_FOLDER });
 
-async function realInstance(hooks: Hooks = {}): Promise<{ root: string; instance: Instance; readModlist: Mock; logs: string[] }> {
+function fakeConfig(explicit: string | undefined): ConfigLike {
+  return { get: (key) => (key === 'mods.gameDirectory' ? explicit : undefined) };
+}
+
+// Same double `gameDirectoryResolver.test.ts` uses for the same event shape.
+function fakeOnConfigChange() {
+  let listener: ((e: ConfigChangeEvent) => void) | undefined;
+  return {
+    subscribe: (l: (e: ConfigChangeEvent) => void) => {
+      listener = l;
+      return { dispose: () => { listener = undefined; } };
+    },
+    fire: (section: string) => listener?.({ affectsConfiguration: (s) => s === section }),
+  };
+}
+
+const noDetectWinePrefix: DetectWinePrefix = () => Promise.resolve(null);
+
+// `readModlist`'s call count is the recompute count: the Instance reads the modlist once per
+// recompute. `afterModlistRead` lands a write inside that read window — the only deterministic
+// way to reproduce a torn file read.
+interface Hooks {
+  afterModlistRead?: () => Promise<void>;
+  detectPaths?: DetectPaths;
+}
+
+async function realInstance(hooks: Hooks = {}): Promise<{
+  root: string;
+  instance: Instance;
+  readModlist: Mock;
+  logs: string[];
+  onConfigChange: ReturnType<typeof fakeOnConfigChange>;
+  setGameDirectorySetting: (explicit: string | undefined) => void;
+  setDetectPaths: (detect: DetectPaths) => void;
+}> {
   const root = await cloneCorpusFixture();
   roots.push(root);
   const mo2 = new Mo2ModlistSource(root);
@@ -37,6 +72,9 @@ async function realInstance(hooks: Hooks = {}): Promise<{ root: string; instance
     return entries;
   });
   const logs: string[] = [];
+  let gameDirectorySetting: string | undefined;
+  let detectPaths = hooks.detectPaths ?? autodetectsDataFolder;
+  const onConfigChange = fakeOnConfigChange();
   const instance = new Instance({
     instanceRoot: root,
     source: {
@@ -44,11 +82,18 @@ async function realInstance(hooks: Hooks = {}): Promise<{ root: string; instance
       readPluginOrder: () => mo2.readPluginOrder(),
       readEnabledPlugins: () => mo2.readEnabledPlugins(),
     },
-    dataFolder: () => Promise.resolve(DATA_FOLDER),
+    config: () => fakeConfig(gameDirectorySetting),
+    detectPaths: () => detectPaths(),
+    detectWinePrefix: noDetectWinePrefix,
+    onConfigChange: onConfigChange.subscribe,
     log: (msg) => logs.push(msg),
   });
   instances.push(instance);
-  return { root, instance, readModlist, logs };
+  return {
+    root, instance, readModlist, logs, onConfigChange,
+    setGameDirectorySetting: (explicit) => { gameDirectorySetting = explicit; },
+    setDetectPaths: (detect) => { detectPaths = detect; },
+  };
 }
 
 const NONO = 'Ñoño\'s Retexture';
@@ -71,6 +116,16 @@ function pastSequence(instance: Instance, sequence: number): Promise<InstanceVal
       resolve(value);
     });
   });
+}
+
+const TIMED_OUT = Symbol('timed out waiting for a recompute');
+
+// A missing trigger must fail on an explicit assertion, not the test runner's own timeout.
+function pastSequenceWithin(instance: Instance, sequence: number, ms: number): Promise<InstanceValue | typeof TIMED_OUT> {
+  return Promise.race([
+    pastSequence(instance, sequence),
+    new Promise<typeof TIMED_OUT>((resolve) => setTimeout(() => resolve(TIMED_OUT), ms)),
+  ]);
 }
 
 const watcherFor = (glob: string): FakeWatcher => {
@@ -214,7 +269,7 @@ describe('Instance — built by watching', () => {
     await realInstance();
 
     expect(watchers.map((w) => w.pattern).sort()).toEqual(
-      ['mods/**', 'overwrite/**', 'profiles/*/modlist.txt', 'profiles/*/plugins.txt'],
+      ['downloads/**', 'mods/**', 'overwrite/**', 'profiles/*/modlist.txt', 'profiles/*/plugins.txt'],
     );
   });
 
@@ -223,7 +278,7 @@ describe('Instance — built by watching', () => {
 
     instance.dispose();
 
-    expect(watchers.map((w) => w.disposed)).toEqual([true, true, true, true]);
+    expect(watchers.map((w) => w.disposed)).toEqual([true, true, true, true, true]);
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
@@ -250,6 +305,7 @@ describe('Instance — built by watching', () => {
     watcherFor('profiles/*/modlist.txt').fireChange(join(root, DEFAULT_MODLIST));
     watcherFor('profiles/*/plugins.txt').fireChange(join(root, DEFAULT_PLUGINS));
     watcherFor('overwrite/**').fireCreate(join(root, 'overwrite', 'stray.esp'));
+    watcherFor('downloads/**').fireCreate(join(root, 'downloads', 'New.7z'));
 
     await pastSequence(instance, before);
     // Chains behind anything the burst still had queued, so a per-event recompute would be
@@ -372,5 +428,155 @@ describe('Instance — a value that survives a bad read', () => {
 
     expect(isEnabled(instance.value, 'Harder VATS')).toBe(true);
     expect(instance.sequence).toBe(before + 1);
+  });
+});
+
+// The Instance now writes ModOrganizer.ini's own selected_profile — the same file MO2, xEdit or
+// the user can rewrite at any moment, with Modbench none the wiser.
+async function switchProfileOutsideModbench(root: string, profile: string): Promise<void> {
+  const path = join(root, 'ModOrganizer.ini');
+  await writeFile(path, setSelectedProfileInText(await readFile(path, 'utf8'), profile));
+}
+
+describe('Instance — downloads, profile, game directory and deploy state', () => {
+  it('carries downloads with status and hidden, the active profile, the resolved game directory and release, and deploy state, from one value', async () => {
+    const { root, instance } = await realInstance();
+
+    await instance.refresh();
+
+    expect(instance.value.downloads).toContainEqual(
+      expect.objectContaining({
+        name: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
+        status: 'Installed',
+        hidden: false,
+      }),
+    );
+    expect(instance.value.activeProfile).toBe('Default');
+    expect(instance.value.gameRelease).toBe('Fallout 4');
+    expect(instance.value.gameDirectory).toEqual({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
+    expect(instance.value.deployed).toBe(false);
+
+    await writeFile(join(root, 'mods', '.medit-manifest.json'), JSON.stringify({ links: [], preExisting: [] }));
+    await instance.refresh();
+
+    expect(instance.value.deployed).toBe(true);
+  });
+
+  it('reflects a profile switch made outside Modbench in the next value', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    expect(instance.value.activeProfile).toBe('Default');
+
+    await switchProfileOutsideModbench(root, 'Secondary');
+    await instance.refresh();
+
+    expect(instance.value.activeProfile).toBe('Secondary');
+  });
+
+  // The empty value before any read already has `downloads: []`, so the assertion alone cannot
+  // tell a tolerated absence from a swallowed throw that never landed a new value at all — the
+  // sequence bump is what proves the recompute actually completed.
+  it('yields a value with no downloads, rather than a failure, when downloads/ is absent', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    expect(instance.value.downloads.length).toBeGreaterThan(0); // the fixture starts with one
+    const before = instance.sequence;
+
+    await rm(join(root, 'downloads'), { recursive: true, force: true });
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(before + 1);
+    expect(instance.value.downloads).toEqual([]);
+  });
+
+  // Same reasoning as the downloads case above: `deployed: false` is also the empty value's own
+  // default, so the sequence bump is what proves this recompute — not a caught failure — landed.
+  it('yields a value with deployed false, rather than a failure, when the manifest is absent', async () => {
+    const { root, instance } = await realInstance();
+    await writeFile(join(root, 'mods', '.medit-manifest.json'), JSON.stringify({ links: [], preExisting: [] }));
+    await instance.refresh();
+    expect(instance.value.deployed).toBe(true);
+    const before = instance.sequence;
+
+    await rm(join(root, 'mods', '.medit-manifest.json'), { force: true });
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(before + 1);
+    expect(instance.value.deployed).toBe(false);
+  });
+
+  // Same reasoning again: the empty value already has `gameDirectory: undefined`, so a prior
+  // resolved refresh plus the sequence bump prove tolerance rather than a swallowed failure.
+  it('yields a value with no game directory, rather than a failure, when nothing resolves', async () => {
+    const { instance, setDetectPaths } = await realInstance();
+    await instance.refresh();
+    expect(instance.value.gameDirectory).toBeDefined();
+    const before = instance.sequence;
+
+    setDetectPaths(() => Promise.resolve(null));
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(before + 1);
+    expect(instance.value.gameDirectory).toBeUndefined();
+  });
+
+  // A mod- or overwrite-provided row keeps its real path; a listed name only Data/ could provide
+  // still gets a row — existence, slot and enabled come from plugins.txt alone — with `path:
+  // undefined` rather than a guess or a drop.
+  it('keeps every plugins.txt line as a row when the game directory is unresolved, Data-only rows line-only', async () => {
+    const { instance, setDetectPaths } = await realInstance();
+    await instance.refresh();
+    const withGameDirectory = instance.value.plugins;
+    // Sanity: the fixture has at least one Data-folder-only listed plugin today, so its path is
+    // resolved through the game directory this test is about to take away.
+    const dataOnlyBefore = withGameDirectory.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
+    expect(dataOnlyBefore?.origin).toBe('Data');
+    expect(dataOnlyBefore?.path).toEqual(expect.any(String));
+    const modProvidedBefore = withGameDirectory.find((p) => p.name === 'NonAsciiRetexture.esp');
+    expect(modProvidedBefore?.path).toEqual(expect.any(String));
+
+    setDetectPaths(() => Promise.resolve(null));
+    await instance.refresh();
+
+    const modProvided = instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp');
+    expect(modProvided).toEqual(modProvidedBefore); // unaffected — a mod winner needs no game directory
+    const dataOnly = instance.value.plugins.find((p) => p.name === 'Unofficial Fallout 4 Patch.esp');
+    expect(dataOnly).toBeDefined(); // the row survives — this is the bug this test guards
+    expect(dataOnly?.slot).toBe(dataOnlyBefore?.slot);
+    expect(dataOnly?.enabled).toBe(dataOnlyBefore?.enabled);
+    expect(dataOnly?.origin).toBe('Data');
+    expect(dataOnly?.path).toBeUndefined(); // no Data/ to resolve it against — not a guess
+  });
+
+  it('recomputes with a new game directory when the setting changes, yielding a new value and sequence', async () => {
+    const { root, instance, onConfigChange, setGameDirectorySetting } = await realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+    const explicitDir = join(root, 'ExplicitGame');
+    await mkdir(join(explicitDir, 'Data'), { recursive: true });
+    setGameDirectorySetting(explicitDir);
+
+    onConfigChange.fire('modbench.mods.gameDirectory');
+    const value = await pastSequenceWithin(instance, before, 2000);
+
+    expect(value).not.toBe(TIMED_OUT);
+    expect(instance.sequence).toBe(before + 1);
+    expect((value as InstanceValue).gameDirectory).toEqual({ root: explicitDir, dataFolder: join(explicitDir, 'Data') });
+  });
+
+  it('does not recompute for a config change affecting an unrelated setting', async () => {
+    const { instance, onConfigChange } = await realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    vi.useFakeTimers();
+    try {
+      onConfigChange.fire('modbench.mods.language');
+      await vi.advanceTimersByTimeAsync(1000);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(instance.sequence).toBe(before);
   });
 });

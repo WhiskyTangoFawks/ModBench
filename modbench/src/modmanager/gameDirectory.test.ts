@@ -116,6 +116,22 @@ describe('resolveGameDirectory', () => {
     expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
+  // ADR-0047: the Instance reads ModOrganizer.ini once and hands the text on, so this and
+  // activeProfile/gameRelease share one generation. The on-disk file names an unresolvable
+  // path — only the injected text can produce a match.
+  it('reads the ini through an injected reader instead of the file, when one is supplied', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
+    const gameRoot = join(dir, 'Stock Game Folder');
+    await mkdir(join(gameRoot, 'Data'), { recursive: true });
+    await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\r\ngamePath=@ByteArray(/nowhere/on/disk)\r\n');
+    const injectedText = `[General]\r\ngamePath=@ByteArray(${gameRoot})\r\n`;
+
+    const resolved = await resolveGameDirectory(
+      dir, fakeConfig({}), noDetect, noDetectPrefix, () => Promise.resolve(injectedText));
+
+    expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
+  });
+
   it('normalizes a Wine drive-mapped ini gamePath to its POSIX path (the real-LitR case)', async () => {
     dir = await mkdtemp(join(tmpdir(), 'medit-gamedir-'));
     const gameRoot = join(dir, 'Stock Game Folder');
