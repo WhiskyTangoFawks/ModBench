@@ -103,7 +103,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     public void CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_AddsToItsDialogTopicsAndNothingElse()
     {
         var service = EditService();
-        Assert.True(service.CopyRecordAsOverride(
+        Assert.True(_fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin).Applied);
         var questFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId);
         var questBefore = JsonDocument.Parse(File.ReadAllText(questFile));

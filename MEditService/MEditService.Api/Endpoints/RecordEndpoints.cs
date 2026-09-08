@@ -130,7 +130,7 @@ public static class RecordEndpoints
 
         // ADR-0041: the source record's own bytes land under the same FormKey in the destination.
         app.MapPost("/records/{formKey}/copy-as-override", (
-            string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, IndexWriteGate gate) =>
             CopyRecordAsOverride(formKey, request, edits, gate, logger))
         .WithName("CopyRecordAsOverride")
         .WithSummary("Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.")
@@ -298,7 +298,7 @@ public static class RecordEndpoints
     }
 
     internal static IResult CopyRecordAsOverride(
-        string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, IndexWriteGate gate,
+        string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, IndexWriteGate gate,
         ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);

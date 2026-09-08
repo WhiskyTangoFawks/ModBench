@@ -43,6 +43,20 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
 
+        // The container half copy as override takes; copy as new record joins it when that gesture
+        // moves, and builds its own until then. Held once: singletons only, nothing per request.
+        services.AddSingleton(sp => new RecordCopy(
+            sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy)),
+            sp.GetRequiredService<RecordTextCodec>()));
+
+        services.AddSingleton(sp => new CopyRecordAsOverrideHandler(
+            sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<RecordCopy>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<RecordTextCodec>(),
+            sp.GetRequiredService<ILogger<CopyRecordAsOverrideHandler>>()));
+
         services.AddSingleton(sp => new PeekNextFreeFormKeyHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>()));

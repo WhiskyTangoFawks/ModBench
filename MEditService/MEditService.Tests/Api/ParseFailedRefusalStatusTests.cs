@@ -53,7 +53,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             CopyFixture.DestinationPluginName, CopyFixture.DestinationOrigin);
 
         var result = RecordEndpoints.CopyRecordAsOverride(
-            _mod.SourceNpc.ToString(), request, _mod.Edits, _gate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.CopyAsOverrideHandler, _gate, NullLogger.Instance);
 
         AssertRefused(result);
         Assert.Empty(_mod.DestinationGitStatus());
