@@ -1,6 +1,6 @@
-import { readFile, writeFile, readdir, rm, cp, access } from 'node:fs/promises'; // access used by exists()
+import { readFile, writeFile, readdir, rm, access } from 'node:fs/promises'; // access used by exists()
 import { join } from 'node:path';
-import type { IModlistSource, InstallMeta, ModlistEntry, PluginEntry } from '../model';
+import type { IModlistSource, ModlistEntry, PluginEntry } from '../model';
 import type { Reporter } from '../deployer';
 import {
   insertModAtWinningEnd,
@@ -17,7 +17,7 @@ import {
   deadModEntryNames,
 } from './modlistText';
 import { parsePlugins } from './pluginsText';
-import { parseMetaIni, writeMetaIni } from './metaIni';
+import { parseMetaIni } from './metaIni';
 import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
 import { nexusSlugForGame } from './nexusSlug';
@@ -167,15 +167,6 @@ export class Mo2ModlistSource implements IModlistSource {
       const message = err instanceof Error ? err.message : String(err);
       this.log(`[Mo2ModlistSource] removeMod: could not mark download "${archiveFilename}" uninstalled: ${message}`);
     }
-  }
-
-  async installMod(name: string, sourceDir: string, meta: InstallMeta): Promise<void> {
-    const modDir = join(this.instanceRoot, 'mods', name);
-    if (await exists(modDir)) throw new Error(`A mod named "${name}" already exists.`);
-    await cp(sourceDir, modDir, { recursive: true });
-    const gameName = readGameName(await readFile(this.iniPath, 'utf8'));
-    await writeFile(join(modDir, 'meta.ini'), writeMetaIni({ gameName, ...meta }));
-    await this.modifyModlist((t) => insertModAtWinningEnd(t, name));
   }
 
   /** Covers a mod folder that appeared in `mods/` outside Modbench. New entries

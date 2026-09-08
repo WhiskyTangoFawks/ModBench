@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
-import type { IModlistSource, Mod, ModlistEntry, Separator } from './model';
+import type { Mod, ModlistEntry, Separator } from './model';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from './statusChecker';
 // Pure drop-index reconciliation, shared with PluginListProvider. A neutral
@@ -18,15 +18,10 @@ import {
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
-/** The only `IModlistSource` member this provider still calls directly — every modlist.txt
- *  gesture goes through the commands/modlist.ts commands instead (ADR-0047 point 6). */
-export type ModListSource = Pick<IModlistSource, 'setActiveProfile'>;
-
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count — the tree's only data input (ADR-0047). */
   instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
-  source: ModListSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
   /** Only for the pinned Overwrite row's resourceUri (Explorer reveal / the decoration
@@ -145,7 +140,6 @@ export class ModListProvider
   // base/vanilla-adjacent mods on top, winning overrides at the bottom, matching
   // MO2's default. See modmanager/CONTEXT.md ("View order").
   private winningAtTop = false;
-  private readonly source: ModListSource;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot: string;
@@ -158,7 +152,6 @@ export class ModListProvider
   private resolveFirstValue: (() => void) | undefined;
 
   constructor(options: ModListProviderOptions) {
-    this.source = options.source;
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
     this.instanceRoot = options.instanceRoot;
@@ -385,11 +378,6 @@ export class ModListProvider
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     const outcome = await setModEnabledCommand(this.instanceRoot, this.instanceValue.activeProfile, modName, enabled);
     if (!outcome.applied) throw new Error(outcome.refusal);
-    this.invalidate();
-  }
-
-  async switchProfile(name: string): Promise<void> {
-    await this.source.setActiveProfile(name);
     this.invalidate();
   }
 

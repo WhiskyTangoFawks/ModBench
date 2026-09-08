@@ -388,9 +388,15 @@ The extension owns the editing backend process
 - Sources: **Install from Archive…** (`.zip`/`.7z`/`.rar`) and **Install from Folder…**;
   Nexus `nxm://` install (a Downloads-tree concern) is planned — see
   [downloads.md](downloads.md).
-- Flow: extract to temp staging → detect root type (`Data/` subfolder vs `.esp`/meshes at
-  root) and normalise → write `mods/<name>/` + `meta.ini` via the active `IModlistSource` →
-  append to `modlist.txt` **disabled** → the user enables and (standalone) deploys.
+- Flow: extract (or copy) into a staging directory beside `mods/` → detect root type (`Data/`
+  subfolder vs `.esp`/meshes at root) and normalise → write `meta.ini` into the staged tree →
+  **rename the staging directory to `mods/<name>/`**, so the folder appears complete in one
+  filesystem event → the user enables and (standalone) deploys.
+- The installer writes **no `modlist.txt` line**. The `mods/**` watcher registers the new
+  folder as a **disabled** entry, the same path a folder dropped in by MO2 or by hand takes
+  (`modmanager/modsReconcile.ts`), so an install is one signal with one owner.
+- Staging shares a volume with `mods/` so the rename is atomic. A cross-volume staging area
+  (`EXDEV`) is **refused**, never quietly downgraded to a recursive copy.
 - FOMOD installers are **detected and flagged for manual setup, not executed**.
 
 ### Conflict index & status badges (Modbench-3)
@@ -609,15 +615,18 @@ folder so the user can reassign or discard those files without leaving Modbench.
   throw, never a read of the Instance, never a refresh or sync request (ADR-0047 point 6). A
   scan test (`modmanager/commands/instanceScan.test.ts`, generic over the whole folder) and
   a small per-file one enforce the latter, in the style of `formatLiteralScan.test.ts`.
-- The **`IModlistSource` adapter** over an in-memory modlist model remains the seam for
-  install, profile switch, and every read — `readModlist`, `listSeparators`,
-  `listProfiles`, `getActiveProfile`/`getNexusSlug` — exercised with real MO2 instance
-  fixtures.
+- Install, profile switch, deploy and purge are free-function commands beside the
+  `modlist.txt` ones, in the same shape and under the same scan test:
+  `modmanager/commands/install.ts`, `profile.ts` and `deployment.ts`.
+- The **`IModlistSource` adapter** over an in-memory modlist model remains the seam for the
+  reads — `readModlist`, `listSeparators`, `listProfiles`,
+  `getActiveProfile`/`getNexusSlug` — and for reconciling `mods/` with `modlist.txt`
+  (`registerUnlistedMods`/`pruneDeadEntries`), exercised with real MO2 instance fixtures.
 - The **`FileConflictIndex`** (pure winner-map construction from a mod set + order) and the
   **surgical text transforms** (`modlistText.ts`, `metaIni.ts`, `modOrganizerIni.ts`) are
   pure-logic seams with no `vscode` import.
 - A **thin VS Code adapter** (the `TreeDataProvider`, the `TreeDragAndDropController`, and
-  the command handlers) wires the commands (and the adapter, for install/read paths) to the
+  the command handlers) wires the commands (and the adapter, for read paths) to the
   tree and performs the unavoidable VS Code calls (reveal, quick picks, deploy `fs.link`); it
   holds no logic beyond wiring.
 

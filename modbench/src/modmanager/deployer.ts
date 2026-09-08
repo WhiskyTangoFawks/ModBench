@@ -116,21 +116,24 @@ export async function listRelativeFiles(root: string): Promise<string[]> {
   return out;
 }
 
+/** False when a precondition aborted the run — cross-volume mods/, or a corrupt manifest — each
+ *  already reported through `reporter`. The caller's success message hangs off this, so an
+ *  aborted deploy can never announce itself as a deployed one. */
 export async function deploy(
   instanceRoot: string,
   gameDirectory: GameDirectory,
   index: FileConflictIndex,
   reporter: Reporter,
   opts: DeployOptions = {},
-): Promise<void> {
+): Promise<boolean> {
   const { dataFolder } = gameDirectory;
 
   const modsDir = join(instanceRoot, 'mods');
   const statFn = opts.statFn ?? ((p: string) => stat(p));
-  if (!(await onSameVolume(modsDir, gameDirectory, statFn, reporter))) return;
+  if (!(await onSameVolume(modsDir, gameDirectory, statFn, reporter))) return false;
 
   const baseline = await readBaseline(instanceRoot, dataFolder, reporter);
-  if (!baseline) return;
+  if (!baseline) return false;
   const { previousLinks, preExisting } = baseline;
 
   const { links, skipped, crossVolume } = await linkWinners(index, dataFolder, previousLinks, opts.linkFn ?? link);
@@ -155,6 +158,7 @@ export async function deploy(
 
   const manifest: Manifest = { links, preExisting, loadOrder };
   await writeFile(manifestPath(instanceRoot), JSON.stringify(manifest, null, 2));
+  return true;
 }
 
 // Hardlinks need mods/ and the game directory on one volume. A mismatch is reported, never
@@ -304,14 +308,15 @@ export interface PurgeOptions {
   renameFn?: (source: string, target: string) => Promise<void>;
 }
 
+/** False when there was no manifest to purge, or it was corrupt — nothing in Data/ was touched. */
 export async function purge(
   instanceRoot: string,
   gameDirectory: GameDirectory,
   reporter: Reporter,
   opts: PurgeOptions = {},
-): Promise<void> {
+): Promise<boolean> {
   const manifest = await resolveManifestForPurge(instanceRoot, reporter);
-  if (!manifest) return;
+  if (!manifest) return false;
 
   const { dataFolder } = gameDirectory;
   for (const relativePath of manifest.links) {
@@ -332,6 +337,7 @@ export async function purge(
 
   await pruneEmptyDirs(dataFolder);
   await rm(manifestPath(instanceRoot), { force: true });
+  return true;
 }
 
 // Anything in Data/ that is neither a link nor part of the vanilla baseline is a runtime output

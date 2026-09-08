@@ -1,18 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as os from 'os';
-import * as fs from 'fs';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
 import { createOverwriteWatcher } from './overwriteWatcher';
-import { createModsWatcher } from './modsWatcher';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
-import type { GameDirectory } from './gameDirectory';
 import { type GameDirectoryResolver } from './gameDirectoryResolver';
-import { deploy, purge, type LoadOrderDeployment } from './deployer';
-import { buildFileConflictIndex } from './fileConflictIndex';
-import { detectRoot } from './install/detectRoot';
-import { extractArchive } from './install/extractArchive';
 import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand } from './DownloadsPanel';
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
@@ -27,12 +19,14 @@ import {
   moveModToSeparator,
   renameSeparator,
   uninstallMod,
-  type ModlistCommandResult,
 } from './commands/modlist';
+import { deployMods, purgeMods, type DeploymentCommandResult } from './commands/deployment';
+import { installFromArchive, installFromFolder } from './commands/install';
+import { switchProfile } from './commands/profile';
 
 // A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
 // contract whether the failure came from a rejected promise or an `{ applied: false }` result.
-function applyOrThrow(outcome: ModlistCommandResult): void {
+function applyOrThrow(outcome: { applied: true } | { applied: false; refusal: string }): void {
   if (!outcome.applied) throw new Error(outcome.refusal);
 }
 
@@ -48,7 +42,8 @@ export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
  *  than one call site, not merely by having several fields. The two callbacks are narrow
  *  windows onto the composition root's session object. */
 export function registerModListCoreCommands(
-  modListProvider: ModListProvider, modlistSource: Mo2ModlistSource, updateProfileDescription: () => Promise<void>,
+  instanceRoot: string, modListProvider: ModListProvider, modlistSource: Mo2ModlistSource,
+  outputChannel: vscode.LogOutputChannel, updateProfileDescription: () => Promise<void>,
   notifyLoadoutHeaderChanged: () => void, requestLoadOrderSync: () => void,
 ): vscode.Disposable[] {
   return [
@@ -70,7 +65,11 @@ export function registerModListCoreCommands(
           { placeHolder: 'Switch profile' },
         );
         if (!picked || picked.label === active) return;
-        await modListProvider.switchProfile(picked.label);
+        const outcome = await switchProfile(instanceRoot, picked.label);
+        if (!outcome.applied) {
+          makeReporter(outputChannel, 'switchProfile').report('error', 'Failed to switch profile.', outcome.refusal);
+          return;
+        }
         void updateProfileDescription();
         notifyLoadoutHeaderChanged();
         // A profile switch is the next snapshot, not a teardown (ADR-0044). Switching writes
@@ -81,13 +80,13 @@ export function registerModListCoreCommands(
   ];
 }
 export interface ModInstallDeps {
-  modlistSource: Mo2ModlistSource;
+  instanceRoot: string;
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
   promptModName: (defaultName: string) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
 }
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { modlistSource, runModAction, promptModName, warnIfFomod } = deps;
+  const { instanceRoot, runModAction, promptModName, warnIfFomod } = deps;
   return [
       vscode.commands.registerCommand('modbench.modList.installFromArchive', async (archivePath?: string): Promise<boolean> => {
         let archive = archivePath;
@@ -105,16 +104,10 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         if (!name) return false;
         let succeeded = false;
         await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
-          const staging = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'medit-install-'));
-          try {
-            await extractArchive(resolvedArchive, staging);
-            const { sourceDir, isFomod } = await detectRoot(staging);
-            await modlistSource.installMod(name, sourceDir, { installationFile: path.basename(resolvedArchive) });
-            warnIfFomod(name, isFomod);
-            succeeded = true;
-          } finally {
-            await fs.promises.rm(staging, { recursive: true, force: true });
-          }
+          const outcome = await installFromArchive(instanceRoot, name, resolvedArchive);
+          if (!outcome.applied) throw new Error(outcome.refusal);
+          warnIfFomod(name, outcome.isFomod);
+          succeeded = true;
         });
         return succeeded;
       }),
@@ -130,9 +123,9 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         const name = await promptModName(path.basename(folder));
         if (!name) return;
         await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
-          const { sourceDir, isFomod } = await detectRoot(folder);
-          await modlistSource.installMod(name, sourceDir, {});
-          warnIfFomod(name, isFomod);
+          const outcome = await installFromFolder(instanceRoot, name, folder);
+          if (!outcome.applied) throw new Error(outcome.refusal);
+          warnIfFomod(name, outcome.isFomod);
         });
       }),
   ];
@@ -274,25 +267,6 @@ export function registerOverwriteView(
     }),
   ];
 }
-/** A mods/<name>/ folder can appear outside Modbench at any time — dragged in, extracted by
- *  hand, installed by another tool — so its modlist.txt entry is added reactively. */
-export function registerModsAutoRegisterWatcher(
-  instanceRoot: string,
-  modlistSource: Mo2ModlistSource,
-  modListProvider: ModListProvider,
-  outputChannel: vscode.LogOutputChannel,
-): vscode.Disposable {
-  return createModsWatcher(instanceRoot, () => {
-    modlistSource
-      .registerUnlistedMods()
-      .then((added) => {
-        if (added.length > 0) modListProvider.invalidate();
-      })
-      .catch((err: unknown) => {
-        outputChannel.error(`[extension] auto-registering mods/ folders failed: ${err instanceof Error ? err.message : String(err)}`);
-      });
-  });
-}
 /** A real provider would only fail lazily on first read, so the view gets an always-empty stub
  *  and its `viewsWelcome` contribution renders an actionable message instead. */
 export function registerNotMo2InstanceWelcome(
@@ -412,56 +386,48 @@ export function registerDeployCommands(
   // The deployment row appears and disappears with a successful deploy or purge.
   notifyLoadoutHeaderChanged: () => void,
 ): vscode.Disposable[] {
-  const config = meditConfig;
   const detectPaths = makeDetectPaths();
-
   const reporter = makeReporter(outputChannel, 'deploy');
 
-  const resolveGd = async () => {
-    // The single game-directory resolver, memoised and invalidated only when
-    // modbench.mods.gameDirectory changes.
-    const gd = await gameDirResolver.resolve();
-    if (!gd) {
-      reporter.report('error', 'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.');
+  const loadOrderTarget = async (): Promise<string | undefined> =>
+    meditConfig().get('game.pluginsTxtPath') || (await detectPaths())?.pluginsTxt;
+
+  // `wrote` false means the command reported its own abort, so the success message is withheld
+  // rather than announcing a deployment that did not happen.
+  const run = async (
+    failure: string, success: string, command: () => Promise<DeploymentCommandResult>,
+  ): Promise<void> => {
+    let outcome: DeploymentCommandResult;
+    try {
+      outcome = await command();
+    } catch (err) {
+      outcome = { applied: false, refusal: err instanceof Error ? err.message : String(err) };
     }
-    return gd;
-  };
-
-  const resolveLoadOrder = async (): Promise<LoadOrderDeployment[]> => {
-    const target = (config().get('game.pluginsTxtPath') as string) || (await detectPaths())?.pluginsTxt;
-    if (!target) return [];
-    const profile = await modlistSource.getActiveProfile();
-    return [{ source: path.join(instanceRoot, 'profiles', profile, 'plugins.txt'), target }];
-  };
-
-  const runDeploy = async (gd: GameDirectory) => {
-    const index = buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot, (msg) => outputChannel.debug(msg));
-    await deploy(instanceRoot, gd, await index, reporter, { loadOrder: await resolveLoadOrder() });
+    if (!outcome.applied) {
+      reporter.report('error', failure, outcome.refusal);
+      return;
+    }
+    if (!outcome.wrote) return;
+    void vscode.window.showInformationMessage(success);
+    notifyLoadoutHeaderChanged();
   };
 
   return [
-    vscode.commands.registerCommand('modbench.modList.deploy', async () => {
-      try {
-        const gd = await resolveGd();
-        if (!gd) return;
-        await runDeploy(gd);
-        notifyLoadoutHeaderChanged();
-        void vscode.window.showInformationMessage('Modbench: Mods deployed.');
-      } catch (err) {
-        reporter.report('error', 'Deploy failed.', err instanceof Error ? err.message : String(err));
-      }
-    }),
-    vscode.commands.registerCommand('modbench.modList.purge', async () => {
-      try {
-        const gd = await resolveGd();
-        if (!gd) return;
-        await purge(instanceRoot, gd, reporter);
-        notifyLoadoutHeaderChanged();
-        void vscode.window.showInformationMessage('Modbench: Deployed mods purged.');
-      } catch (err) {
-        reporter.report('error', 'Purge failed.', err instanceof Error ? err.message : String(err));
-      }
-    }),
+    vscode.commands.registerCommand('modbench.modList.deploy', () =>
+      run('Deploy failed.', 'Modbench: Mods deployed.', async () =>
+        deployMods(
+          instanceRoot,
+          await modlistSource.getActiveProfile(),
+          // The single game-directory resolver, memoised and invalidated only when
+          // modbench.mods.gameDirectory changes.
+          (await gameDirResolver.resolve()) ?? undefined,
+          await loadOrderTarget(),
+          reporter,
+          (msg) => outputChannel.debug(msg),
+        ))),
+    vscode.commands.registerCommand('modbench.modList.purge', () =>
+      run('Purge failed.', 'Modbench: Deployed mods purged.', async () =>
+        purgeMods(instanceRoot, (await gameDirResolver.resolve()) ?? undefined, reporter))),
   ];
 }
 /** The task type tool launching contributes one task per MO2 executables-registry entry under.

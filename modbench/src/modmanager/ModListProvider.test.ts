@@ -31,7 +31,7 @@ vi.mock('./commands/modlist', () => ({
   reorderSeparatorBlock: (...args: unknown[]) => reorderSeparatorBlockMock(...args),
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModListSource } from './ModListProvider';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode } from './ModListProvider';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
@@ -88,22 +88,15 @@ class FakeInstance {
   }
 }
 
-// Typed as the provider's own Pick<>, so a method it never touches can't be added by mistake.
-class FakeSource implements ModListSource {
-  activeProfile = 'Default';
-  setActiveProfile(name: string): Promise<void> { this.activeProfile = name; return Promise.resolve(); }
-}
-
 const makeProvider = (
   mods: ModlistEntry[],
   extra: Partial<{
-    source: ModListSource; instance: FakeInstance;
+    instance: FakeInstance;
     log: (m: string) => void; reporter: { report: (severity: string, message: string, detail?: string) => void };
     instanceRoot: string;
   }> = {},
 ) => new ModListProvider({
   instance: extra.instance ?? new FakeInstance(valueOf(mods)),
-  source: extra.source ?? new FakeSource(),
   log: extra.log,
   reporter: extra.reporter,
   instanceRoot: extra.instanceRoot ?? INSTANCE_ROOT,
@@ -202,18 +195,6 @@ describe('ModListProvider', () => {
     const roots = await provider.getChildren();
 
     expect(roots.filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label)).toContain('B');
-  });
-
-  it('switchProfile persists the selection and fires a refresh', async () => {
-    const source = new FakeSource();
-    const provider = makeProvider([mod('A')], { source });
-    let fired = false;
-    provider.onDidChangeTreeData(() => { fired = true; });
-
-    await provider.switchProfile('Secondary');
-
-    expect(source.activeProfile).toBe('Secondary');
-    expect(fired).toBe(true);
   });
 
   // Rival: subscribe but drop the callback, or never subscribe — rows would stay at the value
