@@ -1,6 +1,5 @@
 using MEditService.Api;
 using MEditService.Bridge;
-using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -41,7 +40,6 @@ public sealed class CascadeRollbackFixture : IDisposable
 
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
-    public EditRecordHandler EditHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over these trees.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries => _data.Plugins;
@@ -110,7 +108,6 @@ public sealed class CascadeRollbackFixture : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
-        EditHandler = TestEditService.EditHandler(holder);
 
         if (!watched) return;
 

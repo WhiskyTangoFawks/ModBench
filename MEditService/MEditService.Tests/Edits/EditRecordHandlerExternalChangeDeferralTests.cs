@@ -4,7 +4,6 @@ using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 

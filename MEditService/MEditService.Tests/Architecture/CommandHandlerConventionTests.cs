@@ -1,5 +1,7 @@
 using System.Reflection;
 using MEditService.Core.Commands;
+using MEditService.Core.Composition;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Architecture;
 
@@ -8,55 +10,108 @@ namespace MEditService.Tests.Architecture;
 /// Track is asynchronous and the rest are not.</summary>
 public sealed class CommandHandlerConventionTests
 {
-    // Each gesture's own change adds its handler here; the sweep below is what stops one arriving
-    // in the namespace without joining this list.
-    private static readonly Type[] Handlers = [typeof(EditRecordHandler)];
+    // Each gesture's change appends its handler and the member its carrier answers "did this land?"
+    // with. Spelled rather than nameof, so a carrier that stops answering fails here rather than
+    // following a rename.
+    private static readonly (Type Handler, string Landed)[] Handlers =
+    [
+        (typeof(EditRecordHandler), "Applied"),
+    ];
 
     private const string CommandsNamespace = "MEditService.Core.Commands";
 
-    public static IEnumerable<object[]> EveryHandler => Handlers.Select(handler => new object[] { handler });
+    public static IEnumerable<object[]> EveryHandler => Handlers.Select(entry => new object[] { entry.Handler });
+
+    public static IEnumerable<object[]> EveryAnswer =>
+        Handlers.Select(entry => new object[] { entry.Handler, entry.Landed });
 
     [Theory]
     [MemberData(nameof(EveryHandler))]
-    public void AHandler_OffersTheGestureAndNothingElse(Type handler) => Assert.Single(PublicMethods(handler));
-
-    [Theory]
-    [MemberData(nameof(EveryHandler))]
-    public void AHandler_AnswersWhetherTheWriteLanded(Type handler)
+    public void AHandler_OffersTheGestureAndNothingElse(Type handler)
     {
-        var answer = Answered(PublicMethods(handler).Single().ReturnType);
+        var gestures = GestureMethods(handler);
 
-        Assert.NotEqual(typeof(void), answer);
-        Assert.NotEqual(typeof(Task), answer);
-        Assert.Contains(answer.GetProperties(), member => member.PropertyType == typeof(bool));
+        Assert.True(
+            gestures.Length == 1,
+            $"{handler.Name} declares {gestures.Length} public methods of its own; a handler is one " +
+            "gesture, and no interface may declare it.");
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryAnswer))]
+    public void AHandler_AnswersWhetherTheWriteLanded(Type handler, string landed)
+    {
+        var answer = Answered(GestureMethods(handler).Single().ReturnType);
+
+        Assert.True(
+            LandedType(answer, landed) == typeof(bool),
+            $"{answer.Name} has no public {landed} of type bool, so {handler.Name} does not say " +
+            "whether its write landed (ADR-0046 invariant 8).");
     }
 
     [Theory]
     [MemberData(nameof(EveryHandler))]
-    public void AHandler_SharesNoInterfaceAndNoBaseClass(Type handler)
+    public void AHandler_SharesNoBaseClass(Type handler)
     {
         Assert.True(handler.IsSealed, $"{handler.Name} is inheritable.");
         Assert.Equal(typeof(object), handler.BaseType);
-        Assert.Empty(handler.GetInterfaces());
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryHandler))]
+    public void AHandler_IsRegisteredByTheOneRegistration(Type handler)
+    {
+        var services = new ServiceCollection().AddCommandHandlers();
+
+        Assert.Contains(services, descriptor => descriptor.ServiceType == handler);
+    }
+
+    // IDisposable on one handler is neither of the things ruling 2 forbids; an interface two
+    // handlers share is the shared handler interface by another name.
+    [Fact]
+    public void NoInterface_IsSharedAcrossHandlers()
+    {
+        var shared = Handlers
+            .SelectMany(entry => entry.Handler.GetInterfaces().Distinct())
+            .GroupBy(contract => contract)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key.Name);
+
+        Assert.Empty(shared);
     }
 
     [Fact]
     public void EveryCommandInTheNamespace_IsAHandlerThisSuiteNames()
     {
-        var found = typeof(EditRecordHandler).Assembly.GetTypes()
-            .Where(type => type.IsPublic && type.Namespace == CommandsNamespace)
+        var found = typeof(EditRecordHandler).Assembly.GetExportedTypes()
+            .Where(type => type.Namespace == CommandsNamespace)
             .OrderBy(type => type.Name, StringComparer.Ordinal);
 
-        Assert.Equal(Handlers.OrderBy(type => type.Name, StringComparer.Ordinal), found);
+        Assert.Equal(Handlers.Select(entry => entry.Handler).OrderBy(type => type.Name, StringComparer.Ordinal), found);
     }
 
-    // Declared only, so the members every object has are not the gesture; a public property's
-    // getter counts, which is what keeps a handler from carrying state.
-    private static MethodInfo[] PublicMethods(Type handler) =>
-        handler.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly);
+    // Declared only, so the members every object has are not the gesture, and minus what an
+    // interface asks for, so implementing one is not a second gesture.
+    private static MethodInfo[] GestureMethods(Type handler)
+    {
+        var required = handler.GetInterfaces()
+            .SelectMany(contract => handler.GetInterfaceMap(contract).TargetMethods)
+            .ToHashSet();
+        return handler
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(method => !required.Contains(method))
+            .ToArray();
+    }
+
+    // A property, a field or a parameterless method: which of the three a gesture's own carrier
+    // uses is its business, and the entry above names the member either way.
+    private static Type? LandedType(Type answer, string member) =>
+        answer.GetProperty(member, BindingFlags.Public | BindingFlags.Instance)?.PropertyType
+        ?? answer.GetField(member, BindingFlags.Public | BindingFlags.Instance)?.FieldType
+        ?? answer.GetMethod(member, BindingFlags.Public | BindingFlags.Instance, Type.EmptyTypes)?.ReturnType;
 
     // Track's answer arrives later rather than in a different shape, so the task is unwrapped and
-    // the spine inside it is what the convention asks about.
+    // the carrier inside it is what the convention asks about.
     private static Type Answered(Type returned) =>
         returned.IsGenericType && returned.GetGenericTypeDefinition() == typeof(Task<>)
             ? returned.GetGenericArguments()[0]

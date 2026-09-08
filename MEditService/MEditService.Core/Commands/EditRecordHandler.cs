@@ -11,8 +11,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Edit gesture's handler (ADR-0046 invariant 3). Its four shared write concerns are
-/// <see cref="WriteTargets"/>'s, so nothing here re-derives a target, a gate or a rename.</summary>
+/// <summary>The Edit gesture's handler (ADR-0046 invariant 3). The target, the pre-write gate and
+/// the rename on an EditorID change are <see cref="WriteTargets"/>'s, so nothing here re-derives
+/// one.</summary>
 public sealed class EditRecordHandler
 {
     private readonly WriteTargets _targets;

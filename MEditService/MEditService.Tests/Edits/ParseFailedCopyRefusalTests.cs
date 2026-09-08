@@ -1,5 +1,4 @@
 using System.Text;
-using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -87,7 +86,6 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
         public RecordEditService Edits { get; }
-        public EditRecordHandler EditHandler { get; }
 
         public ParseFailedCopyFixture()
         {
@@ -122,7 +120,6 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             var holder = new LoadOrderHolder();
             holder.Apply(loadOrder);
             Edits = TestEditService.Over(holder);
-            EditHandler = TestEditService.EditHandler(holder);
         }
 
         public SourceDocument? DestinationDocument(string formKey) =>
