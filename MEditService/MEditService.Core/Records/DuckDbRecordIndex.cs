@@ -843,10 +843,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
         {
-            using var connection = owner.OpenRead();
             var types = tableNames.ToList();
             if (types.Count == 0 || !owner._filterActive)
                 return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            using var connection = owner.OpenRead();
 
             var (where, paramValues) = BuildWhere(null, null, filterActive: true, origin: null, recordTypes: types);
 
@@ -1020,11 +1021,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey)
         {
-            using var connection = owner.OpenRead();
             var schemas = owner.RequireSchemas();
             var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
             if (placedTypes.Count == 0)
                 return new CellReferences([], []);
+
+            using var connection = owner.OpenRead();
 
             // ADR-0041: the placed ref's base form comes out of the document rather than a `base`
             // column; json_extract_string unquotes the stored FormLink text, and a placed ref with no
@@ -1191,6 +1193,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             return results;
         }
+
+        // ── Worldspace tree reads (ADR-0023) ────────────────────────────────────────
 
         private static PlacementRow? GetPlacement(DuckDBConnection connection, string formKey, string plugin, string origin)
         {
@@ -1392,8 +1396,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemas ?? throw new InvalidOperationException("Call Initialize before using the repository.");
-
-    // ── Worldspace tree reads (ADR-0023) ────────────────────────────────────────
 
     public void SetFilter(string? sql)
     {

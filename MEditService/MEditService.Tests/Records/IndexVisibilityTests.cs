@@ -31,24 +31,11 @@ public sealed class IndexVisibilityTests
     [Fact]
     public void AReadDuringAnUncommittedWrite_AnswersFromTheCommittedIndex()
     {
-        var (_, modPath, dir) = BuildBigPlugin("Big.esp");
+        var (repository, _, dir, key) = IndexedBigPlugin();
         try
         {
-            var reflector = SharedSchemaReflector.Instance;
-            using var repository = (DuckDbRecordIndex)new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector))
-                .Create(GameRelease.Fallout4);
-            using var loaded = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
-            var key = new PluginKey("Big.esp", PluginOrigin.DataDirectory);
-            repository.Index(loaded, Registration.Participating(0), key);
-
-            // The writer's transaction is mid-flight: its registration row is gone but nothing is
-            // committed. A read that joined this connection would answer 0.
             using var writerTransaction = repository.Connection.BeginTransaction();
-            using (var unregister = repository.Connection.CreateCommand())
-            {
-                unregister.CommandText = $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = 'Big.esp'";
-                unregister.ExecuteNonQuery();
-            }
+            ExecuteOnWriter(repository, $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = 'Big.esp'");
 
             var seen = repository.At(RecordRef.Effective).GetRecordTypeCounts(key)
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
@@ -56,6 +43,7 @@ public sealed class IndexVisibilityTests
         }
         finally
         {
+            repository.Dispose();
             Directory.Delete(dir, recursive: true);
         }
     }
@@ -72,12 +60,8 @@ public sealed class IndexVisibilityTests
         return (repository, modPath, dir, key);
     }
 
-    private static void ExecuteOnWriter(DuckDbRecordIndex repository, string sql)
-    {
-        using var cmd = repository.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
-    }
+    private static void ExecuteOnWriter(DuckDbRecordIndex repository, string sql) =>
+        DuckDbSql.ExecuteFor(repository.Connection, sql);
 
     [Fact]
     public void RegisteredPluginsDuringAnUncommittedWrite_AnswerFromTheCommittedIndex()

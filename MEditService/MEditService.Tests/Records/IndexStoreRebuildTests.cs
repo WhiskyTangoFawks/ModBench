@@ -5,13 +5,6 @@ namespace MEditService.Tests.Records;
 
 public sealed class IndexStoreRebuildTests
 {
-    private static void Execute(DuckDB.NET.Data.DuckDBConnection connection, string sql)
-    {
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.ExecuteNonQuery();
-    }
-
     private static long MarkerTables(DuckDB.NET.Data.DuckDBConnection connection)
     {
         using var cmd = connection.CreateCommand();
@@ -27,7 +20,7 @@ public sealed class IndexStoreRebuildTests
         try
         {
             store.Initialize("test");
-            Execute(store.Connection, "CREATE TABLE marker(i INTEGER)");
+            DuckDbSql.ExecuteFor(store.Connection, "CREATE TABLE marker(i INTEGER)");
 
             var inFlight = store.OpenReadConnection();
             Assert.Equal(1, MarkerTables(inFlight));
