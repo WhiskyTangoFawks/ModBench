@@ -87,7 +87,8 @@ flowchart TB
    transaction and git live inside it, and turning an identity into a path is its work alone. It is a
    concrete module, not a port, because nothing varies across it.
 10. **The Index is one deep module**, projector and store, with the interface refresh by keys,
-    validate, sequence, and reads. The projector asks the load order which copy wins and the
+    validate by hash, the projection sequence and its await, reconcile from the load order, and
+    reads. The store is the module's own; nothing outside it names the store or its factory. The projector asks the load order which copy wins and the
     schema which fields are references and children; it decides nothing itself.
 11. **The load order is state**, sent by Mod Management, held in the shared kernel with the
     participation and winner rules, read by both sides, persisted by the Index as rows like any
@@ -134,7 +135,7 @@ These describe the present and may change without revisiting the invariants.
   [ADR-0042](0042-plugin-is-the-source-of-truth-lossless-source.md) stand: this decision is the
   structure around the truth they define.
 - [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md) stands on the load order as state
-  and participation as derived. Its single "mirror" is now two modules, the load order and the
+  and participation as derived. Its single fused type is now two modules, the load order and the
   Index's projector; that ADR points here for the split.
 - [ADR-0032](0032-the-document-is-the-model.md) stands: the codec and schema are the shared
   kernel this decision names.
@@ -148,6 +149,6 @@ These describe the present and may change without revisiting the invariants.
   command handlers around the pure document edit. Documents, glossary, namespaces and generated
   architecture views follow the code.
 - Validate-on-read, the index's push verbs, the extension's post-write broadcast and the fused
-  mirror type retire in that order.
+  load-order-and-index type retired in that order.
 - A tracked mod's source layout changes, so every tracked mod is re-Tracked once; that is the
   whole migration for users.

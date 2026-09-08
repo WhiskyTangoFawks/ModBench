@@ -3,7 +3,7 @@ status: accepted
 ---
 
 # The load order is mirrored, not loaded: one reconcile verb, every copy registered, no session
-Where the load order and the index live as modules, and why the mirror is two of them, is
+Where the load order and the index live as modules, and why they are two of them, is
 [ADR-0046](0046-ports-and-adapters-with-a-write-side-a-read-side-and-one-way-data-flow.md); this
 ADR governs the load order's content and the reconcile verb.
 
@@ -34,8 +34,8 @@ still received as a command rather than as state. There was no moment at which E
    idempotent snapshot — `PUT /load-order` — whenever anything that feeds it changes: activation,
    profile switch, a `modlist.txt` or `plugins.txt` write, an install or uninstall. Editing
    **reconciles** the snapshot against what it holds: register what is new (indexing only what the
-   mirror has never seen — ADR-0001), unregister what is gone, update slot and flags on what
-   moved, then one winner sweep, one conflict invalidation, one mirror-watch reconcile. Nothing is
+   Index has never seen — ADR-0001), unregister what is gone, update slot and flags on what
+   moved, then one winner sweep, one conflict invalidation, one indexed-binary-watch reconcile. Nothing is
    torn down; a snapshot identical to the current state is a no-op. `load-explicit`, `reread`,
    `participation`, `load` and `unload` are retired.
 
@@ -51,7 +51,10 @@ still received as a command rather than as state. There was no moment at which E
    | `enabled` | the line's `*` prefix |
    | `winning` | this copy is the one the Mod override order resolves the name to |
 
-   **Participation is derived, never stored:** `enabled AND winning AND load_order_idx IS NOT NULL`.
+   **Participation is derived, and the load order value is where that rule is spelled:**
+   `enabled AND winning AND load_order_idx IS NOT NULL`, once, in `Registration.Participates`. It
+   is never a column on `registrations`, and no SQL re-spells it: the winner sweep is handed the
+   derived set as load-order-owned state beside `winners`, replaced whole by each reconcile.
    Only participating rows compete for winner or count in a conflict. "Overridden" and "disabled"
    are thereby the same mechanism — a registered row that does not participate — which is what
    makes inspecting a losing copy free: it is already there.
@@ -66,7 +69,7 @@ still received as a command rather than as state. There was no moment at which E
 3. **There is no session.** Session management is profile management, and the profile is MO2's.
    Editing holds *the load order* — an immutable value in the shared kernel, replaced whole by this
    snapshot and read by both sides ([ADR-0046](0046-ports-and-adapters-with-a-write-side-a-read-side-and-one-way-data-flow.md)
-   invariant 11) — and *the index*, a mirror kept true by observation and by reconcile. Nothing is
+   invariant 11) — and *the index*, kept true by observation and by reconcile. Nothing is
    loaded, reloaded or exited: a plugin that fails to parse is a row in an
    error state, the way a file with a diagnostic is still a file. `SessionManager`, `GameSession`,
    `modbench.reloadSession`, "session settled", "exit to Loadout on load failure" and the
@@ -80,7 +83,7 @@ still received as a command rather than as state. There was no moment at which E
   with anything but plugin files at physical paths (ADR-0036, ADR-0041). The tuple that crosses
   gains two booleans that are already shared vocabulary (winning/losing — CONTEXT-MAP.md); no
   "mod", no modlist, no profile crosses.
-- The mirror (ADR-0001) is untouched. Reconcile is cheap precisely because registration and
+- The index (ADR-0001) is untouched. Reconcile is cheap precisely because registration and
   indexing were already separated; this decision removes the last bulk verb on top of them.
 - Progressive indexing and its "conflict information not yet computed" state stay; they now
   describe a reconcile in progress rather than a load.
@@ -88,7 +91,7 @@ still received as a command rather than as state. There was no moment at which E
 ## Consequences
 
 - Cold-index cost is bounded by every plugin file the snapshot names, not by the load order —
-  paid once per copy, ever, by the mirror. The snapshot is what Mod Management already walks for
+  paid once per copy, ever, by the Index. The snapshot is what Mod Management already walks for
   its own file-conflict index: every root-level plugin in every **enabled** mod, `overwrite/`, and
   the game's `Data/` copy of every listed name no mod provides. A disabled mod's plugins are not in
   it — MO2 does not deploy them, and Mod Management does not walk them — so enabling a mod that
@@ -101,7 +104,7 @@ still received as a command rather than as state. There was no moment at which E
   restart; it trusts the next snapshot, and the extension sends one on activation. Whether Editing
   should read the profile itself — which would move Mod override order resolution across the
   context boundary — is deliberately left open.
-- Live reorder, mirror watches for plugins registered mid-session, and
+- Live reorder, indexed-binary watches for plugins registered mid-session, and
   `pluginDrift.ts` all fold into the reconcile verb rather than being fixed separately.
 
 ## Alternatives rejected
@@ -109,7 +112,7 @@ still received as a command rather than as state. There was no moment at which E
 - **Keep `load-explicit` and add a reorder verb** — a fifth patch on a bulk verb; every future
   loadout gesture would need its own endpoint and its own drift story.
 - **Editing reads `modlist.txt`/`plugins.txt` itself** — makes the registration self-validating
-  like the mirror, but puts Mod override order resolution (and "mod") inside Editing. Deferred, not
+  like the index, but puts Mod override order resolution (and "mod") inside Editing. Deferred, not
   refused.
 - **Register only participating copies, load losers on demand** (ADR-0035's original answer) —
   keeps a second loading path and a second identity story (`unlistedPlugins.ts`, `/plugins/load`)

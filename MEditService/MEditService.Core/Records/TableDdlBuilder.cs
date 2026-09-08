@@ -47,11 +47,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// is never a column here.</summary>
     internal const string RegistrationsRelation = "registrations";
 
-    /// <summary>ADR-0044: who competes for winner, as the load order value answered it — the set the
-    /// last reconcile handed in, carrying each participating copy's slot so the sweep can order by
-    /// it. Load-order-owned state like <see cref="WinnersRelation"/>, so it lives in <c>main</c>;
-    /// the rule that produced it is <see cref="Registration.Participates"/> and is spelled
-    /// nowhere else.</summary>
+    /// <summary>ADR-0044: who competes for winner, as the load order value answered it, with each
+    /// copy's slot so the sweep can order by it. Load-order-owned state, so it lives in
+    /// <c>main</c>.</summary>
     internal const string ParticipatingRelation = "participating";
 
     // A LEFT JOIN, never a correlated EXISTS: winners holds at most one row per (ref, form_key), so
@@ -242,9 +240,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0044: one row per physical plugin copy, carrying the three facts participation is derived
-    // from; participation itself is never a column here. ADR-0001: this table is the load order and
-    // nothing else; it is not cleared at open, the first reconcile corrects it.
+    // ADR-0044: one row per physical plugin copy, carrying the three facts participation derives
+    // from; participation itself is never a column here. ADR-0001: not cleared at open — the first
+    // reconcile corrects these rows.
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (

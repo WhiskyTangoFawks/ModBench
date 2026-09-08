@@ -258,10 +258,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>See <see cref="IRecordIndex.UpdateWinners"/>. Wholesale rather than incremental
-    /// because there is no smaller correct unit: registering a plugin can move the winner of every
-    /// FormKey it holds. Measured at ~75 ms for both refs on a 48,000-record, 60-plugin
-    /// fixture.</summary>
+    /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
+    /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms for
+    /// both refs on a 48,000-record, 60-plugin fixture.</summary>
     public void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)
     {
         using var tx = Connection.BeginTransaction();
@@ -314,11 +313,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         InsertWinners(RecordRef.Head, $"SELECT form_key, plugin, origin FROM {TableDdlBuilder.HeadRowsRelation}");
     }
 
-    // The winner rule: among the rows, the participating plugin latest in the load order wins its
-    // FormKey. The join is against `participating` alone — membership and slot both come from the
-    // load order value, so no SQL here re-spells who participates. QUALIFY makes the result a
-    // function — a tie on load_order_idx yields one winner — and the (plugin, origin) tiebreak
-    // makes which one deterministic.
+    // The participating plugin latest in the load order wins its FormKey. The join is
+    // `participating` alone, so no SQL re-spells who competes; QUALIFY and the (plugin, origin)
+    // tiebreak make a load_order_idx tie deterministic.
     private void InsertWinners(RecordRef @ref, string rowsSql) =>
         Execute($"""
             INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
@@ -393,7 +390,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         using var tx = Connection.BeginTransaction();
         _workingTreeOverlay.SeedCommittedOnly(key, records);
-        // The mirror of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
+        // The counterpart of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
         // demote whoever was winning it at that ref. Effective is untouched either way.
         UpdateWinnersCore();
         _indexStore.BumpSequence();

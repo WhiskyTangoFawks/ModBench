@@ -220,11 +220,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0044's one verb, and ADR-0046 invariant 11: the store's registration rows are
-    /// made equal to the snapshot's copies, copies the store has never held are indexed, then one
-    /// winner sweep. A snapshot identical to what is held is a no-op; a reconcile superseded by
-    /// another throws <see cref="OperationCanceledException"/>, leaving its work for its
-    /// successor.</summary>
+    /// <summary>ADR-0044's one verb: the store's registrations are made equal to the snapshot's
+    /// copies, copies it has never held are indexed, then one winner sweep. A superseded reconcile
+    /// throws, leaving its work for its successor.</summary>
     public void Reconcile(LoadOrder snapshot)
     {
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -728,9 +726,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         ReapplyFilter();
     }
 
-    /// <summary>ADR-0044: the winner sweep is handed who competes, projected from the load order
-    /// value the held copies are — the rule itself is <see cref="Registration.Participates"/> and
-    /// runs there. Read whole rather than per plugin: the sweep is once per projection.</summary>
+    // ADR-0044: the sweep is handed who competes, projected from the load order value the held
+    // copies are — the rule is Registration.Participates and runs there. Read whole, not per plugin.
     private IReadOnlyList<RegisteredCopy> Participating()
     {
         lock (_lock) return _heldPlugins is { } held ? Plugins.LoadOrder.From(held).Participating : [];

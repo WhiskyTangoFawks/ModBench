@@ -99,6 +99,38 @@ public sealed class ArchitectureTests
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
+    // ADR-0044: participation is derived — enabled, winning, and named by a plugins.txt line — and
+    // the load order value is the one place that rule is spelled. A second spelling is how two
+    // answers start disagreeing.
+    [Fact]
+    public void TheParticipationRule_IsSpelledOnceInProduction()
+    {
+        var root = SolutionDirectory();
+        var spellings = Projects
+            .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
+            .Where(file => ParticipationRule.IsMatch(File.ReadAllText(file)))
+            .Select(file => Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Equal(["MEditService.Core/Records/Registration.cs"], spellings);
+    }
+
+    // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning
+    // AND` both match, and either one alone does not — a read of a single fact is ordinary.
+    private static readonly Regex ParticipationRule = new(
+        @"enabled\s*(?:&&|AND)\s*[^\n]{0,24}?winning\s*(?:&&|AND)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(5));
+
+    [Fact]
+    public void TheParticipationRulePattern_MatchesBothSpellings_AndNotASingleFact()
+    {
+        Assert.Matches(ParticipationRule, "Enabled && Winning && LoadOrderIndex is not null");
+        Assert.Matches(ParticipationRule, "$\"{alias}.enabled AND {alias}.winning AND {alias}.load_order_idx IS NOT NULL\"");
+        Assert.DoesNotMatch(ParticipationRule, "reader.GetBoolean(3) is var enabled && winning is null");
+        Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
+    }
+
     // ADR-0008: PluginWriter backs the binary up first; IndexProjector writes only a brand-new
     // file and TrackService only a scratch copy, so neither has anything to back up.
     [Fact]

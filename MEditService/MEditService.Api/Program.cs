@@ -67,10 +67,8 @@ try
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
-    // ADR-0046 invariant 10: one Index instance for the whole process, so the write side and the
-    // read side never project into two stores.
-    // ADR-0001: the index is a persistent file per MO2 instance, inside the instance root — the
-    // load request names it, so there is nothing for the composition root to state here.
+    // ADR-0046 invariant 10: one Index for the whole process, so the two sides never project into
+    // two stores. ADR-0001: which file it opens comes from the load request, not from here.
     builder.Services.AddSingleton(sp => new IndexProjector(
         sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILoggerFactory>(),

@@ -3,10 +3,9 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests;
 
-/// <summary>ADR-0044: the winner sweep is handed who participates, because the rule belongs to the
-/// load order value. A store-level test states its load order as the registrations it writes, so
-/// this reads those three facts back and applies <see cref="Registration.Participates"/> — the one
-/// spelling of the rule — rather than making every call site restate the set.</summary>
+/// <summary>ADR-0044: the sweep is handed who participates. A store-level test's load order is the
+/// registrations it writes, so this reads them back and applies
+/// <see cref="Registration.Participates"/> rather than restating the set per call.</summary>
 internal static class StoreWinnerSweep
 {
     internal static void UpdateWinners(this DuckDbRecordIndex store)

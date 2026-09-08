@@ -8,21 +8,28 @@ namespace MEditService.Tests.Architecture;
 /// allowlist that stays empty.</summary>
 public sealed class WriteSideIndexScanTests
 {
-    // The index and its factory, the read surface, the ref enum, the index, the projector, the
-    // query surface and the store. Naming one is how a write path starts reading its own effect.
+    // The store and its factory, the read surface, the ref enum, the Index, the query surface, the
+    // four query services and the write gate. Naming one is how a write path starts reading its own
+    // effect.
     private static readonly string[] Symbols =
     [
         "IRecordIndex", "IRecordIndexFactory", "DuckDbRecordIndex", "DuckDbRecordIndexFactory",
-        "IRecordReads", "RecordRef", "IndexProjector", "IndexProjector", "IndexProjector",
-        "IQueryIndex", "IndexStore",
+        "IRecordReads", "RecordRef", "IndexProjector", "IQueryIndex", "IndexStore", "IndexWriteGate",
+        "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
+        "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
     ];
 
-    // Everything under Edits, and Source but for the one file that is the Index's own reader.
-    private static readonly string[] ScannedRoots =
-        ["MEditService.Core/Edits", "MEditService.Core/Source"];
+    // The whole shared-kernel-and-write-side assembly, not a list of folders: a folder literal means
+    // a new folder joins the write side unguarded.
+    private const string ProductionRoot = "MEditService.Core";
 
-    // Not write side: SourceIngest is how the Index reads a tracked tree, so the index it fills is
-    // its subject rather than something it consults mid-write.
+    // Not write side: Records is the Index module itself and Queries is the read side, both of which
+    // name these types by definition.
+    private static readonly string[] NotWriteSide =
+        ["MEditService.Core/Records", "MEditService.Core/Queries"];
+
+    // Not write side either: SourceIngest is how the Index reads a tracked tree, so the store it
+    // fills is its subject rather than something it consults mid-write.
     private const string IndexIngestFileName = "SourceIngest.cs";
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/write-side-index-allowlist.txt";
@@ -33,9 +40,24 @@ public sealed class WriteSideIndexScanTests
         var root = ArchitectureTests.SolutionDirectory();
 
         AssertCountsMatchAllowlist(
-            Counts(root, ScannedRoots),
+            Counts(root, [ProductionRoot], NotWriteSide, Symbols),
             SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
             AllowlistPath);
+    }
+
+    // The write side's own suites, which would otherwise keep the shape the production code no
+    // longer has: a write test that builds an Index is a test of the projection, not of the write.
+    private const string TestAllowlistPath = "MEditService.Tests/Architecture/write-side-test-index-allowlist.txt";
+
+    [Fact]
+    public void TheWriteSideSuites_BuildAnIndex_OnlyAsOftenAsTheAllowlistSays()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        AssertCountsMatchAllowlist(
+            Counts(root, ["MEditService.Tests/Edits"], [], ["new IndexProjector"]),
+            SourceTree.ReadAllowlist(Path.Combine(root, TestAllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
+            TestAllowlistPath);
     }
 
     [Fact]
@@ -54,8 +76,11 @@ public sealed class WriteSideIndexScanTests
             File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
             Directory.CreateDirectory(Path.Combine(root, "Source"));
             File.WriteAllText(Path.Combine(root, "Source", IndexIngestFileName), "IRecordIndex index;");
+            // An excluded subtree is skipped whole, not file by file.
+            Directory.CreateDirectory(Path.Combine(root, "Records"));
+            File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "IRecordIndex index;");
 
-            var counts = Counts(root, ["Edits", "Source"]);
+            var counts = Counts(root, [""], ["Records"], Symbols);
 
             Assert.Equal(
                 [
@@ -92,23 +117,31 @@ public sealed class WriteSideIndexScanTests
             + "text and reads nothing back from the Index, so a reference here needs the maintainer's "
             + "ruling before its line is added:\n"
             + string.Join("\n", unallowed)
-            + $"\nAllowlist lines matching no count ({unmatched.Count}) — delete them; this list is empty "
-            + "and stays empty:\n"
+            + $"\nAllowlist lines matching no count ({unmatched.Count}) — delete them; every line here "
+            + "is a deliberate exception:\n"
             + string.Join("\n", unmatched));
     }
 
     // A count, not a line number: a reference is the unit of work, and a line number would fail the
     // gate for any unrelated edit above one.
-    private static List<string> Counts(string root, string[] scannedRoots) =>
-        [.. scannedRoots
+    private static List<string> Counts(
+        string root, string[] scannedRoots, string[] excludedRoots, string[] symbols)
+    {
+        var excluded = excludedRoots
+            .Select(r => Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar)) + Path.DirectorySeparatorChar)
+            .ToList();
+
+        return [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
+            .Where(file => !excluded.Exists(e => file.StartsWith(e, StringComparison.Ordinal)))
             .Where(file => !Path.GetFileName(file).Equals(IndexIngestFileName, StringComparison.Ordinal))
-            .SelectMany(file => References(File.ReadAllText(file))
+            .SelectMany(file => References(File.ReadAllText(file), symbols)
                 .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Symbol}: {r.Count}"))
             .Order(StringComparer.Ordinal)];
+    }
 
-    private static IEnumerable<(string Symbol, int Count)> References(string text) =>
-        Symbols
+    private static IEnumerable<(string Symbol, int Count)> References(string text, string[] symbols) =>
+        symbols
             .Select(symbol => (Symbol: symbol, Count: Regex.Count(text, $@"\b{symbol}\b")))
             .Where(r => r.Count > 0);
 }

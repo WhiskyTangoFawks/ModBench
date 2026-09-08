@@ -4,7 +4,7 @@ namespace MEditService.Core.Plugins;
 
 /// <summary>The plugin copies Editing currently holds, each with its registration (ADR-0044): the
 /// live view of Mod Management's snapshot, kept true by reconcile — nothing is loaded or exited.
-/// Opening a copy is the adapter's (<see cref="HeldPlugins"/>), never this view's.</summary>
+/// Opening a copy is the Plugin adapter's work.</summary>
 public interface ILoadOrder : IDisposable
 {
     string DataFolderPath { get; }

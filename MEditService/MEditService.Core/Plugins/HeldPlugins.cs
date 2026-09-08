@@ -188,7 +188,7 @@ public sealed class HeldPlugins : ILoadOrder
     }
 
     /// <summary>The load order's half of a copy leaving the snapshot. The index side is
-    /// <c>IRecordIndex.Unregister</c>: the rows stay for the next snapshot that wants them.</summary>
+    /// the Index's own unregister: the rows stay for the next snapshot that wants them.</summary>
     public bool Remove(PluginKey key)
     {
         lock (_mutation)

@@ -59,11 +59,9 @@ internal interface IRecordIndex : IDisposable
     /// the next sweep.</summary>
     void Unregister(PluginKey key);
 
-    /// <summary>Rebuilds the whole load order's winners at each ref among
-    /// <paramref name="participating"/>. ADR-0001: the answer lives in a load-order-owned table, so
-    /// this replaces it rather than updating rows in place. ADR-0044: who participates is the load
-    /// order value's answer, handed in here; the store never re-derives it, and remembers this set
-    /// for the re-sweeps a working-tree write triggers.</summary>
+    /// <summary>Rebuilds every ref's winners among <paramref name="participating"/>. ADR-0044: who
+    /// competes is the load order value's answer, handed in here and remembered for the re-sweeps a
+    /// working-tree write triggers.</summary>
     void UpdateWinners(IReadOnlyList<RegisteredCopy> participating);
 
     /// <summary>Re-establishes what "committed" means for these records after <c>HEAD</c> moved under

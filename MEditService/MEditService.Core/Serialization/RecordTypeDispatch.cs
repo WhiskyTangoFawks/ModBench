@@ -137,7 +137,7 @@ internal sealed class RecordTypeDispatch
         var byName = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
         var folderByType = new Dictionary<Type, string>();
         // Valued by the schema table spelling (lowercased GRUP signature), never the CLR name:
-        // DuckDbRecordIndex's record-type dictionary is keyed by that spelling only and throws on "Npc".
+        // The store's record-type dictionary is keyed by that spelling only and throws on "Npc".
         var typesByFolder = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var directoryPerRecordTypeByFolder = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var type in modType.Assembly.GetTypes())
