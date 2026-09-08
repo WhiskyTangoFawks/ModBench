@@ -11,10 +11,10 @@ namespace MEditService.Core.Records;
 /// <summary>The connection/DDL/validate/rebuild collaborator of <see cref="DuckDbRecordIndex"/>.
 /// Validate is a pure question: this class returns the stale set and never removes rows itself,
 /// since <c>Unindex</c> is the caller's orchestrating verb.</summary>
-internal sealed class IndexStore
+internal sealed class IndexStore : IDisposable
 {
-    private const string FilesRelation = "mirror.files";
-    private const string SequenceRelation = "mirror.sequence";
+    internal const string FilesRelation = "mirror.files";
+    internal const string SequenceRelation = "mirror.sequence";
 
     private readonly ILogger _logger;
     private readonly string? _databasePath;
@@ -69,6 +69,50 @@ internal sealed class IndexStore
     internal static bool IsAnotherWriter(Exception ex) =>
         ex.Message.Contains("lock on file", StringComparison.OrdinalIgnoreCase)
         || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase);
+
+    // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
+    // this process's database instance. Either way the read gets its own transaction context.
+    public DuckDBConnection OpenReadConnection()
+    {
+        lock (_rebuildGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            WaitWhile(() => _rebuilding, "being rebuilt");
+            var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
+            connection.Open();
+            _readsInFlight++;
+            connection.Disposed += (_, _) => { lock (_rebuildGate) { _readsInFlight--; Monitor.PulseAll(_rebuildGate); } };
+            return connection;
+        }
+    }
+
+    // A reopen while a read connection is open gets DuckDB.NET's cached instance of the file the
+    // rebuild just deleted, so a rebuild waits for reads in flight. Taken inside IndexProjector's
+    // lock and the write gate.
+    private readonly object _rebuildGate = new();
+    private int _readsInFlight;
+    private bool _rebuilding;
+    private bool _disposed;
+
+    // Called under _rebuildGate. Bounded for the reason IndexWriteGate.DefaultTimeout gives: a read
+    // connection that is never disposed would otherwise wedge every later rebuild and read behind
+    // it, with nothing said.
+    private void WaitWhile(Func<bool> pending, string what)
+    {
+        var deadline = DateTime.UtcNow + IndexWriteGate.DefaultTimeout;
+        while (pending())
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero || !Monitor.Wait(_rebuildGate, remaining))
+                throw new TimeoutException($"The index is still {what} after {IndexWriteGate.DefaultTimeout.TotalSeconds:0.###}s.");
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_rebuildGate) _disposed = true;
+        Connection.Dispose();
+    }
 
     private DuckDBConnection OpenFile()
     {
@@ -136,9 +180,22 @@ internal sealed class IndexStore
     // case IsAnotherWriter guards. Internal: ADR-0046's rebuild reuses this same delete-and-reopen.
     internal void RebuildFile()
     {
-        Connection.Dispose();
-        File.Delete(_databasePath!);
-        Connection = OpenFile();
+        lock (_rebuildGate)
+        {
+            _rebuilding = true;
+            try
+            {
+                WaitWhile(() => _readsInFlight > 0, "serving reads");
+                Connection.Dispose();
+                File.Delete(_databasePath!);
+                Connection = OpenFile();
+            }
+            finally
+            {
+                _rebuilding = false;
+                Monitor.PulseAll(_rebuildGate);
+            }
+        }
     }
 
     /// <summary>ADR-0001: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
@@ -224,10 +281,13 @@ internal sealed class IndexStore
     }
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
-    public string? IndexedContentHash(PluginKey key) =>
-        DuckDbSql.ScalarString(Connection,
+    public string? IndexedContentHash(PluginKey key)
+    {
+        using var connection = OpenReadConnection();
+        return DuckDbSql.ScalarString(connection,
             $"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
             key.Name, key.Origin!);
+    }
 
     // ADR-0001: the file half of an Index() call, inside its transaction. A caller naming no file
     // (an in-memory mod) writes no row, so nothing vouches for those rows and the next load
@@ -348,7 +408,8 @@ internal sealed class IndexStore
 
     public long CurrentSequence()
     {
-        using var cmd = Connection.CreateCommand();
+        using var connection = OpenReadConnection();
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT value FROM {SequenceRelation}";
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
