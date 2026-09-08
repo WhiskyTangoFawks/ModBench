@@ -1,9 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { cp, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join } from 'node:path';
 import ts from 'typescript';
+
+// Delay is 0 by default (a passthrough), so only the concurrent-write test below opts in.
+const fsState = vi.hoisted(() => {
+  type ReadFile = typeof import('node:fs/promises')['readFile'];
+  return { real: undefined as unknown as ReadFile, delayMs: 0 };
+});
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  fsState.real = actual.readFile;
+  const readFile = vi.fn(async (...args: Parameters<typeof actual.readFile>) => {
+    const result = await fsState.real(...args);
+    if (fsState.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, fsState.delayMs));
+    return result;
+  });
+  return { ...actual, readFile };
+});
+
+import { cp, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import {
   createEmptyMod,
   deleteSeparator,
@@ -29,7 +46,23 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     await cp(fixture, dir, { recursive: true });
   });
   afterEach(async () => {
+    fsState.delayMs = 0;
     await rm(dir, { recursive: true, force: true });
+  });
+
+  // Rival: unserialized read-then-write. Both reads land pre-mutation before either write, so
+  // the second write clobbers the first — a forced interleave, not scheduler luck.
+  it('serializes two concurrent writes to the same modlist.txt — neither edit is lost', async () => {
+    fsState.delayMs = 20;
+    const [a, b] = await Promise.all([
+      setModEnabled(dir, 'Default', 'Harder VATS', true),
+      setModEnabled(dir, 'Default', 'ENBoost - 12k', false),
+    ]);
+    expect(a).toEqual({ applied: true });
+    expect(b).toEqual({ applied: true });
+    const entries = await readModlist();
+    expect(entries.find((e) => e.name === 'Harder VATS')?.enabled).toBe(true);
+    expect(entries.find((e) => e.name === 'ENBoost - 12k')?.enabled).toBe(false);
   });
 
   it('setModEnabled flips only the target prefix on disk', async () => {

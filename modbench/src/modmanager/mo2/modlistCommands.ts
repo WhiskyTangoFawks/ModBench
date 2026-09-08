@@ -36,22 +36,38 @@ const modlistPath = (instanceRoot: string, profile: string): string =>
 
 const outcomeMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+// The one queue every modlist.txt write for an instance passes through — module-private
+// infrastructure, not an abstraction over commands. Keyed by instance root, so every profile
+// under it serializes together. Exported so Mo2ModlistSource's own writes share it too.
+const modlistWriteQueues = new Map<string, Promise<unknown>>();
+
+export function withModlistWriteLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
+  const prior = modlistWriteQueues.get(instanceRoot) ?? Promise.resolve();
+  const next = prior.then(task, task);
+  // The chain tail must never stay rejected, or every later write on this instance queues
+  // behind a dead link forever — only the caller's own `next` sees the error.
+  modlistWriteQueues.set(instanceRoot, next.catch(() => undefined));
+  return next;
+}
+
 // The one splice point every verb below goes through. A transform that throws (the kernel's
 // "not found" signal) becomes `refusal` rather than an exception escaping the command.
-async function spliceModlist(
+function spliceModlist(
   instanceRoot: string,
   profile: string,
   refusal: string,
   transform: (text: string) => string,
 ): Promise<ModlistCommandOutcome> {
-  const path = modlistPath(instanceRoot, profile);
-  try {
-    const text = await readFile(path, 'utf8');
-    await writeFile(path, transform(text));
-    return { applied: true };
-  } catch (err) {
-    return { applied: false, refusal, message: outcomeMessage(err) };
-  }
+  return withModlistWriteLock(instanceRoot, async () => {
+    const path = modlistPath(instanceRoot, profile);
+    try {
+      const text = await readFile(path, 'utf8');
+      await writeFile(path, transform(text));
+      return { applied: true };
+    } catch (err) {
+      return { applied: false, refusal, message: outcomeMessage(err) };
+    }
+  });
 }
 
 /** Flip a mod's `+`/`-` prefix — the Mods tree checkbox. */
