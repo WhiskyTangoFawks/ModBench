@@ -22,20 +22,23 @@ public sealed class SubrecordInventoryRoundTripGateTests
     {
         using var scratch = new TrueStormsScratch();
 
-        var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(() => scratch.TrackAsync());
+        var result = await scratch.TrackAsync();
 
-        Assert.Contains("REGN", ex.Message);
-        Assert.Contains("001D2AF4", ex.Message);
-        Assert.Contains("RDMP", ex.Message);
-        Assert.Contains("ANAM", ex.Message);
-        Assert.Contains("RDMO", ex.Message);
-        Assert.Contains("RDSA", ex.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+        Assert.Contains("REGN", result.Message);
+        Assert.Contains("001D2AF4", result.Message);
+        Assert.Contains("RDMP", result.Message);
+        Assert.Contains("ANAM", result.Message);
+        Assert.Contains("RDMO", result.Message);
+        Assert.Contains("RDSA", result.Message);
         // The refusal carries the Kind B diagnosis for the same record, the cause of the drop with its
         // repair tail, not only the generic inventory loss.
-        Assert.Contains("fixed-size-subrecord-short", ex.Message);
-        Assert.Contains("repairable (lossless)", ex.Message);
-        Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", ex.Message);
-        Assert.DoesNotContain("header or a container's own structure", ex.Message);
+        Assert.Contains("fixed-size-subrecord-short", result.Message);
+        Assert.Contains("repairable (lossless)", result.Message);
+        Assert.Contains("RDAT is 6 bytes; a REGN RDAT is always 8", result.Message);
+        Assert.DoesNotContain("header or a container's own structure", result.Message);
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
@@ -71,7 +74,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
             _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
-        public Task TrackAsync() =>
+        public Task<TrackResult> TrackAsync() =>
             new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()

@@ -21,6 +21,29 @@ public sealed class TrackServiceTests
     private static IReadOnlyCollection<PluginKey> HeldIn(LoadOrder loadOrder) =>
         [.. loadOrder.Copies.Select(copy => copy.Key)];
 
+    // Track answers with a refusal for every way out it has, so the endpoint maps one value rather
+    // than catching one exception type per outcome.
+    [Fact]
+    public async Task TrackAsync_WithNoLoadedPluginForTheOrigin_RefusesWithoutThrowing()
+    {
+        var gameDir = Directory.CreateTempSubdirectory("medit-track-noorigin-game-").FullName;
+        try
+        {
+            var loadOrder = new LoadOrder(gameDir, null, GameRelease.Fallout4, []);
+
+            var result = await new TrackService(NullLogger<TrackService>.Instance)
+                .TrackAsync(loadOrder, [], "NoSuchMod", SourcePreset.Edits);
+
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.NoPluginWithOrigin, result.Refusal);
+            Assert.Contains("NoSuchMod", result.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            SafeDelete(gameDir);
+        }
+    }
+
     // A copy the Index could not open is registered like any other but has no bytes to deep-parse,
     // so Track passes over it instead of failing the whole origin on it.
     [Fact]
@@ -237,8 +260,10 @@ public sealed class TrackServiceTests
             File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
-            await Assert.ThrowsAsync<SourceAlreadyTrackedException>(
-                () => service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits));
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
+
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.AlreadyTracked, result.Refusal);
         }
         finally
         {
@@ -360,11 +385,13 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
-                () => service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenCorruptTheNpc));
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenCorruptTheNpc);
 
-            Assert.Contains(npc.FormKey.ToString(), ex.Message);
-            Assert.Contains("OriginalName", ex.Message);
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+            Assert.Contains(npc.FormKey.ToString(), result.Message);
+            Assert.Contains("OriginalName", result.Message);
             Assert.False(SourceRepository.IsTracked(modFolder));
             Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
         }
@@ -404,12 +431,14 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
-                () => service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenMutateTheFloat));
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenMutateTheFloat);
 
-            Assert.Contains(npc.FormKey.ToString(), ex.Message);
-            Assert.Contains("Npc", ex.Message);
-            Assert.Contains("HeightMin", ex.Message);
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+            Assert.Contains(npc.FormKey.ToString(), result.Message);
+            Assert.Contains("Npc", result.Message);
+            Assert.Contains("HeightMin", result.Message);
             Assert.False(SourceRepository.IsTracked(modFolder));
         }
         finally
@@ -502,10 +531,12 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
-                () => service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenCorrupt));
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenCorrupt);
 
-            Assert.Contains($"TES4 header field '{fieldName}'", ex.Message);
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+            Assert.Contains($"TES4 header field '{fieldName}'", result.Message);
             Assert.False(SourceRepository.IsTracked(modFolder));
         }
         finally
@@ -534,14 +565,16 @@ public sealed class TrackServiceTests
                 [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
-            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
-                () => service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits));
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
-            Assert.DoesNotContain("is missing", ex.Message);
-            Assert.DoesNotContain("FNAM", ex.Message);
-            Assert.DoesNotContain("MNAM", ex.Message);
-            Assert.Contains("Furniture", ex.Message);
-            Assert.Contains("Flags", ex.Message);
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+            Assert.DoesNotContain("is missing", result.Message);
+            Assert.DoesNotContain("FNAM", result.Message);
+            Assert.DoesNotContain("MNAM", result.Message);
+            Assert.Contains("Furniture", result.Message);
+            Assert.Contains("Flags", result.Message);
             Assert.False(SourceRepository.IsTracked(modFolder));
         }
         finally
@@ -659,12 +692,14 @@ public sealed class TrackServiceTests
                 [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
-            var ex = await Assert.ThrowsAsync<MissingLocalizationStringsException>(
-                () => service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits));
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
+
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.MissingLocalizationStrings, result.Refusal);
 
             // Fallout4 names its strings files by ISO language code (GameConstants.Fallout4's own
             // StringsLanguageFormat.Iso), not the full language name.
-            Assert.Contains("Fixture_en.STRINGS", ex.Message);
+            Assert.Contains("Fixture_en.STRINGS", result.Message);
             Assert.False(SourceRepository.IsTracked(modFolder));
         }
         finally

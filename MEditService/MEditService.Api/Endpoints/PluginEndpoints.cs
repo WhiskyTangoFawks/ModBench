@@ -192,7 +192,17 @@ public static class PluginEndpoints
                 plugin.Name, plugin.Origin, plugin.Path, plugin.LoadOrderIndex, Enabled: true, Winning: true));
 
             if (!SourceRepository.IsTracked(req.Path))
-                await trackService.TrackAsync(holder.Current, HeldCopies(index), req.Origin, SourcePreset.Edits);
+            {
+                var track = await trackService.TrackAsync(holder.Current, HeldCopies(index), req.Origin, SourcePreset.Edits);
+                if (!track.Applied)
+                {
+                    // Loud, not silent: the plugin file and load order entry already landed, but
+                    // plugins.txt is never appended without a 2xx, so no load order can name this
+                    // half-created plugin. The orphaned entry is accepted residue.
+                    logger.LogError("Refused to track {Origin} while creating {Name}: {Refusal}", req.Origin, req.Name, track.Refusal);
+                    return Results.Problem(track.Message, statusCode: track.Refusal == TrackRefusal.AlreadyTracked ? 409 : 500);
+                }
+            }
 
             return Results.Ok(plugin);
         }
@@ -205,21 +215,6 @@ public static class PluginEndpoints
         {
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
-        }
-        catch (SourceAlreadyTrackedException ex)
-        {
-            // Defensive: CreatePlugin only Tracks a destination it just checked was untracked, so
-            // something else tracked the same folder in between — still a state conflict, 409.
-            logger.LogWarning(ex, "Raced tracking {Origin} while creating {Name}", req.Origin, req.Name);
-            return Results.Problem(ex.Message, statusCode: 409);
-        }
-        catch (GitUnavailableException ex)
-        {
-            // Loud, not silent: the plugin file and load order entry already landed, but
-            // plugins.txt is never appended without a 2xx, so no load order can name this
-            // half-created plugin. The orphaned entry is accepted residue.
-            logger.LogError(ex, "git unavailable while creating {Name} in {Origin}", req.Name, req.Origin);
-            return Results.Problem(ex.Message, statusCode: 500);
         }
         catch (InvalidOperationException ex)
         {
@@ -249,42 +244,17 @@ public static class PluginEndpoints
             // RequireScope for the refusal only: which copies this origin registers is the load
             // order's answer, read from the shared kernel rather than from the Index.
             index.RequireScope();
-            await trackService.TrackAsync(holder.Current, HeldCopies(index), req.Origin, preset);
-            return Results.Ok(new TrackResponse(req.Origin));
+            var result = await trackService.TrackAsync(holder.Current, HeldCopies(index), req.Origin, preset);
+            if (result.Applied)
+                return Results.Ok(new TrackResponse(req.Origin));
+
+            logger.LogWarning("Refused to track {Origin}: {Refusal} — {Message}", req.Origin, result.Refusal, result.Message);
+            return WriteEndpointMapping.Refusal(result);
         }
         catch (NoLoadOrderException ex)
         {
             logger.LogError(ex, "No loadOrder when tracking {Origin}", req.Origin);
             return WriteEndpointMapping.NoLoadOrder(ex);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            logger.LogWarning(ex, "No loaded plugin has origin {Origin} to track", req.Origin);
-            return Results.Problem(ex.Message, statusCode: 404);
-        }
-        catch (SourceAlreadyTrackedException ex)
-        {
-            logger.LogWarning(ex, "Refused to re-track {Origin}", req.Origin);
-            return Results.Problem(ex.Message, statusCode: 409);
-        }
-        // ADR-0042 decision 2: a data-quality problem with the plugin, not a state conflict (409 is
-        // already "this mod folder is tracked") — 422, the status Compile's refusal uses.
-        catch (SourceRoundTripFailedException ex)
-        {
-            logger.LogWarning(ex, "Refused to track {Origin}: round-trip gate failed", req.Origin);
-            return Results.Problem(ex.Message, statusCode: 422);
-        }
-        // Same status as the round-trip gate above — a data-quality problem with the
-        // plugin itself (a missing strings file), not a state conflict.
-        catch (MissingLocalizationStringsException ex)
-        {
-            logger.LogWarning(ex, "Refused to track {Origin}: missing localization strings", req.Origin);
-            return Results.Problem(ex.Message, statusCode: 422);
-        }
-        catch (GitUnavailableException ex)
-        {
-            logger.LogError(ex, "git unavailable while tracking {Origin}", req.Origin);
-            return Results.Problem(ex.Message, statusCode: 500);
         }
     }
 
@@ -391,10 +361,13 @@ public static class PluginEndpoints
 
         try
         {
-            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath, loadOrder);
-            watcher.MarkAnswered(modFolder, decoded);
-            watcher.Watch(modFolder, decoded, pluginPath);
-            return Results.Ok(new ExternalChangeActionResponse(true, null));
+            var result = ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath, loadOrder);
+            if (result.Applied)
+            {
+                watcher.MarkAnswered(modFolder, decoded);
+                watcher.Watch(modFolder, decoded, pluginPath);
+            }
+            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
