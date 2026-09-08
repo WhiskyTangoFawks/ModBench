@@ -4,8 +4,9 @@ using MEditService.Core.Records;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>A read, not a mutation (ADR-0046 invariant 3 exempts it), but it draws through the same
-/// allocator <see cref="WriteTargets"/> holds, so Create's own FormKey never disagrees with it.</summary>
+/// <summary>A read, not a mutation. It answers from the source tree and load order, unreachable
+/// from the read side, so it draws through the same allocator <see cref="WriteTargets"/> holds,
+/// agreeing with Create's own FormKey.</summary>
 public sealed class PeekNextFreeFormKeyHandler
 {
     private readonly WriteTargets _targets;

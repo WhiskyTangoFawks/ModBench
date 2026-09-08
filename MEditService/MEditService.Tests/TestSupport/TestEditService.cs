@@ -28,8 +28,6 @@ internal static class TestEditService
             SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance),
         NullLogger<DeleteRecordHandler>.Instance);
 
-    internal static DeleteRecordHandler DeleteHandler(IndexProjector index) => DeleteHandler(HolderOver(index));
-
     internal static CreateRecordHandler CreateHandler(LoadOrderHolder holder)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
@@ -46,8 +44,6 @@ internal static class TestEditService
             holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance),
         holder);
-
-    internal static PeekNextFreeFormKeyHandler PeekHandler(IndexProjector index) => PeekHandler(HolderOver(index));
 
     internal static RecordEditService Over(LoadOrderHolder holder) =>
         new(holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),

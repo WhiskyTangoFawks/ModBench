@@ -14,9 +14,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>The write side's shared concerns (ADR-0046): target resolution under the load order,
-/// the pre-write external-change gate, rename on an EditorID change, and FormKey allocation. An
-/// internal seam, tested through the gestures.</summary>
+/// <summary>The write side's shared concerns (ADR-0046): target resolution, its pre-write refusals,
+/// rename on an EditorID change, and FormKey allocation. An internal seam, tested through the
+/// gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
     IModImporter importer,
