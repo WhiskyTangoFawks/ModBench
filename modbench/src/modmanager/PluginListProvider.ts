@@ -19,7 +19,7 @@ export type PluginListSource = Pick<IModlistSource, 'setPluginEnabled' | 'reorde
 export interface PluginListProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin copy — the row provider's only
    *  row input (ADR-0047). */
-  instance: Pick<Instance, 'value' | 'subscribe'>;
+  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
   source: PluginListSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
@@ -248,9 +248,11 @@ export class PluginListProvider
     if (fullOrder.length === 0) return { kind: 'empty' };
 
     // Every physical plugin copy's own winning path — the badge pass's only way to open a
-    // plugin's own file and read its declared masters.
+    // plugin's own file and read its declared masters. A line-only row has none to offer.
     const winnerByName = new Map(
-      this.instanceValue.plugins.filter((p) => p.winning).map((p) => [p.name.toLowerCase(), p.path] as const),
+      this.instanceValue.plugins
+        .filter((p): p is typeof p & { path: string } => p.winning && p.path !== undefined)
+        .map((p) => [p.name.toLowerCase(), p.path] as const),
     );
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.

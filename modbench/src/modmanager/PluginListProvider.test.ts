@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
-import type { LoadOrderPlugin } from './loadOrderSnapshot';
+import type { LoadOrderPlugin, LoadOrderPluginLine } from './loadOrderSnapshot';
 import type { InstanceValue } from './instance';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
@@ -23,7 +23,11 @@ import {
 import { ErrorNode } from './ErrorNode';
 
 // A minimal fixture builder: only the fields a given test cares about need overriding.
-function plugin(overrides: Partial<LoadOrderPlugin> & { name: string }): LoadOrderPlugin {
+// `path: undefined` fixtures a `LoadOrderPluginLine` — a listed name with no game directory to
+// resolve it against.
+function plugin(
+  overrides: Partial<Omit<LoadOrderPlugin, 'path'>> & { name: string; path?: string },
+): LoadOrderPlugin | LoadOrderPluginLine {
   return {
     path: `/fixture/${overrides.name}`,
     origin: 'SomeMod',
@@ -36,7 +40,7 @@ function plugin(overrides: Partial<LoadOrderPlugin> & { name: string }): LoadOrd
 
 // Only `.plugins` is ever read by the row provider — the rest of InstanceValue is Mods-tree/
 // Editing territory this ticket does not touch.
-function valueOf(plugins: LoadOrderPlugin[]): InstanceValue {
+function valueOf(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceValue {
   return { plugins } as unknown as InstanceValue;
 }
 
@@ -45,10 +49,13 @@ function valueOf(plugins: LoadOrderPlugin[]): InstanceValue {
 // concern, not this provider's).
 class FakeInstance {
   value: InstanceValue;
+  // Defaults to 1 ("already loaded") so every existing fixture-based test needs no opinion on
+  // it; a test of the sequence === 0 ("not read yet") guard passes 0 explicitly.
+  sequence: number;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-  private sequence = 0;
-  constructor(initial: InstanceValue) {
+  constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
+    this.sequence = sequence;
   }
   subscribe(subscriber: (value: InstanceValue, sequence: number) => void) {
     this.subscribers.push(subscriber);
@@ -79,7 +86,7 @@ class FakeSource implements PluginListSource {
 }
 
 const makeProvider = (
-  plugins: LoadOrderPlugin[],
+  plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
   extra: Partial<{ source: PluginListSource; instance: FakeInstance; dataFolder: () => Promise<string | undefined> }> = {},
 ) => {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
@@ -222,6 +229,22 @@ describe('PluginListProvider — rows come from the Instance value', () => {
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm', 'Mod.esp']);
   });
 
+  // The real shape an unresolved game directory now produces (`LoadOrderPluginLine`): a row
+  // with no `path` at all, not a placeholder string. The row still renders, unbadged.
+  it('renders a row for a LoadOrderPluginLine (path: undefined), with no badge', async () => {
+    const provider = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data', path: undefined }),
+    ]);
+    const rows = (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
+    expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm']);
+    expect(rows[0].iconPath).toBeUndefined(); // no path to open, so nothing to badge
+  });
+
+  it('resolvePluginPath returns undefined for a LoadOrderPluginLine, never "undefined" as text', async () => {
+    const provider = makeProvider([plugin({ name: 'Fallout4.esm', slot: 0, path: undefined })]);
+    expect(await provider.resolvePluginPath('Fallout4.esm')).toBeUndefined();
+  });
+
   // Rival: subscribe but drop the callback, or never subscribe — rows would stay at the value
   // handed to the constructor.
   it('re-renders on a new value published after construction', async () => {
@@ -293,6 +316,37 @@ describe('PluginListProvider — rows come from the Instance value', () => {
     provider.invalidate();
 
     expect((await provider.getChildren()).map((r) => r.label)).toEqual(['A.esp', 'B.esp']);
+  });
+
+  // sequence === 0 means "the Instance has not read yet", never "genuinely empty" — a real
+  // empty plugins.txt lands at sequence 1. getChildren() must not claim "No plugins" for the
+  // former; it awaits the first landed value instead.
+  it('does not resolve getChildren() until the Instance lands its first value (sequence 0)', async () => {
+    const instance = new FakeInstance(valueOf([]), 0);
+    const provider = makeProvider([], { instance });
+
+    let settled = false;
+    const pending = provider.getChildren().then((rows) => { settled = true; return rows; });
+    // A macrotask boundary, not a microtask one: buildRows() itself hops several microtasks
+    // (dataFolder(), discoverImplicitMasters()), so a single `await Promise.resolve()` would
+    // pass whether or not getChildren() actually waits on the Instance.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const rows = await pending;
+
+    expect(settled).toBe(true);
+    expect(rows.map((r) => r.label)).toEqual(['A.esp']);
+  });
+
+  // A genuinely empty plugins.txt (sequence already past 0) is not "not read yet" — it must
+  // still render EmptyNode honestly, not hang waiting for a value that already landed.
+  it('renders EmptyNode immediately when the first landed value is genuinely empty', async () => {
+    const provider = makeProvider([], { instance: new FakeInstance(valueOf([]), 1) });
+    const rows = await provider.getChildren();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toBeInstanceOf(EmptyNode);
   });
 });
 
@@ -785,7 +839,7 @@ describe('PluginListProvider — implicit (vanilla) master rows', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  const providerFor = (plugins: LoadOrderPlugin[], folder: string | undefined = dataFolder) =>
+  const providerFor = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], folder: string | undefined = dataFolder) =>
     makeProvider(plugins, { dataFolder: () => Promise.resolve(folder) });
 
   it('renders implicit masters as ImplicitMasterNode rows preceding plugins.txt rows, in topological order, with no checkbox and contextValue pluginImplicit', async () => {

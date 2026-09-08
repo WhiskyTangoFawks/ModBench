@@ -831,16 +831,18 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     // Memoised, and invalidated only when modbench.mods.gameDirectory changes, so no consumer can
     // disagree about which folder is current. Deliberately not an activation-scoped Promise
     // resolved once.
-    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, makeDetectPaths(), detectWinePrefix, vscode.workspace.onDidChangeConfiguration);
+    const detectPaths = makeDetectPaths();
+    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, detectPaths, detectWinePrefix, vscode.workspace.onDidChangeConfiguration);
     // Never rejects: a null resolution and a misconfigured setting both fold to undefined, so the
     // views degrade rather than throw. Memoised by the resolver's cache generation, so a
     // stuck-broken setting logs once instead of once per visible file.
     const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
       outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
-    // ADR-0047: the one Instance over MO2's files, its own watchers included. An unresolved data
-    // folder folds to '', matching every other consumer's degrade-not-throw contract.
+    // ADR-0047: the one Instance over MO2's files, its own watchers and game-directory
+    // resolution included — a second, independent resolution from the memoised one above.
     const instance = new Instance({
-      instanceRoot, source: modlistSource, log, dataFolder: () => dataFolder().then((d) => d ?? ''),
+      instanceRoot, source: modlistSource, log,
+      config: meditConfig, detectPaths, detectWinePrefix, onConfigChange: vscode.workspace.onDidChangeConfiguration,
     });
     // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
     // this kicks off the first real read. PluginListProvider's own `sequence === 0` guard is
