@@ -108,7 +108,6 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrder LoadOrder { get; }
-        public RecordEditService Edits { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Faction { get; }
 
@@ -141,7 +140,6 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
             var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
-            Edits = TestEditService.Over(holder);
             EditHandler = TestEditService.EditHandler(holder);
         }
 

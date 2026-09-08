@@ -24,7 +24,6 @@ public sealed class PartialFormEditRefusalTests : IDisposable
 
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrder LoadOrder { get; }
-    public RecordEditService Edits { get; }
     public EditRecordHandler EditHandler { get; }
     public FormKey PartialCell { get; }
     public FormKey OrdinaryNpc { get; }
@@ -60,7 +59,6 @@ public sealed class PartialFormEditRefusalTests : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
     }
 

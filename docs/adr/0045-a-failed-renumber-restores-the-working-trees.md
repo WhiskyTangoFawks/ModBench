@@ -4,7 +4,7 @@ status: accepted
 
 # A failed renumber restores the working trees: failure atomicity, conditionally, without git
 
-Governs the renumber cascade in `MEditService.Core/Edits/RecordEditService.cs` and the mechanism it
+Governs the renumber cascade in `MEditService.Core/Commands/RenumberRecordHandler.cs` and the mechanism it
 constructs, `MEditService.Core/Source/SourceRepositoryTransaction.cs`. Extends
 [ADR-0041](0041-manual-git-tracking-compile-from-text.md) (one write path; refusals precede writes;
 commit, stash and discard are the author's gestures) and

@@ -40,7 +40,7 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests
 
         // Renumbered rather than seeded: at HEAD the child still sits under its old key, so only the
         // working tree can answer, and only through the document that inlines it.
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, fixture.TopCellRef.ToString(), renumbered);
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.TopCellRef.ToString(), renumbered);
         Assert.True(result.Applied, result.Message);
 
         var repository = SourceRepository.Open(fixture.ModFolder, GameRelease.Fallout4)!;

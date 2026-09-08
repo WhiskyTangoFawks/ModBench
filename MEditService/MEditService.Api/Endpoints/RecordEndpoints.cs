@@ -108,7 +108,7 @@ public static class RecordEndpoints
         .ProducesProblem(503);
 
         app.MapPost("/records/{formKey}/renumber", (
-            string formKey, RecordRenumberRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            string formKey, RecordRenumberRequest request, RenumberRecordHandler edits, IndexWriteGate gate) =>
             RenumberRecord(formKey, request, edits, gate, logger))
         .WithName("RenumberRecord")
         .WithSummary("Renumber a native record's FormKey as a delete+create pair.")
@@ -123,8 +123,8 @@ public static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        // A partial-cascade failure surfaces here too — same shape as every other write
-        // path's I/O failure, just with a richer message naming which repos already have dirt.
+        // A rolled-back cascade surfaces here too — same shape as every other write path's I/O
+        // failure, with a richer message naming what the rollback deliberately left standing (ADR-0045).
         .ProducesProblem(500)
         .ProducesProblem(503);
 
@@ -254,7 +254,7 @@ public static class RecordEndpoints
     }
 
     internal static IResult RenumberRecord(
-        string formKey, RecordRenumberRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
+        string formKey, RecordRenumberRequest request, RenumberRecordHandler edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
@@ -276,8 +276,8 @@ public static class RecordEndpoints
             onApplied: result => Results.Ok(new RecordRenumberResponse(true, decoded, result.NewFormKey!)),
             onWriteFailure: ex =>
             {
-                // A partial-cascade failure lands here too, with the richer message
-                // RecordEditService.RenumberRecord already built naming which repos have dirt —
+                // A rolled-back cascade lands here too, with the richer message
+                // RenumberRecordHandler already built naming the paths it left standing (ADR-0045) —
                 // ex.Message goes straight through, unwrapped, unlike every sibling's own
                 // onWriteFailure here.
                 logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);

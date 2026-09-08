@@ -196,7 +196,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     [Fact]
     public void RenumberingAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
     {
-        var result = _fixture.Edits.RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
+        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(QuestFile);

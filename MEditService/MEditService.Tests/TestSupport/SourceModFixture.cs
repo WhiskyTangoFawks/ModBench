@@ -21,8 +21,8 @@ internal sealed class SourceModFixture : IDisposable
     internal string GameDirectory { get; }
     internal PluginKey Plugin { get; }
     internal LoadOrder LoadOrder { get; }
-    internal RecordEditService Edits { get; }
     internal EditRecordHandler EditHandler { get; }
+    internal RenumberRecordHandler RenumberHandler { get; }
 
     private SourceModFixture(string pluginName, string origin, Action<Fallout4Mod> build)
     {
@@ -54,8 +54,8 @@ internal sealed class SourceModFixture : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
+        RenumberHandler = TestEditService.RenumberHandler(holder);
     }
 
     internal static SourceModFixture Tracked(string pluginName, string origin, Action<Fallout4Mod> build) =>

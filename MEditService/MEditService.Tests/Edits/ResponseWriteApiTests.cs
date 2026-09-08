@@ -89,7 +89,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     [Fact]
     public void RenumberingAResponse_ChangesItsFormKeyInPlaceInTheTopicDocument_AndCompilesInOrder()
     {
-        var result = _fixture.Edits.RenumberRecord(_fixture.Plugin, _fixture.Response.ToString());
+        var result = _fixture.RenumberHandler.RenumberRecord(_fixture.Plugin, _fixture.Response.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(TopicFile);
