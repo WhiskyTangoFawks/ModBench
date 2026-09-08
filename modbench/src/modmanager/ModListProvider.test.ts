@@ -24,7 +24,7 @@ const {
   moveModToSeparatorMock: vi.fn(),
   reorderSeparatorBlockMock: vi.fn(),
 }));
-vi.mock('./mo2/modlistCommands', () => ({
+vi.mock('./commands/modlist', () => ({
   setModEnabled: (...args: unknown[]) => setModEnabledMock(...args),
   reorderMod: (...args: unknown[]) => reorderModMock(...args),
   moveModToSeparator: (...args: unknown[]) => moveModToSeparatorMock(...args),
@@ -39,7 +39,7 @@ const ACTIVE_PROFILE = 'Default';
 beforeEach(() => {
   for (const m of [setModEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock]) {
     m.mockReset();
-    m.mockResolvedValue({ applied: true });
+    m.mockResolvedValue({ applied: true, wrote: true });
   }
 });
 
@@ -181,7 +181,7 @@ describe('ModListProvider', () => {
   // The command returns a refusal rather than throwing (ADR-0047 point 6); the provider turns
   // that into a rejected promise so existing callers (the checkbox handler) keep their contract.
   it('setModEnabled throws when the command refuses, and fires no refresh', async () => {
-    setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'ModNotFound', message: 'nope' });
+    setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'nope' });
     const provider = makeProvider([mod('A')]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
@@ -387,11 +387,11 @@ describe('ModListProvider', () => {
       let text = writeModlist(dndEntries);
       reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
         text = moveModInText(text, name, idx);
-        return { applied: true };
+        return { applied: true, wrote: true };
       });
       reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, sepName: string, idx: number) => {
         text = moveSeparatorBlockInText(text, sepName, idx);
-        return { applied: true };
+        return { applied: true, wrote: true };
       });
       const provider = makeProvider(dndEntries);
       return { provider, order: () => parseModlist(text).map((e) => e.name) };
@@ -488,7 +488,7 @@ describe('ModListProvider', () => {
         let text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
         reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
           text = moveModInText(text, name, idx);
-          return { applied: true };
+          return { applied: true, wrote: true };
         });
         const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];
         const provider = makeProvider(simpleEntries);
@@ -589,7 +589,7 @@ describe('ModListProvider', () => {
 
     // A refusal (`{ applied: false }`), not a throw, must report the same way.
     it('a refusal from the moveModToSeparator command reports an error and logs the specific operation', async () => {
-      moveModToSeparatorMock.mockResolvedValue({ applied: false, refusal: 'ModNotFound', message: 'disk full' });
+      moveModToSeparatorMock.mockResolvedValue({ applied: false, refusal: 'disk full' });
       const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;

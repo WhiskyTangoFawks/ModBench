@@ -368,11 +368,10 @@ The extension owns the editing backend process
   separator).
 - **Write behavior**: every mutation (enable/disable, drag-reorder, separator ops, Move to
   Separator, Uninstall, New Empty Mod) writes to `modlist.txt` immediately, through the
-  free-function command beside the `modlist.txt` kernel that owns that gesture
-  (`modmanager/mo2/modlistCommands.ts`, ADR-0047 point 6) rather than through the
-  `IModlistSource` adapter. There is **no save/discard flow** in this view — unlike the
-  Editing surface, whose edits land as working-tree source changes reviewed and committed in
-  the native Source Control panel (ADR-0041, medit-version-control.md).
+  free-function command for that gesture (`modmanager/commands/modlist.ts`, ADR-0047 point 6)
+  rather than through the `IModlistSource` adapter. There is **no save/discard flow** in this
+  view — unlike the Editing surface, whose edits land as working-tree source changes reviewed
+  and committed in the native Source Control panel (ADR-0041, medit-version-control.md).
 
 ### New empty mod
 
@@ -604,11 +603,12 @@ folder so the user can reassign or discard those files without leaving Modbench.
 
 - Every `modlist.txt` gesture (enable, reorder, insert/rename/delete separator, move a mod
   to a separator, reorder a separator block, uninstall, new empty mod) is a **free-function
-  command** in `modmanager/mo2/modlistCommands.ts`, beside the kernel it splices through: it
-  takes the instance root, the active profile and the gesture's own inputs, and returns
-  applied or a typed refusal — never a throw, never a read of the Instance, never a refresh
-  or sync request (ADR-0047 point 6). A scan test enforces the latter, in the style of
-  `formatLiteralScan.test.ts`.
+  command** in `modmanager/commands/modlist.ts`, splicing through the `modlist.txt` kernel:
+  it takes the instance root, the active profile and the gesture's own inputs, and returns
+  `{ applied: true; wrote: boolean }` or `{ applied: false; refusal: string }` — never a
+  throw, never a read of the Instance, never a refresh or sync request (ADR-0047 point 6). A
+  scan test (`modmanager/commands/instanceScan.test.ts`, generic over the whole folder) and
+  a small per-file one enforce the latter, in the style of `formatLiteralScan.test.ts`.
 - The **`IModlistSource` adapter** over an in-memory modlist model remains the seam for
   install, profile switch, and every read — `readModlist`, `listSeparators`,
   `listProfiles`, `getActiveProfile`/`getNexusSlug` — exercised with real MO2 instance
@@ -630,9 +630,10 @@ folder so the user can reassign or discard those files without leaving Modbench.
 - **Primary unit seams** (Vitest, `npm run test:unit`, no backend): the byte-faithful text
   transforms (`modlistText.ts`, `metaIni.ts`, `modOrganizerIni.ts`) — parse, toggle
   enable/disable, reorder, separator ops — asserted byte-faithfully; the modlist.txt
-  gesture commands (`modlistCommands.ts`) — each verb against a temporary instance,
-  asserting the bytes written or the refusal returned; and the `FileConflictIndex` — winner
-  resolution, conflict/override counts, missing-master and missing-mod detection.
+  gesture commands (`modmanager/commands/modlist.ts`) — each verb against a temporary
+  instance, asserting the bytes written (and `wrote: false` for a no-op) or the refusal
+  returned; and the `FileConflictIndex` — winner resolution, conflict/override counts,
+  missing-master and missing-mod detection.
 - **Non-regular dirents inside `mods/<Mod>/`**: a symlink is followed transparently —
   file or directory — and participates in the index and deploy like a real entry, matching
   what `references/modorganizer/`'s own walker does with a reparse point. A symlinked file

@@ -28,13 +28,13 @@ import {
   moveModToSeparator,
   renameSeparator,
   uninstallMod,
-  type ModlistCommandOutcome,
-} from './mo2/modlistCommands';
+  type ModlistCommandResult,
+} from './commands/modlist';
 
 // A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
-// contract whether the failure came from a rejected promise or an `{ applied: false }` outcome.
-function applyOrThrow(outcome: ModlistCommandOutcome): void {
-  if (!outcome.applied) throw new Error(outcome.message);
+// contract whether the failure came from a rejected promise or an `{ applied: false }` result.
+function applyOrThrow(outcome: ModlistCommandResult): void {
+  if (!outcome.applied) throw new Error(outcome.refusal);
 }
 
 

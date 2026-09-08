@@ -22,7 +22,7 @@ import { parseMetaIni, writeMetaIni } from './metaIni';
 import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
 import { nexusSlugForGame } from './nexusSlug';
-import { withModlistWriteLock } from './modlistCommands';
+import { withModlistWriteLock } from '../commands/modlist';
 
 const exists = (path: string): Promise<boolean> =>
   access(path).then(
@@ -55,8 +55,8 @@ export class Mo2ModlistSource implements IModlistSource {
     return join(this.instanceRoot, 'profiles', profile, 'modlist.txt');
   }
 
-  // Shares modlistCommands.ts's write queue (keyed by instanceRoot) rather than its own mutex,
-  // so this adapter's writes and the free-function commands' never race the same bytes.
+  // Shares commands/modlist.ts's write queue (keyed by instanceRoot) rather than its own
+  // mutex, so this adapter's writes and the free-function commands' never race the same bytes.
   private modifyModlist(fn: (text: string) => string): Promise<void> {
     return withModlistWriteLock(this.instanceRoot, async () => {
       const path = await this.modlistPath();

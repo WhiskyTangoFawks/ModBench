@@ -13,13 +13,13 @@ import {
   reorderMod as reorderModCommand,
   reorderSeparatorBlock as reorderSeparatorBlockCommand,
   setModEnabled as setModEnabledCommand,
-  type ModlistCommandOutcome,
-} from './mo2/modlistCommands';
+  type ModlistCommandResult,
+} from './commands/modlist';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
 /** The only `IModlistSource` member this provider still calls directly — every modlist.txt
- *  gesture goes through the mo2/modlistCommands.ts commands instead (ADR-0047 point 6). */
+ *  gesture goes through the commands/modlist.ts commands instead (ADR-0047 point 6). */
 export type ModListSource = Pick<IModlistSource, 'setActiveProfile'>;
 
 export interface ModListProviderOptions {
@@ -254,13 +254,13 @@ export class ModListProvider
   // `handleDrop` still reaches its resync.
   private async runMutation(
     operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
-    mutate: () => Promise<ModlistCommandOutcome>,
+    mutate: () => Promise<ModlistCommandResult>,
   ): Promise<void> {
     try {
       const outcome = await mutate();
       if (outcome.applied) return;
-      this.log(`[ModListProvider] ${operation} failed: ${outcome.message}`);
-      this.reporter?.report('error', 'Failed to reorder mods.', outcome.message);
+      this.log(`[ModListProvider] ${operation} failed: ${outcome.refusal}`);
+      this.reporter?.report('error', 'Failed to reorder mods.', outcome.refusal);
     } catch (e) {
       const message = this.err(e);
       this.log(`[ModListProvider] ${operation} failed: ${message}`);
@@ -384,7 +384,7 @@ export class ModListProvider
 
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
     const outcome = await setModEnabledCommand(this.instanceRoot, this.instanceValue.activeProfile, modName, enabled);
-    if (!outcome.applied) throw new Error(outcome.message);
+    if (!outcome.applied) throw new Error(outcome.refusal);
     this.invalidate();
   }
 
