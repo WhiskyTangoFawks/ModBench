@@ -53,7 +53,7 @@ The MO2 instance directory Modbench is opened on, and the one read model derived
 _Avoid_: loadout, workspace, model
 
 **Toolbox**:
-The view that presents the instance — MO2's top bar as a tree: the game, the active profile, deploy state, run, refresh, settings. Also the extension's composition root.
+The view that presents the instance — MO2's top bar as a tree: two rows, Profile and Deployment, with Refresh and Launch… in its title bar. Also the extension's composition root.
 _Avoid_: Loadout, header, dashboard
 
 **Profile**:

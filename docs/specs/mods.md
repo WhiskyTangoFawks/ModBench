@@ -98,9 +98,9 @@ requires a deploy.**
     that installing never silently changes what my game loads until I enable it.
 20. As a user, I want a FOMOD (scripted) installer to be detected and flagged for manual
     setup rather than run blindly, so that I'm not surprised by a half-configured install.
-21. As a user in standalone mode, I want a Deploy button that makes my enabled mods
-    available to the game, and a Purge button that cleanly removes them, so that I can run
-    the game with my loadout and then restore a clean game directory.
+21. As a user, I want a Deploy button that makes my enabled mods available to the game, and
+    a Purge button that cleanly removes them, so that I can run the game with my loadout and
+    then restore a clean game directory.
 22. As a user, I want deploy to never overwrite vanilla game files, so that deploying can't
     corrupt my base install.
 23. As a user, I want purge to preserve files the game or tools wrote into `Data/` that
@@ -113,9 +113,9 @@ requires a deploy.**
     at first deploy and offer a fix (move the staging folder, use a stock game folder, or
     fall back to symlinks) rather than failing cryptically, so that the constraint is
     surfaced, not hit blindly.
-26. As a user who lets MO2 or Vortex own deployment, I want Modbench to hide Deploy/Purge and
-    the executable tasks entirely and only edit files in place, so that the two tools don't
-    both try to be the deployer.
+26. As a user who lets MO2 or Vortex own deployment, I want Modbench to ask before its first
+    deploy into my game directory rather than deploying silently, so that the two tools never
+    both write into `Data/` without my knowing.
 27. As a user, I want to keep a "stock game folder" — a vanilla copy outside Steam — and
     deploy into that, so that Steam updates and permissions can't clobber my deployed
     `Data/`.
@@ -210,10 +210,9 @@ share by inode anyway — record edits go straight to the source mod file with n
 
 ### Game directory & stock game folder
 
-- The **game directory** is where Modbench reads vanilla masters from and (standalone)
-  deploys into. Resolved from `modbench.mods.gameDirectory`, falling back to
-  `ModOrganizer.ini`'s `gamePath`, then Steam auto-detect (`libraryfolders.vdf` on Linux,
-  registry on Windows).
+- The **game directory** is where Modbench reads vanilla masters from and deploys into.
+  Resolved from `modbench.mods.gameDirectory`, falling back to `ModOrganizer.ini`'s
+  `gamePath`, then Steam auto-detect (`libraryfolders.vdf` on Linux, registry on Windows).
 - A **stock game folder** is a vanilla copy kept outside Steam's management (the Wabbajack
   pattern): it pins a known-compatible game version and keeps the real Steam install clean.
   To the deployer it is just another game directory — identical code path, different
@@ -222,21 +221,19 @@ share by inode anyway — record edits go straight to the source mod file with n
 
 ### Deployment model: hardlinks
 
-- Standalone deploy (`modbench.mods.deploymentMode: "standalone"`) creates hardlinks from
-  `mods/` into the game directory's `Data/`; purge removes them. The game sees real files —
-  no kernel features, no admin rights, no mount lifecycle. Node provides hardlinks natively
-  (`fs.link` / `fs.symlink`). A hardlink is a second directory entry pointing to the same
-  inode; deleting the link in `Data/` leaves the source mod file intact.
-- **External mode** (`deploymentMode: "external"`): when MO2 or Vortex owns deployment,
-  Deploy/Purge are hidden and Modbench only edits in place. Executable tasks are withheld
-  too — with no physical deploy of Modbench's making, an MO2 entry run outside usvfs would
-  see an undeployed game directory.
-- **Alpha default is `external`.** The alpha ships alongside MO2, not instead of it — MO2
-  stays the deployer/launcher and the showcase is editing and mod management, neither of
-  which needs a deploy. Deploy/Purge/Launch Game are withdrawn from both the title bar and
-  the command palette at this default, so a fresh install exposes no path that writes into
-  the game directory. Standalone deploy stays fully implemented and reachable by explicitly
-  setting `deploymentMode: "standalone"`, keeping the post-alpha path testable.
+- Deploy creates hardlinks from `mods/` into the game directory's `Data/`; purge removes
+  them. The game sees real files — no kernel features, no admin rights, no mount lifecycle.
+  Node provides hardlinks natively (`fs.link` / `fs.symlink`). A hardlink is a second
+  directory entry pointing to the same inode; deleting the link in `Data/` leaves the source
+  mod file intact.
+- **The first deploy into a game directory asks once.** Deploy and Purge are always reachable
+  from the [Toolbox](containers.md) — there is no separate standalone/external setting — but
+  deploying into a directory whose `mods/.medit-manifest.json` is absent raises a modal
+  confirmation first: deploying makes Modbench the deployer for that directory, and if MO2 or
+  another tool also deploys there the two will conflict. Accepting proceeds and writes the
+  manifest; declining refuses and touches nothing. The question is keyed purely on the
+  manifest's absence, so a directory Modbench has already deployed into is never asked
+  again — this is the whole of "who deploys here": no mode to set, no setting to leave stale.
 - **Same-drive constraint**: `mods/` and the game directory must be on the same volume.
   Checked at first deploy; on violation, prompt to move the staging folder, create a stock
   game folder on the mods volume, or use the **symlink fallback** (no special permission on
@@ -393,7 +390,7 @@ The extension owns the editing backend process
 - Flow: extract (or copy) into a staging directory beside `mods/` → detect root type (`Data/`
   subfolder vs `.esp`/meshes at root) and normalise → write `meta.ini` into the staged tree →
   **rename the staging directory to `mods/<name>/`**, so the folder appears complete in one
-  filesystem event → the user enables and (standalone) deploys.
+  filesystem event → the user enables and deploys.
 - The installer writes **no `modlist.txt` line**. The `mods/**` watcher registers the new
   folder as a **disabled** entry, the same path a folder dropped in by MO2 or by hand takes
   (`modmanager/modsReconcile.ts`), so an install is one signal with one owner.
@@ -417,11 +414,24 @@ The extension owns the editing backend process
   are distinct from record-level conflicts (the Editing context's `ConflictClassifier`) —
   each surfaces in its own view.
 
-### Deploy / purge (Modbench-4, standalone mode)
+### Deploy / purge (Modbench-4)
 
-- **Deploy**: verify same-volume (else the stock-folder / symlink-fallback prompt);
-  `fs.link` each winner into `Data/<relativePath>`, skipping existing non-manifest files
-  (vanilla — never overwrite); write `mods/.medit-manifest.json` listing every link.
+Deploy is a module of the [Toolbox](containers.md) (`modmanager/commands/deployment.ts` plus
+the hardlink/manifest/purge core in `modmanager/deployer.ts`), offering deploy, purge and
+status (the manifest's presence) — one strategy, hardlinks, with no strategy interface: the
+symlink fallback stays a requirement, not a second implementation, until it actually ships.
+
+- **Deploy**: winners come from the Instance's own `files` value (ADR-0047), never a fresh
+  walk of `mods/`, so a deploy can never disagree with what the Mods tree shows or what the
+  backend's load order sync last sent. Verify same-volume (else the stock-folder /
+  symlink-fallback prompt); `fs.link` each winner into `Data/<relativePath>`, skipping
+  existing non-manifest files (vanilla — never overwrite); write
+  `mods/.medit-manifest.json` listing every link.
+- **The first deploy into a directory asks once**: when `mods/.medit-manifest.json` is
+  absent, a modal confirmation names the conflict risk with an external deployer before
+  anything is written; declining refuses and leaves `Data/` and the manifest untouched;
+  accepting proceeds as an ordinary deploy. A directory that already has a manifest is never
+  asked. This is the only gate — there is no deployer-mode setting.
 - **Purge**: read the manifest, delete each listed hardlink, move `Data/` files that are
   neither in the manifest nor vanilla into `overwrite/` (F4SE outputs, MCM INI
   writes), then delete the manifest.

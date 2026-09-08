@@ -80,14 +80,14 @@ stays quiet rather than repeating it.
 
 - The **Profile** row reads `—` rather than erroring while the Instance holds its empty
   pre-first-read value: a readout blip is ADR-0026's background tier, not a toast.
-- The **Deployment** row appears only when Modbench itself is the deployer
-  (`modbench.mods.deploymentMode != external`, read through the single `isStandaloneDeployment`
-  predicate that also drives the `when` clauses, so a row and an icon can never disagree), and
-  reads deployed-ness from the Instance's `deployed` field — the presence of the deploy
-  manifest (`mods/.medit-manifest.json`), the same question purge already asks, so the readout
-  cannot disagree with what purge would do. A corrupt manifest reads as deployed: there is state
-  out there needing a purge, which is what the row should say. When deployed, the row is an
-  inert readout — Purge is destructive and stays in overflow behind a modal.
+- The **Deployment** row reads deployed-ness from the Instance's `deployed` field — the
+  presence of the deploy manifest (`mods/.medit-manifest.json`), the same question purge
+  already asks, so the readout cannot disagree with what purge would do. A corrupt manifest
+  reads as deployed: there is state out there needing a purge, which is what the row should
+  say. When deployed, the row is an inert readout — Purge is destructive and stays in overflow
+  behind a modal. Deploying into a directory whose manifest is absent — the first deploy —
+  raises a modal confirmation first (see [mods.md](mods.md)); the row itself carries no trace
+  of that, since it is asked only once the row's own Deploy command runs.
 
 ### mEdit has no lifecycle affordance
 
@@ -103,8 +103,8 @@ superseded by there being no pair to place.)
 | Slot | Action | Gate |
 | --- | --- | --- |
 | `navigation@1` | Refresh | always |
-| `navigation@2` | Launch… | standalone deployment only |
-| overflow | Deploy, Purge | standalone deployment only |
+| `navigation@2` | Launch… | MO2 instance open |
+| overflow | Deploy, Purge | MO2 instance open |
 
 **Refresh** is one command id (`modbench.refresh`) that refreshes the whole of Modbench, not only
 Mod Management. It re-reads mods, plugins and downloads from disk as it always did, and it also
@@ -154,18 +154,17 @@ Editing's "mEdit Plugins tree" into the one shared Plugins tree that exists toda
 ### Implementation Decisions
 
 - **`ToolboxProvider`** (`modbench/src/ToolboxProvider.ts`) renders its rows from one injected
-  getter over the Instance's value — `{ activeProfile, deployed }` — plus the
-  `isStandaloneDeployment` predicate. That is both what keeps the readout from drifting from the
-  trees and what makes the whole surface unit-testable without a VS Code harness. It reads no
-  backend/load order state at all (see *mEdit has no lifecycle affordance* above).
+  getter over the Instance's value — `{ activeProfile, deployed }`. That is both what keeps the
+  readout from drifting from the trees and what makes the whole surface unit-testable without a
+  VS Code harness. It reads no backend/load order state at all (see *mEdit has no lifecycle
+  affordance* above).
 - **It owns no state.** Both fields belong to the Instance; the Toolbox re-renders, it never
   caches.
 - **`createToolbox`** (`modbench/src/toolbox.ts`) is the composition root: the Instance, the
   four views, every MO2-side gesture and the load-order sync are built there. Everything it
   constructs is registered through one `own()` and disposed with it.
 - **Re-render triggers** are a landed Instance recompute — a profile switch, a deploy and a
-  purge all reach it as a watched file changing — and a change to
-  `modbench.mods.deploymentMode`, which is a setting the Instance does not watch.
+  purge all reach it as a watched file changing.
 - **The four-row ceiling is a design constraint, not a limit of the widget.** A fifth candidate
   row is a signal that the state belongs in a tree or the status bar. Today there are two.
 

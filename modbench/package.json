@@ -52,20 +52,6 @@
           "default": "",
           "scope": "resource",
           "description": "Game directory to deploy into (the folder containing the game executable and Data/). A Steam install or a stock game folder. Leave blank to fall back to ModOrganizer.ini's gamePath, then Steam auto-detect."
-        },
-        "modbench.mods.deploymentMode": {
-          "type": "string",
-          "enum": [
-            "standalone",
-            "external"
-          ],
-          "enumDescriptions": [
-            "Modbench hardlinks the merged mod view into the game directory's Data/ (the mechanism on Linux, where MO2's USVFS is unavailable).",
-            "An external manager (MO2/Vortex) owns deployment; Modbench hides Deploy/Purge/Launch Game."
-          ],
-          "default": "external",
-          "scope": "resource",
-          "description": "Who deploys mods into the game directory."
         }
       }
     },
@@ -449,15 +435,15 @@
       "commandPalette": [
         {
           "command": "modbench.modList.deploy",
-          "when": "modbench.workspaceIsMo2Instance && modbench.deploymentStandalone"
+          "when": "modbench.workspaceIsMo2Instance"
         },
         {
           "command": "modbench.modList.purge",
-          "when": "modbench.workspaceIsMo2Instance && modbench.deploymentStandalone"
+          "when": "modbench.workspaceIsMo2Instance"
         },
         {
           "command": "modbench.launch",
-          "when": "modbench.workspaceIsMo2Instance && modbench.deploymentStandalone"
+          "when": "modbench.workspaceIsMo2Instance"
         },
         {
           "command": "modbench.openHeader",
@@ -592,17 +578,17 @@
         },
         {
           "command": "modbench.launch",
-          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
           "group": "navigation@2"
         },
         {
           "command": "modbench.modList.deploy",
-          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
           "group": "2_deployment"
         },
         {
           "command": "modbench.modList.purge",
-          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
           "group": "2_deployment"
         },
         {

@@ -11,7 +11,6 @@ const VALUE: ToolboxState = { activeProfile: 'Default', deployed: false };
 function makeProvider(overrides: Partial<ToolboxDeps> = {}) {
   return new ToolboxProvider({
     state: () => VALUE,
-    isStandaloneDeployment: () => false,
     ...overrides,
   });
 }
@@ -27,7 +26,7 @@ describe('ToolboxProvider', () => {
   it('never renders an mEdit row', () => {
     const rows = makeProvider().getChildren();
 
-    expect(rows.map((r) => r.label)).toEqual(['Profile']);
+    expect(rows.map((r) => r.label)).toEqual(['Profile', 'Deployment']);
   });
 
   it('refresh() fires the change event VS Code re-renders the tree on', () => {
@@ -55,17 +54,8 @@ describe('ToolboxProvider', () => {
     expect(profile.description).toBe('—');
   });
 
-  it('says nothing about deployment when an external manager owns it — no row, no launch affordance', () => {
-    const rows = makeProvider({ isStandaloneDeployment: () => false }).getChildren();
-
-    expect(rows).toHaveLength(1);
-  });
-
   it('offers Deploy from the deployment row while the value says nothing is deployed', () => {
-    const rows = makeProvider({
-      state: () => ({ activeProfile: 'Default', deployed: false }),
-      isStandaloneDeployment: () => true,
-    }).getChildren();
+    const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: false }) }).getChildren();
 
     expect(rows).toHaveLength(2);
     expect(rows[1].description).toBe('not deployed');
@@ -73,10 +63,7 @@ describe('ToolboxProvider', () => {
   });
 
   it('reads out a live deployment without offering Purge from the row — destructive actions stay in overflow behind a modal', () => {
-    const rows = makeProvider({
-      state: () => ({ activeProfile: 'Default', deployed: true }),
-      isStandaloneDeployment: () => true,
-    }).getChildren();
+    const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: true }) }).getChildren();
 
     expect(rows[1].description).toBe('deployed');
     expect(rows[1].command).toBeUndefined();

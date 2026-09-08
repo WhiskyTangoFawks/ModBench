@@ -297,19 +297,13 @@ describe('package.json title-bar rubric', () => {
 // mEdit is an option on the Plugins view, so its affordance lives on that tree, not the Toolbox.
 // Placement is overflow, not a navigation icon: rule 2's ceiling test already measures this tree
 // at its four-icon maximum.
-describe('package.json standalone Deploy/Purge/Launch withdrawal', () => {
-  it('defaults deploymentMode to external so the alpha never exposes standalone deploy without explicit opt-in', () => {
-    const prop = pkg.contributes.configuration.properties['modbench.mods.deploymentMode'];
-    expect(prop, 'expected modbench.mods.deploymentMode to still be declared').toBeTruthy();
-    expect(prop.default).toBe('external');
-  });
-
+describe('package.json Deploy/Purge/Launch gating', () => {
   it('gates Deploy/Purge/Launch Game in the command palette the same as the title bar, closing the Ctrl+Shift+P hole', () => {
     const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
     expect(palette, 'expected a contributes.menus.commandPalette section').toBeTruthy();
 
     // modbench.launch runs a contributed task, never a hardcoded game exe. Same
-    // standalone-only gate as Deploy/Purge.
+    // MO2-instance-only gate as Deploy/Purge — there is no separate standalone mode.
     for (const command of ['modbench.modList.deploy', 'modbench.modList.purge', 'modbench.launch']) {
       const entry = palette.find((e) => e.command === command);
       expect(entry, `expected a commandPalette entry for ${command}`).toBeTruthy();

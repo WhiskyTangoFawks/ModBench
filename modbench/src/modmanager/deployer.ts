@@ -5,7 +5,7 @@
 import { copyFile, link, mkdir, readFile, readdir, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import type { GameDirectory } from './gameDirectory';
-import { foldPath, type FileConflictIndex } from './fileConflictIndex';
+import { foldPath, type FileWinners } from './fileConflictIndex';
 
 /** ADR-0026 surfacing: injected so business logic stays free of vscode types. */
 export type Severity = 'error' | 'warning';
@@ -122,7 +122,7 @@ export async function listRelativeFiles(root: string): Promise<string[]> {
 export async function deploy(
   instanceRoot: string,
   gameDirectory: GameDirectory,
-  index: FileConflictIndex,
+  index: { files: FileWinners },
   reporter: Reporter,
   opts: DeployOptions = {},
 ): Promise<boolean> {
@@ -207,7 +207,7 @@ function toFoldedLinkMap(links: string[]): Map<string, string> {
 // Found by folded key, but judged the same link only by exact casing: on ext4 an old-cased
 // target is a distinct path and must be removed, or it is orphaned in Data/.
 async function linkWinners(
-  index: FileConflictIndex,
+  index: { files: FileWinners },
   dataFolder: string,
   previousLinks: Map<string, string>,
   linkFn: (source: string, target: string) => Promise<void>,

@@ -14,8 +14,6 @@ export interface ToolboxDeps {
    *  container's first view and must never be a hole — but the commands its rows activate do
    *  not exist, so it renders no rows. */
   state: () => ToolboxState | undefined;
-  /** False when an external manager owns deployment, which leaves nothing here to deploy. */
-  isStandaloneDeployment: () => boolean;
 }
 
 // No command once deployed: Purge is destructive and belongs in overflow behind a modal confirm.
@@ -59,8 +57,6 @@ export class ToolboxProvider implements vscode.TreeDataProvider<vscode.TreeItem>
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
     const state = element ? undefined : this.deps.state();
     if (!state) return [];
-    const rows = [profileRow(state.activeProfile)];
-    if (this.deps.isStandaloneDeployment()) rows.push(deploymentRow(state.deployed));
-    return rows;
+    return [profileRow(state.activeProfile), deploymentRow(state.deployed)];
   }
 }
