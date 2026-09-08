@@ -25,6 +25,7 @@ import { broadcastToRecordPanels } from './medit/onRecordEdited';
 import { EXTENSION_TO_WEBVIEW, type ColumnHeaderContext } from './medit/messages';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
+import { Instance } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider } from './modmanager/ModListProvider';
 import { createModsWatcher } from './modmanager/modsWatcher';
@@ -272,7 +273,7 @@ export function activate(context: vscode.ExtensionContext) {
       controller, compileDiagnostics, { name: offer.plugin, origin: offer.origin }, atRef, repository,
     ),
   );
-  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
+  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, instance, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
   // ADR-0026 background tier — the scan is advisory, so a blip logs and retries next reconcile,
   // never toasts. Fire-and-forget: the tree hand-off must not wait on a whole-load-order scan.
   let diagnosisScanGeneration = 0;
@@ -311,9 +312,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Exposed for integration tests — unused in production. The match map has no other externally
   // observable surface, and a backend going unhealthy needs the real BackendManager.stop().
+  // `instance`: lets a test await past a sequence instead of sleeping.
   return {
     modListProvider, downloadsProvider, pluginListProvider, pluginsTree: session.pluginsTree, pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing, exitToLoadout: () => exitToLoadout(session), loadOrderSync: session.loadOrderSync, backendManager: session.backendManager,
+    instance,
   };
 }
 
@@ -327,6 +330,9 @@ interface PluginListDeps {
   // A getter through the single game-directory resolver, not a Promise settled once. Folds a
   // resolution failure to undefined, degrading vanilla-master lookups and badges.
   dataFolder: () => Promise<string | undefined>;
+  /** ADR-0047: the row provider's only row input — name, origin, slot, enabled and winning for
+   *  every plugin copy. */
+  instance: Instance;
   /** The record browser that supplies a plugin row's children. Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
@@ -335,10 +341,10 @@ interface PluginListDeps {
 // browser's children — so each row expands into its records. The composition root is the only
 // place that may know both.
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { session, modlistSource, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
+  const { session, modlistSource, outputChannel, reporter, instanceRoot, dataFolder, instance, recordBrowser } = deps;
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
-  const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
+  const pluginListProvider = new PluginListProvider({ instance, source: modlistSource, log, reporter, dataFolder });
   const composite = new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
     // A thin positional adapter, not `recordBrowser` directly: the composite's
@@ -391,6 +397,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
   return { pluginListProvider, disposables: [
     pluginListView,
     composite,
+    pluginListProvider, // disposes its Instance subscription
     // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
     // against PluginListProvider's own implicitMasterNames() so it never drifts from the tree.
     vscode.window.registerFileDecorationProvider(
@@ -757,7 +764,7 @@ function registerLoadoutSurfaces(session: ExtensionSession, deps: Omit<LoadoutVi
   modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider; pluginListProvider?: PluginListProvider;
   // Forwarded so the composition root can wire modbench.newPlugin's destination QuickPick — both
   // are undefined together with the providers above.
-  modlistSource?: Mo2ModlistSource; instanceRoot?: string; enterEditing?: () => Promise<void>;
+  modlistSource?: Mo2ModlistSource; instanceRoot?: string; instance?: Instance; enterEditing?: () => Promise<void>;
 } {
   const { context, outputChannel } = deps;
   registerDeploymentModeContext(context, () => session.loadoutHeaderProvider?.refresh());
@@ -769,6 +776,7 @@ function registerLoadoutSurfaces(session: ExtensionSession, deps: Omit<LoadoutVi
     pluginListProvider: loadout?.pluginListProvider,
     modlistSource: loadout?.modlistSource,
     instanceRoot: loadout?.instanceRoot,
+    instance: loadout?.instance,
     enterEditing: loadout?.enterEditing,
   };
 }
@@ -801,7 +809,7 @@ function wireEnterEditingOnRestart(
   });
 }
 
-function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => Promise<void>; enterEditing: () => Promise<void> } | undefined {
+function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; instance: Instance; refreshAll: () => Promise<void>; enterEditing: () => Promise<void> } | undefined {
   const { context, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
   // The flat log shim, built locally rather than threaded in as its own Deps field.
   const log = (msg: string) => outputChannel.info(msg);
@@ -826,12 +834,23 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     // Memoised, and invalidated only when modbench.mods.gameDirectory changes, so no consumer can
     // disagree about which folder is current. Deliberately not an activation-scoped Promise
     // resolved once.
-    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, makeDetectPaths(), detectWinePrefix, vscode.workspace.onDidChangeConfiguration);
+    const detectPaths = makeDetectPaths();
+    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, detectPaths, detectWinePrefix, vscode.workspace.onDidChangeConfiguration);
     // Never rejects: a null resolution and a misconfigured setting both fold to undefined, so the
     // views degrade rather than throw. Memoised by the resolver's cache generation, so a
     // stuck-broken setting logs once instead of once per visible file.
     const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
       outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
+    // ADR-0047: the one Instance over MO2's files, its own watchers and game-directory
+    // resolution included — a second, independent resolution from the memoised one above.
+    const instance = new Instance({
+      instanceRoot, source: modlistSource, log,
+      config: meditConfig, detectPaths, detectWinePrefix, onConfigChange: vscode.workspace.onDidChangeConfiguration,
+    });
+    // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
+    // this kicks off the first real read. PluginListProvider's own `sequence === 0` guard is
+    // what keeps activation from being blocking here.
+    void instance.refresh();
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
     // and enterEditing below need the session slot filled first.
@@ -845,7 +864,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       buildIndex: (entries) => buildFileConflictIndex(entries, instanceRoot, (msg) => outputChannel.debug(msg)),
     });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ session, modlistSource, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
+      registerPluginListView({ session, modlistSource, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, instance, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
     const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
@@ -886,6 +905,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
       ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
       ...pluginListDisposables,
+      instance,
     );
     // The watchers above cover changes made while Modbench runs; these one-time passes reconcile
     // what happened while it wasn't. Plugins follow mods, so the first pass feeds the second.
@@ -902,11 +922,13 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       ),
       sendLoadOrder: () => session.loadOrderSync!.flush(),
       invalidateMods: () => modListProvider.invalidate(),
-      invalidatePlugins: () => pluginListProvider.invalidate(),
+      // The Plugins tree renders the Instance's value now (ADR-0047): force a real re-read of
+      // disk, not just a re-render of whatever the Instance last landed.
+      invalidatePlugins: () => { void instance.refresh(); pluginListProvider.invalidate(); },
       invalidateDownloads: () => downloadsProvider.invalidate(),
       updateProfileDescription,
     });
-    return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll, enterEditing };
+    return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, instance, refreshAll, enterEditing };
 }
 
 interface LoadoutHeaderDepsWiring {
