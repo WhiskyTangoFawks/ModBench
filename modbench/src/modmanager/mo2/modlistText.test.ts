@@ -15,6 +15,7 @@ import {
   setEnabledInText,
   unlistedModNames,
   deadModEntryNames,
+  writeModlist,
 } from './modlistText';
 import type { Mod, ModlistEntry, Separator } from '../model';
 
@@ -162,6 +163,21 @@ describe('parseModlist', () => {
 
   it('does not surface a false entry when a BOM is followed by a non-entry line', () => {
     expect(parseModlist('\uFEFF# header\r\n*DLC: Automatron\r\n')).toEqual([]);
+  });
+});
+
+describe('writeModlist — parseModlist\'s inverse', () => {
+  it('round-trips entries through write then parse', () => {
+    const entries: (Mod | Separator)[] = [
+      { kind: 'mod', name: 'Alpha', enabled: true },
+      { kind: 'separator', name: 'Group A', enabled: false },
+      { kind: 'mod', name: 'Beta', enabled: false },
+    ];
+    expect(parseModlist(writeModlist(entries))).toEqual(entries);
+  });
+
+  it('writes an empty file for no entries', () => {
+    expect(writeModlist([])).toBe('');
   });
 });
 

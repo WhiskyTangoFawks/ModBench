@@ -4,9 +4,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
-import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree } from './test/corpusFixture';
-import type { Mod } from './model';
+import { Mo2ModlistSource } from './Mo2ModlistSource';
+import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree } from '../test/corpusFixture';
+import type { Mod } from '../model';
 
 describe('mod lifecycle corpus (install / uninstall)', () => {
   let dir: string;
