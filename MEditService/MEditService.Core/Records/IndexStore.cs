@@ -86,9 +86,9 @@ internal sealed class IndexStore : IDisposable
         }
     }
 
-    // A reopen while a read connection is still open gets DuckDB.NET's cached instance of the file
-    // the rebuild just deleted, so a rebuild waits for reads in flight. Taken inside both
-    // IndexProjector's lock and the write gate, never outside either.
+    // A reopen while a read connection is open gets DuckDB.NET's cached instance of the file the
+    // rebuild just deleted, so a rebuild waits for reads in flight. Taken inside IndexProjector's
+    // lock and the write gate.
     private readonly object _rebuildGate = new();
     private int _readsInFlight;
     private bool _rebuilding;
