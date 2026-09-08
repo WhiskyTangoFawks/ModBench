@@ -57,11 +57,14 @@ public sealed class MasterPruningRoundTripGateTests
     {
         using var scratch = new PrunedMasterScratch(SpaDiaAmrFixtureFileName, "SpaDiaAMRMod");
 
-        var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(() => scratch.TrackAsync());
+        var result = await scratch.TrackAsync();
 
-        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", ex.Message);
-        Assert.Contains("DLCNukaWorld.esm", ex.Message);
-        Assert.Contains("Mutagen #688", ex.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", result.Message);
+        Assert.Contains("DLCNukaWorld.esm", result.Message);
+        Assert.Contains("Mutagen #688", result.Message);
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
@@ -180,7 +183,7 @@ public sealed class MasterPruningRoundTripGateTests
             _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
-        public Task TrackAsync() =>
+        public Task<TrackResult> TrackAsync() =>
             new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, _origin, SourcePreset.Edits);
 
         public void Dispose()

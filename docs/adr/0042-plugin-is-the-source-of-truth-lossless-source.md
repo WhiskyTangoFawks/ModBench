@@ -67,7 +67,7 @@ decision, not a defect in this gate) — confirmed against the real LitR corpus:
 carry a `Furniture` whose original bytes never wrote `FNAM`/`MNAM` (a CK/community-tool shape),
 and Mutagen's writer unconditionally re-adds them, materializing `Furniture.Flags` from
 `null` to a real derived value. That is a genuine content change, correctly refused, naming the
-record type, FormKey and field (`SourceRoundTripFailedException`), until Mutagen is fixed.
+record type, FormKey and field (`TrackRefusal.RoundTripFailed`), until Mutagen is fixed.
 
 *(`NPC_/QNAM` float precision drift is **not** a refusal source, despite appearances: `NPC_/QNAM`
 is `System.Drawing.Color`, quantized to a byte per channel at **parse** time, so any precision is

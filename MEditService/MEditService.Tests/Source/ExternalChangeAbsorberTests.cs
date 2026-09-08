@@ -32,8 +32,9 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        var result = ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
+        Assert.True(result.Applied, result.RefusalReason);
         var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var newBaseline = GitCli.Run(gitDir, _mod.ModFolder, "show", $"main:{relativePath}");
@@ -87,6 +88,23 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
 
         var root = SourceRepository.RootFor(SourceEditFixture.PluginName).Replace('\\', '/');
         Assert.Contains($"{root}/RecordData.json", tree);
+    }
+
+    // A binary Mutagen cannot read is the user's answer to a question they can still answer the
+    // other way, so it comes back as a refusal and leaves main where it was.
+    [Fact]
+    public void Absorb_WithABinaryThatCannotBeParsed_RefusesNamingThePluginAndLeavesMainAlone()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
+        var gitDir = Path.Combine(_mod.ModFolder, ".git");
+        var mainBefore = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
+        File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
+
+        var result = ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+
+        Assert.False(result.Applied);
+        Assert.Contains(SourceEditFixture.PluginName, result.RefusalReason, StringComparison.Ordinal);
+        Assert.Equal(mainBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim());
     }
 
     [Fact]

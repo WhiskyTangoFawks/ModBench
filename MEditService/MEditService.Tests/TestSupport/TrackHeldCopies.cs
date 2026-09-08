@@ -9,7 +9,7 @@ namespace MEditService.Tests;
 /// value, and the copies Editing actually opened as the held set.</summary>
 internal static class TrackHeldCopies
 {
-    internal static Task TrackAsync(
+    internal static Task<TrackResult> TrackAsync(
         this TrackService track, IndexProjector index, string origin, SourcePreset preset,
         Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification = null)
     {

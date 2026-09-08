@@ -89,11 +89,14 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             return deserialized;
         }
 
-        var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(() => scratch.TrackAsync(DeserializeThenAddAnNpc));
+        var result = await scratch.TrackAsync(DeserializeThenAddAnNpc);
 
-        Assert.Contains(extra!.Value.ToString(), ex.Message);
-        Assert.Contains("ExtraNpc", ex.Message);
-        Assert.Contains("not present in the original", ex.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+        Assert.Contains(extra!.Value.ToString(), result.Message);
+        Assert.Contains("ExtraNpc", result.Message);
+        Assert.Contains("not present in the original", result.Message);
     }
 
     private static (uint NextObjectId, uint NumRecords) ReadHeaderStats(string pluginPath)
@@ -138,7 +141,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
-        public Task TrackAsync(Func<string, CancellationToken, Task<IFallout4Mod>>? deserialize = null) =>
+        public Task<TrackResult> TrackAsync(Func<string, CancellationToken, Task<IFallout4Mod>>? deserialize = null) =>
             new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(_index, Plugin.Origin!, SourcePreset.Edits, deserialize);
 

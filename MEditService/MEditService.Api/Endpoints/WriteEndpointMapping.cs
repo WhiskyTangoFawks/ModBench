@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
+using MEditService.Core.Source;
 
 namespace MEditService.Api.Endpoints;
 
@@ -36,6 +37,22 @@ internal static class WriteEndpointMapping
             ["eslContradiction"] = result.EslContradiction,
         });
 
+    /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
+    /// says what kind of problem, the refusal extension says exactly which (ADR-0026).</summary>
+    internal static IResult Refusal(TrackResult result) => Results.Problem(
+        detail: result.Message,
+        statusCode: result.Refusal switch
+        {
+            TrackRefusal.NoPluginWithOrigin => 404,
+            // Already tracked is a state conflict: the request is well-formed, and the answer is
+            // "not on a folder that already has a repository".
+            TrackRefusal.AlreadyTracked => 409,
+            TrackRefusal.GitUnavailable => 500,
+            // A data problem in the plugin itself, the status the record edits' own refusals use.
+            _ => 422,
+        },
+        extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+
     /// <summary>A write to a working tree Modbench does not own exclusively can fail; the caller
     /// builds <paramref name="detail"/> because it is wire body that differs per site, so one shared
     /// message would change what every client reads.</summary>
@@ -55,7 +72,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
     /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never
-    /// <see cref="Refusal"/>'s 422.</summary>
+    /// <see cref="Refusal(RecordEditResult)"/>'s 422.</summary>
     internal static IResult MalformedFormKey(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
 
     /// <summary>The gate wraps only the service call, so a malformed request never queues and the

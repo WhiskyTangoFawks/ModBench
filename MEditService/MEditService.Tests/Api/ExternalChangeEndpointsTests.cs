@@ -93,6 +93,29 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         Assert.Equal(503, problem.StatusCode);
     }
 
+    // The same 200-with-a-refusal posture Keep already has: an unparseable binary is an answer the
+    // dialog can show, and the question stays unanswered so the user can still choose Keep.
+    [Fact]
+    public void AbsorbExternalChange_RefusalTravelsAsA200_LeavingTheQuestionUnanswered()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
+        File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
+        var watcher = new ExternalChangeWatcher();
+        watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
+            new ExternalChangeClassification.ExternalChange(false, null, null));
+        var (loggerFactory, _) = CapturingLoggerFactory();
+        using var _disposeLogger = loggerFactory;
+
+        var result = PluginEndpoints.AbsorbExternalChange(
+            IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
+            _mod.Index, watcher, loggerFactory);
+
+        var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
+        Assert.False(ok.Value!.Succeeded);
+        Assert.Contains(IndexedModFixture.PluginName, ok.Value.RefusalReason, StringComparison.Ordinal);
+        Assert.NotEmpty(watcher.Unanswered());
+    }
+
     [Fact]
     public void KeepExternalChange_RefusalTravelsAsA200_NamingTheCollidingRecord()
     {

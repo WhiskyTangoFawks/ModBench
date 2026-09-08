@@ -34,7 +34,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             k.Name.Equals(copy.Name, StringComparison.OrdinalIgnoreCase)
             && string.Equals(k.Origin, copy.Origin, StringComparison.OrdinalIgnoreCase));
 
-    public Task TrackAsync(
+    public Task<TrackResult> TrackAsync(
         LoadOrder loadOrder, IReadOnlyCollection<PluginKey> heldCopies, string origin, SourcePreset preset,
         CancellationToken cancel = default) =>
         TrackAsync(loadOrder, heldCopies, origin, preset, deserializeForVerification: null, cancel);
@@ -42,7 +42,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     /// <summary>Same gesture with one extra seam: how the round-trip gate reads the tree back. Null gets
     /// the real whole-mod door. Only a negative test overrides it: no known codec defect can trigger
     /// the gate for real.</summary>
-    internal async Task TrackAsync(
+    internal async Task<TrackResult> TrackAsync(
         LoadOrder loadOrder,
         IReadOnlyCollection<PluginKey> heldCopies,
         string origin,
@@ -59,18 +59,19 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             .Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase) && Held(heldCopies, p))
             .ToList();
         if (plugins.Count == 0)
-            throw new KeyNotFoundException($"No loaded plugin has origin '{origin}' to track.");
+            return TrackResult.Refused(TrackRefusal.NoPluginWithOrigin, $"No loaded plugin has origin '{origin}' to track.");
 
         var modFolder = Path.GetDirectoryName(plugins[0].Path)
             ?? throw new InvalidOperationException($"Plugin path '{plugins[0].Path}' has no containing folder.");
 
         // Both checks are cheap and both make the whole parse loop pointless if they fail, so they run first.
         if (SourceRepository.IsTracked(modFolder))
-            throw new SourceAlreadyTrackedException($"'{modFolder}' is already tracked.");
-        GitCli.EnsureOnPath();
+            return TrackResult.Refused(TrackRefusal.AlreadyTracked, $"'{modFolder}' is already tracked.");
 
         try
         {
+            GitCli.EnsureOnPath();
+
             var pristineFiles = new List<PristineFile>();
             var binaryHashesByPlugin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -94,14 +95,17 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                     // A raw parse exception's Message carries no located identity; the diagnosis walks the tree for
                     // the innermost RecordException.
                     var diagnosis = PluginDiagnosis.FromParseException(ex);
-                    throw new SourceRoundTripFailedException(
-                        $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}", ex);
+                    logger.LogWarning(ex, "Refused to track {Plugin}: its own binary could not be deep-parsed", plugin.Name);
+                    return TrackResult.Refused(
+                        TrackRefusal.RoundTripFailed,
+                        $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}");
                 }
 
                 // Refuse by name: TranslatedString.TryLookup returns false for a missing file with no exception.
                 if (LocalizedStrings.FindMissingStringsFile(deepParsed, plugin.Name, modFolder, loadOrder.DataFolderPath, loadOrder.GameRelease) is { } missingFile)
                 {
-                    throw new MissingLocalizationStringsException(
+                    return TrackResult.Refused(
+                        TrackRefusal.MissingLocalizationStrings,
                         $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
                         $"in {LocalizedStrings.FolderFor(modFolder, loadOrder.DataFolderPath)}. Restore the file, then track again.");
                 }
@@ -115,7 +119,8 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 // ADR-0042 decision 2: the gate refuses before a single byte of any plugin in this Track is
                 // committed, leaving the folder exactly as untracked as it was. Same Serializing phase — no new
                 // TrackPhase.
-                await VerifyRoundTrip(deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, deserialize, logger, cancel);
+                if (await VerifyRoundTrip(deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, deserialize, logger, cancel) is { } refusal)
+                    return TrackResult.Refused(TrackRefusal.RoundTripFailed, refusal);
 
                 pristineFiles.AddRange(pluginPristineFiles);
 
@@ -135,6 +140,17 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             // After the tree is written and committed, never before: a watch over a half-written tree
             // validates a plugin whose documents are still arriving, and re-derives it from them.
             RepositoryCreated?.Invoke(modFolder, origin);
+            return TrackResult.Success();
+        }
+        catch (GitUnavailableException ex)
+        {
+            return TrackResult.Refused(TrackRefusal.GitUnavailable, ex.Message);
+        }
+        catch (SourceAlreadyTrackedException ex)
+        {
+            // The folder was tracked between this gesture's own check and the commit: nothing here
+            // owns the mod folder exclusively.
+            return TrackResult.Refused(TrackRefusal.AlreadyTracked, ex.Message);
         }
         finally
         {
@@ -147,7 +163,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     // ADR-0042 decision 2's gate: the tree is read back, recompiled and reparsed; refuses unless every
     // record is model-identical. Reparse, not the pre-write object: only written bytes show what the
     // writer does.
-    private static async Task VerifyRoundTrip(
+    private static async Task<string?> VerifyRoundTrip(
         IMod original,
         string pluginName,
         string originalPluginPath,
@@ -184,26 +200,25 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 // reference lives in a VMAD struct-list property Mutagen never walks (upstream issue 688). Never
                 // widen this catch.
                 var diagnosis = PluginDiagnosis.FromWriteException(ex);
-                throw new SourceRoundTripFailedException(
-                    $"{pluginName} does not round-trip through its own tracked source: {diagnosis.Describe()}", ex);
+                logger.LogWarning(ex, "Refused to track {Plugin}: its round-trip write dropped a needed master", pluginName);
+                return $"{pluginName} does not round-trip through its own tracked source: {diagnosis.Describe()}";
             }
 
             var originalBytes = await File.ReadAllBytesAsync(originalPluginPath, cancel);
             var recompiledBytes = await File.ReadAllBytesAsync(recompiledPath, cancel);
             if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
-                return;
+                return null;
 
             if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
             {
                 // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
                 var kindB = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
                     d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
-                throw new SourceRoundTripFailedException(
-                    $"{pluginName} does not round-trip through its own tracked source: " + (kindB != null
-                        ? $"{kindB.Describe()} — parsing the malformed subrecord dropped " +
-                          $"{string.Join(", ", loss.Signatures)} before Track ever wrote its source."
-                        : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
-                          "present in the original — dropped during parsing, before Track ever wrote its source."));
+                return $"{pluginName} does not round-trip through its own tracked source: " + (kindB != null
+                    ? $"{kindB.Describe()} — parsing the malformed subrecord dropped " +
+                      $"{string.Join(", ", loss.Signatures)} before Track ever wrote its source."
+                    : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
+                      "present in the original — dropped during parsing, before Track ever wrote its source.");
             }
 
             var recompiledFromBinary = Fallout4Mod.CreateFromBinary(
@@ -211,19 +226,17 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
 
             if (ModelIdentity.FindFirst(original, recompiledFromBinary) is { } divergence)
             {
-                throw new SourceRoundTripFailedException(
-                    $"{pluginName} does not round-trip through its own tracked source: " +
+                return $"{pluginName} does not round-trip through its own tracked source: " +
                     $"{divergence.RecordType} {divergence.FormKey} (EditorID '{divergence.EditorId}') " +
-                    divergence.Description);
+                    divergence.Description;
             }
 
             // FindFirst never reaches ModHeader (not an IMajorRecordGetter); this is the header's own check,
             // scoped to OpaqueHeaderFields' allow-list — a blanket sweep would refuse legitimate divergence.
             if (ModelIdentity.FindFirstHeaderFieldDivergence(((IFallout4ModGetter)original).ModHeader, recompiledFromBinary.ModHeader) is { } headerField)
             {
-                throw new SourceRoundTripFailedException(
-                    $"{pluginName} does not round-trip through its own tracked source: " +
-                    $"TES4 header field '{headerField}' changed after being recompiled from its own tracked source.");
+                return $"{pluginName} does not round-trip through its own tracked source: " +
+                    $"TES4 header field '{headerField}' changed after being recompiled from its own tracked source.";
             }
 
             // Model-identical but not byte-identical: an encoding-only difference ADR-0042 decision 2
@@ -240,6 +253,8 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         {
             Directory.Delete(scratchDir, recursive: true);
         }
+
+        return null;
     }
 
 
@@ -293,37 +308,34 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath)));
 }
 
-/// <summary>Thrown when a plugin fails ADR-0042 decision 2's round-trip gate, naming the first record
-/// that does not survive recompilation. Named so the endpoint layer maps it to its own HTTP
-/// response.</summary>
-public sealed class SourceRoundTripFailedException : Exception
+/// <summary>Why Track refused, typed rather than a string to match on (ADR-0026): each value is a
+/// different way out, and the endpoint's status is one switch over them.</summary>
+public enum TrackRefusal
 {
-    public SourceRoundTripFailedException()
-    {
-    }
+    None,
 
-    public SourceRoundTripFailedException(string message) : base(message)
-    {
-    }
+    /// <summary>Nothing in the load order carries the origin the gesture named.</summary>
+    NoPluginWithOrigin,
 
-    public SourceRoundTripFailedException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
+    /// <summary>The mod folder already holds a repository, whose history a re-Track would discard.</summary>
+    AlreadyTracked,
+
+    /// <summary>ADR-0042 decision 2's gate: the plugin does not survive its own source, or cannot be
+    /// deep-parsed at all. A data problem in the plugin, not a state conflict.</summary>
+    RoundTripFailed,
+
+    /// <summary>A localized plugin whose strings file is missing; the way out is restoring it.</summary>
+    MissingLocalizationStrings,
+
+    /// <summary>git is not on PATH, so no repository can be created at all (ADR-0041).</summary>
+    GitUnavailable,
 }
 
-/// <summary>Thrown when a Localized plugin is missing one of its strings files. Named so the endpoint
-/// layer maps it to its own HTTP response.</summary>
-public sealed class MissingLocalizationStringsException : Exception
+/// <summary>Track's outcome — applied-or-refusal, never an exception (ADR-0046 invariant 8). The
+/// message names the way out, since a refusal the user cannot act on is dead UI.</summary>
+public sealed record TrackResult(bool Applied, TrackRefusal Refusal, string Message)
 {
-    public MissingLocalizationStringsException()
-    {
-    }
+    public static TrackResult Success() => new(true, TrackRefusal.None, "");
 
-    public MissingLocalizationStringsException(string message) : base(message)
-    {
-    }
-
-    public MissingLocalizationStringsException(string message, Exception innerException) : base(message, innerException)
-    {
-    }
+    public static TrackResult Refused(TrackRefusal refusal, string message) => new(false, refusal, message);
 }

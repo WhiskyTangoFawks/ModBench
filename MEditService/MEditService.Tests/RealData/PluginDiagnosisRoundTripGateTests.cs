@@ -18,12 +18,15 @@ public sealed class PluginDiagnosisRoundTripGateTests
     {
         using var scratch = new RealFixtureScratch("SKI_PlasmaAutocannon.esp");
 
-        var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(() => scratch.TrackAsync());
+        var result = await scratch.TrackAsync();
 
-        Assert.Contains("Perk", ex.Message);
-        Assert.Contains("0000EF:SKI_PlasmaAutocannon.esp", ex.Message);
-        Assert.Contains("T6M_QuickReload_ReloadVATs", ex.Message);
-        Assert.Contains(PluginDiagnosis.UnknownClass, ex.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+        Assert.Contains("Perk", result.Message);
+        Assert.Contains("0000EF:SKI_PlasmaAutocannon.esp", result.Message);
+        Assert.Contains("T6M_QuickReload_ReloadVATs", result.Message);
+        Assert.Contains(PluginDiagnosis.UnknownClass, result.Message);
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
@@ -32,11 +35,14 @@ public sealed class PluginDiagnosisRoundTripGateTests
     {
         using var scratch = new RealFixtureScratch("Clipboards to the BOS.esp");
 
-        var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(() => scratch.TrackAsync());
+        var result = await scratch.TrackAsync();
 
-        Assert.Contains("All FNAM strings should be the same", ex.Message);
-        Assert.DoesNotContain("EditorID", ex.Message);
-        Assert.DoesNotContain("FormKey", ex.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+        Assert.Contains("All FNAM strings should be the same", result.Message);
+        Assert.DoesNotContain("EditorID", result.Message);
+        Assert.DoesNotContain("FormKey", result.Message);
     }
 
     [Fact]
@@ -44,10 +50,13 @@ public sealed class PluginDiagnosisRoundTripGateTests
     {
         using var scratch = new RealFixtureScratch("Clipboards to the BOS.esp");
 
-        var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(() => scratch.TrackAsync());
+        var result = await scratch.TrackAsync();
 
-        Assert.Contains("blocked upstream: Mutagen #687", ex.Message);
-        Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", ex.Message);
+        Assert.False(result.Applied);
+        Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
+
+        Assert.Contains("blocked upstream: Mutagen #687", result.Message);
+        Assert.DoesNotContain($"— {PluginDiagnosis.UnknownClass}:", result.Message);
     }
 
     // Stub masters come from the fixture's own declared list: Track's round-trip write needs the
@@ -84,7 +93,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
             _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
-        public Task TrackAsync() =>
+        public Task<TrackResult> TrackAsync() =>
             new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Origin, SourcePreset.Edits);
 
         public void Dispose()
