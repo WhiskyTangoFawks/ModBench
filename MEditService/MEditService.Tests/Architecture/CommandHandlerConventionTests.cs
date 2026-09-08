@@ -21,6 +21,7 @@ public sealed class CommandHandlerConventionTests
         (typeof(PeekNextFreeFormKeyHandler), "Applied"),
         (typeof(TrackHandler), "Applied"),
         (typeof(CompilePluginHandler), "Succeeded"),
+        (typeof(CopyRecordAsOverrideHandler), "Applied"),
     ];
 
     private const string CommandsNamespace = "MEditService.Core.Commands";

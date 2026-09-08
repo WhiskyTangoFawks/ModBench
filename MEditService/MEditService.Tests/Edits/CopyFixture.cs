@@ -31,6 +31,7 @@ public sealed class CopyFixture : IDisposable
     public RecordEditService Edits { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
+    public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -82,6 +83,7 @@ public sealed class CopyFixture : IDisposable
         Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
+        CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
     }
 
     private void Track(string origin, PluginKey plugin) =>

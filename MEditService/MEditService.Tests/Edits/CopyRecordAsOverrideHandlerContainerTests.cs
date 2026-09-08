@@ -7,14 +7,14 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>A plain "Copy as Override" is own-fields-only for every record type, containers
 /// included (xEdit parity: only "Deep copy as override" carries children).</summary>
-public sealed class RecordEditServiceContainerCopyTests
+public sealed class CopyRecordAsOverrideHandlerContainerTests
 {
     [Fact]
     public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_ChildListsEmpty()
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -39,7 +39,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -72,7 +72,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -93,7 +93,7 @@ public sealed class RecordEditServiceContainerCopyTests
     public void CopyRecordAsOverride_OnAPlacedReference_WhenDestinationAlreadyOverridesTheCell_Appends()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = fixture.Edits;
+        var service = fixture.CopyAsOverrideHandler;
         Assert.True(service.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin).Applied);
 
@@ -120,7 +120,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -135,7 +135,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -151,7 +151,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -193,7 +193,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -223,7 +223,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -250,7 +250,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -283,7 +283,7 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);

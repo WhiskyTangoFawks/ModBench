@@ -13,7 +13,8 @@ namespace MEditService.Tests.TestSupport;
 /// first.</summary>
 internal sealed class ProjectingEditService(
     IndexProjector index, LoadOrderHolder holder, RecordEditService inner, EditRecordHandler edits,
-    DeleteRecordHandler deletes, CreateRecordHandler creates, PeekNextFreeFormKeyHandler peek)
+    DeleteRecordHandler deletes, CreateRecordHandler creates, PeekNextFreeFormKeyHandler peek,
+    CopyRecordAsOverrideHandler copyOverrides)
 {
     /// <summary>The service every test writes through, over <paramref name="index"/>'s own store and
     /// schemas.</summary>
@@ -22,7 +23,8 @@ internal sealed class ProjectingEditService(
         var holder = TestEditService.HolderOver(index);
         return new ProjectingEditService(
             index, holder, TestEditService.Over(holder), TestEditService.EditHandler(holder),
-            TestEditService.DeleteHandler(holder), TestEditService.CreateHandler(holder), TestEditService.PeekHandler(holder));
+            TestEditService.DeleteHandler(holder), TestEditService.CreateHandler(holder), TestEditService.PeekHandler(holder),
+            TestEditService.CopyAsOverrideHandler(holder));
     }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
@@ -39,7 +41,7 @@ internal sealed class ProjectingEditService(
         Projected(CurrentCreates().CreateRecord(plugin, recordType, editorId, requestedFormKey));
 
     internal RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin) =>
-        Projected(Current().CopyRecordAsOverride(sourcePlugin, formKey, destinationPlugin));
+        Projected(CurrentCopyOverrides().CopyRecordAsOverride(sourcePlugin, formKey, destinationPlugin));
 
     internal RecordEditResult CopyRecordAsNewRecord(
         PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null) =>
@@ -75,6 +77,12 @@ internal sealed class ProjectingEditService(
     {
         TestEditService.Sync(holder, index);
         return creates;
+    }
+
+    private CopyRecordAsOverrideHandler CurrentCopyOverrides()
+    {
+        TestEditService.Sync(holder, index);
+        return copyOverrides;
     }
 
     private PeekNextFreeFormKeyHandler CurrentPeek()
