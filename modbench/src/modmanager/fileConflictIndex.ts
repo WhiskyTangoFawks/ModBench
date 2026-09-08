@@ -68,6 +68,10 @@ export class FileConflictLookup {
   }
 }
 
+/** The winner lookup minus its one mutator: a value is replaced whole, never patched (ADR-0047).
+ *  Every reader of the Instance's `files` field, the deployer included, takes this. */
+export type FileWinners = Omit<FileConflictLookup, 'set'>;
+
 export interface FileConflictIndex {
   /** Conflict/winner info, for every path provided by >=1 enabled mod. */
   files: FileConflictLookup;

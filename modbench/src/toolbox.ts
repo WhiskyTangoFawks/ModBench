@@ -27,7 +27,7 @@ import { createEmptyMod, reconcileMods } from './modmanager/commands/modlist';
 import { registerModsReconcile } from './modmanager/modsReconcile';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, clearTreeWhenBackendDies, exitEditing } from './editingTeardown';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
@@ -613,13 +613,9 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   // no disk, so a landed recompute is the only thing that can change what it shows.
   const provider = new ToolboxProvider({
     state: () => (mo2 ? { activeProfile: mo2.instance.value.activeProfile, deployed: mo2.instance.value.deployed } : undefined),
-    isStandaloneDeployment,
   });
   own(vscode.window.createTreeView('modbench.toolbox', { treeDataProvider: provider }));
   if (mo2) own(mo2.instance.subscribe(() => provider.refresh()));
-  // The deployment row appears and disappears with the mode, which is a setting rather than
-  // anything the Instance watches.
-  own(registerDeploymentModeContext(() => provider.refresh()));
   // Its scope is the workspace, so it lives here rather than on any single tree — and it is only
   // the safety net for a flaky watcher, never the primary path.
   own(vscode.commands.registerCommand('modbench.refresh', async () => {

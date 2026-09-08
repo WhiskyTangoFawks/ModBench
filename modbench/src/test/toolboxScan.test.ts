@@ -73,7 +73,6 @@ const DISPOSABLE_PRODUCERS = [
   'registerCreatePluginCommand',
   'registerCommand',
   'registerDeployCommands',
-  'registerDeploymentModeContext',
   'registerFileDecorationProvider',
   'registerLaunchCommand',
   'registerModContextCommands',

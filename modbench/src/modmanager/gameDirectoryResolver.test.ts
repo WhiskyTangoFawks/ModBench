@@ -61,7 +61,7 @@ describe('createGameDirectoryResolver', () => {
     const resolver = createGameDirectoryResolver('/instance', config, noDetect, noDetectPrefix, onConfigChange.subscribe);
 
     await resolver.resolve();
-    onConfigChange.fire('modbench.mods.deploymentMode');
+    onConfigChange.fire('modbench.backendPort');
     await resolver.resolve();
 
     expect(calls).toBe(1);

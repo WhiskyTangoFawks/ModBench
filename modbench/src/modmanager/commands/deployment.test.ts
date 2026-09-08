@@ -1,11 +1,12 @@
-// The deployer itself is covered by deployer.test.ts; these cover what the command adds — it
-// walks disk for its own modlist, refuses instead of throwing, and reports whether it wrote.
+// The deployer itself is covered by deployer.test.ts; this covers what the command adds — winners
+// come from the caller, not a walk; refuses instead of throwing; and asks once before a first
+// deploy into a manifest-less directory.
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deployMods, purgeMods } from './deployment';
-import { makeDeployerFixture, type DeployerFixture } from '../test/deployerFixture';
+import { deployMods, purgeMods, DEPLOY_CONFIRM_BUTTON } from './deployment';
+import { makeDeployerFixture, makeIndex, type DeployerFixture } from '../test/deployerFixture';
 
 const PROFILE = 'Default';
 const MANIFEST = join('mods', '.medit-manifest.json');
@@ -15,11 +16,11 @@ function fakeReporter() {
   return { reports, report: (severity: string, message: string, detail?: string) => reports.push({ severity, message, detail }) };
 }
 
-async function writeModlist(instanceRoot: string, text: string): Promise<void> {
-  const dir = join(instanceRoot, 'profiles', PROFILE);
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, 'modlist.txt'), text);
-}
+// Never asked: used by every test whose fixture already has a manifest, or that predates the
+// prompt existing — a call here is itself a failure of "asks only on an absent manifest".
+const neverAsk = () => { throw new Error('showWarning should not have been called'); };
+const accept = vi.fn().mockResolvedValue(DEPLOY_CONFIRM_BUTTON);
+const decline = vi.fn().mockResolvedValue(undefined);
 
 const exists = (path: string): Promise<boolean> => stat(path).then(() => true, () => false);
 
@@ -27,36 +28,41 @@ describe('deployMods / purgeMods', () => {
   let fx: DeployerFixture | undefined;
   afterEach(() => fx?.cleanup());
 
-  it('deploys the profile\'s own modlist and reports that it wrote', async () => {
+  it('deploys the winners it is handed and reports that it wrote', async () => {
     fx = await makeDeployerFixture();
-    await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
-    await writeModlist(fx.instanceRoot, '+ModA\n');
+    const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
+    const files = makeIndex({ 'textures/foo.dds': source }).files;
 
     const outcome = await deployMods(
-      fx.instanceRoot, PROFILE, fx.gameDirectory, undefined, fakeReporter(), () => {});
+      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(true);
     expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(true);
   });
 
-  it('leaves a disabled mod out — the modlist read is the command\'s own, not a caller\'s', async () => {
+  // Rival: rebuild the conflict index from modlist.txt instead of taking `files` as given. A
+  // modlist.txt naming a mod absent from `files` proves the command never reads it.
+  it('deploys exactly the winners handed in, never rebuilding from modlist.txt', async () => {
     fx = await makeDeployerFixture();
-    await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
-    await writeModlist(fx.instanceRoot, '-ModA\n');
+    const winner = await fx.writeModFile('ModB', 'textures/bar.dds', 'BARDATA');
+    await mkdir(join(fx.instanceRoot, 'profiles', PROFILE), { recursive: true });
+    await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'modlist.txt'), '-ModB\n');
+    const files = makeIndex({ 'textures/bar.dds': winner }).files;
 
-    await deployMods(fx.instanceRoot, PROFILE, fx.gameDirectory, undefined, fakeReporter(), () => {});
+    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
 
-    expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(false);
+    // modlist.txt disables ModB; a rebuild would deploy nothing. The handed-in `files` wins.
+    expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/bar.dds'))).toBe(true);
   });
 
   it('copies the load order to where the game reads it when a target is given', async () => {
     fx = await makeDeployerFixture();
-    await writeModlist(fx.instanceRoot, '');
+    await mkdir(join(fx.instanceRoot, 'profiles', PROFILE), { recursive: true });
     await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'plugins.txt'), '*Foo.esp\n');
     const target = join(fx.gameDirectory.root, 'plugins.txt');
 
-    await deployMods(fx.instanceRoot, PROFILE, fx.gameDirectory, target, fakeReporter(), () => {});
+    await deployMods(fx.instanceRoot, PROFILE, makeIndex({}).files, fx.gameDirectory, target, fakeReporter(), accept);
 
     expect(await exists(target)).toBe(true);
   });
@@ -65,21 +71,58 @@ describe('deployMods / purgeMods', () => {
   // announces a deployment that never touched Data/.
   it('refuses without a game directory, and touches nothing', async () => {
     fx = await makeDeployerFixture();
-    await writeModlist(fx.instanceRoot, '+ModA\n');
 
-    const outcome = await deployMods(fx.instanceRoot, PROFILE, undefined, undefined, fakeReporter(), () => {});
+    const outcome = await deployMods(
+      fx.instanceRoot, PROFILE, makeIndex({}).files, undefined, undefined, fakeReporter(), neverAsk);
 
     expect(outcome).toMatchObject({ applied: false });
     expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(false);
   });
 
-  it('refuses rather than throwing when the profile has no modlist', async () => {
+  // Rival: deploy without asking. Accepting deploys and writes the manifest; declining refuses
+  // and touches nothing — proven against the same fixture so only the answer differs.
+  describe('first deploy into a directory with no manifest', () => {
+    it('asks once, and accepting deploys and writes the manifest', async () => {
+      fx = await makeDeployerFixture();
+      const source = await fx.writeModFile('ModA', 'a.esp', 'BYTES');
+      const files = makeIndex({ 'a.esp': source }).files;
+      const showWarning = vi.fn().mockResolvedValue(DEPLOY_CONFIRM_BUTTON);
+
+      const outcome = await deployMods(
+        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), showWarning);
+
+      expect(showWarning).toHaveBeenCalledOnce();
+      expect(outcome).toEqual({ applied: true, wrote: true });
+      expect(await exists(join(fx.gameDirectory.dataFolder, 'a.esp'))).toBe(true);
+      expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(true);
+    });
+
+    it('declining refuses and writes nothing', async () => {
+      fx = await makeDeployerFixture();
+      const source = await fx.writeModFile('ModA', 'a.esp', 'BYTES');
+      const files = makeIndex({ 'a.esp': source }).files;
+
+      const outcome = await deployMods(
+        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), decline);
+
+      expect(outcome).toMatchObject({ applied: false });
+      expect(await exists(join(fx.gameDirectory.dataFolder, 'a.esp'))).toBe(false);
+      expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(false);
+    });
+  });
+
+  // Rival: ask unconditionally. A second deploy against a manifest the first one just wrote must
+  // never raise the prompt.
+  it('a directory that already has a manifest does not ask', async () => {
     fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'a.esp', 'BYTES');
+    const files = makeIndex({ 'a.esp': source }).files;
+    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
 
-    const outcome = await deployMods(fx.instanceRoot, PROFILE, fx.gameDirectory, undefined, fakeReporter(), () => {});
+    const outcome = await deployMods(
+      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), neverAsk);
 
-    expect(outcome).toMatchObject({ applied: false });
-    expect(outcome.applied === false && outcome.refusal).toMatch(/ENOENT/);
+    expect(outcome).toEqual({ applied: true, wrote: true });
   });
 
   // Rival: report `wrote: true` unconditionally. A purge with nothing deployed would then
@@ -94,9 +137,9 @@ describe('deployMods / purgeMods', () => {
 
   it('purge removes the deployment a deploy just wrote', async () => {
     fx = await makeDeployerFixture();
-    await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
-    await writeModlist(fx.instanceRoot, '+ModA\n');
-    await deployMods(fx.instanceRoot, PROFILE, fx.gameDirectory, undefined, fakeReporter(), () => {});
+    const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
+    const files = makeIndex({ 'textures/foo.dds': source }).files;
+    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
 
     const outcome = await purgeMods(fx.instanceRoot, fx.gameDirectory, fakeReporter());
 
@@ -109,11 +152,11 @@ describe('deployMods / purgeMods', () => {
   // writing, and Data/'s live links would be snapshotted as the vanilla baseline.
   it('a purge issued during a deploy runs after it, never inside it', async () => {
     fx = await makeDeployerFixture();
-    await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
-    await writeModlist(fx.instanceRoot, '+ModA\n');
+    const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
+    const files = makeIndex({ 'textures/foo.dds': source }).files;
 
     const [deployed, purged] = await Promise.all([
-      deployMods(fx.instanceRoot, PROFILE, fx.gameDirectory, undefined, fakeReporter(), () => {}),
+      deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept),
       purgeMods(fx.instanceRoot, fx.gameDirectory, fakeReporter()),
     ]);
 

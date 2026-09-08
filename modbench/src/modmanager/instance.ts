@@ -5,7 +5,7 @@ import type * as vscode from 'vscode';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ModlistEntry, PluginEntry } from './model';
-import { buildFileConflictIndex, FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
+import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { createDebouncedFsWatcher } from './fsWatcher';
 import { createModsWatcher } from './modsWatcher';
@@ -33,9 +33,6 @@ const GAME_DIRECTORY_SECTION = 'modbench.mods.gameDirectory';
 // How long an MO2 write takes to settle: the wait that coalesces a burst into one recompute, and
 // the wait before an empty modlist read is believed.
 const SETTLE_MS = 200;
-
-/** The winner lookup minus its one mutator: a value is replaced whole, never patched. */
-export type FileWinners = Omit<FileConflictIndex['files'], 'set'>;
 
 /** One generation of the MO2 side, whole. Every field comes from the same read of disk, so a
  *  consumer holding one can never hold two facts from two generations. */

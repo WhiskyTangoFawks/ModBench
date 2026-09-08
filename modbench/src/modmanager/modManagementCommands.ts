@@ -336,29 +336,6 @@ export function registerDownloadsView(
   ]) own(disposable);
   return downloadsProvider;
 }
-/** One reading of the setting, shared by the `when`-clause context key and the header's
- *  deployment row: two answers could put an icon and its readout in different states. */
-export function isStandaloneDeployment(): boolean {
-  return (meditConfig().get('mods.deploymentMode') ?? 'external') !== 'external';
-}
-/** Seed and watch the deployment-mode context key (standalone vs external manager). */
-export function registerDeploymentModeContext(
-  // The deployment row appears and disappears with the mode.
-  notifyToolboxChanged: () => void,
-): vscode.Disposable {
-  // Deploy, Purge and Launch are hidden when an external manager owns deployment, which is the
-  // alpha default: MO2 stays the deployer until standalone deploy ships.
-  const applyDeploymentMode = () => {
-    void vscode.commands.executeCommand('setContext', 'modbench.deploymentStandalone', isStandaloneDeployment());
-  };
-  applyDeploymentMode();
-  return vscode.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration('modbench.mods.deploymentMode')) {
-      applyDeploymentMode();
-      notifyToolboxChanged();
-    }
-  });
-}
 export function registerDeployCommands(
   instanceRoot: string,
   instance: Pick<Instance, 'value'>,
@@ -398,12 +375,13 @@ export function registerDeployCommands(
         deployMods(
           instanceRoot,
           instance.value.activeProfile,
+          instance.value.files,
           // The single game-directory resolver, memoised and invalidated only when
           // modbench.mods.gameDirectory changes.
           (await gameDirResolver.resolve()) ?? undefined,
           await loadOrderTarget(),
           reporter,
-          (msg) => outputChannel.debug(msg),
+          (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
         ))),
     vscode.commands.registerCommand('modbench.modList.purge', () =>
       run('Purge failed.', 'Modbench: Deployed mods purged.', async () =>
