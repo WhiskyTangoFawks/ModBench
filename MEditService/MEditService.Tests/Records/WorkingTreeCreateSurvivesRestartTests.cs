@@ -7,7 +7,7 @@ using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Tests.Records;
 
 /// <summary>Head answering nothing is what tells "ingest-from-source produces this state" apart from "the
 /// state stopped being produced"; it goes red the moment ingest seeds both refs from one whole-tree
@@ -17,7 +17,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     [Fact]
     public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterARestart()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
         var created = ProjectingEditService.Over(mod.Mirror)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
         Assert.True(created.Applied, created.Message);
@@ -26,7 +26,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         ((ILoadOrderMirror)reloaded).Reconcile(
             mod.GameDirectory,
-            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
+            [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         // A silently-failed source ingest degrades to the binary, which never held this uncompiled create,
@@ -42,7 +42,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     [Fact]
     public void ARecordCreated_IsWinner_AfterARestart()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
         var created = ProjectingEditService.Over(mod.Mirror)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
 
@@ -50,7 +50,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         ((ILoadOrderMirror)reloaded).Reconcile(
             mod.GameDirectory,
-            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
+            [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         // Regression guard, same reasoning as the sibling test above.

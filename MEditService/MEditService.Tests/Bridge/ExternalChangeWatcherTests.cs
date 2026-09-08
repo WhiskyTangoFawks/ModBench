@@ -131,12 +131,12 @@ public sealed class ExternalChangeWatcherTests
     [Fact]
     public void Watch_DoesNotQueueTheBinary_ARealCompileJustWrote()
     {
-        var mod = TrackedModFixture.Tracked();
+        var mod = IndexedModFixture.Tracked();
         try
         {
-            var pluginPath = Path.Combine(mod.ModFolder, TrackedModFixture.PluginName);
+            var pluginPath = Path.Combine(mod.ModFolder, IndexedModFixture.PluginName);
             using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(mod.ModFolder, TrackedModFixture.PluginName, pluginPath);
+            watcher.Watch(mod.ModFolder, IndexedModFixture.PluginName, pluginPath);
 
             var editService = ProjectingEditService.Over(mod.Mirror);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);

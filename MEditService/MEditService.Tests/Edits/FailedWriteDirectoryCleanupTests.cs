@@ -11,9 +11,6 @@ namespace MEditService.Tests.Edits;
 /// filesystem's per-component limit.</summary>
 public sealed class FailedWriteDirectoryCleanupTests
 {
-    private static ProjectingEditService ServiceFor(TrackedModFixture mod) =>
-        ProjectingEditService.Over(mod.Mirror);
-
     // Exceeds the 255-byte per-component limit on every filesystem this runs on.
     private const string OverLongEditorId =
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
@@ -21,10 +18,10 @@ public sealed class FailedWriteDirectoryCleanupTests
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
-    private static List<string> EntriesUnderSource(TrackedModFixture mod) =>
+    private static List<string> EntriesUnderSource(SourceEditFixture mod) =>
         Directory
             .EnumerateFileSystemEntries(
-                Path.Combine(mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName)),
+                Path.Combine(mod.ModFolder, SourceRepository.RootFor(SourceEditFixture.PluginName)),
                 "*",
                 SearchOption.AllDirectories)
             .Select(e => Path.GetRelativePath(mod.ModFolder, e))
@@ -34,11 +31,11 @@ public sealed class FailedWriteDirectoryCleanupTests
     [Fact]
     public void CreateRecord_WhoseWriteFails_LeavesNoStrayGroupFolder()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
         var before = EntriesUnderSource(mod);
         Assert.DoesNotContain(before, e => e.EndsWith("Weapons", StringComparison.Ordinal));
 
-        Assert.ThrowsAny<Exception>(() => ServiceFor(mod).CreateRecord(mod.Plugin, "weap", OverLongEditorId));
+        Assert.ThrowsAny<Exception>(() => mod.Edits.CreateRecord(mod.Plugin, "weap", OverLongEditorId));
 
         Assert.Equal(before, EntriesUnderSource(mod));
 
@@ -50,14 +47,14 @@ public sealed class FailedWriteDirectoryCleanupTests
     [Fact]
     public void CreateRecord_WhoseWriteFails_LeavesTheGroupFolderThatAlreadyExisted_AndItsRecords_Untouched()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
         var before = EntriesUnderSource(mod);
         var npcsDirectory = Path.Combine(
-            mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName), "Npcs");
+            mod.ModFolder, SourceRepository.RootFor(SourceEditFixture.PluginName), "Npcs");
 
         Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
 
-        Assert.ThrowsAny<Exception>(() => ServiceFor(mod).CreateRecord(mod.Plugin, "npc_", OverLongEditorId));
+        Assert.ThrowsAny<Exception>(() => mod.Edits.CreateRecord(mod.Plugin, "npc_", OverLongEditorId));
 
         Assert.True(Directory.Exists(npcsDirectory));
         Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
@@ -67,9 +64,9 @@ public sealed class FailedWriteDirectoryCleanupTests
     [Fact]
     public void CreateRecord_ThatSucceeds_StillMintsTheGroupFolderItNeeded()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
 
-        var result = ServiceFor(mod).CreateRecord(mod.Plugin, "weap", "AWeapon");
+        var result = mod.Edits.CreateRecord(mod.Plugin, "weap", "AWeapon");
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains(EntriesUnderSource(mod), e => e.EndsWith("Weapons", StringComparison.Ordinal));

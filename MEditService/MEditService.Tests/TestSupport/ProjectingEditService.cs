@@ -17,7 +17,7 @@ internal sealed class ProjectingEditService(ILoadOrderMirror mirror, LoadOrderHo
     internal static ProjectingEditService Over(ILoadOrderMirror mirror)
     {
         var holder = TestEditService.HolderOver(mirror);
-        return new ProjectingEditService(mirror, holder, TestEditService.Over(holder, mirror));
+        return new ProjectingEditService(mirror, holder, TestEditService.Over(holder));
     }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>

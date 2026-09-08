@@ -436,7 +436,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
 /// <see cref="GitUnavailableException"/>, which the 500 mapper must not catch.</summary>
 public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
@@ -451,7 +451,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
         return (factory, entries);
     }
 
-    private string PluginPath => Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+    private string PluginPath => Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
 
     // Process-shelled — same reasoning as WriteEndpointMappingCharacterizationTests.Chmod.
     private static void Chmod(string path, string mode)
@@ -472,7 +472,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
     // Keep's raw File.WriteAllText is MEditService's own I/O and not Mutagen-wrapped.
     private void WriteExternalBinaryChange(float newHeightMax)
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var mod = new Fallout4Mod(ModKey.FromFileName(IndexedModFixture.PluginName), Fallout4Release.Fallout4);
         var race = mod.Races.AddNew("FixtureRace");
         mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew("FixtureNpc");
@@ -493,7 +493,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
         try
         {
             var result = PluginEndpoints.KeepExternalChange(
-                TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
+                IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
                 _mod.Mirror.Projector, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
 
             var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
@@ -502,7 +502,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
         }
         finally
         {
-            Chmod(_mod.ModFolder, "700"); // restored before TrackedModFixture.Dispose() needs to clean up
+            Chmod(_mod.ModFolder, "700"); // restored before IndexedModFixture.Dispose() needs to clean up
         }
     }
 
@@ -513,7 +513,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.KeepExternalChange(
-            TrackedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
+            IndexedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
             _mod.Mirror.Projector, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);

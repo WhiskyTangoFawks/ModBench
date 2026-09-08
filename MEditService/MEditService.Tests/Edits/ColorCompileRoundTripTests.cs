@@ -21,12 +21,11 @@ public sealed class ColorCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private RecordEditService EditService() => _fixture.Edits;
 
     private IFallout4ModGetter CompileAndReparse()
     {
-        var result = CompileServices.Over(_fixture.Mirror)
+        var result = CompileServices.Over(_fixture.LoadOrder)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 

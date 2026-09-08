@@ -6,6 +6,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -14,18 +15,17 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Tests.Records;
 
 /// <summary>Asks <see cref="IRecordReads"/> directly rather than through a compile: these are
 /// exactly the live load order reads that otherwise go stale before a reload.</summary>
 public sealed class ContainmentRederivationTests : IDisposable
 {
-    private readonly ContainerModFixture _fixture = new();
+    private readonly IndexedContainerFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private ProjectingEditService EditService() => ProjectingEditService.Over(_fixture.Mirror);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

@@ -25,8 +25,7 @@ public sealed class RecordEditService(
     IModImporter importer,
     RecordTextCodec codec,
     SchemaReflector schemaReflector,
-    ILogger<RecordEditService> logger,
-    ILoadOrderMirror? mirror = null)
+    ILogger<RecordEditService> logger)
 {
     // RecordCopy shares this instance's schema and codec so its writes are indistinguishable from
     // this class's own (ADR-0041's one write path).
@@ -125,9 +124,6 @@ public sealed class RecordEditService(
                 target.FormKey, target.EditorId, newLeaf);
         }
         repository.Put(plugin, new SourceDocument(target.FormKey, target.RecordType, newEditorId, newText));
-
-        // The new value can flip filter membership either way.
-        mirror?.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -259,9 +255,6 @@ public sealed class RecordEditService(
                 "report it; otherwise relaunch mEdit so the index re-reads the tree.");
         }
 
-        // A deleted row cannot match an active filter.
-        mirror?.ReapplyFilter();
-
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
@@ -298,9 +291,6 @@ public sealed class RecordEditService(
         repository.Put(
             plugin, new SourceDocument(targetFormKey, recordType, record.EditorID, SerializeToText(record, release)));
 
-        // A brand-new row can newly match an active filter.
-        mirror?.ReapplyFilter();
-
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
@@ -316,10 +306,7 @@ public sealed class RecordEditService(
     {
         if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
-        var result = CopyAsOverride(copy, destinationPlugin);
-        // A brand-new row can newly match an active filter (debt #784).
-        if (result.Applied) mirror?.ReapplyFilter();
-        return result;
+        return CopyAsOverride(copy, destinationPlugin);
     }
 
     private RecordEditResult CopyAsOverride(CopyTarget copy, PluginKey destinationPlugin)
@@ -418,10 +405,7 @@ public sealed class RecordEditService(
     {
         if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
-        var result = CopyAsNewRecord(copy, destinationPlugin, requestedFormKey);
-        // A brand-new row can newly match an active filter (debt #784).
-        if (result.Applied) mirror?.ReapplyFilter();
-        return result;
+        return CopyAsNewRecord(copy, destinationPlugin, requestedFormKey);
     }
 
     private RecordEditResult CopyAsNewRecord(
@@ -659,12 +643,6 @@ public sealed class RecordEditService(
             // through to the endpoint's InvalidOperationException handler ("no usable load order").
             // Rethrown as IOException so it reaches the client as the same 500 every write fault does.
             throw new IOException(RollBackFailedRenumber(transaction, plugin, rewrites, formKey, targetFormKey, ex), ex);
-        }
-        finally
-        {
-            // On both outcomes: after a rollback the affected plugins have been re-derived and the
-            // filter must not stay stale. Once rather than per write; SetFilter re-derives the full set.
-            mirror?.ReapplyFilter();
         }
 
         if (logger.IsEnabled(LogLevel.Information))

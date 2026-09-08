@@ -16,7 +16,7 @@ public sealed class ValidateAtLoadTests
     [Fact]
     public void AHandEditMadeWhileStopped_IsInTheLoadOrdersAnswer_WithoutReIndexingTheWholePlugin()
     {
-        using var mod = TrackedModFixture.TrackedPersistent();
+        using var mod = IndexedModFixture.TrackedPersistent();
         var formKey = mod.Npc.ToString();
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"EditedWhileStopped\"", StringComparison.Ordinal));
@@ -40,6 +40,6 @@ public sealed class ValidateAtLoadTests
             "EditedWhileStopped",
             restarted.Index!.At(RecordRef.Effective).GetDocument(formKey, mod.Plugin)!.EditorId);
         Assert.DoesNotContain(
-            entries, e => e.Message.StartsWith($"Indexing {TrackedModFixture.PluginName} ", StringComparison.Ordinal));
+            entries, e => e.Message.StartsWith($"Indexing {IndexedModFixture.PluginName} ", StringComparison.Ordinal));
     }
 }

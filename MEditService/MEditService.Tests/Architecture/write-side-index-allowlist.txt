@@ -1,0 +1,4 @@
+# Every reference on the write side to an Index type, as file, symbol and count. The write side
+# never reads the Index (ADR-0046 invariants 1, 4, 5 and 7): it writes source text and the projector
+# follows, so this list is empty and stays empty. A line here is a reference that needs the
+# maintainer's ruling, not permission.

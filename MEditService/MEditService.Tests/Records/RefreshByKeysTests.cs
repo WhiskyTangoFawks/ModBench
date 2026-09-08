@@ -15,7 +15,7 @@ namespace MEditService.Tests.Records;
 /// than through the Source watcher, its caller — covered separately.</summary>
 public sealed class RefreshByKeysTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 

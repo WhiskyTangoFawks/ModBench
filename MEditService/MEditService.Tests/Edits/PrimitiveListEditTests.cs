@@ -267,9 +267,10 @@ public sealed class PrimitiveListEditTests : IDisposable
         private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-699-instance-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-699-game-").FullName;
         private readonly string _modFolder;
-        private readonly LoadOrderMirror _mirror;
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
+        public LoadOrder LoadOrder { get; }
+        public RecordEditService Edits { get; }
         public FormKey Race { get; }
         public FormKey MaterialObject { get; }
         public FormKey MiscItem { get; }
@@ -311,18 +312,19 @@ public sealed class PrimitiveListEditTests : IDisposable
 
             mod.WriteToBinary(pluginPath);
 
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
+            LoadOrder = LoadOrder.From(
+                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
+                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+                .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
+
+            var holder = new LoadOrderHolder();
+            holder.Apply(LoadOrder);
+            Edits = TestEditService.Over(holder);
         }
 
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
+        public RecordEditService Service() => Edits;
 
         public string RaceBody() => Body(Race);
 
@@ -337,11 +339,10 @@ public sealed class PrimitiveListEditTests : IDisposable
                 _modFolder, PluginName, "race", Race.ToString(), RaceEditorId, GameRelease.Fallout4));
 
         private string Body(FormKey formKey) =>
-            _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!.Body!;
+            TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;
 
         public void Dispose()
         {
-            _mirror.Dispose();
             TryDelete(_instanceRoot);
             TryDelete(_gameDirectory);
         }

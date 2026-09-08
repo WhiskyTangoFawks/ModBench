@@ -3,6 +3,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -10,7 +11,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Tests.Records;
 
 /// <summary>The mirror gap to <see cref="ContainmentRederivationTests"/>: a Worldspace's exterior
 /// cells are unreachable from <c>EnumerateChildren</c> (<c>SubCells</c> holds blocks, not records).

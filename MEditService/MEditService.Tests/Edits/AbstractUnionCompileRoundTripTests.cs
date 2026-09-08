@@ -23,11 +23,9 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private RecordEditService EditService() => _fixture.Edits;
 
-    private PluginCompileService CompileService() =>
-        CompileServices.Over(_fixture.Mirror);
+    private PluginCompileService CompileService() => CompileServices.Over(_fixture.LoadOrder);
 
     private IFallout4ModGetter CompileAndReparse()
     {

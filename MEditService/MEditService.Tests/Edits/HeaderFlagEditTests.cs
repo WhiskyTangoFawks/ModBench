@@ -14,14 +14,13 @@ namespace MEditService.Tests.Edits;
 /// the raw <c>flags</c> column stays read-only.</summary>
 public sealed class HeaderFlagEditTests : IDisposable
 {
-    private readonly TrackedModFixture _fixture = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _fixture = SourceEditFixture.Tracked();
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private RecordEditService Service() => _fixture.Edits;
 
-    private static string HeaderFormKey => FormKey.Factory($"000000:{TrackedModFixture.PluginName}").ToString();
+    private static string HeaderFormKey => FormKey.Factory($"000000:{SourceEditFixture.PluginName}").ToString();
 
     private static JsonElement Json(bool value) => JsonDocument.Parse(value ? "true" : "false").RootElement;
 
@@ -33,16 +32,15 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         // The source document is the truth: the root RecordData.json now carries the flag.
-        var headerDoc = _fixture.Mirror.Projected().GetDocument(HeaderFormKey, _fixture.Plugin);
-        Assert.Contains("Small", headerDoc!.Body!, StringComparison.Ordinal);
+        Assert.Contains("Small", _fixture.Document(HeaderFormKey)!.Body, StringComparison.Ordinal);
 
-        var compile = CompileServices.Over(_fixture.Mirror)
+        var compile = CompileServices.Over(_fixture.LoadOrder)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compile.Succeeded, compile.RefusalReason);
 
         using var written = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(TrackedModFixture.PluginName),
-                Path.Combine(_fixture.ModFolder, TrackedModFixture.PluginName)),
+            new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName),
+                Path.Combine(_fixture.ModFolder, SourceEditFixture.PluginName)),
             GameRelease.Fallout4);
         Assert.True(((IModFlagsGetter)written).IsSmallMaster);
     }
@@ -56,8 +54,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         var result = service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false));
 
         Assert.True(result.Applied, result.Message);
-        var headerDoc = _fixture.Mirror.Projected().GetDocument(HeaderFormKey, _fixture.Plugin);
-        Assert.DoesNotContain("Small", headerDoc!.Body!, StringComparison.Ordinal);
+        Assert.DoesNotContain("Small", _fixture.Document(HeaderFormKey)!.Body, StringComparison.Ordinal);
     }
 
     // The allocator answers from the document, not the load order's in-memory mod object: a flag
@@ -69,7 +66,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
         var result = service.CreateRecord(
-            _fixture.Plugin, "npc_", "OutOfRange", $"001000:{TrackedModFixture.PluginName}");
+            _fixture.Plugin, "npc_", "OutOfRange", $"001000:{SourceEditFixture.PluginName}");
 
         Assert.False(result.Applied);
         Assert.Contains("0xFFF", result.Message, StringComparison.Ordinal);
@@ -83,7 +80,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     {
         var service = Service();
         Assert.True(service.CreateRecord(
-            _fixture.Plugin, "npc_", "BigId", $"001000:{TrackedModFixture.PluginName}").Applied);
+            _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
         Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
         var compile = CompileService().Compile(_fixture.Plugin, new CompileSource.WorkingTree());
@@ -100,7 +97,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     }
 
     private PluginCompileService CompileService() =>
-        CompileServices.Over(_fixture.Mirror);
+        CompileServices.Over(_fixture.LoadOrder);
 
     // The raw flags column stays exactly as read-only as it was — IsSmallMaster is the one door.
     [Fact]

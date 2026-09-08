@@ -23,15 +23,12 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
-
-    private IRecordIndex Index => _fixture.Mirror.Index!;
+    private RecordEditService EditService() => _fixture.Edits;
 
     // ---- a container's own record ----
 
     [Fact]
-    public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndCascadesEveryEmbeddedDescendantsIndexRow()
+    public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndEveryEmbeddedDescendantWithIt()
     {
         var directory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!;
         Assert.True(Directory.Exists(directory));
@@ -41,16 +38,18 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(directory));
 
-        // The container's own row, and every embedded child's — all four of EmbedCell's slots.
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Navmesh.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Landscape.ToString(), _fixture.Plugin));
+        // The container itself, and every embedded child — all four of EmbedCell's slots.
+        Assert.Null(_fixture.Document(_fixture.EmbedCell.ToString()));
+        Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
+        Assert.Null(_fixture.Document(_fixture.PersistentRef.ToString()));
+        Assert.Null(_fixture.Document(_fixture.Navmesh.ToString()));
+        Assert.Null(_fixture.Document(_fixture.Landscape.ToString()));
 
         // Still at Head — this is a working-tree delete, not a hard erase.
-        Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
-        Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.NotNull(_fixture.CommittedDocument(
+            _fixture.EmbedCell.ToString(), "cell", ContainerModFixture.EmbedCellEditorId));
+        Assert.NotNull(_fixture.CommittedDocument(
+            _fixture.TemporaryRef.ToString(), "refr", ContainerModFixture.TemporaryRefEditorId));
     }
 
     [Fact]
@@ -59,9 +58,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Document(_fixture.Worldspace.ToString()));
+        Assert.Null(_fixture.Document(_fixture.TopCell.ToString()));
+        Assert.Null(_fixture.Document(_fixture.TopCellRef.ToString()));
     }
 
     // ---- an embedded child ----
@@ -83,17 +82,18 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Contains(ContainerModFixture.NavmeshEditorId, after, StringComparison.Ordinal);
         Assert.Contains(ContainerModFixture.LandscapeEditorId, after, StringComparison.Ordinal);
 
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        // The owner's own row picked up the rewritten body.
+        Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
+        Assert.NotNull(_fixture.CommittedDocument(
+            _fixture.TemporaryRef.ToString(), "refr", ContainerModFixture.TemporaryRefEditorId));
+        // The owner's own document picked up the rewrite.
         Assert.DoesNotContain(
             ContainerModFixture.TemporaryRefEditorId,
-            Index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body!,
+            _fixture.Document(_fixture.EmbedCell.ToString())!.Body,
             StringComparison.Ordinal);
     }
 
     // Worldspace.TopCell is the only single-value embedded slot this gesture can reach: SchemaReflector
-    // publishes no schema for land or navm, so GetDocument answers null for the Cell slots.
+    // publishes no schema for land or navm, so neither Cell slot has a document to read.
     [Fact]
     public void DeletingASingleValueEmbeddedSlot_NullsTheSlot_AndCascadesItsOwnDescendant()
     {
@@ -107,12 +107,13 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.DoesNotContain(ContainerModFixture.TopCellEditorId, after, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerModFixture.TopCellRefEditorId, after, StringComparison.Ordinal);
 
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Document(_fixture.TopCell.ToString()));
         // TopCellRef was itself embedded inside TopCell — cascaded, not orphaned.
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
-        Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Document(_fixture.TopCellRef.ToString()));
+        Assert.NotNull(_fixture.CommittedDocument(
+            _fixture.TopCell.ToString(), "cell", ContainerModFixture.TopCellEditorId));
         // The Worldspace itself is untouched — only its TopCell slot emptied.
-        Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
+        Assert.NotNull(_fixture.Document(_fixture.Worldspace.ToString()));
     }
 
     // ---- renumber a container's own record ----
@@ -127,11 +128,11 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
 
-        var newDoc = Index.At(RecordRef.Effective).GetDocument(result.NewFormKey!, _fixture.Plugin);
-        Assert.NotNull(newDoc);
-        Assert.Contains(result.NewFormKey!, newDoc!.Body!, StringComparison.Ordinal);
+        var renumbered = _fixture.Document(result.NewFormKey!);
+        Assert.NotNull(renumbered);
+        Assert.Contains(result.NewFormKey!, renumbered!.Body, StringComparison.Ordinal);
 
         var newFile = _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
         Assert.Equal(parent, Path.GetDirectoryName(Path.GetDirectoryName(newFile)));
@@ -153,9 +154,10 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Contains(result.NewFormKey!, text, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.TemporaryRef.ToString(), text, StringComparison.Ordinal);
 
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
-        Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(result.NewFormKey!, _fixture.Plugin));
+        Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
+        Assert.NotNull(_fixture.CommittedDocument(
+            _fixture.TemporaryRef.ToString(), "refr", ContainerModFixture.TemporaryRefEditorId));
+        Assert.NotNull(_fixture.Document(result.NewFormKey!));
     }
 
     // ---- renumbering a record a container references ----
@@ -167,13 +169,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         // point anywhere, and giving one a real Base is a riskier change to a fixture four other suites
         // depend on than a small local one.
         const string pluginName = "ContainerReferencer.esp";
-        const string origin = "ContainerReferencerMod";
-        var modFolder = Directory.CreateTempSubdirectory("medit-container-referencer-mod-").FullName;
-        var gameDirectory = Directory.CreateTempSubdirectory("medit-container-referencer-game-").FullName;
-        try
+        var referenced = FormKey.Null;
+        using var referencer = SourceModFixture.Tracked(pluginName, "ContainerReferencerMod", mod =>
         {
-            var pluginPath = Path.Combine(modFolder, pluginName);
-            var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
             var npc = mod.Npcs.AddNew("ReferencedNpc");
             var cell = new Cell(mod) { EditorID = "ReferencerCell", WaterHeight = 0f };
             var placedRef = new PlacedObject(mod) { EditorID = "ReferencerRef", Position = new Noggog.P3Float(0, 0, 0) };
@@ -184,48 +182,22 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
             block.SubBlocks.Add(subBlock);
             mod.Cells.Records.Add(block);
-            mod.WriteToBinary(pluginPath);
+            referenced = npc.FormKey;
+        });
 
-            using var mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            var plugin = new PluginKey(pluginName, origin);
-            ((ILoadOrderMirror)mirror).Reconcile(
-                gameDirectory, [new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
-            Track(mirror, origin);
+        var file = Directory.EnumerateFiles(
+                Path.Combine(referencer.ModFolder, SourceRepository.RootFor(pluginName)), "RecordData.json",
+                SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
+        Assert.Contains(referenced.ToString(), File.ReadAllText(file), StringComparison.Ordinal);
 
-            var file = Directory.EnumerateFiles(
-                    Path.Combine(modFolder, SourceRepository.RootFor(pluginName)), "RecordData.json", SearchOption.AllDirectories)
-                .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
-            Assert.Contains(npc.FormKey.ToString(), File.ReadAllText(file), StringComparison.Ordinal);
+        var result = referencer.Edits.RenumberRecord(referencer.Plugin, referenced.ToString());
 
-            var result = ProjectingEditService.Over(mirror)
-                .RenumberRecord(plugin, npc.FormKey.ToString());
-
-            Assert.True(result.Applied, result.Message);
-            var text = File.ReadAllText(file);
-            Assert.DoesNotContain(npc.FormKey.ToString(), text, StringComparison.Ordinal);
-            Assert.Contains(result.NewFormKey!, text, StringComparison.Ordinal);
-        }
-        finally
-        {
-            TryDelete(modFolder);
-            TryDelete(gameDirectory);
-        }
+        Assert.True(result.Applied, result.Message);
+        var text = File.ReadAllText(file);
+        Assert.DoesNotContain(referenced.ToString(), text, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey!, text, StringComparison.Ordinal);
     }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
-    }
-
-    // Not inlined into the [Fact] above: xUnit1031 flags a blocking Task wait directly inside a test
-    // method, the same reason ContainerModFixture's own TrackAsync call lives in its constructor
-    // rather than in a test body.
-    private static void Track(LoadOrderMirror mirror, string origin) =>
-        new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(mirror.LoadOrder!, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     // ---- order preservation ----
 
@@ -243,7 +215,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var questFile = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
         Assert.DoesNotContain($"\"{nameof(Quest.DialogTopics)}\"", File.ReadAllText(questFile), StringComparison.Ordinal);
 
-        var compileResult = CompileServices.Over(_fixture.Mirror)
+        var compileResult = CompileServices.Over(_fixture.LoadOrder)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }

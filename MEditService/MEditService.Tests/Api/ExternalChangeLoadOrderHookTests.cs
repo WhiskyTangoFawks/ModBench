@@ -2,6 +2,7 @@ using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,17 +15,17 @@ namespace MEditService.Tests.Api;
 /// routed away from the external-change dialog's queue.</summary>
 public sealed class ExternalChangeLoadOrderHookTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
     [Fact]
     public void RunAfterReconcile_QueuesAnExternalChange_ForABinaryThatChangedWithNoWatcherEverRunning()
     {
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
 
         // "Closed" means no FileSystemWatcher instance ever sees this write happen.
-        var externalMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var externalMod = new Fallout4Mod(ModKey.FromFileName(IndexedModFixture.PluginName), Fallout4Release.Fallout4);
         var race = externalMod.Races.AddNew("FixtureRace");
         externalMod.Keywords.AddNew("FixtureKeyword");
         var npc = externalMod.Npcs.AddNew("FixtureNpc");
@@ -38,7 +39,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
 
         var unanswered = Assert.Single(watcher.Unanswered());
         Assert.Equal(_mod.ModFolder, unanswered.ModFolder);
-        Assert.Equal(TrackedModFixture.PluginName, unanswered.PluginName);
+        Assert.Equal(IndexedModFixture.PluginName, unanswered.PluginName);
     }
 
     [Fact]
@@ -58,7 +59,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     public void RunAfterReconcile_OffersRepair_AndQueuesNoExternalChangeQuestion_WhenAJournalMarkerIsUnanswered()
     {
         Assert.ThrowsAny<Exception>(() =>
-            CompileJournal.RunBatch(_mod.ModFolder, [TrackedModFixture.PluginName],
+            CompileJournal.RunBatch(_mod.ModFolder, [IndexedModFixture.PluginName],
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder)); // sanity: the marker really is there.
 
@@ -66,8 +67,8 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);
 
         var offer = Assert.Single(offers);
-        Assert.Equal(TrackedModFixture.PluginName, offer.Plugin);
-        Assert.Equal(TrackedModFixture.ModFolderOrigin, offer.Origin);
+        Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
+        Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
         Assert.Equal(CrashRepairReason.InterruptedCompile, offer.Reason);
         Assert.Empty(watcher.Unanswered()); // never the external-change dialog's own question.
     }
@@ -78,15 +79,15 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     [Fact]
     public void RunAfterReconcile_OffersRepair_WhenTheTrackedPluginsBinaryIsMissing()
     {
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         File.Delete(pluginPath);
 
         var watcher = new ExternalChangeWatcher();
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);
 
         var offer = Assert.Single(offers);
-        Assert.Equal(TrackedModFixture.PluginName, offer.Plugin);
-        Assert.Equal(TrackedModFixture.ModFolderOrigin, offer.Origin);
+        Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
+        Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
         Assert.Equal(CrashRepairReason.MissingOrUnreadableBinary, offer.Reason);
         Assert.Empty(watcher.Unanswered());
     }
@@ -96,8 +97,8 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     [Fact]
     public void RunAfterReconcile_OffersNothing_ForAnUntrackedPlugin_EvenWithAMissingBinary()
     {
-        using var untracked = TrackedModFixture.Untracked();
-        File.Delete(Path.Combine(untracked.ModFolder, TrackedModFixture.PluginName));
+        using var untracked = IndexedModFixture.Untracked();
+        File.Delete(Path.Combine(untracked.ModFolder, IndexedModFixture.PluginName));
 
         var watcher = new ExternalChangeWatcher();
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(untracked.Mirror.LoadOrder, untracked.Mirror.Index, watcher, NullLogger.Instance);
@@ -109,7 +110,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     [Fact]
     public void RunAfterReconcile_RegistersALiveWatch_SoFurtherChangesAreCaughtWithoutAnotherLoad()
     {
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
 
         ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Mirror.LoadOrder, _mod.Mirror.Index, watcher, NullLogger.Instance);

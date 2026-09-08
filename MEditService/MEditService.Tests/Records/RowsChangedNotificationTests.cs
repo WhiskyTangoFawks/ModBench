@@ -66,7 +66,7 @@ public sealed class RowsChangedNotificationTests : IDisposable
     public void ProjectingAContainersDocument_NamesTheContainerAndEveryEmbeddedChildWhoseRowsChanged()
     {
         var notifications = new InMemoryNotificationPublisher();
-        using var fixture = new ContainerModFixture(notifications);
+        using var fixture = new IndexedContainerFixture(notifications);
         var cell = fixture.EmbedCell.ToString();
 
         // A hand edit to a child inside its owner's document: the child has no file of its own, and

@@ -14,20 +14,15 @@ using static MEditService.Tests.TestSupport.Envelopes;
 namespace MEditService.Tests.Edits;
 
 /// <summary>A quest's children live inline in its document, transitively, so every gesture on one
-/// patches the quest's document at the edited path only, the index re-derives from it, and compile
-/// keeps the document's order.</summary>
+/// patches the quest's document at the edited path only, and compile keeps the document's
+/// order.</summary>
 public sealed class QuestChildWriteApiTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
-
-    private IRecordIndex Index => _fixture.Mirror.Index!;
-
-    private IRecordReads Reads => Index.At(RecordRef.Effective);
+    private RecordEditService EditService() => _fixture.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -35,7 +30,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private IQuestGetter CompiledQuest()
     {
-        var result = CompileServices.Over(_fixture.Mirror)
+        var result = CompileServices.Over(_fixture.LoadOrder)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -54,9 +49,16 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.EndsWith(Path.GetFileName(QuestFile), changed, StringComparison.Ordinal);
     }
 
-    private IReadOnlyList<(string ChildFormKey, int SlotIndex)> QuestSlot(string slotName) =>
-        [.. Reads.GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString())
-            .Where(c => c.SlotName == slotName).OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex))];
+    // A child slot as the quest's own document spells it, in document order — the only order a
+    // child has.
+    private IReadOnlyList<string> QuestSlot(string slotName) => SlotOf(_fixture.Quest, slotName);
+
+    private IReadOnlyList<string> SlotOf(FormKey owner, string slotName)
+    {
+        using var document = JsonDocument.Parse(_fixture.Document(owner.ToString())!.Body);
+        return [.. document.RootElement.GetProperty(slotName).EnumerateArray()
+            .Select(child => child.GetProperty("FormKey").GetString()!)];
+    }
 
     // ---- set ----
 
@@ -86,7 +88,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
             File.ReadAllText(QuestFile));
         AssertOnlyTheQuestFileChanged();
 
-        Assert.Equal($"Renamed{kind}", Reads.GetDocument(child.ToString(), _fixture.Plugin)!.EditorId);
+        Assert.Equal($"Renamed{kind}", _fixture.Document(child.ToString())!.EditorId);
         var compiled = siblings(CompiledQuest()).ToList();
         Assert.Contains($"Renamed{kind}", compiled);
         if (kind == "topic")
@@ -110,8 +112,8 @@ public sealed class QuestChildWriteApiTests : IDisposable
             File.ReadAllText(QuestFile));
         AssertOnlyTheQuestFileChanged();
 
-        Assert.Equal("RenamedResponse", Reads.GetDocument(_fixture.Response.ToString(), _fixture.Plugin)!.EditorId);
-        Assert.Equal(_fixture.DialogTopic.ToString(), Reads.GetContainerParent(_fixture.Plugin, _fixture.Response.ToString())!.Value.ParentFormKey);
+        Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString())!.EditorId);
+        Assert.Contains(_fixture.Response.ToString(), SlotOf(_fixture.DialogTopic, nameof(DialogTopic.Responses)));
         Assert.Equal(
             ["RenamedResponse", ContainerModFixture.Response2EditorId],
             CompiledQuest().DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic).Responses.Select(r => r.EditorID!));
@@ -171,12 +173,17 @@ public sealed class QuestChildWriteApiTests : IDisposable
             Assert.Contains($"\"{kept}\"", after, StringComparison.Ordinal);
         AssertOnlyTheQuestFileChanged();
 
-        foreach (var gone in new[] { _fixture.DialogTopic, _fixture.Response, _fixture.Response2 })
+        foreach (var (gone, recordType, editorId) in new[]
+                 {
+                     (_fixture.DialogTopic, "dial", ContainerModFixture.DialogTopicEditorId),
+                     (_fixture.Response, "info", ContainerModFixture.ResponseEditorId),
+                     (_fixture.Response2, "info", ContainerModFixture.Response2EditorId),
+                 })
         {
-            Assert.Null(Reads.GetDocument(gone.ToString(), _fixture.Plugin));
-            Assert.NotNull(Index.At(RecordRef.Head).GetDocument(gone.ToString(), _fixture.Plugin));
+            Assert.Null(_fixture.Document(gone.ToString()));
+            Assert.NotNull(_fixture.CommittedDocument(gone.ToString(), recordType, editorId));
         }
-        Assert.Equal([(_fixture.DialogTopic2.ToString(), 0), (_fixture.DialogTopic3.ToString(), 1)], QuestSlot(nameof(Quest.DialogTopics)));
+        Assert.Equal([_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString()], QuestSlot(nameof(Quest.DialogTopics)));
 
         var compiled = CompiledQuest();
         Assert.Equal([ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId], compiled.DialogTopics.Select(t => t.EditorID!));
@@ -197,7 +204,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
         AssertOnlyTheQuestFileChanged();
 
         Assert.Equal(
-            [(_fixture.DialogTopic.ToString(), 0), (result.NewFormKey!, 1), (_fixture.DialogTopic3.ToString(), 2)],
+            [_fixture.DialogTopic.ToString(), result.NewFormKey!, _fixture.DialogTopic3.ToString()],
             QuestSlot(nameof(Quest.DialogTopics)));
 
         Assert.Equal(
@@ -208,17 +215,17 @@ public sealed class QuestChildWriteApiTests : IDisposable
     // ---- refusal ----
 
     [Fact]
-    public void ARefusedQuestChildEdit_LeavesTheQuestDocumentAndTheIndexUntouched()
+    public void ARefusedQuestChildEdit_LeavesTheQuestDocumentAndTheSceneItselfUntouched()
     {
         var before = File.ReadAllText(QuestFile);
-        var indexedBefore = Reads.GetDocument(_fixture.Scene.ToString(), _fixture.Plugin)!.Body;
+        var sceneBefore = _fixture.Document(_fixture.Scene.ToString())!.Body;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.Scene.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(before, File.ReadAllText(QuestFile));
         Assert.Empty(_fixture.GitStatus());
-        Assert.Equal(indexedBefore, Reads.GetDocument(_fixture.Scene.ToString(), _fixture.Plugin)!.Body);
+        Assert.Equal(sceneBefore, _fixture.Document(_fixture.Scene.ToString())!.Body);
     }
 
     // ---- copy as override: the container rule's mint, one and two levels up ----

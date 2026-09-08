@@ -15,13 +15,13 @@ public sealed class MalformedFormKeyEndpointTests
 {
     private const string MalformedFormKey = "not-a-formkey";
 
-    private static RecordEditService ServiceFor(TrackedModFixture mod) => TestEditService.Over(mod.Mirror);
+    private static RecordEditService ServiceFor(IndexedModFixture mod) => TestEditService.Over(mod.Mirror);
 
     [Fact]
     public void CreateRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var req = new RecordCreateRequest(TrackedModFixture.ModFolderOrigin, "npc_", "Broken", MalformedFormKey);
+        using var mod = IndexedModFixture.Tracked();
+        var req = new RecordCreateRequest(IndexedModFixture.ModFolderOrigin, "npc_", "Broken", MalformedFormKey);
 
         var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, ServiceFor(mod), mod.Mirror.WriteGate, NullLoggerFactory.Instance);
 
@@ -32,8 +32,8 @@ public sealed class MalformedFormKeyEndpointTests
     [Fact]
     public void RenumberRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var req = new RecordRenumberRequest(mod.Plugin.Name, TrackedModFixture.ModFolderOrigin, MalformedFormKey);
+        using var mod = IndexedModFixture.Tracked();
+        var req = new RecordRenumberRequest(mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
         var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Mirror.WriteGate, NullLogger.Instance);
 
@@ -44,10 +44,10 @@ public sealed class MalformedFormKeyEndpointTests
     [Fact]
     public void CopyRecordAsNewRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
         var req = new RecordCopyAsNewRecordRequest(
-            mod.Plugin.Name, TrackedModFixture.ModFolderOrigin,
-            mod.Plugin.Name, TrackedModFixture.ModFolderOrigin, MalformedFormKey);
+            mod.Plugin.Name, IndexedModFixture.ModFolderOrigin,
+            mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
         var result = RecordEndpoints.CopyRecordAsNewRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Mirror.WriteGate, NullLogger.Instance);
 

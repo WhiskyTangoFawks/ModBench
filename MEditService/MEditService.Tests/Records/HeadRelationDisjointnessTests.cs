@@ -18,7 +18,7 @@ public sealed class HeadRelationDisjointnessTests
     [Fact]
     public async Task ReindexingATrackedPluginWithADirtyRecord_KeepsTheUncommittedEdit_AndLeavesExactlyOneRowAtHead()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var edited = ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
@@ -54,7 +54,7 @@ public sealed class HeadRelationDisjointnessTests
     [Fact]
     public void UnindexingAPluginWithADirtyRecord_LeavesNothingAtHead()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var edited = ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.8").RootElement);

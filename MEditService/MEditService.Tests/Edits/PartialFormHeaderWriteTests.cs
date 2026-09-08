@@ -26,9 +26,10 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-partialform-header-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-partialform-header-game-").FullName;
-    private readonly LoadOrderMirror _mirror;
 
     public PluginKey Plugin { get; } = new(PluginName, Origin);
+    public LoadOrder LoadOrder { get; }
+    public RecordEditService Edits { get; }
     public FormKey PartialCell { get; }
     public FormKey OrdinaryNpc { get; }
 
@@ -55,24 +56,25 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         PartialCell = cell.FormKey;
         OrdinaryNpc = npc.FormKey;
 
-        _mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
-            _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
+        LoadOrder = LoadOrder.From(
+            _gameDirectory, _gameDirectory, GameRelease.Fallout4,
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
+
+        var holder = new LoadOrderHolder();
+        holder.Apply(LoadOrder);
+        Edits = TestEditService.Over(holder);
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
         try { Directory.Delete(_modFolder, recursive: true); } catch { /* best-effort cleanup */ }
         try { Directory.Delete(_gameDirectory, recursive: true); } catch { /* best-effort cleanup */ }
     }
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
+    private RecordEditService Service() => Edits;
 
     // xEdit's SetIsPartialForm (wbImplementation.pas:14146-14221) re-populates a cleared override from
     // its nearest non-partial predecessor; mEdit's minimum is narrower, and is that the record becomes

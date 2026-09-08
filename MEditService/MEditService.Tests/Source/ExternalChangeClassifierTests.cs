@@ -17,18 +17,18 @@ public sealed class ExternalChangeClassifierTests
     [Fact]
     public void Classify_ReportsSelfEcho_ForTheBinaryARealCompileJustWrote()
     {
-        var mod = TrackedModFixture.Tracked();
+        var mod = SourceEditFixture.Tracked();
         try
         {
-            var editService = ProjectingEditService.Over(mod.Mirror);
+            var editService = mod.Edits;
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-            var compileService = CompileServices.Over(mod.Mirror);
+            var compileService = CompileServices.Over(mod.LoadOrder);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 
-            var binaryBytes = File.ReadAllBytes(Path.Combine(mod.ModFolder, TrackedModFixture.PluginName));
-            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, TrackedModFixture.PluginName, binaryBytes);
+            var binaryBytes = File.ReadAllBytes(Path.Combine(mod.ModFolder, SourceEditFixture.PluginName));
+            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, SourceEditFixture.PluginName, binaryBytes);
 
             Assert.IsType<ExternalChangeClassification.SelfEcho>(classification);
         }
@@ -41,10 +41,10 @@ public sealed class ExternalChangeClassifierTests
     [Fact]
     public void Classify_ReportsExternalChange_ForBytesTheParkedRefDoesNotName()
     {
-        var mod = TrackedModFixture.Tracked();
+        var mod = SourceEditFixture.Tracked();
         try
         {
-            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, TrackedModFixture.PluginName, "not the tracked binary"u8.ToArray());
+            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, SourceEditFixture.PluginName, "not the tracked binary"u8.ToArray());
 
             Assert.IsType<ExternalChangeClassification.ExternalChange>(classification);
         }
@@ -82,12 +82,12 @@ public sealed class ExternalChangeClassifierTests
     [Fact]
     public void Classify_ReportsCrashRecovery_EvenWhenTheHashAlsoMatchesTheParkedRef()
     {
-        var mod = TrackedModFixture.Tracked();
+        var mod = SourceEditFixture.Tracked();
         try
         {
-            var editService = ProjectingEditService.Over(mod.Mirror);
+            var editService = mod.Edits;
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
-            var compileService = CompileServices.Over(mod.Mirror);
+            var compileService = CompileServices.Over(mod.LoadOrder);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -95,8 +95,8 @@ public sealed class ExternalChangeClassifierTests
             // one marker per .git, not one per plugin.
             CompileJournal.RunBatch(mod.ModFolder, ["SomeOtherPlugin.esp"], _ => false);
 
-            var binaryBytes = File.ReadAllBytes(Path.Combine(mod.ModFolder, TrackedModFixture.PluginName));
-            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, TrackedModFixture.PluginName, binaryBytes);
+            var binaryBytes = File.ReadAllBytes(Path.Combine(mod.ModFolder, SourceEditFixture.PluginName));
+            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, SourceEditFixture.PluginName, binaryBytes);
 
             Assert.IsType<ExternalChangeClassification.CrashRecovery>(classification);
         }

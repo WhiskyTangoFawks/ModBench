@@ -21,12 +21,12 @@ namespace MEditService.Tests.Api;
 public sealed class SourceWatchTests : IDisposable
 {
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly TrackedModFixture _mod;
+    private readonly IndexedModFixture _mod;
     private readonly SourceChangeWatcher _watcher;
 
     public SourceWatchTests()
     {
-        _mod = TrackedModFixture.Tracked(_notifications);
+        _mod = IndexedModFixture.Tracked(_notifications);
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
         var sourceMirror = new SourceMirror(_mod.Mirror.Projector, _mod.Mirror.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceMirror.Apply;
@@ -50,7 +50,7 @@ public sealed class SourceWatchTests : IDisposable
     private void RenameTheNpcByHand(string editorId)
     {
         var text = File.ReadAllText(_mod.NpcSourceFile);
-        File.WriteAllText(_mod.NpcSourceFile, text.Replace($"\"{TrackedModFixture.NpcEditorId}\"", $"\"{editorId}\"", StringComparison.Ordinal));
+        File.WriteAllText(_mod.NpcSourceFile, text.Replace($"\"{IndexedModFixture.NpcEditorId}\"", $"\"{editorId}\"", StringComparison.Ordinal));
     }
 
     private void Git(params string[] args) =>
@@ -94,7 +94,7 @@ public sealed class SourceWatchTests : IDisposable
         var before = _mod.Mirror.Sequence;
         RenameTheNpcByHand("RenamedByHand");
         Assert.True(await Settles(before));
-        Assert.Equal(TrackedModFixture.NpcEditorId, EditorIdAt(RecordRef.Head));
+        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Head));
 
         var beforeCommit = _mod.Mirror.Sequence;
         Git("add", "-A");
@@ -117,8 +117,8 @@ public sealed class SourceWatchTests : IDisposable
 
         Git("checkout", "-q", "main");
 
-        Assert.Equal(TrackedModFixture.NpcEditorId, await CommittedEditorIdReaches(TrackedModFixture.NpcEditorId));
-        Assert.Equal(TrackedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
+        Assert.Equal(IndexedModFixture.NpcEditorId, await CommittedEditorIdReaches(IndexedModFixture.NpcEditorId));
+        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
     }
 
     // ADR-0046 invariant 4: our own write reaches the Index the way a hand edit does, and a second
@@ -184,7 +184,7 @@ public sealed class SourceWatchTests : IDisposable
             _mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement).Applied);
         Assert.True(await Settles(before));
 
-        var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId).Replace('\\', '/');
         var afterEdit = _mod.Mirror.Sequence;
         Git("restore", "--", relativePath);
 
@@ -260,7 +260,7 @@ public sealed class SourceWatchTests : IDisposable
         WaitOutTheWatcher();
 
         Assert.Equal(before, _mod.Mirror.Sequence);
-        Assert.Equal(TrackedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
+        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
         Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
@@ -277,8 +277,8 @@ public sealed class SourceWatchTests : IDisposable
         WaitOutTheWatcher();
 
         Assert.False(SourceRepository.IsTracked(_mod.ModFolder));
-        Assert.False(ModFolders.IsEditable(TrackedModFixture.ModFolderOrigin, Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName)));
+        Assert.False(ModFolders.IsEditable(IndexedModFixture.ModFolderOrigin, Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName)));
         Assert.Equal(before, _mod.Mirror.Sequence);
-        Assert.Equal(TrackedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
+        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
     }
 }

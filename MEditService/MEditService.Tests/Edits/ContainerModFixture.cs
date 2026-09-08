@@ -1,8 +1,8 @@
-using MEditService.Core.Notifications;
+using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,8 +11,9 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>The container counterpart to <see cref="TrackedModFixture"/>, which holds only flat records and
-/// cannot exercise a container at all.</summary>
+/// <summary>The container counterpart to <see cref="SourceEditFixture"/>, which holds only flat
+/// records and cannot exercise a container at all. No index anywhere in it (ADR-0046 invariant
+/// 7).</summary>
 public sealed class ContainerModFixture : IDisposable
 {
     public const string ModFolderOrigin = "ContainerFixtureMod";
@@ -20,7 +21,11 @@ public sealed class ContainerModFixture : IDisposable
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public LoadOrderMirror Mirror { get; }
+    public LoadOrder LoadOrder { get; }
+    public RecordEditService Edits { get; }
+
+    /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
+    public IReadOnlyList<LoadOrderEntry> Entries { get; }
     public PluginKey Plugin { get; } = new(PluginName, ModFolderOrigin);
 
     public const string NpcEditorId = "FixtureNpc";
@@ -90,10 +95,15 @@ public sealed class ContainerModFixture : IDisposable
     // child has an order to change.
     public static readonly byte[] ResponseLineNumbers = [1, 2];
 
-    public ContainerModFixture(INotificationPublisher? notifications = null)
+    public ContainerModFixture() : this(track: true) { }
+
+    /// <summary>Deferred tracking, for the indexed wrapper: the mirror reconciles over the untracked
+    /// binary first, exactly as the process does before Track ever runs.</summary>
+    internal ContainerModFixture(bool track)
     {
-        ModFolder = Directory.CreateTempSubdirectory("medit-container-mod-").FullName;
-        GameDirectory = Directory.CreateTempSubdirectory("medit-container-game-").FullName;
+        _instanceRoot = Directory.CreateTempSubdirectory("medit-container-mod-").FullName;
+        ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", ModFolderOrigin)).FullName;
+        GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
 
         var pluginPath = Path.Combine(ModFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -166,18 +176,33 @@ public sealed class ContainerModFixture : IDisposable
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
         (DialogBranch, Scene) = (dialogBranch.FormKey, scene.FormKey);
 
-        Mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(
-                SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
-        ((ILoadOrderMirror)Mirror).Reconcile(
-            GameDirectory,
-            [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
-            GameRelease.Fallout4);
+        Entries = [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
+        LoadOrder = LoadOrder.From(GameDirectory, _instanceRoot, GameRelease.Fallout4, Entries);
 
-        new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Mirror.LoadOrder!, ModFolderOrigin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
+        if (track) Track();
+
+        var holder = new LoadOrderHolder();
+        holder.Apply(LoadOrder);
+        Edits = TestEditService.Over(holder);
     }
+
+    private readonly string _instanceRoot;
+
+    /// <summary>Track through the real service: what an edit does to a git working tree is the thing
+    /// under test, and no mock can answer that.</summary>
+    internal void Track() =>
+        new TrackService(NullLogger<TrackService>.Instance)
+            .TrackAsync(LoadOrder, [Plugin], ModFolderOrigin, SourcePreset.Edits)
+            .GetAwaiter().GetResult();
+
+    /// <summary>What the tree holds for a FormKey, read back through the same repository the write
+    /// side wrote through — an embedded child cut back out of its owner's document included.</summary>
+    public SourceDocument? Document(string formKey) => TrackedTree.Document(ModFolder, Plugin, formKey);
+
+    /// <summary>The same question at HEAD: what the last commit holds, which a working-tree change
+    /// does not alter.</summary>
+    public SourceDocument? CommittedDocument(string formKey, string recordType, string? editorId) =>
+        TrackedTree.CommittedDocument(ModFolder, Plugin, new RecordIdentity(formKey, recordType, editorId));
 
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
     {
@@ -230,18 +255,11 @@ public sealed class ContainerModFixture : IDisposable
         return $"{status} {unquoted}";
     }
 
-    public void Dispose()
-    {
-        Mirror.Dispose();
-        TryDelete(ModFolder);
-        TryDelete(GameDirectory);
-    }
-
     // A tracked mod folder holds a .git tree whose object files are read-only on some filesystems,
     // and a test failing on cleanup would mask the real assertion that already ran.
-    private static void TryDelete(string path)
+    public void Dispose()
     {
-        try { Directory.Delete(path, recursive: true); }
+        try { Directory.Delete(_instanceRoot, recursive: true); }
         catch (IOException) { /* scratch directory, best effort */ }
         catch (UnauthorizedAccessException) { /* ditto */ }
     }

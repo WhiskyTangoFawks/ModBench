@@ -11,7 +11,7 @@ namespace MEditService.Tests.Records;
 /// projection of the changed tree made of it. Read here, never in the write suites.</summary>
 public sealed class IndexAfterAWriteTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
@@ -52,7 +52,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
         var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!;
         Assert.DoesNotContain("0.75", head.Body!, StringComparison.Ordinal);
         Assert.Equal(
-            _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
+            _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)), head.Body);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
             "0.5", index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
             StringComparison.Ordinal);
         Assert.Equal(
-            _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)),
+            _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)),
             index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body);
     }
 

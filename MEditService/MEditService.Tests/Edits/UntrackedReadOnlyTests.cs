@@ -18,16 +18,13 @@ public sealed class UntrackedReadOnlyTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
-        ProjectingEditService.Over(mirror);
-
     [Fact]
     public void EditingAPluginInAnUntrackedModFolder_IsRefused_NamingTheTrackCommand()
     {
-        using var mod = TrackedModFixture.Untracked();
+        using var mod = SourceEditFixture.Untracked();
         Assert.False(SourceRepository.IsTracked(mod.ModFolder)); // the whole of "untracked": no .git
 
-        var result = ServiceFor(mod.Mirror).Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = mod.Edits.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -43,9 +40,9 @@ public sealed class UntrackedReadOnlyTests
     [Fact]
     public void EditingANonexistentFormKey_OnAnUntrackedPlugin_StillRefusesAsUntracked_NotAsRecordNotFound()
     {
-        using var mod = TrackedModFixture.Untracked();
+        using var mod = SourceEditFixture.Untracked();
 
-        var result = ServiceFor(mod.Mirror).Set(mod.Plugin, $"ABCDEF:{TrackedModFixture.PluginName}", "HeightMax", Json("0.75"));
+        var result = mod.Edits.Set(mod.Plugin, $"ABCDEF:{SourceEditFixture.PluginName}", "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -54,23 +51,23 @@ public sealed class UntrackedReadOnlyTests
     [Fact]
     public void EditingAPluginInAnUntrackedModFolder_WritesNothingAtAll()
     {
-        using var mod = TrackedModFixture.Untracked();
+        using var mod = SourceEditFixture.Untracked();
 
-        ServiceFor(mod.Mirror).Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        mod.Edits.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // Not merely "no dirt" — there is no repo to have dirt in. Hard read-only means the refusal
         // did not quietly create the source tree on its way out.
-        Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName))));
+        Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, SourceRepository.RootFor(SourceEditFixture.PluginName))));
         Assert.False(File.Exists(mod.NpcSourceFile));
     }
 
     [Fact]
     public void EditingAPluginWithNoModFolder_IsRefused_NamingThePatchPluginPathInstead()
     {
-        using var vanilla = new DataDirectoryFixture();
+        using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var result = ServiceFor(vanilla.Mirror)
-            .Set(vanilla.Plugin, vanilla.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = vanilla.Edits
+            .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
@@ -80,13 +77,13 @@ public sealed class UntrackedReadOnlyTests
     [Fact]
     public void TheTwoRefusalsAreDistinct_AndNeitherMessageOffersTheOthersWayOut()
     {
-        using var untracked = TrackedModFixture.Untracked();
-        using var vanilla = new DataDirectoryFixture();
+        using var untracked = SourceEditFixture.Untracked();
+        using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var trackable = ServiceFor(untracked.Mirror)
+        var trackable = untracked.Edits
             .Set(untracked.Plugin, untracked.Npc.ToString(), "HeightMax", Json("0.75"));
-        var notTrackable = ServiceFor(vanilla.Mirror)
-            .Set(vanilla.Plugin, vanilla.Npc.ToString(), "HeightMax", Json("0.75"));
+        var notTrackable = vanilla.Edits
+            .Set(vanilla.Plugin, vanillaNpc.ToString(), "HeightMax", Json("0.75"));
 
         // Collapsing these into one refusal would leave half the users following advice that cannot work:
         // Track does not apply to a Data-directory master, and authoring a patch is not the answer for an
@@ -102,46 +99,11 @@ public sealed class UntrackedReadOnlyTests
     {
         // The positive control for every refusal above, and the product claim: the escape
         // is one command, once, per mod. Same plugin, same record, same field — only .git differs.
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
 
-        var result = ServiceFor(mod.Mirror).Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
+        var result = mod.Edits.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.None, result.Refusal);
-    }
-
-    // The game's own Data folder is never a repo and must never become one: a distinct state from
-    // "untracked mod folder", not a special case of it.
-    private sealed class DataDirectoryFixture : IDisposable
-    {
-        private const string Name = "Vanilla.esm";
-
-        public string GameDirectory { get; }
-        public LoadOrderMirror Mirror { get; }
-        public PluginKey Plugin { get; } = new(Name, PluginOrigin.DataDirectory);
-        public FormKey Npc { get; }
-
-        public DataDirectoryFixture()
-        {
-            GameDirectory = Directory.CreateTempSubdirectory("medit-vanilla-").FullName;
-            var pluginPath = Path.Combine(GameDirectory, Name);
-            var mod = new Fallout4Mod(ModKey.FromFileName(Name), Fallout4Release.Fallout4);
-            Npc = mod.Npcs.AddNew("VanillaNpc").FormKey;
-            mod.WriteToBinary(pluginPath);
-
-            Mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)Mirror).Reconcile(
-                GameDirectory,
-                [new LoadOrderEntry(Name, pluginPath, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
-        }
-
-        public void Dispose()
-        {
-            Mirror.Dispose();
-            try { Directory.Delete(GameDirectory, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-        }
     }
 }

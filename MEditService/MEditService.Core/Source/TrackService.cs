@@ -22,7 +22,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     // wholesale, never mutated, so Volatile.Read/Write suffices and no lock is needed.
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
-    // ADR-0046: null in every test that does not care, matching DuckDbRecordIndex's own posture.
+    // ADR-0046: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
 
     /// <summary>ADR-0046: raised with the mod folder and origin of a repository that now exists, so

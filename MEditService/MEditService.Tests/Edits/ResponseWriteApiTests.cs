@@ -12,26 +12,30 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>A response lives inline in its topic's document, so every gesture on one patches that
-/// document at the response's element only, the index re-derives from it, and compile keeps the
-/// document's order.</summary>
+/// document at the response's element only, and compile keeps the document's order.</summary>
 public sealed class ResponseWriteApiTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
-
-    private IRecordIndex Index => _fixture.Mirror.Index!;
+    private RecordEditService EditService() => _fixture.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private string TopicFile => _fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId);
 
+    // The topic document's own Responses array, in document order — the only order a response has.
+    private IReadOnlyList<string> ResponseFormKeys()
+    {
+        using var topic = JsonDocument.Parse(_fixture.Document(_fixture.DialogTopic.ToString())!.Body);
+        return [.. topic.RootElement.GetProperty("Responses").EnumerateArray()
+            .Select(response => response.GetProperty("FormKey").GetString()!)];
+    }
+
     private IReadOnlyList<string> CompiledResponseEditorIds()
     {
-        var result = CompileServices.Over(_fixture.Mirror)
+        var result = CompileServices.Over(_fixture.LoadOrder)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -58,7 +62,7 @@ public sealed class ResponseWriteApiTests : IDisposable
         var changed = Assert.Single(_fixture.GitStatus());
         Assert.EndsWith(Path.GetFileName(TopicFile), changed, StringComparison.Ordinal);
 
-        Assert.Equal("RenamedResponse", Index.At(RecordRef.Effective).GetDocument(_fixture.Response.ToString(), _fixture.Plugin)!.EditorId);
+        Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString())!.EditorId);
         Assert.Equal(["RenamedResponse", ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
     }
 
@@ -73,10 +77,10 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.Contains($"\"{ContainerModFixture.Response2EditorId}\"", after, StringComparison.Ordinal);
         Assert.Equal([Path.GetFileName(TopicFile)], _fixture.GitStatus().Select(Path.GetFileName));
 
-        Assert.Null(Index.At(RecordRef.Effective).GetDocument(_fixture.Response.ToString(), _fixture.Plugin));
-        Assert.NotNull(Index.At(RecordRef.Head).GetDocument(_fixture.Response.ToString(), _fixture.Plugin));
-        var survivor = Assert.Single(Index.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.DialogTopic.ToString()));
-        Assert.Equal((_fixture.Response2.ToString(), 0), (survivor.ChildFormKey, survivor.SlotIndex));
+        Assert.Null(_fixture.Document(_fixture.Response.ToString()));
+        Assert.NotNull(_fixture.CommittedDocument(
+            _fixture.Response.ToString(), "info", ContainerModFixture.ResponseEditorId));
+        Assert.Equal([_fixture.Response2.ToString()], ResponseFormKeys());
 
         Assert.Equal([ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
     }
@@ -92,26 +96,23 @@ public sealed class ResponseWriteApiTests : IDisposable
         Assert.DoesNotContain(_fixture.Response.ToString(), after, StringComparison.Ordinal);
         Assert.Equal([Path.GetFileName(TopicFile)], _fixture.GitStatus().Select(Path.GetFileName));
 
-        Assert.Equal(
-            [(result.NewFormKey!, 0), (_fixture.Response2.ToString(), 1)],
-            Index.At(RecordRef.Effective).GetContainerChildren(_fixture.Plugin, _fixture.DialogTopic.ToString())
-                .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex)));
+        Assert.Equal([result.NewFormKey!, _fixture.Response2.ToString()], ResponseFormKeys());
 
         Assert.Equal([ContainerModFixture.ResponseEditorId, ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
     }
 
     [Fact]
-    public void ARefusedResponseEdit_LeavesTheTopicDocumentAndTheIndexUntouched()
+    public void ARefusedResponseEdit_LeavesTheTopicDocumentAndTheResponseItselfUntouched()
     {
         var before = File.ReadAllText(TopicFile);
-        var indexedBefore = Index.At(RecordRef.Effective).GetDocument(_fixture.Response.ToString(), _fixture.Plugin)!.Body;
+        var responseBefore = _fixture.Document(_fixture.Response.ToString())!.Body;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.Response.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(before, File.ReadAllText(TopicFile));
         Assert.Empty(_fixture.GitStatus());
-        Assert.Equal(indexedBefore, Index.At(RecordRef.Effective).GetDocument(_fixture.Response.ToString(), _fixture.Plugin)!.Body);
+        Assert.Equal(responseBefore, _fixture.Document(_fixture.Response.ToString())!.Body);
     }
 
     // The container rule's mint: the destination lacks the topic and the quest, so both land bare

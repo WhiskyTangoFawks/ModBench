@@ -10,12 +10,11 @@ namespace MEditService.Tests.Edits;
 /// will not be there when this compiles.</summary>
 public sealed class FormLinkValidationTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService Service() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -63,10 +62,9 @@ public sealed class FormLinkValidationTests : IDisposable
     {
         // The record still exists at Head — `git show` would print it. What it is not is somewhere a link
         // can point: exactly the divergence "checks read effective state" means.
-        File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId));
-        _mod.Mirror.Index!.ProjectDocuments(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
+        File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", SourceEditFixture.KeywordEditorId));
 
-        Assert.NotEmpty(_mod.GitShowHead(_mod.RelativeSourcePath(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
+        Assert.NotEmpty(_mod.GitShowHead(_mod.RelativeSourcePath(_mod.Keyword, "kywd", SourceEditFixture.KeywordEditorId)));
 
         var result = SetKeywords(_mod.Keyword.ToString());
 

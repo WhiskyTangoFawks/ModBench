@@ -9,13 +9,13 @@ namespace MEditService.Tests.TestSupport;
 /// per gesture over it, the codec and the schema.</summary>
 internal static class TestEditService
 {
-    internal static RecordEditService Over(LoadOrderHolder holder, ILoadOrderMirror? mirror = null) =>
+    internal static RecordEditService Over(LoadOrderHolder holder) =>
         new(holder, Resolver, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
-            SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance, mirror);
+            SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     /// <summary>The same service for a test still holding a mirror: its held copies are the load
-    /// order value the write side reads.</summary>
-    internal static RecordEditService Over(ILoadOrderMirror mirror) => Over(HolderOver(mirror), mirror);
+    /// order value the write side reads, and the mirror itself never reaches the service.</summary>
+    internal static RecordEditService Over(ILoadOrderMirror mirror) => Over(HolderOver(mirror));
 
     /// <summary>A holder carrying whatever <paramref name="mirror"/> holds right now — reapplied per
     /// gesture, since a test can register a copy mid-run.</summary>

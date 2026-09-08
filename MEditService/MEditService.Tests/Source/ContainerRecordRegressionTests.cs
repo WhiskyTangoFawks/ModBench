@@ -20,7 +20,7 @@ namespace MEditService.Tests.Source;
 /// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> rather than a 500.</summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
-    private readonly ContainerModFixture _fixture = new();
+    private readonly IndexedContainerFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
