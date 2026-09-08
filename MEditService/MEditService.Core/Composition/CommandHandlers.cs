@@ -4,6 +4,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -60,6 +61,10 @@ public static class CommandHandlers
         services.AddSingleton(sp => new PeekNextFreeFormKeyHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>()));
+
+        services.AddSingleton(sp => new TrackHandler(sp.GetRequiredService<TrackService>()));
+
+        services.AddSingleton(sp => new CompilePluginHandler(sp.GetRequiredService<PluginCompileService>()));
 
         return services;
     }

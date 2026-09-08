@@ -235,7 +235,8 @@ public static class PluginEndpoints
     // ADR-0041: the Track gesture. Origin names the mod folder (every loaded plugin sharing
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
-    internal static async Task<IResult> Track(TrackRequest req, IndexProjector index, LoadOrderHolder holder, TrackService trackService, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Track(
+        TrackRequest req, IndexProjector index, LoadOrderHolder holder, TrackHandler trackHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -248,7 +249,7 @@ public static class PluginEndpoints
             // RequireScope for the refusal only: which copies this origin registers is the load
             // order's answer, read from the shared kernel rather than from the Index.
             index.RequireScope();
-            var result = await trackService.TrackAsync(holder.Current, HeldCopies(index), req.Origin, preset);
+            var result = await trackHandler.TrackAsync(holder.Current, HeldCopies(index), req.Origin, preset);
             if (result.Applied)
                 return Results.Ok(new TrackResponse(req.Origin));
 
@@ -264,7 +265,7 @@ public static class PluginEndpoints
 
     // req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree — the
     // extension supplies "main" for the compile-at-main gesture, behind its own confirmation.
-    internal static IResult Compile(string plugin, CompileRequest req, PluginCompileService compileService, ILoggerFactory loggerFactory)
+    internal static IResult Compile(string plugin, CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
@@ -276,7 +277,7 @@ public static class PluginEndpoints
         try
         {
             CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
-            var result = compileService.Compile(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), source);
+            var result = compileHandler.Compile(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), source);
             return Results.Ok(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
