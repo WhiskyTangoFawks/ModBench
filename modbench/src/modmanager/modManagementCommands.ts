@@ -20,6 +20,21 @@ import type { Instance } from './instance';
 import { makeReporter } from '../reporter';
 import { registerNameFilter, type NameFilter } from '../nameFilter';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from '../workspaceConfig';
+import {
+  createEmptyMod,
+  deleteSeparator,
+  insertSeparator,
+  moveModToSeparator,
+  renameSeparator,
+  uninstallMod,
+  type ModlistCommandResult,
+} from './commands/modlist';
+
+// A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
+// contract whether the failure came from a rejected promise or an `{ applied: false }` result.
+function applyOrThrow(outcome: ModlistCommandResult): void {
+  if (!outcome.applied) throw new Error(outcome.refusal);
+}
 
 
 /** Always empty, so VS Code renders the `viewsWelcome` contribution instead of the tree.
@@ -136,7 +151,10 @@ export function registerModContextCommands(
         if (node?.kind !== 'mod') return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
-        await runModAction('addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.mod.name));
+        await runModAction('addSeparatorBelow', 'Failed to add separator.', async () => {
+          const profile = await modlistSource.getActiveProfile();
+          applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.mod.name));
+        });
       }),
       vscode.commands.registerCommand('modbench.modList.mod.moveToSeparator', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
@@ -153,7 +171,10 @@ export function registerModContextCommands(
         ];
         const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Move to separator…' });
         if (!picked) return;
-        await runModAction('moveToSeparator', 'Failed to move mod.', () => modlistSource.moveModToSeparator(node.mod.name, picked.sepName));
+        await runModAction('moveToSeparator', 'Failed to move mod.', async () => {
+          const profile = await modlistSource.getActiveProfile();
+          applyOrThrow(await moveModToSeparator(instanceRoot, profile, node.mod.name, picked.sepName));
+        });
       }),
       vscode.commands.registerCommand('modbench.modList.mod.uninstall', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
@@ -163,7 +184,10 @@ export function registerModContextCommands(
           'Uninstall',
         );
         if (answer !== 'Uninstall') return;
-        await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, () => modlistSource.removeMod(node.mod.name));
+        await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, async () => {
+          const profile = await modlistSource.getActiveProfile();
+          applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name));
+        });
       }),
       vscode.commands.registerCommand('modbench.modList.mod.viewOnNexus', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod' || !node.mod.nexusId) return;
@@ -178,7 +202,7 @@ export function registerModContextCommands(
   ];
 }
 export function registerSeparatorCommands(
-  modlistSource: Mo2ModlistSource,
+  instanceRoot: string, modlistSource: Mo2ModlistSource,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable[] {
   return [
@@ -189,19 +213,43 @@ export function registerSeparatorCommands(
           value: node.separator.name,
         });
         if (!newName || newName === node.separator.name) return;
-        await runModAction('renameSeparator', 'Failed to rename separator.', () => modlistSource.renameSeparator(node.separator.name, newName));
+        await runModAction('renameSeparator', 'Failed to rename separator.', async () => {
+          const profile = await modlistSource.getActiveProfile();
+          applyOrThrow(await renameSeparator(instanceRoot, profile, node.separator.name, newName));
+        });
       }),
       vscode.commands.registerCommand('modbench.modList.separator.addSeparatorBelow', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
-        await runModAction('separator.addSeparatorBelow', 'Failed to add separator.', () => modlistSource.insertSeparator(name, node.separator.name));
+        await runModAction('separator.addSeparatorBelow', 'Failed to add separator.', async () => {
+          const profile = await modlistSource.getActiveProfile();
+          applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.separator.name));
+        });
       }),
       vscode.commands.registerCommand('modbench.modList.separator.delete', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
-        await runModAction('deleteSeparator', 'Failed to delete separator.', () => modlistSource.deleteSeparator(node.separator.name));
+        await runModAction('deleteSeparator', 'Failed to delete separator.', async () => {
+          const profile = await modlistSource.getActiveProfile();
+          applyOrThrow(await deleteSeparator(instanceRoot, profile, node.separator.name));
+        });
       }),
   ];
+}
+/** Mods tree title-bar action: a name prompt, refusing a name already in use (ADR-0047 point 6
+ *  — the command itself decides the refusal; this only surfaces it). */
+export function registerCreateEmptyModCommand(
+  instanceRoot: string, modlistSource: Mo2ModlistSource,
+  runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.modList.newEmptyMod', async () => {
+    const name = await vscode.window.showInputBox({ prompt: 'New mod name', placeHolder: 'My New Mod' });
+    if (!name) return;
+    await runModAction('newEmptyMod', `Failed to create "${name}".`, async () => {
+      const profile = await modlistSource.getActiveProfile();
+      applyOrThrow(await createEmptyMod(instanceRoot, profile, name));
+    });
+  });
 }
 /** A live watcher, so the Mods tree follows `overwrite/` filling and emptying without a manual
  *  refresh, plus the folder's sole action. */

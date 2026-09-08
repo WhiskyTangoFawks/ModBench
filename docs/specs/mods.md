@@ -157,6 +157,9 @@ requires a deploy.**
 40. As a user, I don't want Modbench writing task configuration into my instance folder, so
     that editing executables in MO2 is enough and no generated file can go stale behind my
     back.
+41. As a user, I want a "New Empty Mod…" title-bar action that creates a `mods/<name>/`
+    folder and a disabled `modlist.txt` line for it, so that I have somewhere to create a
+    new plugin from scratch without first installing an archive.
 
 ## Implementation Decisions
 
@@ -292,8 +295,8 @@ The extension owns the editing backend process
 ### UI — the Mods tree
 
 - **Header**: title "MODS"; description = current profile name; a first non-interactive
-  count node ("N active / M installed"); title-bar icon buttons for Filter, Sort Direction
-  and Collapse All — three, and nothing else. Switch Profile, Refresh, Deploy
+  count node ("N active / M installed"); title-bar icon buttons for Filter, Sort Direction,
+  New Empty Mod, and Collapse All — four, and nothing else. Switch Profile, Refresh, Deploy
   and Purge live on the [Loadout header](containers.md): none of them are
   about *this tree*, and nine icons is past the point where VS Code
   keeps them visible in a narrow sidebar. Launch Game does not exist (see
@@ -364,10 +367,21 @@ The extension owns the editing backend process
   Separator Below, and Delete Separator (its mods become ungrouped / join the prior
   separator).
 - **Write behavior**: every mutation (enable/disable, drag-reorder, separator ops, Move to
-  Separator) writes to `modlist.txt` immediately via the active `IModlistSource`. There is
-  **no save/discard flow** in this view — unlike the Editing surface, whose edits land as
-  working-tree source changes reviewed and committed in the native Source Control panel
-  (ADR-0041, medit-version-control.md).
+  Separator, Uninstall, New Empty Mod) writes to `modlist.txt` immediately, through the
+  free-function command for that gesture (`modmanager/commands/modlist.ts`, ADR-0047 point 6)
+  rather than through the `IModlistSource` adapter. There is **no save/discard flow** in this
+  view — unlike the Editing surface, whose edits land as working-tree source changes reviewed
+  and committed in the native Source Control panel (ADR-0041, medit-version-control.md).
+
+### New empty mod
+
+- **Title-bar action** (`$(add)`, "New Empty Mod…"): prompts for a name, then creates an
+  empty `mods/<name>/` folder and appends a **disabled** `modlist.txt` line for it — nothing
+  else (no `meta.ini`) — so a plugin created afterwards (New Plugin…) has somewhere to land.
+  Landing disabled matches Install's own posture: creating a mod never silently changes what
+  the game loads.
+- **Refuses a name already in use** — a folder of that name already present under `mods/` —
+  surfaced as a reported error rather than silently overwriting or duplicating the entry.
 
 ### Install (Modbench-6)
 
@@ -587,15 +601,25 @@ folder so the user can reassign or discard those files without leaving Modbench.
 
 ### Architecture / seams
 
-- The **`IModlistSource` adapter** over an in-memory modlist model is the primary seam:
-  all persistence and byte-faithful surgical edits go through it, exercised with real MO2
-  instance fixtures.
+- Every `modlist.txt` gesture (enable, reorder, insert/rename/delete separator, move a mod
+  to a separator, reorder a separator block, uninstall, new empty mod) is a **free-function
+  command** in `modmanager/commands/modlist.ts`, splicing through the `modlist.txt` kernel:
+  it takes the instance root, the active profile and the gesture's own inputs, and returns
+  `{ applied: true; wrote: boolean }` or `{ applied: false; refusal: string }` — never a
+  throw, never a read of the Instance, never a refresh or sync request (ADR-0047 point 6). A
+  scan test (`modmanager/commands/instanceScan.test.ts`, generic over the whole folder) and
+  a small per-file one enforce the latter, in the style of `formatLiteralScan.test.ts`.
+- The **`IModlistSource` adapter** over an in-memory modlist model remains the seam for
+  install, profile switch, and every read — `readModlist`, `listSeparators`,
+  `listProfiles`, `getActiveProfile`/`getNexusSlug` — exercised with real MO2 instance
+  fixtures.
 - The **`FileConflictIndex`** (pure winner-map construction from a mod set + order) and the
   **surgical text transforms** (`modlistText.ts`, `metaIni.ts`, `modOrganizerIni.ts`) are
   pure-logic seams with no `vscode` import.
 - A **thin VS Code adapter** (the `TreeDataProvider`, the `TreeDragAndDropController`, and
-  the command handlers) wires the model to the tree and performs the unavoidable VS Code
-  calls (reveal, quick picks, deploy `fs.link`); it holds no logic beyond wiring.
+  the command handlers) wires the commands (and the adapter, for install/read paths) to the
+  tree and performs the unavoidable VS Code calls (reveal, quick picks, deploy `fs.link`); it
+  holds no logic beyond wiring.
 
 ## Testing Decisions
 
@@ -605,9 +629,11 @@ folder so the user can reassign or discard those files without leaving Modbench.
   verdicts.
 - **Primary unit seams** (Vitest, `npm run test:unit`, no backend): the byte-faithful text
   transforms (`modlistText.ts`, `metaIni.ts`, `modOrganizerIni.ts`) — parse, toggle
-  enable/disable, reorder, separator ops — asserted byte-faithfully; and the
-  `FileConflictIndex` — winner resolution, conflict/override counts, missing-master and
-  missing-mod detection.
+  enable/disable, reorder, separator ops — asserted byte-faithfully; the modlist.txt
+  gesture commands (`modmanager/commands/modlist.ts`) — each verb against a temporary
+  instance, asserting the bytes written (and `wrote: false` for a no-op) or the refusal
+  returned; and the `FileConflictIndex` — winner resolution, conflict/override counts,
+  missing-master and missing-mod detection.
 - **Non-regular dirents inside `mods/<Mod>/`**: a symlink is followed transparently —
   file or directory — and participates in the index and deploy like a real entry, matching
   what `references/modorganizer/`'s own walker does with a reparse point. A symlinked file

@@ -21,6 +21,7 @@ import { parseMetaIni, writeMetaIni } from './metaIni';
 import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
 import { nexusSlugForGame } from './nexusSlug';
+import { withModlistWriteLock } from '../commands/modlist';
 
 const exists = (path: string): Promise<boolean> =>
   access(path).then(
@@ -31,8 +32,6 @@ const exists = (path: string): Promise<boolean> =>
 /** `instanceRoot` is the folder holding ModOrganizer.ini, mods/ and profiles/,
  *  which is the open VS Code workspace. Only the active profile is touched. */
 export class Mo2ModlistSource implements IModlistSource {
-  private modlistMutex: Promise<void> = Promise.resolve();
-
   private readonly log: (msg: string) => void;
 
   constructor(
@@ -53,15 +52,13 @@ export class Mo2ModlistSource implements IModlistSource {
     return join(this.instanceRoot, 'profiles', profile, 'modlist.txt');
   }
 
+  // Shares commands/modlist.ts's write queue (keyed by instanceRoot) rather than its own
+  // mutex, so this adapter's writes and the free-function commands' never race the same bytes.
   private modifyModlist(fn: (text: string) => string): Promise<void> {
-    const task = this.modlistMutex.then(async () => {
+    return withModlistWriteLock(this.instanceRoot, async () => {
       const path = await this.modlistPath();
       await writeFile(path, fn(await readFile(path, 'utf8')));
     });
-    // Chain tail must never stay rejected, or every later call would hang forever
-    // waiting on a dead link — only the caller's own `task` should see the error.
-    this.modlistMutex = task.catch(() => undefined);
-    return task;
   }
 
   async readModlist(): Promise<ModlistEntry[]> {

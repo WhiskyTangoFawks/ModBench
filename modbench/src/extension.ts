@@ -53,7 +53,7 @@ import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled, type 
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
@@ -928,7 +928,8 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       gameDirResolver,
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands(instanceRoot, modlistSource, outputChannel, runModAction),
-      ...registerSeparatorCommands(modlistSource, runModAction),
+      ...registerSeparatorCommands(instanceRoot, modlistSource, runModAction),
+      registerCreateEmptyModCommand(instanceRoot, modlistSource, runModAction),
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
       registerPluginsReconcile(instance, runPluginsReconcile),

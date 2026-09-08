@@ -257,6 +257,12 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.modList.newEmptyMod",
+        "title": "New Empty Mod…",
+        "icon": "$(add)",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.modList.installFromArchive",
         "title": "Install Mod from Archive…",
         "category": "Modbench"
@@ -643,6 +649,11 @@
           "command": "modbench.modList.view.losingAtTop",
           "when": "view == modbench.modList && modbench.modList.winningAtTop",
           "group": "navigation@2"
+        },
+        {
+          "command": "modbench.modList.newEmptyMod",
+          "when": "view == modbench.modList",
+          "group": "navigation@3"
         },
         {
           "command": "modbench.downloads.filter",

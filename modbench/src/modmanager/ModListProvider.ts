@@ -8,14 +8,19 @@ import type { ModStatus, ModStatusResult } from './statusChecker';
 import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from './deployer';
 import type { Instance, InstanceValue } from './instance';
+import {
+  moveModToSeparator as moveModToSeparatorCommand,
+  reorderMod as reorderModCommand,
+  reorderSeparatorBlock as reorderSeparatorBlockCommand,
+  setModEnabled as setModEnabledCommand,
+  type ModlistCommandResult,
+} from './commands/modlist';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
-/** The only `IModlistSource` members this provider calls — reading the modlist itself is the
- *  Instance's job now (ADR-0047). */
-export type ModListSource = Pick<
-  IModlistSource, 'setEnabled' | 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock' | 'setActiveProfile'
->;
+/** The only `IModlistSource` member this provider still calls directly — every modlist.txt
+ *  gesture goes through the commands/modlist.ts commands instead (ADR-0047 point 6). */
+export type ModListSource = Pick<IModlistSource, 'setActiveProfile'>;
 
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
@@ -229,26 +234,33 @@ export class ModListProvider
     // it left. A separator drops its whole block.
     const order = this.cachedEntries?.map((e) => e.name) ?? [];
     const targetName = this.targetName(target);
+    const profile = this.instanceValue.activeProfile;
     if (kind === 'mod') {
       if (target instanceof SeparatorNode) {
-        await this.runMutation('moveModToSeparator', () => this.source.moveModToSeparator(name, target.separator.name));
+        await this.runMutation('moveModToSeparator', () =>
+          moveModToSeparatorCommand(this.instanceRoot, profile, name, target.separator.name));
       } else {
-        await this.runMutation('reorder', () => this.source.reorder(name, this.dropToIndex(order, [name], targetName)));
+        await this.runMutation('reorder', () =>
+          reorderModCommand(this.instanceRoot, profile, name, this.dropToIndex(order, [name], targetName)));
       }
     } else {
       await this.runMutation('reorderSeparatorBlock', () =>
-        this.source.reorderSeparatorBlock(name, this.dropToIndex(order, this.separatorBlockNames(name), targetName)),
+        reorderSeparatorBlockCommand(this.instanceRoot, profile, name, this.dropToIndex(order, this.separatorBlockNames(name), targetName)),
       );
     }
   }
 
-  // Swallows the failure rather than rethrowing, so `handleDrop` still reaches its resync.
+  // Swallows the failure (thrown, or a `{ applied: false }` refusal) rather than rethrowing, so
+  // `handleDrop` still reaches its resync.
   private async runMutation(
     operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
-    mutate: () => Promise<void>,
+    mutate: () => Promise<ModlistCommandResult>,
   ): Promise<void> {
     try {
-      await mutate();
+      const outcome = await mutate();
+      if (outcome.applied) return;
+      this.log(`[ModListProvider] ${operation} failed: ${outcome.refusal}`);
+      this.reporter?.report('error', 'Failed to reorder mods.', outcome.refusal);
     } catch (e) {
       const message = this.err(e);
       this.log(`[ModListProvider] ${operation} failed: ${message}`);
@@ -371,7 +383,8 @@ export class ModListProvider
   }
 
   async setModEnabled(modName: string, enabled: boolean): Promise<void> {
-    await this.source.setEnabled(modName, enabled);
+    const outcome = await setModEnabledCommand(this.instanceRoot, this.instanceValue.activeProfile, modName, enabled);
+    if (!outcome.applied) throw new Error(outcome.refusal);
     this.invalidate();
   }
 
