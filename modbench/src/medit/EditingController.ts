@@ -455,9 +455,10 @@ export class EditingController {
   /** Returns null on a transport/HTTP failure, distinct from a typed refusal. Refreshes the tree:
    *  a new baseline can move the provenance trailers the tree reads. */
   async absorbUpstreamUpdate(plugin: string, origin: string): Promise<ExternalChangeActionResult | null> {
-    return this.mutate({
+    const failMsg = `mEdit: Could not absorb the upstream update for "${plugin}"`;
+    const result = await this.mutate({
       op: `absorbUpstreamUpdate(${plugin})`,
-      failMsg: `mEdit: Could not absorb the upstream update for "${plugin}"`,
+      failMsg,
       post: () => this.deps.client.POST('/plugins/{plugin}/external-change/absorb', {
         params: { path: { plugin } },
         body: { origin },
@@ -467,6 +468,13 @@ export class EditingController {
       map: (data) => data ?? null,
       failure: null,
     });
+    // A refusal rides a 200, which mutate's error path never sees. Unsurfaced it leaves the
+    // plugin unabsorbed and still read-only with nothing saying why (ADR-0026).
+    if (result && !result.succeeded) {
+      this.log(`[EditingController] absorbUpstreamUpdate(${plugin}) refused: ${result.refusalReason ?? ''}`);
+      this.deps.showError(`${failMsg} — ${result.refusalReason ?? ''}`);
+    }
+    return result;
   }
 
   /** A same-record collision with existing working-tree dirt is a typed refusal

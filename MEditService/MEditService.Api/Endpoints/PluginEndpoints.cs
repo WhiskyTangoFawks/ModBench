@@ -200,6 +200,9 @@ public static class PluginEndpoints
                     // plugins.txt is never appended without a 2xx, so no load order can name this
                     // half-created plugin. The orphaned entry is accepted residue.
                     logger.LogError("Refused to track {Origin} while creating {Name}: {Refusal}", req.Origin, req.Name, track.Refusal);
+                    // Not WriteEndpointMapping.Refusal's map, which answers 404 and 422 this route
+                    // does not declare; widening the declared set is the create route's own work
+                    // (debt #797).
                     return Results.Problem(track.Message, statusCode: track.Refusal == TrackRefusal.AlreadyTracked ? 409 : 500);
                 }
             }

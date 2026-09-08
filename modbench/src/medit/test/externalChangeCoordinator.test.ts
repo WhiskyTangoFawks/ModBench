@@ -122,6 +122,26 @@ describe('subscribeExternalChangePending', () => {
     expect(deps.showRebaseOffer).not.toHaveBeenCalled();
   });
 
+  it('a refused Absorb never offers the rebase', async () => {
+    const deps = makeDeps({
+      showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
+      controller: {
+        keepAsMyEdit: vi.fn(),
+        absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'Fixture.esp could not be parsed.' }),
+        rebaseOntoMain: vi.fn(),
+      } as any,
+    });
+    const notificationSubscriber = new FakeNotificationSubscriber();
+    subscribeExternalChangePending(deps, notificationSubscriber);
+
+    notificationSubscriber.emit(pendingEvent());
+    await flush();
+
+    // The controller has already surfaced the reason; nothing landed, so there is no new baseline
+    // to rebase onto.
+    expect(deps.showRebaseOffer).not.toHaveBeenCalled();
+  });
+
   it('a rejected dispatch logs rather than throwing', async () => {
     const log = vi.fn();
     const deps = makeDeps({

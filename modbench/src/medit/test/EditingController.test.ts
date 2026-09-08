@@ -1215,6 +1215,22 @@ describe('EditingController.absorbUpstreamUpdate', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
+  it('surfaces a typed refusal to the user and leaves the tree alone', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({
+      response: { ok: true, status: 200 },
+      data: { succeeded: false, refusalReason: 'Fixture.esp could not be parsed from its own binary.' },
+    });
+    const deps = makeDeps({ client });
+    const controller = new EditingController(deps);
+
+    const result = await controller.absorbUpstreamUpdate('Fixture.esp', 'ModA');
+
+    expect(result).toEqual({ succeeded: false, refusalReason: 'Fixture.esp could not be parsed from its own binary.' });
+    expect(deps.showError).toHaveBeenCalledOnce();
+    expect(vi.mocked(deps.showError).mock.calls[0][0]).toContain('could not be parsed from its own binary');
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
 });
 
 describe('EditingController.keepAsMyEdit', () => {

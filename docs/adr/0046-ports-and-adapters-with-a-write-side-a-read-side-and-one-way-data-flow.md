@@ -80,10 +80,11 @@ flowchart TB
    load order for which plugin copy a record lives in, and the Source repository for whether a
    mod is tracked. Parse status comes from the codec at edit time. A document is never taken
    from the Index; a missing file is a refusal.
-8. **A command returns applied-or-refusal, and what it did.** Every gesture answers with a
-   success flag, the refusal that stopped it and the message naming the way out, its own payload
-   beside them — the new FormKey, the diagnostics and masters, the landed keys. A refusal is a
-   returned value, never an exception, and no command returns state the read side owns.
+8. **A command returns applied-or-refusal, and what it did.** The answer says whether the write
+   landed, carries the refusal when it did not, and carries whatever the gesture itself produced —
+   the new FormKey, the diagnostics and masters, the landed keys. A refusal is returned, never
+   thrown. No command returns state the read side owns. The carrier is each gesture's own; nothing
+   here asks for one shape across all of them.
 9. **The Source repository is the only repository.** It answers for documents by identity, for a
    whole plugin's documents, and for either of those at a named git ref, at the working tree or
    through the object store as the question demands. Layout, embedding, child paths, the write

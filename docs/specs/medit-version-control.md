@@ -313,7 +313,9 @@ self-echo of Modbench's own writes is suppressed, crash markers route to Crash r
   default is already `Keep as My Edit`.
 - **Absorb Upstream Update**: new baselines committed to `main` by plumbing (no checkout,
   fresh trailers), then a non-modal notification offers the rebase (`Rebase Now` /
-  `Later`). Absorb commits to `main` as it stands: if the user has merged into `main`
+  `Later`). A binary Mutagen cannot parse, or a missing git, refuses instead: an error
+  notification names the plugin and the reason, nothing is committed, no rebase is offered, and
+  the question stays unanswered so `Keep as My Edit` is still open. Absorb commits to `main` as it stands: if the user has merged into `main`
   (the Authored workflow), there is no pristine left to diff against — that is the
   topology they chose, not a state Modbench detects or repairs. Rebase with any uncommitted dirt refuses, naming the paths — commit, stash, or
   discard is the user's move, then re-run via `Modbench: Rebase onto Updated Baseline`.
