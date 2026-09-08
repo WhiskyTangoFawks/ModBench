@@ -1,5 +1,3 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
@@ -15,15 +13,11 @@ public sealed class RenumberRollbackTests
     private const string NewRaceFormKey = "000F00:Target.esp";
 
     // The same, in the container fixture's plugin.
-    private const string NewWorldspaceFormKey = "000F00:ContainerFixture.esp";
+    private const string NewWorldspaceFormKey = "000F00:SourceContainer.esp";
 
-    // A directory where a file belongs: the serializer's write to it fails, and nothing else about
-    // the tree changes.
-    private static void Block(string path)
-    {
-        if (File.Exists(path)) File.Delete(path);
-        Directory.CreateDirectory(path);
-    }
+    // A directory where the atomic write's scratch file belongs: that write fails, and the document
+    // being rewritten stays readable, which is what makes it a referencer at all.
+    private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
 
     // ---- the sweep ----
 
@@ -48,8 +42,7 @@ public sealed class RenumberRollbackTests
             var statusBefore = fixture.GitStatuses();
 
             var thrown = Assert.Throws<IOException>(() =>
-                ProjectingEditService.Over(fixture.Mirror)
-                    .RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
+                fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
 
             Assert.Equal(before, fixture.Snapshots());
             Assert.Equal(statusBefore, fixture.GitStatuses());
@@ -68,7 +61,7 @@ public sealed class RenumberRollbackTests
         var before = fixture.Snapshots();
 
         var thrown = Assert.Throws<IOException>(() =>
-            ProjectingEditService.Over(fixture.Mirror).RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString()));
+            fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString()));
 
         Assert.Contains("back as it was", thrown.Message, StringComparison.Ordinal);
         Assert.Equal(before, fixture.Snapshots());
@@ -88,8 +81,7 @@ public sealed class RenumberRollbackTests
             .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
 
         Assert.Throws<IOException>(() =>
-            ProjectingEditService.Over(fixture.Mirror)
-                .RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
+            fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
 
         Assert.Equal(
             entriesBefore,
@@ -99,17 +91,16 @@ public sealed class RenumberRollbackTests
     [Fact]
     public void AContainerRenumberFailingAfterRelocatingItsSubtree_PutsTheSubtreeBack()
     {
-        using var fixture = new ContainerModFixture();
-        // A worldspace is the fixture's one directory-per-record container: its cells and their
-        // placed references travel with the directory the renumber moves.
+        using var fixture = new SourceContainerFixture();
+        // A worldspace is the one directory-per-record container: its cells and their placed
+        // references travel with the directory the renumber moves.
         Occupy(RelocatedWorldspaceDirectory(fixture, NewWorldspaceFormKey));
 
         var before = TreeSnapshot.Of(fixture.ModFolder);
         var statusBefore = fixture.GitStatus();
 
         Assert.Throws<IOException>(() =>
-            ProjectingEditService.Over(fixture.Mirror)
-                .RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
+            fixture.Edits.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
         Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
         Assert.Equal(statusBefore, fixture.GitStatus());
@@ -123,61 +114,14 @@ public sealed class RenumberRollbackTests
 
     // Where the worldspace's own directory would land: a rename onto an occupied path fails, and
     // the subtree under it has already been moved by then.
-    private static string RelocatedWorldspaceDirectory(ContainerModFixture fixture, string newFormKey)
+    private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {
         var worldspaceDirectory = Path.GetDirectoryName(
-            fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId))!;
+            fixture.SourceFileContaining(SourceContainerFixture.WorldspaceEditorId))!;
         return Path.Combine(
             Path.GetDirectoryName(worldspaceDirectory)!,
             SourceRepository.LeafNameFor(
-                FormKey.Factory(newFormKey), ContainerModFixture.WorldspaceEditorId, isDirectory: true));
-    }
-
-    // ---- what the Index says afterwards ----
-
-    [Fact]
-    public void AfterARolledBackRenumber_TheIndexAnswersTheOldIdentityAndNothingAtTheNewOne()
-    {
-        using var fixture = new ContainerModFixture();
-        var worldspace = fixture.Worldspace.ToString();
-        var cell = fixture.TopCell.ToString();
-        Occupy(RelocatedWorldspaceDirectory(fixture, NewWorldspaceFormKey));
-
-        Assert.Throws<IOException>(() =>
-            ProjectingEditService.Over(fixture.Mirror)
-                .RenumberRecord(fixture.Plugin, worldspace, NewWorldspaceFormKey));
-
-        // The projector re-read the restored tree, so the old identity is what answers: the
-        // rollback put the files back and nothing else had to unwind an index.
-        var reads = fixture.Mirror.Projected();
-        Assert.NotNull(reads.GetDocument(worldspace, fixture.Plugin));
-        Assert.Null(reads.GetDocument(NewWorldspaceFormKey, fixture.Plugin));
-        Assert.Equal(worldspace, reads.GetCellLocation(fixture.Plugin, cell)?.ParentWorldspace);
-        Assert.Equal(
-            fixture.Quest.ToString(),
-            reads.GetContainerParent(fixture.Plugin, fixture.DialogTopic.ToString())?.ParentFormKey);
-    }
-
-    [Fact]
-    public void AfterARolledBackCascade_TheReferenceGraphStillNamesTheOldFormKey()
-    {
-        using var fixture = new CascadeRollbackFixture();
-        var race = fixture.Race.ToString();
-        // The renumbered record's own destination, which no document occupies yet: blocking a
-        // referencer's file would remove that referencer from the tree, and the projector would be
-        // right to drop it.
-        Block(fixture.RenumberedRacePath(NewRaceFormKey));
-
-        Assert.Throws<IOException>(() =>
-            ProjectingEditService.Over(fixture.Mirror)
-                .RenumberRecord(fixture.TargetPlugin, race, NewRaceFormKey));
-
-        var reads = fixture.Mirror.Projected();
-        Assert.Equal(3, reads.GetReferencedBy(race).Select(r => r.FormKey).Distinct().Count());
-
-        // And nothing at the identity the renumber was reaching for.
-        Assert.Null(reads.GetDocument(NewRaceFormKey, fixture.TargetPlugin));
-        Assert.Empty(reads.GetReferencedBy(NewRaceFormKey));
+                FormKey.Factory(newFormKey), SourceContainerFixture.WorldspaceEditorId, isDirectory: true));
     }
 
     // ---- the oracle ----
@@ -185,7 +129,7 @@ public sealed class RenumberRollbackTests
     [Fact]
     public void TheDirectFilesystemOracleSeesAnEmptyDirectory_WhichGitStatusCallsClean()
     {
-        using var fixture = new ContainerModFixture();
+        using var fixture = new SourceContainerFixture();
         var snapshotBefore = TreeSnapshot.Of(fixture.ModFolder);
         var statusBefore = fixture.GitStatus();
 

@@ -4,78 +4,66 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Two-mod fixture because the interesting question, does a renumber rewrite a FormLink in
-/// a different mod folder's own repo, cannot be asked of one.</summary>
+/// <summary>What a renumber does to the working trees: the record's own file moves, a tracked
+/// referencer's document is rewritten, an untracked one refuses. What the Index says afterwards
+/// belongs to the Index suite.</summary>
 public sealed class RecordEditServiceRenumberRecordTests
 {
-    private static ProjectingEditService ServiceFor(ILoadOrderMirror mirror) =>
-        ProjectingEditService.Over(mirror);
-
     [Fact]
     public void RenumberRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, headerFormKey);
+        var result = mod.Edits.RenumberRecord(mod.Plugin, headerFormKey);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
         Assert.True(File.Exists(mod.NpcSourceFile), "an unrelated sibling record's file must survive");
-        Assert.NotNull(mod.Mirror.Projected().GetDocument(headerFormKey, mod.Plugin));
+        Assert.NotNull(mod.Document(headerFormKey));
     }
 
     [Fact]
-    public void RenumberRecord_MovesToNewFormKey_OldGoneAtEffective_StillAtHead_NewAbsentAtHead()
+    public void RenumberRecord_MovesToNewFormKey_OldGoneAtTheWorkingTree_StillAtHead_NewAbsentAtHead()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
 
-        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
-        mod.Mirror.Settle();
-        var index = mod.Mirror.Index!;
-        Assert.Null(index.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
-        Assert.NotNull(index.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
-        Assert.NotNull(index.At(RecordRef.Effective).GetDocument(result.NewFormKey!, mod.Plugin));
-        Assert.Null(index.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
+        Assert.Null(mod.Document(mod.Npc.ToString()));
+        Assert.NotNull(mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
+        Assert.NotNull(mod.Document(result.NewFormKey!));
+        Assert.Null(mod.CommittedDocument(result.NewFormKey!, "npc_", SourceEditFixture.NpcEditorId));
     }
 
     [Fact]
-    public void RenumberRecord_OnANeverCommittedAddedRecord_DropsOldFormKeyAtTheQueryLayer()
+    public void RenumberRecord_OnANeverCommittedAddedRecord_LeavesTheOldFormKeyInNeitherRef()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Mirror);
+        using var mod = SourceEditFixture.Tracked();
         const string oldFormKey = "800000:Fixture.esp";
-        var seeded = service.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
+        var seeded = mod.Edits.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = service.RenumberRecord(mod.Plugin, oldFormKey);
+        var result = mod.Edits.RenumberRecord(mod.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
-        var repository = mod.Mirror.SettledReads();
-        Assert.Null(repository.GetDocument(oldFormKey));
-        Assert.NotNull(repository.GetDocument(result.NewFormKey!));
-        var listing = repository.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.Plugin, Limit: 50, Offset: 0));
-        Assert.DoesNotContain(listing.Items, r => r.FormKey == oldFormKey);
-        Assert.Contains(listing.Items, r => r.FormKey == result.NewFormKey);
+        Assert.Null(mod.Document(oldFormKey));
+        Assert.Null(mod.CommittedDocument(oldFormKey, "npc_", "BrandNew"));
+        Assert.NotNull(mod.Document(result.NewFormKey!));
     }
 
     [Fact]
     public void RenumberRecord_WithARequestedTarget_UsesItExactly()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
         const string requested = "900000:Fixture.esp";
 
-        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString(), requested);
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString(), requested);
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(requested, result.NewFormKey);
@@ -87,38 +75,20 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void RenumberRecord_OnALightPlugin_Refuses_WhenTheTargetExceedsTheEslCap()
     {
-        using var mod = TrackedModFixture.TrackedLight();
+        using var mod = SourceEditFixture.TrackedLight();
 
-        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
     }
 
-    // The renumbered record lands under a brand-new FormKey that _filter's snapshot never evaluated,
-    // and the old one is gone, so without re-materializing it vanishes from a filtered listing.
-    [Fact]
-    public void RenumberRecord_MakesTheRecordUnderItsNewFormKeyAppearInAnActiveFilteredListing()
-    {
-        using var mod = TrackedModFixture.Tracked();
-        mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'FixtureNpc'");
-        Assert.Equal(1, mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
-
-        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
-
-        Assert.True(result.Applied, result.Message);
-        var after = mod.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
-        Assert.Equal(1, after.Total);
-        Assert.Equal(result.NewFormKey, after.Items[0].FormKey);
-    }
-
     [Fact]
     public void RenumberRecord_Refuses_WhenTheRequestedTargetBelongsToADifferentPlugin()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
 
-        var result = ServiceFor(mod.Mirror)
-            .RenumberRecord(mod.Plugin, mod.Npc.ToString(), "900000:SomeOtherPlugin.esp");
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString(), "900000:SomeOtherPlugin.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
@@ -129,12 +99,11 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void RenumberRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Mirror);
-        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
+        using var mod = SourceEditFixture.Tracked();
+        var seeded = mod.Edits.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = service.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -143,11 +112,11 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void RenumberRecord_Refuses_OnAnOverrideRecord_NamingTheOriginatingPlugin()
     {
-        using var two = TwoModFixture.Create(trackReferencer: true);
+        using var two = RenumberTwoModFixture.Create(trackReferencer: true);
 
         // Npc, native to Base.esm, overridden (unedited copy) in Winner.esp — renumbering it from
         // Winner.esp's side is exactly the override case this gesture refuses.
-        var result = ServiceFor(two.Mirror).RenumberRecord(two.WinnerPlugin, two.Npc.ToString());
+        var result = two.Edits.RenumberRecord(two.ReferencerPlugin, two.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
@@ -157,101 +126,54 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void RenumberRecord_RewritesATrackedReferencersFormLink_ToTheNewFormKey()
     {
-        using var two = TwoModFixture.Create(trackReferencer: true);
+        using var two = RenumberTwoModFixture.Create(trackReferencer: true);
 
-        var result = ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        two.Mirror.Settle();
-        var index = two.Mirror.Index!;
-        var referencer = index.At(RecordRef.Effective).GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
+        var referencer = two.Document(two.ReferencerPlugin, two.ReferencerNpc)!;
         Assert.Contains(result.NewFormKey!, referencer.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
-        Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
-    }
-
-    // ADR-0045: the referencer's rewrite is rolled back with everything else, so the filter, still
-    // re-applied on the failure path, shows the restored tree.
-    [Fact]
-    public void RenumberRecord_WhenTheTargetsOwnWriteFails_TheFilterReflectsTheRestoredTree()
-    {
-        using var two = TwoModFixture.Create(trackReferencer: true);
-        const string requestedTarget = "900000:Base.esm";
-
-        // Matches nothing yet: form_references still points every source at TargetRace's *old*
-        // FormKey, not the one this renumber is about to move it to.
-        two.Mirror.SetFilter(
-            $"SELECT source_form_key AS form_key FROM form_references " +
-            $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
-        Assert.Equal(0, two.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
-
-        Chmod(two.TargetModFolder, "500"); // read+execute only — the new race source file can't be created
-        try
-        {
-            var ex = Assert.Throws<IOException>(() =>
-                ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString(), requestedTarget));
-            // No repository is named as holding partial damage, because none does.
-            Assert.Contains("back as it was", ex.Message, StringComparison.Ordinal);
-            Assert.DoesNotContain(TwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
-
-            // ADR-0045's path rule, asked of the one fault here that is a genuine OS error: the message names
-            // the path it failed on, and no absolute path reaches the author. The relative remainder does.
-            Assert.DoesNotContain(two.TargetModFolder, ex.Message, StringComparison.Ordinal);
-            Assert.Contains(SourceRepository.RootFor(TwoModFixture.TargetPluginName), ex.Message, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Chmod(two.TargetModFolder, "700"); // restored before TwoModFixture.Dispose() needs to clean up
-        }
-
-        // The referencer's rewrite came back off disk and its rows were re-derived from the restored
-        // file, so the filter — re-materialized even though the overall gesture threw — still matches
-        // nothing, exactly as it did before the gesture ran.
-        Assert.Equal(
-            0, two.Mirror.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
-        var referencer = two.Mirror.Projected()
-            .GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
-        Assert.Contains(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
-        Assert.DoesNotContain(requestedTarget, referencer.Body, StringComparison.Ordinal);
-    }
-
-    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe even on a Linux-only
-    // runtime. Recursive: the write this blocks lands several directories under the mod folder root.
-    private static void Chmod(string path, string mode)
-    {
-        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            "chmod", ["-R", mode, path])
-        { RedirectStandardError = true })!;
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
     }
 
     [Fact]
     public void RenumberRecord_Refuses_WhenAReferencerIsUntracked_NamingIt_AndWritesNothing()
     {
-        using var two = TwoModFixture.Create(trackReferencer: false);
-        var oldRaceSourceFile = two.SourceFileFor(two.TargetPlugin, two.TargetRace, "race", "TargetRace");
+        using var two = RenumberTwoModFixture.Create(trackReferencer: false);
+        var oldRaceSourceFile = two.SourceFileFor(
+            two.TargetPlugin, two.TargetRace, "race", RenumberTwoModFixture.TargetRaceEditorId);
 
-        var result = ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.UntrackedReferencer, result.Refusal);
-        Assert.Contains(TwoModFixture.ReferencerPluginName, result.Message, StringComparison.Ordinal);
+        Assert.Contains(RenumberTwoModFixture.ReferencerPluginName, result.Message, StringComparison.Ordinal);
 
         // "No half-applied state": refused before any write, on either side of the cascade.
         Assert.True(File.Exists(oldRaceSourceFile));
-        Assert.NotNull(two.Mirror.Projected().GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
-        var referencerBody = two.Mirror.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
-        Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);
+        Assert.NotNull(two.Document(two.TargetPlugin, two.TargetRace));
+    }
+
+    // MO2 removes a copy's file whenever it likes, and a snapshot names copies that were there when
+    // it was taken. A copy gone since is one no cascade could rewrite, not a 500.
+    [Fact]
+    public void RenumberRecord_WhenAnUntrackedCopysFileHasGoneSinceTheSnapshot_SkipsItRatherThanFaulting()
+    {
+        using var two = RenumberTwoModFixture.Create(trackReferencer: false);
+        File.Delete(Path.Combine(two.ReferencerModFolder, RenumberTwoModFixture.ReferencerPluginName));
+
+        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey!));
     }
 
     [Fact]
     public void RenumberRecord_Refuses_WhenPluginIsUntracked_NamingTheTrackCommand()
     {
-        using var mod = TrackedModFixture.Untracked();
+        using var mod = SourceEditFixture.Untracked();
 
-        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -261,10 +183,10 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void RenumberRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
-        using var mod = TrackedModFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
+        using var mod = SourceEditFixture.Tracked();
+        ExternalChangeDeferral.Set(mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
 
-        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -273,11 +195,10 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void PeekNextFreeFormKey_MatchesWhatRenumberWouldActuallyAllocate()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Mirror);
+        using var mod = SourceEditFixture.Tracked();
 
-        var suggested = service.PeekNextFreeFormKey(mod.Plugin);
-        var result = service.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var suggested = mod.Edits.PeekNextFreeFormKey(mod.Plugin);
+        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(suggested.Applied, suggested.Message);
         Assert.Equal(suggested.NewFormKey, result.NewFormKey);
@@ -286,11 +207,9 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void PeekNextFreeFormKey_Refuses_WhenNoLoadOrderIsLoaded()
     {
-        using var mod = TrackedModFixture.Tracked();
-        mod.Mirror.Dispose();
+        using var mod = SourceEditFixture.Tracked();
 
-        var suggested = ProjectingEditService.Over(mod.Mirror)
-            .PeekNextFreeFormKey(mod.Plugin);
+        var suggested = TestEditService.Over(new LoadOrderHolder()).PeekNextFreeFormKey(mod.Plugin);
 
         Assert.False(suggested.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, suggested.Refusal);
@@ -300,98 +219,13 @@ public sealed class RecordEditServiceRenumberRecordTests
     [Fact]
     public void PeekNextFreeFormKey_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Mirror);
-        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
+        using var mod = SourceEditFixture.Tracked();
+        var seeded = mod.Edits.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = service.PeekNextFreeFormKey(mod.Plugin);
+        var result = mod.Edits.PeekNextFreeFormKey(mod.Plugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
-    }
-
-    private sealed class TwoModFixture : IDisposable
-    {
-        public const string ReferencerPluginName = "Winner.esp";
-        public const string TargetPluginName = "Base.esm";
-        private const string TargetOrigin = "TargetMod";
-        private const string ReferencerOrigin = "ReferencerMod";
-
-        public string TargetModFolder { get; }
-        public string ReferencerModFolder { get; }
-        public string GameDirectory { get; }
-        public LoadOrderMirror Mirror { get; }
-        public PluginKey TargetPlugin { get; } = new(TargetPluginName, TargetOrigin);
-        public PluginKey WinnerPlugin { get; } = new(ReferencerPluginName, ReferencerOrigin);
-        public PluginKey ReferencerPlugin => WinnerPlugin;
-        public FormKey TargetRace { get; }
-        public FormKey Npc { get; }
-        public FormKey ReferencerNpc { get; }
-
-        private TwoModFixture(bool trackReferencer)
-        {
-            TargetModFolder = Directory.CreateTempSubdirectory("medit-renumber-target-").FullName;
-            ReferencerModFolder = Directory.CreateTempSubdirectory("medit-renumber-ref-").FullName;
-            GameDirectory = Directory.CreateTempSubdirectory("medit-renumber-game-").FullName;
-
-            var targetPath = Path.Combine(TargetModFolder, TargetPluginName);
-            var targetMod = new Fallout4Mod(ModKey.FromFileName(TargetPluginName), Fallout4Release.Fallout4);
-            var race = targetMod.Races.AddNew("TargetRace");
-            var npc = targetMod.Npcs.AddNew("BaseNpc");
-            targetMod.WriteToBinary(targetPath);
-            (TargetRace, Npc) = (race.FormKey, npc.FormKey);
-
-            var referencerPath = Path.Combine(ReferencerModFolder, ReferencerPluginName);
-            var referencerMod = new Fallout4Mod(ModKey.FromFileName(ReferencerPluginName), Fallout4Release.Fallout4);
-            referencerMod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName(TargetPluginName) });
-            referencerMod.Npcs.Set(targetMod.Npcs.First(n => n.FormKey == npc.FormKey).DeepCopy()); // override, for the NotNativeRecord test
-            var referencerNpc = referencerMod.Npcs.AddNew("ReferencerNpc");
-            referencerNpc.Race.SetTo(race);
-            referencerMod.WriteToBinary(referencerPath);
-            ReferencerNpc = referencerNpc.FormKey;
-
-            Mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)Mirror).Reconcile(
-                GameDirectory,
-                [
-                    new LoadOrderEntry(TargetPluginName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
-                    new LoadOrderEntry(ReferencerPluginName, referencerPath, ReferencerOrigin, Slot: 1, Enabled: true, Winning: true),
-                ],
-                GameRelease.Fallout4);
-
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Mirror.LoadOrder!, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
-            if (trackReferencer)
-            {
-                new TrackService(NullLogger<TrackService>.Instance)
-                    .TrackAsync(Mirror.LoadOrder!, ReferencerOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
-            }
-        }
-
-        public static TwoModFixture Create(bool trackReferencer) => new(trackReferencer);
-
-        // Asked of the repository rather than computed: FlatPathFor needs an order index this
-        // fixture has no reason to track.
-        public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
-            SourceDocumentPath.Of(
-                plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder,
-                plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
-
-        public void Dispose()
-        {
-            Mirror.Dispose();
-            TryDelete(TargetModFolder);
-            TryDelete(ReferencerModFolder);
-            TryDelete(GameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
-        }
     }
 }

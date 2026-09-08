@@ -200,6 +200,11 @@ public sealed partial class SourceRepository
         var sourceRoot = Path.Combine(_modFolder, RootFor(plugin.Name));
         if (!Directory.Exists(sourceRoot)) return false;
 
+        // The header's document is the fixed root RecordData.json, and it declares a ModKey rather
+        // than the FormKey the tree files it under, so no name or text carries that key.
+        if (parsed.ToString().Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
+            return File.Exists(Path.Combine(sourceRoot, RecordDataFileName));
+
         foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
         {
             if (ReadOrNull(documentPath) is not { } text) continue;
@@ -209,7 +214,7 @@ public sealed partial class SourceRepository
                 return true;
             }
         }
-        return CarriesEmbedded(plugin, formKey);
+        return CarriesEmbedded(plugin, parsed.ToString());
     }
 
     // The committed set, read the same way the allocator reads it: a document's own FormKey, plus

@@ -50,7 +50,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_OfAReadablePerkFromTheSamePlugin_StillLands()
     {
-        var readable = _mod.ReadablePerk();
+        var readable = _mod.PerkTheCodecReads();
 
         var result = _mod.Edits.CopyRecordAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
@@ -61,7 +61,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsNewRecord_OfAReadablePerkFromTheSamePlugin_StillLands()
     {
-        var readable = _mod.ReadablePerk();
+        var readable = _mod.PerkTheCodecReads();
 
         var result = _mod.Edits.CopyRecordAsNewRecord(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
@@ -125,9 +125,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         public SourceDocument? DestinationDocument(string formKey) =>
             TrackedTree.Document(_destinationModFolder, DestinationPlugin, formKey);
 
-        /// <summary>A perk from the same plugin the codec does read, found the way the copy path finds
-        /// one: by asking the codec.</summary>
-        public string ReadablePerk()
+        public string PerkTheCodecReads()
         {
             var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
             using var overlay = Fallout4Mod.CreateFromBinaryOverlay(

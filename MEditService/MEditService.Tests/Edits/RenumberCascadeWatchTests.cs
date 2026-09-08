@@ -1,8 +1,4 @@
-using MEditService.Core.Edits;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
@@ -13,15 +9,12 @@ public sealed class RenumberCascadeWatchTests
 {
     private const string NewRaceFormKey = "000F00:Target.esp";
 
-    private static RecordEditService ServiceFor(CascadeRollbackFixture fixture) =>
-        TestEditService.Over(fixture.Mirror);
-
     [Fact]
     public async Task ARenumberAcrossThreeTrackedMods_LandsEveryRewrittenReferenceThroughTheWatcher()
     {
         using var fixture = CascadeRollbackFixture.Watched();
 
-        var result = ServiceFor(fixture).RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey);
+        var result = fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey);
         Assert.True(result.Applied, result.Message);
 
         // Nothing was pushed: what the Index knows, it learns from the trees the command wrote.
@@ -31,7 +24,7 @@ public sealed class RenumberCascadeWatchTests
                 && reads.GetReferencedBy(NewRaceFormKey).Select(r => r.FormKey).Distinct().Count() == 3),
             "the renumbered race and its three rewritten referencers never reached the index");
 
-        var landed = fixture.Mirror.Index!.At(RecordRef.Effective);
+        var landed = fixture.Mirror!.Index!.At(RecordRef.Effective);
         Assert.Null(landed.GetDocument(fixture.Race.ToString(), fixture.TargetPlugin));
         Assert.Empty(landed.GetReferencedBy(fixture.Race.ToString()));
 
@@ -57,7 +50,7 @@ public sealed class RenumberCascadeWatchTests
         Directory.CreateDirectory(blocked);
 
         Assert.Throws<IOException>(() =>
-            ServiceFor(fixture).RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
+            fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
 
         Assert.True(
             await fixture.ProjectionReaches(reads =>
@@ -65,7 +58,7 @@ public sealed class RenumberCascadeWatchTests
                 && reads.GetDocument(NewRaceFormKey, fixture.TargetPlugin) == null),
             "the restored trees never brought the index back to the old identity");
 
-        Assert.NotNull(fixture.Mirror.Index!.At(RecordRef.Effective)
+        Assert.NotNull(fixture.Mirror!.Index!.At(RecordRef.Effective)
             .GetDocument(fixture.Race.ToString(), fixture.TargetPlugin));
     }
 }

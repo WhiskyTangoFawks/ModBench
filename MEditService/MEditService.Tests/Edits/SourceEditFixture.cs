@@ -33,6 +33,9 @@ public sealed class SourceEditFixture : IDisposable
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
 
+    /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
+    public IReadOnlyList<LoadOrderEntry> Entries { get; }
+
     // Keyword is a valid target for the NPC's keywords field and Race a resolvable target of the
     // wrong type, so both FormLink error axes are reachable without inventing data mid-test.
     public FormKey Npc { get; }
@@ -59,9 +62,8 @@ public sealed class SourceEditFixture : IDisposable
         mod.WriteToBinary(pluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        LoadOrder = LoadOrder.From(
-            GameDirectory, InstanceRoot, GameRelease.Fallout4,
-            [new LoadOrderEntry(pluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)]);
+        Entries = [new LoadOrderEntry(pluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
+        LoadOrder = LoadOrder.From(GameDirectory, InstanceRoot, GameRelease.Fallout4, Entries);
 
         // Track through the real service, from the load order value: what an edit does to a git
         // working tree is the thing under test, and no mock can answer that.
@@ -83,6 +85,10 @@ public sealed class SourceEditFixture : IDisposable
         new(track: true, pluginName, isLight: true);
 
     public static SourceEditFixture Untracked() => new(track: false, PluginName, isLight: false);
+
+    /// <summary>Tracked under a name of the caller's choosing: a plugin filename carrying a space is
+    /// ref-unsafe, and only a real tracked tree can answer whether that holds.</summary>
+    public static SourceEditFixture TrackedAs(string pluginName) => new(track: true, pluginName, isLight: false);
 
     /// <summary>What the tree holds for a FormKey, read back through the same repository the write
     /// side wrote through — the whole read model these suites have.</summary>
