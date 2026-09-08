@@ -190,7 +190,7 @@ calls or intermediate DTO shape rather than the queried/saved result.
   Stryker's "Safe Mode" discards every mutation in a method once one fails to compile, and
   two errors account for all of it: `CS0165` (unassigned local — block removal against
   definite assignment) and `CS0411` (LINQ `Select` overload inference). Concentrated in
-  `RecordEditService.cs` and `DuckDbRecordIndex.cs`. Counted and ignored
+  `RenumberRecordHandler.cs` and `DuckDbRecordIndex.cs`. Counted and ignored
   automatically — not a signal.
 - The full-install smoke test (`RealData/RealInstallSmokeTests.cs`) is gated behind
   `MEDIT_SMOKE=1` so it never runs under mutation.

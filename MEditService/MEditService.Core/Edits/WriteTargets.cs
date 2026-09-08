@@ -329,8 +329,8 @@ internal sealed class WriteTargets(
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     /// <summary>A source unit's leaf name carries its record's EditorID, so an EditorID change moves
-    /// the unit. Called before the document is written, so a crash between leaves it findable by
-    /// FormKey.</summary>
+    /// the unit. Never a gesture's only write, so a crash on either side of it leaves the record
+    /// findable by FormKey.</summary>
     internal void RenameTo(SourceRepository repository, PluginKey plugin, RecordIdentity target, string? newEditorId)
     {
         if (repository.Rename(plugin, target, newEditorId) is { } newLeaf && logger.IsEnabled(LogLevel.Information))

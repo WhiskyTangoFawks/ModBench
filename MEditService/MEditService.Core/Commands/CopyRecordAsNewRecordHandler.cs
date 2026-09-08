@@ -67,9 +67,9 @@ public sealed class CopyRecordAsNewRecordHandler
         ContainerChildFields.ClearAllChildSlots(newRecord);
         var placement = SourceRepository.PlacementFor(
             destinationPlugin.Name, identity.RecordType, targetFormKey, newRecord.EditorID, release);
-        RecordEditService.WriteAt(
+        SourceRepository.WriteAt(
             destination.ModFolder, placement,
-            path => RecordEditService.SerializeAndWrite(_codec, newRecord, path, release));
+            path => _codec.SerializeAndWrite(newRecord, path, release));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

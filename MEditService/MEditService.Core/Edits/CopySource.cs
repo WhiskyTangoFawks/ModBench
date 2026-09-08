@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -57,14 +56,13 @@ internal sealed class CopySource(
         if (_tree == null)
         {
             var record = Getter(identity.FormKey) ?? throw NoLongerHeld(identity.FormKey);
-            return Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, _release).GetAwaiter().GetResult());
+            return codec.SerializeToText(record, _release);
         }
 
         var body = _tree.Get(plugin, identity)?.Body ?? throw NoLongerHeld(identity.FormKey);
         // Read through the codec even though the verbatim bytes are what lands: a copy of text no
         // reader can make a record of would leave the destination uncompilable.
-        codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, identity.RecordType)
-            .GetAwaiter().GetResult();
+        codec.Deserialize(body, _release, identity.RecordType);
         return body;
     }
 
@@ -76,14 +74,13 @@ internal sealed class CopySource(
     /// <summary>The record's graph, read back through the codec from its own text, so what a copy
     /// mutates is a document rather than the source's live object.</summary>
     internal IMajorRecord Record(RecordIdentity identity) =>
-        codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(Body(identity)), _release, identity.RecordType)
-            .GetAwaiter().GetResult();
+        codec.Deserialize(Body(identity), _release, identity.RecordType);
 
     /// <summary>The container carrying this record, or null when it has a document of its own. A cell
     /// always answers null: its place is <see cref="CellPlacementOf"/>'s, never a slot's.</summary>
     internal Containment? ContainerOf(RecordIdentity identity)
     {
-        if (RecordEditService.IsCellType(identity.RecordType, _release)) return null;
+        if (RecordTypeDispatch.For(_release).IsCell(identity.RecordType)) return null;
 
         if (_tree == null)
             return Containments().TryGetValue(identity.FormKey, out var found) ? found : null;

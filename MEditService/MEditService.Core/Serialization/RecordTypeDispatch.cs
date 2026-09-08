@@ -59,6 +59,10 @@ internal sealed class RecordTypeDispatch
     internal Type? ConcreteFor(string recordType) =>
         _byName.TryGetValue(NormalizeOverlayName(recordType), out var type) ? type : null;
 
+    /// <summary>Whether this is the game's cell — the one record type whose place in the world is its
+    /// directory rather than a slot.</summary>
+    internal bool IsCell(string recordType) => ConcreteFor(recordType)?.Name == "Cell";
+
     /// <summary>The group-property name ("Npcs") the generator writes verbatim as a flat record's
     /// directory. Null for a type with no top-level group, a directory-per-record one, or one that
     /// does not resolve — ask the repository.</summary>

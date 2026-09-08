@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -307,6 +308,61 @@ public sealed partial class SourceRepository
 
     internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
+
+    /// <summary>Writes the record's file at its placement, minting the directories above it and
+    /// removing them again if the write throws.</summary>
+    internal static string WriteAt(string modFolder, SourcePlacement placement, Func<string, string> write)
+    {
+        var path = Path.Combine(modFolder, placement.RelativePath);
+        return InMintedDirectory(Path.GetDirectoryName(path)!, () => write(path));
+    }
+
+    /// <summary>Interior placement carries no gameplay meaning (PlacementWalker records null block/sub
+    /// for every interior cell), so this reuses whichever block/sub-block directory the destination
+    /// already has, minting <c>0/0</c> only the first time.</summary>
+    internal static IReadOnlyList<string> EnsureInteriorCellBlockPath(
+        string modFolder, string pluginName, GameRelease release)
+    {
+        var cellsFolder = RecordTypeDispatch.For(release).GroupFolderNameFor("cell")
+            ?? throw new InvalidOperationException(
+                "This game's schema has no Cell group folder, so an interior cell has no block " +
+                "directory to land in; only a caller that has already established the record is a " +
+                "cell reaches here.");
+        var cellsDirectory = Path.Combine(modFolder, RootFor(pluginName), cellsFolder);
+        InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
+
+        var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
+        var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
+
+        return [Path.GetFileName(blockDirectory), Path.GetFileName(subBlockDirectory)];
+    }
+
+    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType)
+    {
+        var existing = Directory.EnumerateDirectories(parentDirectory).FirstOrDefault();
+        if (existing != null) return existing;
+
+        var directory = Path.Combine(parentDirectory, "0");
+        InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
+        return directory;
+    }
+
+    // Matches Track's own WriteIndented output; WriteMinimalGroupRecordDataIfMissing's byte-exact
+    // contract depends on it.
+    private static readonly JsonSerializerOptions GroupRecordDataOptions = new() { WriteIndented = true };
+
+    // Not a record the codec has a schema for, so written directly. BlockNumber is omitted because
+    // Track omits a BlockNumber of 0; the bytes are verified identical to Track's for both shapes,
+    // which byte-compare tooling depends on.
+    private static void WriteMinimalGroupRecordDataIfMissing(string directory, string? groupType)
+    {
+        var path = Path.Combine(directory, GroupRecordDataFileName);
+        if (File.Exists(path)) return;
+        var bytes = groupType == null
+            ? JsonSerializer.SerializeToUtf8Bytes(new { }, GroupRecordDataOptions)
+            : JsonSerializer.SerializeToUtf8Bytes(new { GroupType = groupType }, GroupRecordDataOptions);
+        File.WriteAllBytes(path, bytes);
+    }
 
     /// <summary>Takes back the levels <see cref="LevelsMintedBy"/> named, deepest first, so a parent is
     /// already empty by the time it is reached. A level something else filled stops the walk.</summary>

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -17,12 +18,14 @@ namespace MEditService.Core.Commands;
 /// gesture.</summary>
 public sealed class KeepExternalChangeHandler
 {
+    private readonly WriteTargets _targets;
     private readonly SchemaReflector _reflector;
     private readonly ILogger<KeepExternalChangeHandler> _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal KeepExternalChangeHandler(SchemaReflector reflector, ILogger<KeepExternalChangeHandler> logger) =>
-        (_reflector, _logger) = (reflector, logger);
+    internal KeepExternalChangeHandler(
+        WriteTargets targets, SchemaReflector reflector, ILogger<KeepExternalChangeHandler> logger) =>
+        (_targets, _reflector, _logger) = (targets, reflector, logger);
 
     public ExternalChangeLandResult Keep(string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease)
     {
@@ -112,7 +115,7 @@ public sealed class KeepExternalChangeHandler
 
             // A flat record's leaf name carries its EditorID, so an external rename moves its file and
             // leaves no duplicate behind; a container's directory keeps the name the tree gave it.
-            if (t.Renameable) repository.Rename(plugin, t.At, t.IncomingEditorId);
+            if (t.Renameable) _targets.RenameTo(repository, plugin, t.At, t.IncomingEditorId);
         }
 
         // The working tree now corresponds to this binary — atRef: null snapshots it as it stands, as

@@ -1,3 +1,5 @@
+using MEditService.Core.Serialization;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
@@ -12,6 +14,13 @@ internal static class ContainerChildFields
         ContainerMembers.Derived.ChildFieldsByType.TryGetValue(NormalizedTypeName(recordType), out var fields)
             ? fields
             : null;
+
+    /// <summary>Whether a record of <paramref name="recordType"/> has child slots at all: the copy
+    /// gestures land one own-fields-only, and replace an existing override in place rather than
+    /// refusing.</summary>
+    internal static bool HasChildFields(string recordType, GameRelease release) =>
+        RecordTypeDispatch.For(release).ConcreteFor(recordType) is { } concrete
+        && EnumerateChildFieldsFor(concrete) != null;
 
     private const string OverlaySuffix = "BinaryOverlay";
 

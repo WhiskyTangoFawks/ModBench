@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -123,7 +122,7 @@ internal sealed class ReferencerScan(
             return null;
         }
 
-        var root = RecordEditService.ReadDocument(codec, document, release);
+        var root = codec.Deserialize(document.Body, release, document.RecordType);
         schemaType = SourceRecordType.Resolve(root, schemas);
         return root;
     }
@@ -135,15 +134,15 @@ internal sealed class ReferencerScan(
         IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
         var linkers = new List<string>();
-        if (!RecordEditService.IsContainerType(document.RecordType, release)) return linkers;
+        if (!ContainerChildFields.HasChildFields(document.RecordType, release)) return linkers;
 
-        var root = parsed ?? RecordEditService.ReadDocument(codec, document, release);
+        var root = parsed ?? codec.Deserialize(document.Body, release, document.RecordType);
         foreach (var child in EmbeddedDescendants(root))
         {
             if (Is(child.FormKey, itself)) continue;
             if (!schemas.TryGetValue(SourceRecordType.Resolve(child, schemas), out var childSchema)) continue;
 
-            var body = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(child, release).GetAwaiter().GetResult());
+            var body = codec.SerializeToText(child, release);
             if (Links(body, childSchema, target)) linkers.Add(child.FormKey.ToString());
         }
         return linkers;

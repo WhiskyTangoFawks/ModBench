@@ -51,7 +51,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Null(Record.Exception(() => Reads().GetCompare(_fixture.Cell.ToString())));
     }
 
-    // ---- Point writes refuse (RecordEditService) ----
+    // ---- Point writes refuse ----
 
     private string CellSourceFile => _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
 
@@ -295,9 +295,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         });
 
         var entries = new List<LogEntry>();
-        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
-        var handler = new KeepExternalChangeHandler(
-            SharedSchemaReflector.Instance, loggerFactory.CreateLogger<KeepExternalChangeHandler>());
+        var handler = TestEditService.KeepHandler(
+            b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
 
         var result = handler.Keep(_fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
 

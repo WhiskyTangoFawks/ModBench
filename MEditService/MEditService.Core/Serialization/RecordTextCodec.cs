@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
+using System.Text;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
@@ -27,10 +28,28 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     /// <summary>A document read and written back: the one shape gate a write goes through, and the
     /// spelling the codec gives what it kept.</summary>
-    public string RoundTrip(string text, GameRelease gameRelease, string? recordType)
+    public string RoundTrip(string text, GameRelease gameRelease, string? recordType) =>
+        SerializeToText(Deserialize(text, gameRelease, recordType), gameRelease);
+
+    /// <summary>A document's own graph, read back by the type its text names — a path-ambiguous
+    /// group's document names its own class, which is the codec's spelling, not the schema's
+    /// table.</summary>
+    internal IMajorRecord Deserialize(string text, GameRelease gameRelease, string? recordType) =>
+        DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(text), gameRelease, recordType).GetAwaiter().GetResult();
+
+    /// <summary>The record as the text a source document carries: what
+    /// <see cref="SerializeToBytesAsync"/> produces, decoded.</summary>
+    internal string SerializeToText(IMajorRecordGetter record, GameRelease gameRelease) =>
+        Encoding.UTF8.GetString(SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+
+    /// <summary>Two serializations, one for the caller and one for disk; this codec producing
+    /// identical bytes for both is what makes what the index is told and what lands the same
+    /// text.</summary>
+    internal string SerializeAndWrite(IMajorRecordGetter record, string path, GameRelease gameRelease)
     {
-        var record = DeserializeFromBytesAsync(System.Text.Encoding.UTF8.GetBytes(text), gameRelease, recordType).GetAwaiter().GetResult();
-        return System.Text.Encoding.UTF8.GetString(SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+        var text = SerializeToText(record, gameRelease);
+        SerializeAsync(record, path, gameRelease).GetAwaiter().GetResult();
+        return text;
     }
 
     /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem: the

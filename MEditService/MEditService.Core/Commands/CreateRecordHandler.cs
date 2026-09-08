@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -53,13 +52,13 @@ public sealed class CreateRecordHandler
         if (_targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var record = RecordEditService.BareRecord(
+        var record = RecordMint.Bare(
             _codec, schema, release, targetFormKey, string.IsNullOrWhiteSpace(editorId) ? null : editorId, partialForm: false);
 
         // RefuseIfContainerType guarantees a flat record, so the repository's own layout is the whole
         // answer: no block path, and the group folder minted by the write when this type is new here.
         repository.Put(
-            plugin, new SourceDocument(targetFormKey, recordType, record.EditorID, SerializeToText(record, release)));
+            plugin, new SourceDocument(targetFormKey, recordType, record.EditorID, _codec.SerializeToText(record, release)));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -69,7 +68,4 @@ public sealed class CreateRecordHandler
         }
         return RecordEditResult.Success(targetFormKey);
     }
-
-    private string SerializeToText(IMajorRecordGetter record, GameRelease release) =>
-        Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
 }
