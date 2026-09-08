@@ -121,15 +121,13 @@ bookkeeping.
 29. As a user, I want to drop files into the `downloads/` folder from my OS file
     manager and have them show up in the tree, so that adding a manually-downloaded mod
     is frictionless.
-30. As a user, I want a clear "no downloads yet" message when the folder is empty, so
+30. As a user, I want a clear "no downloads yet" message when the tree is empty, so
     that I know the tree is working and just has nothing to show.
-31. As a user, I want a clear message when the instance has no `downloads/` folder at
-    all, so that I understand why the tree is empty and what's expected.
-32. As a user, I want the Downloads tree available from the command palette (VS Code
+31. As a user, I want the Downloads tree available from the command palette (VS Code
     auto-generates a "Focus on Downloads View" command for any contributed view) and
     always present — collapsed, not hidden — in the sidebar stack, so that I can get to
     my downloads without a bespoke open command or toolbar button anywhere else.
-33. As a user with a long downloads folder, I want to narrow to matching rows by name with
+32. As a user with a long downloads folder, I want to narrow to matching rows by name with
     the same filter I use on every other Modbench list, so that I can find one without
     scrolling and without learning a second way to search (VS Code's native tree Find
     remains available on this tree as it is on every tree).
@@ -224,10 +222,7 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
   only three values, so ties are the common case rather than the exceptional one.
 - **Filter** (`modbench.downloads.filter`, slot 1) — the shared Modbench filter widget,
   narrowing to rows whose filename contains what the user types, case-insensitively.
-  Render-only: a keystroke never re-scans `downloads/`. An error row survives every filter,
-  since hiding the reason the list is wrong behind a name match is exactly the
-  silently-wrong state ADR-0026 forbids — and, for the same reason, a view left showing only
-  that error row is never told "no matches".
+  Render-only: a keystroke never re-pulls the Instance value the rows are built from.
 
   Applied **after hidden-filtering**: Show Hidden decides which rows exist, the name filter
   narrows what is left. Behavior — durable until explicitly cleared, `ctrl+F` entry, term in the
@@ -240,18 +235,18 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
   Downloads reuses the one widget, with no toggle.
 - **No manual Refresh** — no view has one. Refresh is a single workspace-scope
   command on the [Loadout header](containers.md) that re-reads every Mod-Management source
-  together. It remains only a safety net for filesystems with unreliable watch events:
-  `downloadsWatcher.ts` debounces filesystem events on `downloads/` and invalidates the
-  provider automatically, so every mutation and every external file-manager drop is picked up
-  without user action.
+  together, the Instance included. It remains only a safety net for filesystems with
+  unreliable watch events: the Instance's own `downloads/` watcher (`downloadsWatcher.ts`)
+  is what normally brings a change back, with no user action needed.
 
 ### Live updates
 
-- A **file-watcher** (`downloadsWatcher.ts`) on `downloads/` drives every re-render:
-  downloads (and `.meta` changes) added, removed, or modified on disk are reflected with
-  no user action and no manual Refresh (see *Toolbar* above). Events are debounced
-  (200ms) so a single logical file operation (e.g. a download write followed by its
-  `.meta` sidecar write) doesn't trigger overlapping re-scans.
+- The **Instance** (ADR-0047) owns the one watcher over `downloads/`: downloads (and
+  `.meta` changes) added, removed, or modified on disk land in its next recomputed value,
+  and `DownloadsProvider` re-renders from that value on every landing — no user action and
+  no manual Refresh (see *Toolbar* above). Events are debounced (200ms) so a single logical
+  file operation (e.g. a download write followed by its `.meta` sidecar write) recomputes
+  once, not once per file.
 
 ### Row context menu
 
@@ -325,12 +320,15 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   nothing of the tree. This mirrors the existing pure-logic layer
   (`statusChecker.ts`, `metaIni.ts`, `modlistText.ts`).
 - **`DownloadsProvider` / `DownloadNode`** (`DownloadsProvider.ts`) is a thin
-  `TreeDataProvider`: it scans `downloads/`, runs
-  the pure model to build render-ready rows, turns each into a `TreeItem` (see *Row
-  rendering*), and holds the toolbar's transient view state (`showHidden`, `sortColumn`,
-  `sortDescending` — reset on every activation, never persisted, matching the Mods
-  tree's Sort Direction toggle). A mutation or the watcher calls `invalidate()`, which
-  clears the cache and fires `onDidChangeTreeData`.
+  `TreeDataProvider` reading the Instance's `downloads` field (ADR-0047): it owns no scan
+  and no watcher of its own, runs the pure model over the Instance's rows to build
+  render-ready ones, turns each into a `TreeItem` (see *Row rendering*), and holds the
+  toolbar's transient view state (`showHidden`, `sortColumn`, `sortDescending` — reset on
+  every activation, never persisted, matching the Mods tree's Sort Direction toggle). It
+  subscribes to the Instance at construction; each landed value calls `invalidate()`, which
+  clears the cache and fires `onDidChangeTreeData`. A mutation from a row command reaches
+  the tree the same way — through the Instance's watcher over `downloads/`, not a direct
+  push from the command.
 - **`contextValue` carries the row's own gating state.** `downloadContextValue` produces the
   space-separated flag string a native `view/item/context` `when` clause can regex-match
   directly.
@@ -344,8 +342,8 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   its own direct `registerCommand` call, no id -> handler lookup table in between.
   `registerDownloadsSortCommand` and `registerDownloadsHiddenToggleCommands` wire the
   toolbar. Every command calls its action function directly — no round trip.
-- **`downloadsWatcher.ts`** is the sole re-render trigger; there is no
-  manual Refresh — see *Toolbar*.
+- **`downloadsWatcher.ts`** is the Instance's own watcher over `downloads/` (ADR-0047); the
+  tree has no watcher of its own and there is no manual Refresh — see *Toolbar*.
 - **`HiddenDownloadDecorationProvider`** dims hidden rows: a stateless
   `FileDecorationProvider` keyed on `resourceUri`, reading `DownloadsProvider.hiddenNames()`
   live on every call. It exists only because Show hidden is additive (hidden rows render
@@ -370,11 +368,11 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   the three mutation functions, byte-faithfully.
 - **`DownloadsProvider.test.ts`** (Vitest): `DownloadNode` row rendering (label/id, status
   icon+colour, description, tooltip composition including the metaless-minimal case,
-  `contextValue`, `resourceUri`); provider behavior — default sort, hidden exclusion,
+  `contextValue`, `resourceUri`); provider behavior against a fake Instance — rows come
+  from the Instance value alone (fixtures, never real fs), default sort, hidden exclusion,
   `setShowHidden`/`setSort` re-rendering and firing `onDidChangeTreeData`, `hiddenNames()`,
-  the empty-folder and no-folder empty states, the `modbench.downloadsFolderExists`
-  context key (including that a scan failure leaves it untouched — existence is unknown,
-  not false), and `ErrorNode` surfacing on a non-ENOENT scan failure (ADR-0026).
+  the empty-value state, the `sequence === 0` "not read yet" guard, and re-rendering off a
+  newly published Instance value past a macrotask boundary.
 - **`DownloadsPanel.test.ts`** (Vitest, `vscode` stubbed the way `ModListProvider.test.ts`
   does): `registerDownloadsSingleRowCommands` / `registerDownloadsMultiRowCommands` exercised
   by capturing the mocked `vscode.commands.registerCommand` calls and invoking the captured
@@ -395,10 +393,10 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   `modOrganizerIni.test.ts` — same fixture-in / value-out style; instance fixtures live
   under `modbench/src/modmanager/test/fixtures/`.
 - **Reused integration seam** (`npm run test:integration`, real VS Code process,
-  `extension.test.ts`'s `modbench.downloads` tree block): the tree renders from a
-  real instance; a dropped-in file is reflected via the watcher with no manual refresh;
-  the folder-exists welcome states; and all twelve `modbench.downloads.*` commands
-  register, asserted via `EXPECTED_COMMANDS`.
+  `extension.test.ts`'s `modbench.downloads` tree block): the tree renders from a real
+  instance; a dropped-in file is reflected through the Instance's watcher with no manual
+  refresh; and all twelve `modbench.downloads.*` commands register, asserted via
+  `EXPECTED_COMMANDS`.
 - The `when`-clause gating in `package.json` itself isn't exercised by any test
   (declarative, verified manually), same caveat as every other native context menu in
   this codebase.

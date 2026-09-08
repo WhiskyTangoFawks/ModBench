@@ -4,7 +4,6 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 import {
-  buildDownloadRows,
   downloadContextValue,
   filterHiddenRows,
   sortDownloadRows,
@@ -12,8 +11,7 @@ import {
   type DownloadSortColumn,
   type DownloadStatus,
 } from './mo2/downloads';
-import { scanDownloads } from './DownloadsPanel';
-import { ErrorNode } from './ErrorNode';
+import type { Instance, InstanceValue } from './instance';
 
 // Mirrors MO2's own colour-coded Status cell. The icon is always set explicitly so the
 // file-icon theme never takes over; a colour is affordable because every row is an archive.
@@ -67,14 +65,31 @@ export class DownloadNode extends vscode.TreeItem {
   }
 }
 
-export type DownloadsNode = DownloadNode | ErrorNode;
+export interface DownloadsProviderOptions {
+  instanceRoot: string;
+  /** downloads/ rows, `.meta` sidecars folded in — the row provider's only row input
+   *  (ADR-0047). */
+  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+}
 
-/** Flat: downloads have no grouping or reorder concept, so every row is a leaf. */
-export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode> {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsNode | undefined>();
+/** Flat: downloads have no grouping or reorder concept, so every row is a leaf. One row per
+ *  archive, read entirely from the Instance value (ADR-0047); this provider owns no cache or
+ *  watcher over downloads/ itself. */
+export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode>, vscode.Disposable {
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  private cache?: DownloadsNode[];
+  private readonly instanceRoot: string;
+  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  private instanceValue: InstanceValue;
+  private readonly instanceSubscription: vscode.Disposable;
+  // Resolves once the Instance lands its first recompute. `sequence === 0` means "not read
+  // yet", never "genuinely empty" — lets `getChildren()` await it instead of showing no rows
+  // before the Instance has read once (mirrors PluginListProvider's `firstValue`).
+  private readonly firstValue: Promise<void>;
+  private resolveFirstValue: (() => void) | undefined;
+
+  private cache?: DownloadNode[];
 
   // Transient view state — never persisted, matching the Mods tree's Sort Direction
   // toggle: a fresh activation always starts back at the spec's defaults (hidden excluded,
@@ -84,12 +99,29 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
   private sortDescending = true;
   private filterLower = '';
 
-  constructor(
-    private readonly instanceRoot: string,
-    private readonly log: (msg: string) => void = () => {},
-  ) {}
+  constructor(options: DownloadsProviderOptions) {
+    this.instanceRoot = options.instanceRoot;
+    this.instance = options.instance;
+    this.instanceValue = options.instance.value;
+    this.firstValue = options.instance.sequence > 0
+      ? Promise.resolve()
+      : new Promise((resolve) => { this.resolveFirstValue = resolve; });
+    this.instanceSubscription = options.instance.subscribe((value) => {
+      this.instanceValue = value;
+      this.resolveFirstValue?.();
+      this.invalidate();
+    });
+  }
 
+  dispose(): void {
+    this.instanceSubscription.dispose();
+  }
+
+  // Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
+  // a caller forcing a resync (Refresh All) gets whatever the Instance is currently holding, not
+  // a snapshot that predates it.
   invalidate(): void {
+    this.instanceValue = this.instance.value;
     this.cache = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -107,8 +139,8 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
     this.invalidate();
   }
 
-  /** Render-only: a filter keystroke narrows already-built rows and never re-scans
-   *  downloads/. An empty string clears the filter. */
+  /** Render-only: a filter keystroke narrows already-built rows and never re-pulls the Instance
+   *  value. An empty string clears the filter. */
   setFilter(text: string): void {
     this.filterLower = text.toLowerCase();
     this._onDidChangeTreeData.fire(undefined);
@@ -117,42 +149,25 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
   /** Empty before the first render, and whenever Show hidden is off, because hidden rows are
    *  then already absent from the cache. */
   hiddenNames(): ReadonlySet<string> {
-    const hidden = (this.cache ?? []).filter(
-      (n): n is DownloadNode => n instanceof DownloadNode && n.row.hidden,
-    );
+    const hidden = (this.cache ?? []).filter((n) => n.row.hidden);
     return new Set(hidden.map((n) => n.row.name));
   }
 
-  getTreeItem(element: DownloadsNode): vscode.TreeItem {
+  getTreeItem(element: DownloadNode): vscode.TreeItem {
     return element;
   }
 
-  async getChildren(element?: DownloadsNode): Promise<DownloadsNode[]> {
+  async getChildren(element?: DownloadNode): Promise<DownloadNode[]> {
     if (element) return []; // flat list — no row has children
-    this.cache ??= await this.load();
+    await this.firstValue; // never claim "no downloads" before the Instance has actually read one
+    this.cache ??= this.build();
     if (!this.filterLower) return this.cache;
-    // An ErrorNode survives every filter — hiding the reason the list is wrong behind a
-    // name match is exactly the silently-wrong state ADR-0026 forbids.
-    return this.cache.filter((n) =>
-      !(n instanceof DownloadNode) || n.row.name.toLowerCase().includes(this.filterLower));
+    return this.cache.filter((n) => n.row.name.toLowerCase().includes(this.filterLower));
   }
 
-  // The downloads folder can appear and disappear live, so `modbench.downloadsFolderExists` is
-  // republished on every re-scan rather than checked once at activation. On failure the key is
-  // left untouched: existence is then genuinely unknown, not false.
-  private async load(): Promise<DownloadsNode[]> {
-    let entries;
-    try {
-      entries = await scanDownloads(this.instanceRoot);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      this.log(`[DownloadsProvider] scanning downloads/ failed: ${message}`);
-      return [new ErrorNode(message)];
-    }
-    void vscode.commands.executeCommand('setContext', 'modbench.downloadsFolderExists', entries !== undefined);
-    if (!entries) return [];
+  private build(): DownloadNode[] {
     // Hidden-filtering applies first, then sort — the acceptance criterion the two compose by.
-    const filtered = filterHiddenRows(buildDownloadRows(entries), this.showHidden);
+    const filtered = filterHiddenRows(this.instanceValue.downloads, this.showHidden);
     const rows = sortDownloadRows(filtered, this.sortColumn, this.sortDescending);
     return rows.map((row) => new DownloadNode(row, this.instanceRoot));
   }
