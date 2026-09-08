@@ -2,13 +2,26 @@
 // MO2-side watchers, holds one whole value, and is built only by watching.
 
 import type * as vscode from 'vscode';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { IModlistSource, ModlistEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
-import { buildLoadOrderSnapshot, type LoadOrderPlugin } from './loadOrderSnapshot';
+import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { createModsWatcher } from './modsWatcher';
 import { createModlistWatcher } from './modlistWatcher';
 import { createOverwriteWatcher } from './overwriteWatcher';
 import { createPluginsTxtWatcher } from './pluginsTxtWatcher';
+import { createDownloadsWatcher } from './downloadsWatcher';
+import { scanDownloads } from './DownloadsPanel';
+import { buildDownloadRows, type DownloadRow } from './mo2/downloads';
+import { readGameName, readSelectedProfile } from './mo2/modOrganizerIni';
+import { resolveGameDirectory, type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory } from './gameDirectory';
+import type { OnConfigChange } from './gameDirectoryResolver';
+import { isDeployed } from './deployer';
+
+// A change here must recompute exactly as a file event does — the Instance's own replacement
+// for the memoized resolver's invalidation.
+const GAME_DIRECTORY_SECTION = 'modbench.mods.gameDirectory';
 
 // How long an MO2 write takes to settle: the wait that coalesces a burst into one recompute, and
 // the wait before an empty modlist read is believed.
@@ -26,8 +39,20 @@ export interface InstanceValue {
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
   readonly filesByMod: ReadonlyMap<string, readonly { relativePath: string; absolutePath: string }[]>;
-  /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0044). */
-  readonly plugins: readonly LoadOrderPlugin[];
+  /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0044). A listed
+   *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
+   *  undefined — when the game directory is unresolved. */
+  readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
+  /** downloads/ rows, `.meta` sidecars folded in — status and hidden included. */
+  readonly downloads: readonly DownloadRow[];
+  /** ModOrganizer.ini's `selected_profile`. */
+  readonly activeProfile: string;
+  /** ModOrganizer.ini's `gameName`. */
+  readonly gameRelease: string;
+  /** Setting, then MO2's `gamePath`, then autodetect; undefined when none resolve. */
+  readonly gameDirectory: GameDirectory | undefined;
+  /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
+  readonly deployed: boolean;
 }
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
@@ -37,13 +62,26 @@ type InstanceSource = Pick<IModlistSource, 'readModlist' | 'readPluginOrder' | '
 export interface InstanceOptions {
   instanceRoot: string;
   source: InstanceSource;
-  dataFolder: () => Promise<string>;
+  config: () => ConfigLike;
+  detectPaths: DetectPaths;
+  detectWinePrefix: DetectWinePrefix;
+  onConfigChange: OnConfigChange;
   log: (msg: string) => void;
 }
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
-const EMPTY: InstanceValue = { mods: [], files: new FileConflictLookup(), filesByMod: new Map(), plugins: [] };
+const EMPTY: InstanceValue = {
+  mods: [],
+  files: new FileConflictLookup(),
+  filesByMod: new Map(),
+  plugins: [],
+  downloads: [],
+  activeProfile: '',
+  gameRelease: '',
+  gameDirectory: undefined,
+  deployed: false,
+};
 
 export class Instance implements vscode.Disposable {
   private current: InstanceValue = EMPTY;
@@ -59,6 +97,8 @@ export class Instance implements vscode.Disposable {
 
   private readonly watchers: vscode.Disposable[];
 
+  private readonly configSubscription: { dispose(): void };
+
   constructor(private readonly options: InstanceOptions) {
     const schedule = () => this.schedule();
     // Each watcher's own coalescing is off: a burst spanning several of them is one recompute,
@@ -68,7 +108,13 @@ export class Instance implements vscode.Disposable {
       createModlistWatcher(options.instanceRoot, schedule, 0),
       createPluginsTxtWatcher(options.instanceRoot, schedule, 0),
       createOverwriteWatcher(options.instanceRoot, schedule, 0),
+      createDownloadsWatcher(options.instanceRoot, schedule, 0),
     ];
+    // The game directory setting is editable while Modbench runs, so a change to it is a
+    // recompute trigger like any watched file, not just a cache invalidation.
+    this.configSubscription = options.onConfigChange((e) => {
+      if (e.affectsConfiguration(GAME_DIRECTORY_SECTION)) schedule();
+    });
   }
 
   /** Never undefined and never partial: before the first read it is the empty value at
@@ -102,6 +148,7 @@ export class Instance implements vscode.Disposable {
   dispose(): void {
     clearTimeout(this.timer);
     for (const watcher of this.watchers) watcher.dispose();
+    this.configSubscription.dispose();
     this.subscribers = [];
   }
 
@@ -139,9 +186,9 @@ export class Instance implements vscode.Disposable {
     }
   }
 
-  // A truncated modlist.txt parses to no entries rather than failing, and zero mods is legal, so
-  // an empty parse is re-read after a settle: a torn write has finished by then, a mass delete
-  // has not. A partial parse is indistinguishable from a real removal and is not covered.
+  // A truncated modlist.txt parses to no entries, and zero mods is legal, so an empty parse is
+  // re-read after a settle before being believed. A partial parse is not covered — it reads as
+  // a real removal.
   private async readMods(): Promise<ModlistEntry[]> {
     const entries = await this.options.source.readModlist();
     if (entries.length > 0) return entries;
@@ -154,10 +201,22 @@ export class Instance implements vscode.Disposable {
   }
 
   private async read(): Promise<InstanceValue> {
-    const { instanceRoot, source, dataFolder, log } = this.options;
+    const { instanceRoot, source, config, detectPaths, detectWinePrefix, log } = this.options;
     const entries = await this.readMods();
-    const index = await buildFileConflictIndex(entries, instanceRoot, log);
-    const plugins = await buildLoadOrderSnapshot(
+    const [index, iniText, downloadEntries, deployed] = await Promise.all([
+      buildFileConflictIndex(entries, instanceRoot, log),
+      readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'),
+      scanDownloads(instanceRoot),
+      isDeployed(instanceRoot),
+    ]);
+    // The ini is read once above and handed to resolveGameDirectory as-is, so a rewrite
+    // between it and activeProfile/gameRelease below cannot land two generations in one value.
+    const gameDirectory = await resolveGameDirectory(
+      instanceRoot, config(), detectPaths, detectWinePrefix, () => Promise.resolve(iniText));
+    // An unresolved game directory loses only the Data-folder copies' paths: every plugins.txt
+    // line still gets a row, existence/slot/enabled coming from the line itself (see
+    // `LoadOrderPluginLine`), not from the game directory.
+    const plugins = await buildLoadOrderRows(
       // The modlist is read once per recompute and handed on, so the snapshot cannot see a
       // different generation of it than the file index did.
       {
@@ -166,9 +225,19 @@ export class Instance implements vscode.Disposable {
         readEnabledPlugins: () => source.readEnabledPlugins(),
       },
       instanceRoot,
-      await dataFolder(),
+      gameDirectory?.dataFolder,
       () => Promise.resolve(index),
     );
-    return { mods: entries, files: index.files, filesByMod: index.filesByMod, plugins };
+    return {
+      mods: entries,
+      files: index.files,
+      filesByMod: index.filesByMod,
+      plugins,
+      downloads: downloadEntries ? buildDownloadRows(downloadEntries) : [],
+      activeProfile: readSelectedProfile(iniText),
+      gameRelease: readGameName(iniText),
+      gameDirectory: gameDirectory ?? undefined,
+      deployed,
+    };
   }
 }

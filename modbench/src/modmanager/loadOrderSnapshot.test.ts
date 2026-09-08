@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
-import { buildLoadOrderSnapshot } from './loadOrderSnapshot';
+import { buildLoadOrderSnapshot, resolvePluginPaths } from './loadOrderSnapshot';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
 // to produce them: those are a wire contract (ADR-0036), and asserting against the same symbol
@@ -175,5 +175,21 @@ describe('buildLoadOrderSnapshot', () => {
       { name: 'Bar.esp', path: '/mods/B/bar.esp', origin: 'B', slot: 1, enabled: true, winning: true },
       { name: 'Fallout4.esm', path: join(dataFolder, 'Fallout4.esm'), origin: 'Data', slot: 2, enabled: true, winning: true },
     ]);
+  });
+});
+
+describe('resolvePluginPaths', () => {
+  // A defined-but-empty dataFolder is falsy but not undefined: the fallback branches on
+  // definedness, so it still resolves rather than dropping the name.
+  it('resolves the Data-folder fallback for an empty-string dataFolder', () => {
+    const result = resolvePluginPaths(['Fallout4.esm'], index({}), '');
+
+    expect(result.get('Fallout4.esm')).toBe('Fallout4.esm');
+  });
+
+  it('drops a name neither a mod winner nor a dataFolder can resolve', () => {
+    const result = resolvePluginPaths(['Fallout4.esm'], index({}), undefined);
+
+    expect(result.has('Fallout4.esm')).toBe(false);
   });
 });
