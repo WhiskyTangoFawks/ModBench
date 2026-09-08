@@ -32,7 +32,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        var result = ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        var result = _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         Assert.True(result.Applied, result.RefusalReason);
         var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
@@ -51,7 +51,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         Assert.Equal(branchBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Equal(headBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
@@ -65,7 +65,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, SourceEditFixture.PluginName));
     }
@@ -78,7 +78,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var tree = GitCli.Run(gitDir, _mod.ModFolder, "ls-tree", "-r", "--name-only", "main")
@@ -100,7 +100,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         var mainBefore = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
         File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
-        var result = ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        var result = _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         Assert.False(result.Applied);
         Assert.Contains(SourceEditFixture.PluginName, result.RefusalReason, StringComparison.Ordinal);
@@ -113,7 +113,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var mainSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();

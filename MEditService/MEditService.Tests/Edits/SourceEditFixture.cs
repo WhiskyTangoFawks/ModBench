@@ -37,6 +37,8 @@ public sealed class SourceEditFixture : IDisposable
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
     public PeekNextFreeFormKeyHandler PeekHandler { get; }
+    public AbsorbExternalChangeHandler AbsorbHandler { get; }
+    public KeepExternalChangeHandler KeepHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
@@ -86,6 +88,8 @@ public sealed class SourceEditFixture : IDisposable
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);
         PeekHandler = TestEditService.PeekHandler(holder);
+        AbsorbHandler = TestEditService.AbsorbHandler();
+        KeepHandler = TestEditService.KeepHandler();
     }
 
     public static SourceEditFixture Tracked() => new(track: true, PluginName, isLight: false);
