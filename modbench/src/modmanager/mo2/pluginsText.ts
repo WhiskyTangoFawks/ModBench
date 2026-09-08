@@ -23,9 +23,9 @@ const pluginNameOf = (line: string): string => {
   return c.startsWith('*') ? c.slice(1) : c;
 };
 
-/** Each name's 0-based line-order index — the load order slot ADR-0035's ordering derives
- *  from — keyed by exact case. A caller matching another file's names case-insensitively
- *  folds the keys itself. */
+/** Each name's 0-based line-order index — the `load_order_idx` slot ADR-0044 derives from —
+ *  keyed by exact case. A caller matching another file's names case-insensitively folds the
+ *  keys itself. */
 export function pluginSlots(names: readonly string[]): Map<string, number> {
   return new Map(names.map((name, slot) => [name, slot] as const));
 }

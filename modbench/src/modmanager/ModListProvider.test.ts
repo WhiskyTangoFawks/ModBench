@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Mod, ModlistEntry, Separator } from './model';
-import { parseModlist, moveModInText, moveSeparatorBlockInText } from './mo2/modlistText';
+import { parseModlist, moveModInText, moveSeparatorBlockInText, writeModlist } from './mo2/modlistText';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
@@ -274,18 +274,10 @@ describe('ModListProvider', () => {
       return { provider, reorderCalls, moveToSepCalls, reorderBlockCalls };
     }
 
-    // Serialise entries to a real modlist.txt so a drop can be observed by its
-    // resulting order, not just the pre-removal index argument (asserting only
-    // the argument once missed a down-drag off-by-one).
-    const toModlistText = (entries: ModlistEntry[]): string =>
-      entries
-        .map((e) => `${e.enabled ? '+' : '-'}${e.name}${e.kind === 'separator' ? '_separator' : ''}`)
-        .join('\n') + '\n';
-
     /** A source that applies real modlist.txt transforms, so tests assert the
      *  final entry order the drop produces end-to-end. */
     class ApplyingSource extends FakeSource {
-      text = toModlistText(dndEntries);
+      text = writeModlist(dndEntries);
       override readModlist(): Promise<ModlistEntry[]> { return Promise.resolve(parseModlist(this.text)); }
       override reorder(name: string, idx: number): Promise<void> { this.text = moveModInText(this.text, name, idx); return Promise.resolve(); }
       override reorderSeparatorBlock(sepName: string, idx: number): Promise<void> { this.text = moveSeparatorBlockInText(this.text, sepName, idx); return Promise.resolve(); }

@@ -84,7 +84,8 @@ export async function buildLoadOrderSnapshot(
   // Case-folded, like every other name comparison here: plugins.txt casing is not authoritative,
   // and a case difference must not read as "disabled" or as "a second copy".
   const enabledNames = new Set(enabled.map((n) => foldPath(n)));
-  const slotByName = new Map([...pluginSlots(names)].map(([name, slot]) => [foldPath(name), slot] as const));
+  const slotByName = new Map<string, number>();
+  for (const [name, slot] of pluginSlots(names)) slotByName.set(foldPath(name), slot);
 
   const listed: LoadOrderPlugin[] = names.map((name, slot) => {
     const overwriteFile = overwriteFiles.get(foldPath(name));
