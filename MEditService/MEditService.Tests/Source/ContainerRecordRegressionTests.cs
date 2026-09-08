@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
@@ -7,6 +8,7 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -183,7 +185,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
         var beforeMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
-        ExternalChangeAbsorber.Absorb(_fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, LoadOrder.From(_fixture.Index.LoadOrder!));
+        TestEditService.AbsorbHandler().Absorb(
+            _fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, LoadOrder.From(_fixture.Index.LoadOrder!));
 
         var afterMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);
@@ -203,9 +206,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
 
-        var result = ExternalChangeEditLander.Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+        var result = TestEditService.KeepHandler().Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -223,9 +225,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .SelectMany(sub => sub.Cells)
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
-        var result = ExternalChangeEditLander.Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+        var result = TestEditService.KeepHandler().Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -247,9 +248,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             placedRef.Position = new P3Float(999f, 22f, 33f);
         });
 
-        var result = ExternalChangeEditLander.Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+        var result = TestEditService.KeepHandler().Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
@@ -270,9 +270,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .SelectMany(sub => sub.Cells)
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
-        var result = ExternalChangeEditLander.Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+        var result = TestEditService.KeepHandler().Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
 
         Assert.False(result.Applied);
         Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -296,9 +295,11 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         });
 
         var entries = new List<LogEntry>();
-        var result = ExternalChangeEditLander.Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            SharedSchemaReflector.Instance, new CollectingLogger(entries));
+        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
+        var handler = new KeepExternalChangeHandler(
+            SharedSchemaReflector.Instance, loggerFactory.CreateLogger<KeepExternalChangeHandler>());
+
+        var result = handler.Keep(_fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);

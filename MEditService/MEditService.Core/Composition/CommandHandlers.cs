@@ -80,6 +80,13 @@ public static class CommandHandlers
 
         services.AddSingleton(sp => new CompilePluginHandler(sp.GetRequiredService<PluginCompileService>()));
 
+        services.AddSingleton(sp => new AbsorbExternalChangeHandler(
+            sp.GetRequiredService<ILogger<AbsorbExternalChangeHandler>>()));
+
+        services.AddSingleton(sp => new KeepExternalChangeHandler(
+            sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<ILogger<KeepExternalChangeHandler>>()));
+
         return services;
     }
 }

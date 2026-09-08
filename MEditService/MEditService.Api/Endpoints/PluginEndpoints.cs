@@ -4,7 +4,6 @@ using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using MEditService.Core.Source;
 
 namespace MEditService.Api.Endpoints;
@@ -351,7 +350,9 @@ public static class PluginEndpoints
 
     // Absorb Upstream Update. The plugin name and origin resolve the target the same way
     // Compile does; GameRelease comes off the loaded load order, never guessed.
-    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, IndexProjector index, ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
+    internal static IResult AbsorbExternalChange(
+        string plugin, ExternalChangeActionRequest req, IndexProjector index, AbsorbExternalChangeHandler handler,
+        ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
@@ -366,7 +367,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath, loadOrder);
+            var result = handler.Absorb(modFolder, decoded, pluginPath, loadOrder);
             if (result.Applied)
             {
                 watcher.MarkAnswered(modFolder, decoded);
@@ -384,7 +385,9 @@ public static class PluginEndpoints
     // Keep as My Edit. A same-record collision is a typed refusal (ExternalChangeLandResult.
     // Applied == false), not an exception — it travels straight through as a 200, same posture as
     // Compile's own refusal.
-    internal static IResult KeepExternalChange(string plugin, ExternalChangeActionRequest req, IndexProjector index, ExternalChangeWatcher watcher, SchemaReflector reflector, ILoggerFactory loggerFactory)
+    internal static IResult KeepExternalChange(
+        string plugin, ExternalChangeActionRequest req, IndexProjector index, KeepExternalChangeHandler handler,
+        ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
@@ -399,9 +402,8 @@ public static class PluginEndpoints
 
         try
         {
-            var result = ExternalChangeEditLander.Keep(
-                modFolder, WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), pluginPath, loadOrder.GameRelease,
-                reflector, logger);
+            var result = handler.Keep(
+                modFolder, WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), pluginPath, loadOrder.GameRelease);
             if (result.Applied)
             {
                 watcher.MarkAnswered(modFolder, decoded);

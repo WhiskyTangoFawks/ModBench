@@ -1,16 +1,33 @@
 using System.Security.Cryptography;
 using MEditService.Core.Plugins;
+using MEditService.Core.Source;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Commands;
 
-/// <summary>The "Absorb Upstream Update" exit path: re-serializes the whole plugin as Track does and
-/// commits it to main as a new baseline. No per-record diffing — reconciling against the edit
-/// branch is the rebase's job.</summary>
-public static class ExternalChangeAbsorber
+/// <summary>Absorb Upstream Update's handler (ADR-0046 invariant 3): re-serializes the plugin as
+/// Track does, then commits it to main as a new baseline — no per-record diffing; that's the
+/// rebase's job.</summary>
+public sealed class AbsorbExternalChangeHandler
 {
-    public static AbsorbResult Absorb(string modFolder, string pluginName, string pluginPath, LoadOrder loadOrder)
+    private readonly ILogger<AbsorbExternalChangeHandler> _logger;
+
+    // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
+    internal AbsorbExternalChangeHandler(ILogger<AbsorbExternalChangeHandler> logger) => _logger = logger;
+
+    public AbsorbResult Absorb(string modFolder, string pluginName, string pluginPath, LoadOrder loadOrder)
+    {
+        var result = Run(modFolder, pluginName, pluginPath, loadOrder);
+        // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
+        if (!result.Applied)
+            _logger.LogWarning("Refused to absorb {Plugin}: {Reason}", pluginName, result.RefusalReason);
+        return result;
+    }
+
+    // Static because none of it reads this handler's state.
+    private static AbsorbResult Run(string modFolder, string pluginName, string pluginPath, LoadOrder loadOrder)
     {
         // A fresh deep parse of the binary now on disk, never a cached load-order view — that stale view
         // is what this method reacts to. Absorb only runs against a tracked plugin, so the mod-folder-only
@@ -53,13 +70,4 @@ public static class ExternalChangeAbsorber
         ExternalChangeDeferral.Clear(modFolder, pluginName);
         return AbsorbResult.Success();
     }
-}
-
-/// <summary>Absorb Upstream Update's outcome — the applied-or-refusal spine its Keep sibling returns
-/// (ADR-0046 invariant 8), so a binary that cannot be parsed is an answer, not an exception.</summary>
-public sealed record AbsorbResult(bool Applied, string? RefusalReason)
-{
-    public static AbsorbResult Success() => new(true, null);
-
-    public static AbsorbResult Refused(string reason) => new(false, reason);
 }

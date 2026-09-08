@@ -46,7 +46,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
     }
 
     private void AbsorbUpstreamNewRecord()
@@ -61,7 +61,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
     }
 
     [Fact]

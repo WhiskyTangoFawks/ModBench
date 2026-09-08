@@ -62,6 +62,12 @@ internal static class TestEditService
     internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(IndexProjector index) =>
         CopyAsNewHandler(HolderOver(index));
 
+    internal static AbsorbExternalChangeHandler AbsorbHandler() =>
+        new(NullLogger<AbsorbExternalChangeHandler>.Instance);
+
+    internal static KeepExternalChangeHandler KeepHandler() =>
+        new(SharedSchemaReflector.Instance, NullLogger<KeepExternalChangeHandler>.Instance);
+
     internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) => new(
         new WriteTargets(
             holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),

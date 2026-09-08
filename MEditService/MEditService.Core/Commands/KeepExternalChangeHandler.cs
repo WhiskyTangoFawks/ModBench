@@ -3,28 +3,33 @@ using System.Text;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Commands;
 
-/// <summary>The "Keep as My Edit" path: the binary lands as working-tree dirt on the records it
-/// touched, so unrelated edits survive. A record with independent dirt that disagrees with the
-/// incoming value refuses the whole gesture.</summary>
-public static class ExternalChangeEditLander
+/// <summary>Keep as My Edit's handler (ADR-0046 invariant 3): the binary lands as working-tree dirt
+/// on the records it touched. Dirt that disagrees with the incoming value refuses the whole
+/// gesture.</summary>
+public sealed class KeepExternalChangeHandler
 {
-    public static ExternalChangeLandResult Keep(
-        string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease,
-        SchemaReflector reflector, ILogger? logger = null)
+    private readonly SchemaReflector _reflector;
+    private readonly ILogger<KeepExternalChangeHandler> _logger;
+
+    // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
+    internal KeepExternalChangeHandler(SchemaReflector reflector, ILogger<KeepExternalChangeHandler> logger) =>
+        (_reflector, _logger) = (reflector, logger);
+
+    public ExternalChangeLandResult Keep(string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease)
     {
-        logger ??= NullLogger.Instance;
         var repository = SourceRepository.Open(modFolder, gameRelease)
             ?? throw new InvalidOperationException($"'{modFolder}' is not tracked, so it has no source to land on.");
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var schemas = reflector.GetSchemas(gameRelease);
+        var schemas = _reflector.GetSchemas(gameRelease);
         var pluginName = plugin.Name;
 
         // Keyed by the record, not its path: an external EditorID change moves a record's file.
@@ -55,9 +60,9 @@ public static class ExternalChangeEditLander
             {
                 // Inlined in its owner's document, and the owner's own pass serializes this child's
                 // current value as part of the owner's whole text.
-                if (logger.IsEnabled(LogLevel.Trace))
+                if (_logger.IsEnabled(LogLevel.Trace))
                 {
-                    logger.LogTrace(
+                    _logger.LogTrace(
                         "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
                         "it is embedded, not its own source unit",
                         record.FormKey, recordType, pluginName, unit.OwnerFormKey);
@@ -70,9 +75,9 @@ public static class ExternalChangeEditLander
             var renameable = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType) is not null;
             if (held is null && !renameable)
             {
-                if (logger.IsEnabled(LogLevel.Debug))
+                if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    logger.LogDebug(
+                    _logger.LogDebug(
                         "Skipping {FormKey} ({RecordType}) in {Plugin}: no existing source unit anywhere in " +
                         "the tree — landing a brand-new container isn't supported yet",
                         record.FormKey, recordType, pluginName);
@@ -124,13 +129,4 @@ public static class ExternalChangeEditLander
     private sealed record TouchedRecord(
         string FormKey, RecordIdentity At, bool Renameable, string? IncomingEditorId, string IncomingText,
         string? CurrentText, string? BaselineText);
-}
-
-/// <summary>Keep as My Edit's outcome — a typed refusal (naming the colliding records), never a
-/// partial apply: either every touched record lands, or none of them do.</summary>
-public sealed record ExternalChangeLandResult(bool Applied, string? RefusalReason, IReadOnlyList<string> LandedFormKeys)
-{
-    public static ExternalChangeLandResult Success(IReadOnlyList<string> landedFormKeys) => new(true, null, landedFormKeys);
-
-    public static ExternalChangeLandResult Refused(string reason) => new(false, reason, []);
 }
