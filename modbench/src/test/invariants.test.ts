@@ -12,7 +12,7 @@ const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'ut
 describe('every Mo2ModlistSource write verb has a corpus test', () => {
   const writeVerbs = [...read('modmanager/mo2/Mo2ModlistSource.ts').matchAll(/^ {2}async (?!read|list|get)(\w+)\(/gm)].map((m) => m[1]);
   const corpusDir = join(SRC, 'modmanager');
-  const corpus = readdirSync(corpusDir).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => read(`modmanager/${f}`)).join('\n');
+  const corpus = walk(corpusDir).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
 
   it('finds the write verbs', () => {
     expect(writeVerbs).toContain('setEnabled');

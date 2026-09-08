@@ -2,9 +2,9 @@
 // modlist.txt changed — the composition-level guarantee a per-format test cannot give.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
-import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree } from './test/corpusFixture';
-import type { Mod, Separator } from './model';
+import { Mo2ModlistSource } from './Mo2ModlistSource';
+import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree } from '../test/corpusFixture';
+import type { Mod, Separator } from '../model';
 
 describe('modlist.txt corpus — every entry mutation touches modlist.txt and nothing else', () => {
   let dir: string;
