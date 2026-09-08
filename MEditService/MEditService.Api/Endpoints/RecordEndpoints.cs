@@ -153,7 +153,7 @@ public static class RecordEndpoints
         // via Mutagen's own record-level Duplicate. Same collision posture as CreateRecord, reused
         // rather than re-implemented.
         app.MapPost("/records/{formKey}/copy-as-new-record", (
-            string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits, IndexWriteGate gate) =>
             CopyRecordAsNewRecord(formKey, request, edits, gate, logger))
         .WithName("CopyRecordAsNewRecord")
         .WithSummary("Copy as New Record Into… — a deep copy of the source record under a fresh FormKey.")
@@ -339,7 +339,7 @@ public static class RecordEndpoints
     }
 
     internal static IResult CopyRecordAsNewRecord(
-        string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, IndexWriteGate gate,
+        string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits, IndexWriteGate gate,
         ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);

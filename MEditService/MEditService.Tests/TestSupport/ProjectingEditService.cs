@@ -14,7 +14,7 @@ namespace MEditService.Tests.TestSupport;
 internal sealed class ProjectingEditService(
     IndexProjector index, LoadOrderHolder holder, RecordEditService inner, EditRecordHandler edits,
     DeleteRecordHandler deletes, CreateRecordHandler creates, PeekNextFreeFormKeyHandler peek,
-    CopyRecordAsOverrideHandler copyOverrides)
+    CopyRecordAsOverrideHandler copyOverrides, CopyRecordAsNewRecordHandler copyAsNew)
 {
     /// <summary>The service every test writes through, over <paramref name="index"/>'s own store and
     /// schemas.</summary>
@@ -24,7 +24,7 @@ internal sealed class ProjectingEditService(
         return new ProjectingEditService(
             index, holder, TestEditService.Over(holder), TestEditService.EditHandler(holder),
             TestEditService.DeleteHandler(holder), TestEditService.CreateHandler(holder), TestEditService.PeekHandler(holder),
-            TestEditService.CopyAsOverrideHandler(holder));
+            TestEditService.CopyAsOverrideHandler(holder), TestEditService.CopyAsNewHandler(holder));
     }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
@@ -45,7 +45,7 @@ internal sealed class ProjectingEditService(
 
     internal RecordEditResult CopyRecordAsNewRecord(
         PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null) =>
-        Projected(Current().CopyRecordAsNewRecord(sourcePlugin, formKey, destinationPlugin, requestedFormKey));
+        Projected(CurrentCopyAsNew().CopyRecordAsNewRecord(sourcePlugin, formKey, destinationPlugin, requestedFormKey));
 
     internal RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null) =>
         Projected(Current().RenumberRecord(plugin, formKey, requestedFormKey));
@@ -83,6 +83,12 @@ internal sealed class ProjectingEditService(
     {
         TestEditService.Sync(holder, index);
         return copyOverrides;
+    }
+
+    private CopyRecordAsNewRecordHandler CurrentCopyAsNew()
+    {
+        TestEditService.Sync(holder, index);
+        return copyAsNew;
     }
 
     private PeekNextFreeFormKeyHandler CurrentPeek()

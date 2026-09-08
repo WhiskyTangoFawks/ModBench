@@ -49,6 +49,19 @@ internal static class TestEditService
             NullLogger<CopyRecordAsOverrideHandler>.Instance);
     }
 
+    internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(LoadOrderHolder holder)
+    {
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var targets = new WriteTargets(
+            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
+        return new CopyRecordAsNewRecordHandler(
+            targets, new RecordCopy(SharedSchemaReflector.Instance, NullLogger.Instance, codec), codec,
+            NullLogger<CopyRecordAsNewRecordHandler>.Instance);
+    }
+
+    internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(IndexProjector index) =>
+        CopyAsNewHandler(HolderOver(index));
+
     internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) => new(
         new WriteTargets(
             holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
