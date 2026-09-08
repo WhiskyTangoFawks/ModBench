@@ -23,6 +23,7 @@ public sealed class CommandHandlerConventionTests
         (typeof(CompilePluginHandler), "Succeeded"),
         (typeof(CopyRecordAsOverrideHandler), "Applied"),
         (typeof(CopyRecordAsNewRecordHandler), "Applied"),
+        (typeof(RenumberRecordHandler), "Applied"),
     ];
 
     private const string CommandsNamespace = "MEditService.Core.Commands";

@@ -15,7 +15,7 @@ public sealed class RenumberCascadeWatchTests
     {
         using var fixture = CascadeRollbackFixture.Watched();
 
-        var result = fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey);
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey);
         Assert.True(result.Applied, result.Message);
 
         // Nothing was pushed: what the Index knows, it learns from the trees the command wrote.
@@ -51,7 +51,7 @@ public sealed class RenumberCascadeWatchTests
         Directory.CreateDirectory(blocked);
 
         Assert.Throws<IOException>(() =>
-            fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
+            fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
 
         Assert.True(
             await fixture.ProjectionReaches(reads =>

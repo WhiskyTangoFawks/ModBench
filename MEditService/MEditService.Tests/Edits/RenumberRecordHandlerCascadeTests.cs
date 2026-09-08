@@ -5,7 +5,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>The renumber cascade computes every affected record's new content before it writes
 /// anything; a computation failure is a typed refusal with the tree untouched.</summary>
-public sealed class RecordEditServiceRenumberCascadeTests
+public sealed class RenumberRecordHandlerCascadeTests
 {
     [Fact]
     public void RenumberRecord_Refuses_WhenAReferencersOnlyLinkIsAStructListScriptProperty_NamingIt()
@@ -14,7 +14,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         var referencerFile = fixture.SourceFileOf(fixture.Referencer, "npc_", "StructListNpc");
         var referencerBefore = File.ReadAllText(referencerFile);
 
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, fixture.Target.ToString());
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Target.ToString());
 
         Assert.False(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.ReferenceRemapIncomplete, result.Refusal);
@@ -35,7 +35,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         var targetFile = fixture.SourceFileOf(fixture.Target, "npc_", "SelfStructListNpc");
         var before = File.ReadAllText(targetFile);
 
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, fixture.Target.ToString());
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Target.ToString());
 
         Assert.False(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.ReferenceRemapIncomplete, result.Refusal);
@@ -49,7 +49,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         using var fixture = CascadeFixture.WithSelfReferencingTarget();
         var oldFormKey = fixture.Target.ToString();
 
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, oldFormKey);
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
         var moved = fixture.Document(result.NewFormKey!)!;
@@ -69,7 +69,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         using var fixture = CascadeFixture.WithPathAmbiguousGroupReferencer();
         var oldFormKey = fixture.Target.ToString();
 
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, oldFormKey);
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
         var referencer = fixture.Document(fixture.Referencer.ToString())!;
@@ -89,7 +89,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
             referencerFile,
             File.ReadAllText(referencerFile).Replace(oldFormKey, oldFormKey.ToLowerInvariant(), StringComparison.Ordinal));
 
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, oldFormKey);
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
         var rewritten = File.ReadAllText(referencerFile);
@@ -112,7 +112,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
             "{\n  \"MutagenObjectType\": \"Landscape\",\n  \"FormKey\": \"000F00:Cascade.esp\",\n" +
             $"  \"EditorID\": \"{oldFormKey}\"\n}}");
 
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, oldFormKey);
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.False(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.ReferenceRemapIncomplete, result.Refusal);
@@ -130,7 +130,7 @@ public sealed class RecordEditServiceRenumberCascadeTests
         // directory is the one shape that takes a whole referencer out of the tree.
         Directory.Delete(fixture.DirectoryOf(fixture.SecondReferencer), recursive: true);
 
-        var result = fixture.Edits.RenumberRecord(fixture.Plugin, fixture.Target.ToString());
+        var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Target.ToString());
 
         Assert.True(result.Applied, result.Message);
         var surviving = File.ReadAllText(survivingFile);

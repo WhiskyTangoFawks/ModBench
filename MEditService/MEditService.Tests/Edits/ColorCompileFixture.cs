@@ -27,7 +27,6 @@ public sealed class ColorCompileFixture : IDisposable
     public string ModFolder => _modFolder;
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrder LoadOrder { get; }
-    public RecordEditService Edits { get; }
     public EditRecordHandler EditHandler { get; }
 
     // Neither 0 nor 255, so surviving a 3-leaf edit cannot pass by coincidence against a default.
@@ -82,7 +81,6 @@ public sealed class ColorCompileFixture : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
     }
 

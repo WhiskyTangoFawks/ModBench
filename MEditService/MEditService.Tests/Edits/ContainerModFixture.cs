@@ -23,7 +23,7 @@ public sealed class ContainerModFixture : IDisposable
     public string ModFolder { get; }
     public string GameDirectory { get; }
     public LoadOrder LoadOrder { get; }
-    public RecordEditService Edits { get; }
+    public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
 
@@ -186,7 +186,7 @@ public sealed class ContainerModFixture : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
+        RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
     }

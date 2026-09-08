@@ -4,7 +4,7 @@ status: accepted
 
 # A failed renumber restores the working trees: failure atomicity, conditionally, without git
 
-Governs the renumber cascade in `MEditService.Core/Edits/RecordEditService.cs` and the mechanism it
+Governs the renumber cascade in `MEditService.Core/Commands/RenumberRecordHandler.cs` and the mechanism it
 constructs, `MEditService.Core/Source/SourceRepositoryTransaction.cs`. Extends
 [ADR-0041](0041-manual-git-tracking-compile-from-text.md) (one write path; refusals precede writes;
 commit, stash and discard are the author's gestures) and
@@ -70,7 +70,7 @@ something broken behind after we are done is not.** This ADR is about failure at
 
 5. **Process death is out of scope.** An in-memory transaction dies with its process. The compile
    round-trip gate and re-Track remain the recovery path for a tree left mid-write by a crash, as
-   they already are for `SourceUnitResolver.InMintedDirectory`'s own minted directories. Making failure atomicity survive process death would mean an on-disk journal in the author's
+   they already are for `SourceRepository.InMintedDirectory`'s own minted directories. Making failure atomicity survive process death would mean an on-disk journal in the author's
    folder — new state, new staleness, new recovery semantics — for a failure mode the existing gate
    already catches.
 
@@ -92,7 +92,7 @@ something broken behind after we are done is not.** This ADR is about failure at
    still shown — it is the only thing that says *why* — with every affected mod folder's prefix cut
    off it, textually, because an exception message is prose and there is no typed path to reach for.
 
-8. **Directory lifetime stays with `SourceUnitResolver.InMintedDirectory`.** It already lists
+8. **Directory lifetime stays with `SourceRepository.InMintedDirectory`.** It already lists
    missing ancestors before creating them and removes exactly those, non-recursively, when the write
    fails — so a directory a third party has written into survives. The transaction routes its writes
    *through* that wrapper and holds no directory pre-images of its own; two mechanisms racing to

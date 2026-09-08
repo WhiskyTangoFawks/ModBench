@@ -32,7 +32,7 @@ public sealed class IndexAfterARenumberTests
         using var index = MirrorOver(two.GameDirectory, two.Entries);
         var oldFormKey = two.TargetRace.ToString();
 
-        var result = two.Edits.RenumberRecord(two.TargetPlugin, oldFormKey);
+        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, oldFormKey);
         Assert.True(result.Applied, result.Message);
 
         Assert.Null(index.Projected().GetDocument(oldFormKey, two.TargetPlugin));
@@ -52,7 +52,7 @@ public sealed class IndexAfterARenumberTests
         var query = new RecordQuery(RecordTypes: ["race"], Limit: 10, Offset: 0);
         Assert.Equal(1, index.SettledReads().Search(query).Total);
 
-        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
         Assert.True(result.Applied, result.Message);
 
         var after = index.SettledReads().Search(query);
@@ -66,7 +66,7 @@ public sealed class IndexAfterARenumberTests
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
         using var index = MirrorOver(two.GameDirectory, two.Entries);
 
-        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
         Assert.True(result.Applied, result.Message);
 
         var reads = index.Projected();
@@ -83,7 +83,7 @@ public sealed class IndexAfterARenumberTests
         var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, oldFormKey);
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, oldFormKey);
         Assert.True(result.Applied, result.Message);
 
         var reads = index.SettledReads();
@@ -115,7 +115,7 @@ public sealed class IndexAfterARenumberTests
         try
         {
             var ex = Assert.Throws<IOException>(() =>
-                two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString(), requestedTarget));
+                two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString(), requestedTarget));
             // No repository is named as holding partial damage, because none does.
             Assert.Contains("back as it was", ex.Message, StringComparison.Ordinal);
             Assert.DoesNotContain(RenumberTwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
@@ -151,7 +151,7 @@ public sealed class IndexAfterARenumberTests
         Directory.CreateDirectory(fixture.RenumberedRacePath(NewRaceFormKey) + ".tmp");
 
         Assert.Throws<IOException>(() =>
-            fixture.Edits.RenumberRecord(fixture.TargetPlugin, race, NewRaceFormKey));
+            fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, race, NewRaceFormKey));
 
         var reads = index.Projected();
         Assert.Equal(3, reads.GetReferencedBy(race).Select(r => r.FormKey).Distinct().Count());
@@ -179,7 +179,7 @@ public sealed class IndexAfterARenumberTests
         File.WriteAllText(Path.Combine(relocated, "occupied.txt"), "something else is here");
 
         Assert.Throws<IOException>(() =>
-            fixture.Edits.RenumberRecord(fixture.Plugin, worldspace, newWorldspaceFormKey));
+            fixture.RenumberHandler.RenumberRecord(fixture.Plugin, worldspace, newWorldspaceFormKey));
 
         // The projector re-read the restored tree, so the old identity is what answers: the
         // rollback put the files back and nothing else had to unwind an index.

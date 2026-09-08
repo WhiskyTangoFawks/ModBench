@@ -294,7 +294,7 @@ public record RecordRenumberRequest(string Plugin, string Origin, string? NewFor
 
 public record RecordRenumberResponse(bool Applied, string OldFormKey, string NewFormKey);
 
-/// <summary>The Renumber gesture's FormID input box's suggested default (<c>RecordEditService.PeekNextFreeFormKey</c>).</summary>
+/// <summary>The Renumber gesture's FormID input box's suggested default (<c>PeekNextFreeFormKeyHandler.PeekNextFreeFormKey</c>).</summary>
 public record NextFreeFormKeyResponse(string FormKey);
 
 // ADR-0041: xEdit's "Copy as Override Into…" / "Copy as New Record Into…". The route's {formKey}

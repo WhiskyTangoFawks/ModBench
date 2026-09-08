@@ -12,9 +12,10 @@ namespace MEditService.Tests.TestSupport;
 /// learning of it two events, so a test reading after a write lets the projector catch up
 /// first.</summary>
 internal sealed class ProjectingEditService(
-    IndexProjector index, LoadOrderHolder holder, RecordEditService inner, EditRecordHandler edits,
+    IndexProjector index, LoadOrderHolder holder, EditRecordHandler edits,
     DeleteRecordHandler deletes, CreateRecordHandler creates, PeekNextFreeFormKeyHandler peek,
-    CopyRecordAsOverrideHandler copyOverrides, CopyRecordAsNewRecordHandler copyAsNew)
+    CopyRecordAsOverrideHandler copyOverrides, CopyRecordAsNewRecordHandler copyAsNew,
+    RenumberRecordHandler renumbers)
 {
     /// <summary>The service every test writes through, over <paramref name="index"/>'s own store and
     /// schemas.</summary>
@@ -22,9 +23,10 @@ internal sealed class ProjectingEditService(
     {
         var holder = TestEditService.HolderOver(index);
         return new ProjectingEditService(
-            index, holder, TestEditService.Over(holder), TestEditService.EditHandler(holder),
+            index, holder, TestEditService.EditHandler(holder),
             TestEditService.DeleteHandler(holder), TestEditService.CreateHandler(holder), TestEditService.PeekHandler(holder),
-            TestEditService.CopyAsOverrideHandler(holder), TestEditService.CopyAsNewHandler(holder));
+            TestEditService.CopyAsOverrideHandler(holder), TestEditService.CopyAsNewHandler(holder),
+            TestEditService.RenumberHandler(holder));
     }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
@@ -48,17 +50,17 @@ internal sealed class ProjectingEditService(
         Projected(CurrentCopyAsNew().CopyRecordAsNewRecord(sourcePlugin, formKey, destinationPlugin, requestedFormKey));
 
     internal RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null) =>
-        Projected(Current().RenumberRecord(plugin, formKey, requestedFormKey));
+        Projected(CurrentRenumbers().RenumberRecord(plugin, formKey, requestedFormKey));
 
     /// <summary>A read, so nothing follows it.</summary>
     internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) => CurrentPeek().PeekNextFreeFormKey(plugin);
 
     // The two load orders are one in the product, where a snapshot reaches the holder and the Index
     // together; here the Index is the one a test reconciles, so the holder follows it per gesture.
-    private RecordEditService Current()
+    private RenumberRecordHandler CurrentRenumbers()
     {
         TestEditService.Sync(holder, index);
-        return inner;
+        return renumbers;
     }
 
     private EditRecordHandler CurrentEdits()

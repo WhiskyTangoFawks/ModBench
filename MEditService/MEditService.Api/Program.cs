@@ -93,7 +93,6 @@ try
     // ADR-0046 invariant 3: one handler per gesture, registered where the module they share is
     // visible, and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();
-    builder.Services.AddSingleton<RecordEditService>();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
     // The bridge's own live-watch lifecycle and unanswered-question queue — one instance for the

@@ -68,13 +68,20 @@ internal static class TestEditService
             SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance),
         holder);
 
-    internal static RecordEditService Over(LoadOrderHolder holder) =>
-        new(holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
-            SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    internal static RenumberRecordHandler RenumberHandler(LoadOrderHolder holder)
+    {
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var importer = new DefaultModImporter();
+        var targets = new WriteTargets(
+            holder, importer, codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
+        return new RenumberRecordHandler(
+            targets, holder, importer, codec, SharedSchemaReflector.Instance,
+            NullLogger<RenumberRecordHandler>.Instance);
+    }
 
-    /// <summary>The same service for a test holding the Index: its held copies are the load order
-    /// value the write side reads, and the Index itself never reaches the service.</summary>
-    internal static RecordEditService Over(IndexProjector index) => Over(HolderOver(index));
+    /// <summary>The same handler for a test holding the Index: its held copies are the load order
+    /// value the write side reads, and the Index itself never reaches the handler.</summary>
+    internal static RenumberRecordHandler RenumberHandler(IndexProjector index) => RenumberHandler(HolderOver(index));
 
     /// <summary>A holder carrying whatever <paramref name="index"/> holds right now — reapplied per
     /// gesture, since a test can register a copy mid-run.</summary>
