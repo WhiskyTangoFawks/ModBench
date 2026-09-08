@@ -44,15 +44,14 @@ export async function computeModStatuses(
   vanillaMasters: Set<string>,
   log: (msg: string) => void,
 ): Promise<Map<string, ModStatusResult>> {
-  const results = new Map<string, ModStatusResult>();
   const providedPlugins = providedPluginBasenames(index.filesByMod);
-
-  for (const entry of entries) {
-    if (entry.kind !== 'mod') continue;
-    results.set(entry.name, await computeEntryStatus(entry, instanceRoot, index, vanillaMasters, providedPlugins, log));
-  }
-
-  return results;
+  const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
+  // Each entry's own stat + master reads are independent, so run them concurrently — a mod
+  // count in the hundreds made the old sequential loop the dominant cost of a recompute.
+  const statuses = await Promise.all(
+    mods.map((entry) => computeEntryStatus(entry, instanceRoot, index, vanillaMasters, providedPlugins, log)),
+  );
+  return new Map(mods.map((entry, i) => [entry.name, statuses[i]]));
 }
 
 async function computeEntryStatus(

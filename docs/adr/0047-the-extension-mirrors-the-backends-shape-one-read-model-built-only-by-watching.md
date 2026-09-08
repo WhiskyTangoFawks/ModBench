@@ -50,6 +50,12 @@ either side's local optimum.
    about 0.1 s, which is what makes whole recompute affordable. Incremental update is refused while
    that holds: it would reintroduce per-key invalidation and with it the two-generations bug.
 
+   The Mods tree's per-mod status and conflict/override counts joined the value later (moved from
+   a render-gated computation into this same recompute), re-measured warm against the same
+   764-mod instance at ~230-260 ms — the per-mod loop parallelized (it was a sequential `for`
+   with an `await` inside), `readVanillaMasters` itself costs under 1 ms regardless. The number
+   already includes everything above; recompute stays affordable at this size.
+
 5. **Watchers are not trusted alone, and a bad read is not a new value.** A read that throws — MO2
    half-way through rewriting a file — logs and leaves the last value and the last sequence in
    place, so a torn file never empties the trees. The next event or `refresh` corrects it. A torn

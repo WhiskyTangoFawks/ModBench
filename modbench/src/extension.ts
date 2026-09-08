@@ -924,9 +924,10 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
         (message, detail) => makeReporter(outputChannel, 'refresh').report('error', message, detail),
       ),
       sendLoadOrder: () => session.loadOrderSync!.flush(),
-      invalidateMods: () => modListProvider.invalidate(),
-      // The Plugins tree renders the Instance's value now (ADR-0047): force a real re-read of
-      // disk, not just a re-render of whatever the Instance last landed.
+      // The Mods tree renders the Instance's value now (ADR-0047): force a real re-read of disk,
+      // not just a re-render of whatever the Instance last landed.
+      invalidateMods: () => { void instance.refresh(); modListProvider.invalidate(); },
+      // Same as invalidateMods above: Plugins renders the Instance value too (ADR-0047).
       invalidatePlugins: () => { void instance.refresh(); pluginListProvider.invalidate(); },
       // Same as invalidatePlugins above: Downloads renders the Instance value too (ADR-0047).
       invalidateDownloads: () => { void instance.refresh(); downloadsProvider.invalidate(); },
