@@ -10,9 +10,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>A mod folder holding whatever record shape a suite needs, and the write service over
-/// it. The caller fills the plugin; this writes it, registers it and — for a tracked copy — tracks
-/// it through the real service. No index, no factory and no mirror in it (ADR-0046 invariant
-/// 7).</summary>
+/// it: the caller fills the plugin, this writes, registers and tracks it. No index and no mirror
+/// (ADR-0046 invariant 7).</summary>
 internal sealed class SourceModFixture : IDisposable
 {
     private readonly string _instanceRoot;

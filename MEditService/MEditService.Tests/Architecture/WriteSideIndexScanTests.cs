@@ -3,10 +3,9 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The write side names no Index type (ADR-0046 invariants 1, 4, 5 and 7). Editing, copy,
-/// compile, Track, the external-change path and the repository write source text; what the Index
-/// then holds is the projector's answer, asked for on the read side. References are counted against
-/// an allowlist that stays empty.</summary>
+/// <summary>The write side names no Index type (ADR-0046 invariants 1, 4, 5 and 7): it writes
+/// source text, and what the Index holds is asked for on the read side. Counted against an
+/// allowlist that stays empty.</summary>
 public sealed class WriteSideIndexScanTests
 {
     // The index and its factory, the read surface, the ref enum, the mirror, the projector, the
@@ -22,8 +21,8 @@ public sealed class WriteSideIndexScanTests
     private static readonly string[] ScannedRoots =
         ["MEditService.Core/Edits", "MEditService.Core/Source"];
 
-    /// <summary>Not write side: SourceIngest is how the Index reads a tracked tree, so the index it
-    /// fills is its subject rather than a thing it consults mid-write.</summary>
+    // Not write side: SourceIngest is how the Index reads a tracked tree, so the index it fills is
+    // its subject rather than something it consults mid-write.
     private const string IndexIngestFileName = "SourceIngest.cs";
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/write-side-index-allowlist.txt";
