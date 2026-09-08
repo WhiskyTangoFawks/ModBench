@@ -20,6 +20,7 @@ import {
   PluginListProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
   type PluginListSource,
 } from './PluginListProvider';
+import { ErrorNode } from './ErrorNode';
 
 // A minimal fixture builder: only the fields a given test cares about need overriding.
 function plugin(overrides: Partial<LoadOrderPlugin> & { name: string }): LoadOrderPlugin {
@@ -128,7 +129,16 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   });
 });
 
-describe('leading slot — the empty-state row renders neither checkbox nor lock', () => {
+// ErrorNode is shared with ModListProvider/DownloadsProvider (./ErrorNode.ts); this provider
+// never constructs one, but its checkbox/lock absence is worth guarding here too, alongside
+// EmptyNode's, as both are "rows outside the load order".
+describe('leading slot — rows outside the load order render neither checkbox nor lock', () => {
+  it('ErrorNode has no checkbox and no lock', () => {
+    const node = new ErrorNode('boom');
+    expect(node.checkboxState).toBeUndefined();
+    expect(node.iconPath).not.toEqual({ id: 'lock' });
+  });
+
   it('EmptyNode has no checkbox and no lock', () => {
     const node = new EmptyNode();
     expect(node.checkboxState).toBeUndefined();
@@ -723,15 +733,20 @@ describe('PluginListProvider — order-aware missing-master badge', () => {
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });
 
-  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged', async () => {
-    const [f4, base, late] = await Promise.all([
-      writePlugin('Fallout4.esm', []), writePlugin('Base.esp', ['Fallout4.esm', 'Late.esp']), writePlugin('Late.esp', []),
+  // Implicit rows (Fallout4.esm, via dataFolder) are present alongside the two real plugins.txt
+  // lines, so this per-pair order check is proven not to special-case vanilla even when the
+  // implicit-row injection is also active.
+  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged, with implicit rows present', async () => {
+    const dataFolder = join(dir, 'Data');
+    await mkdir(dataFolder, { recursive: true });
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    const [base, late] = await Promise.all([
+      writePlugin('Base.esp', ['Fallout4.esm', 'Late.esp']), writePlugin('Late.esp', []),
     ]);
     const provider = makeProvider([
-      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
-      plugin({ name: 'Base.esp', slot: 1, path: base }),
-      plugin({ name: 'Late.esp', slot: 2, path: late }),
-    ]);
+      plugin({ name: 'Base.esp', slot: 0, path: base }),
+      plugin({ name: 'Late.esp', slot: 1, path: late }),
+    ], { dataFolder: () => Promise.resolve(dataFolder) });
     const nodes = await pluginNodes(provider);
     expect(byName(nodes, 'Base.esp').iconPath).toEqual({ id: 'error' });
     expect(byName(nodes, 'Base.esp').tooltip).toContain('Late.esp');
@@ -864,39 +879,42 @@ describe('PluginListProvider — implicit (vanilla) master rows', () => {
 // The implicit block has no plugins.txt line, so a drop onto it lands at file-index 0 —
 // computed from the fixture's slots, never the implicit names.
 describe('PluginListProvider — implicit master drop-index mapping', () => {
+  let dir: string;
+  const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
   const node = (name: string) => new PluginNode({ name, enabled: true });
   const fixturePlugins = () => [plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'C.esp', slot: 1 })];
 
-  it('dropping onto the implicit block computes file-index 0', async () => {
-    const source = new FakeSource();
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-implicit-drop-'));
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\n');
+    // Raw plugins.txt has NO implicit-master line — Fallout4.esm is purely a synthetic display
+    // row; B.esp/C.esp are the real, draggable file rows.
+    await writeFile(pluginsTxt(), '*B.esp\r\n*C.esp\r\n');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function dragToDisk(moved: string[], target: PluginNode | ImplicitMasterNode | undefined) {
+    const source = new Mo2ModlistSource(dir);
     const provider = new PluginListProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
     await provider.getChildren();
     const dt = new FakeDataTransfer();
-    provider.handleDrag([node('C.esp')], dt as never, NONE);
+    provider.handleDrag(moved.map(node), dt as never, NONE);
+    await provider.handleDrop(target, dt as never, NONE);
+  }
 
-    await provider.handleDrop(new ImplicitMasterNode('Fallout4.esm'), dt as never, NONE);
+  it('dropping onto the implicit block lands the moved plugin at file-index 0, and the file never gains an implicit-master line', async () => {
+    await dragToDisk(['C.esp'], new ImplicitMasterNode('Fallout4.esm'));
 
-    expect(source.reorderPluginsCalls).toEqual([{ names: ['C.esp'], toIndex: 0 }]);
+    const text = await readFile(pluginsTxt(), 'utf8');
+    expect(text).toBe('*C.esp\r\n*B.esp\r\n'); // C moved to file-index 0
+    expect(text).not.toContain('Fallout4.esm'); // never written into plugins.txt
   });
 
-  it('dropping onto a normal row is unaffected by whether implicit rows exist at all', async () => {
-    const withImplicitSource = new FakeSource();
-    const withImplicit = new PluginListProvider({
-      instance: new FakeInstance(valueOf(fixturePlugins())), source: withImplicitSource,
-      dataFolder: () => Promise.resolve('/some/Data'),
-    });
-    await withImplicit.getChildren();
-    const dt1 = new FakeDataTransfer();
-    withImplicit.handleDrag([node('C.esp')], dt1 as never, NONE);
-    await withImplicit.handleDrop(node('B.esp'), dt1 as never, NONE);
-
-    const noImplicitSource = new FakeSource();
-    const noImplicit = new PluginListProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source: noImplicitSource });
-    await noImplicit.getChildren();
-    const dt2 = new FakeDataTransfer();
-    noImplicit.handleDrag([node('C.esp')], dt2 as never, NONE);
-    await noImplicit.handleDrop(node('B.esp'), dt2 as never, NONE);
-
-    expect(withImplicitSource.reorderPluginsCalls).toEqual(noImplicitSource.reorderPluginsCalls);
+  it('dropping onto a normal row is unaffected by the implicit prefix — same file index as with no implicit rows at all', async () => {
+    await dragToDisk(['C.esp'], node('B.esp'));
+    expect(await readFile(pluginsTxt(), 'utf8')).toBe('*C.esp\r\n*B.esp\r\n');
   });
 });
