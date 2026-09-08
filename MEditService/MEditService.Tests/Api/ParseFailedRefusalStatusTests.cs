@@ -67,7 +67,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             CopyFixture.DestinationPluginName, CopyFixture.DestinationOrigin, RequestedFormKey: null);
 
         var result = RecordEndpoints.CopyRecordAsNewRecord(
-            _mod.SourceNpc.ToString(), request, _mod.Edits, _gate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.CopyAsNewHandler, _gate, NullLogger.Instance);
 
         AssertRefused(result);
         Assert.Empty(_mod.DestinationGitStatus());
@@ -80,7 +80,6 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
         Assert.Equal(
             nameof(RecordEditRefusal.RecordParseFailed),
             Assert.Contains("refusal", problem.ProblemDetails.Extensions));
-        // The reader's own words, which is the only thing that says why.
         // The reader's own words, which is the only thing that says why.
         Assert.Contains("Unable to cast", problem.ProblemDetails.Detail!, StringComparison.Ordinal);
     }

@@ -4,7 +4,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;
 
-public sealed class RecordEditServiceCopyRecordAsNewRecordTests
+public sealed class CopyRecordAsNewRecordHandlerTests
 {
     [Fact]
     public void CopyRecordAsNewRecord_AllocatesAFreeFormKey_AndLandsAsAWorkingTreeRecordInTheDestination()
@@ -12,7 +12,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         using var mod = CopyFixture.Create();
         var sourceBefore = mod.SourcePluginBytes();
 
-        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -33,7 +33,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         using var mod = CopyFixture.Create();
         const string requested = "900000:Destination.esp";
 
-        var result = mod.Edits.CopyRecordAsNewRecord(
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, requested);
 
         Assert.True(result.Applied, result.Message);
@@ -45,7 +45,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.CommittedDocument(
@@ -61,7 +61,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.Edits.CopyRecordAsNewRecord(
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SelfLinkingFaction.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -77,7 +77,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         using var mod = CopyFixture.Create();
         Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
 
-        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -89,7 +89,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.Edits.CopyRecordAsNewRecord(
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, mod.DestinationNpc.ToString());
 
         Assert.False(result.Applied);
@@ -101,7 +101,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.Edits.CopyRecordAsNewRecord(
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, "900000:SomeOtherPlugin.esp");
 
         Assert.False(result.Applied);
@@ -112,11 +112,11 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     public void CopyRecordAsNewRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = CopyFixture.Create();
-        var seeded = mod.Edits.CopyRecordAsNewRecord(
+        var seeded = mod.CopyAsNewHandler.CopyRecordAsNewRecord(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin, "FFFFFF:Destination.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -129,7 +129,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsNewRecord(
+        var result = fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -141,7 +141,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsNewRecord(
+        var result = fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -155,7 +155,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var fixture = ContainerCopyFixture.CreateWithTrackedSource();
 
-        var result = fixture.Edits.CopyRecordAsNewRecord(
+        var result = fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -167,7 +167,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = mod.Edits.CopyRecordAsNewRecord(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
+        var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

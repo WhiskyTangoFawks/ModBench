@@ -28,10 +28,10 @@ public sealed class CopyFixture : IDisposable
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
 
     public LoadOrder LoadOrder { get; }
-    public RecordEditService Edits { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
     public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
+    public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -80,10 +80,10 @@ public sealed class CopyFixture : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
+        CopyAsNewHandler = TestEditService.CopyAsNewHandler(holder);
     }
 
     private void Track(string origin, PluginKey plugin) =>
