@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -22,7 +23,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() => _fixture.Edits;
+    private EditRecordHandler EditService() => _fixture.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -163,7 +164,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     [Fact]
     public void DeletingATopic_RemovesItAndItsResponsesFromTheQuestDocument_LeavingItsSiblingsInPlace_AndCompiles()
     {
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.DialogTopic.ToString());
+        var result = _fixture.Edits.DeleteRecord(_fixture.Plugin, _fixture.DialogTopic.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(QuestFile);
@@ -195,7 +196,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     [Fact]
     public void RenumberingAMidListTopic_ChangesItsFormKeyInPlaceInTheQuestDocument_AndCompilesInOrder()
     {
-        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
+        var result = _fixture.Edits.RenumberRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(QuestFile);

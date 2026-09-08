@@ -123,7 +123,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     [Fact]
     public void Keep_Refuses_WhenTheSameRecordAlreadyHasUncommittedDirtThatDisagreesWithTheIncomingValue()
     {
-        var editService = _mod.Edits;
+        var editService = _mod.EditHandler;
         var applyResult = editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.5").RootElement);
         Assert.True(applyResult.Applied, applyResult.Message);
         var myOwnEditText = File.ReadAllText(_mod.NpcSourceFile);
@@ -225,7 +225,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         // Not a real collision: the user happened to make the exact same edit the external tool made
         // — nothing to lose by landing it.
-        var editService = _mod.Edits;
+        var editService = _mod.EditHandler;
         editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.9").RootElement);
 
         WriteExternalBinaryChange(0.9f);

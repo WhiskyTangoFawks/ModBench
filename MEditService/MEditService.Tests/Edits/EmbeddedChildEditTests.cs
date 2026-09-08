@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -18,7 +19,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() => _fixture.Edits;
+    private EditRecordHandler EditService() => _fixture.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -263,7 +264,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
             withoutTheRef.TrimEnd().TrimEnd('}')
             + $",\n  \"NotAChild\": {{ \"FormKey\": \"{_fixture.TemporaryRef}\" }}\n}}");
 
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
+        var result = _fixture.Edits.DeleteRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

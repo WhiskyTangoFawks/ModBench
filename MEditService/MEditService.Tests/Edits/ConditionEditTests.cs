@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -257,6 +258,7 @@ public sealed class ConditionEditTests : IDisposable
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrder LoadOrder { get; }
         public RecordEditService Edits { get; }
+        public EditRecordHandler EditHandler { get; }
         public FormKey Cobj { get; }
         public FormKey Perk { get; }
         public FormKey Message { get; }
@@ -330,9 +332,10 @@ public sealed class ConditionEditTests : IDisposable
             var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
             Edits = TestEditService.Over(holder);
+            EditHandler = TestEditService.EditHandler(holder);
         }
 
-        public RecordEditService Service() => Edits;
+        public EditRecordHandler Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
             TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;

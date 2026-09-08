@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -68,9 +69,9 @@ public static class RecordEndpoints
         .ProducesProblem(500);
 
         // ADR-0041: the single write path's one door. Scripts and agents (ADR-0024) reach the same
-        // RecordEditService the UI does, which is why the untracked refusal is expressible here.
+        // handler the UI does, which is why the untracked refusal is expressible here.
         app.MapPost("/records/{formKey}/edit", (
-            string formKey, RecordEditRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            string formKey, RecordEditRequest request, EditRecordHandler edits, IndexWriteGate gate) =>
             EditRecord(formKey, request, edits, gate, logger))
         .WithName("EditRecord")
         .WithTags("Records")
@@ -178,7 +179,7 @@ public static class RecordEndpoints
     // and there is no exception middleware, so I/O failures are mapped here rather than escaping
     // as a bodyless 500.
     internal static IResult EditRecord(
-        string formKey, RecordEditRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
+        string formKey, RecordEditRequest request, EditRecordHandler edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);

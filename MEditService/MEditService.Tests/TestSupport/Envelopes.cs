@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 
@@ -31,6 +32,6 @@ internal static class Envelopes
 
     /// <summary>A set of one top-level member: the gesture most tests make.</summary>
     internal static RecordEditResult Set(
-        this RecordEditService service, PluginKey plugin, string formKey, string member, JsonElement value) =>
-        service.Edit(plugin, formKey, SetAt(value, Member(member)));
+        this EditRecordHandler handler, PluginKey plugin, string formKey, string member, JsonElement value) =>
+        handler.Edit(plugin, formKey, SetAt(value, Member(member)));
 }

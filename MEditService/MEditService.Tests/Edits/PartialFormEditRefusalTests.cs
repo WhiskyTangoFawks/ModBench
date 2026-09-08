@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -24,6 +25,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
+    public EditRecordHandler EditHandler { get; }
     public FormKey PartialCell { get; }
     public FormKey OrdinaryNpc { get; }
     public FormKey ChildRef { get; }
@@ -59,6 +61,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
+        EditHandler = TestEditService.EditHandler(holder);
     }
 
     public void Dispose()
@@ -67,7 +70,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         try { Directory.Delete(_gameDirectory, recursive: true); } catch { /* best-effort cleanup */ }
     }
 
-    private RecordEditService Service() => Edits;
+    private EditRecordHandler Service() => EditHandler;
 
     [Fact]
     public void EditField_NonHeaderFieldOnPartialFormRecord_IsRefused()

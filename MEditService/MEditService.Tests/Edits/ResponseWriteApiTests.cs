@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -19,7 +20,7 @@ public sealed class ResponseWriteApiTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() => _fixture.Edits;
+    private EditRecordHandler EditService() => _fixture.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -69,7 +70,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     [Fact]
     public void DeletingAResponse_RemovesItsElementFromTheTopicDocument_LeavingItsSiblingInPlace_AndCompiles()
     {
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Response.ToString());
+        var result = _fixture.Edits.DeleteRecord(_fixture.Plugin, _fixture.Response.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(TopicFile);
@@ -88,7 +89,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     [Fact]
     public void RenumberingAResponse_ChangesItsFormKeyInPlaceInTheTopicDocument_AndCompilesInOrder()
     {
-        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Response.ToString());
+        var result = _fixture.Edits.RenumberRecord(_fixture.Plugin, _fixture.Response.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(TopicFile);

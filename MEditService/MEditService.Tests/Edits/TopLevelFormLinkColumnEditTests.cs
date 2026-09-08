@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -20,7 +21,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() => _mod.Edits;
+    private EditRecordHandler Service() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -73,7 +74,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     {
         using var untracked = SourceEditFixture.Untracked();
 
-        var result = untracked.Edits
+        var result = untracked.EditHandler
             .Set(untracked.Plugin, untracked.OtherNpc.ToString(), "Race", Json($"\"{untracked.Race}\""));
 
         Assert.False(result.Applied);
@@ -101,7 +102,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     {
         using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var result = vanilla.Edits
+        var result = vanilla.EditHandler
             .Set(vanilla.Plugin, vanillaNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
         Assert.False(result.Applied);

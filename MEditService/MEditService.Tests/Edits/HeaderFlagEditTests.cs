@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -18,7 +19,7 @@ public sealed class HeaderFlagEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService Service() => _fixture.Edits;
+    private EditRecordHandler Service() => _fixture.EditHandler;
 
     private static string HeaderFormKey => FormKey.Factory($"000000:{SourceEditFixture.PluginName}").ToString();
 
@@ -62,10 +63,9 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public void AfterSettingIsLight_ATypedTargetOutsideTheLightRange_IsRefusedImmediately()
     {
-        var service = Service();
-        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var result = service.CreateRecord(
+        var result = _fixture.Edits.CreateRecord(
             _fixture.Plugin, "npc_", "OutOfRange", $"001000:{SourceEditFixture.PluginName}");
 
         Assert.False(result.Applied);
@@ -78,10 +78,9 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public void Compile_WithTheEslFlagAndAnOutOfRangeRecord_RefusesWithTheContradictionMarker()
     {
-        var service = Service();
-        Assert.True(service.CreateRecord(
+        Assert.True(_fixture.Edits.CreateRecord(
             _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
-        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
         var compile = CompileService().Compile(_fixture.Plugin, new CompileSource.WorkingTree());
 
@@ -90,7 +89,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.Contains("001000", compile.RefusalReason, StringComparison.Ordinal);
 
         // The accepted prompt's own path: clear the flag, compile again — clean.
-        Assert.True(service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
+        Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false)).Applied);
         var second = CompileService().Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(second.Succeeded, second.RefusalReason);
         Assert.False(second.EslContradiction);

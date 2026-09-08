@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
@@ -30,6 +31,7 @@ public sealed class IndexedContainerFixture : IDisposable
     public string GameDirectory => _source.GameDirectory;
     public PluginKey Plugin => _source.Plugin;
     public RecordEditService Edits => _source.Edits;
+    public EditRecordHandler EditHandler => _source.EditHandler;
     public string SourceFileContaining(string editorId) => _source.SourceFileContaining(editorId);
     public IReadOnlyList<string> GitStatus() => _source.GitStatus();
 

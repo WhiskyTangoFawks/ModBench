@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
@@ -19,7 +20,7 @@ public sealed class RecordEditServiceCreateRecordTests
         var created = mod.Edits.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
         Assert.True(created.Applied, created.Message);
 
-        var result = mod.Edits.Set(mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\""));
+        var result = mod.EditHandler.Set(mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
         var document = mod.Document(created.NewFormKey!)!;

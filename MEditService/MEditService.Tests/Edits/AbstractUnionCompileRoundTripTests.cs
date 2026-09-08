@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -23,7 +24,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private RecordEditService EditService() => _fixture.Edits;
+    private EditRecordHandler EditService() => _fixture.EditHandler;
 
     private PluginCompileService CompileService() => CompileServices.Over(_fixture.LoadOrder);
 

@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -31,6 +32,7 @@ public sealed class RenumberTwoModFixture : IDisposable
 
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
+    public EditRecordHandler EditHandler { get; }
 
     public PluginKey TargetPlugin { get; } = new(TargetPluginName, TargetOrigin);
     public PluginKey ReferencerPlugin { get; } = new(ReferencerPluginName, ReferencerOrigin);
@@ -77,6 +79,7 @@ public sealed class RenumberTwoModFixture : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
+        EditHandler = TestEditService.EditHandler(holder);
     }
 
     public static RenumberTwoModFixture Create(bool trackReferencer) => new(trackReferencer);

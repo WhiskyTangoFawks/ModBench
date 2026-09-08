@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -22,7 +23,7 @@ public sealed class ArrayOpEditTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private RecordEditService Service() => _mod.Edits;
+    private EditRecordHandler Service() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -30,7 +31,7 @@ public sealed class ArrayOpEditTests : IDisposable
 
     private string SecondKeyword()
     {
-        var result = Service().CreateRecord(_mod.Plugin, "kywd", "SecondKeyword");
+        var result = _mod.Edits.CreateRecord(_mod.Plugin, "kywd", "SecondKeyword");
         Assert.True(result.Applied, result.Message);
         return result.NewFormKey!;
     }
@@ -153,11 +154,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayAdd_StructElementArray_AppendsADefaultElement()
     {
         using var fixture = ContainerMod(out var container);
-        var seed = fixture.Edits.Set(fixture.Plugin, container.ToString(), "Destructible",
+        var seed = fixture.EditHandler.Set(fixture.Plugin, container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 50}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
+        var result = fixture.EditHandler.Edit(fixture.Plugin, container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
 
         Assert.True(result.Applied, result.Message);
         var stages = Stages(fixture, container);
@@ -172,7 +173,7 @@ public sealed class ArrayOpEditTests : IDisposable
     {
         using var fixture = ContainerMod(out var container);
 
-        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
+        var result = fixture.EditHandler.Edit(fixture.Plugin, container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(1, Stages(fixture, container).GetArrayLength());
@@ -182,11 +183,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayRemove_NestedArrayElement_RemovesAtTheRealPath()
     {
         using var fixture = ContainerMod(out var container);
-        var seed = fixture.Edits.Set(fixture.Plugin, container.ToString(), "Destructible",
+        var seed = fixture.EditHandler.Set(fixture.Plugin, container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), RemoveAt(Member("Destructible"), Member("Stages"), At(0)));
+        var result = fixture.EditHandler.Edit(fixture.Plugin, container.ToString(), RemoveAt(Member("Destructible"), Member("Stages"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var stages = Stages(fixture, container);
@@ -198,11 +199,11 @@ public sealed class ArrayOpEditTests : IDisposable
     public void ArrayMoveDown_NestedArrayElement_MovesAtTheRealPath()
     {
         using var fixture = ContainerMod(out var container);
-        var seed = fixture.Edits.Set(fixture.Plugin, container.ToString(), "Destructible",
+        var seed = fixture.EditHandler.Set(fixture.Plugin, container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), MoveTo(1, Member("Destructible"), Member("Stages"), At(0)));
+        var result = fixture.EditHandler.Edit(fixture.Plugin, container.ToString(), MoveTo(1, Member("Destructible"), Member("Stages"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var stages = Stages(fixture, container);
@@ -220,7 +221,7 @@ public sealed class ArrayOpEditTests : IDisposable
         // Seeds [QuestLocationAlias, QuestReferenceAlias(Location: null)].
         using var fixture = QuestMod(withLocation: false, out var quest);
 
-        var result = fixture.Edits.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
+        var result = fixture.EditHandler.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = fixture.Body(quest);
@@ -236,7 +237,7 @@ public sealed class ArrayOpEditTests : IDisposable
         // Location: { AliasID: 9 }.
         using var fixture = QuestMod(withLocation: true, out var quest);
 
-        var result = fixture.Edits.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
+        var result = fixture.EditHandler.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var body = fixture.Body(quest);

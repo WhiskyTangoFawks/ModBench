@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -25,6 +26,7 @@ public sealed class SourceContainerFixture : IDisposable
     public string GameDirectory { get; }
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
+    public EditRecordHandler EditHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
@@ -65,6 +67,7 @@ public sealed class SourceContainerFixture : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
+        EditHandler = TestEditService.EditHandler(holder);
         _instanceRoot = instanceRoot;
     }
 

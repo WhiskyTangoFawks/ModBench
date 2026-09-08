@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -23,7 +24,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     private string GitDir => Path.Combine(_mod.ModFolder, ".git");
     private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
 
-    private RecordEditService EditService() => _mod.Edits;
+    private EditRecordHandler EditService() => _mod.EditHandler;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

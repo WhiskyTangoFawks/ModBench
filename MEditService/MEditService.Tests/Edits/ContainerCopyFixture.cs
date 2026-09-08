@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -29,6 +30,7 @@ public sealed class ContainerCopyFixture : IDisposable
 
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
+    public EditRecordHandler EditHandler { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -273,6 +275,7 @@ public sealed class ContainerCopyFixture : IDisposable
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
+        EditHandler = TestEditService.EditHandler(holder);
     }
 
     public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, trackSource: false);
