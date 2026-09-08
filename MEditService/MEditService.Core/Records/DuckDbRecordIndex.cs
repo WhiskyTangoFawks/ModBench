@@ -149,8 +149,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // deletes and appender flushes roll back together on Dispose-without-Commit.
         using var tx = Connection.BeginTransaction();
 
-        // One `registrations` row per indexed plugin — UpdateWinners() joins against it so a
-        // non-participating copy's rows never win regardless of load_order_idx.
+        // One `registrations` row per indexed plugin, in the same transaction as its rows: ADR-0001
+        // makes registration visibility, so rows arriving without it would answer nothing.
         UpsertRegistration(plugin, origin, registration);
         // And the disk claim these rows are about, replaced with them rather than beside them.
         _indexStore.StampIndexedFile(plugin, origin, filePath);
@@ -179,8 +179,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
 
-    // The `registrations` row is dropped last: it is the row UpdateWinners joins against, and while
-    // it exists this (origin, plugin) is still a known member of the read model.
+    // The `registrations` row is dropped last: while it exists this (origin, plugin) is still a
+    // known member of the read model, so no read can meet rows that have already gone.
     private void Unindex(string plugin, string origin)
     {
         if (_logger.IsEnabled(LogLevel.Information))
