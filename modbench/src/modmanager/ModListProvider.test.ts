@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from './model';
 import { parseModlist, moveModInText, moveSeparatorBlockInText, writeModlist } from './mo2/modlistText';
 import type { InstanceValue } from './instance';
@@ -13,23 +13,50 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
+// Every modlist.txt gesture the provider fires goes through these free commands now (ADR-0047
+// point 6) rather than an injected source — mocked at the module boundary, in the style already
+// established by recordPanelContextCommands.test.ts.
+const {
+  setModEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock,
+} = vi.hoisted(() => ({
+  setModEnabledMock: vi.fn(),
+  reorderModMock: vi.fn(),
+  moveModToSeparatorMock: vi.fn(),
+  reorderSeparatorBlockMock: vi.fn(),
+}));
+vi.mock('./mo2/modlistCommands', () => ({
+  setModEnabled: (...args: unknown[]) => setModEnabledMock(...args),
+  reorderMod: (...args: unknown[]) => reorderModMock(...args),
+  moveModToSeparator: (...args: unknown[]) => moveModToSeparatorMock(...args),
+  reorderSeparatorBlock: (...args: unknown[]) => reorderSeparatorBlockMock(...args),
+}));
+
 import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModListSource } from './ModListProvider';
 
 const INSTANCE_ROOT = '/instance';
+const ACTIVE_PROFILE = 'Default';
+
+beforeEach(() => {
+  for (const m of [setModEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock]) {
+    m.mockReset();
+    m.mockResolvedValue({ applied: true });
+  }
+});
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
   kind: 'mod', name, enabled, ...extra,
 });
 const sep = (name: string, enabled = false): Separator => ({ kind: 'separator', name, enabled });
 
-// Only `.mods`, `.modStatuses` and `.overwriteFileCount` matter here — a provider reaching for
-// `.files`/`.filesByMod` to derive a badge itself would find them `undefined`.
+// Only `.mods`, `.activeProfile`, `.modStatuses` and `.overwriteFileCount` matter here — a
+// provider reaching for `.files`/`.filesByMod` to derive a badge itself would find them `undefined`.
 function valueOf(
   mods: ModlistEntry[],
-  extra: Partial<Pick<InstanceValue, 'modStatuses' | 'overwriteFileCount'>> = {},
+  extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount'>> = {},
 ): InstanceValue {
   return {
     mods,
+    activeProfile: extra.activeProfile ?? ACTIVE_PROFILE,
     modStatuses: extra.modStatuses ?? new Map<string, ModStatusResult>(),
     overwriteFileCount: extra.overwriteFileCount ?? 0,
   } as unknown as InstanceValue;
@@ -63,15 +90,7 @@ class FakeInstance {
 
 // Typed as the provider's own Pick<>, so a method it never touches can't be added by mistake.
 class FakeSource implements ModListSource {
-  setEnabledCalls: { modName: string; enabled: boolean }[] = [];
   activeProfile = 'Default';
-  setEnabled(modName: string, enabled: boolean): Promise<void> {
-    this.setEnabledCalls.push({ modName, enabled });
-    return Promise.resolve();
-  }
-  reorder(_name: string, _idx: number): Promise<void> { return Promise.resolve(); }
-  moveModToSeparator(_mod: string, _sep: string | null): Promise<void> { return Promise.resolve(); }
-  reorderSeparatorBlock(_sep: string, _idx: number): Promise<void> { return Promise.resolve(); }
   setActiveProfile(name: string): Promise<void> { this.activeProfile = name; return Promise.resolve(); }
 }
 
@@ -148,16 +167,27 @@ describe('ModListProvider', () => {
     expect(disabled.tooltip).toBe('Disabled Mod'); // no extra fields
   });
 
-  it('setModEnabled delegates to the source and fires a refresh', async () => {
-    const source = new FakeSource();
-    const provider = makeProvider([mod('A')], { source });
+  it('setModEnabled calls the setModEnabled command with the instance root, active profile and inputs, and fires a refresh', async () => {
+    const provider = makeProvider([mod('A')]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
     await provider.setModEnabled('A', false);
 
-    expect(source.setEnabledCalls).toEqual([{ modName: 'A', enabled: false }]);
+    expect(setModEnabledMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, 'A', false);
     expect(fired).toBe(true);
+  });
+
+  // The command returns a refusal rather than throwing (ADR-0047 point 6); the provider turns
+  // that into a rejected promise so existing callers (the checkbox handler) keep their contract.
+  it('setModEnabled throws when the command refuses, and fires no refresh', async () => {
+    setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'ModNotFound', message: 'nope' });
+    const provider = makeProvider([mod('A')]);
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+
+    await expect(provider.setModEnabled('A', false)).rejects.toThrow('nope');
+    expect(fired).toBe(false);
   });
 
   // Asymmetry test: unlike setFilter (render-only), a mutation must invalidate — the next
@@ -347,30 +377,24 @@ describe('ModListProvider', () => {
     ];
 
     function makeDndProvider() {
-      const fakeSource = new FakeSource();
-      const reorderCalls: { name: string; idx: number }[] = [];
-      const moveToSepCalls: { mod: string; sep: string | null }[] = [];
-      const reorderBlockCalls: { sep: string; idx: number }[] = [];
-      fakeSource.reorder = (name: string, idx: number) => { reorderCalls.push({ name, idx }); return Promise.resolve(); };
-      fakeSource.moveModToSeparator = (m: string, s: string | null) => { moveToSepCalls.push({ mod: m, sep: s }); return Promise.resolve(); };
-      fakeSource.reorderSeparatorBlock = (s: string, idx: number) => { reorderBlockCalls.push({ sep: s, idx }); return Promise.resolve(); };
-      const provider = makeProvider(dndEntries, { source: fakeSource });
-      return { provider, reorderCalls, moveToSepCalls, reorderBlockCalls };
+      const provider = makeProvider(dndEntries);
+      return { provider };
     }
 
-    // Real modlist.txt transforms, so tests assert the drop's final entry order against
-    // `order()`, not the row provider's own un-refreshed rendering.
-    class ApplyingSource extends FakeSource {
-      text = writeModlist(dndEntries);
-      override reorder(name: string, idx: number): Promise<void> { this.text = moveModInText(this.text, name, idx); return Promise.resolve(); }
-      override reorderSeparatorBlock(sepName: string, idx: number): Promise<void> { this.text = moveSeparatorBlockInText(this.text, sepName, idx); return Promise.resolve(); }
-      order(): string[] { return parseModlist(this.text).map((e) => e.name); }
-    }
-
+    // Real modlist.txt transforms applied to an in-memory `text`, so tests assert the drop's
+    // final entry order against `order()`, not the row provider's own un-refreshed rendering.
     function makeApplyingProvider() {
-      const source = new ApplyingSource();
-      const provider = makeProvider(dndEntries, { source });
-      return { provider, source };
+      let text = writeModlist(dndEntries);
+      reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
+        text = moveModInText(text, name, idx);
+        return { applied: true };
+      });
+      reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, sepName: string, idx: number) => {
+        text = moveSeparatorBlockInText(text, sepName, idx);
+        return { applied: true };
+      });
+      const provider = makeProvider(dndEntries);
+      return { provider, order: () => parseModlist(text).map((e) => e.name) };
     }
 
     async function childrenOf(provider: ModListProvider, sepName: string): Promise<ModNode[]> {
@@ -398,78 +422,77 @@ describe('ModListProvider', () => {
     });
 
     it('drop mod onto separator → moveModToSeparator', async () => {
-      const { provider, moveToSepCalls } = makeDndProvider();
+      const { provider } = makeDndProvider();
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
       const dt = new FakeDataTransfer();
       dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
       await provider.handleDrop(sepNode, dt as any, token as any);
-      expect(moveToSepCalls).toEqual([{ mod: 'Alpha', sep: 'Group A' }]);
+      expect(moveModToSeparatorMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, 'Alpha', 'Group A');
     });
 
     // Down-drag off-by-one: passing the pre-removal target index would land Alpha one slot
     // too low.
     it('winning-at-top down-drag: drop mod onto a lower mod lands it before that mod', async () => {
-      const { provider, source } = makeApplyingProvider();
+      const { provider, order } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       const gammaNode = (await childrenOf(provider, 'Group B')).find((n) => n.label === 'Gamma')!;
       await drop(provider, gammaNode, modItem('Alpha'));
-      expect(source.order()).toEqual(['Group A', 'Beta', 'Alpha', 'Gamma', 'Group B', 'Delta']);
+      expect(order()).toEqual(['Group A', 'Beta', 'Alpha', 'Gamma', 'Group B', 'Delta']);
     });
 
     // Regression: up-drags were never affected (nothing moved sits above the
     // target, so no shift) — must stay correct.
     // Beta is Group B's member (it precedes Group B's line), not Group A's.
     it('winning-at-top up-drag: drop mod onto a higher mod lands it before that mod', async () => {
-      const { provider, source } = makeApplyingProvider();
+      const { provider, order } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       const betaNode = (await childrenOf(provider, 'Group B')).find((n) => n.label === 'Beta')!;
       await drop(provider, betaNode, modItem('Delta'));
-      expect(source.order()).toEqual(['Alpha', 'Group A', 'Delta', 'Beta', 'Gamma', 'Group B']);
+      expect(order()).toEqual(['Alpha', 'Group A', 'Delta', 'Beta', 'Gamma', 'Group B']);
     });
 
     it('winning-at-top: drop mod onto empty space appends it to the end', async () => {
-      const { provider, source } = makeApplyingProvider();
+      const { provider, order } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       await provider.getChildren(); // populate cache
       await drop(provider, undefined, modItem('Alpha'));
-      expect(source.order()).toEqual(['Group A', 'Beta', 'Gamma', 'Group B', 'Delta', 'Alpha']);
+      expect(order()).toEqual(['Group A', 'Beta', 'Gamma', 'Group B', 'Delta', 'Alpha']);
     });
 
     // The whole block is removed before toIndex is counted, so every block member above the
     // target shifts it — otherwise the block is flung to the bottom.
     it('winning-at-top down-drag: drop separator block onto a lower mod lands the block before it', async () => {
-      const { provider, source } = makeApplyingProvider();
+      const { provider, order } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       const roots = await provider.getChildren();
       const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
       await drop(provider, deltaNode, sepItem('Group A'));
-      expect(source.order()).toEqual(['Beta', 'Gamma', 'Group B', 'Alpha', 'Group A', 'Delta']);
+      expect(order()).toEqual(['Beta', 'Gamma', 'Group B', 'Alpha', 'Group A', 'Delta']);
     });
 
     // The pinned Overwrite fixture is not a modlist.txt position — a drop
     // onto it must be a no-op, never falling through to "move to end".
     it('drop onto the Overwrite node is a no-op', async () => {
-      const { provider, source } = makeApplyingProvider();
-      const before = source.order();
+      const { provider, order } = makeApplyingProvider();
+      const before = order();
       const overwriteNode = new OverwriteNode({ fsPath: '/x', toString: () => 'file:///x' } as any, 1);
       await drop(provider, overwriteNode, modItem('Alpha'));
-      expect(source.order()).toEqual(before);
+      expect(order()).toEqual(before);
     });
 
     // In the default losing-at-top view the file runs opposite to the view, so these assert
     // the on-disk (file) order the drop produces, translated from the intended view position.
     describe('honors the view direction', () => {
-      class SimpleApplyingSource extends FakeSource {
-        text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
-        override reorder(name: string, idx: number): Promise<void> { this.text = moveModInText(this.text, name, idx); return Promise.resolve(); }
-        order(): string[] { return parseModlist(this.text).map((e) => e.name); }
-      }
-      const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];
       function makeSimpleProvider() {
-        const source = new SimpleApplyingSource();
-        const provider = makeProvider(simpleEntries, { source });
-        return { provider, source };
+        let text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
+        reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
+          text = moveModInText(text, name, idx);
+          return { applied: true };
+        });
+        const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];
+        const provider = makeProvider(simpleEntries);
+        return { provider, order: () => parseModlist(text).map((e) => e.name) };
       }
 
       it('sanity: default (losing-at-top) view reverses file order', async () => {
@@ -480,36 +503,36 @@ describe('ModListProvider', () => {
 
       // View target ['Losing', 'Winning', 'Middle'] => file order ['Middle','Winning','Losing'].
       it('default (losing-at-top): dropping the winning mod onto the middle row lands it just above that row in the view', async () => {
-        const { provider, source } = makeSimpleProvider();
+        const { provider, order } = makeSimpleProvider();
         const middle = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Middle')!;
         await drop(provider, middle, modItem('Winning'));
-        expect(source.order()).toEqual(['Middle', 'Winning', 'Losing']);
+        expect(order()).toEqual(['Middle', 'Winning', 'Losing']);
       });
 
       // View target ['Middle', 'Losing', 'Winning'] => file order ['Winning','Losing','Middle'].
       it('default (losing-at-top): dragging a top (losing) row down onto a lower row lands it just above that row in the view', async () => {
-        const { provider, source } = makeSimpleProvider();
+        const { provider, order } = makeSimpleProvider();
         const winning = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Winning')!;
         await drop(provider, winning, modItem('Losing')); // Losing (view top) dropped onto Winning (view bottom)
-        expect(source.order()).toEqual(['Winning', 'Losing', 'Middle']);
+        expect(order()).toEqual(['Winning', 'Losing', 'Middle']);
       });
 
       // View target (winning end, bottom) ['Middle','Winning','Losing'] => file ['Losing','Winning','Middle'].
       it('default (losing-at-top): dropping onto empty space sends the mod to the winning end (bottom of the view)', async () => {
-        const { provider, source } = makeSimpleProvider();
+        const { provider, order } = makeSimpleProvider();
         await provider.getChildren(); // populate cache
         await drop(provider, undefined, modItem('Losing'));
-        expect(source.order()).toEqual(['Losing', 'Winning', 'Middle']);
+        expect(order()).toEqual(['Losing', 'Winning', 'Middle']);
       });
 
       it('default (losing-at-top): dropping a separator block onto a row lands the block just above it in the view', async () => {
         // Delta is the losing-most row in the default view, so just above it in the view is
         // just after it in the file.
-        const { provider, source } = makeApplyingProvider();
+        const { provider, order } = makeApplyingProvider();
         const roots = await provider.getChildren();
         const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
         await drop(provider, deltaNode, sepItem('Group A'));
-        expect(source.order()).toEqual(['Beta', 'Gamma', 'Group B', 'Delta', 'Alpha', 'Group A']);
+        expect(order()).toEqual(['Beta', 'Gamma', 'Group B', 'Delta', 'Alpha', 'Group A']);
       });
     });
   });
@@ -538,13 +561,10 @@ describe('ModListProvider', () => {
       mod('Delta'),
     ];
 
-    function makeFailingProvider(overrides: Partial<FakeSource>) {
-      const fakeSource = new FakeSource();
-      Object.assign(fakeSource, overrides);
+    function makeFailingProvider() {
       const reports: { severity: string; message: string; detail?: string }[] = [];
       const logs: string[] = [];
       const provider = makeProvider(dndEntries, {
-        source: fakeSource,
         log: (m) => logs.push(m),
         reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
       });
@@ -557,10 +577,9 @@ describe('ModListProvider', () => {
       await provider.handleDrop(target as never, dt as never, token as never);
     }
 
-    it('a throw from reorder reports an error and logs the specific operation', async () => {
-      const { provider, reports, logs } = makeFailingProvider({
-        reorder: () => Promise.reject(new Error('disk full')),
-      });
+    it('a throw from the reorder command reports an error and logs the specific operation', async () => {
+      reorderModMock.mockRejectedValue(new Error('disk full'));
+      const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
       const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
       await drop(provider, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
@@ -568,10 +587,10 @@ describe('ModListProvider', () => {
       expect(logs.some((l) => l.includes('reorder failed: disk full'))).toBe(true);
     });
 
-    it('a throw from moveModToSeparator reports an error and logs the specific operation', async () => {
-      const { provider, reports, logs } = makeFailingProvider({
-        moveModToSeparator: () => Promise.reject(new Error('disk full')),
-      });
+    // A refusal (`{ applied: false }`), not a throw, must report the same way.
+    it('a refusal from the moveModToSeparator command reports an error and logs the specific operation', async () => {
+      moveModToSeparatorMock.mockResolvedValue({ applied: false, refusal: 'ModNotFound', message: 'disk full' });
+      const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
       await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
@@ -579,10 +598,9 @@ describe('ModListProvider', () => {
       expect(logs.some((l) => l.includes('moveModToSeparator failed: disk full'))).toBe(true);
     });
 
-    it('a throw from reorderSeparatorBlock reports an error and logs the specific operation', async () => {
-      const { provider, reports, logs } = makeFailingProvider({
-        reorderSeparatorBlock: () => Promise.reject(new Error('disk full')),
-      });
+    it('a throw from the reorderSeparatorBlock command reports an error and logs the specific operation', async () => {
+      reorderSeparatorBlockMock.mockRejectedValue(new Error('disk full'));
+      const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
       const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
       await drop(provider, deltaNode, item({ kind: 'separator', name: 'Group A' }));
@@ -591,9 +609,8 @@ describe('ModListProvider', () => {
     });
 
     it('resyncs the tree after a failed drop, and a successful drop refreshes silently', async () => {
-      const { provider: failing, reports: failingReports } = makeFailingProvider({
-        reorder: () => Promise.reject(new Error('disk full')),
-      });
+      reorderModMock.mockRejectedValueOnce(new Error('disk full'));
+      const { provider: failing, reports: failingReports } = makeFailingProvider();
       let failingFired = false;
       failing.onDidChangeTreeData(() => { failingFired = true; });
       const roots = await failing.getChildren();

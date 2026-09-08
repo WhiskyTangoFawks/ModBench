@@ -52,7 +52,7 @@ import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcil
 import { reconcilePluginsWithDisk } from './modmanager/pluginsReconcile';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerPluginsReconcileWatchers, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModsAutoRegisterWatcher, registerPluginsReconcileWatchers, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
@@ -902,7 +902,8 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       gameDirResolver,
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands(instanceRoot, modlistSource, outputChannel, runModAction),
-      ...registerSeparatorCommands(modlistSource, runModAction),
+      ...registerSeparatorCommands(instanceRoot, modlistSource, runModAction),
+      registerCreateEmptyModCommand(instanceRoot, modlistSource, runModAction),
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
       ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
