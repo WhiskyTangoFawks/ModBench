@@ -814,6 +814,9 @@ describe('Loadout stays visible through an editing backend', () => {
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    // Every line these tests write names a plugin the plugins reconcile would otherwise prune.
+    // An unparseable Data/ stub is presence without being an implicit master.
+    for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n'));
@@ -922,6 +925,7 @@ describe('Plugin load-order rows expand into records', () => {
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-expand-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    for (const name of ['TestMod.esp', 'Other.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n'));
@@ -1033,6 +1037,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-readonly-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    for (const name of ['Immutable.esm']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
@@ -1367,6 +1372,7 @@ describe('The record-filter readout does not outlive its load order', () => {
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-readout-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    for (const name of ['TestMod.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
@@ -1426,6 +1432,7 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-lens-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    for (const name of ['TestMod.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
@@ -1525,6 +1532,7 @@ describe('Progressive load', () => {
     if (!root) return;
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-progressive-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    for (const name of ['TestMod.esp', 'Other.esp', 'MissingMaster.esp', 'Immutable.esm']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() =>

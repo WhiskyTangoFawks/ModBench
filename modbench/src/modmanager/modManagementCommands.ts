@@ -6,7 +6,6 @@ import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
 import { createOverwriteWatcher } from './overwriteWatcher';
 import { createModsWatcher } from './modsWatcher';
-import { createModlistWatcher } from './modlistWatcher';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import type { GameDirectory } from './gameDirectory';
 import { type GameDirectoryResolver } from './gameDirectoryResolver';
@@ -60,8 +59,8 @@ export function registerModListCoreCommands(
         void updateProfileDescription();
         notifyLoadoutHeaderChanged();
         // A profile switch is the next snapshot, not a teardown (ADR-0044). Switching writes
-        // ModOrganizer.ini rather than modlist/plugins.txt, which no watcher covers, so the
-        // sync is asked for explicitly.
+        // ModOrganizer.ini rather than modlist/plugins.txt, the files the sync's own watchers
+        // cover, so it is asked for explicitly.
         requestLoadOrderSync();
       }),
   ];
@@ -227,16 +226,6 @@ export function registerOverwriteView(
     }),
   ];
 }
-/** Every signal that can change which plugin files are present. Never plugins.txt itself: an
- *  edit to that file changes nothing on disk. */
-export function registerPluginsReconcileWatchers(instanceRoot: string, run: () => void): vscode.Disposable[] {
-  return [
-    createModsWatcher(instanceRoot, run),
-    createModlistWatcher(instanceRoot, run),
-    createOverwriteWatcher(instanceRoot, run),
-  ];
-}
-
 /** A mods/<name>/ folder can appear outside Modbench at any time — dragged in, extracted by
  *  hand, installed by another tool — so its modlist.txt entry is added reactively. */
 export function registerModsAutoRegisterWatcher(

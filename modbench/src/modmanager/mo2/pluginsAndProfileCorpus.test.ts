@@ -3,9 +3,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { Mo2ModlistSource } from './Mo2ModlistSource';
+import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../commands/plugins';
 import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree } from '../test/corpusFixture';
 
 const INI = 'ModOrganizer.ini';
+const PROFILE = 'Default';
 
 describe('plugins.txt + profile corpus', () => {
   let dir: string;
@@ -19,7 +21,7 @@ describe('plugins.txt + profile corpus', () => {
 
   it('setPluginEnabled(false) touches only the active profile\'s plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await src.setPluginEnabled('Tracked Patch Mod.esp', false);
+    await setPluginEnabled(dir, PROFILE, 'Tracked Patch Mod.esp', false);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
@@ -28,25 +30,23 @@ describe('plugins.txt + profile corpus', () => {
     expect(await src.readPluginOrder()).toContain('Tracked Patch Mod.esp');
   });
 
-  it('reconcilePluginLines applies the delta it is handed, touching only plugins.txt', async () => {
+  it('reconcilePlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const applied = await src.reconcilePluginLines((listed) => ({
-      append: ['Added.esp'],
-      prune: listed.filter((name) => name === 'ccSBJFO4003-Grenade.esl'),
-    }));
+    const result = await reconcilePlugins(dir, PROFILE, undefined, () => {});
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
-    expect(applied).toEqual({ append: ['Added.esp'], prune: ['ccSBJFO4003-Grenade.esl'] });
+    // The fixture ships this plugin on disk with no plugins.txt line; an unresolved game
+    // directory makes Data-folder presence unknowable, so nothing is pruned.
+    expect(result).toEqual({ applied: true, wrote: true, append: ['NonAsciiRetexture - Addon.esl'], prune: [] });
     const order = await src.readPluginOrder();
-    expect(order).not.toContain('ccSBJFO4003-Grenade.esl');
-    expect(order.at(-1)).toBe('Added.esp');
-    expect(await src.readEnabledPlugins()).not.toContain('Added.esp');
+    expect(order.at(-1)).toBe('NonAsciiRetexture - Addon.esl');
+    expect(await src.readEnabledPlugins()).not.toContain('NonAsciiRetexture - Addon.esl');
   });
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await src.reorderPlugins(['NonAsciiRetexture.esp'], 999);
+    await reorderPlugins(dir, PROFILE, ['NonAsciiRetexture.esp'], 999);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
@@ -59,7 +59,7 @@ describe('plugins.txt + profile corpus', () => {
   // is the real production path that closes that gap.
   it('appendPlugin registers a disk-only plugin at the winning end, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    await src.appendPlugin('NonAsciiRetexture - Addon.esl');
+    await appendPlugin(dir, PROFILE, 'NonAsciiRetexture - Addon.esl');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

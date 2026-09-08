@@ -672,7 +672,7 @@ overflow, then native **Collapse All** last.
   `sync.request()` fan-out rather than replacing it — no watcher was added.
 - **Rows are exactly `plugins.txt`'s lines; the file converges on disk.** The tree never
   merges disk into the file's inventory — a plugin file with no `plugins.txt` line has no row.
-  Instead a **plugins reconcile** (`pluginsReconcile.ts`, the plugins twin of the Mods tree's
+  Instead a **plugins reconcile** (`commands/plugins.ts`, the plugins twin of the Mods tree's
   `modlist.txt`-vs-`mods/` reconcile) updates the file to match disk, the way MO2's own
   refresh-then-full-rewrite converges: every root-level plugin an enabled mod or `overwrite/`
   provides with no line gets one **appended, disabled** (discovery is not user intent to enable),
@@ -680,16 +680,20 @@ overflow, then native **Collapse All** last.
   `overwrite/`, not the game's `Data/` folder (DLC and Creation Club lines stay) — is **pruned**.
   A `.mohidden` file is not present. An implicit master (rendered from `Data/`, never from a
   line) is never appended, even when a mod ships a copy. Matching is case-insensitive throughout. The edit is
-  surgical (ADR-0021): one read-modify-write under the plugins mutex, the delta computed from a
-  fresh parse, no write at all when nothing changed. It runs once at startup (after the modlist
-  reconcile) and behind the `mods/`, `modlist.txt` and `overwrite/` watchers — never the
-  `plugins.txt` watcher, since an edit to the file changes nothing on disk. Its write is what the
-  `plugins.txt` watcher then picks up for this tree and for Editing's Plugin load order sync. Any
-  failure to enumerate disk aborts the whole run (a walk that errored must never read as
-  "everything vanished"); with the game directory unresolved it appends but prunes nothing.
-  Silent by ruling: no prompt, no toast, the Output line is the record. Between a file appearing
-  on disk and the reconcile's write, the tree shows the file exactly as it is — no transitional
-  decoration. A checkbox toggle on a name whose line has meanwhile gone is a no-op.
+  surgical (ADR-0021): one read-modify-write on the commands' write chain, the delta computed from
+  a fresh parse, no write at all when the resulting text is unchanged. It is a command like the
+  three gestures beside it (ADR-0046) — it enumerates disk itself, reads no Instance, and returns
+  applied-or-refusal with the delta it applied; the composition root logs that. Every landed
+  Instance value runs it (`pluginsReconcileTrigger.ts`), including the value its own write
+  produces through the `plugins.txt` watcher: that loop terminates because the following run
+  computes an empty delta and writes nothing, which `pluginsReconcileLoop.test.ts` asserts by
+  counting writes over a burst. Its write is what reaches this tree and Editing's Plugin load
+  order sync. Any failure to enumerate disk refuses the whole run (a walk that errored must never
+  read as "everything vanished"); with the game directory unresolved it appends but prunes
+  nothing. Silent by ruling: no prompt, no toast, the Output line is the record. Between a file
+  appearing on disk and the reconcile's write, the tree shows the file exactly as it is — no
+  transitional decoration. A checkbox toggle on a name whose line has meanwhile gone is refused,
+  and the refusal is reported (ADR-0026).
 
 ### Row context menu
 
