@@ -20,6 +20,9 @@ public sealed class MalformedFormKeyEndpointTests
 
     private static CreateRecordHandler CreateHandlerFor(IndexedModFixture mod) => TestEditService.CreateHandler(mod.Index);
 
+    private static CopyRecordAsNewRecordHandler CopyAsNewHandlerFor(IndexedModFixture mod) =>
+        TestEditService.CopyAsNewHandler(mod.Index);
+
     [Fact]
     public void CreateRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
@@ -52,7 +55,8 @@ public sealed class MalformedFormKeyEndpointTests
             mod.Plugin.Name, IndexedModFixture.ModFolderOrigin,
             mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
-        var result = RecordEndpoints.CopyRecordAsNewRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Index.WriteGate, NullLogger.Instance);
+        var result = RecordEndpoints.CopyRecordAsNewRecord(
+            mod.Npc.ToString(), req, CopyAsNewHandlerFor(mod), mod.Index.WriteGate, NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

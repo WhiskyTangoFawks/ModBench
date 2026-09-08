@@ -10,7 +10,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>Copy as New Record covers the QUST/DIAL/INFO family (xEdit allows exactly these;
 /// CELL/WRLD stay on the permanent blacklist).</summary>
-public sealed class CopyAsNewContainerTests : IDisposable
+public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
 
@@ -21,8 +21,6 @@ public sealed class CopyAsNewContainerTests : IDisposable
     }
 
     private readonly List<IDisposable> _overlays = [];
-
-    private RecordEditService EditService() => _fixture.Edits;
 
     // Every response the destination's copy of a topic carries, in slot order, out of the topic's own
     // document — the only place they exist, since a response has no file of its own.
@@ -54,7 +52,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnADialogTopicWithResponses_MintsFreshKeysForEach_WithoutRemappingSiblingLinks()
     {
-        var result = EditService().CopyRecordAsNewRecord(
+        var result = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -102,13 +100,12 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnADialogTopic_WhenDestinationAlreadyOverridesTheQuest_AddsToItsDialogTopicsAndNothingElse()
     {
-        var service = EditService();
         Assert.True(_fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin).Applied);
         var questFile = _fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId);
         var questBefore = JsonDocument.Parse(File.ReadAllText(questFile));
 
-        var result = service.CopyRecordAsNewRecord(
+        var result = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -146,7 +143,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnAResponseAlone_AutoCreatesTheQuestAndTopicChain()
     {
-        var result = EditService().CopyRecordAsNewRecord(
+        var result = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.Response1.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -175,7 +172,7 @@ public sealed class CopyAsNewContainerTests : IDisposable
     [Fact]
     public void CopyAsNewRecord_OnAQuest_LandsANewQuestUnderAFreshFormKey_WithoutItsTopics()
     {
-        var result = EditService().CopyRecordAsNewRecord(
+        var result = _fixture.CopyAsNewHandler.CopyRecordAsNewRecord(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);

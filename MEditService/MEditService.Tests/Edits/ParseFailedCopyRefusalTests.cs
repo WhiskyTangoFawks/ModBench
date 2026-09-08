@@ -40,7 +40,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsNewRecord_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var result = _mod.Edits.CopyRecordAsNewRecord(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.CopyAsNewHandler.CopyRecordAsNewRecord(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
@@ -64,7 +64,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.PerkTheCodecReads();
 
-        var result = _mod.Edits.CopyRecordAsNewRecord(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.CopyAsNewHandler.CopyRecordAsNewRecord(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(_mod.DestinationDocument(result.NewFormKey!));
@@ -86,8 +86,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
-        public RecordEditService Edits { get; }
         public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
+        public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
 
         public ParseFailedCopyFixture()
         {
@@ -121,8 +121,8 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
             var holder = new LoadOrderHolder();
             holder.Apply(loadOrder);
-            Edits = TestEditService.Over(holder);
             CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
+            CopyAsNewHandler = TestEditService.CopyAsNewHandler(holder);
         }
 
         public SourceDocument? DestinationDocument(string formKey) =>
@@ -187,7 +187,7 @@ public sealed class ParseFailedDialogChildCopyRefusalTests : IDisposable
                 $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.Response2EditorId}\"",
                 StringComparison.Ordinal));
 
-        var result = _mod.Edits.CopyRecordAsNewRecord(
+        var result = _mod.CopyAsNewHandler.CopyRecordAsNewRecord(
             _mod.SourcePlugin, _mod.DialogTopic.ToString(), _mod.DestinationPlugin);
 
         Assert.False(result.Applied);

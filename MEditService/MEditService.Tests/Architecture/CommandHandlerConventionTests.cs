@@ -22,6 +22,7 @@ public sealed class CommandHandlerConventionTests
         (typeof(TrackHandler), "Applied"),
         (typeof(CompilePluginHandler), "Succeeded"),
         (typeof(CopyRecordAsOverrideHandler), "Applied"),
+        (typeof(CopyRecordAsNewRecordHandler), "Applied"),
         (typeof(AbsorbExternalChangeHandler), "Applied"),
         (typeof(KeepExternalChangeHandler), "Applied"),
     ];
