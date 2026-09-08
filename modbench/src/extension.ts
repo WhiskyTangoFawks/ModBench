@@ -31,7 +31,7 @@ import { ModListProvider } from './modmanager/ModListProvider';
 import { createModsWatcher } from './modmanager/modsWatcher';
 import { createModlistWatcher } from './modmanager/modlistWatcher';
 import { createPluginsTxtWatcher } from './modmanager/pluginsTxtWatcher';
-import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode } from './modmanager/PluginListProvider';
+import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode, type PluginListSource } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite, type PluginFacts } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { wirePluginListInvalidation } from './wirePluginListInvalidation';
@@ -49,10 +49,11 @@ import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePending, type MinimalRepository } from './medit/editorCommands';
 import { reconcileModlistWithModsDir } from './modmanager/startupModlistReconcile';
-import { reconcilePluginsWithDisk } from './modmanager/pluginsReconcile';
+import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled, type PluginsCommandResult } from './modmanager/commands/plugins';
+import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins } from './loadoutTeardown';
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerPluginsReconcileWatchers, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
@@ -321,9 +322,25 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 
+async function applyOrThrow(command: Promise<PluginsCommandResult>): Promise<void> {
+  const result = await command;
+  if (!result.applied) throw new Error(result.refusal);
+}
+
+// The commands are free functions, so the composition root binds the instance root and the
+// profile the Instance last landed, and turns a refusal into the rejection ADR-0026's
+// notify-and-log path is written against.
+function pluginListSource(instanceRoot: string, instance: Instance): PluginListSource {
+  return {
+    setPluginEnabled: (name, enabled) =>
+      applyOrThrow(setPluginEnabled(instanceRoot, instance.value.activeProfile, name, enabled)),
+    reorderPlugins: (names, toIndex) =>
+      applyOrThrow(reorderPlugins(instanceRoot, instance.value.activeProfile, names, toIndex)),
+  };
+}
+
 interface PluginListDeps {
   session: ExtensionSession;
-  modlistSource: Mo2ModlistSource;
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   instanceRoot: string;
@@ -341,10 +358,11 @@ interface PluginListDeps {
 // browser's children — so each row expands into its records. The composition root is the only
 // place that may know both.
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { session, modlistSource, outputChannel, reporter, instanceRoot, dataFolder, instance, recordBrowser } = deps;
+  const { session, outputChannel, reporter, instanceRoot, dataFolder, instance, recordBrowser } = deps;
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
-  const pluginListProvider = new PluginListProvider({ instance, source: modlistSource, log, reporter, dataFolder });
+  const source = pluginListSource(instanceRoot, instance);
+  const pluginListProvider = new PluginListProvider({ instance, source, log, reporter, dataFolder });
   const composite = new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
     // A thin positional adapter, not `recordBrowser` directly: the composite's
@@ -541,20 +559,19 @@ async function pickPluginDestination(
 // `appendPlugin` add the load-order line — never the other way around, so the load order can
 // never name a file that does not exist.
 async function appendCreatedPluginToLoadOrder(
-  modlistSource: Mo2ModlistSource, pluginListProvider: PluginListProvider, pluginName: string, outputChannel: vscode.LogOutputChannel,
+  instanceRoot: string, modlistSource: Mo2ModlistSource, pluginListProvider: PluginListProvider,
+  pluginName: string, outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
-  try {
-    await modlistSource.appendPlugin(pluginName);
-  } catch (err) {
+  const result = await appendPlugin(instanceRoot, await modlistSource.getActiveProfile(), pluginName);
+  pluginListProvider.invalidate();
+  if (!result.applied) {
     makeReporter(outputChannel, 'newPlugin').report(
       'error',
       `Created "${pluginName}", but could not add it to the load order — add it manually in the Plugins tree.`,
-      err instanceof Error ? err.message : String(err),
+      result.refusal,
     );
-    pluginListProvider.invalidate();
     return;
   }
-  pluginListProvider.invalidate();
   void vscode.window.showInformationMessage(`Modbench: Created "${pluginName}".`);
 }
 
@@ -590,7 +607,7 @@ function registerCreatePluginCommand(
     const created = await controller.createPlugin(name, destination.path, destination.origin);
     if (!created) return;
 
-    await appendCreatedPluginToLoadOrder(modlistSource, pluginListProvider, created.name, outputChannel);
+    await appendCreatedPluginToLoadOrder(instanceRoot, modlistSource, pluginListProvider, created.name, outputChannel);
   });
 }
 
@@ -861,12 +878,21 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     });
     // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
     // Plugin load order sync through the plugins.txt watcher.
-    const reconcilePlugins = () => reconcilePluginsWithDisk({
-      source: modlistSource, instanceRoot, dataFolder, channel: outputChannel,
-      buildIndex: (entries) => buildFileConflictIndex(entries, instanceRoot, (msg) => outputChannel.debug(msg)),
-    });
+    const runPluginsReconcile = async (profile: string, folder: string | undefined) => {
+      const result = await reconcilePlugins(instanceRoot, profile, folder, (msg) => outputChannel.debug(msg));
+      if (!result.applied) {
+        outputChannel.error(`[modmanager] Plugins reconcile failed: ${result.refusal}`);
+        return;
+      }
+      if (result.append.length > 0) {
+        outputChannel.info(`[modmanager] Plugins reconcile appended ${result.append.length} disabled plugins.txt line(s) for plugin(s) on disk with no line: ${result.append.join(', ')}`);
+      }
+      if (result.prune.length > 0) {
+        outputChannel.info(`[modmanager] Plugins reconcile pruned ${result.prune.length} plugins.txt line(s) with no plugin on disk: ${result.prune.join(', ')}`);
+      }
+    };
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ session, modlistSource, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, instance, recordBrowser });
+      registerPluginListView({ session, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, instance, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
     const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
@@ -905,15 +931,16 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       ...registerSeparatorCommands(modlistSource, runModAction),
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
-      ...registerPluginsReconcileWatchers(instanceRoot, () => void reconcilePlugins()),
+      registerPluginsReconcile(instance, runPluginsReconcile),
       ...pluginListDisposables,
       modListProvider, // disposes its Instance subscription
       instance,
     );
-    // The watchers above cover changes made while Modbench runs; these one-time passes reconcile
-    // what happened while it wasn't. Plugins follow mods, so the first pass feeds the second.
+    // The watchers above cover changes made while Modbench runs; this one-time pass reconciles
+    // what happened while it wasn't. The refresh is what carries the mods it registered into the
+    // plugins reconcile, which runs off the Instance's value.
     void reconcileModlistWithModsDir(modlistSource, () => modListProvider.invalidate(), outputChannel)
-      .then(reconcilePlugins);
+      .then(() => instance.refresh());
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, instance, outputChannel);
     context.subscriptions.push(...downloadsDisposables);
     // ADR-0046: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);

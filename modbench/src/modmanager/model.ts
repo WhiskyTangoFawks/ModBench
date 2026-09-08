@@ -69,12 +69,4 @@ export interface IModlistSource {
   readPluginOrder(): Promise<string[]>;
   /** plugins.txt load order, enabled-only: the `*`-prefixed lines that actually load. */
   readEnabledPlugins(): Promise<string[]>;
-  /** Byte-faithful. A name with no entry line has no row, so it is a no-op. */
-  setPluginEnabled(pluginName: string, enabled: boolean): Promise<void>;
-  /** `toIndex` counts entries with the moved lines already removed. Preserves the moved
-   *  lines' relative order regardless of selection contiguity. Throws if a name is absent. */
-  reorderPlugins(pluginNames: string[], toIndex: number): Promise<void>;
-  /** Appends an always-enabled line at the winning end (bottom) of plugins.txt; the plugin
-   *  file already exists on disk by the time this is called. Throws if the name is present. */
-  appendPlugin(pluginName: string): Promise<void>;
 }
