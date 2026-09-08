@@ -70,6 +70,15 @@ internal sealed class IndexStore
         ex.Message.Contains("lock on file", StringComparison.OrdinalIgnoreCase)
         || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase);
 
+    // DuckDB.NET duplicates in-memory connections only; a file opened again on the same path shares
+    // this process's database instance. Either way the read gets its own transaction context.
+    public DuckDBConnection OpenReadConnection()
+    {
+        var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
+        connection.Open();
+        return connection;
+    }
+
     private DuckDBConnection OpenFile()
     {
         var connection = new DuckDBConnection($"DataSource={_databasePath}");

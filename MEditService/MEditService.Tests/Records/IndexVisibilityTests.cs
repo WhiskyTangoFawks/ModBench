@@ -29,6 +29,38 @@ public sealed class IndexVisibilityTests
     }
 
     [Fact]
+    public void AReadDuringAnUncommittedWrite_AnswersFromTheCommittedIndex()
+    {
+        var (_, modPath, dir) = BuildBigPlugin("Big.esp");
+        try
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            using var repository = (DuckDbRecordIndex)new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector))
+                .Create(GameRelease.Fallout4);
+            using var loaded = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+            var key = new PluginKey("Big.esp", PluginOrigin.DataDirectory);
+            repository.Index(loaded, Registration.Participating(0), key);
+
+            // The writer's transaction is mid-flight: its registration row is gone but nothing is
+            // committed. A read that joined this connection would answer 0.
+            using var writerTransaction = repository.Connection.BeginTransaction();
+            using (var unregister = repository.Connection.CreateCommand())
+            {
+                unregister.CommandText = $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = 'Big.esp'";
+                unregister.ExecuteNonQuery();
+            }
+
+            var seen = repository.At(RecordRef.Effective).GetRecordTypeCounts(key)
+                .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            Assert.True(seen == NpcCount, $"a read saw {seen} of {NpcCount} records — it joined the writer's uncommitted transaction");
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task AReadDuringIndexing_NeverSeesAPartiallyIndexedPlugin()
     {
         var (_, modPath, dir) = BuildBigPlugin("Big.esp");
