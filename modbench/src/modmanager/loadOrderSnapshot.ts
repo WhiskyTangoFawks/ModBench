@@ -4,7 +4,7 @@
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { IModlistSource } from './model';
+import type { ModlistEntry } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { isPluginFile } from './masterReader';
 import { findUnlistedPlugins } from './unlistedPlugins';
@@ -66,11 +66,14 @@ async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, s
   }
 }
 
-type Source = Pick<IModlistSource, 'readPluginOrder' | 'readEnabledPlugins' | 'readModlist'>;
-type BuildIndex = (
-  entries: Awaited<ReturnType<IModlistSource['readModlist']>>,
-  instanceRoot: string,
-) => Promise<FileConflictIndex>;
+// The three reads a snapshot is built from. The caller reads MO2's files; this module never
+// opens one, so a snapshot can only ever be as fresh as the generation it was handed.
+type Source = {
+  readPluginOrder(): Promise<string[]>;
+  readEnabledPlugins(): Promise<string[]>;
+  readModlist(): Promise<ModlistEntry[]>;
+};
+type BuildIndex = (entries: ModlistEntry[], instanceRoot: string) => Promise<FileConflictIndex>;
 
 // Shared by both public entry points below: `dataFolder` optional yields a line-only row
 // (`path: undefined`) for a listed name neither a mod nor overwrite/ provides; a definite

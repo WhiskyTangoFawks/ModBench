@@ -119,7 +119,7 @@ function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
 }
 
-/** Sidebar Mod List (Loadout) tree over an MO2 instance's active profile — rows, statuses and
+/** Sidebar Mods tree over an MO2 instance's active profile — rows, statuses and
  *  the overwrite count all read entirely from the Instance value (ADR-0047); this provider owns
  *  no cache or watcher over MO2's files itself. */
 export class ModListProvider

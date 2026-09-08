@@ -781,7 +781,7 @@ describe('EditingController.putLoadOrder abandonment', () => {
   });
 
   // If a superseded load answered the way a failed one does, makeEnterEditing would call
-  // exitToLoadout(), tearing the backend down under the newer load that owns the load order.
+  // exitEditing(), tearing the backend down under the newer load that owns the load order.
   it('reports a superseded load as abandoned, distinctly from a failed one', async () => {
     const client = { ...makeClient(), PUT: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
     const deps = makeDeps({ client });

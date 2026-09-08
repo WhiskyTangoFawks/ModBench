@@ -88,8 +88,8 @@
     "views": {
       "modbench": [
         {
-          "id": "modbench.loadoutHeader",
-          "name": "Loadout"
+          "id": "modbench.toolbox",
+          "name": "Toolbox"
         },
         {
           "id": "modbench.modList",
@@ -587,22 +587,22 @@
       "view/title": [
         {
           "command": "modbench.refresh",
-          "when": "view == modbench.loadoutHeader",
+          "when": "view == modbench.toolbox",
           "group": "navigation@1"
         },
         {
           "command": "modbench.launch",
-          "when": "view == modbench.loadoutHeader && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
           "group": "navigation@2"
         },
         {
           "command": "modbench.modList.deploy",
-          "when": "view == modbench.loadoutHeader && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
           "group": "2_deployment"
         },
         {
           "command": "modbench.modList.purge",
-          "when": "view == modbench.loadoutHeader && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
+          "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance && modbench.deploymentStandalone",
           "group": "2_deployment"
         },
         {

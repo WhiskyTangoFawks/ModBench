@@ -44,16 +44,16 @@ code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
 **The workspace root must be a real MO2 instance directory** (`modbench/CLAUDE.md` § Invariants:
 workspace root = MO2 instance, no separate setting). Default to `DevList/` (the local test
 instance checked into this repo) unless the user names another instance. Do not open the
-Modbench source repo itself as the workspace — the Loadout view will have nothing to show.
+Modbench source repo itself as the workspace — the Toolbox will have nothing to show.
 
 ## 3 — Activate the extension
 
 `activationEvents` is intentionally `[]` — the extension does not auto-activate on startup
-(see `src/test/integration/extension.test.ts`). The loadout views (Mods, Plugins, Downloads)
+(see `src/test/integration/extension.test.ts`). The MO2-side views (Toolbox, Mods, Plugins, Downloads)
 are contributed unconditionally, but activation is still required to populate them.
 
 Force activation once per sitting by running any Modbench command from the Command Palette,
-e.g. **Modbench: Refresh**. The activity bar icon then appears (Loadout view) and the
+e.g. **Modbench: Refresh**. The activity bar icon then appears (Toolbox) and the
 backend launches automatically — the Plugins tree's rows
-gain chevrons once the load order is ready. Nothing switches views; every loadout view stays
+gain chevrons once the load order is ready. Nothing switches views; every MO2-side view stays
 exactly where it was.

@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
 import { createOverwriteWatcher } from './overwriteWatcher';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
@@ -9,8 +8,10 @@ import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommand
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import type { Instance } from './instance';
+import { nexusSlugForGame } from './mo2/nexusSlug';
+import type { Own } from '../session';
 import { makeReporter } from '../reporter';
-import { registerNameFilter, type NameFilter } from '../nameFilter';
+import { registerNameFilter } from '../nameFilter';
 import { meditConfig, makeDetectPaths, setMo2InstanceContext } from '../workspaceConfig';
 import {
   createEmptyMod,
@@ -22,7 +23,7 @@ import {
 } from './commands/modlist';
 import { deployMods, purgeMods, type DeploymentCommandResult } from './commands/deployment';
 import { installFromArchive, installFromFolder } from './commands/install';
-import { switchProfile } from './commands/profile';
+import { listProfiles, switchProfile } from './commands/profile';
 
 // A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
 // contract whether the failure came from a rejected promise or an `{ applied: false }` result.
@@ -42,9 +43,8 @@ export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
  *  than one call site, not merely by having several fields. The callback is a narrow window onto
  *  the composition root's session object. */
 export function registerModListCoreCommands(
-  instanceRoot: string, modListProvider: ModListProvider, modlistSource: Mo2ModlistSource,
+  instanceRoot: string, modListProvider: ModListProvider, instance: Pick<Instance, 'value'>,
   outputChannel: vscode.LogOutputChannel, updateProfileDescription: () => Promise<void>,
-  notifyLoadoutHeaderChanged: () => void,
 ): vscode.Disposable[] {
   return [
       vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
@@ -56,10 +56,8 @@ export function registerModListCoreCommands(
         void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', false);
       }),
       vscode.commands.registerCommand('modbench.modList.switchProfile', async () => {
-        const [profiles, active] = await Promise.all([
-          modlistSource.listProfiles(),
-          modlistSource.getActiveProfile(),
-        ]);
+        const active = instance.value.activeProfile;
+        const profiles = await listProfiles(instanceRoot);
         const picked = await vscode.window.showQuickPick(
           profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined })),
           { placeHolder: 'Switch profile' },
@@ -71,9 +69,9 @@ export function registerModListCoreCommands(
           return;
         }
         void updateProfileDescription();
-        notifyLoadoutHeaderChanged();
         // ADR-0044/ADR-0047: the write lands in ModOrganizer.ini, which the Instance already
-        // watches — its own recompute is what reaches the load-order sync, never this command.
+        // watches — its own recompute is what reaches the load-order sync and the Toolbox's
+        // profile row, never this command.
       }),
   ];
 }
@@ -129,7 +127,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   ];
 }
 export function registerModContextCommands(
-  instanceRoot: string, modlistSource: Mo2ModlistSource, outputChannel: vscode.LogOutputChannel,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, outputChannel: vscode.LogOutputChannel,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable[] {
   return [
@@ -143,19 +141,13 @@ export function registerModContextCommands(
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
         await runModAction('addSeparatorBelow', 'Failed to add separator.', async () => {
-          const profile = await modlistSource.getActiveProfile();
+          const profile = instance.value.activeProfile;
           applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.mod.name));
         });
       }),
       vscode.commands.registerCommand('modbench.modList.mod.moveToSeparator', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
-        let separators: string[];
-        try {
-          separators = await modlistSource.listSeparators();
-        } catch (err) {
-          makeReporter(outputChannel, 'moveToSeparator').report('error', 'Failed to read mod list.', err instanceof Error ? err.message : String(err));
-          return;
-        }
+        const separators = instance.value.mods.filter((e) => e.kind === 'separator').map((e) => e.name);
         const items: Array<vscode.QuickPickItem & { sepName: string | null }> = [
           { label: 'Ungrouped', description: 'Before first separator', sepName: null },
           ...separators.map((s) => ({ label: s, sepName: s })),
@@ -163,7 +155,7 @@ export function registerModContextCommands(
         const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Move to separator…' });
         if (!picked) return;
         await runModAction('moveToSeparator', 'Failed to move mod.', async () => {
-          const profile = await modlistSource.getActiveProfile();
+          const profile = instance.value.activeProfile;
           applyOrThrow(await moveModToSeparator(instanceRoot, profile, node.mod.name, picked.sepName));
         });
       }),
@@ -176,7 +168,7 @@ export function registerModContextCommands(
         );
         if (answer !== 'Uninstall') return;
         await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, async () => {
-          const profile = await modlistSource.getActiveProfile();
+          const profile = instance.value.activeProfile;
           applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name));
         });
       }),
@@ -184,7 +176,7 @@ export function registerModContextCommands(
         if (node?.kind !== 'mod' || !node.mod.nexusId) return;
         const nexusId = node.mod.nexusId;
         await runModAction('viewOnNexus', 'Failed to open Nexus page.', async () => {
-          const slug = await modlistSource.getNexusSlug();
+          const slug = nexusSlugForGame(instance.value.gameRelease);
           await vscode.env.openExternal(
             vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${nexusId}`),
           );
@@ -193,7 +185,7 @@ export function registerModContextCommands(
   ];
 }
 export function registerSeparatorCommands(
-  instanceRoot: string, modlistSource: Mo2ModlistSource,
+  instanceRoot: string, instance: Pick<Instance, 'value'>,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable[] {
   return [
@@ -205,7 +197,7 @@ export function registerSeparatorCommands(
         });
         if (!newName || newName === node.separator.name) return;
         await runModAction('renameSeparator', 'Failed to rename separator.', async () => {
-          const profile = await modlistSource.getActiveProfile();
+          const profile = instance.value.activeProfile;
           applyOrThrow(await renameSeparator(instanceRoot, profile, node.separator.name, newName));
         });
       }),
@@ -214,14 +206,14 @@ export function registerSeparatorCommands(
         const name = await vscode.window.showInputBox({ prompt: 'Separator name', placeHolder: 'My Group' });
         if (!name) return;
         await runModAction('separator.addSeparatorBelow', 'Failed to add separator.', async () => {
-          const profile = await modlistSource.getActiveProfile();
+          const profile = instance.value.activeProfile;
           applyOrThrow(await insertSeparator(instanceRoot, profile, name, node.separator.name));
         });
       }),
       vscode.commands.registerCommand('modbench.modList.separator.delete', async (node: SeparatorNode | undefined) => {
         if (node?.kind !== 'separator') return;
         await runModAction('deleteSeparator', 'Failed to delete separator.', async () => {
-          const profile = await modlistSource.getActiveProfile();
+          const profile = instance.value.activeProfile;
           applyOrThrow(await deleteSeparator(instanceRoot, profile, node.separator.name));
         });
       }),
@@ -230,14 +222,14 @@ export function registerSeparatorCommands(
 /** Mods tree title-bar action: a name prompt, refusing a name already in use (ADR-0047 point 6
  *  — the command itself decides the refusal; this only surfaces it). */
 export function registerCreateEmptyModCommand(
-  instanceRoot: string, modlistSource: Mo2ModlistSource,
+  instanceRoot: string, instance: Pick<Instance, 'value'>,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.modList.newEmptyMod', async () => {
     const name = await vscode.window.showInputBox({ prompt: 'New mod name', placeHolder: 'My New Mod' });
     if (!name) return;
     await runModAction('newEmptyMod', `Failed to create "${name}".`, async () => {
-      const profile = await modlistSource.getActiveProfile();
+      const profile = instance.value.activeProfile;
       applyOrThrow(await createEmptyMod(instanceRoot, profile, name));
     });
   });
@@ -269,31 +261,26 @@ export function registerOverwriteView(
  *  and its `viewsWelcome` contribution renders an actionable message instead. */
 export function registerNotMo2InstanceWelcome(
   instanceRoot: string,
-  context: vscode.ExtensionContext,
   outputChannel: vscode.LogOutputChannel,
-): void {
-  outputChannel.info(`[extension] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
+): vscode.Disposable {
+  outputChannel.info(`[toolbox] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
   setMo2InstanceContext(false);
-  context.subscriptions.push(
-    vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER }),
-  );
+  return vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER });
 }
 /** Tree, filter and profile readout together, because the view's description has exactly one
  *  owner. Split apart, a profile update and a filter keystroke race for that property and the
  *  loser silently vanishes. */
 export function createModListView(
+  own: Own,
   modListProvider: ModListProvider,
-  modlistSource: Mo2ModlistSource,
-  outputChannel: vscode.LogOutputChannel,
-): {
-  modListView: vscode.TreeView<ModlistNode>; modListFilter: NameFilter; updateProfileDescription: () => Promise<void>;
-} {
-  const modListView = vscode.window.createTreeView('modbench.modList', {
+  instance: Pick<Instance, 'value' | 'subscribe'>,
+): { modListView: vscode.TreeView<ModlistNode>; updateProfileDescription: () => Promise<void> } {
+  const modListView = own(vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
     showCollapseAll: true,
     dragAndDropController: modListProvider,
-  });
-  const modListFilter = registerNameFilter({
+  }));
+  const modListFilter = own(registerNameFilter({
     view: modListView,
     viewId: 'modbench.modList',
     placeholder: 'Filter mods…',
@@ -302,53 +289,52 @@ export function createModListView(
     // a modlist entry), so it is not evidence that the term matched anything.
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
-  });
-  const updateProfileDescription = async () => {
-    try {
-      modListFilter.setBaseDescription(await modlistSource.getActiveProfile());
-    } catch (err) {
-      outputChannel.error(`[extension] reading active profile failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
+  }));
+  // Async only because Refresh's own sequence awaits it (ADR-0046); the profile is a field of
+  // the value the Instance already landed, so there is no disk read left to fail.
+  const updateProfileDescription = () => {
+    modListFilter.setBaseDescription(instance.value.activeProfile);
+    return Promise.resolve();
   };
   void updateProfileDescription();
-  return { modListView, modListFilter, updateProfileDescription };
+  // A profile switch rewrites ModOrganizer.ini, which the Instance watches — the recompute it
+  // lands is what moves this readout, not the gesture.
+  own(instance.subscribe(() => void updateProfileDescription()));
+  return { modListView, updateProfileDescription };
 }
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
  *  Rows come entirely from the Instance value (ADR-0047); no own scan or watcher here. */
 export function registerDownloadsView(
+  own: Own,
   instanceRoot: string,
   instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>,
   outputChannel: vscode.LogOutputChannel,
-): { downloadsProvider: DownloadsProvider; disposables: vscode.Disposable[] } {
+): DownloadsProvider {
   // A shim for collaborators still taking a flat `(msg) => void`, built here at the boundary so
   // the flat shape stops at them rather than one level higher.
   const log = (msg: string) => outputChannel.info(msg);
-  const downloadsProvider = new DownloadsProvider({ instanceRoot, instance });
-  const downloadsView = vscode.window.createTreeView('modbench.downloads', {
+  const downloadsProvider = own(new DownloadsProvider({ instanceRoot, instance })); // disposes its Instance subscription
+  const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
     canSelectMany: true,
-  });
-  return {
-    downloadsProvider,
-    disposables: [
-      downloadsView,
-      downloadsProvider, // disposes its Instance subscription
-      // Dims hidden rows once Show hidden is on — the sole cue distinguishing them,
-      // since Show hidden is additive, not an exclusive filter.
-      vscode.window.registerFileDecorationProvider(
-        new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
-      ),
-      registerNameFilter({
-        view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…',
-        setFilter: (text) => downloadsProvider.setFilter(text),
-        hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
-      }),
-      registerDownloadsSortCommand(downloadsProvider),
-      ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-      ...registerDownloadsSingleRowCommands(instanceRoot, log),
-      ...registerDownloadsMultiRowCommands(instanceRoot, log),
-    ],
-  };
+  }));
+  // Dims hidden rows once Show hidden is on — the sole cue distinguishing them, since Show
+  // hidden is additive, not an exclusive filter.
+  own(vscode.window.registerFileDecorationProvider(
+    new HiddenDownloadDecorationProvider(instanceRoot, () => downloadsProvider.hiddenNames()),
+  ));
+  own(registerNameFilter({
+    view: downloadsView, viewId: 'modbench.downloads', placeholder: 'Filter downloads…',
+    setFilter: (text) => downloadsProvider.setFilter(text),
+    hasRows: async () => (await downloadsProvider.getChildren()).length > 0,
+  }));
+  own(registerDownloadsSortCommand(downloadsProvider));
+  for (const disposable of [
+    ...registerDownloadsHiddenToggleCommands(downloadsProvider),
+    ...registerDownloadsSingleRowCommands(instanceRoot, log),
+    ...registerDownloadsMultiRowCommands(instanceRoot, log),
+  ]) own(disposable);
+  return downloadsProvider;
 }
 /** One reading of the setting, shared by the `when`-clause context key and the header's
  *  deployment row: two answers could put an icon and its readout in different states. */
@@ -357,32 +343,27 @@ export function isStandaloneDeployment(): boolean {
 }
 /** Seed and watch the deployment-mode context key (standalone vs external manager). */
 export function registerDeploymentModeContext(
-  context: vscode.ExtensionContext,
   // The deployment row appears and disappears with the mode.
-  notifyLoadoutHeaderChanged: () => void,
-): void {
+  notifyToolboxChanged: () => void,
+): vscode.Disposable {
   // Deploy, Purge and Launch are hidden when an external manager owns deployment, which is the
   // alpha default: MO2 stays the deployer until standalone deploy ships.
   const applyDeploymentMode = () => {
     void vscode.commands.executeCommand('setContext', 'modbench.deploymentStandalone', isStandaloneDeployment());
   };
   applyDeploymentMode();
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('modbench.mods.deploymentMode')) {
-        applyDeploymentMode();
-        notifyLoadoutHeaderChanged();
-      }
-    }),
-  );
+  return vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('modbench.mods.deploymentMode')) {
+      applyDeploymentMode();
+      notifyToolboxChanged();
+    }
+  });
 }
 export function registerDeployCommands(
   instanceRoot: string,
-  modlistSource: Mo2ModlistSource,
+  instance: Pick<Instance, 'value'>,
   outputChannel: vscode.LogOutputChannel,
   gameDirResolver: GameDirectoryResolver,
-  // The deployment row appears and disappears with a successful deploy or purge.
-  notifyLoadoutHeaderChanged: () => void,
 ): vscode.Disposable[] {
   const detectPaths = makeDetectPaths();
   const reporter = makeReporter(outputChannel, 'deploy');
@@ -406,8 +387,9 @@ export function registerDeployCommands(
       return;
     }
     if (!outcome.wrote) return;
+    // The manifest lands under mods/, which the Instance watches — its own recompute is what
+    // moves the Toolbox's deployment row, never this command.
     void vscode.window.showInformationMessage(success);
-    notifyLoadoutHeaderChanged();
   };
 
   return [
@@ -415,7 +397,7 @@ export function registerDeployCommands(
       run('Deploy failed.', 'Modbench: Mods deployed.', async () =>
         deployMods(
           instanceRoot,
-          await modlistSource.getActiveProfile(),
+          instance.value.activeProfile,
           // The single game-directory resolver, memoised and invalidated only when
           // modbench.mods.gameDirectory changes.
           (await gameDirResolver.resolve()) ?? undefined,

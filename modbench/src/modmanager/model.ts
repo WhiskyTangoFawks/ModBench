@@ -35,34 +35,3 @@ export interface InstallMeta {
   version?: string;
   installationFile?: string;
 }
-
-/** Persistence over an MO2 instance for the active profile. File order is
- *  winning-first: top of modlist.txt = winning end, bottom = losing end. */
-export interface IModlistSource {
-  readModlist(): Promise<ModlistEntry[]>;
-  setEnabled(modName: string, enabled: boolean): Promise<void>;
-  reorder(modName: string, toIndex: number): Promise<void>;
-  /** Insert a new enabled separator immediately after `afterEntryName` (mod or separator).
-   *  When `afterEntryName` is a separator, inserts after its last child. */
-  insertSeparator(name: string, afterEntryName: string): Promise<void>;
-  renameSeparator(oldName: string, newName: string): Promise<void>;
-  deleteSeparator(name: string): Promise<void>;
-  /** Move `modName` to the end of `separatorName`'s section, or to the ungrouped
-   *  section (before the first separator) when `separatorName` is null. */
-  moveModToSeparator(modName: string, separatorName: string | null): Promise<void>;
-  /** Remove the mod from modlist.txt and delete its mods/<name>/ directory. */
-  removeMod(modName: string): Promise<void>;
-  /** Move a separator and all its children as a block to entry-index `toIndex`. */
-  reorderSeparatorBlock(separatorName: string, toIndex: number): Promise<void>;
-  /** Nexus Mods game slug (e.g. "fallout4") for constructing mod page URLs. */
-  getNexusSlug(): Promise<string>;
-  listProfiles(): Promise<string[]>;
-  /** Separator names in file order (winning end / top of file first). */
-  listSeparators(): Promise<string[]>;
-  getActiveProfile(): Promise<string>;
-  setActiveProfile(name: string): Promise<void>;
-  /** plugins.txt load order, read-only (the Plugin List view owns plugin order). */
-  readPluginOrder(): Promise<string[]>;
-  /** plugins.txt load order, enabled-only: the `*`-prefixed lines that actually load. */
-  readEnabledPlugins(): Promise<string[]>;
-}

@@ -1,4 +1,4 @@
-# Mods (Loadout) — Surface Specification
+# Mods — Surface Specification
 
 Mod Management context — operates on mods and files, never on records or FormKeys. The
 mEdit-context vocabulary ("record", "FormKey") is absent here by construction
@@ -35,7 +35,7 @@ rights, kernel features, or a mount lifecycle that fails in ways nobody can diag
 
 ## Solution
 
-The **Loadout view** — a VS Code sidebar tree ("Mods") that installs, orders, enables,
+The **Mods view** — a VS Code sidebar tree that installs, orders, enables,
 and deploys mods for the active profile. The open VS Code workspace root *is* the MO2
 instance directory, so `mods/`, `profiles/`, and `ModOrganizer.ini` are read in place and
 the on-disk format *is* MO2's — Modbench and MO2 can alternate on the same instance with
@@ -165,7 +165,7 @@ requires a deploy.**
 
 ### Scope
 
-- This spec covers the **Loadout surface**: the Mods tree, install, conflict/status
+- This spec covers the **Mods surface**: the Mods tree, install, conflict/status
   badges, deploy/purge, launching executables as tasks, the modlist source-adapter model,
   profile switching, and the editing-backend lifecycle hook this surface owns.
 - The mod manager is a subsystem of the VS Code extension (`modbench/src/modmanager/`). It
@@ -256,9 +256,11 @@ the configured game directory's `Data/`.
 ### Modlist format & source adapters
 
 - Modbench does not invent a modlist format — its format **is** MO2's
-  ([ADR-0021](../adr/0021-mod-manager-in-extension.md)).
-  Persistence goes through an `IModlistSource` over an in-memory modlist model.
-- **MO2 adapter** (first-class): reads/writes an instance in place — `mods/<name>/`, the
+  ([ADR-0021](../adr/0021-mod-manager-in-extension.md)). The **Instance** reads it
+  ([ADR-0047](../adr/0047-the-extension-mirrors-the-backends-shape-one-read-model-built-only-by-watching.md))
+  and the free-function commands in `modmanager/commands/` write it; there is no adapter object
+  between them and the files.
+- **MO2 layout** (first-class): read/written in place — `mods/<name>/`, the
   active profile's `modlist.txt` (`+`/`-` prefixes, top of file = winning end, bottom = losing end) and
   `plugins.txt`, and per-mod `meta.ini` (Nexus id/version). Separators, categories, and
   metadata survive verbatim.
@@ -297,7 +299,7 @@ The extension owns the editing backend process
 - **Header**: title "MODS"; description = current profile name; a first non-interactive
   count node ("N active / M installed"); title-bar icon buttons for Filter, Sort Direction,
   New Empty Mod, and Collapse All — four, and nothing else. Switch Profile, Refresh, Deploy
-  and Purge live on the [Loadout header](containers.md): none of them are
+  and Purge live on the [Toolbox](containers.md): none of them are
   about *this tree*, and nine icons is past the point where VS Code
   keeps them visible in a narrow sidebar. Launch Game does not exist (see
   *Deploy / purge* below).
@@ -354,7 +356,7 @@ The extension owns the editing backend process
     not persisted across window reloads. It is a lens, not a setting.
   - **Icon note**: `$(clear-all)` matches VS Code's own "Clear Extensions Search Results";
     the choice is recorded here rather than silently inherited.
-- **Profile selector**: reached from the [Loadout header](containers.md)'s Profile row,
+- **Profile selector**: reached from the [Toolbox](containers.md)'s Profile row,
   not this tree — switching profile swaps the modlist *and* `plugins.txt` *and* invalidates
   any running editing backend's load order, so its scope is the workspace. It opens a quick pick
   of directories under `profiles/`; selecting one persists `selected_profile`, refreshes the tree
@@ -368,8 +370,8 @@ The extension owns the editing backend process
   separator).
 - **Write behavior**: every mutation (enable/disable, drag-reorder, separator ops, Move to
   Separator, Uninstall, New Empty Mod) writes to `modlist.txt` immediately, through the
-  free-function command for that gesture (`modmanager/commands/modlist.ts`, ADR-0047 point 6)
-  rather than through the `IModlistSource` adapter. There is **no save/discard flow** in this
+  free-function command for that gesture (`modmanager/commands/modlist.ts`, ADR-0047 point 6).
+  There is **no save/discard flow** in this
   view — unlike the Editing surface, whose edits land as working-tree source changes reviewed
   and committed in the native Source Control panel (ADR-0041, medit-version-control.md).
 
@@ -440,7 +442,7 @@ The extension owns the editing backend process
   because usvfs is a live VFS it holds up across however many tool runs; physical hardlinks
   have no such lifetime, so "deployed" is a mode the user is in.
 - **There is no Launch Game action** (deploy, run, purge-on-exit). The affordance is the
-  [Loadout header](containers.md)'s
+  [Toolbox](containers.md)'s
   **Launch…**, a task picker over the executables registry — one affordance that launches and
   nothing else. Deploy-run-purge coupling was
   rejected for three reasons, none of them cost: (1) *the launched process is not the game* — a script
@@ -458,7 +460,7 @@ The extension owns the editing backend process
 ### Launching executables as tasks (*specced, not yet implemented*)
 
 Everything in this section is a decision, not current behavior: today the
-[Loadout header](containers.md)'s Launch… affordance is placed but unwired.
+[Toolbox](containers.md)'s Launch… affordance is placed but unwired.
 
 Launching is a **VS Code task**, not a button. Tasks are the native "run a program" mechanism
 — a picker, user-editable configuration, terminal output, exit codes — and per
@@ -560,7 +562,7 @@ difference is intentional and documented, not a defect.
 
 **Cross-surface hazard**: running a plugin editor as a task while an mEdit load order holds the
 same plugins indexed leaves that index stale with no notification. Resolution is deferred, and
-it is an Editing-surface concern (see [medit.md](medit.md)), not a Loadout one.
+it is an Editing-surface concern (see [medit.md](medit.md)), not a Mod-Management one.
 
 ### Overwrite folder
 
@@ -568,7 +570,7 @@ Purge sweeps `Data/` files that are neither a deployed link nor vanilla into
 `overwrite/` (runtime outputs — F4SE logs, MCM INI writes). This surfaces that
 folder so the user can reassign or discard those files without leaving Modbench.
 
-- **Surface**: a single **leaf row** in the Loadout tree, pinned as the **very last row**,
+- **Surface**: a single **leaf row** in the Mods tree, pinned as the **very last row**,
   outside separator grouping. It is a read-only fixture over `overwrite/`, **not** a
   `modlist.txt` entry — so it never enables/disables, reorders, moves to a separator, or
   uninstalls like a mod.
@@ -618,10 +620,10 @@ folder so the user can reassign or discard those files without leaving Modbench.
 - Install, profile switch, deploy and purge are free-function commands beside the
   `modlist.txt` ones, in the same shape and under the same scan test:
   `modmanager/commands/install.ts`, `profile.ts` and `deployment.ts`.
-- The **`IModlistSource` adapter** over an in-memory modlist model remains the seam for the
-  reads — `readModlist`, `listSeparators`, `listProfiles`,
-  `getActiveProfile`/`getNexusSlug` — and for reconciling `mods/` with `modlist.txt`
-  (`registerUnlistedMods`/`pruneDeadEntries`), exercised with real MO2 instance fixtures.
+- The **Instance** (`modmanager/instance.ts`) is the only reader of MO2's files: the modlist
+  with each mod's `meta.ini` folded in, `plugins.txt`, the active profile and the game name all
+  come from one value. Reconciling `mods/` with `modlist.txt` is `reconcileMods`, a command
+  beside the others, exercised with real MO2 instance fixtures.
 - The **`FileConflictIndex`** (pure winner-map construction from a mod set + order) and the
   **surgical text transforms** (`modlistText.ts`, `metaIni.ts`, `modOrganizerIni.ts`) are
   pure-logic seams with no `vscode` import.

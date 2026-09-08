@@ -7,22 +7,32 @@ import { join } from 'node:path';
 const SRC = join(__dirname, '..');
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
-// ADR-0021: a write verb is a surgical edit of one MO2 file, and the corpus tests are what prove
-// it touched nothing else. A verb without one is unproven.
-describe('every Mo2ModlistSource write verb has a corpus test', () => {
-  const writeVerbs = [...read('modmanager/mo2/Mo2ModlistSource.ts').matchAll(/^ {2}async (?!read|list|get)(\w+)\(/gm)].map((m) => m[1]);
-  const corpusDir = join(SRC, 'modmanager');
-  const corpus = walk(corpusDir).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
+// ADR-0021: a write verb is a surgical edit of one MO2 text file, and the corpus tests are what
+// prove it touched nothing else. A verb without one is unproven.
+describe('every MO2 text-file write command has a corpus test', () => {
+  const WRITERS = ['modmanager/commands/modlist.ts', 'modmanager/commands/plugins.ts', 'modmanager/commands/profile.ts'];
+  const writeVerbs = WRITERS.flatMap((file) => commandVerbs(read(file)));
+  const corpus = walk(join(SRC, 'modmanager')).filter((f) => f.endsWith('Corpus.test.ts')).map((f) => readFileSync(f, 'utf8')).join('\n');
 
   it('finds the write verbs', () => {
-    expect(writeVerbs).toContain('setEnabled');
-    expect(writeVerbs).not.toContain('readModlist');
+    expect(writeVerbs).toContain('setModEnabled');
+    expect(writeVerbs).toContain('switchProfile');
+    // The write queue is infrastructure the verbs share, not a verb of its own.
+    expect(writeVerbs).not.toContain('withModlistWriteLock');
   });
 
   it.each(writeVerbs)('%s', (verb) => {
     expect(corpus).toMatch(new RegExp(`\\b${verb}\\(`));
   });
 });
+
+// A verb is an exported function whose signature answers with a result — `applied` inline, or
+// one of the named `…Result` types every gesture returns (ADR-0047 point 6).
+function commandVerbs(source: string): string[] {
+  return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
+    .filter((m) => /applied|Result>/.test(m[2]))
+    .map((m) => m[1]);
+}
 
 // docs/specs/containers.md rule 7: showCollapseAll on every hierarchical tree, never a flat
 // list. `createTreeView` has no declarative contribution, so the call sites are the seam.
@@ -31,8 +41,8 @@ describe('title-bar rule 7: showCollapseAll marks exactly the hierarchical trees
 
   it('reads every createTreeView site', () => {
     expect(sites.map((s) => s.id).sort()).toEqual([
-      'modbench.downloads', 'modbench.loadoutHeader', 'modbench.modList', 'modbench.modList',
-      'modbench.pluginListTree', 'modbench.referencedByTree',
+      'modbench.downloads', 'modbench.modList', 'modbench.modList', 'modbench.pluginListTree',
+      'modbench.referencedByTree', 'modbench.toolbox',
     ]);
   });
 

@@ -39,7 +39,7 @@ and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
 | **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
 | **Version control** — Track, edit branch, Save & Compile, native SCM integration, external-change handling, crash recovery | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
 | **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
-| **Loadout view** — profile and deployment readout, the container's settings view | [containers.md](docs/specs/containers.md) | Implemented |
+| **Toolbox** — the view of the instance and the composition root | [containers.md](docs/specs/containers.md) | Implemented |
 | **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Repair** — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [medit-repair.md](docs/specs/medit-repair.md) | Specced |
 | **Downloads** — Nexus download queue and tree (`nxm://` handler still pending) | [downloads.md](docs/specs/downloads.md) | Implemented |
@@ -66,7 +66,7 @@ and files; **Editing** speaks plugins, records and FormKeys — meet at exactly 
 file at a physical path. [CONTEXT-MAP.md](CONTEXT-MAP.md) is the map;
 [CONTEXT.md](CONTEXT.md) and [modbench/src/modmanager/CONTEXT.md](modbench/src/modmanager/CONTEXT.md)
 are the glossaries. The extension spawns and owns the backend for a load order
-([ADR-0022](docs/adr/0022-extension-owns-backend-lifecycle.md)); the Loadout side works with no
+([ADR-0022](docs/adr/0022-extension-owns-backend-lifecycle.md)); the MO2 side works with no
 backend at all.
 
 The UX rules are borrowed, not invented: Mod Management follows MO2, record editing follows xEdit
@@ -110,7 +110,7 @@ code --extensionDevelopmentPath="$(pwd)/modbench" "<path to an MO2 instance dire
 The workspace folder you open **is** the MO2 instance — the directory containing
 `ModOrganizer.ini`, `mods/` and `profiles/`. There is no separate instance-path setting
 ([modbench/CLAUDE.md](modbench/CLAUDE.md) § Invariants). Run any Modbench command from the palette
-to activate the extension; the Loadout views appear in the activity bar.
+to activate the extension; the Modbench views appear in the activity bar.
 
 Regenerating the typed API client after a backend change: `npm run generate-api` against a
 freshly started backend (the `/regenerate-api` skill has the exact sequence).

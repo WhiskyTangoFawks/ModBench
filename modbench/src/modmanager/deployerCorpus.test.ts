@@ -4,11 +4,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
+import { parseModlist } from './mo2/modlistText';
 import { deploy, purge } from './deployer';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import type { GameDirectory } from './gameDirectory';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from './test/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, snapshotTree } from './test/corpusFixture';
 
 const MANIFEST = 'mods/.medit-manifest.json';
 const TRACKED_GIT_HEAD = 'mods/Tracked Patch Mod/.git/HEAD';
@@ -23,12 +23,10 @@ function fakeReporter() {
 
 describe('deploy/purge corpus', () => {
   let dir: string;
-  let src: Mo2ModlistSource;
   let gameDirectory: GameDirectory;
 
   beforeEach(async () => {
     dir = await cloneCorpusFixture();
-    src = new Mo2ModlistSource(dir);
 
     // game/Data as a sibling inside the same mkdtemp root, so the deployer's
     // same-volume precheck never false-fails (mirrors test/deployerFixture.ts).
@@ -49,7 +47,7 @@ describe('deploy/purge corpus', () => {
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
   async function realIndex() {
-    const entries = await src.readModlist();
+    const entries = parseModlist(await readFile(join(dir, DEFAULT_MODLIST), 'utf8'));
     return buildFileConflictIndex(entries, dir, () => {});
   }
 

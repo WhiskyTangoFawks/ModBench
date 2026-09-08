@@ -112,7 +112,7 @@ describe('mo2 kernel format literals', () => {
     expect(isAllowed(join('src', 'modmanager', 'mo2', 'pluginsText.test.ts'))).toBe(true);
   });
 
-  it('does not allow a non-kernel file in mo2/, such as the adapter’s own test', () => {
-    expect(isAllowed(join('src', 'modmanager', 'mo2', 'Mo2ModlistSource.test.ts'))).toBe(false);
+  it('does not allow a non-kernel file in mo2/, such as a corpus test', () => {
+    expect(isAllowed(join('src', 'modmanager', 'mo2', 'modlistCorpus.test.ts'))).toBe(false);
   });
 });

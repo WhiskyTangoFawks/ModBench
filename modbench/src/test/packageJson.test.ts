@@ -15,7 +15,6 @@ describe('package.json viewsWelcome', () => {
     const welcome = (pkg.contributes.viewsWelcome as { view: string; when: string }[])
       .find((w) => w.view === 'modbench.modList');
     expect(welcome, 'expected a viewsWelcome entry for modbench.modList').toBeTruthy();
-    // modbench.viewMode flips to 'loadout' before a workspace is checked, and
     // workspaceIsMo2Instance is never set with no folder open, so without this guard the
     // wrong-folder message shows on a bare window. workspaceFolderCount is VS Code's own key.
     expect(welcome!.when).toContain('workspaceFolderCount != 0');
@@ -60,11 +59,11 @@ describe('package.json Referenced By panel migration', () => {
   });
 });
 
-describe('package.json Loadout header view', () => {
+describe('package.json Toolbox view', () => {
   const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
 
   it('is the first view in the Modbench container, so workspace-scope actions sit above the domain trees', () => {
-    expect(sidebarViews()[0].id).toBe('modbench.loadoutHeader');
+    expect(sidebarViews()[0].id).toBe('modbench.toolbox');
   });
 });
 
@@ -79,7 +78,7 @@ describe('package.json "Plugins - …" naming for Referenced By', () => {
   });
 });
 
-describe('package.json Loadout views stay visible through an editing backend', () => {
+describe('package.json the Toolbox stack stays visible through an editing backend', () => {
   const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
 
   it('drops the now-redundant view-mode clause from the "not an MO2 instance" welcome message', () => {
@@ -232,10 +231,10 @@ describe('package.json Refresh is one command', () => {
     expect(refreshCommands.map((c) => c.command)).toEqual(['modbench.refresh']);
   });
 
-  it('puts it at slot 1 of the header and nowhere else', () => {
+  it('puts it at slot 1 of the Toolbox and nowhere else', () => {
     const entries = titleMenus().filter((e) => e.command === 'modbench.refresh');
     expect(entries).toHaveLength(1);
-    expect(entries[0].when).toBe('view == modbench.loadoutHeader');
+    expect(entries[0].when).toBe('view == modbench.toolbox');
     expect(entries[0].group).toBe('navigation@1');
   });
 
@@ -256,7 +255,7 @@ describe('package.json title-bar rubric', () => {
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
     const views = viewsOf(titleMenus().filter((e) => e.command === command));
-    expect([...views].filter((v) => v !== 'modbench.loadoutHeader')).toEqual([]);
+    expect([...views].filter((v) => v !== 'modbench.toolbox')).toEqual([]);
   });
 
   // Rule 4 — docs/specs/containers.md.
@@ -278,9 +277,8 @@ describe('package.json title-bar rubric', () => {
     }
   });
 
-  // The header registers even when there is no MO2 instance, but the commands these three
-  // activate are registered only alongside the Loadout views — so without this gate they are
-  // icons that throw "command not found" on a non-MO2 folder.
+  // The Toolbox registers with no MO2 instance, but the commands these three activate do not —
+  // without this gate they are icons that throw "command not found" on a non-MO2 folder.
   it.each(['modbench.launch', 'modbench.modList.deploy', 'modbench.modList.purge'])(
     '%s is withheld until the workspace is an MO2 instance', (command) => {
       const entries = titleMenus().filter((e) => e.command === command);
@@ -296,9 +294,9 @@ describe('package.json title-bar rubric', () => {
   });
 });
 
-// mEdit is an option on the Plugins view, so its affordance lives on that tree, not the Loadout
-// header. Placement is overflow, not a navigation icon: rule 2's ceiling test already measures
-// this tree at its four-icon maximum.
+// mEdit is an option on the Plugins view, so its affordance lives on that tree, not the Toolbox.
+// Placement is overflow, not a navigation icon: rule 2's ceiling test already measures this tree
+// at its four-icon maximum.
 describe('package.json standalone Deploy/Purge/Launch withdrawal', () => {
   it('defaults deploymentMode to external so the alpha never exposes standalone deploy without explicit opt-in', () => {
     const prop = pkg.contributes.configuration.properties['modbench.mods.deploymentMode'];

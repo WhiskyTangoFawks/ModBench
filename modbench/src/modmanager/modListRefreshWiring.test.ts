@@ -20,15 +20,12 @@ vi.mock('vscode', () => ({
 }));
 
 import { Instance } from './instance';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { ModListProvider, ModNode } from './ModListProvider';
 
 async function setup() {
   const root = await cloneCorpusFixture();
-  const source = new Mo2ModlistSource(root);
   const instance = new Instance({
     instanceRoot: root,
-    source,
     config: () => ({ get: () => undefined }),
     detectPaths: () => Promise.resolve(null),
     detectWinePrefix: () => Promise.resolve(null),

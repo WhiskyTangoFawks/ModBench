@@ -12,7 +12,7 @@ The mEdit-context vocabulary ("record", "FormKey") is absent here by constructio
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md)).
 
 Placement: [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — a native
-sidebar `TreeView` (`modbench.downloads`), third in the loadout stack
+sidebar `TreeView` (`modbench.downloads`), third in the `modbench` container
 below Mods and Plugins, registered collapsed by default. Downloads is occasional/rich
 rather than something referenced mid-navigation, so it doesn't compete with Mods and
 Plugins for attention until there's something to act on — a placement decision, not a
@@ -234,7 +234,7 @@ Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeIte
   bar, and its structural-vs-flat toggle is an option on the widget, not the widget itself —
   Downloads reuses the one widget, with no toggle.
 - **No manual Refresh** — no view has one. Refresh is a single workspace-scope
-  command on the [Loadout header](containers.md) that re-reads every Mod-Management source
+  command on the [Toolbox](containers.md) that re-reads every Mod-Management source
   together, the Instance included. It remains only a safety net for filesystems with
   unreliable watch events: the Instance's own `downloads/` watcher (`downloadsWatcher.ts`)
   is what normally brings a change back, with no user action needed.
@@ -302,7 +302,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
 ### Placement & entry point
 
 - A sidebar `TreeView` (`modbench.downloads`), third in the `modbench` view container's
-  loadout stack below Mods and Plugins, registered `"visibility": "collapsed"` by
+  `modbench` container below Mods and Plugins, registered `"visibility": "collapsed"` by
   default — always present, never opened via a command.
 - **Entry point**: VS Code auto-generates a `modbench.downloads.focus` command for any
   contributed view (surfaced in the command palette as "Downloads: Focus on Downloads
@@ -428,7 +428,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
 
 - **What the alpha's Downloads surface actually is**: the `modbench.downloads` sidebar
   `TreeView`, collapsed by default, reachable via the command palette or by expanding it
-  in the loadout stack — no separate command to open it, no columns, no
+  in the `modbench` container — no separate command to open it, no columns, no
   manual Refresh (a name filter exists — Slot 1 above — this is about the absence of a
   data-refresh control). Live entirely off `downloadsWatcher.ts` and the pure `downloads` model
   in `mo2/downloads.ts`.

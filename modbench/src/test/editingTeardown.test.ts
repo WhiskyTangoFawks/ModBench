@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { exitToLoadout, clearTreeWhenBackendDies, refreshMatchingPlugins, say } from '../loadoutTeardown';
+import { exitEditing, clearTreeWhenBackendDies, refreshMatchingPlugins, say } from '../editingTeardown';
 
-// The three writers that clear loadOrderSync's record-filter match map — exitToLoadout, the
+// The three writers that clear loadOrderSync's record-filter match map — exitEditing, the
 // backend-death listener, and refreshMatchingPlugins' error path — have no other unit seam:
 // dropping any of the writes leaves the integration suite green.
 
@@ -19,11 +19,11 @@ function makeSession() {
   };
 }
 
-describe('exitToLoadout', () => {
+describe('exitEditing', () => {
   it('clears every statement about the departing backend: match map, chevrons, message, filter UI, immutable and tracked sets', () => {
     const session = makeSession();
 
-    exitToLoadout(session);
+    exitEditing(session);
 
     expect(session.loadOrderSync.abandon).toHaveBeenCalled();
     expect(session.pluginsTree.setLoadOrder).toHaveBeenCalledWith(undefined);
@@ -39,7 +39,7 @@ describe('exitToLoadout', () => {
   });
 
   it('tolerates a session whose fields were never built', () => {
-    expect(() => exitToLoadout({})).not.toThrow();
+    expect(() => exitEditing({})).not.toThrow();
   });
 });
 

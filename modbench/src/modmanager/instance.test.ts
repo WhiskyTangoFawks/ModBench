@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi, type Mock } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -13,7 +13,6 @@ import type { ConfigChangeEvent } from './gameDirectoryResolver';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance, type InstanceValue } from './instance';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { createLoadOrderSync } from '../loadOrderReconcile';
 import type { LoadOrderPlugin } from './loadOrderSnapshot';
 
@@ -50,18 +49,13 @@ function fakeOnConfigChange() {
 
 const noDetectWinePrefix: DetectWinePrefix = () => Promise.resolve(null);
 
-// `readModlist`'s call count is the recompute count: the Instance reads the modlist once per
-// recompute. `afterModlistRead` lands a write inside that read window — the only deterministic
-// way to reproduce a torn file read.
 interface Hooks {
-  afterModlistRead?: () => Promise<void>;
   detectPaths?: DetectPaths;
 }
 
 async function realInstance(hooks: Hooks = {}): Promise<{
   root: string;
   instance: Instance;
-  readModlist: Mock;
   logs: string[];
   onConfigChange: ReturnType<typeof fakeOnConfigChange>;
   setGameDirectorySetting: (explicit: string | undefined) => void;
@@ -69,23 +63,12 @@ async function realInstance(hooks: Hooks = {}): Promise<{
 }> {
   const root = await cloneCorpusFixture();
   roots.push(root);
-  const mo2 = new Mo2ModlistSource(root);
-  const readModlist = vi.fn(async () => {
-    const entries = await mo2.readModlist();
-    await hooks.afterModlistRead?.();
-    return entries;
-  });
   const logs: string[] = [];
   let gameDirectorySetting: string | undefined;
   let detectPaths = hooks.detectPaths ?? autodetectsDataFolder;
   const onConfigChange = fakeOnConfigChange();
   const instance = new Instance({
     instanceRoot: root,
-    source: {
-      readModlist,
-      readPluginOrder: () => mo2.readPluginOrder(),
-      readEnabledPlugins: () => mo2.readEnabledPlugins(),
-    },
     config: () => fakeConfig(gameDirectorySetting),
     detectPaths: () => detectPaths(),
     detectWinePrefix: noDetectWinePrefix,
@@ -94,7 +77,7 @@ async function realInstance(hooks: Hooks = {}): Promise<{
   });
   instances.push(instance);
   return {
-    root, instance, readModlist, logs, onConfigChange,
+    root, instance, logs, onConfigChange,
     setGameDirectorySetting: (explicit) => { gameDirectorySetting = explicit; },
     setDetectPaths: (detect) => { detectPaths = detect; },
   };
@@ -175,6 +158,33 @@ describe('Instance — the value', () => {
       ['mod', 'Harder VATS', false],
       ['mod', 'Cracked and Smudged Pip-Boy Screen', true],
     ]);
+  });
+
+  it('joins each mod\'s meta.ini onto its entry, and leaves an absent or empty-valued one undefined', async () => {
+    const { instance } = await realInstance();
+
+    await instance.refresh();
+
+    const byName = new Map(instance.value.mods.map((m) => [m.name, m]));
+    expect(byName.get('Unofficial Fallout 4 Patch')).toMatchObject({
+      nexusId: '4598',
+      version: '2.1.5.0',
+      archiveFilename: 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z',
+    });
+    // "Harder VATS" ships modid=0 with blank version/installationFile.
+    expect(byName.get('Harder VATS')).toEqual({ kind: 'mod', name: 'Harder VATS', enabled: false });
+  });
+
+  // A real mod folder can share a separator's bare display name; the separator entry must never
+  // pick up that folder's meta.ini fields.
+  it('never carries meta fields on a separator entry, even when a same-named mod folder exists', async () => {
+    const { root, instance } = await realInstance();
+    await writeModFile(root, 'Unassigned (Modlist Development)', 'meta.ini', '[General]\r\nmodid=555\r\nversion=9.9.9\r\n');
+
+    await instance.refresh();
+
+    expect(instance.value.mods.find((e) => e.name === 'Unassigned (Modlist Development)'))
+      .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
   it('carries the winner of a path two enabled mods provide, and each enabled mod\'s own files', async () => {
@@ -299,10 +309,9 @@ describe('Instance — built by watching', () => {
   });
 
   it('recomputes once for a burst of events across every watcher', async () => {
-    const { root, instance, readModlist } = await realInstance();
+    const { root, instance } = await realInstance();
     await instance.refresh();
     const before = instance.sequence;
-    readModlist.mockClear();
 
     watcherFor('mods/**').fireCreate(join(root, 'mods', 'Tracked Patch Mod', 'textures', 'a.dds'));
     watcherFor('mods/**').fireChange(join(root, 'mods', 'Tracked Patch Mod', 'textures', 'b.dds'));
@@ -316,7 +325,7 @@ describe('Instance — built by watching', () => {
     // counted here rather than landing after the assertion.
     await instance.refresh();
 
-    expect(readModlist).toHaveBeenCalledTimes(2); // the burst's one recompute, plus this refresh
+    // The burst's one recompute, plus this refresh — a per-event recompute would land six more.
     expect(instance.sequence).toBe(before + 2);
   });
 
@@ -374,20 +383,35 @@ describe('Instance — a value that survives a bad read', () => {
     expect(failureLogs[0]).toContain('ModOrganizer.ini');
   });
 
+  it('keeps the value when a mod\'s meta.ini is present but unreadable — never silently "no metadata"', async () => {
+    const { root, instance, logs } = await realInstance();
+    await instance.refresh();
+    const value = instance.value;
+    const before = instance.sequence;
+
+    await rm(join(root, 'mods', 'Harder VATS', 'meta.ini'), { force: true });
+    await mkdir(join(root, 'mods', 'Harder VATS', 'meta.ini')); // present but unreadable (EISDIR)
+    await instance.refresh();
+
+    expect(instance.value).toBe(value);
+    expect(instance.sequence).toBe(before);
+    expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
+  });
+
   it('keeps the mods when modlist.txt reads as empty mid-write, and logs', async () => {
-    const hooks: Hooks = {};
-    const { root, instance, logs } = await realInstance(hooks);
+    const { root, instance, logs } = await realInstance();
     await instance.refresh();
     const before = instance.value.mods;
     const path = join(root, DEFAULT_MODLIST);
     const complete = await readFile(path, 'utf8');
 
     await writeFile(path, ''); // MO2 has truncated the file and not yet written it
-    hooks.afterModlistRead = async () => {
-      hooks.afterModlistRead = undefined;
-      await writeFile(path, complete); // the write completes before the Instance re-reads
-    };
-    await instance.refresh();
+    const recompute = instance.refresh();
+    // Inside the Instance's own 200 ms settle: the first read has already seen the truncation,
+    // and the write completes before the re-read that decides whether to believe it.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await writeFile(path, complete);
+    await recompute;
 
     expect(instance.value.mods).toEqual(before);
     expect(logs.filter((m) => m.includes('mid-write'))).toHaveLength(1);
@@ -613,12 +637,10 @@ async function minimalInstance(): Promise<{
   await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '+Consumer\n');
   await writeFile(join(root, 'profiles', 'Default', 'plugins.txt'), '');
   await mkdir(join(root, 'mods', 'Consumer'), { recursive: true });
-  const mo2 = new Mo2ModlistSource(root);
   const logs: string[] = [];
   let detectPaths: DetectPaths = () => Promise.resolve(null);
   const instance = new Instance({
     instanceRoot: root,
-    source: mo2,
     config: () => fakeConfig(undefined),
     detectPaths: () => detectPaths(),
     detectWinePrefix: noDetectWinePrefix,

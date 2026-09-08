@@ -2,7 +2,7 @@
 // refusal. It writes ModOrganizer.ini and forgets — the Instance's watcher over that file is
 // how the switch comes back.
 
-import { access, readFile, writeFile } from 'node:fs/promises';
+import { access, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readSelectedProfile, setSelectedProfileInText } from '../mo2/modOrganizerIni';
 
@@ -43,4 +43,12 @@ export function switchProfile(instanceRoot: string, profile: string): Promise<Pr
       return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
     }
   });
+}
+
+/** The profiles the switch can choose between — directories under `profiles/`, so a stray file
+ *  MO2 left there is never offered as one. The Instance names only the active profile, and the
+ *  QuickPick that feeds this command needs the rest. */
+export async function listProfiles(instanceRoot: string): Promise<string[]> {
+  const dirents = await readdir(join(instanceRoot, 'profiles'), { withFileTypes: true });
+  return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
 }

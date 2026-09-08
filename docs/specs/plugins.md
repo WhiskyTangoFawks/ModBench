@@ -10,7 +10,7 @@ load order, checkbox — operating on physical plugin files (`.esm`/`.esp`/`.esl
 types, records, the spatial worldspace/cell hierarchy — whenever the backend is running.
 Neither side imports the other's vocabulary
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), each context's own `CONTEXT.md`); the join is a thin
-composite at the composition root (`PluginsTreeComposite`, `modbench/src/extension.ts`), not a
+composite at the composition root (`PluginsTreeComposite`, `modbench/src/toolbox.ts`), not a
 change to either provider. This structural split is what answers ADR-0027's
 objection to merging these views: the merge is not a conflation of contexts, it is a shared row
 with an owner per axis.
@@ -27,7 +27,7 @@ context's `CONTEXT.md`:
 ## Purpose
 
 Reconstruct MO2's Plugins tab — view and manage `plugins.txt` (the Plugin load order) as a
-first-class, always-available part of the Loadout workflow: enable/disable, drag-and-drop
+first-class, always-available part of the Mod-Management workflow: enable/disable, drag-and-drop
 reorder, missing-master detection — **and**, whenever the backend is running, be the entry
 point for all per-record navigation in the mEdit view: browsing each plugin's records by type,
 spatially by worldspace and cell, and narrowing by name or by a SQL record filter. In xEdit these
@@ -114,7 +114,7 @@ there is no separate load-order step.
     what I type, so that I can find one without scrolling a 100+-entry load order.
 11. As a user, I want one Refresh, in one place, that re-reads every list at once if any of
     them looks stale, so that I never have to remember which tree owns which refresh (it
-    lives on the [Loadout header](containers.md)). An external MO2 edit is *not* the case
+    lives on the [Toolbox](containers.md)). An external MO2 edit is *not* the case
     this exists for — that reaches the tab on its own (see *Toolbar*).
 12. As a user, I want to right-click a plugin and Reveal it in my OS file manager, so that I
     can go inspect the actual file behind a badge without hunting for it myself.
@@ -580,7 +580,7 @@ the activation-time launch runs (via `loadOrderSync.flush()`) after the backend 
 **A failed PUT tears nothing down.** The backend keeps whatever it held; the error is surfaced
 (ADR-0026's explicit-action tier) and the next snapshot retries. A copy that cannot be opened or
 indexed is a row in an error state (`LoadOrderStatus.failures`, decorated on its row), retried only
-once its bytes change. There is no "exit to Loadout on load failure" any more.
+once its bytes change. There is no "exit to the mod list on load failure" any more.
 
 **Uninstalling the only provider of a held plugin** unregisters that copy — its rows stay in the
 index for its return (a reinstall registers them again with no re-index), and its row in this tree
@@ -657,7 +657,7 @@ overflow, then native **Collapse All** last.
 - **Native Collapse All** — the merge made this the deepest tree in the product
   (plugin → record type → record), so it earns the affordance.
 - **No Refresh of its own.** Re-reading `plugins.txt` is part of the single
-  workspace-scope Refresh on the [Loadout header](containers.md), which re-reads every
+  workspace-scope Refresh on the [Toolbox](containers.md), which re-reads every
   Mod-Management source together and also drops and rebuilds the Index (ADR-0046) — the one
   reload gesture, distinct from the ordinary per-change reconcile (ADR-0044).
 - **Refresh is not how the tab recovers from an external edit.** The `mods/**`,
@@ -733,13 +733,13 @@ overflow, then native **Collapse All** last.
   whitespace resolves to the same plugin name as one without, and its `*` marker is read and
   spliced at the marker's true byte offset rather than at the line's start — so padding survives a
   toggle untouched instead of being written into.
-- `IModlistSource` gains the write-side counterparts to its read-only `readPluginOrder()`/
-  `readEnabledPlugins()`: toggle a line's `*` prefix, and reorder lines — mirroring the shape of
-  the existing `modlist.txt` mutators (`moveModToSeparator`, `reorderSeparatorBlock`).
+- The write side is `modmanager/commands/plugins.ts`: toggle a line's `*` prefix, reorder lines,
+  append one, reconcile the file with disk — the same free-function shape as the `modlist.txt`
+  commands (`moveModToSeparator`, `reorderSeparatorBlock`).
 - **Current mutation path**: reorder, enable and disable all still apply immediately and
   unprompted via the surgical splice write above — a direct `plugins.txt` edit, nothing else.
   `PluginListProvider` makes no backend call to do this itself (root `CLAUDE.md`: Mod Management
-  never calls the C# backend); the composition root (`extension.ts`) is what bridges a mutation to
+  never calls the C# backend); the composition root (`toolbox.ts`) is what bridges a mutation to
   the running load order, per the next bullet.
 - **Checkbox toggles and drag reorders are live (ADR-0044).** Both write `plugins.txt` and
   then become the next snapshot (`loadOrderSync.request()` — the toggle asks explicitly, the

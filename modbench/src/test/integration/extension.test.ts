@@ -39,18 +39,18 @@ async function writeAndAwaitInstance(write: () => void): Promise<void> {
 }
 
 // The backend launches with the extension, so tests drive the lifecycle through activate()'s
-// test-API exports: a launch failure is logged-and-swallowed after resetting to loadout.
+// test-API exports: a launch failure is logged-and-swallowed after tearing editing down.
 const editingApi = () =>
-  ext?.exports as { enterEditing?: () => Promise<void>; exitToLoadout?: () => void } | undefined;
+  ext?.exports as { enterEditing?: () => Promise<void>; exitEditing?: () => void } | undefined;
 async function enterEditing(): Promise<void> {
   try {
     await editingApi()?.enterEditing?.();
   } catch {
-    editingApi()?.exitToLoadout?.();
+    editingApi()?.exitEditing?.();
   }
 }
 function exitEditing(): void {
-  editingApi()?.exitToLoadout?.();
+  editingApi()?.exitEditing?.();
 }
 
 // Models the real backend: GET /plugins fails with 503 until PUT /load-order arrives. The
@@ -789,7 +789,7 @@ describe('Launch mEdit populates the editing plugin tree', () => {
   });
 });
 
-// ── Loadout survives an editing backend ────────────────────────────────────────
+// ── The Toolbox stack survives an editing backend ──────────────────────────────
 // These prove the two consequences only a live host can show: load-order state survives a
 // round trip, and its write path stays reachable while the backend runs.
 
@@ -802,7 +802,7 @@ interface PluginListProviderLike {
   getChildren(element?: unknown): Promise<PluginListNodeLike[]>;
 }
 
-describe('Loadout stays visible through an editing backend', () => {
+describe('The Toolbox stack stays visible through an editing backend', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginListProvider = () =>
@@ -849,7 +849,7 @@ describe('Loadout stays visible through an editing backend', () => {
     const after = await provider.getChildren();
     assert.deepStrictEqual(
       after.map((n) => n.plugin?.name), ['TestMod.esp'],
-      'the filter set before Launch mEdit must still be applied after Close mEdit — the loadout view was never torn down',
+      'the filter set before Launch mEdit must still be applied after Close mEdit — the Plugins view was never torn down',
     );
   });
 
@@ -931,7 +931,7 @@ describe('Plugin load-order rows expand into records', () => {
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n'));
     pluginListProviderOf()?.invalidate();
       // Setting the game directory just now fired the production config-change relaunch
-    // (backend down + a directory appeared). Settle it and return to loadout so the
+    // (backend down + a directory appeared). Settle it and tear editing down so the
     // tests below still start from the pre-editing state they assert.
     await enterEditing();
     exitEditing();
@@ -1043,7 +1043,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
     pluginListProviderOf()?.invalidate();
       // Setting the game directory just now fired the production config-change relaunch
-    // (backend down + a directory appeared). Settle it and return to loadout so the
+    // (backend down + a directory appeared). Settle it and tear editing down so the
     // tests below still start from the pre-editing state they assert.
     await enterEditing();
     exitEditing();
@@ -1150,9 +1150,9 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
 
 });
 
-// ADR-0044: a loadout change through the real wiring — the plugins.txt watcher, the load-order
+// ADR-0044: an instance change through the real wiring — the plugins.txt watcher, the load-order
 // sync, `PUT /load-order`, and the tree hand-off that follows.
-describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => {
+describe('An instance change sends a fresh load order snapshot (ADR-0044)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
@@ -1251,7 +1251,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
   });
 
   // ADR-0044: a failed PUT tears nothing down — the backend still holds what it held — so the
-  // tree keeps its chevrons rather than exiting to Loadout.
+  // tree keeps its chevrons rather than tearing editing down.
   it('keeps the rows expandable, without throwing, when the reconcile itself fails', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
@@ -1273,7 +1273,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
 
 // ADR-0035 amending ADR-0018: the match map answers for the active filter only, so three
 // writers reset it to undefined rather than answer for a filter or load order that has gone:
-// refreshMatchingPlugins's failure path, exitToLoadout, and clearTreeWhenBackendDies.
+// refreshMatchingPlugins's failure path, exitEditing, and clearTreeWhenBackendDies.
 describe('matchingPlugins resets to undefined once it cannot answer for the active filter or load order', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1324,9 +1324,9 @@ describe('matchingPlugins resets to undefined once it cannot answer for the acti
     resetMockBackend();
   });
 
-  it('exitToLoadout clears the match map, not just the tree', () => {
-    // exitToLoadout's stop() also fires clearTreeWhenBackendDies's 'status' listener, a second writer
-    // of the same map — detached here so this test proves exitToLoadout's own write, restored after.
+  it('exitEditing clears the match map, not just the tree', () => {
+    // exitEditing's stop() also fires clearTreeWhenBackendDies's 'status' listener, a second writer
+    // of the same map — detached here so this test proves exitEditing's own write, restored after.
     const bm = backendManagerOf();
     const statusListeners = bm?.listeners('status') ?? [];
     bm?.removeAllListeners('status');
@@ -1351,7 +1351,7 @@ describe('matchingPlugins resets to undefined once it cannot answer for the acti
     }
   });
 
-  it('a backend that goes unhealthy outside exitToLoadout still clears the match map', async () => {
+  it('a backend that goes unhealthy outside exitEditing still clears the match map', async () => {
     await backendManagerOf()?.stop();
     assert.strictEqual(loadOrderSyncOf()?.matches('testmod.esp'), undefined,
       'a dead backend must forget which plugins an old record filter matched, the same as an explicit Close mEdit');
@@ -1538,7 +1538,7 @@ describe('Progressive load', () => {
     await writeAndAwaitInstance(() =>
       fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n*MissingMaster.esp\n*Immutable.esm\n'));
       // Setting the game directory just now fired the production config-change relaunch
-    // (backend down + a directory appeared). Settle it and return to loadout so the
+    // (backend down + a directory appeared). Settle it and tear editing down so the
     // tests below still start from the pre-editing state they assert.
     await enterEditing();
     exitEditing();

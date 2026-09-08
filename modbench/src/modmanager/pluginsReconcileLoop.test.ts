@@ -9,7 +9,6 @@ import type { ConfigChangeEvent } from './gameDirectoryResolver';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from './instance';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { registerPluginsReconcile } from './pluginsReconcileTrigger';
 import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from './commands/plugins';
 import { setSelectedProfileInText } from './mo2/modOrganizerIni';
@@ -77,11 +76,9 @@ async function wiredInstance(): Promise<{
   await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
-  const source = new Mo2ModlistSource(root);
   const config: ConfigLike = { get: (key) => (key === 'mods.gameDirectory' ? join(root, 'Game') : undefined) };
   const instance = new Instance({
     instanceRoot: root,
-    source,
     config: () => config,
     detectPaths: () => Promise.resolve(null),
     detectWinePrefix: noDetectWinePrefix,

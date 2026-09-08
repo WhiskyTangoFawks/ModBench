@@ -72,7 +72,7 @@ still received as a command rather than as state. There was no moment at which E
    invariant 11) — and *the index*, kept true by observation and by reconcile. Nothing is
    loaded, reloaded or exited: a plugin that fails to parse is a row in an
    error state, the way a file with a diagnostic is still a file. `SessionManager`, `GameSession`,
-   `modbench.reloadSession`, "session settled", "exit to Loadout on load failure" and the
+   `modbench.reloadSession`, "session settled", "exit to the mod list on load failure" and the
    `/session/*` route prefix go with the concept. Opening the index file does not clear the
    registration table (ADR-0001 point 4): the rows are the last known load order, and the
    first reconcile corrects them.
