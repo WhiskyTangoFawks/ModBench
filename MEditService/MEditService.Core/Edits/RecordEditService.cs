@@ -102,6 +102,7 @@ public sealed class RecordEditService(
         }
         return RecordEditResult.Success(targetFormKey);
     }
+
     // The embedded subtree rides along, each record under a fresh key drawn before anything is written.
     // Links between copied siblings are not remapped, xEdit's own behavior. A missing container chain
     // auto-creates bare and Partial Form.
@@ -559,6 +560,7 @@ public sealed class RecordEditService(
             "types (CELL, WRLD, LAND, NAVM, PGRD, ROAD, NAVI), since a fresh FormKey would leave the copy " +
             "with no group to belong to. Copy as Override, instead.");
     }
+
     /// <summary>Interior placement carries no gameplay meaning (PlacementWalker records null block/sub
     /// for every interior cell), so this reuses whichever block/sub-block directory the destination
     /// already has, minting <c>0/0</c> only the first time.</summary>
@@ -603,6 +605,7 @@ public sealed class RecordEditService(
             : JsonSerializer.SerializeToUtf8Bytes(new { GroupType = groupType }, GroupRecordDataOptions);
         File.WriteAllBytes(path, bytes);
     }
+
     /// <summary>Writes the record's file at its placement, minting the directories above it and
     /// removing them again if the write throws.</summary>
     internal static string WriteAt(string modFolder, SourcePlacement placement, Func<string, string> write)

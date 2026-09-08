@@ -43,8 +43,8 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
 
-        // The container half both copy gestures reach for, held once for the same reason: singletons
-        // only, nothing decided per request.
+        // The container half copy as override takes; copy as new record joins it when that gesture
+        // moves, and builds its own until then. Held once: singletons only, nothing per request.
         services.AddSingleton(sp => new RecordCopy(
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(RecordCopy)),
