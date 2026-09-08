@@ -242,7 +242,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     public IReadOnlyList<PluginKey> RegisteredPlugins()
     {
         var keys = new List<PluginKey>();
-        using var cmd = Connection.CreateCommand();
+        using var connection = OpenRead();
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}";
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
@@ -599,7 +600,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private const string EffectiveRelation = "records";
     private const string HeadRelation = "records_head";
 
-    // Created on first ask and reused: each is a stateless projection over this same connection, and
+    // Created on first ask and reused: each is a stateless projection over this index, and
     // At() is called per read on hot paths.
     private IRecordReads? _effectiveReads;
     private IRecordReads? _headReads;

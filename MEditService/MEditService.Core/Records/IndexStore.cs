@@ -13,8 +13,8 @@ namespace MEditService.Core.Records;
 /// since <c>Unindex</c> is the caller's orchestrating verb.</summary>
 internal sealed class IndexStore : IDisposable
 {
-    private const string FilesRelation = "mirror.files";
-    private const string SequenceRelation = "mirror.sequence";
+    internal const string FilesRelation = "mirror.files";
+    internal const string SequenceRelation = "mirror.sequence";
 
     private readonly ILogger _logger;
     private readonly string? _databasePath;
@@ -261,10 +261,13 @@ internal sealed class IndexStore : IDisposable
     }
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
-    public string? IndexedContentHash(PluginKey key) =>
-        DuckDbSql.ScalarString(Connection,
+    public string? IndexedContentHash(PluginKey key)
+    {
+        using var connection = OpenReadConnection();
+        return DuckDbSql.ScalarString(connection,
             $"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
             key.Name, key.Origin!);
+    }
 
     // ADR-0001: the file half of an Index() call, inside its transaction. A caller naming no file
     // (an in-memory mod) writes no row, so nothing vouches for those rows and the next load
@@ -385,7 +388,8 @@ internal sealed class IndexStore : IDisposable
 
     public long CurrentSequence()
     {
-        using var cmd = Connection.CreateCommand();
+        using var connection = OpenReadConnection();
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT value FROM {SequenceRelation}";
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }

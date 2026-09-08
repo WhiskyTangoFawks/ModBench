@@ -60,6 +60,79 @@ public sealed class IndexVisibilityTests
         }
     }
 
+    private static (DuckDbRecordIndex Repository, ModPath Path, string Dir, PluginKey Key) IndexedBigPlugin()
+    {
+        var (_, modPath, dir) = BuildBigPlugin("Big.esp");
+        var reflector = SharedSchemaReflector.Instance;
+        var repository = (DuckDbRecordIndex)new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector))
+            .Create(GameRelease.Fallout4);
+        using var loaded = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
+        var key = new PluginKey("Big.esp", PluginOrigin.DataDirectory);
+        repository.Index(loaded, Registration.Participating(0), key, modPath.Path);
+        return (repository, modPath, dir, key);
+    }
+
+    private static void ExecuteOnWriter(DuckDbRecordIndex repository, string sql)
+    {
+        using var cmd = repository.Connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.ExecuteNonQuery();
+    }
+
+    [Fact]
+    public void RegisteredPluginsDuringAnUncommittedWrite_AnswerFromTheCommittedIndex()
+    {
+        var (repository, _, dir, key) = IndexedBigPlugin();
+        try
+        {
+            using var writerTransaction = repository.Connection.BeginTransaction();
+            ExecuteOnWriter(repository, $"DELETE FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = 'Big.esp'");
+            Assert.Contains(key, repository.RegisteredPlugins());
+        }
+        finally
+        {
+            repository.Dispose();
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SequenceDuringAnUncommittedWrite_AnswersFromTheCommittedIndex()
+    {
+        var (repository, _, dir, _) = IndexedBigPlugin();
+        try
+        {
+            var committed = repository.Sequence;
+            using var writerTransaction = repository.Connection.BeginTransaction();
+            ExecuteOnWriter(repository, $"UPDATE {IndexStore.SequenceRelation} SET value = value + 100");
+            Assert.Equal(committed, repository.Sequence);
+        }
+        finally
+        {
+            repository.Dispose();
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IndexedContentHashDuringAnUncommittedWrite_AnswersFromTheCommittedIndex()
+    {
+        var (repository, _, dir, key) = IndexedBigPlugin();
+        try
+        {
+            var committed = repository.IndexedContentHash(key);
+            Assert.NotNull(committed);
+            using var writerTransaction = repository.Connection.BeginTransaction();
+            ExecuteOnWriter(repository, $"DELETE FROM {IndexStore.FilesRelation} WHERE plugin = 'Big.esp'");
+            Assert.Equal(committed, repository.IndexedContentHash(key));
+        }
+        finally
+        {
+            repository.Dispose();
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task AReadDuringIndexing_NeverSeesAPartiallyIndexedPlugin()
     {
@@ -74,8 +147,7 @@ public sealed class IndexVisibilityTests
             var observed = new System.Collections.Concurrent.ConcurrentBag<int>();
             using var indexing = new CancellationTokenSource();
 
-            // Several readers, because production is several concurrent HTTP requests against one
-            // connection, not one.
+            // Several readers, because production is several concurrent HTTP requests, not one.
             var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
             {
                 while (!indexing.IsCancellationRequested)
