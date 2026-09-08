@@ -59,8 +59,8 @@ export function registerModListCoreCommands(
         void updateProfileDescription();
         notifyLoadoutHeaderChanged();
         // A profile switch is the next snapshot, not a teardown (ADR-0044). Switching writes
-        // ModOrganizer.ini rather than modlist/plugins.txt, which no watcher covers, so the
-        // sync is asked for explicitly.
+        // ModOrganizer.ini rather than modlist/plugins.txt, the files the sync's own watchers
+        // cover, so it is asked for explicitly.
         requestLoadOrderSync();
       }),
   ];

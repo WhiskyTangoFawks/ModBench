@@ -11,9 +11,11 @@ vi.mock('vscode', () => fakeVscodeModule());
 import { Instance, type InstanceValue } from './instance';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { registerPluginsReconcile } from './pluginsReconcileTrigger';
-import { reconcilePlugins, type PluginsReconcileResult } from './commands/plugins';
+import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from './commands/plugins';
+import { setSelectedProfileInText } from './mo2/modOrganizerIni';
 
 const PROFILE = 'Default';
+const OTHER_PROFILE = 'Secondary';
 const INI = '[General]\r\nselected_profile=@ByteArray(Default)\r\ngameName=Fallout 4\r\n';
 const noDetectWinePrefix: DetectWinePrefix = () => Promise.resolve(null);
 
@@ -58,15 +60,21 @@ async function wiredInstance(): Promise<{
   instance: Instance;
   reconciles: Promise<PluginsReconcileResult>[];
   plugins: () => Promise<string>;
+  pluginsOf: (profile: string) => Promise<string>;
 }> {
   const root = await mkdtemp(join(tmpdir(), 'plugins-loop-'));
   roots.push(root);
   await mkdir(join(root, 'mods', 'Provider'), { recursive: true });
   await mkdir(join(root, 'profiles', PROFILE), { recursive: true });
+  await mkdir(join(root, 'profiles', OTHER_PROFILE), { recursive: true });
   await mkdir(join(root, 'Game', 'Data'), { recursive: true });
   await writeFile(join(root, 'ModOrganizer.ini'), INI);
   await writeFile(join(root, 'profiles', PROFILE, 'modlist.txt'), '+Provider\r\n');
   await writeFile(join(root, 'profiles', PROFILE, 'plugins.txt'), '*Base.esp\r\n');
+  // Both profiles start already matching disk, so the reconcile never writes either of them and
+  // a changed file can only be the gesture's own.
+  await writeFile(join(root, 'profiles', OTHER_PROFILE, 'modlist.txt'), '+Provider\r\n');
+  await writeFile(join(root, 'profiles', OTHER_PROFILE, 'plugins.txt'), '*Base.esp\r\n');
   await writeFile(join(root, 'mods', 'Provider', 'Base.esp'), 'plugin');
 
   const source = new Mo2ModlistSource(root);
@@ -89,7 +97,8 @@ async function wiredInstance(): Promise<{
     return run;
   });
 
-  return { root, instance, reconciles, plugins: () => readFile(join(root, 'profiles', PROFILE, 'plugins.txt'), 'utf8') };
+  const pluginsOf = (profile: string) => readFile(join(root, 'profiles', profile, 'plugins.txt'), 'utf8');
+  return { root, instance, reconciles, plugins: () => pluginsOf(PROFILE), pluginsOf };
 }
 
 // Drives the loop the way the platform does: a plugins.txt write comes back as the watcher event
@@ -135,5 +144,27 @@ describe('the plugins reconcile and the Instance close a loop that settles', () 
     expect(writes).toBe(0);
     expect(quiescent).toBe(true);
     expect(await plugins()).toBe('*Base.esp\r\n');
+  });
+});
+
+// A gesture writes `profiles/<profile>/plugins.txt` for the profile the Instance last landed, so
+// a value that missed a switch would silently edit the profile the user just left.
+describe('a gesture writes the profile the Instance last landed', () => {
+  it('lands on the new profile after a switch, with no refresh asked for', async () => {
+    const { root, instance, pluginsOf } = await wiredInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    const ini = join(root, 'ModOrganizer.ini');
+    await writeFile(ini, setSelectedProfileInText(await readFile(ini, 'utf8'), OTHER_PROFILE));
+    watcherFor('ModOrganizer.ini').fireChange();
+    expect(await pastSequenceWithin(instance, before, 5000)).not.toBe(TIMED_OUT);
+
+    // Exactly what the composition root binds into the tree's source.
+    const result = await setPluginEnabled(root, instance.value.activeProfile, 'Base.esp', false);
+
+    expect(result).toEqual({ applied: true, wrote: true });
+    expect(await pluginsOf(OTHER_PROFILE)).toBe('Base.esp\r\n');
+    expect(await pluginsOf(PROFILE)).toBe('*Base.esp\r\n');
   });
 });
