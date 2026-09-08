@@ -1,5 +1,6 @@
 using MEditService.Api;
 using MEditService.Bridge;
+using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -14,7 +15,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>Three mods, each its own repository, and one record two of the others reference: a
 /// cascade spanning one folder could not show several working trees rewritten, nor several
-/// restored.</summary>
+/// restored. No index unless <see cref="Watched"/> asks for one.</summary>
 public sealed class CascadeRollbackFixture : IDisposable
 {
     public const string RaceEditorId = "RollbackRace";
@@ -33,7 +34,17 @@ public sealed class CascadeRollbackFixture : IDisposable
     private readonly ScatteredFixtureData _data;
     private readonly SourceChangeWatcher? _watcher;
 
-    public LoadOrderMirror Mirror { get; }
+    /// <summary>Null unless <see cref="Watched"/> built one: the write side reads the load order
+    /// value, and only the projection question needs an Index.</summary>
+    public LoadOrderMirror? Mirror { get; }
+
+    public LoadOrder LoadOrder { get; }
+    public RecordEditService Edits { get; }
+
+    /// <summary>The same snapshot as a list, for a test reconciling an index over these trees.</summary>
+    public IReadOnlyList<LoadOrderEntry> Entries => _data.Plugins;
+
+    public string GameDirectory => _data.GameDirectory;
     public PluginKey TargetPlugin { get; } = new(TargetName, TargetMod);
     public PluginKey FirstPlugin { get; } = new(FirstName, FirstMod);
     public PluginKey SecondPlugin { get; } = new(SecondName, SecondMod);
@@ -85,15 +96,24 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         (Race, HomeNpc, FirstNpc, SecondNpc) = (race, home, first, second);
 
-        Mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)Mirror).Reconcile(_data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
+        LoadOrder = LoadOrder.From(_data.GameDirectory, _data.GameDirectory, GameRelease.Fallout4, _data.Plugins);
 
         var track = new TrackService(NullLogger<TrackService>.Instance);
         foreach (var origin in new[] { TargetMod, FirstMod, SecondMod })
-            track.TrackAsync(Mirror.LoadOrder!, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+        {
+            track.TrackAsync(LoadOrder, [.. LoadOrder.Copies.Select(c => c.Key)], origin, SourcePreset.Edits)
+                .GetAwaiter().GetResult();
+        }
+
+        var holder = new LoadOrderHolder();
+        holder.Apply(LoadOrder);
+        Edits = TestEditService.Over(holder);
 
         if (!watched) return;
+
+        Mirror = new LoadOrderMirror(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        ((ILoadOrderMirror)Mirror).Reconcile(_data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
 
         // Short, because a test waits on the projection rather than on the clock; the composition
         // root's own window is 300 ms.
@@ -104,7 +124,7 @@ public sealed class CascadeRollbackFixture : IDisposable
         sourceMirror.RefreshWatches();
     }
 
-    public string ModFolderOf(PluginKey plugin) => ModFolders.Of(Mirror.LoadOrder, plugin)!;
+    public string ModFolderOf(PluginKey plugin) => ModFolders.Of(LoadOrder, plugin)!;
 
     public string SourceFileOf(PluginKey plugin, FormKey formKey, string recordType, string editorId) =>
         SourceDocumentPath.Of(
@@ -134,10 +154,10 @@ public sealed class CascadeRollbackFixture : IDisposable
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
-            if (condition(Mirror.Index!.At(RecordRef.Effective))) return true;
+            if (condition(Mirror!.Index!.At(RecordRef.Effective))) return true;
             await ((ILoadOrderMirror)Mirror).AwaitSequenceAsync(Mirror.Sequence + 1, TimeSpan.FromSeconds(2));
         }
-        return condition(Mirror.Index!.At(RecordRef.Effective));
+        return condition(Mirror!.Index!.At(RecordRef.Effective));
     }
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Snapshots() =>
@@ -157,7 +177,7 @@ public sealed class CascadeRollbackFixture : IDisposable
     public void Dispose()
     {
         _watcher?.Dispose();
-        Mirror.Dispose();
+        Mirror?.Dispose();
         try { _data.Dispose(); }
         catch (IOException) { /* scratch directory, best effort */ }
         catch (UnauthorizedAccessException) { /* ditto */ }

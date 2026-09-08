@@ -40,71 +40,53 @@ public static class ExternalChangeEditLander
         var touched = new List<TouchedRecord>();
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
+            var formKey = record.FormKey.ToString();
+            var incomingText = Encoding.UTF8.GetString(
+                codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+            var baselineText = baselineByFormKey.GetValueOrDefault(formKey);
+
+            // The external change never touched this record, so nothing about it is this gesture's.
+            if (string.Equals(incomingText, baselineText, StringComparison.Ordinal)) continue;
+
             var recordType = SourceRecordType.Resolve(record, schemas);
-            var groupFolder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType);
-            var containerFormKey = record.FormKey.ToString();
+            var held = repository.IdentityOf(plugin, formKey, schemas);
 
-            // A container or embedded record has no computable path but usually already has a file; the same
-            // disk-scan resolution the point-write path uses.
-            if (groupFolder is null)
+            if (held is { } identity && repository.Locate(plugin, identity) is { IsEmbedded: true } unit)
             {
-                var unit = repository.Locate(plugin, new RecordIdentity(containerFormKey, recordType, record.EditorID));
-
-                if (unit is null)
+                // Inlined in its owner's document, and the owner's own pass serializes this child's
+                // current value as part of the owner's whole text.
+                if (logger.IsEnabled(LogLevel.Trace))
                 {
-                    // Truly new, nowhere in the tree and with no container to hold it: landing a brand-new container
-                    // needs the layout grammar this method lacks, so it is logged and skipped.
-                    if (logger.IsEnabled(LogLevel.Debug))
-                    {
-                        logger.LogDebug(
-                            "Skipping {FormKey} ({RecordType}) in {Plugin}: no existing source unit anywhere in " +
-                            "the tree — landing a brand-new container isn't supported yet",
-                            record.FormKey, recordType, pluginName);
-                    }
-                    continue;
-                }
-
-                if (unit.Value.IsEmbedded)
-                {
-                    // Inlined in its owner's document, and the owner's own pass serializes this child's current value
-                    // as part of the owner's whole text.
-                    if (logger.IsEnabled(LogLevel.Trace))
-                    {
-                        logger.LogTrace(
-                            "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
-                            "it is embedded, not its own source unit",
-                            record.FormKey, recordType, pluginName, unit.Value.OwnerFormKey);
-                    }
-                    continue;
-                }
-
-                // Its own source unit, so the path found is the path to diff and land on.
-                if (DiffAgainstBaseline(
-                        record, gameRelease, codec, baselineByFormKey, containerFormKey,
-                        unit.Value.FullPath, unit.Value.FullPath) is { } containerTouched)
-                {
-                    touched.Add(containerTouched);
+                    logger.LogTrace(
+                        "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
+                        "it is embedded, not its own source unit",
+                        record.FormKey, recordType, pluginName, unit.OwnerFormKey);
                 }
                 continue;
             }
 
-            var formKey = record.FormKey.ToString();
-            var fullPath = Path.Combine(
-                modFolder, SourceRepository.FlatPathFor(pluginName, recordType, formKey, record.EditorID, gameRelease));
-
-            // An external EditorID change moves the record's file, so it may sit under its old EditorID.
-            // Resolved by FormKey so the collision check reads the real current text and the stale file
-            // is removed.
-            var existingPath = repository
-                .Locate(plugin, new RecordIdentity(formKey, recordType, record.EditorID))
-                ?.FullPath ?? fullPath;
-
-            if (DiffAgainstBaseline(
-                    record, gameRelease, codec, baselineByFormKey, formKey, fullPath, existingPath)
-                is { } flatTouched)
+            // A flat record's own leaf is computed, so a brand-new one lands; a container's is not,
+            // and minting one needs the layout grammar this method lacks.
+            var renameable = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType) is not null;
+            if (held is null && !renameable)
             {
-                touched.Add(flatTouched);
+                if (logger.IsEnabled(LogLevel.Debug))
+                {
+                    logger.LogDebug(
+                        "Skipping {FormKey} ({RecordType}) in {Plugin}: no existing source unit anywhere in " +
+                        "the tree — landing a brand-new container isn't supported yet",
+                        record.FormKey, recordType, pluginName);
+                }
+                continue;
             }
+
+            // An external EditorID change moves a flat record's file, so what the tree holds is asked
+            // by FormKey: the collision check reads the real current text, and the leaf moves after.
+            var at = held ?? new RecordIdentity(formKey, recordType, record.EditorID);
+            touched.Add(new TouchedRecord(
+                formKey, at, renameable, record.EditorID, incomingText,
+                held is { } current ? repository.Get(plugin, current)?.Body : null,
+                baselineText));
         }
 
         var colliding = touched
@@ -121,12 +103,11 @@ public static class ExternalChangeEditLander
 
         foreach (var t in touched)
         {
-            // The stale file under the old EditorID, never left behind as a duplicate.
-            if (!string.Equals(t.ExistingPath, t.FullPath, StringComparison.Ordinal) && File.Exists(t.ExistingPath))
-                File.Delete(t.ExistingPath);
+            repository.Put(plugin, new SourceDocument(t.FormKey, t.At.RecordType, t.At.EditorId, t.IncomingText));
 
-            Directory.CreateDirectory(Path.GetDirectoryName(t.FullPath)!);
-            File.WriteAllText(t.FullPath, t.IncomingText);
+            // A flat record's leaf name carries its EditorID, so an external rename moves its file and
+            // leaves no duplicate behind; a container's directory keeps the name the tree gave it.
+            if (t.Renameable) repository.Rename(plugin, t.At, t.IncomingEditorId);
         }
 
         // The working tree now corresponds to this binary — atRef: null snapshots it as it stands, as
@@ -138,23 +119,10 @@ public static class ExternalChangeEditLander
         return ExternalChangeLandResult.Success([.. touched.Select(t => t.FormKey)]);
     }
 
-    // Null when the external binary never touched this record (incoming == baseline).
-    private static TouchedRecord? DiffAgainstBaseline(
-        IMajorRecordGetter record, GameRelease gameRelease, RecordTextCodec codec,
-        Dictionary<string, string> baselineByFormKey, string formKey, string fullPath, string existingPath)
-    {
-        var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
-
-        var baselineText = baselineByFormKey.TryGetValue(formKey, out var baseline) ? baseline : null;
-        if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
-            return null; // the external change never actually touched this record
-
-        var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
-        return new TouchedRecord(formKey, fullPath, existingPath, incomingText, currentText, baselineText);
-    }
-
+    // At is where the tree holds the record now; IncomingEditorId is what the binary calls it, which
+    // is the leaf name a flat record moves to.
     private sealed record TouchedRecord(
-        string FormKey, string FullPath, string ExistingPath, string IncomingText,
+        string FormKey, RecordIdentity At, bool Renameable, string? IncomingEditorId, string IncomingText,
         string? CurrentText, string? BaselineText);
 }
 
