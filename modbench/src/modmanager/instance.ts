@@ -203,13 +203,16 @@ export class Instance implements vscode.Disposable {
   private async read(): Promise<InstanceValue> {
     const { instanceRoot, source, config, detectPaths, detectWinePrefix, log } = this.options;
     const entries = await this.readMods();
-    const [index, gameDirectory, iniText, downloadEntries, deployed] = await Promise.all([
+    const [index, iniText, downloadEntries, deployed] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
-      resolveGameDirectory(instanceRoot, config(), detectPaths, detectWinePrefix),
       readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'),
       scanDownloads(instanceRoot),
       isDeployed(instanceRoot),
     ]);
+    // The ini is read once above and handed to resolveGameDirectory as-is, so a rewrite
+    // between it and activeProfile/gameRelease below cannot land two generations in one value.
+    const gameDirectory = await resolveGameDirectory(
+      instanceRoot, config(), detectPaths, detectWinePrefix, () => Promise.resolve(iniText));
     // An unresolved game directory loses only the Data-folder copies' paths: every plugins.txt
     // line still gets a row, existence/slot/enabled coming from the line itself (see
     // `LoadOrderPluginLine`), not from the game directory.
