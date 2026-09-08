@@ -49,7 +49,7 @@ A download the user has dismissed from view (`.meta` `removed=true`). A display 
 _Avoid_: removed, deleted (the file is still on disk)
 
 **Instance**:
-The MO2 instance directory Modbench is opened on, and the one read model derived from its files. Everything a view shows on the MO2 side is read from it; nothing writes to it.
+The MO2 instance directory Modbench is opened on, and the one read model derived from its files ([ADR-0047](../../../docs/adr/0047-the-extension-mirrors-the-backends-shape-one-read-model-built-only-by-watching.md)). Everything a view shows on the MO2 side is read from it; nothing writes to it.
 _Avoid_: loadout, workspace, model
 
 **Toolbox**:
