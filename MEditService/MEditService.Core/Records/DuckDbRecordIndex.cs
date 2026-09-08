@@ -1416,5 +1416,5 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _filterActive = true;
     }
 
-    public void Dispose() => Connection.Dispose();
+    public void Dispose() => _indexStore.Dispose();
 }

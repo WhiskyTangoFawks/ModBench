@@ -11,7 +11,7 @@ namespace MEditService.Core.Records;
 /// <summary>The connection/DDL/validate/rebuild collaborator of <see cref="DuckDbRecordIndex"/>.
 /// Validate is a pure question: this class returns the stale set and never removes rows itself,
 /// since <c>Unindex</c> is the caller's orchestrating verb.</summary>
-internal sealed class IndexStore
+internal sealed class IndexStore : IDisposable
 {
     private const string FilesRelation = "mirror.files";
     private const string SequenceRelation = "mirror.sequence";
@@ -74,10 +74,25 @@ internal sealed class IndexStore
     // this process's database instance. Either way the read gets its own transaction context.
     public DuckDBConnection OpenReadConnection()
     {
-        var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
-        connection.Open();
-        return connection;
+        lock (_rebuildGate)
+        {
+            while (_rebuilding) Monitor.Wait(_rebuildGate);
+            var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
+            connection.Open();
+            _readsInFlight++;
+            connection.Disposed += (_, _) => { lock (_rebuildGate) { _readsInFlight--; Monitor.PulseAll(_rebuildGate); } };
+            return connection;
+        }
     }
+
+    // A reopen while a read connection is still open gets DuckDB.NET's cached instance of the file
+    // the rebuild just deleted, so a rebuild waits for reads in flight; reads wait for nothing but
+    // a rebuild.
+    private readonly object _rebuildGate = new();
+    private int _readsInFlight;
+    private bool _rebuilding;
+
+    public void Dispose() => Connection.Dispose();
 
     private DuckDBConnection OpenFile()
     {
@@ -145,9 +160,22 @@ internal sealed class IndexStore
     // case IsAnotherWriter guards. Internal: ADR-0046's rebuild reuses this same delete-and-reopen.
     internal void RebuildFile()
     {
-        Connection.Dispose();
-        File.Delete(_databasePath!);
-        Connection = OpenFile();
+        lock (_rebuildGate)
+        {
+            _rebuilding = true;
+            try
+            {
+                while (_readsInFlight > 0) Monitor.Wait(_rebuildGate);
+                Connection.Dispose();
+                File.Delete(_databasePath!);
+                Connection = OpenFile();
+            }
+            finally
+            {
+                _rebuilding = false;
+                Monitor.PulseAll(_rebuildGate);
+            }
+        }
     }
 
     /// <summary>ADR-0001: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
