@@ -18,7 +18,9 @@ the next stream to start has nowhere safe to land. Always work in a worktree.
    a different slice. No overlap: proceed.
 3. `git worktree add ../<repo>-fix-<n>-<slug> fix-<n>-<slug>` — a sibling directory, never the
    main checkout. `.claude/worktrees/` belongs to the `Agent` tool's own auto-managed isolation;
-   don't hand-create worktrees there.
+   don't hand-create worktrees there. An orchestrated executor works in one of those, cut from
+   local `HEAD` (`worktree.baseRef` is `head` in the local settings), creates its `fix-<n>-<slug>`
+   branch inside it, and the orchestrator removes it at land.
 4. Claim tracked-ticket work immediately: `gh issue edit <n> --add-assignee @me` or a claiming
    comment.
 

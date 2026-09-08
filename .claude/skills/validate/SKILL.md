@@ -26,7 +26,7 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend --api-drift` |
 | config/docs only | `… ` with no flag — Gate 1 alone |
 
-Gate 1 (comment discipline) runs on every invocation (excluded paths in `run-gates.sh`'s
+`bash .claude/skills/validate/run-gates.sh` with no flags runs Gate 1 alone in seconds and exits 1 on failure; an orchestrator runs it on a branch before merging, because the editor-time hook does not fire on script-patched files. Gate 1 (comment discipline) runs on every invocation (excluded paths in `run-gates.sh`'s
 `EXCLUDE_RE`): Vale over comments in `.cs`/`.ts`/`.tsx`/`.py`/`.mjs` and over markdown text
 (`.vale.ini`); Vale over those plus `.sh`/`.yml`/`.json`/`.csproj`/`.props` as raw text, which
 reaches string literals but carries only the History and Ticket rules (`.vale-raw.ini`);
