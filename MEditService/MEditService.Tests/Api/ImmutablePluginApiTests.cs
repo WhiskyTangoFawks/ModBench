@@ -29,8 +29,10 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         Assert.True(fo4.GetProperty("isImmutable").GetBoolean());
     }
 
+    // The response says what the gesture wrote and registered — the Index has never held this copy,
+    // so nothing here is a plugin row.
     [Fact]
-    public async Task CreatePlugin_CreatesFileAndReturnsPlugin()
+    public async Task CreatePlugin_CreatesTheFileAndAnswersWithTheRegisteredCopy()
     {
         var modFolder = ModFolder("NewModMod");
         var resp = await _client.PostAsJsonAsync("/plugins/create", new { name = "NewMod.esp", path = modFolder, origin = "NewModMod" });
@@ -39,14 +41,41 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         var plugin = await resp.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
         Assert.Equal("NewMod.esp", plugin.GetProperty("name").GetString());
         Assert.Equal("NewModMod", plugin.GetProperty("origin").GetString());
-        Assert.False(plugin.GetProperty("isImmutable").GetBoolean());
+        Assert.Equal(Path.Combine(modFolder, "NewMod.esp"), plugin.GetProperty("path").GetString());
 
         Assert.True(File.Exists(Path.Combine(modFolder, "NewMod.esp")));
+    }
 
+    // ADR-0046 invariants 1 and 4: the created plugin reaches the Index through the snapshot Mod
+    // Management sends once plugins.txt names it, the door any newly installed plugin arrives by.
+    [Fact]
+    public async Task CreatePlugin_IsQueryable_OnceTheNextSnapshotNamesIt()
+    {
+        var modFolder = ModFolder("QueryableMod");
+        var created = await _client.PostAsJsonAsync("/plugins/create", new { name = "Queryable.esp", path = modFolder, origin = "QueryableMod" });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        Assert.DoesNotContain(await Listed(), name => name == "Queryable.esp");
+
+        var reconciled = await _client.PutAsJsonAsync("/load-order", Snapshot(
+            [.. _fixture.Plugins.Select(p => (p.Name, p.Path, p.Origin, p.Slot)),
+             ("Queryable.esp", Path.Combine(modFolder, "Queryable.esp"), "QueryableMod", (int?)_fixture.Plugins.Count)]));
+
+        Assert.Equal(HttpStatusCode.OK, reconciled.StatusCode);
+        Assert.Contains(await Listed(), name => name == "Queryable.esp");
+    }
+
+    private object Snapshot(IReadOnlyList<(string Name, string Path, string Origin, int? Slot)> plugins) => new
+    {
+        plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, Enabled = true, Winning = true }),
+        gameDirectory = _fixture.DataFolder,
+        instanceRoot = _fixture.InstanceRoot,
+        gameRelease = "Fallout4",
+    };
+
+    private async Task<IReadOnlyList<string>> Listed()
+    {
         var plugins = await _client.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/plugins");
-        Assert.NotNull(plugins);
-        Assert.Contains(plugins, p =>
-            string.Equals(p.GetProperty("name").GetString(), "NewMod.esp", StringComparison.OrdinalIgnoreCase));
+        return [.. plugins!.Select(p => p.GetProperty("name").GetString()!)];
     }
 
     [Fact]

@@ -60,26 +60,55 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
     }
 
-    // ADR-0044: a load order arrives from Mod Management only through PUT /load-order; a second
-    // arrival makes the Index's Status lie, and a second writer makes the shared kernel disagree
-    // with the index.
+    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the Index's Status lie,
+    // and a second writer makes the shared kernel's load order disagree with the index.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
     {
+        var root = SolutionDirectory();
+        // The reconcile request is the endpoint's alone. ADR-0041's created copy is registered on the
+        // kernel and reaches the Index through the next snapshot, so the create gesture is a writer
+        // and never a reconciler.
+        string[] reconcilers = ["LoadOrderEndpoints.cs"];
         // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
         // goes through cannot disarm this.
-        string[] writers =
-            ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs", "CreatePluginHandler.cs"];
-        // IndexProjector.cs holds the reconcile itself; the create route reconciles the snapshot the
-        // kernel already holds, one copy longer (ADR-0041), which is a projection, not an arrival.
-        string[] reconcilers = ["LoadOrderEndpoints.cs", "IndexProjector.cs", "PluginEndpoints.cs"];
-        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], reconcilers)
-            .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Apply("], writers))
-            .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Register("], writers))
+        string[] writers = ["LoadOrderEndpoints.cs", "CreatePluginHandler.cs"];
+
+        var reconciles = Offenders(root, Projects, [".Reconcile("], []);
+        var applies = Offenders(root, Projects, [nameof(LoadOrderHolder), ".Apply("], []);
+        var registers = Offenders(root, Projects, [nameof(LoadOrderHolder), ".Register("], []);
+
+        var offenders = Unallowed(reconciles, reconcilers)
+            .Concat(Unallowed(applies, writers))
+            .Concat(Unallowed(registers, writers))
             .Distinct()
             .ToList();
         Assert.True(offenders.Count == 0,
             "The load order is reconciled or written outside its endpoints in:\n" + string.Join("\n", offenders));
+
+        var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies, registers)).ToList();
+        Assert.True(dead.Count == 0,
+            "Allowances naming no such call — delete them rather than leaving a write pre-authorized:\n"
+            + string.Join("\n", dead));
+    }
+
+    private static IEnumerable<string> Unallowed(List<string> named, string[] allowed) =>
+        named.Where(f => !allowed.Contains(Path.GetFileName(f)));
+
+    // An allowance matching no call pre-authorizes a write nobody reviews, and reads as though the
+    // rule had an exception it does not have.
+    internal static List<string> DeadAllowances(string[] allowed, params List<string>[] scans)
+    {
+        var named = scans.SelectMany(s => s).Select(Path.GetFileName).ToHashSet(StringComparer.Ordinal);
+        return [.. allowed.Where(a => !named.Contains(a)).Order(StringComparer.Ordinal)];
+    }
+
+    [Fact]
+    public void DeadAllowances_NamesAnAllowanceNoScanMatched_AndKeepsOneAnyScanDid()
+    {
+        Assert.Equal(
+            ["Stale.cs"],
+            DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
     // ADR-0046 invariant 3: Queries are the Index's only readers, so a member no query service

@@ -56,7 +56,7 @@ public static class PluginEndpoints
                 "destination under the Edits preset first if it is not already tracked. Does NOT " +
                 "add the plugin to any load order — the caller (the extension's Mod Management " +
                 "writer, or a script/agent consumer per ADR-0024) is responsible for that.")
-            .Produces<PluginResponse>()
+            .Produces<PluginCreatedResponse>()
             .ProducesProblem(400)
             // 404 and 422 are Track's own refusal map, which this route answers with rather than
             // repeating inline: the destination is Tracked inside this gesture.
@@ -179,8 +179,7 @@ public static class PluginEndpoints
     // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, IndexProjector index, LoadOrderHolder holder, CreatePluginHandler create,
-        ILoggerFactory loggerFactory)
+        CreatePluginRequest req, IndexProjector index, CreatePluginHandler create, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Name))
@@ -191,23 +190,21 @@ public static class PluginEndpoints
         try
         {
             var result = await create.CreatePlugin(HeldCopies(index), req.Name, req.Path, req.Origin);
-            if (!result.Applied)
+            if (result.Track is { Applied: false } refused)
             {
                 // Loud, not silent: the plugin file and load order entry already landed, but
                 // plugins.txt is never appended without a 2xx, so no load order can name this
                 // half-created plugin. The orphaned entry is accepted residue.
                 logger.LogError(
                     "Refused to track {Origin} while creating {Name}: {Refusal}",
-                    req.Origin, req.Name, result.Track!.Refusal);
-                return WriteEndpointMapping.Refusal(result.Track);
+                    req.Origin, req.Name, refused.Refusal);
+                return WriteEndpointMapping.Refusal(refused);
             }
 
-            // ADR-0046 invariant 1: the created copy reaches the Index the way every other load
-            // order change does, from the kernel's snapshot. Gated, since an edit can be in flight.
-            using (index.WriteGate.Enter()) index.Reconcile(holder.Current);
-            return Projected(index, result.Copy.Key) is { } plugin
-                ? Results.Ok(plugin)
-                : Results.Problem($"{req.Name} was created but could not be indexed.", statusCode: 500);
+            // ADR-0046 invariants 1 and 4: the write is done. The Index has never held this copy, so
+            // it learns of it from the next snapshot, as it does for any newly installed plugin.
+            var copy = result.Copy;
+            return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot));
         }
         catch (ArgumentException ex)
         {
@@ -219,33 +216,12 @@ public static class PluginEndpoints
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
         }
-        catch (IndexWriteGateTimeoutException ex)
-        {
-            logger.LogWarning(ex, "Write gate busy after creating plugin {Name}", req.Name);
-            return WriteEndpointMapping.WriteGateBusy(ex);
-        }
-        catch (OperationCanceledException ex)
-        {
-            logger.LogWarning(ex, "Superseded reconcile after creating plugin {Name}", req.Name);
-            return Results.Problem(
-                $"{req.Name} was created; the load order moved before it could be indexed. Try again.",
-                statusCode: 503);
-        }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
-
-    // The read side answers what the new plugin is: masters, flags and record count are the
-    // projection's to state, never the write's.
-    private static PluginResponse? Projected(IndexProjector index, PluginKey key) =>
-        (index.LoadOrder?.Plugins ?? []).FirstOrDefault(p =>
-            p.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
-            && p.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase)) is { } metadata
-            ? PluginResponse.FromMetadata(metadata)
-            : null;
 
     // Which registered copies Editing actually holds. A copy the Index could not open is
     // registered like any other but has no bytes to read.
@@ -494,6 +470,10 @@ public static class PluginEndpoints
 // freshly installed mod folder, or overwrite/) — the caller resolves which physical folder, the
 // backend acts on it.
 public record CreatePluginRequest(string Name, string Path, string Origin);
+
+// What the create gesture wrote and registered, not a plugin row: masters, flags and record count
+// are the Index's to state, and it has not seen this copy yet. Slot is null off a bare load order.
+public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot);
 
 // Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — no Plugin/Path
 // needed: Origin alone is enough for TrackService to resolve every plugin sharing that mod folder.

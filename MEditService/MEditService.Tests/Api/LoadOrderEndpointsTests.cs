@@ -53,13 +53,46 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var result = await PluginEndpoints.CreatePlugin(
             new CreatePluginRequest("Minted.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
-            _mod.Index, holder, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance);
+            _mod.Index, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance);
 
-        Assert.IsAssignableFrom<Ok<PluginResponse>>(result);
+        Assert.IsAssignableFrom<Ok<PluginCreatedResponse>>(result);
         var registered = holder.Current.Copy(new PluginKey("Minted.esp", IndexedModFixture.ModFolderOrigin));
         Assert.NotNull(registered);
         Assert.Equal(Path.Combine(_mod.ModFolder, "Minted.esp"), registered.Path);
     }
+
+    // Two plugins, parked before the first: a create that cancelled this reconcile would be caught
+    // by the token check the second plugin makes, and the endpoint's revert then drops the created
+    // copy from the kernel.
+    [Fact]
+    public async Task CreatePlugin_DuringAnInFlightReconcile_NeitherWaitsForItNorCancelsIt()
+    {
+        using var data = new PluginFixtureBuilder("create-during-reconcile")
+            .WithPlugin("A.esp").WithPlugin("B.esp").Build();
+        var reflector = SharedSchemaReflector.Instance;
+        using var factory = new GatedIndexRepositoryFactory(
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), gateBefore: "A.esp");
+        using var index = new IndexProjector(factory);
+        var holder = new LoadOrderHolder();
+        var put = Task.Run(() => LoadOrderEndpoints.PutLoadOrder(
+            Request(data), index, holder, new ExternalChangeWatcher(), NullLoggerFactory.Instance));
+        await factory.WaitUntilParkedAsync();
+
+        var create = Task.Run(() => PluginEndpoints.CreatePlugin(
+            new CreatePluginRequest("Interleaved.esp", Path.Combine(data.DataFolder, "InterleavedMod"), "InterleavedMod"),
+            index, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance));
+        var created = await create.WaitAsync(TimeSpan.FromSeconds(10));
+        factory.Release();
+
+        Assert.IsAssignableFrom<Ok<PluginCreatedResponse>>(created);
+        Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(await put);
+        Assert.NotNull(holder.Current.Copy(new PluginKey("Interleaved.esp", "InterleavedMod")));
+        Assert.Contains(holder.Current.Copies, c => c.Name == "A.esp");
+    }
+
+    private static LoadOrderRequest Request(PluginFixtureData data) => new(
+        [.. data.Plugins.Select(p => new LoadOrderPlugin(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning))],
+        data.DataFolder, data.InstanceRoot, "Fallout4");
 
     [Fact]
     public void PutLoadOrder_ReportsACrashRepairOffer_WhenATrackedPluginHasAnUnfinishedJournalMarker()

@@ -1,11 +1,9 @@
-using MEditService.Api.Endpoints;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Records;
 
@@ -76,28 +74,6 @@ public sealed class IndexWriteSerializationTests : IDisposable
             bool finished;
             (work, finished) = RunAndWait(() => Index.SetFilter("SELECT form_key FROM records"), BlockedWindow);
             Assert.False(finished, "SetFilter materialized _filter without taking the write gate");
-        }
-
-        await work.WaitAsync(Generous);
-    }
-
-    // The create gesture's own index write is the reconcile the route runs once the file is on
-    // disk, so the gate is asserted where that write now happens.
-    [Fact]
-    public async Task CreatePlugin_WaitsForAnInFlightWriteToRelease()
-    {
-        var holder = TestEditService.HolderOver(Index);
-        Task work;
-        using (new GateHeldElsewhere(Index.WriteGate))
-        {
-            bool finished;
-            (work, finished) = RunAndWait(
-                () => PluginEndpoints.CreatePlugin(
-                    new CreatePluginRequest("GatedCreate.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
-                    Index, holder, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance)
-                    .GetAwaiter().GetResult(),
-                BlockedWindow);
-            Assert.False(finished, "the create projected a new plugin without taking the write gate");
         }
 
         await work.WaitAsync(Generous);

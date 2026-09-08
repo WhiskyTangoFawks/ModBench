@@ -849,6 +849,13 @@ export interface components {
             recordType: string;
             hasParseFailure: boolean;
         };
+        PluginCreatedResponse: {
+            name: string;
+            path: string;
+            origin: string;
+            /** Format: int32 */
+            slot?: number | null;
+        };
         PluginDiagnosisReport: {
             plugin: string;
             origin: string;
@@ -1579,7 +1586,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PluginResponse"];
+                    "application/json": components["schemas"]["PluginCreatedResponse"];
                 };
             };
             /** @description Bad Request */
