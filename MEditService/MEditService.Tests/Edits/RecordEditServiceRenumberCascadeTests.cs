@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Source;
 
 namespace MEditService.Tests.Edits;
 
@@ -58,6 +59,63 @@ public sealed class RecordEditServiceRenumberCascadeTests
         Assert.Contains($"\"{oldFormKey}\"", moved.Body, StringComparison.Ordinal);
         // The self-link, by contrast, moved: it is the only *link* the record holds.
         Assert.Contains($"\"MorphRace\": \"{result.NewFormKey}\"", moved.Body, StringComparison.Ordinal);
+    }
+
+    // OMOD's document names its own concrete class, not the schema's table key. A referencer no
+    // collector was run over is one whose link a renumber leaves dangling while reporting success.
+    [Fact]
+    public void RenumberRecord_RewritesALinkHeldByAPathAmbiguousGroupsDocument()
+    {
+        using var fixture = CascadeFixture.WithPathAmbiguousGroupReferencer();
+        var oldFormKey = fixture.Target.ToString();
+
+        var result = fixture.Edits.RenumberRecord(fixture.Plugin, oldFormKey);
+
+        Assert.True(result.Applied, result.Message);
+        var referencer = fixture.Document(fixture.Referencer.ToString())!;
+        Assert.Contains(result.NewFormKey!, referencer.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain(oldFormKey, referencer.Body, StringComparison.Ordinal);
+    }
+
+    // What a link is, is a FormKey, not the text that spells it: a document something else edited may
+    // hold the same key in a different case, and a text comparison reads that as a different record.
+    [Fact]
+    public void RenumberRecord_RewritesALinkWhoseDocumentSpellsTheFormKeyInAnotherCase()
+    {
+        using var fixture = CascadeFixture.WithFlatAndWorldspaceReferencers();
+        var oldFormKey = fixture.Target.ToString();
+        var referencerFile = fixture.SourceFileOf(fixture.Referencer, "acti", "FirstActivator");
+        File.WriteAllText(
+            referencerFile,
+            File.ReadAllText(referencerFile).Replace(oldFormKey, oldFormKey.ToLowerInvariant(), StringComparison.Ordinal));
+
+        var result = fixture.Edits.RenumberRecord(fixture.Plugin, oldFormKey);
+
+        Assert.True(result.Applied, result.Message);
+        var rewritten = File.ReadAllText(referencerFile);
+        Assert.Contains(result.NewFormKey!, rewritten, StringComparison.Ordinal);
+        Assert.DoesNotContain(oldFormKey, rewritten, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // A record type the schema excludes (land, navm) is one the collector cannot be run over, and a
+    // guard that cannot run has cleared nothing: the gesture refuses rather than skipping the
+    // document and leaving whatever it holds behind.
+    [Fact]
+    public void RenumberRecord_Refuses_WhenADocumentTheCollectorCannotReadMentionsTheTarget()
+    {
+        using var fixture = CascadeFixture.WithSelfReferencingTarget();
+        var oldFormKey = fixture.Target.ToString();
+        var strays = Directory.CreateDirectory(Path.Combine(
+            fixture.ModFolder, SourceRepository.RootFor(CascadeFixture.PluginName), "Strays")).FullName;
+        File.WriteAllText(
+            Path.Combine(strays, "Stray - 000F00_Cascade.esp.json"),
+            "{\n  \"MutagenObjectType\": \"Landscape\",\n  \"FormKey\": \"000F00:Cascade.esp\",\n" +
+            $"  \"EditorID\": \"{oldFormKey}\"\n}}");
+
+        var result = fixture.Edits.RenumberRecord(fixture.Plugin, oldFormKey);
+
+        Assert.False(result.Applied, result.Message);
+        Assert.Equal(RecordEditRefusal.ReferenceRemapIncomplete, result.Refusal);
     }
 
     // The tree is what a referencer is, so a document something else took out of it references

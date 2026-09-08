@@ -103,6 +103,22 @@ public sealed class CascadeFixture : IDisposable
         race.Name = new TranslatedString(Language.English, race.FormKey.ToString());
     });
 
+    /// <summary>OMOD is FO4's path-ambiguous group: five concrete classes under one signature, so the
+    /// document names its own class rather than the schema's table.</summary>
+    public static CascadeFixture WithPathAmbiguousGroupReferencer() => new((mod, self) =>
+    {
+        var looseMod = mod.MiscItems.AddNew("CascadeTargetMisc");
+        self.Target = looseMod.FormKey;
+
+        var armorMod = new ArmorModification(mod.GetNextFormKey("CascadeArmorMod"), Fallout4Release.Fallout4)
+        {
+            EditorID = "CascadeArmorMod",
+        };
+        armorMod.LooseMod.SetTo(looseMod);
+        mod.ObjectModifications.Add(armorMod);
+        self.Referencer = armorMod.FormKey;
+    });
+
     public static CascadeFixture WithFlatAndWorldspaceReferencers() => new((mod, self) =>
     {
         var water = mod.Waters.AddNew("CascadeTargetWater");

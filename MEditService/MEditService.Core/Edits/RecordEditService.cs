@@ -750,13 +750,23 @@ public sealed class RecordEditService(
         var mapping = RenumberMapping(oldFormKey, newFormKey);
         var schemas = schemaReflector.GetSchemas(release);
 
-        foreach (var (referencerPlugin, referencerRepository, document, embeddedFormKeys) in referencers)
+        foreach (var (referencerPlugin, referencerRepository, document, schemaType, embeddedFormKeys) in referencers)
         {
-            var owner = codec
-                .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body), release, document.RecordType)
-                .GetAwaiter().GetResult();
+            // Asked before the codec is: a document the scan could not run the collector over is one
+            // this pass cannot read either, and a guard that cannot run has cleared nothing.
+            if (schemaType is null)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ReferenceRemapIncomplete,
+                    $"A document in {referencerPlugin.Name}'s tree naming {document.FormKey} could not be " +
+                    $"read, so whether it links {oldFormKey} cannot be answered. Nothing was written.");
+            }
+            if (!schemas.ContainsKey(schemaType))
+                return RefuseNoSchema(document.FormKey, schemaType, referencerPlugin);
+
+            var owner = ReadDocument(codec, document, release);
             ((IFormLinkContainer)owner).RemapLinks(mapping);
-            if (RefuseIfRemapIncomplete(owner, document.RecordType, oldFormKey, referencerPlugin, release) is { } incomplete)
+            if (RefuseIfRemapIncomplete(owner, schemaType, oldFormKey, referencerPlugin, release) is { } incomplete)
                 return incomplete;
 
             foreach (var embeddedFormKey in embeddedFormKeys)
@@ -775,11 +785,19 @@ public sealed class RecordEditService(
             // relative to this repository's folder.
             rewrites.Add(new ComputedRewrite(
                 referencerPlugin, referencerRepository,
-                new RecordIdentity(document.FormKey, document.RecordType, document.EditorId), owner));
+                new RecordIdentity(document.FormKey, schemaType, document.EditorId), owner));
         }
 
         return null;
     }
+
+    // The guard's conservative direction: a guard that cannot run has cleared nothing, so a document
+    // whose type the schema does not name stops the gesture rather than being passed over.
+    private static RecordEditResult RefuseNoSchema(string formKey, string recordType, PluginKey plugin) =>
+        RecordEditResult.Refused(
+            RecordEditRefusal.ReferenceRemapIncomplete,
+            $"'{recordType}' has no reflected schema, so the remap-completeness check for " +
+            $"{formKey} in {plugin.Name} could not run. Nothing was written.");
 
     private static Dictionary<FormKey, FormKey> RenumberMapping(string oldFormKey, string newFormKey) =>
         new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };
@@ -794,14 +812,7 @@ public sealed class RecordEditService(
         IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
     {
         if (!schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
-        {
-            // A record from an indexed document always has a schema; refusing keeps the guard's
-            // conservative direction: a guard that cannot run has cleared nothing.
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ReferenceRemapIncomplete,
-                $"'{recordType}' has no reflected schema, so the remap-completeness check for " +
-                $"{record.FormKey} in {plugin.Name} could not run. Nothing was written.");
-        }
+            return RefuseNoSchema(record.FormKey.ToString(), recordType, plugin);
 
         List<FormReference> refs;
         using (var document = JsonDocument.Parse(SerializeToText(record, release)))
@@ -868,7 +879,7 @@ public sealed class RecordEditService(
                     $"{unit.RelativePath} carries {oldFormKey} inside. Nothing was written.");
             }
 
-            var owner = ReadDocument(ownerDocument, release);
+            var owner = ReadDocument(codec, ownerDocument, release);
             if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
             {
                 return RecordEditResult.Refused(
@@ -901,7 +912,7 @@ public sealed class RecordEditService(
                 $"No source unit in {plugin.Name}'s tree holds {oldFormKey}. Nothing was written.");
         }
 
-        var record = ReadDocument(document, release);
+        var record = ReadDocument(codec, document, release);
         ((IFormLinkContainer)record).RemapLinks(mapping);
 
         if (RefuseIfRemapIncomplete(record, identity.RecordType, oldFormKey, plugin, release) is { } recordIncomplete)
@@ -915,7 +926,10 @@ public sealed class RecordEditService(
         return null;
     }
 
-    private IMajorRecord ReadDocument(SourceDocument document, GameRelease release) =>
+    /// <summary>The document's own graph, read back through the codec by the type its text names —
+    /// a path-ambiguous group's document names its own class, which is the codec's spelling, not the
+    /// schema's table.</summary>
+    internal static IMajorRecord ReadDocument(RecordTextCodec codec, SourceDocument document, GameRelease release) =>
         codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body), release, document.RecordType)
             .GetAwaiter().GetResult();
 
