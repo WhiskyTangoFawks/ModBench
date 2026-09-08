@@ -626,7 +626,6 @@ describe('modbench.downloads tree', () => {
 // ── Overwrite row ──────────────────────────────────────────────────────────────
 
 interface ModListLike {
-  invalidate(): void;
   getChildren(element?: unknown): Promise<Array<{ label?: unknown; kind?: string; resourceUri?: vscode.Uri }>>;
 }
 
@@ -649,12 +648,14 @@ describe('Overwrite row', () => {
   });
 
   it('shows a pinned Overwrite row (last, outside grouping) when overwrite/ is non-empty', async () => {
-    fs.mkdirSync(overwriteDir, { recursive: true });
-    fs.writeFileSync(path.join(overwriteDir, 'f4se.log'), 'x');
+    // The count is a field of the Instance value now (ADR-0047) — awaited past a sequence,
+    // rather than assuming a fresh disk read the instant invalidate() is called.
+    await writeAndAwaitInstance(() => {
+      fs.mkdirSync(overwriteDir, { recursive: true });
+      fs.writeFileSync(path.join(overwriteDir, 'f4se.log'), 'x');
+    });
 
-    const p = provider()!;
-    p.invalidate();
-    const roots = await p.getChildren();
+    const roots = await provider()!.getChildren();
     const last = roots[roots.length - 1];
     assert.strictEqual(last.kind, 'overwrite', 'Overwrite row should be the very last root');
     assert.strictEqual(last.label, 'Overwrite');
@@ -669,10 +670,10 @@ describe('Overwrite row', () => {
   });
 
   it('drops the Overwrite row once overwrite/ is emptied', async () => {
-    fs.rmSync(overwriteDir, { recursive: true, force: true });
-    const p = provider()!;
-    p.invalidate();
-    const roots = await p.getChildren();
+    await writeAndAwaitInstance(() => {
+      fs.rmSync(overwriteDir, { recursive: true, force: true });
+    });
+    const roots = await provider()!.getChildren();
     assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
   });
 });

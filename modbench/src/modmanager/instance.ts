@@ -18,6 +18,9 @@ import { readGameName, readSelectedProfile } from './mo2/modOrganizerIni';
 import { resolveGameDirectory, type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory } from './gameDirectory';
 import type { OnConfigChange } from './gameDirectoryResolver';
 import { isDeployed } from './deployer';
+import { computeModStatuses, type ModStatusResult } from './statusChecker';
+import { readVanillaMasters } from './vanillaMasters';
+import { countOverwriteFiles } from './overwriteFolder';
 
 // A change here must recompute exactly as a file event does — the Instance's own replacement
 // for the memoized resolver's invalidation.
@@ -53,6 +56,11 @@ export interface InstanceValue {
   readonly gameDirectory: GameDirectory | undefined;
   /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
   readonly deployed: boolean;
+  /** Each mod's conflict/override/missing-master/missing-mod status, keyed by mod name — the
+   *  Mods tree's badges (ADR-0047). */
+  readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
+  /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */
+  readonly overwriteFileCount: number;
 }
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
@@ -81,6 +89,8 @@ const EMPTY: InstanceValue = {
   gameRelease: '',
   gameDirectory: undefined,
   deployed: false,
+  modStatuses: new Map(),
+  overwriteFileCount: 0,
 };
 
 export class Instance implements vscode.Disposable {
@@ -203,31 +213,40 @@ export class Instance implements vscode.Disposable {
   private async read(): Promise<InstanceValue> {
     const { instanceRoot, source, config, detectPaths, detectWinePrefix, log } = this.options;
     const entries = await this.readMods();
-    const [index, iniText, downloadEntries, deployed] = await Promise.all([
+    const [index, iniText, downloadEntries, deployed, overwriteFileCount] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'),
       scanDownloads(instanceRoot),
       isDeployed(instanceRoot),
+      countOverwriteFiles(join(instanceRoot, 'overwrite')),
     ]);
     // The ini is read once above and handed to resolveGameDirectory as-is, so a rewrite
     // between it and activeProfile/gameRelease below cannot land two generations in one value.
     const gameDirectory = await resolveGameDirectory(
       instanceRoot, config(), detectPaths, detectWinePrefix, () => Promise.resolve(iniText));
-    // An unresolved game directory loses only the Data-folder copies' paths: every plugins.txt
-    // line still gets a row, existence/slot/enabled coming from the line itself (see
-    // `LoadOrderPluginLine`), not from the game directory.
-    const plugins = await buildLoadOrderRows(
-      // The modlist is read once per recompute and handed on, so the snapshot cannot see a
-      // different generation of it than the file index did.
-      {
-        readModlist: () => Promise.resolve(entries),
-        readPluginOrder: () => source.readPluginOrder(),
-        readEnabledPlugins: () => source.readEnabledPlugins(),
-      },
-      instanceRoot,
-      gameDirectory?.dataFolder,
-      () => Promise.resolve(index),
-    );
+    // Both derive from the same index and gameDirectory generation, so they run concurrently.
+    const [plugins, modStatuses] = await Promise.all([
+      // An unresolved game directory loses only the Data-folder copies' paths: every
+      // plugins.txt line still gets a row, existence/slot/enabled coming from the line
+      // itself (see `LoadOrderPluginLine`), not from the game directory.
+      buildLoadOrderRows(
+        // The modlist is read once per recompute and handed on, so the snapshot cannot see a
+        // different generation of it than the file index did.
+        {
+          readModlist: () => Promise.resolve(entries),
+          readPluginOrder: () => source.readPluginOrder(),
+          readEnabledPlugins: () => source.readEnabledPlugins(),
+        },
+        instanceRoot,
+        gameDirectory?.dataFolder,
+        () => Promise.resolve(index),
+      ),
+      // An unresolved game directory degrades to an empty vanilla-master set rather than
+      // failing the badge — same fallback readVanillaMasters/computeModStatuses already had
+      // as the Mods tree's own read, moved here unchanged (ADR-0047).
+      readVanillaMasters(gameDirectory?.dataFolder, log).then(
+        (vanillaMasters) => computeModStatuses(entries, instanceRoot, index, vanillaMasters, log)),
+    ]);
     return {
       mods: entries,
       files: index.files,
@@ -238,6 +257,8 @@ export class Instance implements vscode.Disposable {
       gameRelease: readGameName(iniText),
       gameDirectory: gameDirectory ?? undefined,
       deployed,
+      modStatuses,
+      overwriteFileCount,
     };
   }
 }

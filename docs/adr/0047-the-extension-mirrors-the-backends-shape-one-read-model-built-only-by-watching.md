@@ -46,9 +46,11 @@ either side's local optimum.
    event the platform never delivered has no other correction. The recompute is debounced once for
    the Instance, not once per watcher, so a burst spanning several files is one recompute.
 
-4. **Recompute is whole, not incremental.** A full walk of a 764-mod, 15,000-file instance measures
-   about 0.1 s, which is what makes whole recompute affordable. Incremental update is refused while
-   that holds: it would reintroduce per-key invalidation and with it the two-generations bug.
+4. **Recompute is whole, not incremental.** A full recompute of the whole value — mods, the file
+   index, plugin rows, downloads, the game directory, the deploy manifest and per-mod status —
+   measures ~230-260 ms warm against a real 764-mod instance, which is what makes whole recompute
+   affordable. Incremental update is refused while that holds: it would reintroduce per-key
+   invalidation and with it the two-generations bug.
 
 5. **Watchers are not trusted alone, and a bad read is not a new value.** A read that throws — MO2
    half-way through rewriting a file — logs and leaves the last value and the last sequence in
