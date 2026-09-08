@@ -273,7 +273,7 @@ export function activate(context: vscode.ExtensionContext) {
       controller, compileDiagnostics, { name: offer.plugin, origin: offer.origin }, atRef, repository,
     ),
   );
-  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
+  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, instance, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
   // ADR-0026 background tier — the scan is advisory, so a blip logs and retries next reconcile,
   // never toasts. Fire-and-forget: the tree hand-off must not wait on a whole-load-order scan.
   let diagnosisScanGeneration = 0;
@@ -312,9 +312,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Exposed for integration tests — unused in production. The match map has no other externally
   // observable surface, and a backend going unhealthy needs the real BackendManager.stop().
+  // `instance`: lets a test await past a sequence instead of sleeping.
   return {
     modListProvider, downloadsProvider, pluginListProvider, pluginsTree: session.pluginsTree, pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing, exitToLoadout: () => exitToLoadout(session), loadOrderSync: session.loadOrderSync, backendManager: session.backendManager,
+    instance,
   };
 }
 
@@ -762,7 +764,7 @@ function registerLoadoutSurfaces(session: ExtensionSession, deps: Omit<LoadoutVi
   modListProvider?: ModListProvider; downloadsProvider?: DownloadsProvider; pluginListProvider?: PluginListProvider;
   // Forwarded so the composition root can wire modbench.newPlugin's destination QuickPick — both
   // are undefined together with the providers above.
-  modlistSource?: Mo2ModlistSource; instanceRoot?: string; enterEditing?: () => Promise<void>;
+  modlistSource?: Mo2ModlistSource; instanceRoot?: string; instance?: Instance; enterEditing?: () => Promise<void>;
 } {
   const { context, outputChannel } = deps;
   registerDeploymentModeContext(context, () => session.loadoutHeaderProvider?.refresh());
@@ -774,6 +776,7 @@ function registerLoadoutSurfaces(session: ExtensionSession, deps: Omit<LoadoutVi
     pluginListProvider: loadout?.pluginListProvider,
     modlistSource: loadout?.modlistSource,
     instanceRoot: loadout?.instanceRoot,
+    instance: loadout?.instance,
     enterEditing: loadout?.enterEditing,
   };
 }
@@ -806,7 +809,7 @@ function wireEnterEditingOnRestart(
   });
 }
 
-function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => Promise<void>; enterEditing: () => Promise<void> } | undefined {
+function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; instance: Instance; refreshAll: () => Promise<void>; enterEditing: () => Promise<void> } | undefined {
   const { context, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
   // The flat log shim, built locally rather than threaded in as its own Deps field.
   const log = (msg: string) => outputChannel.info(msg);
@@ -925,7 +928,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       invalidateDownloads: () => downloadsProvider.invalidate(),
       updateProfileDescription,
     });
-    return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, refreshAll, enterEditing };
+    return { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, instance, refreshAll, enterEditing };
 }
 
 interface LoadoutHeaderDepsWiring {

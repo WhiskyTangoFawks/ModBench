@@ -11,6 +11,33 @@ const TEST_PORT = 15172;
 let mockBackend: http.Server;
 let ext: vscode.Extension<unknown> | undefined;
 
+// The Instance's own read model (ADR-0047): a test that writes plugins.txt and then reads the
+// Plugins tree awaits past a sequence with this, rather than assuming the write is visible the
+// instant the write call returns.
+interface InstanceLike {
+  sequence: number;
+  subscribe(subscriber: (value: unknown, sequence: number) => void): { dispose(): void };
+}
+const instanceExport = () => (ext?.exports as { instance?: InstanceLike } | undefined)?.instance;
+function pastSequence(instance: InstanceLike, sequence: number): Promise<void> {
+  if (instance.sequence > sequence) return Promise.resolve();
+  return new Promise((resolve) => {
+    const subscription = instance.subscribe((_value, seq) => {
+      if (seq <= sequence) return;
+      subscription.dispose();
+      resolve();
+    });
+  });
+}
+// Snapshots the current sequence, runs `write` (a plugins.txt/config change), then awaits the
+// Instance's next landed recompute — the row-provider-visible equivalent of the write completing.
+async function writeAndAwaitInstance(write: () => void): Promise<void> {
+  const instance = instanceExport();
+  const before = instance?.sequence ?? 0;
+  write();
+  if (instance) await pastSequence(instance, before);
+}
+
 // The backend launches with the extension, so tests drive the lifecycle through activate()'s
 // test-API exports: a launch failure is logged-and-swallowed after resetting to loadout.
 const editingApi = () =>
@@ -716,7 +743,8 @@ describe('Launch mEdit populates the editing plugin tree', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
 
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
+    await writeAndAwaitInstance(() =>
+      fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n'));
   });
 
   after(async () => {
@@ -786,7 +814,7 @@ describe('Loadout stays visible through an editing backend', () => {
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n');
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n'));
   });
 
   after(async () => {
@@ -894,7 +922,7 @@ describe('Plugin load-order rows expand into records', () => {
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n');
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n'));
     pluginListProviderOf()?.invalidate();
       // Setting the game directory just now fired the production config-change relaunch
     // (backend down + a directory appeared). Settle it and return to loadout so the
@@ -1005,7 +1033,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n');
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
     pluginListProviderOf()?.invalidate();
       // Setting the game directory just now fired the production config-change relaunch
     // (backend down + a directory appeared). Settle it and return to loadout so the
@@ -1072,7 +1100,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     }
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
+    await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n'));
     pluginListProviderOf()?.invalidate();
     await enterEditing();
   });
@@ -1497,7 +1525,8 @@ describe('Progressive load', () => {
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n*MissingMaster.esp\n*Immutable.esm\n');
+    await writeAndAwaitInstance(() =>
+      fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n*MissingMaster.esp\n*Immutable.esm\n'));
       // Setting the game directory just now fired the production config-change relaunch
     // (backend down + a directory appeared). Settle it and return to loadout so the
     // tests below still start from the pre-editing state they assert.
