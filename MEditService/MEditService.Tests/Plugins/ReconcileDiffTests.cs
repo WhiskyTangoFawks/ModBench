@@ -32,10 +32,10 @@ public sealed class ReconcileDiffTests
             base.Index(plugin, registration, key, filePath);
         }
 
-        public override void UpdateWinners()
+        public override void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)
         {
             owner.Sweeps++;
-            base.UpdateWinners();
+            base.UpdateWinners(participating);
         }
     }
 

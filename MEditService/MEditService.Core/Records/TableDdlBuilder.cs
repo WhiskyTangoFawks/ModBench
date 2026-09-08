@@ -47,10 +47,12 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// is never a column here.</summary>
     internal const string RegistrationsRelation = "registrations";
 
-    /// <summary>ADR-0044: participation, derived — the one SQL spelling of
-    /// <see cref="Registration.Participates"/>, for the winner sweep to join on.</summary>
-    internal static string ParticipatesPredicate(string alias) =>
-        $"{alias}.enabled AND {alias}.winning AND {alias}.load_order_idx IS NOT NULL";
+    /// <summary>ADR-0044: who competes for winner, as the load order value answered it — the set the
+    /// last reconcile handed in, carrying each participating copy's slot so the sweep can order by
+    /// it. Load-order-owned state like <see cref="WinnersRelation"/>, so it lives in <c>main</c>;
+    /// the rule that produced it is <see cref="Registration.Participates"/> and is spelled
+    /// nowhere else.</summary>
+    internal const string ParticipatingRelation = "participating";
 
     // A LEFT JOIN, never a correlated EXISTS: winners holds at most one row per (ref, form_key), so
     // the join cannot duplicate a row, and a hash join beats EXISTS on the full-scan reads that
@@ -68,6 +70,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
         CreateRecordsTable(connection);
         CreateRegistrationsTable(connection);
+        CreateParticipatingTable(connection);
         CreateWinnersTable(connection);
         CreateCommittedRecordsTable(connection);
         CreateFilesTable(connection);
@@ -213,6 +216,18 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
+    // ADR-0044: replaced whole by each sweep, never diffed — the load order value decides who is in
+    // it, and this table only remembers the answer for the re-sweeps a working-tree write triggers.
+    private static void CreateParticipatingTable(DuckDBConnection connection) =>
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS {ParticipatingRelation} (
+                plugin VARCHAR NOT NULL,
+                origin VARCHAR NOT NULL,
+                load_order_idx INTEGER NOT NULL,
+                PRIMARY KEY (plugin, origin)
+            )
+            """);
+
     // ADR-0001: winning is a function of registration alone. No PRIMARY KEY on any appended table:
     // re-index is delete-then-append, and the ART index across the rebuild measured 6x the sweep.
     private static void CreateWinnersTable(DuckDBConnection connection)
@@ -227,9 +242,9 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0044: one row per physical plugin copy; participation is never stored
-    // (ParticipatesPredicate). ADR-0001: this table is the load order and nothing else; it is not
-    // cleared at open, the first reconcile corrects it.
+    // ADR-0044: one row per physical plugin copy, carrying the three facts participation is derived
+    // from; participation itself is never a column here. ADR-0001: this table is the load order and
+    // nothing else; it is not cleared at open, the first reconcile corrects it.
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (

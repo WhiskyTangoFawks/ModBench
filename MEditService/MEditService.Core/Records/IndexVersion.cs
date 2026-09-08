@@ -13,7 +13,7 @@ internal static class IndexVersion
 {
     // Bump on any change to TableDdlBuilder's fixed tables or the codec's conventions: CREATE TABLE
     // IF NOT EXISTS leaves an existing file's old column list in place, so nothing else catches those.
-    private const int FormatVersion = 4;
+    private const int FormatVersion = 5;
 
     internal static string For(SchemaReflector reflector, GameRelease release)
     {

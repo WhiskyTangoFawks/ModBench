@@ -436,7 +436,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         // arrived earlier was browsable but its winner state was not yet decided (ADR-0035).
         _logger.LogDebug("Computing winners");
         var winnersTimer = Stopwatch.StartNew();
-        index.UpdateWinners();
+        index.UpdateWinners(snapshot.Participating);
         lock (_lock) _conflictsComputed = true;
         // Ready: the last status transition a subscriber sees for this reconcile.
         PublishStatus();
@@ -728,6 +728,14 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         ReapplyFilter();
     }
 
+    /// <summary>ADR-0044: the winner sweep is handed who competes, projected from the load order
+    /// value the held copies are — the rule itself is <see cref="Registration.Participates"/> and
+    /// runs there. Read whole rather than per plugin: the sweep is once per projection.</summary>
+    private IReadOnlyList<RegisteredCopy> Participating()
+    {
+        lock (_lock) return _heldPlugins is { } held ? Plugins.LoadOrder.From(held).Participating : [];
+    }
+
     // Never null, and never one without the other, for the same reason RequireScope is not.
     private (ILoadOrder LoadOrder, IRecordIndex Index) RequireHeldIndex()
     {
@@ -811,7 +819,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
                 throw;
             }
 
-            index.UpdateWinners();
+            index.UpdateWinners(Participating());
             // Re-derived content can flip filter membership either way.
             ReapplyFilter();
         }
@@ -838,7 +846,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         lock (_lock)
         {
             index.Index(loaded.Getter, metadata.Registration, metadata.Key, metadata.Path);
-            index.UpdateWinners();
+            index.UpdateWinners(Participating());
             // Re-indexed content can flip filter membership either way.
             ReapplyFilter();
         }
@@ -870,7 +878,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             }
             _index.Unindex(key);
             // A removal moves winners for every FormKey it held, exactly as a re-index does.
-            _index.UpdateWinners();
+            _index.UpdateWinners(Participating());
             // Deleted rows cannot match a filter that a stale _filter still lists them in.
             ReapplyFilter();
         }

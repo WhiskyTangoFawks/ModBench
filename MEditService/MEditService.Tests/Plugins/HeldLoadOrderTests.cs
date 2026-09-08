@@ -430,7 +430,8 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
 
     private sealed class FaultingUpdateWinnersRepository(IRecordIndex inner) : DelegatingRecordIndex(inner)
     {
-        public override void UpdateWinners() => throw new InvalidOperationException("simulated mid-load winner-sweep fault");
+        public override void UpdateWinners(IReadOnlyList<RegisteredCopy> participating) =>
+            throw new InvalidOperationException("simulated mid-load winner-sweep fault");
     }
 
 

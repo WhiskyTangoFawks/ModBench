@@ -200,7 +200,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // ADR-0035: one row per registered copy. ADR-0044: participation is derived from the three facts
-    // here (TableDdlBuilder.ParticipatesPredicate), never a column.
+    // here by Registration.Participates, never a column.
     private void UpsertRegistration(string plugin, string origin, Registration registration)
     {
         DeleteRegistration(plugin, origin);
@@ -258,15 +258,43 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Wholesale rather than incremental because there is no smaller correct unit:
-    /// registering a plugin can move the winner of every FormKey it holds. Measured at ~75 ms for
-    /// both refs on a 48,000-record, 60-plugin fixture.</summary>
-    public void UpdateWinners()
+    /// <summary>See <see cref="IRecordIndex.UpdateWinners"/>. Wholesale rather than incremental
+    /// because there is no smaller correct unit: registering a plugin can move the winner of every
+    /// FormKey it holds. Measured at ~75 ms for both refs on a 48,000-record, 60-plugin
+    /// fixture.</summary>
+    public void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)
+    {
+        using var tx = Connection.BeginTransaction();
+        ReplaceParticipating(participating);
+        UpdateWinnersCore();
+        _indexStore.BumpSequence();
+        tx.Commit();
+    }
+
+    // The same sweep for a projection that moved rows without moving the load order: who
+    // participates cannot change here, so the set the last sweep was handed still holds.
+    private void ResweepWinners()
     {
         using var tx = Connection.BeginTransaction();
         UpdateWinnersCore();
         _indexStore.BumpSequence();
         tx.Commit();
+    }
+
+    // ADR-0044: replaced whole, never diffed. The rule that decided membership ran in the load order
+    // value (Registration.Participates); nothing here re-asks it.
+    private void ReplaceParticipating(IReadOnlyList<RegisteredCopy> participating)
+    {
+        Execute($"DELETE FROM {TableDdlBuilder.ParticipatingRelation}");
+        foreach (var copy in participating)
+        {
+            using var cmd = Connection.CreateCommand();
+            cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ParticipatingRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
+            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Origin });
+            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Slot!.Value });
+            cmd.ExecuteNonQuery();
+        }
     }
 
     // The sweep itself, unwrapped: a caller already inside a transaction (the projection verbs
@@ -287,15 +315,17 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // The winner rule: among the rows, the participating plugin latest in the load order wins its
-    // FormKey. QUALIFY makes the result a function — a tie on load_order_idx yields one winner —
-    // and the (plugin, origin) tiebreak makes which one deterministic.
+    // FormKey. The join is against `participating` alone — membership and slot both come from the
+    // load order value, so no SQL here re-spells who participates. QUALIFY makes the result a
+    // function — a tie on load_order_idx yields one winner — and the (plugin, origin) tiebreak
+    // makes which one deterministic.
     private void InsertWinners(RecordRef @ref, string rowsSql) =>
         Execute($"""
             INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
             SELECT '{WinnerRef.Of(@ref)}', r.form_key, r.plugin, r.origin
             FROM ({rowsSql}) r
-            JOIN {TableDdlBuilder.RegistrationsRelation} p
-              ON p.plugin = r.plugin AND p.origin = r.origin AND {TableDdlBuilder.ParticipatesPredicate("p")}
+            JOIN {TableDdlBuilder.ParticipatingRelation} p
+              ON p.plugin = r.plugin AND p.origin = r.origin
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY r.form_key
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
@@ -463,7 +493,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             SourceIngest.Ingest(
                 this, modFolder, sourceTree, registration, key, _indexStore.IndexedFile(key)?.FilePath,
                 _release, _schemaReflector, _logger);
-            UpdateWinners();
+            ResweepWinners();
         }
 
         // ADR-0046: too many rows to name, exactly as the plugin watcher's own re-index reports it.
