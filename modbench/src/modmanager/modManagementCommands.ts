@@ -39,12 +39,12 @@ export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
 };
 
 /** Positional params, not a Deps bundle: a bundle earns its keep by being shared across more
- *  than one call site, not merely by having several fields. The two callbacks are narrow
- *  windows onto the composition root's session object. */
+ *  than one call site, not merely by having several fields. The callback is a narrow window onto
+ *  the composition root's session object. */
 export function registerModListCoreCommands(
   instanceRoot: string, modListProvider: ModListProvider, modlistSource: Mo2ModlistSource,
   outputChannel: vscode.LogOutputChannel, updateProfileDescription: () => Promise<void>,
-  notifyLoadoutHeaderChanged: () => void, requestLoadOrderSync: () => void,
+  notifyLoadoutHeaderChanged: () => void,
 ): vscode.Disposable[] {
   return [
       vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
@@ -72,10 +72,8 @@ export function registerModListCoreCommands(
         }
         void updateProfileDescription();
         notifyLoadoutHeaderChanged();
-        // A profile switch is the next snapshot, not a teardown (ADR-0044). Switching writes
-        // ModOrganizer.ini rather than modlist/plugins.txt, the files the sync's own watchers
-        // cover, so it is asked for explicitly.
-        requestLoadOrderSync();
+        // ADR-0044/ADR-0047: the write lands in ModOrganizer.ini, which the Instance already
+        // watches — its own recompute is what reaches the load-order sync, never this command.
       }),
   ];
 }

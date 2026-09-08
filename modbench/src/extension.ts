@@ -25,20 +25,15 @@ import { broadcastToRecordPanels } from './medit/onRecordEdited';
 import { EXTENSION_TO_WEBVIEW, type ColumnHeaderContext } from './medit/messages';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
-import { Instance } from './modmanager/instance';
+import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider } from './modmanager/ModListProvider';
-import { createModsWatcher } from './modmanager/modsWatcher';
-import { createModlistWatcher } from './modmanager/modlistWatcher';
-import { createPluginsTxtWatcher } from './modmanager/pluginsTxtWatcher';
 import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode, type PluginListSource } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite, type PluginFacts } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
-import { wirePluginListInvalidation } from './wirePluginListInvalidation';
-import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
+import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
 import { isDeployed, type Reporter } from './modmanager/deployer';
-import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
-import { buildLoadOrderSnapshot, type LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
+import type { LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
 import { resolvePluginDestination, type PluginDestinationChoice } from './modmanager/pluginDestination';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
@@ -422,13 +417,11 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
-    ...wireLoadOrderWatchers(session.loadOrderSync!, instanceRoot, pluginListProvider),
+    session.loadOrderSync!,
+    // ADR-0044: the one trigger for a PUT — a landed Instance recompute, never a gesture.
+    wireLoadOrderSyncToInstance(instance, session.loadOrderSync!),
     pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginListProvider, outputChannel)),
     revealInExplorerCommand,
-    // ADR-0044: the checkbox gesture's other half. The plugins.txt watcher would fire for the same
-    // write; asking explicitly keeps the gesture's path off a watcher event, and the sync folds
-    // the two into one PUT.
-    pluginListProvider.onDidChangeParticipation(() => session.loadOrderSync?.request()),
     session.pluginsNameFilter,
   ] };
 }
@@ -710,11 +703,12 @@ function registerCompileAtRefCommand(
   });
 }
 
-// ADR-0044: the sync every loadout gesture feeds. 250 ms covers the bursts — both watchers
-// firing for one install, a drag reorder's write plus its watcher event, a checkbox toggle's
-// request plus the event it causes.
+// ADR-0044: the sync an Instance change and a client connect both feed. 250 ms covers a burst
+// of Instance recomputes landing close together. `resolveGameDirectory`/`buildSnapshot` read one
+// Instance value together (closed over below), never two generations of it.
 function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
-  const { session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
+  const { session, instanceRoot, instance, controller, outputChannel, heldPluginFiles, showCrashRepairOffers } = deps;
+  let snapshot: ReturnType<typeof loadOrderSnapshotOf>;
   return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
     isReceiving: () => session.backendManager?.isHealthy === true,
     debounceMs: 250,
@@ -725,11 +719,11 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     notifyNoGameDirectory: () => void vscode.window.showErrorMessage(
       'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
     ),
-    // gameDirResolver's `null` and the sequencer's `undefined` are the same fact, normalized at
-    // the one seam between them rather than teaching the sequencer a second falsy spelling.
-    resolveGameDirectory: () => gameDirResolver.resolve().then((gd) => gd ?? undefined),
-    buildSnapshot: (dataFolder) => buildLoadOrderSnapshot(modlistSource, instanceRoot, dataFolder, (entries, root) =>
-      buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg))),
+    resolveGameDirectory: () => {
+      snapshot = loadOrderSnapshotOf(instance.value);
+      return Promise.resolve(snapshot ? { dataFolder: snapshot.dataFolder } : undefined);
+    },
+    buildSnapshot: () => Promise.resolve(snapshot?.plugins ?? []),
     makeProgressHandler: () => makeTreeProgressHandler(session),
     putLoadOrder: (plugins, dataFolder, signal, onProgress) =>
       controller.putLoadOrder(plugins, dataFolder, instanceRoot, undefined, { onProgress, signal }),
@@ -737,25 +731,6 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, heldPluginFiles, failures, outputChannel, totalPlugins),
     presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
-}
-
-
-// ADR-0044: reactive watchers, never a timer. Three because one misses gestures: `modlist.txt`
-// catches install, uninstall and reprioritise; `mods/**` a folder appearing without one;
-// `plugins.txt` the Plugin axis, whoever wrote it. `debounceMs: 0` — the sync already debounces.
-function wireLoadOrderWatchers(
-  sync: LoadOrderSync, instanceRoot: string, pluginListProvider: PluginListProvider,
-): vscode.Disposable[] {
-  const events = wirePluginListInvalidation(
-    { onModsChange: () => sync.request(), onModlistChange: () => sync.request(), onPluginsChange: () => sync.request() },
-    pluginListProvider,
-  );
-  return [
-    sync,
-    createModlistWatcher(instanceRoot, events.onModlistChange, 0),
-    createModsWatcher(instanceRoot, events.onModsChange, 0),
-    createPluginsTxtWatcher(instanceRoot, events.onPluginsChange, 0),
-  ];
 }
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
@@ -871,7 +846,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
     // and enterEditing below need the session slot filled first.
     session.loadOrderSync = makeLoadOrderSync({
-      session, instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
+      session, instanceRoot, instance, controller, outputChannel, heldPluginFiles, showCrashRepairOffers,
     });
     // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
     // Plugin load order sync through the plugins.txt watcher.
@@ -908,7 +883,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
             `arrangement; Modbench does not run the installer's own install steps.`,
         );
     };
-    const enterEditing = makeEnterEditing(session, outputChannel, revealLog);
+    const enterEditing = makeEnterEditing(session, instance, outputChannel, revealLog);
     wireEnterEditingOnRestart(session, enterEditing, outputChannel);
     context.subscriptions.push(
       modListView,
@@ -916,7 +891,7 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
       ...registerModListCoreCommands(
         instanceRoot, modListProvider, modlistSource, outputChannel, updateProfileDescription,
-        () => session.loadoutHeaderProvider?.refresh(), () => session.loadOrderSync?.request(),
+        () => session.loadoutHeaderProvider?.refresh(),
       ),
       ...registerDeployCommands(
         instanceRoot, modlistSource, outputChannel, gameDirResolver, () => session.loadoutHeaderProvider?.refresh(),
@@ -1090,7 +1065,8 @@ function makeTreeProgressHandler(
 interface ReconcileDeps {
   session: ExtensionSession;
   instanceRoot: string;
-  modlistSource: Mo2ModlistSource;
+  /** ADR-0044/ADR-0047: the sync reads its snapshot from this, never from a walk of its own. */
+  instance: Instance;
   controller: EditingController;
   outputChannel: vscode.LogOutputChannel;
   /** The plugin files the backend's load order names — read once a reconcile lands, to
@@ -1098,18 +1074,18 @@ interface ReconcileDeps {
   heldPluginFiles: () => Promise<HeldPluginFiles>;
   /** Run once a reconcile completes, for whatever crash-repair offers it reported. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
-  /** Shared with the views — memoised and invalidated only when modbench.mods.gameDirectory
-   *  changes, so a snapshot always agrees with what they show. */
-  gameDirResolver: GameDirectoryResolver;
 }
 
 // ADR-0035: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(
-  session: ExtensionSession, outputChannel: vscode.LogOutputChannel, revealLog: () => void,
+  session: ExtensionSession, instance: Instance, outputChannel: vscode.LogOutputChannel, revealLog: () => void,
 ): () => Promise<void> {
   const enter = async (): Promise<void> => {
     const { abandoned } = session.loadOrderSync!.arm();
+    // Overlaps with the backend starting below, same as PluginListProvider's own first-value
+    // wait: `flush()` must read a real Instance value, never the empty pre-first-read sentinel.
+    const instanceReady = instance.sequence > 0 ? Promise.resolve() : instance.refresh();
     revealLog(); // the launch can take a while; let the user watch the step log
     say(session, 'Starting backend…');
     outputChannel.info('[extension] entering editing: starting backend');
@@ -1122,6 +1098,7 @@ function makeEnterEditing(
       void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
       return;
     }
+    await instanceReady;
     // No game directory means nothing to build a snapshot from — don't strand the UI in an empty
     // editing view. `flush()` is used because this path wants the outcome, not just a promise.
     if ((await session.loadOrderSync!.flush()) === 'no-game-directory') exitToLoadout(session);

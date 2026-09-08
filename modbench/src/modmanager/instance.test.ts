@@ -12,8 +12,10 @@ import type { ConfigChangeEvent } from './gameDirectoryResolver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance, type InstanceValue } from './instance';
+import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance, type InstanceValue } from './instance';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
+import { createLoadOrderSync } from '../loadOrderReconcile';
+import type { LoadOrderPlugin } from './loadOrderSnapshot';
 
 const roots: string[] = [];
 const instances: Instance[] = [];
@@ -663,5 +665,93 @@ describe('Instance — per-mod status and the overwrite count', () => {
     await instance.refresh();
 
     expect(instance.value.overwriteFileCount).toBe(1);
+  });
+});
+
+// ADR-0044: the snapshot the sync PUTs, read straight from the value rather than a fresh walk.
+describe('loadOrderSnapshotOf', () => {
+  const GAME_DIRECTORY = { root: '/game', dataFolder: '/game/Data' };
+  const resolved: LoadOrderPlugin = { name: 'a.esp', path: '/mods/A/a.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
+  const unresolved = { name: 'b.esp', path: undefined, origin: 'Data', slot: 1, enabled: true, winning: true };
+
+  it('is undefined — no put at all — when the game directory has not resolved', () => {
+    expect(loadOrderSnapshotOf({ plugins: [resolved], gameDirectory: undefined })).toBeUndefined();
+  });
+
+  it('carries the game directory\'s dataFolder and every resolved plugin once it has', () => {
+    expect(loadOrderSnapshotOf({ plugins: [resolved], gameDirectory: GAME_DIRECTORY }))
+      .toEqual({ dataFolder: '/game/Data', plugins: [resolved] });
+  });
+
+  // Rival: casting the union blind and sending `path: undefined` to the backend.
+  it('omits a line-only row rather than sending it with path: undefined', () => {
+    const snapshot = loadOrderSnapshotOf({ plugins: [resolved, unresolved], gameDirectory: GAME_DIRECTORY });
+    expect(snapshot?.plugins).toEqual([resolved]);
+  });
+});
+
+// ADR-0044: the one path from a landed recompute to a PUT — no gesture, command or view calls
+// `request()` itself (asserted by a scan elsewhere); this is the sole wiring that does.
+describe('wireLoadOrderSyncToInstance', () => {
+  function fakeInstance(): Pick<Instance, 'subscribe'> & { land: () => void } {
+    const subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
+    return {
+      subscribe: (fn) => { subscribers.push(fn); return { dispose: () => {} }; },
+      land: () => { for (const fn of subscribers) fn({} as InstanceValue, 0); },
+    };
+  }
+
+  it('never calls request() before the Instance lands anything', () => {
+    const instance = fakeInstance();
+    const sync = { request: vi.fn() };
+    wireLoadOrderSyncToInstance(instance, sync);
+
+    expect(sync.request).not.toHaveBeenCalled();
+  });
+
+  it('calls request() once for each landed value', () => {
+    const instance = fakeInstance();
+    const sync = { request: vi.fn() };
+    wireLoadOrderSyncToInstance(instance, sync);
+
+    instance.land();
+    instance.land();
+
+    expect(sync.request).toHaveBeenCalledTimes(2);
+  });
+
+  // The real sync's own debounce is what turns a burst of landed values into a bounded number
+  // of PUTs — this proves the wiring feeds that debounce rather than bypassing it.
+  it('a burst of landed values coalesces to one PUT via the sync\'s own debounce', async () => {
+    vi.useFakeTimers();
+    try {
+      const instance = fakeInstance();
+      const putLoadOrder = vi.fn().mockResolvedValue({ outcome: 'reconciled', failures: [], crashRepairOffers: [] });
+      const sync = createLoadOrderSync({
+        isReceiving: () => true,
+        debounceMs: 100,
+        log: vi.fn(),
+        withProgress: (work: () => Promise<void>) => work(),
+        say: vi.fn(),
+        logInfo: vi.fn(),
+        notifyNoGameDirectory: vi.fn(),
+        resolveGameDirectory: vi.fn().mockResolvedValue({ dataFolder: '/data' }),
+        buildSnapshot: vi.fn().mockResolvedValue([]),
+        makeProgressHandler: () => ({ onProgress: vi.fn(), lastTotalPlugins: () => 0 }),
+        putLoadOrder,
+        syncFilterState: vi.fn().mockResolvedValue(undefined),
+        applyReconciled: vi.fn().mockResolvedValue(undefined),
+        presentCrashRepairOffers: vi.fn().mockResolvedValue(undefined),
+      });
+      wireLoadOrderSyncToInstance(instance, sync);
+
+      instance.land(); instance.land(); instance.land(); // a burst of Instance recomputes
+
+      expect(putLoadOrder).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(putLoadOrder).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
