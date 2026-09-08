@@ -49,7 +49,7 @@ export function resolvePluginPaths(
 ): Map<string, string> {
   const winnerByName = rootLevelWinners(index);
   const entries = names
-    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? (dataFolder ? join(dataFolder, name) : undefined)])
+    .map((name): [string, string | undefined] => [name, winnerByName.get(name.toLowerCase()) ?? (dataFolder !== undefined ? join(dataFolder, name) : undefined)])
     .filter((entry): entry is [string, string] => entry[1] !== undefined);
   return new Map(entries);
 }
