@@ -9,8 +9,7 @@ public sealed class CompilePluginHandler
 {
     private readonly PluginCompileService _compileService;
 
-    // Internal because the shared module is, which is why this assembly registers its own handlers
-    // (MEditService.Core.Composition) rather than the host naming a type it cannot see.
+    // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal CompilePluginHandler(PluginCompileService compileService) => _compileService = compileService;
 
     public CompileResult Compile(PluginKey plugin, CompileSource source) => _compileService.Compile(plugin, source);

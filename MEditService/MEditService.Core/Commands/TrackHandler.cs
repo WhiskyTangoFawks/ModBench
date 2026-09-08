@@ -11,11 +11,11 @@ public sealed class TrackHandler
 {
     private readonly TrackService _trackService;
 
-    // Internal because the shared module is, which is why this assembly registers its own handlers
-    // (MEditService.Core.Composition) rather than the host naming a type it cannot see.
+    // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal TrackHandler(TrackService trackService) => _trackService = trackService;
 
     public Task<TrackResult> TrackAsync(
-        LoadOrder loadOrder, IReadOnlyCollection<PluginKey> heldCopies, string origin, SourcePreset preset) =>
-        _trackService.TrackAsync(loadOrder, heldCopies, origin, preset);
+        LoadOrder loadOrder, IReadOnlyCollection<PluginKey> heldCopies, string origin, SourcePreset preset,
+        CancellationToken cancel = default) =>
+        _trackService.TrackAsync(loadOrder, heldCopies, origin, preset, cancel);
 }
