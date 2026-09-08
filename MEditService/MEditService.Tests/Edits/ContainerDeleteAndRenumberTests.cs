@@ -18,13 +18,13 @@ namespace MEditService.Tests.Edits;
 /// <summary>Delete and Renumber resolve containers through <see cref="SourceRepository.Locate"/>, as
 /// EditField does. A container moves or removes its directory whole; an embedded child is spliced
 /// inside its owner's document, no file move.</summary>
-public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
+public sealed class ContainerDeleteAndRenumberTests : IDisposable
 {
     private readonly ContainerModFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() => _fixture.Edits;
+    private RenumberRecordHandler RenumberHandler() => _fixture.RenumberHandler;
     private DeleteRecordHandler DeleteHandler() => _fixture.DeleteHandler;
 
     // ---- a container's own record ----
@@ -126,7 +126,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var oldDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.CellEditorId))!;
         var parent = Path.GetDirectoryName(oldDirectory)!;
 
-        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
+        var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
@@ -147,7 +147,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     {
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
 
-        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
+        var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
 
         Assert.True(result.Applied, result.Message);
         // Same file — an embedded record has no leaf of its own to move.
@@ -193,7 +193,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
         Assert.Contains(referenced.ToString(), File.ReadAllText(file), StringComparison.Ordinal);
 
-        var result = referencer.Edits.RenumberRecord(referencer.Plugin, referenced.ToString());
+        var result = referencer.RenumberHandler.RenumberRecord(referencer.Plugin, referenced.ToString());
 
         Assert.True(result.Applied, result.Message);
         var text = File.ReadAllText(file);

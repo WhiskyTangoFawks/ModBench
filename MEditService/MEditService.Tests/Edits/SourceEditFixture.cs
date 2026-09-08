@@ -32,7 +32,7 @@ public sealed class SourceEditFixture : IDisposable
     public PluginKey Plugin { get; }
     public string ActualPluginName { get; }
     public LoadOrder LoadOrder { get; }
-    public RecordEditService Edits { get; }
+    public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
@@ -83,7 +83,7 @@ public sealed class SourceEditFixture : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
+        RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);

@@ -16,7 +16,7 @@ public sealed class MalformedFormKeyEndpointTests
 {
     private const string MalformedFormKey = "not-a-formkey";
 
-    private static RecordEditService ServiceFor(IndexedModFixture mod) => TestEditService.Over(mod.Index);
+    private static RenumberRecordHandler RenumberHandlerFor(IndexedModFixture mod) => TestEditService.RenumberHandler(mod.Index);
 
     private static CreateRecordHandler CreateHandlerFor(IndexedModFixture mod) => TestEditService.CreateHandler(mod.Index);
 
@@ -41,7 +41,7 @@ public sealed class MalformedFormKeyEndpointTests
         using var mod = IndexedModFixture.Tracked();
         var req = new RecordRenumberRequest(mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
-        var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, ServiceFor(mod), mod.Index.WriteGate, NullLogger.Instance);
+        var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, RenumberHandlerFor(mod), mod.Index.WriteGate, NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

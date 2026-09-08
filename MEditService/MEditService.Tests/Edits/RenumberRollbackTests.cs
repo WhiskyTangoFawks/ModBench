@@ -42,7 +42,7 @@ public sealed class RenumberRollbackTests
             var statusBefore = fixture.GitStatuses();
 
             var thrown = Assert.Throws<IOException>(() =>
-                fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
+                fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
 
             Assert.Equal(before, fixture.Snapshots());
             Assert.Equal(statusBefore, fixture.GitStatuses());
@@ -61,7 +61,7 @@ public sealed class RenumberRollbackTests
         var before = fixture.Snapshots();
 
         var thrown = Assert.Throws<IOException>(() =>
-            fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString()));
+            fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString()));
 
         Assert.Contains("back as it was", thrown.Message, StringComparison.Ordinal);
         Assert.Equal(before, fixture.Snapshots());
@@ -81,7 +81,7 @@ public sealed class RenumberRollbackTests
             .Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
 
         Assert.Throws<IOException>(() =>
-            fixture.Edits.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
+            fixture.RenumberHandler.RenumberRecord(fixture.TargetPlugin, fixture.Race.ToString(), NewRaceFormKey));
 
         Assert.Equal(
             entriesBefore,
@@ -89,7 +89,7 @@ public sealed class RenumberRollbackTests
     }
 
     [Fact]
-    public void AContainerRenumberFailingAfterRelocatingItsSubtree_PutsTheSubtreeBack()
+    public void AContainerRenumberOntoAnOccupiedPath_RefusesWithoutTouchingTheTree()
     {
         using var fixture = new SourceContainerFixture();
         // A worldspace is the one directory-per-record container: its cells and their placed
@@ -100,7 +100,7 @@ public sealed class RenumberRollbackTests
         var statusBefore = fixture.GitStatus();
 
         Assert.Throws<IOException>(() =>
-            fixture.Edits.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
+            fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
         Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
         Assert.Equal(statusBefore, fixture.GitStatus());
@@ -112,8 +112,6 @@ public sealed class RenumberRollbackTests
         File.WriteAllText(Path.Combine(directory, "occupied.txt"), "something else is here");
     }
 
-    // Where the worldspace's own directory would land: a rename onto an occupied path fails, and
-    // the subtree under it has already been moved by then.
     private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {
         var worldspaceDirectory = Path.GetDirectoryName(

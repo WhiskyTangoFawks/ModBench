@@ -29,7 +29,6 @@ public sealed class IndexedContainerFixture : IDisposable
     public string ModFolder => _source.ModFolder;
     public string GameDirectory => _source.GameDirectory;
     public PluginKey Plugin => _source.Plugin;
-    public RecordEditService Edits => _source.Edits;
     public string SourceFileContaining(string editorId) => _source.SourceFileContaining(editorId);
     public IReadOnlyList<string> GitStatus() => _source.GitStatus();
 

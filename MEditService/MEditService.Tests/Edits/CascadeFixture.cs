@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -25,7 +26,7 @@ public sealed class CascadeFixture : IDisposable
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
 
     public LoadOrder LoadOrder { get; }
-    public RecordEditService Edits { get; }
+    public RenumberRecordHandler RenumberHandler { get; }
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public FormKey Target { get; private set; }
     public FormKey Referencer { get; private set; }
@@ -49,7 +50,7 @@ public sealed class CascadeFixture : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
+        RenumberHandler = TestEditService.RenumberHandler(holder);
     }
 
     public static CascadeFixture WithStructListReferencer() => new((mod, self) =>

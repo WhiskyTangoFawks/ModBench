@@ -257,7 +257,6 @@ public sealed class ConditionEditTests : IDisposable
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrder LoadOrder { get; }
-        public RecordEditService Edits { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Cobj { get; }
         public FormKey Perk { get; }
@@ -331,7 +330,6 @@ public sealed class ConditionEditTests : IDisposable
 
             var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
-            Edits = TestEditService.Over(holder);
             EditHandler = TestEditService.EditHandler(holder);
         }
 

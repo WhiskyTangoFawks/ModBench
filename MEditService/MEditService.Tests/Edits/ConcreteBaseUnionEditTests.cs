@@ -112,7 +112,6 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrder LoadOrder { get; }
-        public RecordEditService Edits { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Npc { get; }
 
@@ -145,7 +144,6 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
 
             var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
-            Edits = TestEditService.Over(holder);
             EditHandler = TestEditService.EditHandler(holder);
         }
 

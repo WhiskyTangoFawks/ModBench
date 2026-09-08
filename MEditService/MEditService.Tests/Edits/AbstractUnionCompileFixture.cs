@@ -25,7 +25,6 @@ public sealed class AbstractUnionCompileFixture : IDisposable
     public string ModFolder => _modFolder;
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrder LoadOrder { get; }
-    public RecordEditService Edits { get; }
     public EditRecordHandler EditHandler { get; }
 
     // ── Supporting cast — FormLink targets only, never edited directly ─────────
@@ -146,7 +145,6 @@ public sealed class AbstractUnionCompileFixture : IDisposable
 
         var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
-        Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
     }
 

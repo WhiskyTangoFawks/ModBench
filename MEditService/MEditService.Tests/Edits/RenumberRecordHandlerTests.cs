@@ -11,7 +11,7 @@ namespace MEditService.Tests.Edits;
 /// <summary>What a renumber does to the working trees: the record's own file moves, a tracked
 /// referencer's document is rewritten, an untracked one refuses. What the Index says afterwards
 /// belongs to the Index suite.</summary>
-public sealed class RecordEditServiceRenumberRecordTests
+public sealed class RenumberRecordHandlerTests
 {
     [Fact]
     public void RenumberRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
@@ -19,7 +19,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, headerFormKey);
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, headerFormKey);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
@@ -32,7 +32,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.Document(mod.Npc.ToString()));
@@ -49,7 +49,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, oldFormKey);
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.Document(oldFormKey));
@@ -63,7 +63,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var mod = SourceEditFixture.Tracked();
         const string requested = "900000:Fixture.esp";
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString(), requested);
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString(), requested);
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(requested, result.NewFormKey);
@@ -77,7 +77,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = SourceEditFixture.TrackedLight();
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
@@ -88,7 +88,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString(), "900000:SomeOtherPlugin.esp");
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString(), "900000:SomeOtherPlugin.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
@@ -103,7 +103,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
@@ -116,7 +116,7 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // Npc, native to Base.esm, overridden (unedited copy) in Winner.esp — renumbering it from
         // Winner.esp's side is exactly the override case this gesture refuses.
-        var result = two.Edits.RenumberRecord(two.ReferencerPlugin, two.Npc.ToString());
+        var result = two.RenumberHandler.RenumberRecord(two.ReferencerPlugin, two.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
@@ -128,7 +128,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
 
-        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
         var referencer = two.Document(two.ReferencerPlugin, two.ReferencerNpc)!;
@@ -143,7 +143,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         var oldRaceSourceFile = two.SourceFileFor(
             two.TargetPlugin, two.TargetRace, "race", RenumberTwoModFixture.TargetRaceEditorId);
 
-        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.UntrackedReferencer, result.Refusal);
@@ -162,7 +162,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var two = RenumberTwoModFixture.Create(trackReferencer: false);
         File.Delete(Path.Combine(two.ReferencerModFolder, RenumberTwoModFixture.ReferencerPluginName));
 
-        var result = two.Edits.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey!));
@@ -173,7 +173,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = SourceEditFixture.Untracked();
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -186,7 +186,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var mod = SourceEditFixture.Tracked();
         ExternalChangeDeferral.Set(mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
 
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -198,7 +198,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var mod = SourceEditFixture.Tracked();
 
         var suggested = mod.PeekHandler.PeekNextFreeFormKey(mod.Plugin);
-        var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(suggested.Applied, suggested.Message);
         Assert.Equal(suggested.NewFormKey, result.NewFormKey);
