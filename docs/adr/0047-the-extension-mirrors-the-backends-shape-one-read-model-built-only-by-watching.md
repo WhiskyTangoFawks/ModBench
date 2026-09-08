@@ -40,18 +40,23 @@ either side's local optimum.
    two facts from two generations. Its interface is that value, `subscribe`, `refresh` and a
    sequence; a subscriber is handed the value and the sequence it landed at.
 
-3. **Built only by watching.** The Instance owns every MO2-side watcher. A watcher event, activation
-   and `refresh` all run the same whole recompute; `refresh` exists because a watcher event the
-   platform never delivered has no other correction. The recompute is debounced once for the model,
-   not once per watcher, so a burst spanning several files is one recompute.
+3. **Built only by watching.** The Instance owns the MO2-side watchers — every one of them once the
+   views move onto it, and its own beside theirs until then (see *Consequences*). A watcher event,
+   activation and `refresh` all run the same whole recompute; `refresh` exists because a watcher
+   event the platform never delivered has no other correction. The recompute is debounced once for
+   the Instance, not once per watcher, so a burst spanning several files is one recompute.
 
 4. **Recompute is whole, not incremental.** A full walk of a 764-mod, 15,000-file instance measures
    about 0.1 s, which is what makes whole recompute affordable. Incremental update is refused while
    that holds: it would reintroduce per-key invalidation and with it the two-generations bug.
 
-5. **Watchers are not trusted alone, and a bad read is not a new value.** A read that throws —
-   MO2 half-way through rewriting a file — logs and leaves the last value and the last sequence in
-   place, so a torn file never empties the trees. The next event or `refresh` corrects it.
+5. **Watchers are not trusted alone, and a bad read is not a new value.** A read that throws — MO2
+   half-way through rewriting a file — logs and leaves the last value and the last sequence in
+   place, so a torn file never empties the trees. The next event or `refresh` corrects it. A torn
+   read that does *not* throw needs its own answer, because `modlist.txt` truncated mid-write parses
+   to no entries rather than failing: an empty mod list is re-read after a settle and published only
+   if the re-read agrees, so a torn write never empties the trees while a real mass delete still
+   lands. A *partial* parse is indistinguishable from a real removal and is not covered.
 
 6. **Commands write and forget.** A write verb is a surgical edit of one MO2 file and returns
    nothing about state (ADR-0021's write verbs, guarded by the corpus tests). It does not push the

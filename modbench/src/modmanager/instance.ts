@@ -10,9 +10,9 @@ import { createModlistWatcher } from './modlistWatcher';
 import { createOverwriteWatcher } from './overwriteWatcher';
 import { createPluginsTxtWatcher } from './pluginsTxtWatcher';
 
-// One wait for the whole model: an extraction or a purge bursts across several watchers at
-// once, and a whole walk of a 764-mod instance measures ~0.1s.
-const DEBOUNCE_MS = 200;
+// How long an MO2 write takes to settle: the wait that coalesces a burst into one recompute, and
+// the wait before an empty modlist read is believed.
+const SETTLE_MS = 200;
 
 /** The winner lookup minus its one mutator: a value is replaced whole, never patched. */
 export type FileWinners = Omit<FileConflictIndex['files'], 'set'>;
@@ -41,6 +41,8 @@ export interface InstanceOptions {
   log: (msg: string) => void;
 }
 
+const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
 const EMPTY: InstanceValue = { mods: [], files: new FileConflictLookup(), filesByMod: new Map(), plugins: [] };
 
 export class Instance implements vscode.Disposable {
@@ -60,7 +62,7 @@ export class Instance implements vscode.Disposable {
   constructor(private readonly options: InstanceOptions) {
     const schedule = () => this.schedule();
     // Each watcher's own coalescing is off: a burst spanning several of them is one recompute,
-    // so the single wait belongs to the model rather than stacking one per signal.
+    // so the single wait belongs to the Instance rather than stacking one per signal.
     this.watchers = [
       createModsWatcher(options.instanceRoot, schedule, 0),
       createModlistWatcher(options.instanceRoot, schedule, 0),
@@ -93,6 +95,7 @@ export class Instance implements vscode.Disposable {
   /** The recompute activation runs, and the one that corrects the value after a watcher event
    *  the platform never delivered. Identical to the one an event runs. */
   refresh(): Promise<void> {
+    clearTimeout(this.timer); // a refresh mid-burst is the burst's recompute, not a second one
     return this.run();
   }
 
@@ -104,7 +107,7 @@ export class Instance implements vscode.Disposable {
 
   private schedule(): void {
     clearTimeout(this.timer);
-    this.timer = setTimeout(() => void this.run(), DEBOUNCE_MS);
+    this.timer = setTimeout(() => void this.run(), SETTLE_MS);
   }
 
   private run(): Promise<void> {
@@ -113,26 +116,46 @@ export class Instance implements vscode.Disposable {
     return task;
   }
 
-  // A half-written file from MO2 is a read that throws, so a failure logs and leaves the last
-  // value in place rather than emptying the trees.
+  // A read that throws logs and leaves the last value and the last sequence in place, so a file
+  // MO2 is half-way through writing never empties the trees.
   private async recompute(): Promise<void> {
     let next: InstanceValue;
     try {
       next = await this.read();
     } catch (err) {
-      this.options.log(
-        `[instance] recompute failed, keeping the value at sequence ${this.seq}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.options.log(`[instance] recompute failed, keeping the value at sequence ${this.seq}: ${message(err)}`);
       return;
     }
     this.current = next;
     this.seq++;
-    for (const subscriber of [...this.subscribers]) subscriber(next, this.seq);
+    for (const subscriber of [...this.subscribers]) {
+      try {
+        subscriber(next, this.seq);
+      } catch (err) {
+        // A throwing subscriber would otherwise reject the queue for good, and no later
+        // recompute would run — the dead chain tail Mo2ModlistSource's mutex documents.
+        this.options.log(`[instance] subscriber threw at sequence ${this.seq}: ${message(err)}`);
+      }
+    }
+  }
+
+  // A truncated modlist.txt parses to no entries rather than failing, and zero mods is legal, so
+  // an empty parse is re-read after a settle: a torn write has finished by then, a mass delete
+  // has not. A partial parse is indistinguishable from a real removal and is not covered.
+  private async readMods(): Promise<ModlistEntry[]> {
+    const entries = await this.options.source.readModlist();
+    if (entries.length > 0) return entries;
+    await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
+    const confirmed = await this.options.source.readModlist();
+    if (confirmed.length > 0) {
+      this.options.log(`[instance] modlist read as empty mid-write; the re-read found ${confirmed.length} entries`);
+    }
+    return confirmed;
   }
 
   private async read(): Promise<InstanceValue> {
     const { instanceRoot, source, dataFolder, log } = this.options;
-    const entries = await source.readModlist();
+    const entries = await this.readMods();
     const index = await buildFileConflictIndex(entries, instanceRoot, log);
     const plugins = await buildLoadOrderSnapshot(
       // The modlist is read once per recompute and handed on, so the snapshot cannot see a

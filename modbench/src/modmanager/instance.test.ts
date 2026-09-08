@@ -23,11 +23,19 @@ const DATA_FOLDER = '/game/Data';
 
 // `readModlist` counts recomputes: the Instance reads the modlist exactly once per recompute and
 // hands the entries on, so its call count is the number of recomputes that started.
-async function realInstance(): Promise<{ root: string; instance: Instance; readModlist: Mock; logs: string[] }> {
+// `afterModlistRead` is how a test lands a write inside the Instance's own read window, which is
+// the only deterministic way to reproduce a torn read of a real file.
+interface Hooks { afterModlistRead?: () => Promise<void> }
+
+async function realInstance(hooks: Hooks = {}): Promise<{ root: string; instance: Instance; readModlist: Mock; logs: string[] }> {
   const root = await cloneCorpusFixture();
   roots.push(root);
   const mo2 = new Mo2ModlistSource(root);
-  const readModlist = vi.fn(() => mo2.readModlist());
+  const readModlist = vi.fn(async () => {
+    const entries = await mo2.readModlist();
+    await hooks.afterModlistRead?.();
+    return entries;
+  });
   const logs: string[] = [];
   const instance = new Instance({
     instanceRoot: root,
@@ -153,6 +161,54 @@ describe('Instance — the value', () => {
   });
 });
 
+describe('Instance — the overwrite folder', () => {
+  it('resolves a listed plugin to the overwrite copy, sending the mod copy as losing', async () => {
+    const { root, instance } = await realInstance();
+    const overwriteCopy = join(root, 'overwrite', 'NonAsciiRetexture.esp');
+    await writeFile(overwriteCopy, 'overwrite-copy');
+
+    await instance.refresh();
+
+    const copies = instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp');
+    expect(copies).toEqual([
+      { name: 'NonAsciiRetexture.esp', path: overwriteCopy, origin: 'overwrite', slot: 0, enabled: true, winning: true },
+      { name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: false },
+    ]);
+  });
+
+  it('sends an unlisted plugin sitting in overwrite/ with no slot, winning-most', async () => {
+    const { root, instance } = await realInstance();
+    await writeFile(join(root, 'overwrite', 'New.esp'), '');
+    await writeFile(join(root, 'overwrite', 'notes.txt'), '');
+
+    await instance.refresh();
+
+    expect(instance.value.plugins.filter((p) => p.origin === 'overwrite')).toEqual([
+      { name: 'New.esp', path: join(root, 'overwrite', 'New.esp'), origin: 'overwrite', slot: null, enabled: false, winning: true },
+    ]);
+  });
+
+  it('falls through to mod resolution when there is no overwrite folder at all', async () => {
+    const { root, instance } = await realInstance();
+    await rm(join(root, 'overwrite'), { recursive: true, force: true });
+
+    await instance.refresh();
+
+    expect(instance.value.plugins.find((p) => p.name === 'NonAsciiRetexture.esp'))
+      .toEqual({ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: true });
+  });
+
+  it('never treats a directory under overwrite/ sharing a plugin\'s name as that plugin\'s file', async () => {
+    const { root, instance } = await realInstance();
+    await mkdir(join(root, 'overwrite', 'NonAsciiRetexture.esp'), { recursive: true });
+
+    await instance.refresh();
+
+    expect(instance.value.plugins.filter((p) => p.name === 'NonAsciiRetexture.esp'))
+      .toEqual([{ name: 'NonAsciiRetexture.esp', path: join(root, 'mods', NONO, 'NonAsciiRetexture.esp'), origin: NONO, slot: 0, enabled: true, winning: true }]);
+  });
+});
+
 describe('Instance — built by watching', () => {
   it('owns a watcher for every MO2 file the value is read from', async () => {
     await realInstance();
@@ -204,6 +260,25 @@ describe('Instance — built by watching', () => {
     expect(instance.sequence).toBe(before + 2);
   });
 
+  it('a refresh mid-burst is the burst\'s recompute, not a second one', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    vi.useFakeTimers();
+    try {
+      watcherFor('mods/**').fireChange(join(root, 'mods', 'Tracked Patch Mod', 'textures', 'a.dds'));
+      await vi.advanceTimersByTimeAsync(1); // the watcher's own hop, which arms the Instance's wait
+      await instance.refresh();
+      await vi.advanceTimersByTimeAsync(1000); // a wait left armed would fire here
+    } finally {
+      vi.useRealTimers();
+    }
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(before + 2);
+  });
+
   it('never recomputes for a write inside a tracked mod\'s git internals', async () => {
     const { root, instance } = await realInstance();
     await instance.refresh();
@@ -236,6 +311,53 @@ describe('Instance — a value that survives a bad read', () => {
     expect(instance.sequence).toBe(before);
     expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
     expect(logs[0]).toContain('ModOrganizer.ini');
+  });
+
+  it('keeps the mods when modlist.txt reads as empty mid-write, and logs', async () => {
+    const hooks: Hooks = {};
+    const { root, instance, logs } = await realInstance(hooks);
+    await instance.refresh();
+    const before = instance.value.mods;
+    const path = join(root, DEFAULT_MODLIST);
+    const complete = await readFile(path, 'utf8');
+
+    await writeFile(path, ''); // MO2 has truncated the file and not yet written it
+    hooks.afterModlistRead = async () => {
+      hooks.afterModlistRead = undefined;
+      await writeFile(path, complete); // the write completes before the Instance re-reads
+    };
+    await instance.refresh();
+
+    expect(instance.value.mods).toEqual(before);
+    expect(logs.filter((m) => m.includes('mid-write'))).toHaveLength(1);
+  });
+
+  it('publishes an empty mod list once the re-read agrees, since zero mods is legal', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    await writeFile(join(root, DEFAULT_MODLIST), ''); // every mod really is gone
+    await instance.refresh();
+
+    expect(instance.value.mods).toEqual([]);
+    expect(instance.value.files.size).toBe(0);
+    expect(instance.sequence).toBe(before + 1);
+  });
+
+  it('keeps recomputing after a subscriber throws', async () => {
+    const { instance, logs } = await realInstance();
+    const seen: number[] = [];
+    instance.subscribe(() => {
+      throw new Error('subscriber exploded');
+    });
+    instance.subscribe((_value, sequence) => seen.push(sequence));
+
+    await instance.refresh();
+    await instance.refresh();
+
+    expect(seen).toEqual([1, 2]);
+    expect(logs.filter((m) => m.includes('subscriber threw'))).toHaveLength(2);
   });
 
   it('corrects the value on refresh after a watcher event that never arrived', async () => {
