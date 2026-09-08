@@ -76,6 +76,7 @@ internal sealed class IndexStore : IDisposable
     {
         lock (_rebuildGate)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             while (_rebuilding) Monitor.Wait(_rebuildGate);
             var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
             connection.Open();
@@ -91,8 +92,13 @@ internal sealed class IndexStore : IDisposable
     private readonly object _rebuildGate = new();
     private int _readsInFlight;
     private bool _rebuilding;
+    private bool _disposed;
 
-    public void Dispose() => Connection.Dispose();
+    public void Dispose()
+    {
+        lock (_rebuildGate) _disposed = true;
+        Connection.Dispose();
+    }
 
     private DuckDBConnection OpenFile()
     {
