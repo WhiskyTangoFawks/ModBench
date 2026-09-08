@@ -19,6 +19,8 @@ public sealed class CommandHandlerConventionTests
         (typeof(DeleteRecordHandler), "Applied"),
         (typeof(CreateRecordHandler), "Applied"),
         (typeof(PeekNextFreeFormKeyHandler), "Applied"),
+        (typeof(TrackHandler), "Applied"),
+        (typeof(CompilePluginHandler), "Succeeded"),
         (typeof(CopyRecordAsOverrideHandler), "Applied"),
         (typeof(CopyRecordAsNewRecordHandler), "Applied"),
     ];
