@@ -12,9 +12,9 @@ namespace MEditService.Tests.Api;
 public sealed class ExternalChangeMirrorTests : IDisposable
 {
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly TrackedModFixture _mod;
+    private readonly IndexedModFixture _mod;
 
-    public ExternalChangeMirrorTests() => _mod = TrackedModFixture.Tracked(_notifications);
+    public ExternalChangeMirrorTests() => _mod = IndexedModFixture.Tracked(_notifications);
 
     public void Dispose() => _mod.Dispose();
 
@@ -26,7 +26,7 @@ public sealed class ExternalChangeMirrorTests : IDisposable
             _mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"EditedWhileRunning\"", StringComparison.Ordinal));
 
         var mirror = new ExternalChangeMirror(_mod.Mirror.Projector, _notifications, NullLogger.Instance);
-        mirror.ApplyOverflow(_mod.ModFolder, TrackedModFixture.PluginName);
+        mirror.ApplyOverflow(_mod.ModFolder, IndexedModFixture.PluginName);
 
         Assert.Equal(
             "EditedWhileRunning",
@@ -41,7 +41,7 @@ public sealed class ExternalChangeMirrorTests : IDisposable
     {
         var mirror = new ExternalChangeMirror(_mod.Mirror.Projector, _notifications, NullLogger.Instance);
 
-        mirror.ApplyOverflow(_mod.ModFolder, TrackedModFixture.PluginName);
+        mirror.ApplyOverflow(_mod.ModFolder, IndexedModFixture.PluginName);
 
         Assert.Empty(_notifications.Notifications);
     }

@@ -8,22 +8,21 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>An unanswered external-change question refuses every gesture on the single write path
-/// (ADR-0041), checked once ahead of both the source write and the index write.</summary>
+/// (ADR-0041), checked once ahead of anything the write would touch.</summary>
 public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService Service() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
     public void EditField_Refuses_WhileAnExternalChangeQuestionIsUnansweredForThePlugin()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName,
+        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName,
             "Fixture.esp (in FixtureMod) changed outside Modbench.");
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
@@ -37,7 +36,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     public void EditField_Refuses_BeforeTouchingTheSourceFile()
     {
         var before = File.ReadAllText(_mod.NpcSourceFile);
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
@@ -46,24 +45,21 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     }
 
     [Fact]
-    public void EditField_Refuses_BeforeTheIndexEverLearnsOfTheAttemptedChange()
+    public void EditField_Refuses_BeforeTheDocumentTheRepositoryServesChanges()
     {
-        var before = _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
-            .Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
+        var before = _mod.Document(_mod.Npc.ToString())!.Body;
+        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var after = _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
-            .Fields.Single(f => f.Metadata.Name == "HeightMax").Value;
-        Assert.Equal(before, after);
+        Assert.Equal(before, _mod.Document(_mod.Npc.ToString())!.Body);
     }
 
     [Fact]
     public void EditField_SucceedsAgain_OnceTheDeferralIsCleared()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
-        ExternalChangeDeferral.Clear(_mod.ModFolder, TrackedModFixture.PluginName);
+        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Clear(_mod.ModFolder, SourceEditFixture.PluginName);
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 

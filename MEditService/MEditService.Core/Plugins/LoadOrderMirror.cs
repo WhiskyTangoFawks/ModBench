@@ -79,7 +79,5 @@ public sealed class LoadOrderMirror : ILoadOrderMirror, IDisposable
 
     public void ClearFilter() => _projector.ClearFilter();
 
-    public void ReapplyFilter() => _projector.ReapplyFilter();
-
     public void Dispose() => _projector.Dispose();
 }

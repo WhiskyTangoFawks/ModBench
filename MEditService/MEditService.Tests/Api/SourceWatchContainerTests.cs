@@ -18,17 +18,17 @@ namespace MEditService.Tests.Api;
 public sealed class SourceWatchContainerTests : IDisposable
 {
     private readonly InMemoryNotificationPublisher _notifications = new();
-    private readonly ContainerModFixture _fixture;
+    private readonly IndexedContainerFixture _fixture;
     private readonly SourceChangeWatcher _watcher;
 
     public SourceWatchContainerTests()
     {
-        _fixture = new ContainerModFixture(_notifications);
+        _fixture = new IndexedContainerFixture(_notifications);
         _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
         var sourceMirror = new SourceMirror(_fixture.Mirror.Projector, _fixture.Mirror.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceMirror.Apply;
         _fixture.Mirror.LoadOrderChanged = sourceMirror.RefreshWatches;
-        // ContainerModFixture's own constructor already reconciled, before any watch could be
+        // The fixture's own constructor already reconciled, before any watch could be
         // registered from that reconcile's own signal.
         sourceMirror.RefreshWatches();
     }

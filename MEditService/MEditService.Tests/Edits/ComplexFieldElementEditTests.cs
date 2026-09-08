@@ -17,16 +17,15 @@ namespace MEditService.Tests.Edits;
 /// like a single element of one is refused rather than silently dropped.</summary>
 public sealed class ComplexFieldElementEditTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService Service() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+    private string NpcBody() => _mod.Document(_mod.Npc.ToString())!.Body;
 
     // ── per-element payloads are refused, not silently dropped ────────────────
 
@@ -61,15 +60,15 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_PerSubFieldPayload_IsRefusedAndWritesNothing()
     {
-        using var omod = new OmodFixture();
-        var before = omod.Body();
+        using var omod = OmodMod(out var armorMod);
+        var before = omod.Body(armorMod);
 
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties", Json("99"));
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties", Json("99"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Contains("Properties", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, omod.Body());
+        Assert.Equal(before, omod.Body(armorMod));
     }
 
     // ── the whole-value write the webview now sends does land ─────────────────
@@ -121,45 +120,45 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_MissingDiscriminator_IsRefusedAndWritesNothing()
     {
-        using var omod = new OmodFixture();
-        var before = omod.Body();
+        using var omod = OmodMod(out var armorMod);
+        var before = omod.Body(armorMod);
 
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
         Assert.Contains("Properties", result.Message, StringComparison.Ordinal);
         Assert.Contains("MutagenObjectType", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, omod.Body());
+        Assert.Equal(before, omod.Body(armorMod));
     }
 
     [Fact]
     public void OmodPropertiesArray_UnrecognizedDiscriminator_IsRefusedAndWritesNothing()
     {
-        using var omod = new OmodFixture();
-        var before = omod.Body();
+        using var omod = OmodMod(out var armorMod);
+        var before = omod.Body(armorMod);
 
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"MutagenObjectType":"NotARealLeaf","Property":"BodyPart","Step":1.0,"Value":5}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
         Assert.Contains("Properties", result.Message, StringComparison.Ordinal);
         Assert.Contains("MutagenObjectType", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, omod.Body());
+        Assert.Equal(before, omod.Body(armorMod));
     }
 
     [Fact]
     public void OmodPropertiesArray_WholeArrayWriteWithIntProperty_LandsWithConcreteTypeAndValuePreserved()
     {
-        using var omod = new OmodFixture();
+        using var omod = OmodMod(out var armorMod);
 
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":42,"Value2":7,"FunctionType":"Set"}]"""));
 
         Assert.True(result.Applied, result.Message);
-        var body = omod.Body();
+        var body = omod.Body(armorMod);
         Assert.Contains("ObjectModIntProperty", body, StringComparison.Ordinal);
         Assert.Contains("\"Value\": 42", body, StringComparison.Ordinal);
         Assert.Contains("\"Value2\": 7", body, StringComparison.Ordinal);
@@ -168,13 +167,13 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_WholeArrayWriteWithFloatProperty_RoundTripsAsFloatNotHardcodedInt()
     {
-        using var omod = new OmodFixture();
+        using var omod = OmodMod(out var armorMod);
 
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"Set"}]"""));
 
         Assert.True(result.Applied, result.Message);
-        var body = omod.Body();
+        var body = omod.Body(armorMod);
         Assert.Contains("ObjectModFloatProperty", body, StringComparison.Ordinal);
         Assert.DoesNotContain("ObjectModIntProperty", body, StringComparison.Ordinal);
         Assert.Contains("\"Value\": 1.5", body, StringComparison.Ordinal);
@@ -183,14 +182,14 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_ArrayAdd_AppendsOneElementOfTheFirstLeafTheSchemaLists()
     {
-        using var omod = new OmodFixture();
+        using var omod = OmodMod(out var armorMod);
 
-        var result = omod.Service().Edit(omod.Plugin, omod.ArmorMod.ToString(), AddAt(Member("Properties")));
+        var result = omod.Edits.Edit(omod.Plugin, armorMod.ToString(), AddAt(Member("Properties")));
 
         Assert.Equal(RecordEditRefusal.None, result.Refusal);
         Assert.True(result.Applied, result.Message);
 
-        var properties = JsonDocument.Parse(omod.Body()).RootElement.GetProperty("Properties");
+        var properties = JsonDocument.Parse(omod.Body(armorMod)).RootElement.GetProperty("Properties");
         Assert.Equal(2, properties.GetArrayLength());
         // The discriminator's own first value is the codec's spelling of the leaf class.
         Assert.Equal(
@@ -201,8 +200,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_WholeArrayWriteReordered_PreservesEachElementsOwnConcreteType()
     {
-        using var omod = new OmodFixture();
-        var seed = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties", Json("""
+        using var omod = OmodMod(out var armorMod);
+        var seed = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties", Json("""
             [
                 {"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"},
                 {"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"Set"}
@@ -211,7 +210,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.True(seed.Applied, seed.Message);
 
         // Move Up on the second element == the whole array resent with the same two elements swapped.
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties", Json("""
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties", Json("""
             [
                 {"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"Set"},
                 {"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}
@@ -219,7 +218,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
             """));
 
         Assert.True(result.Applied, result.Message);
-        var body = omod.Body();
+        var body = omod.Body(armorMod);
         var floatIdx = body.IndexOf("ObjectModFloatProperty", StringComparison.Ordinal);
         var intIdx = body.IndexOf("ObjectModIntProperty", StringComparison.Ordinal);
         Assert.True(floatIdx >= 0, body);
@@ -230,9 +229,9 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_WholeArrayWriteAddingANewElement_LandsAlongsideTheExisting()
     {
-        using var omod = new OmodFixture();
+        using var omod = OmodMod(out var armorMod);
 
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties", Json("""
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties", Json("""
             [
                 {"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"},
                 {"MutagenObjectType":"ObjectModBoolProperty<Armor+Property>","Property":"Value","Step":3.0,"Value":true,"FunctionType":"Set"}
@@ -240,7 +239,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
             """));
 
         Assert.True(result.Applied, result.Message);
-        var body = omod.Body();
+        var body = omod.Body(armorMod);
         Assert.Contains("ObjectModIntProperty", body, StringComparison.Ordinal);
         Assert.Contains("ObjectModBoolProperty", body, StringComparison.Ordinal);
     }
@@ -248,8 +247,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_RemoveShapedWholeArrayWrite_PreservesSurvivorsValue()
     {
-        using var omod = new OmodFixture();
-        var seed = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties", Json("""
+        using var omod = OmodMod(out var armorMod);
+        var seed = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties", Json("""
             [
                 {"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"},
                 {"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"Set"}
@@ -258,11 +257,11 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.True(seed.Applied, seed.Message);
 
         // Remove on the second element == the whole array resent holding only the survivor, verbatim.
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":5,"Value2":6,"FunctionType":"Set"}]"""));
 
         Assert.True(result.Applied, result.Message);
-        var body = omod.Body();
+        var body = omod.Body(armorMod);
         Assert.Contains("\"Value\": 5", body, StringComparison.Ordinal);
         Assert.Contains("\"Value2\": 6", body, StringComparison.Ordinal);
         Assert.DoesNotContain("ObjectModFloatProperty", body, StringComparison.Ordinal);
@@ -273,17 +272,17 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     [Fact]
     public void SwitchingAnOmodPropertyLeaf_DropsAMemberWhoseDomainTheIncomingLeafLacks()
     {
-        using var omod = new OmodFixture();
-        var seed = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties", Json("""
+        using var omod = OmodMod(out var armorMod);
+        var seed = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties", Json("""
             [{"MutagenObjectType":"ObjectModFloatProperty<Armor+Property>","Property":"Weight","Step":2.0,"Value":1.5,"Value2":2.5,"FunctionType":"MultAndAdd"}]
             """));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = omod.Service().Edit(omod.Plugin, omod.ArmorMod.ToString(),
+        var result = omod.Edits.Edit(omod.Plugin, armorMod.ToString(),
             SetAt(Json("\"ObjectModBoolProperty<Armor+Property>\""), Member("Properties"), At(0), Member("MutagenObjectType")));
 
         Assert.True(result.Applied, result.Message);
-        var element = JsonDocument.Parse(omod.Body()).RootElement.GetProperty("Properties")[0];
+        var element = JsonDocument.Parse(omod.Body(armorMod)).RootElement.GetProperty("Properties")[0];
         Assert.Equal("ObjectModBoolProperty<Armor+Property>", element.GetProperty("MutagenObjectType").GetString());
         Assert.False(element.TryGetProperty("FunctionType", out _), "MultAndAdd is not a bool function");
     }
@@ -304,59 +303,22 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.Equal(before, NpcBody());
     }
 
-    // An OMOD carries a struct-element array with an abstract element type, which TrackedModFixture's
-    // NPC shape has no equivalent of.
-    private sealed class OmodFixture : IDisposable
+    // An OMOD carries a struct-element array with an abstract element type, which the shared
+    // fixture's NPC shape has no equivalent of.
+    private static SourceModFixture OmodMod(out FormKey armorMod)
     {
-        private const string PluginName = "Omod503.esp";
-        private const string Origin = "Omod503Mod";
-
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-omod-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-omod-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
-
-        public PluginKey Plugin { get; } = new(PluginName, Origin);
-        public FormKey ArmorMod { get; }
-
-        public OmodFixture()
+        var formKey = FormKey.Null;
+        var fixture = SourceModFixture.Tracked("Omod503.esp", "Omod503Mod", mod =>
         {
-            var pluginPath = Path.Combine(_modFolder, PluginName);
-            var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
             var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod503"), Fallout4Release.Fallout4)
             {
                 EditorID = "ArmorMod503",
             };
             armor.Properties.Add(new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f });
             mod.ObjectModifications.Add(armor);
-            mod.WriteToBinary(pluginPath);
-            ArmorMod = armor.FormKey;
-
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
-                .GetAwaiter().GetResult();
-        }
-
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
-
-        public string Body() => _mirror.Projected().GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
-
-        public void Dispose()
-        {
-            _mirror.Dispose();
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
-        }
+            formKey = armor.FormKey;
+        });
+        armorMod = formKey;
+        return fixture;
     }
 }

@@ -2,15 +2,16 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Tests.Records;
 
 /// <summary>The gate is held by a helper thread for the whole measurement and the call under test is
 /// observed to block or finish; no sleep decides the outcome.</summary>
 public sealed class IndexWriteSerializationTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
@@ -86,7 +87,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
         {
             bool finished;
             (work, finished) = RunAndWait(
-                () => Mirror.CreatePlugin("GatedCreate.esp", _mod.ModFolder, TrackedModFixture.ModFolderOrigin),
+                () => Mirror.CreatePlugin("GatedCreate.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
                 BlockedWindow);
             Assert.False(finished, "CreatePlugin indexed a new plugin without taking the write gate");
         }

@@ -1,8 +1,10 @@
 using System.Drawing;
+using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -20,11 +22,11 @@ public sealed class ColorCompileFixture : IDisposable
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-649-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-649-game-").FullName;
-    private readonly LoadOrderMirror _mirror;
 
-    public LoadOrderMirror Mirror => _mirror;
     public string ModFolder => _modFolder;
     public PluginKey Plugin { get; } = new(PluginName, Origin);
+    public LoadOrder LoadOrder { get; }
+    public RecordEditService Edits { get; }
 
     // Neither 0 nor 255, so surviving a 3-leaf edit cannot pass by coincidence against a default.
     public const byte SeededLightAlpha = 137;
@@ -69,19 +71,20 @@ public sealed class ColorCompileFixture : IDisposable
 
         mod.WriteToBinary(pluginPath);
 
-        _mirror = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)_mirror).Reconcile(
-            _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-            GameRelease.Fallout4);
+        LoadOrder = LoadOrder.From(
+            _gameDirectory, _gameDirectory, GameRelease.Fallout4,
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+            .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
+
+        var holder = new LoadOrderHolder();
+        holder.Apply(LoadOrder);
+        Edits = TestEditService.Over(holder);
     }
 
     public void Dispose()
     {
-        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }

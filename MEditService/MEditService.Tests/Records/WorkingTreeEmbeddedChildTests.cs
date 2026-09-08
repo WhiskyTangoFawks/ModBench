@@ -17,7 +17,7 @@ namespace MEditService.Tests.Records;
 /// descendant's row follows from it.</summary>
 public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 {
-    private readonly ContainerModFixture _fixture = new();
+    private readonly IndexedContainerFixture _fixture = new();
 
     public void Dispose() => _fixture.Dispose();
 

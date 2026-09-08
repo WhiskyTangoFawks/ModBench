@@ -18,16 +18,15 @@ namespace MEditService.Tests.Edits;
 /// by shape.</summary>
 public sealed class ArrayOpEditTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService Service() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+    private string NpcBody() => _mod.Document(_mod.Npc.ToString())!.Body;
 
     private string SecondKeyword()
     {
@@ -153,15 +152,15 @@ public sealed class ArrayOpEditTests : IDisposable
     [Fact]
     public void ArrayAdd_StructElementArray_AppendsADefaultElement()
     {
-        using var fixture = new ContainerFixture();
-        var seed = fixture.Service().Set(fixture.Plugin, fixture.Container.ToString(), "Destructible",
+        using var fixture = ContainerMod(out var container);
+        var seed = fixture.Edits.Set(fixture.Plugin, container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 50}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
+        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
 
         Assert.True(result.Applied, result.Message);
-        var stages = fixture.ExtractStages();
+        var stages = Stages(fixture, container);
         // stages[1]'s HealthPercent is at its CLR default and Mutagen's serializer omits any field equal
         // to its default, so the new element's key is genuinely absent rather than present-and-zero.
         Assert.Equal(2, stages.GetArrayLength());
@@ -171,26 +170,26 @@ public sealed class ArrayOpEditTests : IDisposable
     [Fact]
     public void ArrayAdd_NestedArrayInAStruct_LandsAtTheArraysOwnPath()
     {
-        using var fixture = new ContainerFixture();
+        using var fixture = ContainerMod(out var container);
 
-        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
+        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), AddAt(Member("Destructible"), Member("Stages")));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(1, fixture.ExtractStages().GetArrayLength());
+        Assert.Equal(1, Stages(fixture, container).GetArrayLength());
     }
 
     [Fact]
     public void ArrayRemove_NestedArrayElement_RemovesAtTheRealPath()
     {
-        using var fixture = new ContainerFixture();
-        var seed = fixture.Service().Set(fixture.Plugin, fixture.Container.ToString(), "Destructible",
+        using var fixture = ContainerMod(out var container);
+        var seed = fixture.Edits.Set(fixture.Plugin, container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), RemoveAt(Member("Destructible"), Member("Stages"), At(0)));
+        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), RemoveAt(Member("Destructible"), Member("Stages"), At(0)));
 
         Assert.True(result.Applied, result.Message);
-        var stages = fixture.ExtractStages();
+        var stages = Stages(fixture, container);
         Assert.Equal(1, stages.GetArrayLength());
         Assert.Equal(20, stages[0].GetProperty("HealthPercent").GetByte());
     }
@@ -198,15 +197,15 @@ public sealed class ArrayOpEditTests : IDisposable
     [Fact]
     public void ArrayMoveDown_NestedArrayElement_MovesAtTheRealPath()
     {
-        using var fixture = new ContainerFixture();
-        var seed = fixture.Service().Set(fixture.Plugin, fixture.Container.ToString(), "Destructible",
+        using var fixture = ContainerMod(out var container);
+        var seed = fixture.Edits.Set(fixture.Plugin, container.ToString(), "Destructible",
             Json("""{"Stages": [{"HealthPercent": 10}, {"HealthPercent": 20}]}"""));
         Assert.True(seed.Applied, seed.Message);
 
-        var result = fixture.Service().Edit(fixture.Plugin, fixture.Container.ToString(), MoveTo(1, Member("Destructible"), Member("Stages"), At(0)));
+        var result = fixture.Edits.Edit(fixture.Plugin, container.ToString(), MoveTo(1, Member("Destructible"), Member("Stages"), At(0)));
 
         Assert.True(result.Applied, result.Message);
-        var stages = fixture.ExtractStages();
+        var stages = Stages(fixture, container);
         Assert.Equal(2, stages.GetArrayLength());
         Assert.Equal(20, stages[0].GetProperty("HealthPercent").GetByte());
         Assert.Equal(10, stages[1].GetProperty("HealthPercent").GetByte());
@@ -218,12 +217,13 @@ public sealed class ArrayOpEditTests : IDisposable
     [Fact]
     public void ArrayMoveDown_ArrayContainsElementWithUnsetReadOnlyNestedField_StillApplies()
     {
-        using var fixture = new QuestFixture(); // seeds [QuestLocationAlias, QuestReferenceAlias(Location: null)]
+        // Seeds [QuestLocationAlias, QuestReferenceAlias(Location: null)].
+        using var fixture = QuestMod(withLocation: false, out var quest);
 
-        var result = fixture.Service().Edit(fixture.Plugin, fixture.Quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
+        var result = fixture.Edits.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
 
         Assert.True(result.Applied, result.Message);
-        var body = fixture.Body();
+        var body = fixture.Body(quest);
         var refIdx = body.IndexOf("QuestReferenceAlias", StringComparison.Ordinal);
         var locIdx = body.IndexOf("QuestLocationAlias", StringComparison.Ordinal);
         Assert.True(refIdx >= 0 && locIdx >= 0, body);
@@ -233,12 +233,13 @@ public sealed class ArrayOpEditTests : IDisposable
     [Fact]
     public void ArrayMoveDown_ArrayContainsElementWithSetNestedStructField_AppliesAndPreservesIt()
     {
-        using var fixture = new QuestFixture(withLocation: true); // Location: { AliasID: 9 }
+        // Location: { AliasID: 9 }.
+        using var fixture = QuestMod(withLocation: true, out var quest);
 
-        var result = fixture.Service().Edit(fixture.Plugin, fixture.Quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
+        var result = fixture.Edits.Edit(fixture.Plugin, quest.ToString(), MoveTo(1, Member("Aliases"), At(0)));
 
         Assert.True(result.Applied, result.Message);
-        var body = fixture.Body();
+        var body = fixture.Body(quest);
         var refIdx = body.IndexOf("QuestReferenceAlias", StringComparison.Ordinal);
         var locIdx = body.IndexOf("QuestLocationAlias", StringComparison.Ordinal);
         Assert.True(refIdx >= 0 && locIdx >= 0, body);
@@ -246,24 +247,12 @@ public sealed class ArrayOpEditTests : IDisposable
         Assert.Contains("\"AliasID\": 9", body, StringComparison.Ordinal);
     }
 
-    private sealed class QuestFixture : IDisposable
+    private static SourceModFixture QuestMod(bool withLocation, out FormKey quest)
     {
-        private const string PluginName = "Quest630.esp";
-        private const string Origin = "Quest630Mod";
-
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-630-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-630-game-").FullName;
-        private readonly LoadOrderMirror _mirror = new(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-
-        public PluginKey Plugin { get; } = new(PluginName, Origin);
-        public FormKey Quest { get; }
-
-        public QuestFixture(bool withLocation = false)
+        var formKey = FormKey.Null;
+        var fixture = SourceModFixture.Tracked("Quest630.esp", "Quest630Mod", mod =>
         {
-            var pluginPath = Path.Combine(_modFolder, PluginName);
-            var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-            var quest = new Mutagen.Bethesda.Fallout4.Quest(mod.GetNextFormKey("Quest630"), Fallout4Release.Fallout4)
+            var record = new Quest(mod.GetNextFormKey("Quest630"), Fallout4Release.Fallout4)
             {
                 EditorID = "Quest630",
                 Aliases =
@@ -276,95 +265,32 @@ public sealed class ArrayOpEditTests : IDisposable
                     },
                 ],
             };
-            mod.Quests.Add(quest);
-            mod.WriteToBinary(pluginPath);
-            Quest = quest.FormKey;
-
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
-                .GetAwaiter().GetResult();
-        }
-
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
-
-        public string Body() => _mirror.Projected().GetDocument(Quest.ToString(), Plugin)!.Body!;
-
-        public void Dispose()
-        {
-            _mirror.Dispose();
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
-        }
+            mod.Quests.Add(record);
+            formKey = record.FormKey;
+        });
+        quest = formKey;
+        return fixture;
     }
 
-    private sealed class ContainerFixture : IDisposable
+    private static SourceModFixture ContainerMod(out FormKey container)
     {
-        private const string PluginName = "Container630.esp";
-        private const string Origin = "Container630Mod";
-
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-630-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-630-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
-
-        public PluginKey Plugin { get; } = new(PluginName, Origin);
-        public FormKey Container { get; }
-
-        public ContainerFixture()
+        var formKey = FormKey.Null;
+        var fixture = SourceModFixture.Tracked("Container630.esp", "Container630Mod", mod =>
         {
-            var pluginPath = Path.Combine(_modFolder, PluginName);
-            var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-            var container = new Mutagen.Bethesda.Fallout4.Container(mod.GetNextFormKey("Container630"), Fallout4Release.Fallout4)
+            var record = new Container(mod.GetNextFormKey("Container630"), Fallout4Release.Fallout4)
             {
                 EditorID = "Container630",
             };
-            mod.Containers.Add(container);
-            mod.WriteToBinary(pluginPath);
-            Container = container.FormKey;
+            mod.Containers.Add(record);
+            formKey = record.FormKey;
+        });
+        container = formKey;
+        return fixture;
+    }
 
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
-                .GetAwaiter().GetResult();
-        }
-
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
-
-        public string Body() => _mirror.Projected().GetDocument(Container.ToString(), Plugin)!.Body!;
-
-        public JsonElement ExtractStages()
-        {
-            using var doc = JsonDocument.Parse(Body());
-            return doc.RootElement.GetProperty("Destructible").GetProperty("Stages").Clone();
-        }
-
-        public void Dispose()
-        {
-            _mirror.Dispose();
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
-        }
+    private static JsonElement Stages(SourceModFixture fixture, FormKey container)
+    {
+        using var document = JsonDocument.Parse(fixture.Body(container));
+        return document.RootElement.GetProperty("Destructible").GetProperty("Stages").Clone();
     }
 }

@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Plugins;
 
@@ -9,7 +10,7 @@ namespace MEditService.Tests.Plugins;
 /// an untouched system of record.</summary>
 public sealed class ReconcileRequestTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
@@ -29,7 +30,7 @@ public sealed class ReconcileRequestTests : IDisposable
         var reports = ((ILoadOrderMirror)_mod.Mirror).ValidateIndex(_mod.Plugin);
 
         Assert.Equal(
-            TrackedModFixture.NpcEditorId,
+            IndexedModFixture.NpcEditorId,
             _mod.Mirror.Index!.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)!.EditorId);
         Assert.Contains(formKey, Assert.Single(reports).ChangedKeys, StringComparer.Ordinal);
         Assert.True(_mod.Mirror.Index!.Sequence > before);

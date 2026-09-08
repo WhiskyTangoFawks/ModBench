@@ -12,11 +12,11 @@ namespace MEditService.Tests.Records;
 /// re-derives.</summary>
 public sealed class ValidateUntrackedTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Untracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Untracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private string PluginPath => Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+    private string PluginPath => Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
 
     [Fact]
     public void AnUnchangedBinary_ValidatesClean()
@@ -33,7 +33,7 @@ public sealed class ValidateUntrackedTests : IDisposable
     [Fact]
     public void ABinaryRewrittenOutsideModbench_NeedsARebuild()
     {
-        var rewritten = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var rewritten = new Fallout4Mod(ModKey.FromFileName(IndexedModFixture.PluginName), Fallout4Release.Fallout4);
         rewritten.Npcs.AddNew("WrittenByAnotherTool");
         rewritten.WriteToBinary(PluginPath);
 

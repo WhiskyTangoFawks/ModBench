@@ -5,6 +5,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -242,14 +243,14 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetRecord_NeverReadsSourceItself_AHandEditStaysInvisibleUntilTheStoreIsRefreshed()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
         var reads = new RecordQueryService(mod.Mirror.Projector, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(
             mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        Assert.Equal(TrackedModFixture.NpcEditorId, reads.GetRecord(mod.Npc.ToString())!.EditorId);
+        Assert.Equal(IndexedModFixture.NpcEditorId, reads.GetRecord(mod.Npc.ToString())!.EditorId);
 
         mod.Mirror.Index!.RefreshByKeys(mod.Plugin, mod.ModFolder, [mod.Npc.ToString()]);
 

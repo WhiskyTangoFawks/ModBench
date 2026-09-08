@@ -17,16 +17,15 @@ namespace MEditService.Tests.Edits;
 /// reference".</summary>
 public sealed class ScalarValueRefusalTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService Service() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+    private string NpcBody() => _mod.Document(_mod.Npc.ToString())!.Body;
 
     // ── converter-declined scalar values ───────────────────────────────────────
 
@@ -96,22 +95,22 @@ public sealed class ScalarValueRefusalTests : IDisposable
     [Fact]
     public void OutputCharColumn_OnGlobalShortInstance_IsRefusedAsFieldNotFound()
     {
-        using var glob = new GlobFixture();
-        var before = glob.Body();
+        using var glob = GlobMod(out var globalShort, out var globalFloat);
+        var before = glob.Body(globalShort);
 
-        var result = glob.Service().Set(glob.Plugin, glob.GlobalShort.ToString(), "OutputChar", Json("true"));
+        var result = glob.Edits.Set(glob.Plugin, globalShort.ToString(), "OutputChar", Json("true"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
-        Assert.Equal(before, glob.Body());
+        Assert.Equal(before, glob.Body(globalShort));
     }
 
     [Fact]
     public void OutputCharColumn_OnGlobalFloatInstance_StillReportsApplied()
     {
-        using var glob = new GlobFixture();
+        using var glob = GlobMod(out var globalShort, out var globalFloat);
 
-        var result = glob.Service().Set(glob.Plugin, glob.GlobalFloat.ToString(), "OutputChar", Json("true"));
+        var result = glob.Edits.Set(glob.Plugin, globalFloat.ToString(), "OutputChar", Json("true"));
 
         Assert.True(result.Applied, result.Message);
     }
@@ -142,134 +141,58 @@ public sealed class ScalarValueRefusalTests : IDisposable
     [Fact]
     public void OmodPropertiesArray_ValueItsLeafCannotHold_RefusesTheWholeArrayWrite()
     {
-        using var omod = new OmodFixture();
-        var before = omod.Body();
+        using var omod = OmodMod(out var armorMod);
+        var before = omod.Body(armorMod);
 
-        var result = omod.Service().Set(omod.Plugin, omod.ArmorMod.ToString(), "Properties",
+        var result = omod.Edits.Set(omod.Plugin, armorMod.ToString(), "Properties",
             Json("""[{"MutagenObjectType":"ObjectModIntProperty<Armor+Property>","Property":"BodyPart","Step":1.0,"Value":"not-a-number","Value2":7,"FunctionType":"Set"}]"""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
         Assert.Contains("Properties", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, omod.Body());
+        Assert.Equal(before, omod.Body(armorMod));
     }
 
-    // The record-level union's "column exists on the schema, not on this class" shape, which
-    // TrackedModFixture's NPC has no equivalent of. GlobalShort rather than GlobalBool: Mutagen's
-    // GlobalBool writes FLTV as one byte and reads back expecting four.
-    private sealed class GlobFixture : IDisposable
+    // The record-level union's "column on the schema, not on this class" shape, which no NPC has.
+    // GlobalShort rather than GlobalBool: Mutagen's GlobalBool writes FLTV as one byte and reads
+    // back expecting four.
+    private static SourceModFixture GlobMod(out FormKey globalShort, out FormKey globalFloat)
     {
-        private const string PluginName = "Glob532.esp";
-        private const string Origin = "Glob532Mod";
-
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-glob-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-glob-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
-
-        public PluginKey Plugin { get; } = new(PluginName, Origin);
-        public FormKey GlobalShort { get; }
-        public FormKey GlobalFloat { get; }
-
-        public GlobFixture()
+        var (shortKey, floatKey) = (FormKey.Null, FormKey.Null);
+        var fixture = SourceModFixture.Tracked("Glob532.esp", "Glob532Mod", mod =>
         {
-            var pluginPath = Path.Combine(_modFolder, PluginName);
-            var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-            var shortGlob = new Mutagen.Bethesda.Fallout4.GlobalShort(mod.GetNextFormKey("GlobShort532"), Fallout4Release.Fallout4)
+            var shortGlob = new GlobalShort(mod.GetNextFormKey("GlobShort532"), Fallout4Release.Fallout4)
             {
                 EditorID = "GlobShort532",
                 Data = 5,
             };
-            var floatGlob = new Mutagen.Bethesda.Fallout4.GlobalFloat(mod.GetNextFormKey("GlobFloat532"), Fallout4Release.Fallout4)
+            var floatGlob = new GlobalFloat(mod.GetNextFormKey("GlobFloat532"), Fallout4Release.Fallout4)
             {
                 EditorID = "GlobFloat532",
                 Data = 1.25f,
             };
             mod.Globals.Add(shortGlob);
             mod.Globals.Add(floatGlob);
-            mod.WriteToBinary(pluginPath);
-            GlobalShort = shortGlob.FormKey;
-            GlobalFloat = floatGlob.FormKey;
-
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
-                .GetAwaiter().GetResult();
-        }
-
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
-
-        public string Body() => _mirror.Projected().GetDocument(GlobalShort.ToString(), Plugin)!.Body!;
-
-        public void Dispose()
-        {
-            _mirror.Dispose();
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
-        }
+            (shortKey, floatKey) = (shortGlob.FormKey, floatGlob.FormKey);
+        });
+        (globalShort, globalFloat) = (shortKey, floatKey);
+        return fixture;
     }
 
-    private sealed class OmodFixture : IDisposable
+    private static SourceModFixture OmodMod(out FormKey armorMod)
     {
-        private const string PluginName = "Omod532.esp";
-        private const string Origin = "Omod532Mod";
-
-        private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-omod532-mod-").FullName;
-        private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-omod532-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
-
-        public PluginKey Plugin { get; } = new(PluginName, Origin);
-        public FormKey ArmorMod { get; }
-
-        public OmodFixture()
+        var formKey = FormKey.Null;
+        var fixture = SourceModFixture.Tracked("Omod532.esp", "Omod532Mod", mod =>
         {
-            var pluginPath = Path.Combine(_modFolder, PluginName);
-            var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
             var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod532"), Fallout4Release.Fallout4)
             {
                 EditorID = "ArmorMod532",
             };
             armor.Properties.Add(new ObjectModIntProperty<Armor.Property> { Property = Armor.Property.BodyPart, Step = 1f });
             mod.ObjectModifications.Add(armor);
-            mod.WriteToBinary(pluginPath);
-            ArmorMod = armor.FormKey;
-
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
-                .GetAwaiter().GetResult();
-        }
-
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
-
-        public string Body() => _mirror.Projected().GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
-
-        public void Dispose()
-        {
-            _mirror.Dispose();
-            TryDelete(_modFolder);
-            TryDelete(_gameDirectory);
-        }
-
-        private static void TryDelete(string path)
-        {
-            try { Directory.Delete(path, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-            catch (UnauthorizedAccessException) { /* ditto */ }
-        }
+            formKey = armor.FormKey;
+        });
+        armorMod = formKey;
+        return fixture;
     }
 }

@@ -17,12 +17,11 @@ namespace MEditService.Tests.Edits;
 /// never reached, a top-level bitmask enum column.</summary>
 public sealed class GenericFieldWriteDispatchTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService Service() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

@@ -18,10 +18,15 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Mirror);
+    private RecordEditService EditService() => _fixture.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
+    private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString())!.Body;
+
+    private string CommittedCell() =>
+        _fixture.CommittedDocument(
+            _fixture.EmbedCell.ToString(), "cell", ContainerModFixture.EmbedCellEditorId)!.Body;
 
     // ---- the parent's untouched bytes are untouched ----
 
@@ -61,37 +66,32 @@ public sealed class EmbeddedChildEditTests : IDisposable
     // ---- both rows move, and the parent reads dirty ----
 
     [Fact]
-    public void AfterAnEmbeddedEdit_TheChildsOwnRowCarriesTheNewValue()
+    public void AfterAnEmbeddedEdit_TheChildsOwnDocumentCarriesTheNewValue()
     {
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("3.5")).Applied);
 
-        var child = _fixture.Mirror.Projected().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        // Cut back out of its owner's document by the repository, which is the only place it exists.
+        var child = _fixture.Document(_fixture.TemporaryRef.ToString());
         Assert.NotNull(child);
-        Assert.Contains("\"Scale\": 3.5", child!.Body!, StringComparison.Ordinal);
+        Assert.Contains("\"Scale\": 3.5", child!.Body, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AfterAnEmbeddedEdit_TheOwningCellReadsDirtyAtEffective()
+    public void AfterAnEmbeddedEdit_TheOwningCellDivergesFromHead()
     {
-        _fixture.Mirror.Settle();
-        var index = _fixture.Mirror.Index!;
         // Clean before: the tree is exactly what Track committed, so both refs agree.
-        Assert.Equal(
-            index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body,
-            index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body);
+        Assert.Equal(CommittedCell(), WorkingTreeCell());
 
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("4.5")).Applied);
 
         // The parent is the source unit, so the parent is what went dirty, which is what makes the edit
         // visible as a working-tree change on the record the file actually belongs to.
-        var effective = index.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
-        var head = index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
-        Assert.NotEqual(effective, head);
-        Assert.Contains("\"Scale\": 4.5", effective!, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Scale\": 4.5", head!, StringComparison.Ordinal);
+        Assert.NotEqual(CommittedCell(), WorkingTreeCell());
+        Assert.Contains("\"Scale\": 4.5", WorkingTreeCell(), StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Scale\": 4.5", CommittedCell(), StringComparison.Ordinal);
     }
 
-    // ---- The index's spatial side tables stay correct, because nothing can move them ----
+    // ---- The spatial columns a write may not touch ----
 
     [Fact]
     public void APlacedRefsPosition_IsRefused_SoItsPlacementRowCannotGoStale()
@@ -99,9 +99,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // The reflector's general P3Int16/P3Float mapping makes `position` an ordinary writable column on
         // every IPlacedGetter, so RefuseIfContainmentField refuses it by name: Position is mirrored into
         // `placement` and nothing on this write path re-derives that row.
-        _fixture.Mirror.Settle();
-        var index = _fixture.Mirror.Index!;
-        Assert.Equal(11f, index.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
+        var before = _fixture.Document(_fixture.TemporaryRef.ToString())!.Body;
 
         var result = EditService().Set(
             _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("""{"X": 99.0, "Y": 88.0, "Z": 77.0}"""));
@@ -109,7 +107,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("placement", result.Message, StringComparison.Ordinal);
-        Assert.Equal(11f, index.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
+        Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString())!.Body);
         // No working-tree dirt at all from a refused edit.
         Assert.Empty(_fixture.GitStatus());
     }
@@ -140,13 +138,10 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldReadOnly, reorder.Refusal);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, topCell.Refusal);
 
-        // The child records are all still exactly where they were...
-        Assert.Equal(
-            _fixture.EmbedCell.ToString(),
-            _fixture.Mirror.Projected().GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString())!.Value.ParentFormKey);
-        Assert.Equal(
-            _fixture.EmbedCell.ToString(),
-            _fixture.Mirror.Projected().GetContainerParent(_fixture.Plugin, _fixture.Landscape.ToString())!.Value.ParentFormKey);
+        // The child records are all still exactly where they were — inline in the cell's own document.
+        var cell = WorkingTreeCell();
+        Assert.Contains(_fixture.Navmesh.ToString(), cell, StringComparison.Ordinal);
+        Assert.Contains(_fixture.Landscape.ToString(), cell, StringComparison.Ordinal);
         // ...and three refusals leave not one byte of tree dirt.
         Assert.Empty(_fixture.GitStatus());
     }
@@ -213,9 +208,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
             before.Replace("\"Scale\": 6.0", "\"Scale\": 9.5", StringComparison.Ordinal),
             File.ReadAllText(file));
         Assert.Contains(
-            "\"Scale\": 9.5",
-            _fixture.Mirror.Projected().GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin)!.Body!,
-            StringComparison.Ordinal);
+            "\"Scale\": 9.5", _fixture.Document(_fixture.TopCellRef.ToString())!.Body, StringComparison.Ordinal);
     }
 
     // ---- a record the tree does not hold, both branches ----

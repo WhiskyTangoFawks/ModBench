@@ -19,13 +19,13 @@ namespace MEditService.Tests.Source;
 /// self-heal would make a binary-seeded ingest look source-seeded.</summary>
 public sealed class SourceIngestTests
 {
-    private static LoadOrderMirror Reload(TrackedModFixture mod)
+    private static LoadOrderMirror Reload(IndexedModFixture mod)
     {
         var mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         ((ILoadOrderMirror)mirror).Reconcile(
             mod.GameDirectory,
-            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
+            [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
         return mirror;
     }
@@ -35,13 +35,13 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         // A hand edit outside Modbench — the user's own editor, an agent's script, a git checkout.
         // Nothing tells the backend it happened; the next reconcile is simply expected to read it.
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
-            TrackedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
+            IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
         using var reloaded = Reload(mod);
 
@@ -55,7 +55,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         File.Delete(mod.NpcSourceFile);
 
@@ -70,7 +70,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void AWorkingTreeDeletedRecord_StillAnswersAtHead()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         File.Delete(mod.NpcSourceFile);
 
@@ -78,10 +78,10 @@ public sealed class SourceIngestTests
 
         var head = reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
-        Assert.Equal(TrackedModFixture.NpcEditorId, head!.EditorId);
+        Assert.Equal(IndexedModFixture.NpcEditorId, head!.EditorId);
         // The Head row is HEAD's own bytes, not a reconstruction: same text `git show` serves.
         Assert.Equal(mod.GitShowHead(mod.RelativeSourcePath(
-            mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
+            mod.Npc, "npc_", IndexedModFixture.NpcEditorId)), head.Body);
     }
 
     // ---- HEAD is Head, the working tree is Effective, and they diverge ----
@@ -89,31 +89,31 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
-            TrackedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
+            IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
         using var reloaded = Reload(mod);
 
         Assert.Equal("ExternallyRenamed", reloaded.Index!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
         Assert.Equal(
-            TrackedModFixture.NpcEditorId,
+            IndexedModFixture.NpcEditorId,
             reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
     }
 
     [Fact]
     public void AnUncommittedHeaderEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
     {
-        using var mod = TrackedModFixture.Tracked();
-        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(TrackedModFixture.PluginName));
-        var headerPath = Path.Combine(mod.ModFolder, "source", TrackedModFixture.PluginName, "RecordData.json");
+        using var mod = IndexedModFixture.Tracked();
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(IndexedModFixture.PluginName));
+        var headerPath = Path.Combine(mod.ModFolder, "source", IndexedModFixture.PluginName, "RecordData.json");
 
         // Rebuilt through the same door the production path uses, never a hand-spliced JSON string: the
         // whole-mod door's reader is not a generic JSON parser, so a raw text edit cannot promise a
         // byte-for-byte round trip.
-        var edited = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var edited = new Fallout4Mod(ModKey.FromFileName(IndexedModFixture.PluginName), Fallout4Release.Fallout4);
         edited.ModHeader.Author = "RenamedByHand";
         File.WriteAllBytes(headerPath, HeaderDocument.Write(edited));
 
@@ -131,11 +131,11 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnEditCommittedOutsideModbench_LeavesBothRefsOnTheNewBytes_NotPermanentlyDirty()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
-            TrackedModFixture.NpcEditorId, "CommittedRename", StringComparison.Ordinal));
+            IndexedModFixture.NpcEditorId, "CommittedRename", StringComparison.Ordinal));
         var gitDir = Path.Combine(mod.ModFolder, ".git");
         GitCli.Run(gitDir, mod.ModFolder, "add", "-A");
         GitCli.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "external rename");
@@ -153,16 +153,16 @@ public sealed class SourceIngestTests
     [Fact]
     public void ReconcilingOneEditedRecord_LeavesItsUntouchedSiblingClean()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
-            TrackedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
+            IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
         using var reloaded = Reload(mod);
 
         var byFormKey = reloaded.Index!
-            .At(RecordRef.Effective).Search(new RecordQuery { Plugin = TrackedModFixture.PluginName, Limit = 100 })
+            .At(RecordRef.Effective).Search(new RecordQuery { Plugin = IndexedModFixture.PluginName, Limit = 100 })
             .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
 
         Assert.Equal(WorkingTreeState.Modified, byFormKey[mod.Npc.ToString()].WorkingTreeState);
@@ -175,14 +175,14 @@ public sealed class SourceIngestTests
     [Fact]
     public async Task ReindexPlugin_OnATrackedCopy_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var before = mod.Mirror.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
-        Assert.Equal(TrackedModFixture.NpcEditorId, before.EditorId);
+        Assert.Equal(IndexedModFixture.NpcEditorId, before.EditorId);
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
-            TrackedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
+            IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
         await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin);
 
@@ -195,12 +195,12 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheFailures()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         // Never-assume-exclusive-ownership: MO2, a git operation, or the user can leave this tree
         // half-written at any moment. The root header is what the whole-mod door reads first.
         File.WriteAllText(
-            Path.Combine(mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName), "RecordData.json"),
+            Path.Combine(mod.ModFolder, SourceRepository.RootFor(IndexedModFixture.PluginName), "RecordData.json"),
             "{ this is not json");
 
         using var reloaded = Reload(mod);
@@ -211,21 +211,21 @@ public sealed class SourceIngestTests
         // ...and the degradation is *visible*, which is the whole mitigation: a user reading
         // pre-Track binary content while believing they are reading their tracked source is the hazard.
         var failure = Assert.Single(reloaded.Status.Failures);
-        Assert.Equal(TrackedModFixture.PluginName, failure.Name);
+        Assert.Equal(IndexedModFixture.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task AnUnreadableSourceTree_AtReindex_KeepsTheSourceDerivedRows_AndSaysSoInTheFailures()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var edited = ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
         File.WriteAllText(
-            Path.Combine(mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName), "RecordData.json"),
+            Path.Combine(mod.ModFolder, SourceRepository.RootFor(IndexedModFixture.PluginName), "RecordData.json"),
             "{ this is not json");
 
         await Assert.ThrowsAnyAsync<Exception>(() => ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin));
@@ -236,16 +236,16 @@ public sealed class SourceIngestTests
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
         var failure = Assert.Single(mod.Mirror.Status.Failures);
-        Assert.Equal(TrackedModFixture.PluginName, failure.Name);
+        Assert.Equal(IndexedModFixture.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void APartialReconcileThenBinaryFallback_LeavesExactlyOneRowAtHead_NotTwo()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
         var gitDir = Path.Combine(mod.ModFolder, ".git");
-        var sourceRoot = Path.Combine(mod.ModFolder, SourceRepository.RootFor(TrackedModFixture.PluginName));
+        var sourceRoot = Path.Combine(mod.ModFolder, SourceRepository.RootFor(IndexedModFixture.PluginName));
 
         // A committed file the per-record codec cannot read back. "Npcs" sorts after "Keywords" and git
         // orders porcelain output by path, so the good deletion below is processed first.
@@ -257,7 +257,7 @@ public sealed class SourceIngestTests
         // Two working-tree deletions. The first re-seeds Head and commits; the second throws when its
         // HEAD blob is parsed, aborting the ingest partway through the dirty set.
         File.Delete(Path.Combine(mod.ModFolder, mod.RelativeSourcePath(
-            mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
+            mod.Keyword, "kywd", IndexedModFixture.KeywordEditorId)));
         File.Delete(poison);
 
         using var reloaded = Reload(mod);
@@ -277,7 +277,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         var edit = ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
@@ -296,13 +296,13 @@ public sealed class SourceIngestTests
         // committed-only.
         var head = reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
-        Assert.Equal(TrackedModFixture.NpcEditorId, head!.EditorId);
+        Assert.Equal(IndexedModFixture.NpcEditorId, head!.EditorId);
     }
 
     [Fact]
     public void AnEditorIdRename_LeavesExactlyOneRowAtHead()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = IndexedModFixture.Tracked();
 
         ProjectingEditService.Over(mod.Mirror)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",

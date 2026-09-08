@@ -8,13 +8,13 @@ namespace MEditService.Tests.Source;
 
 public sealed class ExternalChangeAbsorberTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
     private void WriteExternalBinaryChange(float newHeightMax)
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var mod = new Fallout4Mod(ModKey.FromFileName(SourceEditFixture.PluginName), Fallout4Release.Fallout4);
         var race = mod.Races.AddNew("FixtureRace");
         mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew("FixtureNpc");
@@ -22,7 +22,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         npc.HeightMax = newHeightMax;
         mod.Npcs.AddNew("UntouchedNpc");
 
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
         mod.WriteToBinary(pluginPath);
     }
 
@@ -30,11 +30,11 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     public void Absorb_CommitsTheExternalBinarysContent_AsANewBaselineOnMain()
     {
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
-        var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var newBaseline = GitCli.Run(gitDir, _mod.ModFolder, "show", $"main:{relativePath}");
         Assert.Contains("\"HeightMax\": 0.9", newBaseline, StringComparison.Ordinal);
@@ -49,8 +49,8 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         var dirtBefore = _mod.GitStatus();
 
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         Assert.Equal(branchBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Equal(headBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
@@ -60,13 +60,13 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     [Fact]
     public void Absorb_ClearsAnyUnansweredDeferralForThePlugin()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
-        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
+        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, SourceEditFixture.PluginName));
     }
 
     // Absorb shares Track's own serializer rather than a per-record tree writer, because the pristine
@@ -75,9 +75,9 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     public void Absorb_WritesACompleteSourceTree_IncludingTheModHeader()
     {
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var tree = GitCli.Run(gitDir, _mod.ModFolder, "ls-tree", "-r", "--name-only", "main")
@@ -85,7 +85,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
             .Select(l => l.Trim())
             .ToList();
 
-        var root = SourceRepository.RootFor(TrackedModFixture.PluginName).Replace('\\', '/');
+        var root = SourceRepository.RootFor(SourceEditFixture.PluginName).Replace('\\', '/');
         Assert.Contains($"{root}/RecordData.json", tree);
     }
 
@@ -93,13 +93,13 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     public void Absorb_AdvancesTheParkedRefToTheNewBaseline()
     {
         WriteExternalBinaryChange(0.9f);
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var mainSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
-        var parkedSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", $"refs/medit/last-compile/{TrackedModFixture.PluginName}").Trim();
+        var parkedSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", $"refs/medit/last-compile/{SourceEditFixture.PluginName}").Trim();
         Assert.Equal(mainSha, parkedSha);
     }
 }

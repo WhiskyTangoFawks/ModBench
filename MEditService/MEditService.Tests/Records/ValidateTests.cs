@@ -1,6 +1,7 @@
 using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Records;
 
@@ -9,7 +10,7 @@ namespace MEditService.Tests.Records;
 /// what git answers is under test.</summary>
 public sealed class ValidateTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
@@ -51,7 +52,7 @@ public sealed class ValidateTests : IDisposable
     public void ARecordGoneFromTheCommittedTree_LosesItsCommittedRows()
     {
         var formKey = _mod.Npc.ToString();
-        Git("rm", "-q", "--cached", _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId));
+        Git("rm", "-q", "--cached", _mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId));
         Git("commit", "-q", "-m", "removed from the committed tree outside Modbench");
 
         var report = Validate();

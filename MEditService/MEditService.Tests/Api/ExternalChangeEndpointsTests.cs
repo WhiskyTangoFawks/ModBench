@@ -16,7 +16,7 @@ namespace MEditService.Tests.Api;
 /// not a re-derivation of every Source-level scenario.</summary>
 public sealed class ExternalChangeEndpointsTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()
     {
         var entries = new List<LogEntry>();
@@ -32,29 +32,29 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
     private void WriteExternalBinaryChange(float newHeightMax)
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var mod = new Fallout4Mod(ModKey.FromFileName(IndexedModFixture.PluginName), Fallout4Release.Fallout4);
         var race = mod.Races.AddNew("FixtureRace");
         mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew("FixtureNpc");
         npc.Race.SetTo(race);
         npc.HeightMax = newHeightMax;
         mod.Npcs.AddNew("UntouchedNpc");
-        mod.WriteToBinary(Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName));
+        mod.WriteToBinary(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName));
     }
 
     [Fact]
     public void ExternalChangeStatus_ReportsAWatcherQueuedQuestion_WithItsOriginResolved()
     {
         var watcher = new ExternalChangeWatcher();
-        watcher.ReportExternalChange(_mod.ModFolder, TrackedModFixture.PluginName,
+        watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(true, "1.0", "2.0"));
 
         var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Mirror.Projector);
 
         var ok = Assert.IsAssignableFrom<Ok<List<UnansweredExternalChangeResponse>>>(result);
         var unanswered = Assert.Single(ok.Value!);
-        Assert.Equal(TrackedModFixture.PluginName, unanswered.Plugin);
-        Assert.Equal(TrackedModFixture.ModFolderOrigin, unanswered.Origin);
+        Assert.Equal(IndexedModFixture.PluginName, unanswered.Plugin);
+        Assert.Equal(IndexedModFixture.ModFolderOrigin, unanswered.Origin);
         Assert.True(unanswered.MetaChanged);
         Assert.Equal("1.0", unanswered.OldVersion);
         Assert.Equal("2.0", unanswered.NewVersion);
@@ -65,13 +65,13 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
         var watcher = new ExternalChangeWatcher();
-        watcher.ReportExternalChange(_mod.ModFolder, TrackedModFixture.PluginName,
+        watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(false, null, null));
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.AbsorbExternalChange(
-            TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
+            IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
             _mod.Mirror.Projector, watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
@@ -86,7 +86,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.AbsorbExternalChange(
-            TrackedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
+            IndexedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
             _mod.Mirror.Projector, new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
@@ -104,7 +104,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.KeepExternalChange(
-            TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
+            IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
             _mod.Mirror.Projector, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
@@ -130,7 +130,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.Rebase(new RebaseRequest(TrackedModFixture.ModFolderOrigin), _mod.Mirror.Projector, loggerFactory);
+        var result = PluginEndpoints.Rebase(new RebaseRequest(IndexedModFixture.ModFolderOrigin), _mod.Mirror.Projector, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<RebaseResponse>>(result);
         Assert.Equal(RebaseOutcome.Clean, ok.Value!.Outcome);

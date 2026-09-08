@@ -15,7 +15,7 @@ public sealed class SourceRepositoryLocateHeaderTests
     [Fact]
     public void Locate_ForAHeaderFormKey_FindsTheRootRecordDataJson()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!
@@ -33,7 +33,7 @@ public sealed class SourceRepositoryLocateHeaderTests
     [Fact]
     public void Locate_ForAHeaderFormKey_IsNotDirectoryPerRecord()
     {
-        using var mod = TrackedModFixture.Tracked();
+        using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
         var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!

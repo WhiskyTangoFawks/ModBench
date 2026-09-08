@@ -16,12 +16,11 @@ namespace MEditService.Tests.Edits;
 /// <c>RefuseIfBlocked</c> run before <c>TryApply</c> checks for a null Apply.</summary>
 public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService Service() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -37,9 +36,9 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_mod.GitStatus());
 
-        // Answers at Effective: the read model's own document for OtherNpc now carries the new race.
-        var body = _mod.Mirror.Projected().GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
-        Assert.Contains(_mod.Race.ToString(), body, StringComparison.Ordinal);
+        // The tree is the answer: OtherNpc's own document now carries the new race.
+        Assert.Contains(
+            _mod.Race.ToString(), _mod.Document(_mod.OtherNpc.ToString())!.Body, StringComparison.Ordinal);
     }
 
     // ValidateFormLinks runs ahead of
@@ -72,9 +71,9 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     [Fact]
     public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginIsUntracked()
     {
-        using var untracked = TrackedModFixture.Untracked();
+        using var untracked = SourceEditFixture.Untracked();
 
-        var result = ProjectingEditService.Over(untracked.Mirror)
+        var result = untracked.Edits
             .Set(untracked.Plugin, untracked.OtherNpc.ToString(), "Race", Json($"\"{untracked.Race}\""));
 
         Assert.False(result.Applied);
@@ -85,7 +84,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     [Fact]
     public void EditField_TopLevelFormLinkColumn_Refuses_WhileExternalChangeDeferralIsUnanswered()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
 
         var result = Service().Set(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
@@ -100,47 +99,13 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     [Fact]
     public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginHasNoModFolder()
     {
-        using var vanilla = new DataDirectoryFixture();
+        using var vanilla = SourceModFixture.VanillaMaster(out var vanillaNpc);
 
-        var result = ProjectingEditService.Over(vanilla.Mirror)
-            .Set(vanilla.Plugin, vanilla.Npc.ToString(), "Race", Json($"\"{_mod.Race}\""));
+        var result = vanilla.Edits
+            .Set(vanilla.Plugin, vanillaNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginHasNoModFolder, result.Refusal);
     }
 
-    // A Data-directory master has no mod folder, so RefuseIfBlocked answers PluginHasNoModFolder
-    // rather than PluginNotTracked.
-    private sealed class DataDirectoryFixture : IDisposable
-    {
-        private const string Name = "Vanilla.esm";
-
-        public string GameDirectory { get; }
-        public LoadOrderMirror Mirror { get; }
-        public PluginKey Plugin { get; } = new(Name, PluginOrigin.DataDirectory);
-        public FormKey Npc { get; }
-
-        public DataDirectoryFixture()
-        {
-            GameDirectory = Directory.CreateTempSubdirectory("medit-429-vanilla-").FullName;
-            var pluginPath = Path.Combine(GameDirectory, Name);
-            var mod = new Fallout4Mod(ModKey.FromFileName(Name), Fallout4Release.Fallout4);
-            Npc = mod.Npcs.AddNew("VanillaNpc").FormKey;
-            mod.WriteToBinary(pluginPath);
-
-            Mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)Mirror).Reconcile(
-                GameDirectory,
-                [new LoadOrderEntry(Name, pluginPath, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
-        }
-
-        public void Dispose()
-        {
-            Mirror.Dispose();
-            try { Directory.Delete(GameDirectory, recursive: true); }
-            catch (IOException) { /* scratch directory, best effort */ }
-        }
-    }
 }

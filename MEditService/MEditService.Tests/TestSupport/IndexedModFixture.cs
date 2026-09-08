@@ -3,17 +3,17 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
-using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Tests.TestSupport;
 
-/// <summary>A real mod folder tracked through the real <see cref="TrackService"/>: what an edit
-/// does to a git working tree is the thing under test, and no mock can answer that.</summary>
-public sealed class TrackedModFixture : IDisposable
+/// <summary>A real tracked mod folder with an index over it, holding flat records only: for the
+/// suites that are the Index side. A write-side suite takes <see cref="Edits.SourceEditFixture"/>
+/// instead.</summary>
+public sealed class IndexedModFixture : IDisposable
 {
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
@@ -36,7 +36,7 @@ public sealed class TrackedModFixture : IDisposable
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
-    private TrackedModFixture(
+    private IndexedModFixture(
         bool track, string pluginName, bool isLight = false, bool persistent = false,
         INotificationPublisher? notifications = null)
     {
@@ -74,28 +74,28 @@ public sealed class TrackedModFixture : IDisposable
         }
     }
 
-    public static TrackedModFixture Tracked() => new(track: true, PluginName);
+    public static IndexedModFixture Tracked() => new(track: true, PluginName);
 
     /// <summary>Tracked, with every projection the index publishes recorded: what a watcher's signal
     /// reaches the front end as (ADR-0046).</summary>
-    public static TrackedModFixture Tracked(INotificationPublisher notifications) =>
+    public static IndexedModFixture Tracked(INotificationPublisher notifications) =>
         new(track: true, PluginName, notifications: notifications);
 
     /// <summary>Tracked, over a persistent index file keyed on <see cref="InstanceRoot"/>, so a second
     /// mirror over the same instance starts warm — the shape a restart has.</summary>
-    public static TrackedModFixture TrackedPersistent() => new(track: true, PluginName, persistent: true);
+    public static IndexedModFixture TrackedPersistent() => new(track: true, PluginName, persistent: true);
 
     /// <summary>The load order snapshot this fixture's one plugin copy is, for a caller reconciling a
     /// second mirror over the same instance.</summary>
     public LoadOrderEntry Entry =>
         new(ActualPluginName, Path.Combine(ModFolder, ActualPluginName), ModFolderOrigin, Slot: 0, Enabled: true, Winning: true);
 
-    public static TrackedModFixture TrackedLight(string pluginName = PluginName) =>
+    public static IndexedModFixture TrackedLight(string pluginName = PluginName) =>
         new(track: true, pluginName, isLight: true);
 
-    public static TrackedModFixture Untracked() => new(track: false, PluginName);
+    public static IndexedModFixture Untracked() => new(track: false, PluginName);
 
-    public static TrackedModFixture TrackedAs(string pluginName) => new(track: true, pluginName);
+    public static IndexedModFixture TrackedAs(string pluginName) => new(track: true, pluginName);
 
     public const string NpcEditorId = "FixtureNpc";
     public const string RaceEditorId = "FixtureRace";

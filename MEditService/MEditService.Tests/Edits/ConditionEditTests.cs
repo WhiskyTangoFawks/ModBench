@@ -253,9 +253,10 @@ public sealed class ConditionEditTests : IDisposable
 
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-692-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-692-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
+        public LoadOrder LoadOrder { get; }
+        public RecordEditService Edits { get; }
         public FormKey Cobj { get; }
         public FormKey Perk { get; }
         public FormKey Message { get; }
@@ -319,33 +320,28 @@ public sealed class ConditionEditTests : IDisposable
 
             mod.WriteToBinary(pluginPath);
 
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
-            Assert.Empty(_mirror.Status.Failures);
+            LoadOrder = LoadOrder.From(
+                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
+                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+                .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
+
+            var holder = new LoadOrderHolder();
+            holder.Apply(LoadOrder);
+            Edits = TestEditService.Over(holder);
         }
 
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
+        public RecordEditService Service() => Edits;
 
         public string Body(FormKey formKey) =>
-            _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!.Body!;
+            TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;
 
-        public JsonArray Field(FormKey formKey, string name)
-        {
-            var document = _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!;
-            var raw = document.Fields.Single(f => f.Metadata.Name == name).Value;
-            return JsonNode.Parse(raw!.ToString()!)!.AsArray();
-        }
+        public JsonArray Field(FormKey formKey, string name) =>
+            JsonNode.Parse(Body(formKey))!.AsObject()[name]!.AsArray();
 
         public void Dispose()
         {
-            _mirror.Dispose();
             TryDelete(_modFolder);
             TryDelete(_gameDirectory);
         }

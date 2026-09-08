@@ -46,5 +46,4 @@ internal sealed class IndexOverridingMirror(ILoadOrderMirror inner, IRecordIndex
     public void UnindexPlugin(PluginKey key) => inner.UnindexPlugin(key);
     public void SetFilter(string sql) => inner.SetFilter(sql);
     public void ClearFilter() => inner.ClearFilter();
-    public void ReapplyFilter() => inner.ReapplyFilter();
 }

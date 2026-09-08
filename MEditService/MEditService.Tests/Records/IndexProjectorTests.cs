@@ -167,13 +167,13 @@ public sealed class IndexProjectorTests
     [Fact]
     public async Task ATrackedCopyReDerivedFromADirtyTree_AdvancesTheSequenceExactlyOnce()
     {
-        using var fixture = TrackedModFixture.Tracked();
+        using var fixture = IndexedModFixture.Tracked();
         var mirror = (ILoadOrderMirror)fixture.Mirror;
         // Dirty, so the head reconcile has baselines to write: a clean tree short-circuits it and
         // would leave the multi-advance case untested.
         var text = File.ReadAllText(fixture.NpcSourceFile);
         File.WriteAllText(fixture.NpcSourceFile, text.Replace(
-            $"\"{TrackedModFixture.NpcEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+            $"\"{IndexedModFixture.NpcEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
         var before = mirror.Sequence;
 
         await mirror.ReindexPlugin(fixture.Plugin);
@@ -254,15 +254,15 @@ public sealed class IndexProjectorTests
     public void SourceMirrorApply_LandsTheWholeSettledBatchAsOneAdvance()
     {
         var notifications = new InMemoryNotificationPublisher();
-        using var fixture = TrackedModFixture.Tracked(notifications);
+        using var fixture = IndexedModFixture.Tracked(notifications);
         var mirror = (ILoadOrderMirror)fixture.Mirror;
         using var watcher = new SourceChangeWatcher();
         var sourceMirror = new SourceMirror(fixture.Mirror.Projector, mirror.WriteGate, watcher, notifications, NullLogger.Instance);
 
         var otherNpcSource = fixture.SourceFileFor(
-            fixture.OtherNpc, "npc_", TrackedModFixture.OtherNpcEditorId);
-        RenameByHand(fixture.NpcSourceFile, TrackedModFixture.NpcEditorId, "RenamedByHand");
-        RenameByHand(otherNpcSource, TrackedModFixture.OtherNpcEditorId, "AlsoRenamedByHand");
+            fixture.OtherNpc, "npc_", IndexedModFixture.OtherNpcEditorId);
+        RenameByHand(fixture.NpcSourceFile, IndexedModFixture.NpcEditorId, "RenamedByHand");
+        RenameByHand(otherNpcSource, IndexedModFixture.OtherNpcEditorId, "AlsoRenamedByHand");
         var before = mirror.Sequence;
 
         // Two documents the watcher settled together: projected one at a time, they are two
@@ -275,8 +275,8 @@ public sealed class IndexProjectorTests
         Assert.Equal(before + 1, mirror.Sequence);
     }
 
-    private static SourceChangeEvent Settled(TrackedModFixture fixture, string documentPath) =>
-        new(fixture.ActualPluginName, TrackedModFixture.ModFolderOrigin, fixture.ModFolder,
+    private static SourceChangeEvent Settled(IndexedModFixture fixture, string documentPath) =>
+        new(fixture.ActualPluginName, IndexedModFixture.ModFolderOrigin, fixture.ModFolder,
             SourceChangeScope.Documents, [documentPath]);
 
     private static void RenameByHand(string documentPath, string from, string to)
@@ -305,11 +305,11 @@ public sealed class IndexProjectorTests
     public void ARowsChangedNotification_WaitsForItsProjectionToLand_AndNamesTheSequenceItLandedOn()
     {
         var notifications = new InMemoryNotificationPublisher();
-        using var fixture = TrackedModFixture.Tracked(notifications);
+        using var fixture = IndexedModFixture.Tracked(notifications);
         var mirror = (ILoadOrderMirror)fixture.Mirror;
         var text = File.ReadAllText(fixture.NpcSourceFile);
         File.WriteAllText(fixture.NpcSourceFile, text.Replace(
-            $"\"{TrackedModFixture.NpcEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+            $"\"{IndexedModFixture.NpcEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
         using (mirror.BeginProjection())
         {

@@ -25,7 +25,7 @@ public sealed class IndexMirrorTests
         }
     }
 
-    private static ExternalChangeWatcher StartMirroring(TrackedModFixture fixture, INotificationPublisher? notifications = null)
+    private static ExternalChangeWatcher StartMirroring(IndexedModFixture fixture, INotificationPublisher? notifications = null)
     {
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
         var mirror = new IndexMirror(fixture.Mirror.Projector, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
@@ -35,16 +35,16 @@ public sealed class IndexMirrorTests
         return watcher;
     }
 
-    private static void RewriteBinaryWithExtraNpc(TrackedModFixture fixture, string editorId)
+    private static void RewriteBinaryWithExtraNpc(IndexedModFixture fixture, string editorId)
     {
         var mod = new Fallout4Mod(
-            ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew(TrackedModFixture.NpcEditorId);
+            ModKey.FromFileName(IndexedModFixture.PluginName), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew(IndexedModFixture.NpcEditorId);
         mod.Npcs.AddNew(editorId);
-        mod.WriteToBinary(Path.Combine(fixture.ModFolder, TrackedModFixture.PluginName));
+        mod.WriteToBinary(Path.Combine(fixture.ModFolder, IndexedModFixture.PluginName));
     }
 
-    private static IReadOnlyList<string?> EditorIds(TrackedModFixture fixture, PluginKey key) =>
+    private static IReadOnlyList<string?> EditorIds(IndexedModFixture fixture, PluginKey key) =>
         [.. fixture.Mirror.Projected().GetDocuments(key).Select(d => d.EditorId)];
 
     // An untracked plugin's bytes move while the backend runs and the index follows, with no reload — the
@@ -52,7 +52,7 @@ public sealed class IndexMirrorTests
     [Fact]
     public void AnUntrackedPluginChangedMidReconcile_IsReindexedWithNoReload()
     {
-        using var fixture = TrackedModFixture.Untracked();
+        using var fixture = IndexedModFixture.Untracked();
         using var watcher = StartMirroring(fixture);
         Assert.DoesNotContain("ArrivedExternally", EditorIds(fixture, fixture.Plugin));
 
@@ -67,7 +67,7 @@ public sealed class IndexMirrorTests
     [Fact]
     public void AnUntrackedPluginChangedMidReconcile_PublishesPluginChanged()
     {
-        using var fixture = TrackedModFixture.Untracked();
+        using var fixture = IndexedModFixture.Untracked();
         var notifications = new InMemoryNotificationPublisher();
         using var watcher = StartMirroring(fixture, notifications);
 
@@ -83,11 +83,11 @@ public sealed class IndexMirrorTests
     [Fact]
     public void AnIndexedPluginDeletedMidReconcile_StopsAnswering()
     {
-        using var fixture = TrackedModFixture.Untracked();
+        using var fixture = IndexedModFixture.Untracked();
         using var watcher = StartMirroring(fixture);
         Assert.NotEmpty(EditorIds(fixture, fixture.Plugin));
 
-        File.Delete(Path.Combine(fixture.ModFolder, TrackedModFixture.PluginName));
+        File.Delete(Path.Combine(fixture.ModFolder, IndexedModFixture.PluginName));
 
         WaitUntil(() => EditorIds(fixture, fixture.Plugin).Count == 0, TimeSpan.FromSeconds(10));
         Assert.Empty(EditorIds(fixture, fixture.Plugin));
@@ -100,7 +100,7 @@ public sealed class IndexMirrorTests
     [Fact]
     public void ATrackedPluginChangedMidReconcile_AsksTheUser_AndIsNeverSilentlyReindexed()
     {
-        using var fixture = TrackedModFixture.Tracked();
+        using var fixture = IndexedModFixture.Tracked();
         var mirrored = new List<IndexedBinaryEvent>();
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
         watcher.IndexedBinaryChanged = e => { lock (mirrored) mirrored.Add(e); return true; };

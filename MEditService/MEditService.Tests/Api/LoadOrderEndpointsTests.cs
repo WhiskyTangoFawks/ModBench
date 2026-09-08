@@ -17,14 +17,14 @@ namespace MEditService.Tests.Api;
 /// re-derivation of every hook-level scenario.</summary>
 public sealed class LoadOrderEndpointsTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
     private LoadOrderRequest SnapshotRequest() => new(
-        [new LoadOrderPlugin(TrackedModFixture.PluginName,
-            System.IO.Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName),
-            TrackedModFixture.ModFolderOrigin, 0, true, true)],
+        [new LoadOrderPlugin(IndexedModFixture.PluginName,
+            System.IO.Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName),
+            IndexedModFixture.ModFolderOrigin, 0, true, true)],
         _mod.GameDirectory, _mod.InstanceRoot, "Fallout4");
 
     // The kernel and the index must agree once the request returns: a snapshot the index never
@@ -53,11 +53,11 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         holder.Apply(LoadOrder.From(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, []));
 
         var result = await PluginEndpoints.CreatePlugin(
-            new CreatePluginRequest("Minted.esp", _mod.ModFolder, TrackedModFixture.ModFolderOrigin),
+            new CreatePluginRequest("Minted.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
             _mod.Mirror.Projector, holder, new TrackService(NullLogger<TrackService>.Instance), NullLoggerFactory.Instance);
 
         Assert.IsAssignableFrom<Ok<PluginResponse>>(result);
-        var registered = holder.Current.Copy(new PluginKey("Minted.esp", TrackedModFixture.ModFolderOrigin));
+        var registered = holder.Current.Copy(new PluginKey("Minted.esp", IndexedModFixture.ModFolderOrigin));
         Assert.NotNull(registered);
         Assert.Equal(Path.Combine(_mod.ModFolder, "Minted.esp"), registered.Path);
     }
@@ -66,7 +66,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     public void PutLoadOrder_ReportsACrashRepairOffer_WhenATrackedPluginHasAnUnfinishedJournalMarker()
     {
         Assert.ThrowsAny<Exception>(() =>
-            CompileJournal.RunBatch(_mod.ModFolder, [TrackedModFixture.PluginName],
+            CompileJournal.RunBatch(_mod.ModFolder, [IndexedModFixture.PluginName],
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
 
         var result = LoadOrderEndpoints.PutLoadOrder(
@@ -74,8 +74,8 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         var offer = Assert.Single(ok.Value!.CrashRepairOffers);
-        Assert.Equal(TrackedModFixture.PluginName, offer.Plugin);
-        Assert.Equal(TrackedModFixture.ModFolderOrigin, offer.Origin);
+        Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
+        Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
         Assert.Equal(CrashRepairReason.InterruptedCompile, offer.Reason);
     }
 

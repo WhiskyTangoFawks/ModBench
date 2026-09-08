@@ -559,9 +559,10 @@ public sealed class VmadEditTests : IDisposable
 
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-694-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-694-game-").FullName;
-        private readonly LoadOrderMirror _mirror;
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
+        public LoadOrder LoadOrder { get; }
+        public RecordEditService Edits { get; }
         public FormKey Npc { get; }
         public FormKey Quest { get; }
         public FormKey Perk { get; }
@@ -624,15 +625,16 @@ public sealed class VmadEditTests : IDisposable
 
             mod.WriteToBinary(pluginPath);
 
-            _mirror = new LoadOrderMirror(
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ILoadOrderMirror)_mirror).Reconcile(
-                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-                GameRelease.Fallout4);
-            Assert.Empty(_mirror.Status.Failures);
+            LoadOrder = LoadOrder.From(
+                _gameDirectory, _gameDirectory, GameRelease.Fallout4,
+                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
+                .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
+
+            var holder = new LoadOrderHolder();
+            holder.Apply(LoadOrder);
+            Edits = TestEditService.Over(holder);
         }
 
         // Alpha's properties are written out of key order too, and cover every shape a gesture
@@ -663,18 +665,13 @@ public sealed class VmadEditTests : IDisposable
             return script;
         }
 
-        public ProjectingEditService Service() =>
-        ProjectingEditService.Over(_mirror);
+        public RecordEditService Service() => Edits;
 
         public string Body(FormKey formKey) =>
-            _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!.Body!;
+            TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;
 
-        public JsonObject Adapter(FormKey formKey)
-        {
-            var document = _mirror.Projected().GetDocument(formKey.ToString(), Plugin)!;
-            var raw = document.Fields.Single(f => f.Metadata.Name == Field).Value;
-            return JsonNode.Parse(raw!.ToString()!)!.AsObject();
-        }
+        public JsonObject Adapter(FormKey formKey) =>
+            JsonNode.Parse(Body(formKey))!.AsObject()[Field]!.AsObject();
 
         public void Normalize(FormKey formKey)
         {
@@ -684,7 +681,6 @@ public sealed class VmadEditTests : IDisposable
 
         public void Dispose()
         {
-            _mirror.Dispose();
             TryDelete(_modFolder);
             TryDelete(_gameDirectory);
         }

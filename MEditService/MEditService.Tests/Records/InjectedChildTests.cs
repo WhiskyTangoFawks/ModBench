@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Edits;
+namespace MEditService.Tests.Records;
 
 /// <summary>A child a later plugin adds to a container an earlier plugin owns. The Index merges the
 /// two plugins' children; neither document holds the other's. A container type is a row in

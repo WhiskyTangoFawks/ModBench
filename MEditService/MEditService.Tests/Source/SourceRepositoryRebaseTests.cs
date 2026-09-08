@@ -10,20 +10,20 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
 public sealed class SourceRepositoryRebaseTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
     private string GitDir => Path.Combine(_mod.ModFolder, ".git");
     private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
 
-    private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService EditService() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -35,7 +35,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
     private void AbsorbUpstreamHeightMaxChange(float newHeightMax)
     {
-        var externalMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var externalMod = new Fallout4Mod(ModKey.FromFileName(SourceEditFixture.PluginName), Fallout4Release.Fallout4);
         var race = externalMod.Races.AddNew("FixtureRace");
         externalMod.Keywords.AddNew("FixtureKeyword");
         var npc = externalMod.Npcs.AddNew("FixtureNpc");
@@ -43,14 +43,14 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         npc.HeightMax = newHeightMax;
         externalMod.Npcs.AddNew("UntouchedNpc");
 
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
     }
 
     private void AbsorbUpstreamNewRecord()
     {
-        var externalMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var externalMod = new Fallout4Mod(ModKey.FromFileName(SourceEditFixture.PluginName), Fallout4Release.Fallout4);
         var race = externalMod.Races.AddNew("FixtureRace");
         externalMod.Keywords.AddNew("FixtureKeyword");
         var npc = externalMod.Npcs.AddNew("FixtureNpc");
@@ -58,9 +58,9 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         externalMod.Npcs.AddNew("UntouchedNpc");
         externalMod.Npcs.AddNew("BrandNewUpstreamNpc");
 
-        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var result = SourceRepository.RebaseEditBranch(_mod.ModFolder);
 
         Assert.Equal(RebaseOutcome.Refused, result.Outcome);
-        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         Assert.Contains(relative, result.RefusalReason, StringComparison.Ordinal);
         // Refused before touching anything: still on edit, still dirty exactly as before.
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
@@ -92,14 +92,14 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.Equal(RebaseOutcome.Clean, result.Outcome);
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
         // Both sides survived the replay: my own edit's content, and upstream's new record.
-        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         Assert.Contains("\"HeightMax\": 0.3", File.ReadAllText(Path.Combine(_mod.ModFolder, relative)), StringComparison.Ordinal);
         var mainSha = RunGit("rev-parse", "refs/heads/main").Trim();
         Assert.Equal(mainSha, RunGit("merge-base", "refs/heads/main", "edit").Trim());
     }
 
     [Fact]
-    public void RebaseEditBranch_ThenAReload_StillIngestsThePluginFromItsSourceTree()
+    public void RebaseEditBranch_LeavesTheSurvivingEditInTheSourceTree_WhereTheBinaryStillHasUpstreams()
     {
         EditService().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         CommitOnEditBranch("my own edit");
@@ -107,18 +107,18 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         Assert.Equal(RebaseOutcome.Clean, SourceRepository.RebaseEditBranch(_mod.ModFolder).Outcome);
 
-        using var reloaded = new LoadOrderMirror(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ILoadOrderMirror)reloaded).Reconcile(
-            _mod.GameDirectory,
-            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
-            GameRelease.Fallout4);
+        // The edit survived the replay in the tree; the binary on disk is the one upstream wrote and
+        // never carried it, so only the tree can be what a reader of this value reads.
+        using var document = JsonDocument.Parse(_mod.Document(_mod.Npc.ToString())!.Body);
+        Assert.Equal(0.3f, document.RootElement.GetProperty("HeightMax").GetSingle());
 
-        // No degraded load, and the record reads with the edit that survived the replay — which it can
-        // only do if the source tree was read, since the binary on disk is upstream's and has 1.0.
-        Assert.Empty(reloaded.Status.Failures);
-        Assert.Equal(0.3f, Assert.IsType<JsonElement>(reloaded.Index!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Fields
-            .Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
+        using var binary = ModFactory.ImportGetter(
+            new ModPath(
+                ModKey.FromFileName(SourceEditFixture.PluginName),
+                Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName)),
+            GameRelease.Fallout4);
+        Assert.Equal(
+            0f, ((IFallout4ModGetter)binary).Npcs.Single(n => n.FormKey == _mod.Npc).HeightMax);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var conflictResult = SourceRepository.RebaseEditBranch(_mod.ModFolder);
 
-        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal(RebaseOutcome.Conflicted, conflictResult.Outcome);
         Assert.Contains(relative, conflictResult.ConflictedPaths);
         var conflictedText = File.ReadAllText(Path.Combine(_mod.ModFolder, relative));
@@ -146,7 +146,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Empty(SourceRepository.WorkingTreeStatus(_mod.ModFolder));
 
-        var compileService = CompileServices.Over(_mod.Mirror);
+        var compileService = CompileServices.Over(_mod.LoadOrder);
         var compileResult = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }
@@ -161,7 +161,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var conflictResult = SourceRepository.RebaseEditBranch(_mod.ModFolder);
         Assert.Equal(RebaseOutcome.Conflicted, conflictResult.Outcome);
 
-        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         var theirs = RunGit("show", $":3:{relative}");
         File.WriteAllText(Path.Combine(_mod.ModFolder, relative), theirs);
 

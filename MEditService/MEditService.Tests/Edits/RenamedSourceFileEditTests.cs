@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.Edits;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;
@@ -7,11 +8,11 @@ namespace MEditService.Tests.Edits;
 /// path resolves it by the repository's fallback scan rather than a stale computed path.</summary>
 public sealed class RenamedSourceFileEditTests : IDisposable
 {
-    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+    private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService EditService() => ProjectingEditService.Over(_mod.Mirror);
+    private RecordEditService EditService() => _mod.Edits;
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -34,6 +35,6 @@ public sealed class RenamedSourceFileEditTests : IDisposable
         // for.
         Assert.False(File.Exists(originalPath));
         Assert.Contains("0.6", File.ReadAllText(renamed), StringComparison.Ordinal);
-        Assert.NotNull(_mod.Mirror.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Document(_mod.Npc.ToString()));
     }
 }

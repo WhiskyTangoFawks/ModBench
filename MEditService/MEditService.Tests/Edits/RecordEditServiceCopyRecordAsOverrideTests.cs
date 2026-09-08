@@ -87,7 +87,7 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
     {
         using var mod = CopyFixture.Create();
         // The destination fixture always tracks; simulate an untracked destination the same way
-        // TrackedModFixture.Untracked() does — no .git in the folder at all.
+        // SourceEditFixture.Untracked() does — no .git in the folder at all.
         Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
 
         var result = mod.Edits.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
