@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
-import type { IModlistSource, PluginEntry } from './model';
+import type { PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
@@ -12,7 +12,12 @@ const DND_MIME = 'application/vnd.medit.pluginlist-node';
 // Hoisted out of the constructor so an omitted `dataFolder` is not a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
-export type PluginListSource = Pick<IModlistSource, 'setPluginEnabled' | 'reorderPlugins'>;
+/** The two plugins.txt gestures the tree owns, bound to the instance root and the active
+ *  profile by the composition root; a refused command reaches this provider as a rejection. */
+export interface PluginListSource {
+  setPluginEnabled(pluginName: string, enabled: boolean): Promise<void>;
+  reorderPlugins(pluginNames: string[], toIndex: number): Promise<void>;
+}
 
 /** `dataFolder` is a getter, not a settled `Promise`: the setting it resolves is editable while
  *  Modbench runs, so a value captured at construction could go stale for the provider's life. */

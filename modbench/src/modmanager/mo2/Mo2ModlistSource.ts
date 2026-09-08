@@ -16,8 +16,7 @@ import {
   unlistedModNames,
   deadModEntryNames,
 } from './modlistText';
-import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from './pluginsText';
-import type { PluginLinesDelta } from '../pluginsReconcile';
+import { parsePlugins } from './pluginsText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
 import { setUninstalledInText } from './downloads';
 import { readGameName, readSelectedProfile, setSelectedProfileInText } from './modOrganizerIni';
@@ -33,8 +32,6 @@ const exists = (path: string): Promise<boolean> =>
 /** `instanceRoot` is the folder holding ModOrganizer.ini, mods/ and profiles/,
  *  which is the open VS Code workspace. Only the active profile is touched. */
 export class Mo2ModlistSource implements IModlistSource {
-  private pluginsMutex: Promise<void> = Promise.resolve();
-
   private readonly log: (msg: string) => void;
 
   constructor(
@@ -257,52 +254,12 @@ export class Mo2ModlistSource implements IModlistSource {
     return join(this.instanceRoot, 'profiles', profile, 'plugins.txt');
   }
 
-  // An unchanged result writes nothing, so a no-op never fires the watcher.
-  private modifyPlugins(fn: (text: string) => string): Promise<void> {
-    const task = this.pluginsMutex.then(async () => {
-      const path = await this.pluginsPath();
-      const before = await readFile(path, 'utf8');
-      const after = fn(before);
-      if (after !== before) await writeFile(path, after);
-    });
-    // Chain tail must never stay rejected, or every later call would hang forever
-    // waiting on a dead link — only the caller's own `task` should see the error.
-    this.pluginsMutex = task.catch(() => undefined);
-    return task;
-  }
-
   async readPluginOrder(): Promise<string[]> {
     return (await this.readPluginEntries()).map((e) => e.name);
   }
 
   async readEnabledPlugins(): Promise<string[]> {
     return (await this.readPluginEntries()).filter((e) => e.enabled).map((e) => e.name);
-  }
-
-  async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
-    await this.modifyPlugins((t) => setPluginEnabledInText(t, pluginName, enabled));
-  }
-
-  async reorderPlugins(pluginNames: string[], toIndex: number): Promise<void> {
-    await this.modifyPlugins((t) => movePluginsInText(t, pluginNames, toIndex));
-  }
-
-  async appendPlugin(pluginName: string): Promise<void> {
-    await this.modifyPlugins((t) => appendPluginInText(t, pluginName));
-  }
-
-  /** `delta` sees names parsed inside the mutex, so overlapping runs cannot
-   *  double-append. New lines are disabled: discovery is not intent to enable. */
-  async reconcilePluginLines(delta: (listed: string[]) => PluginLinesDelta): Promise<PluginLinesDelta> {
-    let applied: PluginLinesDelta = { append: [], prune: [] };
-    await this.modifyPlugins((t) => {
-      applied = delta(parsePlugins(t).map((e) => e.name));
-      let out = t;
-      for (const name of applied.prune) out = removePluginFromText(out, name);
-      for (const name of applied.append) out = appendPluginInText(out, name, false);
-      return out;
-    });
-    return applied;
   }
 
   private async readPluginEntries(): Promise<PluginEntry[]> {

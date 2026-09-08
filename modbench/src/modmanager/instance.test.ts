@@ -271,7 +271,7 @@ describe('Instance — built by watching', () => {
     await realInstance();
 
     expect(watchers.map((w) => w.pattern).sort()).toEqual(
-      ['downloads/**', 'mods/**', 'overwrite/**', 'profiles/*/modlist.txt', 'profiles/*/plugins.txt'],
+      ['ModOrganizer.ini', 'downloads/**', 'mods/**', 'overwrite/**', 'profiles/*/modlist.txt', 'profiles/*/plugins.txt'],
     );
   });
 
@@ -280,7 +280,7 @@ describe('Instance — built by watching', () => {
 
     instance.dispose();
 
-    expect(watchers.map((w) => w.disposed)).toEqual([true, true, true, true, true]);
+    expect(watchers.map((w) => w.disposed)).toEqual([true, true, true, true, true, true]);
   });
 
   it('yields the next value at a higher sequence when a file is rewritten outside Modbench', async () => {
@@ -473,6 +473,21 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     await switchProfileOutsideModbench(root, 'Secondary');
     await instance.refresh();
 
+    expect(instance.value.activeProfile).toBe('Secondary');
+  });
+
+  // A switch rewrites ModOrganizer.ini and nothing else, so without a watcher on that file the
+  // value keeps naming the old profile until some unrelated file happens to change.
+  it('follows a profile switch on its own watcher, with no refresh asked for', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    const before = instance.sequence;
+
+    await switchProfileOutsideModbench(root, 'Secondary');
+    watcherFor('ModOrganizer.ini').fireChange();
+
+    const landed = await pastSequenceWithin(instance, before, 2000);
+    expect(landed).not.toBe(TIMED_OUT);
     expect(instance.value.activeProfile).toBe('Secondary');
   });
 

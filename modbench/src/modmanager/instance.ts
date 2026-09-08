@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import type { IModlistSource, ModlistEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
+import { createDebouncedFsWatcher } from './fsWatcher';
 import { createModsWatcher } from './modsWatcher';
 import { createModlistWatcher } from './modlistWatcher';
 import { createOverwriteWatcher } from './overwriteWatcher';
@@ -119,6 +120,9 @@ export class Instance implements vscode.Disposable {
       createPluginsTxtWatcher(options.instanceRoot, schedule, 0),
       createOverwriteWatcher(options.instanceRoot, schedule, 0),
       createDownloadsWatcher(options.instanceRoot, schedule, 0),
+      // A profile switch rewrites this file and nothing else, so without it the value keeps
+      // naming the profile the user left — and a write verb would edit that profile's files.
+      createDebouncedFsWatcher(options.instanceRoot, 'ModOrganizer.ini', schedule, 0),
     ];
     // The game directory setting is editable while Modbench runs, so a change to it is a
     // recompute trigger like any watched file, not just a cache invalidation.

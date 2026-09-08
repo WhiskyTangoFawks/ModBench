@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
+import { reorderPlugins } from './commands/plugins';
+import { parsePlugins } from './mo2/pluginsText';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from './loadOrderSnapshot';
 import type { InstanceValue } from './instance';
@@ -84,6 +85,15 @@ class FakeSource implements PluginListSource {
     return Promise.resolve();
   }
 }
+
+// What the composition root binds: the reorder command against one instance root and profile.
+const writesTo = (instanceRoot: string): PluginListSource => ({
+  setPluginEnabled: () => Promise.reject(new Error('not exercised by the drag tests')),
+  reorderPlugins: async (names, toIndex) => {
+    const result = await reorderPlugins(instanceRoot, 'Default', names, toIndex);
+    if (!result.applied) throw new Error(result.refusal);
+  },
+});
 
 const makeProvider = (
   plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
@@ -625,13 +635,14 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   });
 });
 
-// End-to-end: the real Mo2ModlistSource over a temp plugins.txt, driven through the provider's
+// End-to-end: the real reorder command over a temp plugins.txt, driven through the provider's
 // drag → drop, asserting the on-disk order and byte-faithfulness — independent of the fixture
 // value that supplies the rows being dragged.
 describe('PluginListProvider — drag reorder round-trips through plugins.txt on disk', () => {
   let dir: string;
-  let source: Mo2ModlistSource;
+  let source: PluginListSource;
   const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
+  const orderOnDisk = async () => parsePlugins(await readFile(pluginsTxt(), 'utf8')).map((e) => e.name);
   const node = (name: string) => new PluginNode({ name, enabled: true });
   const fixturePlugins = () => ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'].map((name, slot) => plugin({ name, slot }));
 
@@ -640,7 +651,7 @@ describe('PluginListProvider — drag reorder round-trips through plugins.txt on
     await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
     await writeFile(join(dir, 'ModOrganizer.ini'), '[General]\nselected_profile=@ByteArray(Default)\n');
     await writeFile(pluginsTxt(), '# header\r\n*A.esp\r\nB.esp\r\n*C.esp\r\nD.esp\r\nE.esp\r\n');
-    source = new Mo2ModlistSource(dir);
+    source = writesTo(dir);
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
@@ -662,12 +673,12 @@ describe('PluginListProvider — drag reorder round-trips through plugins.txt on
 
   it('non-contiguous multi-selection moves as a block, preserving relative order', async () => {
     await dragToDisk(['A.esp', 'C.esp', 'E.esp'], 'D.esp');
-    expect(await source.readPluginOrder()).toEqual(['B.esp', 'A.esp', 'C.esp', 'E.esp', 'D.esp']);
+    expect(await orderOnDisk()).toEqual(['B.esp', 'A.esp', 'C.esp', 'E.esp', 'D.esp']);
   });
 
   it('drop past the last row appends the moved row', async () => {
     await dragToDisk(['B.esp'], undefined);
-    expect(await source.readPluginOrder()).toEqual(['A.esp', 'C.esp', 'D.esp', 'E.esp', 'B.esp']);
+    expect(await orderOnDisk()).toEqual(['A.esp', 'C.esp', 'D.esp', 'E.esp', 'B.esp']);
   });
 });
 
@@ -951,7 +962,7 @@ describe('PluginListProvider — implicit master drop-index mapping', () => {
   });
 
   async function dragToDisk(moved: string[], target: PluginNode | ImplicitMasterNode | undefined) {
-    const source = new Mo2ModlistSource(dir);
+    const source = writesTo(dir);
     const provider = new PluginListProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
     await provider.getChildren();
     const dt = new FakeDataTransfer();
