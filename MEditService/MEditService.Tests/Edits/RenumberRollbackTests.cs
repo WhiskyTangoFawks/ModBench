@@ -89,7 +89,7 @@ public sealed class RenumberRollbackTests
     }
 
     [Fact]
-    public void AContainerRenumberFailingAfterRelocatingItsSubtree_PutsTheSubtreeBack()
+    public void AContainerRenumberOntoAnOccupiedPath_RefusesWithoutTouchingTheTree()
     {
         using var fixture = new SourceContainerFixture();
         // A worldspace is the one directory-per-record container: its cells and their placed
@@ -112,8 +112,6 @@ public sealed class RenumberRollbackTests
         File.WriteAllText(Path.Combine(directory, "occupied.txt"), "something else is here");
     }
 
-    // Where the worldspace's own directory would land: a rename onto an occupied path fails, and
-    // the subtree under it has already been moved by then.
     private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {
         var worldspaceDirectory = Path.GetDirectoryName(

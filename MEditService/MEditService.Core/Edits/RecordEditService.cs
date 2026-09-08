@@ -11,7 +11,7 @@ namespace MEditService.Core.Edits;
 
 /// <summary>The statics the copy, create and scan sides all reach into: every write here lands as a
 /// working-tree change to the record's source JSON, and every refusal precedes it.</summary>
-public static class RecordEditService
+internal static class RecordEditService
 {
     /// <summary>The codec is the one constructor: a record begins as the document naming its identity,
     /// read back through the door every edit goes through. <paramref name="partialForm"/> sets the
