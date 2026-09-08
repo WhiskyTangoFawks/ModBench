@@ -16,7 +16,7 @@ Editing context — operates on **records**, **FormKeys**, and **plugins** (phys
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
 
 Placement: [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — native VS Code
-views (sidebar trees + editor-tab webviews), not a custom panel switcher. The Loadout surface
+views (sidebar trees + editor-tab webviews), not a custom panel switcher. The Mod-Management surface
 that launches this one is specified in [mods.md](mods.md).
 
 **Vocabulary note:** navigation starts from the **Plugins tree** ([plugins.md](plugins.md)) — one
@@ -56,7 +56,7 @@ backend and builds the load order from every line of the active profile's `plugi
 entries included, carrying their participation (ADR-0035) — plus vanilla masters
 (the `PUT /load-order` snapshot, ADR-0044); teardown is workspace close (or crash handling). A
 launch that found no game directory retries when `modbench.mods.gameDirectory` changes. The Plugins tree's rows gain chevrons
-once the load order is ready — no other surface swap happens: the Loadout views (Mods, Plugins,
+once the load order is ready — no other surface swap happens: the MO2-side views (Toolbox, Mods, Plugins,
 Downloads) are always visible regardless of load order state, and Referenced By is
 always-present-and-following rather than gated on a mode.
 Editing writes records to the working-tree source text of tracked plugins (ADR-0041); writing the
@@ -90,7 +90,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 - Modbench is a single activity-bar container (`modbench`). There is no view mode and no
   `modbench.viewMode` context key
   ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)): every
-  Loadout and mEdit view is contributed unconditionally, and each surface that needs to hide
+  MO2-side and mEdit view is contributed unconditionally, and each surface that needs to hide
   does so on its own signal rather than a shared mode — the Plugins tree's rows gain chevrons
   once a load order exists (ADR-0035), and Referenced By is always present, following the active
   record editor ([medit-referenced-by.md](medit-referenced-by.md)). The backend launches at
@@ -159,7 +159,7 @@ Per-surface testing decisions live in the surface specs. Shared:
 
 - **Run Script…** across load order/record/plugin — planned, not yet shipped.
 - **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side is a
-  Loadout-adjacent concern (see [mods.md](mods.md) Out of Scope); deferred.
+  Mod-Management-adjacent concern (see [mods.md](mods.md) Out of Scope); deferred.
 - **Load-order editing** (checkbox, drag reorder, the missing-master badge) — Mod Management's
   own facet of the merged Plugins tree ([plugins.md](plugins.md) § Row model), not an Editing
   concern.
@@ -172,5 +172,5 @@ Per-surface testing decisions live in the surface specs. Shared:
   the merged Plugins tree ([plugins.md](plugins.md)) all run without it — a row is a leaf until a
   load order exists, per ADR-0035. The backend lifecycle (spawn at activation, teardown on
   workspace close, restart on crash) is owned by the extension per
-  [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and specified from the Loadout
+  [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and specified from the Mod-Management
   side in [mods.md](mods.md).

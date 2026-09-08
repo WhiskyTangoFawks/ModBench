@@ -50,7 +50,7 @@ describe('parsePlugins', () => {
     ] satisfies PluginEntry[]);
   });
 
-  it('a whitespace-only line is blank, not a phantom entry named for its spaces — this is what lets Mo2ModlistSource route readPluginOrder/readEnabledPlugins through this function', () => {
+  it('a whitespace-only line is blank, not a phantom entry named for its spaces — this is what lets the Instance read the load order and its enabled subset through this one function', () => {
     expect(names('﻿# header\r\n*Foo.esp\r\n\r\n   \r\nBar.esp\r\n')).toEqual(['Foo.esp', 'Bar.esp']);
   });
 

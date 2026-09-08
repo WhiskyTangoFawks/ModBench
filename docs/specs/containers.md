@@ -1,7 +1,7 @@
 # Modbench containers — Surface Specification
 
 **Status: Implemented.** Launch… is a placed affordance whose wiring is deferred — see
-*Launch…* under *The Loadout view* below.
+*Launch…* under *The Toolbox* below.
 
 A composition-root spec: the two view containers Modbench contributes to VS Code, the views
 each holds in default order, and the title-bar placement rules every one of those views
@@ -19,7 +19,7 @@ view or command's title-bar home is decided; read it before placing one.
 
 | Order | View | id | Context |
 | --- | --- | --- | --- |
-| 1 | Loadout | `modbench.loadoutHeader` | Composition root — see *The Loadout view* below |
+| 1 | Toolbox | `modbench.toolbox` | Composition root — see *The Toolbox* below |
 | 2 | Mods | `modbench.modList` | Mod Management |
 | 3 | Plugins | `modbench.pluginListTree` | Mod Management, plus Editing's record rows once a load order is running ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)) |
 | 4 | Downloads | `modbench.downloads` | Mod Management; registered collapsed by default |
@@ -40,58 +40,65 @@ active editor, and the *why* (a sidebar view cannot sit beside the record editor
 panel view can) is specced in full in [medit-referenced-by.md](medit-referenced-by.md); it is
 not repeated here.
 
-## The Loadout view — the container's settings view
+## The Toolbox — the view of the instance, and the composition root
 
-`modbench.loadoutHeader`, pinned first in the `modbench` container, present unconditionally.
-Unlike the other three views it is not a tree: a small readout whose rows double as commands,
-playing the part a container-level settings/actions panel would if VS Code exposed one for a
-multi-view container (it doesn't — see *Rule 1* below). Its title bar is the home for every
-workspace-scope action that isn't about any one domain tree.
+`modbench.toolbox`, pinned first in the `modbench` container, present unconditionally. Unlike
+the other three views it is not a tree: MO2's top bar rendered as a small readout whose rows
+double as commands, playing the part a container-level settings/actions panel would if VS Code
+exposed one for a multi-view container (it doesn't — see *Rule 1* below). Its title bar is the
+home for every workspace-scope action that isn't about any one domain tree.
 
-It reads Mod-Management state (profile, deployment), so it carries no domain vocabulary of its
-own: it names *profiles* and a *deployment*, and never records, FormKeys, mods or files.
+It renders the **Instance**'s value
+([ADR-0047](../adr/0047-the-extension-mirrors-the-backends-shape-one-read-model-built-only-by-watching.md))
+and nothing else: the active profile and deployed-ness are fields of that value, so the readout
+can never disagree with what the trees below it show. It names *profiles* and a *deployment*,
+and never records, FormKeys, mods or files.
+
+It is also the MO2 side's **composition root**. It constructs the Instance, the Mods, Plugins
+and Downloads views, every MO2-side gesture and the backend load-order sync; disposing it
+disposes all of them. The extension entry point (`modbench/src/extension.ts`) constructs the
+Toolbox and the editing side, and nothing else.
 
 It is deliberately *not* a dashboard. It has a hard ceiling of four rows, and a row earns its
 place by being state the user needs at a glance while working in the trees below it.
 
-### When there is no loadout
+### When there is no instance
 
 With no workspace open, or a workspace that isn't an MO2 instance, the view registers but
 renders **no rows**, and Launch…, Deploy and Purge are withheld from its title bar
 (`modbench.workspaceIsMo2Instance`). The commands every row activates are registered alongside
-the Loadout views, so on those paths they do not exist — rows would be clicks that throw. The
-Mods view's own `viewsWelcome` is what explains the situation to the user; the header
+the other three views, so on those paths they do not exist — rows would be clicks that throw.
+The Mods view's own `viewsWelcome` is what explains the situation to the user; the Toolbox
 stays quiet rather than repeating it.
 
 ### Rows
 
 | Row | Description | Activates |
 | --- | --- | --- |
-| Profile | active profile name, or `—` when unreadable | Switch Profile |
+| Profile | active profile name, or `—` when the Instance has landed no value yet | Switch Profile |
 | Deployment | `deployed` / `not deployed` | Deploy, when not deployed |
 
-- The **Profile** row degrades to `—` and logs rather than erroring: a readout blip is
-  ADR-0026's background tier, not a toast.
+- The **Profile** row reads `—` rather than erroring while the Instance holds its empty
+  pre-first-read value: a readout blip is ADR-0026's background tier, not a toast.
 - The **Deployment** row appears only when Modbench itself is the deployer
   (`modbench.mods.deploymentMode != external`, read through the single `isStandaloneDeployment`
   predicate that also drives the `when` clauses, so a row and an icon can never disagree), and
-  reads deployed-ness from the presence of
-  the deploy manifest (`mods/.medit-manifest.json`) — the same question purge already asks, so
-  the readout cannot disagree with what purge would do. A corrupt manifest reads as deployed:
-  there is state out there needing a purge, which is what the row should say. When deployed,
-  the row is an inert readout — Purge is destructive and stays in overflow behind a modal.
+  reads deployed-ness from the Instance's `deployed` field — the presence of the deploy
+  manifest (`mods/.medit-manifest.json`), the same question purge already asks, so the readout
+  cannot disagree with what purge would do. A corrupt manifest reads as deployed: there is state
+  out there needing a purge, which is what the row should say. When deployed, the row is an
+  inert readout — Purge is destructive and stays in overflow behind a modal.
 
 ### mEdit has no lifecycle affordance
 
 The backend launches with the extension (the DB-file-backed session makes startup cheap enough
 that lifecycle is not a user decision); the [Plugins view](plugins.md) carries no Launch mEdit /
-Close mEdit toggle. This header carries no mEdit row of any kind, running or not, and reads no
-backend/load order state —
-`LoadoutHeaderProvider` only ever reads Mod-Management state. (The earlier ruling that placed
-the pair — "launch mEdit should be an option on the plugins view" — is superseded by there
-being no pair to place.)
+Close mEdit toggle. The Toolbox carries no mEdit row of any kind, running or not, and reads no
+backend/load order state — `ToolboxProvider` only ever reads the Instance's value. (The earlier
+ruling that placed the pair — "launch mEdit should be an option on the plugins view" — is
+superseded by there being no pair to place.)
 
-### Header title bar
+### Toolbox title bar
 
 | Slot | Action | Gate |
 | --- | --- | --- |
@@ -110,9 +117,9 @@ every one of those sources is otherwise watcher-driven.
 The rebuild is one backend call that drops the index file and reopens it empty, refusing (423)
 exactly as a load-order send does when another window holds it; the extension then resends the
 load order exactly as it does at startup, so the rebuild is the ordinary cold load and needs no
-code of its own. The header shows the same reconcile progress it shows for a cold load. A failed
-rebuild (423, or the backend down) stops Refresh there — no load order is sent and no tree is
-re-read — and is reported the way any other failed gesture is.
+code of its own. The Plugins view shows the same reconcile progress it shows for a cold load. A
+failed rebuild (423, or the backend down) stops Refresh there — no load order is sent and no tree
+is re-read — and is reported the way any other failed gesture is.
 
 ### Launch…
 
@@ -131,7 +138,7 @@ hardcoded executable was a lock to one game that the registry removes by constru
 teardown-on-exit is deferred to its own design, since a
 script-extender loader exits immediately and its exit code says nothing about the game.
 
-### Deltas this view absorbed
+### Deltas the Toolbox absorbed
 
 Historical record from before ADR-0035 merged Mod Management's "Plugins (load order)" and
 Editing's "mEdit Plugins tree" into the one shared Plugins tree that exists today — the two
@@ -146,16 +153,19 @@ Editing's "mEdit Plugins tree" into the one shared Plugins tree that exists toda
 
 ### Implementation Decisions
 
-- **`LoadoutHeaderProvider`** (`modbench/src/LoadoutHeaderProvider.ts`) lives at the
-  composition root and imports from neither bounded context. Every piece of state arrives as
-  an injected getter — `activeProfile`, `deployment` — which is both the language-boundary
-  constraint (the merged plugins provider carries the same one) and what makes the
-  whole surface unit-testable without a VS Code harness. It reads no backend/load order state at
-  all (see *mEdit has no lifecycle affordance* above).
-- **It owns no state.** Profile comes from `Mo2ModlistSource`, deployment from the deploy
-  manifest. The header re-reads; it never caches.
-- **Refresh triggers** are the transitions themselves: a profile switch, a deploy or purge, and
-  a change to `modbench.mods.deploymentMode`.
+- **`ToolboxProvider`** (`modbench/src/ToolboxProvider.ts`) renders its rows from one injected
+  getter over the Instance's value — `{ activeProfile, deployed }` — plus the
+  `isStandaloneDeployment` predicate. That is both what keeps the readout from drifting from the
+  trees and what makes the whole surface unit-testable without a VS Code harness. It reads no
+  backend/load order state at all (see *mEdit has no lifecycle affordance* above).
+- **It owns no state.** Both fields belong to the Instance; the Toolbox re-renders, it never
+  caches.
+- **`createToolbox`** (`modbench/src/toolbox.ts`) is the composition root: the Instance, the
+  four views, every MO2-side gesture and the load-order sync are built there. Everything it
+  constructs is registered through one `own()` and disposed with it.
+- **Re-render triggers** are a landed Instance recompute — a profile switch, a deploy and a
+  purge all reach it as a watched file changing — and a change to
+  `modbench.mods.deploymentMode`, which is a setting the Instance does not watch.
 - **The four-row ceiling is a design constraint, not a limit of the widget.** A fifth candidate
   row is a signal that the state belongs in a tree or the status bar. Today there are two.
 
@@ -178,13 +188,13 @@ reached nine navigation icons with nothing in overflow, which VS Code silently c
 `modbench/src/test/packageJson.test.ts` except where noted.
 
 1. **Scope first.** An action that isn't about a tree's own domain doesn't go on that tree —
-   it goes on the Loadout view, the status bar, or the palette.
+   it goes on the Toolbox, the status bar, or the palette.
    *Rejected alternative*: a container-level `…` shared by every view in the `modbench`
    container. It doesn't exist — VS Code's menu contribution points are enumerated and there is
    no `viewsContainer/title`; what renders at the top of a multi-view container is VS Code's own
    auto-generated **Views** menu (show/hide each view, Reset View Locations, Move View), which
    exists because the container holds several views and cannot be injected into. So a shared
-   home has to be a real view — the Loadout view.
+   home has to be a real view — the Toolbox.
 
 2. **Four navigation icons maximum, in any state.** VS Code collapses navigation icons into
    `…` when a view is narrow, so a fifth is unreliable — not a matter of taste. A two-command
@@ -200,7 +210,7 @@ reached nine navigation icons with nothing in overflow, which VS Code silently c
    *Rejected alternative*: not recorded.
 
 4. **Destructive actions never get an icon.** Deploy and Purge rewrite the game directory;
-   they sit in the header's overflow, behind a modal confirm, never in the navigation group.
+   they sit in the Toolbox's overflow, behind a modal confirm, never in the navigation group.
    *Rejected alternative*: not recorded.
 
 5. **Fixed slot order**, so an icon means the same thing in every view: name filter, then the
@@ -223,18 +233,21 @@ reached nine navigation icons with nothing in overflow, which VS Code silently c
 
 7. **`showCollapseAll` on every hierarchical tree, never on a flat list.** Currently: Mods and
    the merged Plugins tree (plugin → record type → record) — yes; Plugin List (removed),
-   Downloads, the Loadout view — no. On a flat list the icon is one that does nothing.
+   Downloads, the Toolbox — no. On a flat list the icon is one that does nothing.
    *Rejected alternative*: not recorded.
    **This is the one rule with no test seam.** `showCollapseAll` is a `createTreeView` option
    with no declarative contribution and no readable property on the returned `TreeView`, so it
-   is checked by reading the `createTreeView` call sites (`extension.ts` for Plugins,
+   is checked by reading the `createTreeView` call sites (`toolbox.ts` for Plugins,
    `modmanager/modManagementCommands.ts` for Mods) rather than by a test.
 
 ## Testing
 
-- `src/test/LoadoutHeaderProvider.test.ts` — every Loadout-view row, as a function of injected
-  state; also guards that no mEdit row exists.
-- `src/test/packageJson.test.ts` — the Loadout view is first in the container and ungated; the
+- `src/test/ToolboxProvider.test.ts` — every Toolbox row, as a function of the Instance value it
+  is handed; also guards that no mEdit row exists.
+- `src/test/toolboxScan.test.ts` — the retired names (`Loadout`, "modlist source") appear in no
+  source file or `package.json` entry, and every disposable `toolbox.ts` constructs is
+  registered for the Toolbox's own teardown.
+- `src/test/packageJson.test.ts` — the Toolbox is first in the container and ungated; the
   placement rubric (slots, icon ceiling, workspace actions absent from domain trees, destructive
   actions out of navigation, icon vocabulary) holds across every contributed menu. Each `it`
   carries a pointer comment to the rule number here, not the rule's own text.

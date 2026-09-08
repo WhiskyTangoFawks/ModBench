@@ -23,7 +23,7 @@ function makeSyncDeps(over: Partial<LoadOrderSyncDeps> = {}): LoadOrderSyncDeps 
   };
 }
 
-// ADR-0044: every loadout gesture becomes "recompute the snapshot, PUT it", one PUT per settled
+// ADR-0044: every instance change becomes "recompute the snapshot, PUT it", one PUT per settled
 // change, never a race of two. `putLoadOrder` stands in for the whole reconcile as the one call
 // every send assertion spies on.
 describe('createLoadOrderSync', () => {
@@ -49,7 +49,7 @@ describe('createLoadOrderSync', () => {
     expect(putLoadOrder).toHaveBeenCalledTimes(1);
   });
 
-  it('drops a request silently when nothing is receiving — a loadout-only workspace is the ordinary case', async () => {
+  it('drops a request silently when nothing is receiving — a workspace with no backend is the ordinary case', async () => {
     const { sync, putLoadOrder, log } = make({ isReceiving: () => false });
 
     sync.request();

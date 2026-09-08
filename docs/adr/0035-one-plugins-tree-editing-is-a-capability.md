@@ -40,7 +40,7 @@ whether any line names it at all are three facts on the registration row, all su
 Management. `UpdateWinners()` and `ConflictClassifier` carry the participation predicate —
 registered rows that do not participate can never be a winner. This is the load-bearing
 invariant: without it `is_winner` describes a load order the game does not have. Registration is
-not a choice a user makes; participation is three choices they already made in Loadout.
+not a choice a user makes; participation is three choices they already made in Mod Management.
 
 ### The tree
 

@@ -2,7 +2,7 @@
 // instance root, the profile and its own inputs, returning applied or a refusal. No class,
 // no interface, no base type.
 
-import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   deleteSeparatorInText,
@@ -15,9 +15,12 @@ import {
   removeModFromText,
   renameSeparatorInText,
   setEnabledInText,
+  unlistedModNames,
+  deadModEntryNames,
 } from '../mo2/modlistText';
 import { setUninstalledInText } from '../mo2/downloads';
 import { parseMetaIni } from '../mo2/metaIni';
+import type { ModlistEntry } from '../model';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -36,7 +39,7 @@ const modlistPath = (instanceRoot: string, profile: string): string =>
 
 // The one queue every modlist.txt write for an instance passes through — module-private
 // infrastructure, not an abstraction over commands. Keyed by instance root, so every profile
-// under it serializes together. Exported so Mo2ModlistSource's own writes share it too.
+// under it serializes together.
 const modlistWriteQueues = new Map<string, Promise<unknown>>();
 
 export function withModlistWriteLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
@@ -177,4 +180,38 @@ export async function createEmptyMod(instanceRoot: string, profile: string, name
   }
   await mkdir(modDir, { recursive: true });
   return spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
+}
+
+/** modlist.txt converges on what `mods/` holds. A missing `mods/` reconciles nothing, so a
+ *  malformed workspace can never read as a mass delete. */
+export async function reconcileMods(
+  instanceRoot: string, profile: string,
+): Promise<{ applied: true; added: string[]; pruned: string[] } | { applied: false; refusal: string }> {
+  let dirNames: string[];
+  try {
+    const dirents = await readdir(join(instanceRoot, 'mods'), { withFileTypes: true });
+    dirNames = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { applied: true, added: [], pruned: [] };
+    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+  }
+  let entries: ModlistEntry[];
+  try {
+    entries = parseModlist(await readFile(modlistPath(instanceRoot, profile), 'utf8'));
+  } catch (err) {
+    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+  }
+  // insertModAtWinningEnd always lands its new line above whatever is currently first, so
+  // inserting in reverse-sorted order leaves the batch ascending top-to-bottom on disk.
+  const added = unlistedModNames(dirNames, entries);
+  for (const name of [...added].reverse()) {
+    const outcome = await spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
+    if (!outcome.applied) return outcome;
+  }
+  const pruned = deadModEntryNames(dirNames, entries);
+  for (const name of pruned) {
+    const outcome = await spliceModlist(instanceRoot, profile, (text) => removeModFromText(text, name));
+    if (!outcome.applied) return outcome;
+  }
+  return { applied: true, added, pruned };
 }

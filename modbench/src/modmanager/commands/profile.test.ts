@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { switchProfile } from './profile';
+import { listProfiles, switchProfile } from './profile';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../test/corpusFixture';
 
 const INI = 'ModOrganizer.ini';
@@ -64,5 +64,24 @@ describe('switchProfile', () => {
     expect(first).toEqual({ applied: true, wrote: true });
     expect(second).toEqual({ applied: true, wrote: true });
     expect(await iniText(root)).toContain('Default');
+  });
+});
+
+describe('listProfiles', () => {
+  let root: string;
+
+  beforeEach(async () => { root = await cloneCorpusFixture(); });
+  afterEach(() => rm(root, { recursive: true, force: true }));
+
+  it('names every profile directory', async () => {
+    expect((await listProfiles(root)).sort()).toEqual(['Default', 'Secondary']);
+  });
+
+  // Rival: a listing that maps the dirents straight through — MO2 keeps loose files under
+  // profiles/, and one offered as a profile is a switch onto files that do not exist.
+  it('ignores a stray file directly in profiles/', async () => {
+    await writeFile(join(root, 'profiles', 'stray.txt'), 'not a profile');
+
+    expect((await listProfiles(root)).sort()).toEqual(['Default', 'Secondary']);
   });
 });

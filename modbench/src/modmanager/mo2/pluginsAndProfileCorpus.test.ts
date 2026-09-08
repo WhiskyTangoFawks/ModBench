@@ -2,20 +2,26 @@
 // only their own file and nothing else.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
-import { Mo2ModlistSource } from './Mo2ModlistSource';
 import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../commands/plugins';
-import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree } from '../test/corpusFixture';
+import { switchProfile } from '../commands/profile';
+import {
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, readActiveProfile, readModlistEntries,
+  readPluginLines, snapshotTree,
+} from '../test/corpusFixture';
 
 const INI = 'ModOrganizer.ini';
 const PROFILE = 'Default';
 
+const pluginOrder = async (dir: string): Promise<string[]> =>
+  (await readPluginLines(dir)).map((p) => p.name);
+const enabledPlugins = async (dir: string): Promise<string[]> =>
+  (await readPluginLines(dir)).filter((p) => p.enabled).map((p) => p.name);
+
 describe('plugins.txt + profile corpus', () => {
   let dir: string;
-  let src: Mo2ModlistSource;
 
   beforeEach(async () => {
     dir = await cloneCorpusFixture();
-    src = new Mo2ModlistSource(dir);
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
@@ -25,9 +31,9 @@ describe('plugins.txt + profile corpus', () => {
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
-    expect(await src.readEnabledPlugins()).not.toContain('Tracked Patch Mod.esp');
+    expect(await enabledPlugins(dir)).not.toContain('Tracked Patch Mod.esp');
     // Order is preserved — only the marker changed.
-    expect(await src.readPluginOrder()).toContain('Tracked Patch Mod.esp');
+    expect(await pluginOrder(dir)).toContain('Tracked Patch Mod.esp');
   });
 
   it('reconcilePlugins converges the fixture on disk, touching only plugins.txt', async () => {
@@ -39,9 +45,8 @@ describe('plugins.txt + profile corpus', () => {
     // The fixture ships this plugin on disk with no plugins.txt line; an unresolved game
     // directory makes Data-folder presence unknowable, so nothing is pruned.
     expect(result).toEqual({ applied: true, wrote: true, append: ['NonAsciiRetexture - Addon.esl'], prune: [] });
-    const order = await src.readPluginOrder();
-    expect(order.at(-1)).toBe('NonAsciiRetexture - Addon.esl');
-    expect(await src.readEnabledPlugins()).not.toContain('NonAsciiRetexture - Addon.esl');
+    expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture - Addon.esl');
+    expect(await enabledPlugins(dir)).not.toContain('NonAsciiRetexture - Addon.esl');
   });
 
   it('reorderPlugins moves a plugin within load order, touching only plugins.txt', async () => {
@@ -50,8 +55,7 @@ describe('plugins.txt + profile corpus', () => {
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
-    const order = await src.readPluginOrder();
-    expect(order.at(-1)).toBe('NonAsciiRetexture.esp');
+    expect((await pluginOrder(dir)).at(-1)).toBe('NonAsciiRetexture.esp');
   });
 
   // "NonAsciiRetexture - Addon.esl" ships on disk but was never given a plugins.txt
@@ -63,21 +67,21 @@ describe('plugins.txt + profile corpus', () => {
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 
-    expect(await src.readPluginOrder()).toContain('NonAsciiRetexture - Addon.esl');
-    expect(await src.readEnabledPlugins()).toContain('NonAsciiRetexture - Addon.esl');
+    expect(await pluginOrder(dir)).toContain('NonAsciiRetexture - Addon.esl');
+    expect(await enabledPlugins(dir)).toContain('NonAsciiRetexture - Addon.esl');
   });
 
   // Rival this catches: an implementation that copies or merges profile content
   // instead of repointing selected_profile — both profiles' modlist.txt/plugins.txt
   // must stay byte-identical across a switch.
-  it('setActiveProfile repoints ModOrganizer.ini only, leaving every profile file untouched', async () => {
+  it('switchProfile repoints ModOrganizer.ini only, leaving every profile file untouched', async () => {
     const before = await snapshotTree(dir);
-    await src.setActiveProfile('Secondary');
+    await switchProfile(dir, 'Secondary');
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([INI]));
 
-    expect(await src.getActiveProfile()).toBe('Secondary');
-    expect((await src.readModlist()).map((e) => e.name)).toEqual([
+    expect(await readActiveProfile(dir)).toBe('Secondary');
+    expect((await readModlistEntries(dir, 'Secondary')).map((e) => e.name)).toEqual([
       'Unofficial Fallout 4 Patch',
       'Harder VATS',
     ]);

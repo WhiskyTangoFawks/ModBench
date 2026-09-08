@@ -52,8 +52,8 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
 
   // The teardown/refresh writers left extension.ts for a unit seam and claim the same
   // structural-deps property, so they are guarded the same way: nothing imported but `vscode`.
-  it('the loadout teardown module imports from neither context', () => {
-    const imports = importsOf(read('loadoutTeardown.ts'));
+  it('the editing teardown module imports from neither context', () => {
+    const imports = importsOf(read('editingTeardown.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
     expect(imports).toEqual(['vscode']);
   });
@@ -65,7 +65,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
       .split('\n')
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join('\n');
-    expect([...code.matchAll(/\b(mods?|modlists?|loadouts?)\b/gi)].map((m) => m[0])).toEqual([]);
+    expect([...code.matchAll(/\b(mods?|modlists?)\b/gi)].map((m) => m[0])).toEqual([]);
     expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
   });
 
@@ -74,10 +74,6 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   // since these have real modmanager-internal dependencies.
   it('pluginDestination.ts imports nothing from Editing', () => {
     expect(importsOf(read('modmanager/pluginDestination.ts')).filter((s) => s.includes('medit'))).toEqual([]);
-  });
-
-  it('Mo2ModlistSource.ts imports nothing from Editing', () => {
-    expect(importsOf(read('modmanager/mo2/Mo2ModlistSource.ts')).filter((s) => s.includes('medit'))).toEqual([]);
   });
 
   it('model.ts imports nothing from Editing', () => {
@@ -93,7 +89,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
 
   it('the child provider contains no mod vocabulary', () => {
     // Word-bounded so `model`, `modbench` and `modified` don't read as the domain term.
-    const offending = [...read('medit/PluginTreeProvider.ts').matchAll(/\b(mods?|modlists?|loadouts?)\b/gi)];
+    const offending = [...read('medit/PluginTreeProvider.ts').matchAll(/\b(mods?|modlists?)\b/gi)];
     expect(offending.map((m) => m[0])).toEqual([]);
   });
 

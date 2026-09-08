@@ -8,7 +8,7 @@ interface RecordBrowserSets {
 }
 
 /** Stated structurally so this file imports from neither bounded context and needs no VS Code
- *  harness to test; `extension.ts`'s real session satisfies it by shape. */
+ *  harness to test; the real `ExtensionSession` satisfies it by shape. */
 export interface TeardownSession {
   loadOrderSync?: { abandon(): void; setMatches(map: Map<string, boolean> | undefined): void };
   pluginsTree?: { setLoadOrder(files: undefined): void; refreshDecorations(): void };
@@ -35,9 +35,9 @@ export function say(session: TeardownSession, message: string | undefined): void
   if (message === undefined) session.pluginsNameFilter?.refresh();
 }
 
-/** There is no separate loadout view mode to switch back to: the loadout views are never hidden,
- *  and Referenced By governs its own visibility. */
-export function exitToLoadout(session: TeardownSession): void {
+/** There is no view mode to switch back to: the Toolbox, Mods, Plugins and Downloads views are
+ *  never hidden, and Referenced By governs its own visibility. */
+export function exitEditing(session: TeardownSession): void {
   // Abandon any reconcile still in flight *first*: it aborts the PUT, so the reconcile returns
   // 'abandoned' rather than reporting a killed backend to the user as a network failure.
   session.loadOrderSync?.abandon();
@@ -63,7 +63,7 @@ export function exitToLoadout(session: TeardownSession): void {
   void session.backendManager?.stop();
 }
 
-/** A backend that dies takes the load order with it, and `exitToLoadout` is not on that path — a
+/** A backend that dies takes the load order with it, and `exitEditing` is not on that path — a
  *  crash reaches us only as a status change. Otherwise rows keep chevrons that fetch against a
  *  backend that is gone. */
 export function clearTreeWhenBackendDies(
@@ -82,7 +82,7 @@ export function clearTreeWhenBackendDies(
     // And neither must its diagnoses.
     session.loadDiagnostics?.clear();
     // The subscription is against this dead backend specifically — closing it here covers both
-    // a crash and exitToLoadout's own stop(), which lands here too.
+    // a crash and exitEditing's own stop(), which lands here too.
     session.notificationSubscriber?.stop();
   });
 }

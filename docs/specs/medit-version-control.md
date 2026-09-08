@@ -117,8 +117,8 @@ using git.
   one-keystroke framing rules out one, and Edits is Track's own default. A user wanting a
   different preset deletes `.git` and re-Tracks by hand, the same gesture Track always offered),
   and indexes the plugin. Only once that has actually succeeded does the extension's
-  composition root call a new Mod Management writer (`IModlistSource.appendPlugin`,
-  `modmanager/mo2/pluginsText.ts`) that appends an enabled entry line at the winning end of
+  composition root call a Mod Management writer (`appendPlugin`,
+  `modmanager/commands/plugins.ts`) that appends an enabled entry line at the winning end of
   `plugins.txt`. This ordering is the whole of the surface's own invariant: `plugins.txt` can
   never name a file that does not yet exist, because nothing writes the line until the file and
   its index entry are already real.

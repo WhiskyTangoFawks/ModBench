@@ -4,7 +4,7 @@
 import type * as vscode from 'vscode';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { IModlistSource, ModlistEntry } from './model';
+import type { ModlistEntry, PluginEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
 import { createDebouncedFsWatcher } from './fsWatcher';
@@ -16,6 +16,9 @@ import { createDownloadsWatcher } from './downloadsWatcher';
 import { scanDownloads } from './DownloadsPanel';
 import { buildDownloadRows, type DownloadRow } from './mo2/downloads';
 import { readGameName, readSelectedProfile } from './mo2/modOrganizerIni';
+import { parseModlist } from './mo2/modlistText';
+import { parsePlugins } from './mo2/pluginsText';
+import { parseMetaIni } from './mo2/metaIni';
 import { resolveGameDirectory, type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory } from './gameDirectory';
 import type { OnConfigChange } from './gameDirectoryResolver';
 import { isDeployed } from './deployer';
@@ -66,11 +69,8 @@ export interface InstanceValue {
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
 
-type InstanceSource = Pick<IModlistSource, 'readModlist' | 'readPluginOrder' | 'readEnabledPlugins'>;
-
 export interface InstanceOptions {
   instanceRoot: string;
-  source: InstanceSource;
   config: () => ConfigLike;
   detectPaths: DetectPaths;
   detectWinePrefix: DetectWinePrefix;
@@ -79,6 +79,29 @@ export interface InstanceOptions {
 }
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+const profileFile = (instanceRoot: string, profile: string, name: string): string =>
+  join(instanceRoot, 'profiles', profile, name);
+
+// A mod with no meta.ini has no metadata; a present-but-unreadable one is a real failure.
+async function readMeta(instanceRoot: string, modName: string): Promise<Partial<ModlistEntry>> {
+  try {
+    return parseMetaIni(await readFile(join(instanceRoot, 'mods', modName, 'meta.ini'), 'utf8'));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw err;
+  }
+}
+
+async function readModlistEntries(instanceRoot: string, profile: string): Promise<ModlistEntry[]> {
+  const entries = parseModlist(await readFile(profileFile(instanceRoot, profile, 'modlist.txt'), 'utf8'));
+  return Promise.all(entries.map(async (entry) =>
+    (entry.kind === 'mod' ? { ...entry, ...(await readMeta(instanceRoot, entry.name)) } : entry)));
+}
+
+async function readPluginEntries(instanceRoot: string, profile: string): Promise<PluginEntry[]> {
+  return parsePlugins(await readFile(profileFile(instanceRoot, profile, 'plugins.txt'), 'utf8'));
+}
 
 const EMPTY: InstanceValue = {
   mods: [],
@@ -194,7 +217,7 @@ export class Instance implements vscode.Disposable {
         subscriber(next, this.seq);
       } catch (err) {
         // A throwing subscriber would otherwise reject the queue for good, and no later
-        // recompute would run — the dead chain tail Mo2ModlistSource's mutex documents.
+        // recompute would run — the dead chain tail every write queue's tail-catch documents.
         this.options.log(`[instance] subscriber threw at sequence ${this.seq}: ${message(err)}`);
       }
     }
@@ -203,11 +226,11 @@ export class Instance implements vscode.Disposable {
   // A truncated modlist.txt parses to no entries, and zero mods is legal, so an empty parse is
   // re-read after a settle before being believed. A partial parse is not covered — it reads as
   // a real removal.
-  private async readMods(): Promise<ModlistEntry[]> {
-    const entries = await this.options.source.readModlist();
+  private async readMods(profile: string): Promise<ModlistEntry[]> {
+    const entries = await readModlistEntries(this.options.instanceRoot, profile);
     if (entries.length > 0) return entries;
     await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    const confirmed = await this.options.source.readModlist();
+    const confirmed = await readModlistEntries(this.options.instanceRoot, profile);
     if (confirmed.length > 0) {
       this.options.log(`[instance] modlist read as empty mid-write; the re-read found ${confirmed.length} entries`);
     }
@@ -215,11 +238,16 @@ export class Instance implements vscode.Disposable {
   }
 
   private async read(): Promise<InstanceValue> {
-    const { instanceRoot, source, config, detectPaths, detectWinePrefix, log } = this.options;
-    const entries = await this.readMods();
-    const [index, iniText, downloadEntries, deployed, overwriteFileCount] = await Promise.all([
+    const { instanceRoot, config, detectPaths, detectWinePrefix, log } = this.options;
+    // The ini is read first and every later read is against the profile it names, so a profile
+    // switch mid-recompute cannot mix one profile's modlist with another's plugins.txt.
+    const iniText = await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8');
+    const profile = readSelectedProfile(iniText);
+    const entries = await this.readMods(profile);
+    // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
+    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
-      readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'),
+      readPluginEntries(instanceRoot, profile),
       scanDownloads(instanceRoot),
       isDeployed(instanceRoot),
       countOverwriteFiles(join(instanceRoot, 'overwrite')),
@@ -238,8 +266,8 @@ export class Instance implements vscode.Disposable {
         // different generation of it than the file index did.
         {
           readModlist: () => Promise.resolve(entries),
-          readPluginOrder: () => source.readPluginOrder(),
-          readEnabledPlugins: () => source.readEnabledPlugins(),
+          readPluginOrder: () => Promise.resolve(pluginLines.map((p) => p.name)),
+          readEnabledPlugins: () => Promise.resolve(pluginLines.filter((p) => p.enabled).map((p) => p.name)),
         },
         instanceRoot,
         gameDirectory?.dataFolder,
@@ -257,7 +285,7 @@ export class Instance implements vscode.Disposable {
       filesByMod: index.filesByMod,
       plugins,
       downloads: downloadEntries ? buildDownloadRows(downloadEntries) : [],
-      activeProfile: readSelectedProfile(iniText),
+      activeProfile: profile,
       gameRelease: readGameName(iniText),
       gameDirectory: gameDirectory ?? undefined,
       deployed,

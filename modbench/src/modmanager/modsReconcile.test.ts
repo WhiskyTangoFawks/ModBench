@@ -1,6 +1,6 @@
 // The installer writes no modlist line, so this watcher is what puts one there. Reproduced
-// against a real instance directory and a real Mo2ModlistSource, with only the vscode watcher
-// faked.
+// against a real instance directory and the real reconcileMods command, with only the vscode
+// watcher faked.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -11,7 +11,7 @@ import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { registerModsReconcile } from './modsReconcile';
-import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
+import { reconcileMods } from './commands/modlist';
 import { installFromFolder } from './commands/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './test/corpusFixture';
 
@@ -33,7 +33,7 @@ describe('registerModsReconcile', () => {
     await writeFile(join(sourceFolder, 'Installed.esp'), 'plugin bytes');
     invalidate = vi.fn();
     channel = { error: vi.fn() };
-    subscription = registerModsReconcile(root, new Mo2ModlistSource(root), invalidate, channel);
+    subscription = registerModsReconcile(root, () => reconcileMods(root, 'Default'), invalidate, channel);
   });
   afterEach(async () => {
     subscription.dispose();
@@ -68,8 +68,10 @@ describe('registerModsReconcile', () => {
 
   it('is idempotent — a further event once disk and modlist.txt agree changes nothing', async () => {
     watchers[0].fireCreate(join(root, 'mods', 'DragIn Manual Extract'));
-    await vi.waitFor(async () => expect(await modlistText(root)).toContain('DragIn Manual Extract'));
+    // The whole reconcile, not just its first write: `invalidate` fires once both legs land.
+    await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
     const settled = await modlistText(root);
+    expect(settled).toContain('DragIn Manual Extract');
     invalidate.mockClear();
 
     watchers[0].fireChange(join(root, 'mods', 'Harder VATS', 'HarderVATS.esp'));

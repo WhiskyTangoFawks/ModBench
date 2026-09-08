@@ -16,7 +16,13 @@ rather than reinventing MO2's layout widgets. Three placement decisions follow:
   **the one Plugins tree** ([ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md)): Mod
   Management owns its rows (`plugins.txt`, no backend required) and a running editing backend adds
   record browsing beneath them.
-- **Downloads** is a native `TreeView`, third in the loadout stack below Mods and Plugins (flat
+- The **Toolbox** is the container's first view, and the composition root the other three are
+  built from: MO2's top bar rendered as a small readout over the Instance's value (the game, the
+  active profile, deploy state, run, refresh and settings), not a tree. It is the home for every
+  workspace-scope action that is not about one domain tree, because VS Code has no
+  `viewsContainer/title` contribution point to hang them on. Full surface in
+  [containers.md](../specs/containers.md).
+- **Downloads** is a native `TreeView`, third in the container below Mods and Plugins (flat
   list, status columns, right-click actions — the same native-context-menu pattern Mods/Plugins
   use), registered `"visibility": "collapsed"` by default. A status-bar item gives the ambient
   "↓ N downloading" glance. Downloads is occasional — fetched-but-unresolved archives aren't
