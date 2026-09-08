@@ -129,9 +129,13 @@ export class PluginListProvider
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly dataFolder: () => Promise<string | undefined>;
-  private readonly instance: Pick<Instance, 'value' | 'subscribe'>;
+  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
+  // Resolves once the Instance lands its first recompute. `sequence === 0` means "not read
+  // yet", never "genuinely empty" — lets `getChildren()` await it instead of showing `EmptyNode`.
+  private readonly firstValue: Promise<void>;
+  private resolveFirstValue: (() => void) | undefined;
   // plugins.txt's raw file order as last rendered, so a drop computes its index against what
   // the user dragged against rather than a fresh read an external edit could skew.
   private lastOrder: string[] = [];
@@ -148,8 +152,12 @@ export class PluginListProvider
     this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
+    this.firstValue = options.instance.sequence > 0
+      ? Promise.resolve()
+      : new Promise((resolve) => { this.resolveFirstValue = resolve; });
     this.instanceSubscription = options.instance.subscribe((value) => {
       this.instanceValue = value;
+      this.resolveFirstValue?.();
       this.invalidate();
     });
   }
@@ -202,6 +210,7 @@ export class PluginListProvider
 
   async getChildren(element?: PluginListNode): Promise<PluginListNode[]> {
     if (element) return []; // flat list — rows have no children
+    await this.firstValue; // never claim "No plugins" before the Instance has actually read one
 
     if (!this.cache) {
       const built = await this.buildRows();

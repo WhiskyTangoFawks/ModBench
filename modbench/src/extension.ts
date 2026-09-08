@@ -842,7 +842,10 @@ function registerLoadoutView(session: ExtensionSession, deps: LoadoutViewDeps): 
     const instance = new Instance({
       instanceRoot, source: modlistSource, log, dataFolder: () => dataFolder().then((d) => d ?? ''),
     });
-    void instance.refresh(); // first value: watchers alone would leave the tree empty until a change
+    // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
+    // this kicks off the first real read. PluginListProvider's own `sequence === 0` guard is
+    // what keeps activation from being blocking here.
+    void instance.refresh();
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
     // and enterEditing below need the session slot filled first.
