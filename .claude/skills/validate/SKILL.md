@@ -37,8 +37,8 @@ tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh
 has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can
 silently invalidate it, so it rides along with `--backend`, not `--frontend`.
 
-Run gate commands with an explicit `timeout: 600000` — the Bash tool's 120 s default
-silently backgrounds a full `dotnet test` run, which reads as a hang or a skipped gate.
+Run gate commands with `run_in_background: true` and wait for the completion notice: the backend
+gates queue on a machine-wide flock, so a run can outlast a foreground command's 10-minute cap.
 
 Fix all failures, rerun.
 

@@ -4,6 +4,7 @@ BACKEND=false
 FRONTEND=false
 API_DRIFT=false
 FAILED=false
+ORIG_ARGS=("$@")
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -15,6 +16,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+
+# One backend gate run per machine: concurrent runs flake timing tests, and api-drift kills every
+# MEditService.Api and binds 5172. -o keeps the lock out of child processes, so a lingering build
+# server cannot hold it.
+if { $BACKEND || $API_DRIFT; } && [[ -z ${GATE_SLOT:-} ]]; then
+  flock -n /tmp/medit-backend-gate.lock true || echo "=== Waiting for the backend gate slot ==="
+  GATE_SLOT=1 exec flock -o /tmp/medit-backend-gate.lock "$0" "${ORIG_ARGS[@]}"
+fi
 
 echo "=== Gate 1: Comment discipline ==="
 EXCLUDE_RE='^(references/|modbench/src/medit/generated/|tools/|styles/)|/(node_modules|bin|obj|dist|out|TestData)/|package-lock\.json$'
@@ -51,7 +60,7 @@ if $BACKEND; then
 fi
 
 # flock on the integration step: its mock backend binds a fixed port (15172), so concurrent
-# gate runs (a second worktree, a pipelined orchestrate slot) serialize on that step only.
+# frontend-only gate runs (a second worktree, a pipelined orchestrate slot) serialize on that step.
 if $FRONTEND; then
   echo "=== Gate 4: Frontend lint ==="
   (cd "$ROOT/modbench" && npm run lint) && \

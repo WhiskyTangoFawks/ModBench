@@ -29,8 +29,10 @@ the next stream to start has nowhere safe to land. Always work in a worktree.
 A worktree isolates the tree, not the runtime. Never run a live backend against the same MO2
 instance path from two places at once. A long-running process on a fixed port takes a flock'd
 lockfile.
-While building or running tests, be aware of memory usage. The current system can handle 2
- builds simultaneously, but not 3.
+Backend gate runs are the heaviest thing a stream does, and `run-gates.sh` holds one machine-wide
+flock around them, so a second run waits for the slot instead of sharing it, since concurrent
+runs flake timing tests. Run gates in the background, since a queued run can outlast a 10-minute
+foreground command. Inner-loop `dotnet test --filter` runs are not locked.
 
 ## Merging
 
