@@ -141,7 +141,21 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.Rebase(new RebaseRequest("NoSuchOrigin"), _mod.Index, loggerFactory);
+        var result = PluginEndpoints.Rebase(
+            new RebaseRequest("NoSuchOrigin"), TestEditService.RebaseHandler(_mod.Index), loggerFactory);
+
+        var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
+        Assert.Equal(404, problem.StatusCode);
+    }
+
+    [Fact]
+    public void ContinueRebase_UnknownOrigin_Returns404()
+    {
+        var (loggerFactory, _) = CapturingLoggerFactory();
+        using var _disposeLogger = loggerFactory;
+
+        var result = PluginEndpoints.ContinueRebase(
+            new RebaseRequest("NoSuchOrigin"), TestEditService.ContinueRebaseHandler(_mod.Index), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(404, problem.StatusCode);
@@ -153,7 +167,9 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.Rebase(new RebaseRequest(IndexedModFixture.ModFolderOrigin), _mod.Index, loggerFactory);
+        var result = PluginEndpoints.Rebase(
+            new RebaseRequest(IndexedModFixture.ModFolderOrigin), TestEditService.RebaseHandler(_mod.Index),
+            loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<RebaseResponse>>(result);
         Assert.Equal(RebaseOutcome.Clean, ok.Value!.Outcome);

@@ -614,65 +614,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         index.Index(binary, plugin.Registration, plugin.Key, plugin.Path);
     }
 
-    /// <summary>ADR-0041: nothing here touches plugins.txt — Mod Management owns that file, and the
-    /// append happens only once this call has succeeded, so the load order can never name a file
-    /// this method did not finish writing.</summary>
-    public PluginResponse CreatePlugin(string name, string path, string origin)
-    {
-        // This indexes a whole new plugin, so it is a write like any other. _lock alone would not
-        // order it against an in-flight edit: the edit path writes through IRecordIndex without
-        // holding _lock at all.
-        using var _ = WriteGate.Enter();
-
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Plugin name cannot be empty.", nameof(name));
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Destination path cannot be empty.", nameof(path));
-        if (string.IsNullOrWhiteSpace(origin))
-            throw new ArgumentException("Origin cannot be empty.", nameof(origin));
-
-        var ext = Path.GetExtension(name);
-        if (!ext.Equals(".esp", StringComparison.OrdinalIgnoreCase) &&
-            !ext.Equals(".esm", StringComparison.OrdinalIgnoreCase) &&
-            !ext.Equals(".esl", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException($"Invalid plugin extension '{ext}'. Must be .esp, .esm, or .esl.", nameof(name));
-        }
-
-        lock (_lock)
-        {
-            var (loadOrder, index) = RequireScopeCore();
-
-            // Never-assume-exclusive-ownership: the destination may be a mod folder nothing has
-            // written into yet — a brand-new mod, or overwrite/ before its first file.
-            Directory.CreateDirectory(path);
-
-            var filePath = Path.Combine(path, name);
-            if (File.Exists(filePath))
-                throw new IOException($"Plugin file already exists: {name}");
-
-            var modKey = ModKey.FromFileName(name);
-            var mod = ModFactory.Activator(modKey, _gameRelease);
-            // A new plugin defaults to an ESL-flagged ESP, silently; the flag is an ordinary
-            // editable header field afterward. Only for a caller-named .esp: an explicit .esl is
-            // already light, and an explicit .esm asked for a full master.
-            if (Path.GetExtension(name).Equals(".esp", StringComparison.OrdinalIgnoreCase))
-            {
-                mod.IsSmallMaster = true;
-            }
-            mod.WriteToBinary(filePath);
-
-            var metadata = loadOrder.AddCreatedPlugin(filePath, origin);
-            var openedMod = loadOrder.GetMod(metadata.Name, metadata.Origin)!;
-            index.Index(openedMod, metadata.Registration, metadata.Key, metadata.Path);
-            _indexed.Add(new IndexedPlugin(metadata.Name, metadata.Origin));
-            PublishStatus();
-            // A whole new plugin's rows can newly match an active filter.
-            ReapplyFilter();
-            return PluginResponse.FromMetadata(metadata);
-        }
-    }
-
     /// <summary>ADR-0046 invariant 6's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
     /// this call re-derived whole.</summary>

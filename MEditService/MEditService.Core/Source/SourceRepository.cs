@@ -617,6 +617,10 @@ public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha25
 /// each path in the native merge editor; the refusal reason is set only when refused.</summary>
 public sealed record RebaseResult(RebaseOutcome Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths)
 {
+    /// <summary>Clean alone: a refusal never touched the branch, and a conflict leaves the repo
+    /// mid-rebase, waiting on the user's resolution rather than replayed.</summary>
+    public bool Applied => Outcome == RebaseOutcome.Clean;
+
     public static RebaseResult Clean() => new(RebaseOutcome.Clean, null, []);
 
     public static RebaseResult Refused(string reason) => new(RebaseOutcome.Refused, reason, []);

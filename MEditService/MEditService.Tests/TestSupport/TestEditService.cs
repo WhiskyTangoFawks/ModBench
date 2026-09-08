@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.TestSupport;
@@ -67,6 +68,18 @@ internal static class TestEditService
 
     internal static KeepExternalChangeHandler KeepHandler() =>
         new(SharedSchemaReflector.Instance, NullLogger<KeepExternalChangeHandler>.Instance);
+
+    internal static RebaseEditBranchHandler RebaseHandler(LoadOrderHolder holder) => new(holder);
+
+    internal static RebaseEditBranchHandler RebaseHandler(IndexProjector index) => new(HolderOver(index));
+
+    internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(LoadOrderHolder holder) => new(holder);
+
+    internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(IndexProjector index) =>
+        new(HolderOver(index));
+
+    internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder) =>
+        new(holder, new TrackHandler(new TrackService(NullLogger<TrackService>.Instance)));
 
     internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) => new(
         new WriteTargets(

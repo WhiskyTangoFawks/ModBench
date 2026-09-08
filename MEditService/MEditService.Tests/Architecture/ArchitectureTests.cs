@@ -65,18 +65,50 @@ public sealed class ArchitectureTests
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
     {
+        var root = SolutionDirectory();
+        // The reconcile request is the endpoint's alone. ADR-0041's created copy is registered on the
+        // kernel and reaches the Index through the next snapshot, so the create gesture is a writer
+        // and never a reconciler.
+        string[] reconcilers = ["LoadOrderEndpoints.cs"];
         // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
         // goes through cannot disarm this.
-        string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs", "LoadOrderHolder.cs"];
-        // IndexProjector.cs holds the reconcile itself, which the endpoint calls: it is the verb,
-        // not a second arrival.
-        var offenders = Offenders(SolutionDirectory(), Projects, [".Reconcile("], ["LoadOrderEndpoints.cs", "IndexProjector.cs"])
-            .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Apply("], writers))
-            .Concat(Offenders(SolutionDirectory(), Projects, [nameof(LoadOrderHolder), ".Register("], writers))
+        string[] writers = ["LoadOrderEndpoints.cs", "CreatePluginHandler.cs"];
+
+        var reconciles = Offenders(root, Projects, [".Reconcile("], []);
+        var applies = Offenders(root, Projects, [nameof(LoadOrderHolder), ".Apply("], []);
+        var registers = Offenders(root, Projects, [nameof(LoadOrderHolder), ".Register("], []);
+
+        var offenders = Unallowed(reconciles, reconcilers)
+            .Concat(Unallowed(applies, writers))
+            .Concat(Unallowed(registers, writers))
             .Distinct()
             .ToList();
         Assert.True(offenders.Count == 0,
             "The load order is reconciled or written outside its endpoints in:\n" + string.Join("\n", offenders));
+
+        var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies, registers)).ToList();
+        Assert.True(dead.Count == 0,
+            "Allowances naming no such call — delete them rather than leaving a write pre-authorized:\n"
+            + string.Join("\n", dead));
+    }
+
+    private static IEnumerable<string> Unallowed(List<string> named, string[] allowed) =>
+        named.Where(f => !allowed.Contains(Path.GetFileName(f)));
+
+    // An allowance matching no call pre-authorizes a write nobody reviews, and reads as though the
+    // rule had an exception it does not have.
+    internal static List<string> DeadAllowances(string[] allowed, params List<string>[] scans)
+    {
+        var named = scans.SelectMany(s => s).Select(Path.GetFileName).ToHashSet(StringComparer.Ordinal);
+        return [.. allowed.Where(a => !named.Contains(a)).Order(StringComparer.Ordinal)];
+    }
+
+    [Fact]
+    public void DeadAllowances_NamesAnAllowanceNoScanMatched_AndKeepsOneAnyScanDid()
+    {
+        Assert.Equal(
+            ["Stale.cs"],
+            DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
     // ADR-0046 invariant 3: Queries are the Index's only readers, so a member no query service
@@ -131,12 +163,12 @@ public sealed class ArchitectureTests
         Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
     }
 
-    // ADR-0008: PluginWriter backs the binary up first; IndexProjector writes only a brand-new
+    // ADR-0008: PluginWriter backs the binary up first; the create gesture writes only a brand-new
     // file and TrackService only a scratch copy, so neither has anything to back up.
     [Fact]
     public void ExistingPluginBinary_IsWrittenOnlyByPluginWriter()
     {
-        string[] allowed = ["PluginWriter.cs", "IndexProjector.cs", "TrackService.cs"];
+        string[] allowed = ["PluginWriter.cs", "CreatePluginHandler.cs", "TrackService.cs"];
         var offenders = Offenders(SolutionDirectory(), Projects, "WriteToBinary(", allowed)
             .Concat(Offenders(SolutionDirectory(), Projects, "BeginWrite", allowed))
             .ToList();

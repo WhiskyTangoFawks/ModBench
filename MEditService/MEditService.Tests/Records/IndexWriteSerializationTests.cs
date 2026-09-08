@@ -79,22 +79,6 @@ public sealed class IndexWriteSerializationTests : IDisposable
         await work.WaitAsync(Generous);
     }
 
-    [Fact]
-    public async Task CreatePlugin_WaitsForAnInFlightWriteToRelease()
-    {
-        Task work;
-        using (new GateHeldElsewhere(Index.WriteGate))
-        {
-            bool finished;
-            (work, finished) = RunAndWait(
-                () => Index.CreatePlugin("GatedCreate.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
-                BlockedWindow);
-            Assert.False(finished, "CreatePlugin indexed a new plugin without taking the write gate");
-        }
-
-        await work.WaitAsync(Generous);
-    }
-
     // --- The Source watcher's own timer-driven index write (ADR-0046 invariant 4) ---
 
     [Fact]

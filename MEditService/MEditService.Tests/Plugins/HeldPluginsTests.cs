@@ -308,24 +308,6 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void AddCreatedPlugin_IsParticipating_AtTheNextSlot_UnderTheCallersOrigin()
-    {
-        using var data = new PluginFixtureBuilder("lo-create").WithPlugin("Existing.esp").Build();
-        using var loadOrder = Open(data);
-        var newPath = Path.Combine(data.DataFolder, "New.esp");
-        new Fallout4Mod(ModKey.FromFileName("New.esp"), Fallout4Release.Fallout4)
-            .WriteToBinary(newPath);
-
-        var created = loadOrder.AddCreatedPlugin(newPath, "MyMod");
-
-        Assert.Equal("MyMod", created.Origin);
-        Assert.True(created.Participates);
-        Assert.False(created.IsImmutable);
-        Assert.Equal(loadOrder.Plugins.Single(p => p.Name == "Existing.esp").LoadOrderIndex + 1, created.LoadOrderIndex);
-        Assert.NotNull(loadOrder.GetMod("New.esp", "MyMod"));
-    }
-
-    [Fact]
     public void Dispose_CalledTwice_DoesNotThrow()
     {
         using var data = new PluginFixtureBuilder("lo-dispose").WithPlugin("DisposeTest.esp").Build();

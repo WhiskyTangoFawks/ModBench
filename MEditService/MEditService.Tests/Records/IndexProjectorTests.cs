@@ -286,18 +286,19 @@ public sealed class IndexProjectorTests
     }
 
     [Fact]
-    public void CreatePlugin_ReappliesTheFilter_SoTheNewCopysRowsAnswerThroughIt()
+    public void AnArrivingCopy_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
     {
-        using var fx = TwoProviders("projector-create-filter");
+        using var fx = TwoProviders("projector-arriving-filter");
         var projector = MakeProjector();
         using var _1 = projector;
-        projector.Reconcile(Snapshot(fx));
+        projector.Reconcile(Snapshot(fx, [fx.Plugins[0]]));
         projector.SetFilter("SELECT form_key FROM records");
 
-        var created = projector.CreatePlugin("Minted.esp", Path.Combine(fx.Root, "mod-minted"), "MintedMod");
+        projector.Reconcile(Snapshot(fx));
 
+        var arrived = fx.Plugins[1];
         var rows = projector.Reads!.Search(new RecordQuery(
-            Plugin: new PluginKey(created.Name, created.Origin), Limit: 10, Offset: 0));
+            Plugin: new PluginKey(arrived.Name, arrived.Origin), Limit: 10, Offset: 0));
         Assert.NotEmpty(rows.Items);
     }
 
