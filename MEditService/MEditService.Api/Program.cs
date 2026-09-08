@@ -59,25 +59,22 @@ try
         o.SchemaFilter<MEditService.Api.Swagger.NullabilitySchemaFilter>();
     });
     builder.Services.AddSingleton<SchemaReflector>();
-    builder.Services.AddSingleton<TableDdlBuilder>();
     // ADR-0046: one publisher instance, resolved as both types — the concrete type for the stream
     // endpoint's own subscribe/unsubscribe, the interface for every publisher.
     builder.Services.AddSingleton<SseNotificationPublisher>();
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
-    // ADR-0001: the index is a persistent file per MO2 instance, inside the instance root —
-    // the load request names it, so there is nothing for the composition root to state here.
-    builder.Services.AddSingleton<IRecordIndexFactory, DuckDbRecordIndexFactory>();
     builder.Services.AddSingleton<ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // ADR-0046 invariant 10: one Index instance for the whole process, so the write side and the
     // read side never project into two stores.
+    // ADR-0001: the index is a persistent file per MO2 instance, inside the instance root — the
+    // load request names it, so there is nothing for the composition root to state here.
     builder.Services.AddSingleton(sp => new IndexProjector(
-        sp.GetRequiredService<IRecordIndexFactory>(),
-        sp.GetRequiredService<ILoggerFactory>().CreateLogger<IndexProjector>(),
-        sp.GetRequiredService<IModImporter>(),
         sp.GetRequiredService<SchemaReflector>(),
+        sp.GetRequiredService<ILoggerFactory>(),
+        sp.GetRequiredService<IModImporter>(),
         sp.GetRequiredService<INotificationPublisher>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
     // Resolved from the Index rather than registered on its own, so there is exactly one write

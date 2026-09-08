@@ -22,7 +22,7 @@ namespace MEditService.Core.Records;
 // The single DuckDB implementation of IRecordIndex/IRecordReads, split into three collaborators:
 // IndexStore, PluginIngest and WorkingTreeOverlay. This class owns every transaction boundary,
 // registration, the winner sweep, reads and the SQL door.
-public sealed class DuckDbRecordIndex : IRecordIndex
+internal sealed class DuckDbRecordIndex : IRecordIndex
 {
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger _logger;
@@ -798,57 +798,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => owner.GetReferences(targetFormKey);
 
-        /// <summary>Derived, not declared (ADR-0038): owners of every outward reference plus owners
-        /// of every non-native FormKey this plugin carries, in load order, excluding itself.</summary>
-        public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin)
-        {
-            var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            using (var cmd = owner.Connection.CreateCommand())
-            {
-                cmd.CommandText = "SELECT DISTINCT target_form_key FROM form_references WHERE source_plugin = $1 AND source_origin = $2";
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    if (ModKeyNameOf(reader.GetString(0)) is { } name) required.Add(name);
-                }
-            }
-
-            using (var cmd = owner.Connection.CreateCommand())
-            {
-                cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    var fk = reader.GetString(0);
-                    if (ModKeyNameOf(fk) is { } name && !string.Equals(name, plugin.Name, StringComparison.OrdinalIgnoreCase))
-                        required.Add(name);
-                }
-            }
-
-            required.Remove(plugin.Name);
-            if (required.Count == 0) return [];
-
-            // A master the load order holds sorts by its load_order_idx; one it doesn't falls after
-            // every listed master, alphabetically among themselves, so the result is stable either way.
-            var order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            using (var cmd = owner.Connection.CreateCommand())
-            {
-                cmd.CommandText = $"SELECT plugin, MIN(load_order_idx) FROM {TableDdlBuilder.RegistrationsRelation} WHERE load_order_idx IS NOT NULL GROUP BY plugin";
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                    order[reader.GetString(0)] = reader.GetInt32(1);
-            }
-
-            return [.. required
-                .OrderBy(n => order.GetValueOrDefault(n, int.MaxValue))
-                .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)];
-        }
-
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
         {
             var types = tableNames.ToList();
@@ -1079,12 +1028,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             if (reader.GetString(6) != SourceRef.WorkingTree) return WorkingTreeState.None;
             return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
-        }
-
-        private static string? ModKeyNameOf(string formKey)
-        {
-            var colon = formKey.IndexOf(':');
-            return colon > 0 ? formKey[(colon + 1)..] : null;
         }
 
         // Column 8 is the correlated container_child EXISTS Search's SELECT adds, 9 this record's

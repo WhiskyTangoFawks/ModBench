@@ -37,7 +37,24 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     private bool _conflictsComputed;
     private int _plannedCount;
 
+    /// <summary>The composition root's door: the Index opens its own store, so nothing outside
+    /// <c>Core/Records</c> names the store, its factory or how a file is opened (ADR-0001).</summary>
     public IndexProjector(
+        SchemaReflector schemaReflector,
+        ILoggerFactory? loggerFactory = null,
+        IModImporter? modImporter = null,
+        INotificationPublisher? notifications = null)
+        : this(
+            new DuckDbRecordIndexFactory(
+                schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
+                loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>()),
+            loggerFactory?.CreateLogger<IndexProjector>(), modImporter, schemaReflector, notifications)
+    {
+    }
+
+    /// <summary>The store's factory as a seam, for a test that faults or counts what the store
+    /// does.</summary>
+    internal IndexProjector(
         IRecordIndexFactory indexFactory,
         ILogger? logger = null,
         IModImporter? modImporter = null,
@@ -82,9 +99,23 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     public ILoadOrder? LoadOrder { get { lock (_lock) return _heldPlugins; } }
     public IRecordReads? Reads { get { lock (_lock) return _index?.At(RecordRef.Effective); } }
-    /// <summary>The store the projections land in, for a collaborator that writes or reads rows
-    /// directly. Null with no load order held.</summary>
-    public IRecordIndex? Store { get { lock (_lock) return _index; } }
+    /// <summary>The store the projections land in. Internal: ADR-0046 invariant 10 makes the Index
+    /// one module, and the rows behind this are its own. Null with no load order held.</summary>
+    internal IRecordIndex? Store { get { lock (_lock) return _index; } }
+
+    /// <summary>Whether the store registers this copy — an endpoint's 404 question, answered without
+    /// handing out the store.</summary>
+    public bool Registers(PluginKey key)
+    {
+        lock (_lock) return _index?.RegisteredPlugins().Contains(key) == true;
+    }
+
+    /// <summary>ADR-0001: the hash the store's rows for this copy were built from, or null when it
+    /// holds no validated rows for it — the watch registration's one question of the store.</summary>
+    public string? IndexedContentHash(PluginKey key)
+    {
+        lock (_lock) return _index?.IndexedContentHash(key);
+    }
 
     /// <summary>One per projector, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
@@ -893,6 +924,16 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
                     "stale until the filter is reapplied", ex.Message);
             }
         }
+    }
+
+    /// <summary>ADR-0046's Refresh: closes what is held, drops the instance's index file and
+    /// reopens it empty, flooring the new file's sequence at what this process has already handed
+    /// out. The next reconcile fills it.</summary>
+    public void RebuildStore(GameRelease gameRelease, string instanceRoot)
+    {
+        var previousSequence = Sequence;
+        Close();
+        using var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence);
     }
 
     /// <summary>Drops everything held: the load order and the store's connection. Cancels an

@@ -30,8 +30,7 @@ public sealed class BinaryChangeApplierTests
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
         var index = new BinaryChangeApplier(fixture.Index, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
         watcher.IndexedBinaryChanged = index.Apply;
-        ExternalChangeLoadOrderHook.RunAfterReconcile(
-            fixture.Index.LoadOrder, fixture.Index.Store, watcher, NullLogger.Instance);
+        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
         return watcher;
     }
 
@@ -101,11 +100,10 @@ public sealed class BinaryChangeApplierTests
     public void ATrackedPluginChangedMidReconcile_AsksTheUser_AndIsNeverSilentlyReindexed()
     {
         using var fixture = IndexedModFixture.Tracked();
-        var mirrored = new List<IndexedBinaryEvent>();
+        var reindexed = new List<IndexedBinaryEvent>();
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        watcher.IndexedBinaryChanged = e => { lock (mirrored) mirrored.Add(e); return true; };
-        ExternalChangeLoadOrderHook.RunAfterReconcile(
-            fixture.Index.LoadOrder, fixture.Index.Store, watcher, NullLogger.Instance);
+        watcher.IndexedBinaryChanged = e => { lock (reindexed) reindexed.Add(e); return true; };
+        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
 
         RewriteBinaryWithExtraNpc(fixture, "ChangedByXEdit");
 
@@ -113,7 +111,7 @@ public sealed class BinaryChangeApplierTests
         Assert.NotEmpty(watcher.Unanswered());
         // Well past the debounce window, so "no re-index" is a decision rather than a race.
         Thread.Sleep(500);
-        lock (mirrored) Assert.Empty(mirrored);
+        lock (reindexed) Assert.Empty(reindexed);
         Assert.DoesNotContain("ChangedByXEdit", EditorIds(fixture, fixture.Plugin));
     }
 
@@ -124,7 +122,9 @@ public sealed class BinaryChangeApplierTests
     {
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
 
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(null, null, watcher, NullLogger.Instance);
+        using var noLoadOrder = new IndexProjector(SharedSchemaReflector.Instance);
+
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(noLoadOrder, watcher, NullLogger.Instance);
 
         Assert.Empty(offers);
         Assert.Empty(watcher.Unanswered());

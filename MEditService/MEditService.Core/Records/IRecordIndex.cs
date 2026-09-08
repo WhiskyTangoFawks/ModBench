@@ -5,7 +5,7 @@ namespace MEditService.Core.Records;
 
 /// <summary>Ingest plus every read, over one game's indexed plugins. One implementation over DuckDB;
 /// no SQL crosses this seam except <see cref="SetFilter"/> (invariant 8).</summary>
-public interface IRecordIndex : IDisposable
+internal interface IRecordIndex : IDisposable
 {
     /// <summary>Repositions every read at <paramref name="recordRef"/>. Named <c>recordRef</c>, not
     /// <c>ref</c>: CA1716 rejects an interface parameter named after a reserved keyword, even

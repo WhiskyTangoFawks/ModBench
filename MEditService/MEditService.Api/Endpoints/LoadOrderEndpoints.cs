@@ -168,7 +168,7 @@ public static class LoadOrderEndpoints
             // The hash check and the live watches for every plugin now held, in one pass after the
             // sweep; the crash-repair offers ride the response the same way Failures does.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(
-                index.LoadOrder, index.Store, externalChangeWatcher, logger);
+                index, externalChangeWatcher, logger);
             return Results.Ok(new LoadOrderResponse("reconciled", index.Status.Failures, crashRepairOffers));
         }
         catch (OperationCanceledException ex)
@@ -190,9 +190,7 @@ public static class LoadOrderEndpoints
         }
     }
 
-    // Captured before Close(): once the Index drops its store, Sequence reads 0, and the rebuilt
-    // file must not answer a caller with a value lower than this process already gave out.
-    internal static IResult PostRebuildIndex(RebuildIndexRequest req, IndexProjector index, IRecordIndexFactory indexFactory, ILoggerFactory loggerFactory)
+    internal static IResult PostRebuildIndex(RebuildIndexRequest req, IndexProjector index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -203,12 +201,9 @@ public static class LoadOrderEndpoints
             return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
         if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
-        var previousSequence = index.Sequence;
-        index.Close();
-
         try
         {
-            using var rebuilt = indexFactory.Rebuild(gameRelease, req.InstanceRoot, previousSequence);
+            index.RebuildStore(gameRelease, req.InstanceRoot);
             return Results.NoContent();
         }
         catch (IndexHeldElsewhereException ex)

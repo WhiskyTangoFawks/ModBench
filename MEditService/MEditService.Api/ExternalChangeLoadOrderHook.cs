@@ -11,12 +11,12 @@ namespace MEditService.Api;
 internal static class ExternalChangeLoadOrderHook
 {
     internal static IReadOnlyList<CrashRepairOffer> RunAfterReconcile(
-        ILoadOrder? loadOrder, IRecordIndex? index, ExternalChangeWatcher watcher, ILogger logger)
+        IndexProjector index, ExternalChangeWatcher watcher, ILogger logger)
     {
         // A watch must never outlive the load order that asked for it, or a plugin the
         // load order does not hold would keep re-indexing itself into it.
         watcher.UnwatchAllIndexed();
-        if (loadOrder == null) return [];
+        if (index.LoadOrder is not { } loadOrder) return [];
 
         var order = LoadOrder.From(loadOrder);
         var offers = new List<CrashRepairOffer>();
@@ -28,7 +28,7 @@ internal static class ExternalChangeLoadOrderHook
                 // ADR-0001: every other indexed binary, the game's Data/ masters included, gets an
                 // indexed-binary watch: a write by another tool is answered by re-reading it, not by
                 // asking the user. No indexed hash, nothing to compare against.
-                if (index?.IndexedContentHash(key) is { } contentHash)
+                if (index.IndexedContentHash(key) is { } contentHash)
                     watcher.WatchIndexed(plugin.Name, plugin.Origin, plugin.Path, contentHash);
                 continue;
             }

@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
 
-public sealed class TableDdlBuilder(SchemaReflector reflector)
+internal sealed class TableDdlBuilder(SchemaReflector reflector)
 {
     private readonly SchemaReflector _reflector = reflector;
 

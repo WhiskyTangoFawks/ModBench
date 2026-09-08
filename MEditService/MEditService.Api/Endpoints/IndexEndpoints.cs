@@ -48,7 +48,7 @@ public static class IndexEndpoints
             return Results.Problem("Name a copy with both plugin and origin, or neither to check every copy.", statusCode: 400);
 
         PluginKey? key = string.IsNullOrEmpty(plugin) ? (PluginKey?)null : new PluginKey(plugin, origin!);
-        if (key is { } named && index.Store?.RegisteredPlugins().Any(k => k == named) != true)
+        if (key is { } named && !index.Registers(named))
             return Results.Problem($"No registered copy of '{plugin}' from '{origin}'.", statusCode: 404);
 
         try

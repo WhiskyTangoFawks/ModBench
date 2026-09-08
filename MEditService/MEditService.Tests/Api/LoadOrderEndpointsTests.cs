@@ -122,7 +122,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var thisWindow = new IndexProjector(factory);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
-        var result = LoadOrderEndpoints.PostRebuildIndex(request, thisWindow, factory, NullLoggerFactory.Instance);
+        var result = LoadOrderEndpoints.PostRebuildIndex(request, thisWindow, NullLoggerFactory.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(423, problem.StatusCode);
@@ -138,7 +138,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var index = new IndexProjector(factory);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
-        var result = LoadOrderEndpoints.PostRebuildIndex(request, index, factory, NullLoggerFactory.Instance);
+        var result = LoadOrderEndpoints.PostRebuildIndex(request, index, NullLoggerFactory.Instance);
 
         Assert.IsAssignableFrom<NoContent>(result);
     }
