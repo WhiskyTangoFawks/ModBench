@@ -1,4 +1,5 @@
 using MEditService.Bridge;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
@@ -110,7 +111,7 @@ public static class PluginEndpoints
         // gesture's FormID box a default. Refusals go through the same Refusal mapping its siblings
         // use rather than a nullable-string contract that cannot distinguish them.
         app.MapGet("/plugins/{plugin}/records/next-form-key", (
-            string plugin, string origin, RecordEditService edits) =>
+            string plugin, string origin, PeekNextFreeFormKeyHandler edits) =>
         {
             var result = edits.PeekNextFreeFormKey(WriteEndpointMapping.PluginKeyOf(plugin, origin));
             return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : WriteEndpointMapping.Refusal(result);
@@ -289,7 +290,7 @@ public static class PluginEndpoints
     // server-side either way. logReceived is null on purpose: no PluginEndpoints handler logs on
     // entry, UseSerilogRequestLogging's per-request summary covers it.
     internal static IResult CreateRecord(
-        string plugin, RecordCreateRequest req, RecordEditService edits, IndexWriteGate gate,
+        string plugin, RecordCreateRequest req, CreateRecordHandler edits, IndexWriteGate gate,
         ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));

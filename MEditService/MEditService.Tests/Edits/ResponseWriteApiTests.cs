@@ -70,7 +70,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     [Fact]
     public void DeletingAResponse_RemovesItsElementFromTheTopicDocument_LeavingItsSiblingInPlace_AndCompiles()
     {
-        var result = _fixture.Edits.DeleteRecord(_fixture.Plugin, _fixture.Response.ToString());
+        var result = _fixture.DeleteHandler.DeleteRecord(_fixture.Plugin, _fixture.Response.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(TopicFile);

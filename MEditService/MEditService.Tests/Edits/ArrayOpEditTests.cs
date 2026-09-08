@@ -31,7 +31,7 @@ public sealed class ArrayOpEditTests : IDisposable
 
     private string SecondKeyword()
     {
-        var result = _mod.Edits.CreateRecord(_mod.Plugin, "kywd", "SecondKeyword");
+        var result = _mod.CreateHandler.CreateRecord(_mod.Plugin, "kywd", "SecondKeyword");
         Assert.True(result.Applied, result.Message);
         return result.NewFormKey!;
     }

@@ -46,7 +46,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
         const string oldFormKey = "800000:Fixture.esp";
-        var seeded = mod.Edits.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
+        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
         Assert.True(seeded.Applied, seeded.Message);
 
         var result = mod.Edits.RenumberRecord(mod.Plugin, oldFormKey);
@@ -100,7 +100,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void RenumberRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = SourceEditFixture.Tracked();
-        var seeded = mod.Edits.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
+        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
         var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
@@ -197,7 +197,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var suggested = mod.Edits.PeekNextFreeFormKey(mod.Plugin);
+        var suggested = mod.PeekHandler.PeekNextFreeFormKey(mod.Plugin);
         var result = mod.Edits.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(suggested.Applied, suggested.Message);
@@ -209,7 +209,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var suggested = TestEditService.Over(new LoadOrderHolder()).PeekNextFreeFormKey(mod.Plugin);
+        var suggested = TestEditService.PeekHandler(new LoadOrderHolder()).PeekNextFreeFormKey(mod.Plugin);
 
         Assert.False(suggested.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, suggested.Refusal);
@@ -220,10 +220,10 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void PeekNextFreeFormKey_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = SourceEditFixture.Tracked();
-        var seeded = mod.Edits.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
+        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
-        var result = mod.Edits.PeekNextFreeFormKey(mod.Plugin);
+        var result = mod.PeekHandler.PeekNextFreeFormKey(mod.Plugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);

@@ -14,9 +14,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>The write side's shared concerns (ADR-0046): target resolution under the load order,
-/// the pre-write external-change gate, rename on an EditorID change, and FormKey allocation. An
-/// internal seam, tested through the gestures.</summary>
+/// <summary>The write side's shared concerns (ADR-0046): target resolution, its pre-write refusals,
+/// rename on an EditorID change, and FormKey allocation. An internal seam, tested through the
+/// gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
     IModImporter importer,
@@ -356,4 +356,30 @@ internal sealed class WriteTargets(
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
+
+    // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
+    // header deliberately. Without it, SourceUnit.IsDirectoryPerRecord (filename-only) answers true
+    // for the header and DeleteRecord deletes the plugin's whole source root.
+    internal static RecordEditResult? RefuseIfHeader(string recordType) =>
+        recordType == PluginHeader.RecordType
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.HeaderDeleteOrRenumberNotSupported,
+                "The plugin header cannot be deleted or renumbered — it is not an ordinary record.")
+            : null;
+
+    // CreateRecord and CopyAsNewRecord only: a brand-new record has no containment to resolve to, and
+    // choosing one is a UX decision. FolderNameFor is also null for every record with no top-level
+    // group of its own, which the message names.
+    internal static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
+    {
+        if (RecordTypeDispatch.For(release).FolderNameFor(recordType) is not null) return null;
+
+        return RecordEditResult.Refused(
+            RecordEditRefusal.ContainerRecordNotYetSupported,
+            $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace) " +
+            "or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, branch, " +
+            "scene, response). Editing its fields works, and so do deleting and renumbering it; creating " +
+            "one from scratch is not supported — a brand-new record has no containment for anything to " +
+            "place it into.");
+    }
 }

@@ -100,7 +100,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     {
         // A real, resolvable Faction to point at: an element's FormLink sub-field is validated like any
         // other, so a null or invented one would refuse for an unrelated reason.
-        var faction = _mod.Edits.CreateRecord(_mod.Plugin, "fact", "FixtureFaction");
+        var faction = _mod.CreateHandler.CreateRecord(_mod.Plugin, "fact", "FixtureFaction");
         Assert.True(faction.Applied, faction.Message);
 
         var seed = Service().Set(

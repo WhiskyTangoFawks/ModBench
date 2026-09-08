@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
@@ -24,6 +25,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private RecordEditService EditService() => _fixture.Edits;
+    private DeleteRecordHandler DeleteHandler() => _fixture.DeleteHandler;
 
     // ---- a container's own record ----
 
@@ -33,7 +35,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var directory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!;
         Assert.True(Directory.Exists(directory));
 
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
+        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(directory));
@@ -55,7 +57,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     [Fact]
     public void DeletingAWorldspace_CascadesTwoLevelsDeep_ThroughItsEmbeddedTopCellToTheTopCellsOwnRef()
     {
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
+        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(_fixture.Document(_fixture.Worldspace.ToString()));
@@ -72,7 +74,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var before = File.ReadAllText(file);
         Assert.Contains(ContainerModFixture.TemporaryRefEditorId, before, StringComparison.Ordinal);
 
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
+        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.TemporaryRef.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(file);
@@ -100,7 +102,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         var file = _fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId);
         Assert.Contains(ContainerModFixture.TopCellEditorId, File.ReadAllText(file), StringComparison.Ordinal);
 
-        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.TopCell.ToString());
+        var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.TopCell.ToString());
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(file);
@@ -204,10 +206,10 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     [Fact]
     public void DeletingEveryTopicOfAQuest_LeavesNoEmptyListBehind_AndCompiles()
     {
-        var service = EditService();
+        var deletes = DeleteHandler();
         foreach (var topic in new[] { _fixture.DialogTopic, _fixture.DialogTopic2, _fixture.DialogTopic3 })
         {
-            var deleted = service.DeleteRecord(_fixture.Plugin, topic.ToString());
+            var deleted = deletes.DeleteRecord(_fixture.Plugin, topic.ToString());
             Assert.True(deleted.Applied, deleted.Message);
         }
 

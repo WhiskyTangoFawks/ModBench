@@ -10,12 +10,15 @@ namespace MEditService.Tests.Architecture;
 /// Track is asynchronous and the rest are not.</summary>
 public sealed class CommandHandlerConventionTests
 {
-    // Each gesture's change appends its handler and the member its carrier answers "did this land?"
-    // with. Spelled rather than nameof, so a carrier that stops answering fails here rather than
-    // following a rename.
+    // Each gesture's change appends its handler and the member its carrier answers with. Spelled
+    // rather than nameof, so a carrier that stops answering fails here rather than following a
+    // rename.
     private static readonly (Type Handler, string Landed)[] Handlers =
     [
         (typeof(EditRecordHandler), "Applied"),
+        (typeof(DeleteRecordHandler), "Applied"),
+        (typeof(CreateRecordHandler), "Applied"),
+        (typeof(PeekNextFreeFormKeyHandler), "Applied"),
     ];
 
     private const string CommandsNamespace = "MEditService.Core.Commands";
@@ -45,8 +48,8 @@ public sealed class CommandHandlerConventionTests
 
         Assert.True(
             LandedType(answer, landed) == typeof(bool),
-            $"{answer.Name} has no public {landed} of type bool, so {handler.Name} does not say " +
-            "whether its write landed (ADR-0046 invariant 8).");
+            $"{answer.Name} has no public {landed} of type bool, so {handler.Name}'s carrier does " +
+            "not answer with it (ADR-0046 invariant 8).");
     }
 
     [Theory]

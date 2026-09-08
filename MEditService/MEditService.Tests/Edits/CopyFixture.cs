@@ -30,6 +30,7 @@ public sealed class CopyFixture : IDisposable
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
     public EditRecordHandler EditHandler { get; }
+    public DeleteRecordHandler DeleteHandler { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -80,6 +81,7 @@ public sealed class CopyFixture : IDisposable
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
+        DeleteHandler = TestEditService.DeleteHandler(holder);
     }
 
     private void Track(string origin, PluginKey plugin) =>

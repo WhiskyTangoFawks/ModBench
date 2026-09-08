@@ -1,4 +1,5 @@
 using MEditService.Api.Endpoints;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Tests.Edits;
@@ -17,13 +18,15 @@ public sealed class MalformedFormKeyEndpointTests
 
     private static RecordEditService ServiceFor(IndexedModFixture mod) => TestEditService.Over(mod.Index);
 
+    private static CreateRecordHandler CreateHandlerFor(IndexedModFixture mod) => TestEditService.CreateHandler(mod.Index);
+
     [Fact]
     public void CreateRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
         using var mod = IndexedModFixture.Tracked();
         var req = new RecordCreateRequest(IndexedModFixture.ModFolderOrigin, "npc_", "Broken", MalformedFormKey);
 
-        var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, ServiceFor(mod), mod.Index.WriteGate, NullLoggerFactory.Instance);
+        var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, CreateHandlerFor(mod), mod.Index.WriteGate, NullLoggerFactory.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

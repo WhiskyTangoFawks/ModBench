@@ -32,6 +32,21 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<EditRecordHandler>>()));
 
+        services.AddSingleton(sp => new DeleteRecordHandler(
+            sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<ILogger<DeleteRecordHandler>>()));
+
+        services.AddSingleton(sp => new CreateRecordHandler(
+            sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<RecordTextCodec>(),
+            sp.GetRequiredService<SchemaReflector>(),
+            sp.GetRequiredService<ILogger<CreateRecordHandler>>()));
+
+        services.AddSingleton(sp => new PeekNextFreeFormKeyHandler(
+            sp.GetRequiredService<WriteTargets>(),
+            sp.GetRequiredService<LoadOrderHolder>()));
+
         return services;
     }
 }
