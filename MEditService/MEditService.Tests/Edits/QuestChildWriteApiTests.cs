@@ -236,7 +236,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Scene.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -264,7 +264,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
@@ -286,7 +286,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);

@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -27,7 +28,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     [Fact]
     public void CopyRecordAsOverride_OfAParseFailedRecord_IsRefusedWithItsDiagnosis_AndWritesNothing()
     {
-        var result = _mod.Edits.CopyRecordAsOverride(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
+        var result = _mod.CopyAsOverrideHandler.CopyRecordAsOverride(_mod.SourcePlugin, UnreadablePerk, _mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordParseFailed, result.Refusal);
@@ -52,7 +53,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
     {
         var readable = _mod.PerkTheCodecReads();
 
-        var result = _mod.Edits.CopyRecordAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
+        var result = _mod.CopyAsOverrideHandler.CopyRecordAsOverride(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(_mod.DestinationDocument(readable));
@@ -86,6 +87,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
         public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
         public RecordEditService Edits { get; }
+        public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
 
         public ParseFailedCopyFixture()
         {
@@ -120,6 +122,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             var holder = new LoadOrderHolder();
             holder.Apply(loadOrder);
             Edits = TestEditService.Over(holder);
+            CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
         }
 
         public SourceDocument? DestinationDocument(string formKey) =>

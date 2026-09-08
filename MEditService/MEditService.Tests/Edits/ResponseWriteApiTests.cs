@@ -123,7 +123,7 @@ public sealed class ResponseWriteApiTests : IDisposable
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = fixture.Edits.CopyRecordAsOverride(
+        var result = fixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);

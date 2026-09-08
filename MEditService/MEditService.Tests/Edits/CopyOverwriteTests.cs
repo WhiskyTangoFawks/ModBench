@@ -1,3 +1,4 @@
+using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 
 namespace MEditService.Tests.Edits;
@@ -10,14 +11,14 @@ public sealed class CopyOverwriteTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private RecordEditService EditService() => _fixture.Edits;
+    private CopyRecordAsOverrideHandler CopyHandler() => _fixture.CopyAsOverrideHandler;
 
     // The replace is own-fields-only: children the destination's override accumulated (a copied-in
     // placed ref, embedded inline in the cell's document) survive the overwrite.
     [Fact]
     public void CopyAsOverride_OnACellTheDestinationAlreadyOverrides_ReplacesOwnFields_KeepingItsChildren()
     {
-        var service = EditService();
+        var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.InteriorCell.ToString(), _fixture.DestinationPlugin).Applied);
         Assert.True(service.CopyRecordAsOverride(
@@ -39,7 +40,7 @@ public sealed class CopyOverwriteTests : IDisposable
     [Fact]
     public void CopyAsOverride_OnAFlatRecordTheDestinationAlreadyOverrides_StillRefuses()
     {
-        var service = EditService();
+        var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.FlatNpc.ToString(), _fixture.DestinationPlugin).Applied);
 
@@ -56,7 +57,7 @@ public sealed class CopyOverwriteTests : IDisposable
     [Fact]
     public void CopyAsOverride_OnAPlacedReferenceTheDestinationAlreadyHolds_ReplacesItInPlace()
     {
-        var service = EditService();
+        var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.PersistentRef.ToString(), _fixture.DestinationPlugin).Applied);
 
@@ -79,7 +80,7 @@ public sealed class CopyOverwriteTests : IDisposable
     {
         using var underrideFixture = ContainerCopyFixture.CreateWithDestinationLoadingFirst();
 
-        var result = underrideFixture.Edits.CopyRecordAsOverride(
+        var result = underrideFixture.CopyAsOverrideHandler.CopyRecordAsOverride(
             underrideFixture.SourcePlugin, underrideFixture.FlatNpc.ToString(), underrideFixture.DestinationPlugin);
 
         Assert.False(result.Applied);
@@ -91,7 +92,7 @@ public sealed class CopyOverwriteTests : IDisposable
     [Fact]
     public void CopyAsOverride_OnAQuestTheDestinationAlreadyOverrides_ReplacesInsteadOfRefusing()
     {
-        var service = EditService();
+        var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin).Applied);
 

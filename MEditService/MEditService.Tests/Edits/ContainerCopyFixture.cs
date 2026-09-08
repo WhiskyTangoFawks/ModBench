@@ -31,6 +31,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public LoadOrder LoadOrder { get; }
     public RecordEditService Edits { get; }
     public EditRecordHandler EditHandler { get; }
+    public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -276,6 +277,7 @@ public sealed class ContainerCopyFixture : IDisposable
         holder.Apply(LoadOrder);
         Edits = TestEditService.Over(holder);
         EditHandler = TestEditService.EditHandler(holder);
+        CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
     }
 
     public static ContainerCopyFixture Create() => new(destinationLoadsFirst: false, trackSource: false);
