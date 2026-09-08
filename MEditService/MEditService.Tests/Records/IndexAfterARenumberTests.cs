@@ -80,7 +80,7 @@ public sealed class IndexAfterARenumberTests
         using var mod = SourceEditFixture.Tracked();
         using var index = MirrorOver(mod.GameDirectory, mod.Entries);
         const string oldFormKey = "800000:Fixture.esp";
-        var seeded = mod.Edits.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
+        var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
         Assert.True(seeded.Applied, seeded.Message);
 
         var result = mod.Edits.RenumberRecord(mod.Plugin, oldFormKey);

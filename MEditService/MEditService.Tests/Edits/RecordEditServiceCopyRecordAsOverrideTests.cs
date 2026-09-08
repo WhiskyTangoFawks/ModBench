@@ -106,7 +106,7 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         Assert.True(mod.Edits.CopyRecordAsOverride(
             mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin).Applied);
         mod.CommitDestination();
-        Assert.True(mod.Edits.DeleteRecord(mod.DestinationPlugin, mod.SourceNpc.ToString()).Applied);
+        Assert.True(mod.DeleteHandler.DeleteRecord(mod.DestinationPlugin, mod.SourceNpc.ToString()).Applied);
 
         var result = mod.Edits.CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 

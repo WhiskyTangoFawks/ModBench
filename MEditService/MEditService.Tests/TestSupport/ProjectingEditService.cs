@@ -12,7 +12,8 @@ namespace MEditService.Tests.TestSupport;
 /// learning of it two events, so a test reading after a write lets the projector catch up
 /// first.</summary>
 internal sealed class ProjectingEditService(
-    IndexProjector index, LoadOrderHolder holder, RecordEditService inner, EditRecordHandler edits)
+    IndexProjector index, LoadOrderHolder holder, RecordEditService inner, EditRecordHandler edits,
+    DeleteRecordHandler deletes, CreateRecordHandler creates, PeekNextFreeFormKeyHandler peek)
 {
     /// <summary>The service every test writes through, over <paramref name="index"/>'s own store and
     /// schemas.</summary>
@@ -20,7 +21,8 @@ internal sealed class ProjectingEditService(
     {
         var holder = TestEditService.HolderOver(index);
         return new ProjectingEditService(
-            index, holder, TestEditService.Over(holder), TestEditService.EditHandler(holder));
+            index, holder, TestEditService.Over(holder), TestEditService.EditHandler(holder),
+            TestEditService.DeleteHandler(holder), TestEditService.CreateHandler(holder), TestEditService.PeekHandler(holder));
     }
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
@@ -30,11 +32,11 @@ internal sealed class ProjectingEditService(
         Projected(CurrentEdits().Set(plugin, formKey, member, value));
 
     internal RecordEditResult DeleteRecord(PluginKey plugin, string formKey) =>
-        Projected(Current().DeleteRecord(plugin, formKey));
+        Projected(CurrentDeletes().DeleteRecord(plugin, formKey));
 
     internal RecordEditResult CreateRecord(
         PluginKey plugin, string recordType, string? editorId, string? requestedFormKey = null) =>
-        Projected(Current().CreateRecord(plugin, recordType, editorId, requestedFormKey));
+        Projected(CurrentCreates().CreateRecord(plugin, recordType, editorId, requestedFormKey));
 
     internal RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin) =>
         Projected(Current().CopyRecordAsOverride(sourcePlugin, formKey, destinationPlugin));
@@ -47,7 +49,7 @@ internal sealed class ProjectingEditService(
         Projected(Current().RenumberRecord(plugin, formKey, requestedFormKey));
 
     /// <summary>A read, so nothing follows it.</summary>
-    internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) => Current().PeekNextFreeFormKey(plugin);
+    internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) => CurrentPeek().PeekNextFreeFormKey(plugin);
 
     // The two load orders are one in the product, where a snapshot reaches the holder and the Index
     // together; here the Index is the one a test reconciles, so the holder follows it per gesture.
@@ -61,6 +63,24 @@ internal sealed class ProjectingEditService(
     {
         TestEditService.Sync(holder, index);
         return edits;
+    }
+
+    private DeleteRecordHandler CurrentDeletes()
+    {
+        TestEditService.Sync(holder, index);
+        return deletes;
+    }
+
+    private CreateRecordHandler CurrentCreates()
+    {
+        TestEditService.Sync(holder, index);
+        return creates;
+    }
+
+    private PeekNextFreeFormKeyHandler CurrentPeek()
+    {
+        TestEditService.Sync(holder, index);
+        return peek;
     }
 
     private RecordEditResult Projected(RecordEditResult result)

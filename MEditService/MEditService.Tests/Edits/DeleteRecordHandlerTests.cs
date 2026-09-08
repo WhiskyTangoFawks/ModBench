@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-public sealed class RecordEditServiceDeleteRecordTests
+public sealed class DeleteRecordHandlerTests
 {
     [Fact]
     public void DeleteRecord_OnTheHeader_RefusesWithoutTouchingTheSourceTree()
@@ -14,7 +14,7 @@ public sealed class RecordEditServiceDeleteRecordTests
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var result = mod.Edits.DeleteRecord(mod.Plugin, headerFormKey);
+        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, headerFormKey);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.HeaderDeleteOrRenumberNotSupported, result.Refusal);
@@ -30,7 +30,7 @@ public sealed class RecordEditServiceDeleteRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(mod.NpcSourceFile));
@@ -44,10 +44,10 @@ public sealed class RecordEditServiceDeleteRecordTests
     public void DeleteRecord_OnANeverCommittedRecord_LeavesNothingAtEitherRef()
     {
         using var mod = SourceEditFixture.Tracked();
-        var created = mod.Edits.CreateRecord(mod.Plugin, "npc_", "BrandNew");
+        var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew");
         Assert.True(created.Applied, created.Message);
 
-        var result = mod.Edits.DeleteRecord(mod.Plugin, created.NewFormKey!);
+        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, created.NewFormKey!);
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.Document(created.NewFormKey!));
@@ -59,7 +59,7 @@ public sealed class RecordEditServiceDeleteRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.NotNull(mod.Document(mod.OtherNpc.ToString()));
     }
@@ -69,7 +69,7 @@ public sealed class RecordEditServiceDeleteRecordTests
     {
         using var mod = SourceEditFixture.Untracked();
 
-        var result = mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -82,7 +82,7 @@ public sealed class RecordEditServiceDeleteRecordTests
         using var mod = SourceEditFixture.Tracked();
         ExternalChangeDeferral.Set(mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
 
-        var result = mod.Edits.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -94,7 +94,7 @@ public sealed class RecordEditServiceDeleteRecordTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.Edits.DeleteRecord(mod.Plugin, "FFFFFF:Fixture.esp");
+        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, "FFFFFF:Fixture.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

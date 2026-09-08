@@ -35,7 +35,7 @@ public sealed class FailedWriteDirectoryCleanupTests
         var before = EntriesUnderSource(mod);
         Assert.DoesNotContain(before, e => e.EndsWith("Weapons", StringComparison.Ordinal));
 
-        Assert.ThrowsAny<Exception>(() => mod.Edits.CreateRecord(mod.Plugin, "weap", OverLongEditorId));
+        Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "weap", OverLongEditorId));
 
         Assert.Equal(before, EntriesUnderSource(mod));
 
@@ -54,7 +54,7 @@ public sealed class FailedWriteDirectoryCleanupTests
 
         Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
 
-        Assert.ThrowsAny<Exception>(() => mod.Edits.CreateRecord(mod.Plugin, "npc_", OverLongEditorId));
+        Assert.ThrowsAny<Exception>(() => mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", OverLongEditorId));
 
         Assert.True(Directory.Exists(npcsDirectory));
         Assert.Equal(2, Directory.GetFiles(npcsDirectory).Length);
@@ -66,7 +66,7 @@ public sealed class FailedWriteDirectoryCleanupTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.Edits.CreateRecord(mod.Plugin, "weap", "AWeapon");
+        var result = mod.CreateHandler.CreateRecord(mod.Plugin, "weap", "AWeapon");
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains(EntriesUnderSource(mod), e => e.EndsWith("Weapons", StringComparison.Ordinal));

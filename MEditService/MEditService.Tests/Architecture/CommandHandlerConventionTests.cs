@@ -16,6 +16,9 @@ public sealed class CommandHandlerConventionTests
     private static readonly (Type Handler, string Landed)[] Handlers =
     [
         (typeof(EditRecordHandler), "Applied"),
+        (typeof(DeleteRecordHandler), "Applied"),
+        (typeof(CreateRecordHandler), "Applied"),
+        (typeof(PeekNextFreeFormKeyHandler), "Applied"),
     ];
 
     private const string CommandsNamespace = "MEditService.Core.Commands";

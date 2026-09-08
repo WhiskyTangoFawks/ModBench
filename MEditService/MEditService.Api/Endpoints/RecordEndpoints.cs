@@ -88,7 +88,7 @@ public static class RecordEndpoints
         // Delete-record — the source file goes away and the null-Body working-tree mechanism takes
         // it from there. Same door, same refusals, same doctrine as EditRecord above.
         app.MapPost("/records/{formKey}/delete", (
-            string formKey, RecordDeleteRequest request, RecordEditService edits, IndexWriteGate gate) =>
+            string formKey, RecordDeleteRequest request, DeleteRecordHandler edits, IndexWriteGate gate) =>
             DeleteRecord(formKey, request, edits, gate, logger))
         .WithName("DeleteRecord")
         .WithSummary("Delete a record as a working-tree change.")
@@ -222,7 +222,7 @@ public static class RecordEndpoints
     }
 
     internal static IResult DeleteRecord(
-        string formKey, RecordDeleteRequest request, RecordEditService edits, IndexWriteGate gate, ILogger logger)
+        string formKey, RecordDeleteRequest request, DeleteRecordHandler edits, IndexWriteGate gate, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(

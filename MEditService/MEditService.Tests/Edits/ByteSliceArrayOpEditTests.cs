@@ -33,7 +33,7 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
 
     private string SeedDebrisWithTwoModelsCarryingBlobs()
     {
-        var created = _mod.Edits.CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
+        var created = _mod.CreateHandler.CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
         Assert.True(created.Applied, created.Message);
 
         var seed = Service().Set(_mod.Plugin, created.NewFormKey!, "Models",

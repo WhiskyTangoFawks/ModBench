@@ -13,9 +13,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>Delete, create, the two copies and renumber (ADR-0041): each lands as a working-tree
-/// change to the record's source JSON, the source text is the source rather than the index, and
-/// every refusal precedes any write.</summary>
+/// <summary>The two copies and renumber (ADR-0041): each lands as a working-tree change to the
+/// record's source JSON, the source text is the source rather than the index, and every refusal
+/// precedes any write.</summary>
 public sealed class RecordEditService(
     LoadOrderHolder loadOrder,
     IModImporter importer,
@@ -49,76 +49,6 @@ public sealed class RecordEditService(
         if (partialForm) members[nameof(IMajorRecordGetter.MajorRecordFlagsRaw)] = PartialFormFlag.Bit;
         return codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(members.ToJsonString()), release, schema.TableName)
             .GetAwaiter().GetResult();
-    }
-
-    /// <summary>A working-tree deletion: gone at Effective, still served at Head until compiled. No
-    /// reference cascade; a dangling FormLink surfaces as an ordinary compile diagnostic (ADR-0041).
-    /// Every record shape resolves through <see cref="SourceRepository.Locate"/>.</summary>
-    public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
-    {
-        if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (_, identity, unit, repository) = target;
-        if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
-
-        // One changed document either way: the owner without the child, or the record's own gone.
-        // Every descendant's row follows from that when the projector re-reads it.
-        var removal = repository.Remove(plugin, identity);
-        if (removal != SourceRemoval.Removed)
-        {
-            // States only what is observed: either the tree names no document for it, or the document
-            // it names lacks it.
-            var observed = removal == SourceRemoval.NoDocumentHoldsIt
-                ? $"No document in {plugin.Name}'s tree holds {formKey}."
-                : $"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.";
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                $"{observed} If nothing outside Modbench changed that file, this is a defect — please " +
-                "report it; otherwise relaunch mEdit so the index re-reads the tree.");
-        }
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath}",
-                formKey, plugin.Name, plugin.Origin, unit.RelativePath);
-        }
-        return RecordEditResult.Success();
-    }
-
-    /// <summary>The FormKey is <paramref name="requestedFormKey"/> (xEdit's typed-FormID path) or the next
-    /// free local ID, collision-checked at both refs so an uncompiled create or a working-tree-deleted
-    /// record is never handed out twice.</summary>
-    public RecordEditResult CreateRecord(PluginKey plugin, string recordType, string? editorId, string? requestedFormKey = null)
-    {
-        if (_targets.RefuseIfBlocked(plugin, out _, out var repository) is { } blocked) return blocked;
-
-        var release = loadOrder.Current.GameRelease;
-        var schemas = schemaReflector.GetSchemas(release);
-        if (recordType == PluginHeader.RecordType || !schemas.TryGetValue(recordType, out var schema))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
-        }
-        if (RefuseIfContainerType(recordType, release) is { } containerRefusal) return containerRefusal;
-
-        if (_targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
-            is { } refusedTarget) return refusedTarget;
-
-        var record = BareRecord(
-            codec, schema, release, targetFormKey, string.IsNullOrWhiteSpace(editorId) ? null : editorId, partialForm: false);
-
-        // RefuseIfContainerType guarantees a flat record, so the repository's own layout is the whole
-        // answer: no block path, and the group folder minted by the write when this type is new here.
-        repository.Put(
-            plugin, new SourceDocument(targetFormKey, recordType, record.EditorID, SerializeToText(record, release)));
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree source document",
-                recordType, targetFormKey, plugin.Name, plugin.Origin);
-        }
-        return RecordEditResult.Success(targetFormKey);
     }
 
     /// <summary>xEdit's "Copy as Override Into…" (ADR-0041): the source's own bytes land verbatim
@@ -242,7 +172,7 @@ public sealed class RecordEditService(
         {
             if (source.ContainerOf(identity) is { } container)
                 return CopyEmbeddedChildAsNewRecord(copy, container, destinationPlugin, requestedFormKey);
-            if (RefuseIfContainerType(identity.RecordType, release) is { } containerRefusal) return containerRefusal;
+            if (WriteTargets.RefuseIfContainerType(identity.RecordType, release) is { } containerRefusal) return containerRefusal;
         }
 
         if (_targets.ResolveTargetFormKey(
@@ -413,7 +343,7 @@ public sealed class RecordEditService(
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (release, identity, unit, repository) = target;
-        if (RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
+        if (WriteTargets.RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
         // Canonicalised once: two ordinal comparisons below (the exclusion predicate and the
         // remap-completeness guard) run against canonical text, and a differently-cased spelling
@@ -773,72 +703,6 @@ public sealed class RecordEditService(
         // renumber wants; the embedded-only third would mean the tree changed under the put.
         if (removal == SourceRemoval.OwnerDoesNotCarryIt)
             throw new IOException($"The document holding {held.FormKey} does not carry it, so the renumber cannot take it out.");
-    }
-
-    /// <summary>The allocator create and renumber use, exposed so the Renumber box can prefill a
-    /// suggestion as xEdit does. A tracked copy answers from its tree and HEAD, an untracked one from
-    /// its own binary.</summary>
-    public RecordEditResult PeekNextFreeFormKey(PluginKey plugin)
-    {
-        // No snapshot yet is a state, not a refusal about this plugin.
-        if (loadOrder.Current.Copies.Count == 0)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        // Never a write, so no write gate and no tracked gate: an untracked copy answers too. A copy
-        // the load order does not register is the one left with nothing to answer from.
-        if (loadOrder.Current.Copy(plugin) is not { } copy)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"The load order does not hold {plugin.Name} ({plugin.Origin}).");
-        }
-
-        WriteTargets.Allocator allocator;
-        try
-        {
-            allocator = _targets.AllocatorFor(copy, plugin);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            // Registered and unreadable: MO2 replaces and removes a copy's file whenever it likes, and
-            // a read says so rather than faulting.
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordParseFailed,
-                $"{plugin.Name} could not be read, so nothing can say which of its FormIDs are free: {ex.Message}");
-        }
-
-        var formKey = WriteTargets.NextFreeNativeFormId(allocator, allocator.IsLight);
-        return formKey != null
-            ? RecordEditResult.Success(formKey)
-            : RecordEditResult.Refused(
-                RecordEditRefusal.FormKeySpaceExhausted,
-                WriteTargets.FormKeySpaceExhaustedMessage(plugin, allocator.IsLight));
-    }
-
-    // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
-    // header deliberately. Without it, SourceUnit.IsDirectoryPerRecord (filename-only) answers true
-    // for the header and DeleteRecord deletes the plugin's whole source root.
-    private static RecordEditResult? RefuseIfHeader(string recordType) =>
-        recordType == PluginHeader.RecordType
-            ? RecordEditResult.Refused(
-                RecordEditRefusal.HeaderDeleteOrRenumberNotSupported,
-                "The plugin header cannot be deleted or renumbered — it is not an ordinary record.")
-            : null;
-
-    // Create only: a brand-new record has no containment to resolve to, and choosing one is a UX
-    // decision. FolderNameFor is also null for every record with no top-level group of its own,
-    // which the message names.
-    private static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
-    {
-        if (RecordTypeDispatch.For(release).FolderNameFor(recordType) is not null) return null;
-
-        return RecordEditResult.Refused(
-            RecordEditRefusal.ContainerRecordNotYetSupported,
-            $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace) " +
-            "or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, branch, " +
-            "scene, response). Editing its fields works, and so do deleting and renumbering it; creating " +
-            "one from scratch is not supported — a brand-new record has no containment for anything to " +
-            "place it into.");
     }
 
     // xEdit refuses CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI: a fresh FormKey leaves the copy with no group

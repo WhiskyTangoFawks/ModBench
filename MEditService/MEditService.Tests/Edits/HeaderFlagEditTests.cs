@@ -65,7 +65,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     {
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 
-        var result = _fixture.Edits.CreateRecord(
+        var result = _fixture.CreateHandler.CreateRecord(
             _fixture.Plugin, "npc_", "OutOfRange", $"001000:{SourceEditFixture.PluginName}");
 
         Assert.False(result.Applied);
@@ -78,7 +78,7 @@ public sealed class HeaderFlagEditTests : IDisposable
     [Fact]
     public void Compile_WithTheEslFlagAndAnOutOfRangeRecord_RefusesWithTheContradictionMarker()
     {
-        Assert.True(_fixture.Edits.CreateRecord(
+        Assert.True(_fixture.CreateHandler.CreateRecord(
             _fixture.Plugin, "npc_", "BigId", $"001000:{SourceEditFixture.PluginName}").Applied);
         Assert.True(Service().Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(true)).Applied);
 

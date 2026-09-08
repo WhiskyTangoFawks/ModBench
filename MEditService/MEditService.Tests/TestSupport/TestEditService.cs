@@ -22,6 +22,33 @@ internal static class TestEditService
 
     internal static EditRecordHandler EditHandler(IndexProjector index) => EditHandler(HolderOver(index));
 
+    internal static DeleteRecordHandler DeleteHandler(LoadOrderHolder holder) => new(
+        new WriteTargets(
+            holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+            SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance),
+        NullLogger<DeleteRecordHandler>.Instance);
+
+    internal static DeleteRecordHandler DeleteHandler(IndexProjector index) => DeleteHandler(HolderOver(index));
+
+    internal static CreateRecordHandler CreateHandler(LoadOrderHolder holder)
+    {
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var targets = new WriteTargets(
+            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
+        return new CreateRecordHandler(
+            targets, holder, codec, SharedSchemaReflector.Instance, NullLogger<CreateRecordHandler>.Instance);
+    }
+
+    internal static CreateRecordHandler CreateHandler(IndexProjector index) => CreateHandler(HolderOver(index));
+
+    internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) => new(
+        new WriteTargets(
+            holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+            SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance),
+        holder);
+
+    internal static PeekNextFreeFormKeyHandler PeekHandler(IndexProjector index) => PeekHandler(HolderOver(index));
+
     internal static RecordEditService Over(LoadOrderHolder holder) =>
         new(holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
             SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
