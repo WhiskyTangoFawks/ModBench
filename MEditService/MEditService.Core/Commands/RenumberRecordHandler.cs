@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
@@ -197,7 +196,7 @@ public sealed class RenumberRecordHandler
             if (!schemas.ContainsKey(schemaType))
                 return RefuseNoSchema(document.FormKey, schemaType, referencerPlugin);
 
-            var owner = RecordEditService.ReadDocument(_codec, document, release);
+            var owner = _codec.Deserialize(document.Body, release, document.RecordType);
             ((IFormLinkContainer)owner).RemapLinks(mapping);
             if (RefuseIfRemapIncomplete(owner, schemaType, oldFormKey, referencerPlugin, release) is { } incomplete)
                 return incomplete;
@@ -235,9 +234,6 @@ public sealed class RenumberRecordHandler
     private static Dictionary<FormKey, FormKey> RenumberMapping(string oldFormKey, string newFormKey) =>
         new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };
 
-    private string SerializeToText(IMajorRecordGetter record, GameRelease release) =>
-        Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
-
     // A link the typed remap left behind is refused wherever it sits; a KnownDefects row is what
     // names the member Mutagen is known to skip. Asked of the collector: text cannot tell a link
     // from an EditorID or string.
@@ -248,7 +244,7 @@ public sealed class RenumberRecordHandler
             return RefuseNoSchema(record.FormKey.ToString(), recordType, plugin);
 
         List<FormReference> refs;
-        using (var document = JsonDocument.Parse(SerializeToText(record, release)))
+        using (var document = JsonDocument.Parse(_codec.SerializeToText(record, release)))
             refs = FormReferences.Collect(document.RootElement, schema);
         if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
         {
@@ -282,7 +278,7 @@ public sealed class RenumberRecordHandler
             rewrite.Repository, rewrite.Plugin,
             new SourceDocument(
                 rewrite.Owner.FormKey, rewrite.Owner.RecordType, rewrite.Owner.EditorId,
-                SerializeToText(rewrite.Record, release)));
+                _codec.SerializeToText(rewrite.Record, release)));
     }
 
     // Root is the whole record the target's own document serializes from: the owner when embedded,
@@ -312,7 +308,7 @@ public sealed class RenumberRecordHandler
                     $"{unit.RelativePath} carries {oldFormKey} inside. Nothing was written.");
             }
 
-            var owner = RecordEditService.ReadDocument(_codec, ownerDocument, release);
+            var owner = _codec.Deserialize(ownerDocument.Body, release, ownerDocument.RecordType);
             if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
             {
                 return RecordEditResult.Refused(
@@ -345,7 +341,7 @@ public sealed class RenumberRecordHandler
                 $"No source unit in {plugin.Name}'s tree holds {oldFormKey}. Nothing was written.");
         }
 
-        var record = RecordEditService.ReadDocument(_codec, document, release);
+        var record = _codec.Deserialize(document.Body, release, document.RecordType);
         ((IFormLinkContainer)record).RemapLinks(mapping);
 
         if (RefuseIfRemapIncomplete(record, identity.RecordType, oldFormKey, plugin, release) is { } recordIncomplete)
@@ -364,7 +360,7 @@ public sealed class RenumberRecordHandler
         GameRelease release)
     {
         var (repository, unit, written, held, root) = target;
-        var text = SerializeToText(root, release);
+        var text = _codec.SerializeToText(root, release);
 
         // No file moves for an embedded record — it has no leaf name of its own — so the owner's own
         // document, reserialized around the child's new FormKey, is the whole write.

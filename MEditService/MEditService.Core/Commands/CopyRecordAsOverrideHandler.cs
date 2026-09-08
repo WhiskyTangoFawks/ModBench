@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -61,7 +60,7 @@ public sealed class CopyRecordAsOverrideHandler
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(identity.RecordType, release) is { } containerRefusal)
             return containerRefusal;
 
-        var isContainer = RecordEditService.IsContainerType(identity.RecordType, release);
+        var isContainer = ContainerChildFields.HasChildFields(identity.RecordType, release);
         if (destination.Repository.HoldsAtEitherRef(destinationPlugin, formKey))
         {
             // A destination already overriding the explicitly-selected container record gets it
@@ -78,7 +77,7 @@ public sealed class CopyRecordAsOverrideHandler
         // IsInterior is false for both a genuine SubCells cell and a Worldspace's TopCell
         // (PlacementWalker hardcodes it). Only the SubCells case has block coordinates to mint from; a
         // TopCell falls through to the refusal, its placement being a follow-up.
-        var isCell = RecordEditService.IsCellType(identity.RecordType, release);
+        var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         var placement = isCell ? source.CellPlacementOf(identity) : null;
         if (isCell && placement?.IsInterior == false && placement.Value.BlockX != null)
         {
@@ -112,9 +111,9 @@ public sealed class CopyRecordAsOverrideHandler
         var written = SourceRepository.PlacementFor(
             destinationPlugin.Name, identity.RecordType, formKey, identity.EditorId, release,
             isCell
-                ? RecordEditService.EnsureInteriorCellBlockPath(destination.ModFolder, destinationPlugin.Name, release)
+                ? SourceRepository.EnsureInteriorCellBlockPath(destination.ModFolder, destinationPlugin.Name, release)
                 : null);
-        RecordEditService.WriteAt(destination.ModFolder, written, path =>
+        SourceRepository.WriteAt(destination.ModFolder, written, path =>
         {
             SourceRepository.WriteTextAtomic(path, body);
             return body;
@@ -155,7 +154,7 @@ public sealed class CopyRecordAsOverrideHandler
         destination.Repository.Put(
             destination.Plugin,
             new SourceDocument(
-                identity.FormKey, existingTarget.RecordType, replacement.EditorID, SerializeToText(replacement, release)));
+                identity.FormKey, existingTarget.RecordType, replacement.EditorID, _codec.SerializeToText(replacement, release)));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -208,12 +207,8 @@ public sealed class CopyRecordAsOverrideHandler
     // is the verbatim bytes.
     private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release)
     {
-        var record = _codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, recordType).GetAwaiter().GetResult();
+        var record = _codec.Deserialize(body, release, recordType);
         ContainerChildFields.ClearAllChildSlots(record);
-        var stripped = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-        return Encoding.UTF8.GetString(stripped);
+        return _codec.SerializeToText(record, release);
     }
-
-    private string SerializeToText(IMajorRecordGetter record, GameRelease release) =>
-        Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult());
 }

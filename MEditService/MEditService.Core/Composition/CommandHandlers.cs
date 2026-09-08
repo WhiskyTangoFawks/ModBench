@@ -84,6 +84,7 @@ public static class CommandHandlers
             sp.GetRequiredService<ILogger<AbsorbExternalChangeHandler>>()));
 
         services.AddSingleton(sp => new KeepExternalChangeHandler(
+            sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<KeepExternalChangeHandler>>()));
 

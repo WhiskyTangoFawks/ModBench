@@ -1,102 +1,85 @@
 using MEditService.Core.Commands;
+using MEditService.Core.Composition;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>The write side as the composition root builds it: the held load order, one resolver
-/// per gesture over it, the codec and the schema.</summary>
+/// <summary>The write side as the composition root builds it: the one registration the host calls,
+/// over the held load order. Nothing here names the module the handlers share — the handlers are its
+/// tests.</summary>
 internal static class TestEditService
 {
-    internal static EditRecordHandler EditHandler(LoadOrderHolder holder)
-    {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var targets = new WriteTargets(
-            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
-        return new EditRecordHandler(
-            targets, holder, Resolver, codec, SharedSchemaReflector.Instance, NullLogger<EditRecordHandler>.Instance);
-    }
+    /// <summary>Every handler, from the registration the service itself runs. One provider per call,
+    /// so two holders get two independent write sides.</summary>
+    internal static IServiceProvider Over(LoadOrderHolder holder, Action<ILoggingBuilder>? logging = null) =>
+        new ServiceCollection()
+            .AddLogging(logging ?? (_ => { }))
+            .AddSingleton(holder)
+            .AddSingleton<IModImporter, DefaultModImporter>()
+            .AddSingleton<RecordTextCodec>()
+            .AddSingleton(SharedSchemaReflector.Instance)
+            .AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
+                held, sp.GetRequiredService<IModImporter>(), sp.GetRequiredService<SchemaReflector>()))
+            .AddSingleton<TrackService>()
+            .AddSingleton<PluginWriter>()
+            .AddSingleton<PluginCompileService>()
+            .AddCommandHandlers()
+            .BuildServiceProvider();
+
+    internal static EditRecordHandler EditHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<EditRecordHandler>();
 
     internal static EditRecordHandler EditHandler(IndexProjector index) => EditHandler(HolderOver(index));
 
-    internal static DeleteRecordHandler DeleteHandler(LoadOrderHolder holder) => new(
-        new WriteTargets(
-            holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
-            SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance),
-        NullLogger<DeleteRecordHandler>.Instance);
+    internal static DeleteRecordHandler DeleteHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<DeleteRecordHandler>();
 
-    internal static CreateRecordHandler CreateHandler(LoadOrderHolder holder)
-    {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var targets = new WriteTargets(
-            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
-        return new CreateRecordHandler(
-            targets, holder, codec, SharedSchemaReflector.Instance, NullLogger<CreateRecordHandler>.Instance);
-    }
+    internal static CreateRecordHandler CreateHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<CreateRecordHandler>();
 
     internal static CreateRecordHandler CreateHandler(IndexProjector index) => CreateHandler(HolderOver(index));
 
-    internal static CopyRecordAsOverrideHandler CopyAsOverrideHandler(LoadOrderHolder holder)
-    {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var targets = new WriteTargets(
-            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
-        return new CopyRecordAsOverrideHandler(
-            targets, new RecordCopy(SharedSchemaReflector.Instance, NullLogger.Instance, codec), holder, codec,
-            NullLogger<CopyRecordAsOverrideHandler>.Instance);
-    }
+    internal static CopyRecordAsOverrideHandler CopyAsOverrideHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<CopyRecordAsOverrideHandler>();
 
-    internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(LoadOrderHolder holder)
-    {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var targets = new WriteTargets(
-            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
-        return new CopyRecordAsNewRecordHandler(
-            targets, new RecordCopy(SharedSchemaReflector.Instance, NullLogger.Instance, codec), codec,
-            NullLogger<CopyRecordAsNewRecordHandler>.Instance);
-    }
+    internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<CopyRecordAsNewRecordHandler>();
 
     internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(IndexProjector index) =>
         CopyAsNewHandler(HolderOver(index));
 
     internal static AbsorbExternalChangeHandler AbsorbHandler() =>
-        new(NullLogger<AbsorbExternalChangeHandler>.Instance);
+        Over(new LoadOrderHolder()).GetRequiredService<AbsorbExternalChangeHandler>();
 
-    internal static KeepExternalChangeHandler KeepHandler() =>
-        new(SharedSchemaReflector.Instance, NullLogger<KeepExternalChangeHandler>.Instance);
+    internal static KeepExternalChangeHandler KeepHandler(Action<ILoggingBuilder>? logging = null) =>
+        Over(new LoadOrderHolder(), logging).GetRequiredService<KeepExternalChangeHandler>();
 
-    internal static RebaseEditBranchHandler RebaseHandler(LoadOrderHolder holder) => new(holder);
+    internal static RebaseEditBranchHandler RebaseHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<RebaseEditBranchHandler>();
 
-    internal static RebaseEditBranchHandler RebaseHandler(IndexProjector index) => new(HolderOver(index));
+    internal static RebaseEditBranchHandler RebaseHandler(IndexProjector index) => RebaseHandler(HolderOver(index));
 
-    internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(LoadOrderHolder holder) => new(holder);
+    internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<ContinueRebaseEditBranchHandler>();
 
     internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(IndexProjector index) =>
-        new(HolderOver(index));
+        ContinueRebaseHandler(HolderOver(index));
 
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder) =>
-        new(holder, new TrackHandler(new TrackService(NullLogger<TrackService>.Instance)));
+        Over(holder).GetRequiredService<CreatePluginHandler>();
 
-    internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) => new(
-        new WriteTargets(
-            holder, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
-            SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance),
-        holder);
+    internal static PeekNextFreeFormKeyHandler PeekHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<PeekNextFreeFormKeyHandler>();
 
-    internal static RenumberRecordHandler RenumberHandler(LoadOrderHolder holder)
-    {
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var importer = new DefaultModImporter();
-        var targets = new WriteTargets(
-            holder, importer, codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
-        return new RenumberRecordHandler(
-            targets, holder, importer, codec, SharedSchemaReflector.Instance,
-            NullLogger<RenumberRecordHandler>.Instance);
-    }
+    internal static RenumberRecordHandler RenumberHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<RenumberRecordHandler>();
 
     /// <summary>The same handler for a test holding the Index: its held copies are the load order
     /// value the write side reads, and the Index itself never reaches the handler.</summary>
@@ -115,7 +98,4 @@ internal static class TestEditService
     {
         if (index.LoadOrder is { } held) holder.Apply(LoadOrder.From(held));
     }
-
-    private static FormLinkResolver Resolver(LoadOrder held) =>
-        new(held, new DefaultModImporter(), SharedSchemaReflector.Instance);
 }

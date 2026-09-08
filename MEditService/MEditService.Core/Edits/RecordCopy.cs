@@ -96,7 +96,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
                   $"{containerUnit.RelativePath} was found holding {containerFormKey}, but its own text does not carry it.")
             : ownerRecord;
         ContainerChildFields.AddChildToSlot(containerRecord, slotName, childRecord);
-        RecordEditService.SerializeAndWrite(codec, ownerRecord, containerUnit.FullPath, release);
+        codec.SerializeAndWrite(ownerRecord, containerUnit.FullPath, release);
         return RecordEditResult.Success();
     }
 
@@ -121,7 +121,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         ContainerChildFields.TransplantChildSlots(found.Child, replacement);
         ContainerChildFields.ReplaceInSlot(found.Parent, found.SlotName, found.SlotIndex, replacement);
 
-        RecordEditService.SerializeAndWrite(codec, ownerRecord, unit.FullPath, release);
+        codec.SerializeAndWrite(ownerRecord, unit.FullPath, release);
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -140,7 +140,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         CopySource source, string formKey, string recordType, IMajorRecord record,
         Destination destination, GameRelease release)
     {
-        var placement = RecordEditService.IsCellType(recordType, release)
+        var placement = RecordTypeDispatch.For(release).IsCell(recordType)
             && source.Identity(formKey) is { } identity
                 ? source.CellPlacementOf(identity)
                 : null;
@@ -163,10 +163,10 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         var written = SourceRepository.PlacementFor(
             destination.Plugin.Name, recordType, formKey, record.EditorID, release,
             placement != null
-                ? RecordEditService.EnsureInteriorCellBlockPath(destination.ModFolder, destination.Plugin.Name, release)
+                ? SourceRepository.EnsureInteriorCellBlockPath(destination.ModFolder, destination.Plugin.Name, release)
                 : null);
-        RecordEditService.WriteAt(
-            destination.ModFolder, written, path => RecordEditService.SerializeAndWrite(codec, record, path, release));
+        SourceRepository.WriteAt(
+            destination.ModFolder, written, path => codec.SerializeAndWrite(record, path, release));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -243,5 +243,5 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     // Bare fields, no EditorID is xEdit parity (AddIfMissingInternal's Assign() runs only under
     // `if aDeepCopy`, hardcoded False for ancestors).
     private IMajorRecord BarePartialFormAncestor(string formKey, string recordType, GameRelease release) =>
-        RecordEditService.BareRecord(codec, schemaReflector.GetSchemas(release)[recordType], release, formKey, editorId: null, partialForm: true);
+        RecordMint.Bare(codec, schemaReflector.GetSchemas(release)[recordType], release, formKey, editorId: null, partialForm: true);
 }

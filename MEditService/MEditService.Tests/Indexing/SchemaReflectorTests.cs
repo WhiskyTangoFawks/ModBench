@@ -607,7 +607,7 @@ public class SchemaReflectorTests
     public void GetSchemas_MaterialObject_HasProjectionVectorColumn_AsAVectorLeaf()
     {
         // MaterialObject.ProjectionVector is a direct top-level P3Float column (GetColumnInfo path)
-        // with no side-table row — unlike Placed*.Position (see the RecordEditService companion
+        // with no side-table row — unlike Placed*.Position (see the edit gesture's companion
         // refusal), safe to make writable unconditionally.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["mato"].RecordColumns.FirstOrDefault(c => c.Name == "ProjectionVector");

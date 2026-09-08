@@ -79,7 +79,7 @@ public class FormKeyResolutionTests
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
     }
 
-    // A malformed editor string reaches here before RecordEditService's refusal path can reject it,
+    // A malformed editor string reaches here before the edit gesture's refusal path can reject it,
     // and FormKey.Factory throws for it, so the hardcoded check must use TryFactory and treat
     // "cannot even parse" as "definitely not hardcoded".
     [Fact]
