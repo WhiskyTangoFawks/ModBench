@@ -266,3 +266,24 @@ export class Instance implements vscode.Disposable {
     };
   }
 }
+
+/** ADR-0044's snapshot, read from the current value (ADR-0047) rather than a fresh walk.
+ *  `undefined` — no PUT — when the game directory has not resolved. The filter states a
+ *  resolved game directory's own guarantee, never an unchecked cast. */
+export function loadOrderSnapshotOf(
+  value: Pick<InstanceValue, 'plugins' | 'gameDirectory'>,
+): { dataFolder: string; plugins: LoadOrderPlugin[] } | undefined {
+  if (!value.gameDirectory) return undefined;
+  return {
+    dataFolder: value.gameDirectory.dataFolder,
+    plugins: value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined),
+  };
+}
+
+/** ADR-0044: a landed recompute is the sole trigger for a PUT — never a gesture, command or
+ *  view calling `request()` directly. */
+export function wireLoadOrderSyncToInstance(
+  instance: Pick<Instance, 'subscribe'>, sync: { request(): void },
+): vscode.Disposable {
+  return instance.subscribe(() => sync.request());
+}

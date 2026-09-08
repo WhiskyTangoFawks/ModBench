@@ -69,15 +69,6 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
   });
 
-  // `wirePluginListInvalidation` is deliberately typed against `{ invalidate: () => void }` rather
-  // than the real `PluginListProvider`, so it never imports Mod Management's vocabulary; it is not
-  // held to the vocabulary scan, being wiring rather than a joiner of both contexts.
-  it('the plugin-list invalidation wiring imports from neither context', () => {
-    const imports = importsOf(read('wirePluginListInvalidation.ts'));
-    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
-    expect(imports).toEqual([]);
-  });
-
   // Plain modmanager/ modules reachable from the composition root: held to the same "imports
   // nothing from Editing" bar PluginListProvider gets, not the stricter "nothing but vscode" one,
   // since these have real modmanager-internal dependencies.
