@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ModlistEntry } from './model';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
+import type { LoadOrderPlugin } from './loadOrderSnapshot';
+import type { InstanceValue } from './instance';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFilePlain, DataTransferItem, DataTransfer,
@@ -19,27 +20,52 @@ import {
   PluginListProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
   type PluginListSource,
 } from './PluginListProvider';
-import { ErrorNode } from './ErrorNode';
+
+// A minimal fixture builder: only the fields a given test cares about need overriding.
+function plugin(overrides: Partial<LoadOrderPlugin> & { name: string }): LoadOrderPlugin {
+  return {
+    path: `/fixture/${overrides.name}`,
+    origin: 'SomeMod',
+    slot: 0,
+    enabled: true,
+    winning: true,
+    ...overrides,
+  };
+}
+
+// Only `.plugins` is ever read by the row provider — the rest of InstanceValue is Mods-tree/
+// Editing territory this ticket does not touch.
+function valueOf(plugins: LoadOrderPlugin[]): InstanceValue {
+  return { plugins } as unknown as InstanceValue;
+}
+
+// The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
+// compatible with `Instance` without ever constructing one (ADR-0047's watchers are Instance's
+// concern, not this provider's).
+class FakeInstance {
+  value: InstanceValue;
+  private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
+  private sequence = 0;
+  constructor(initial: InstanceValue) {
+    this.value = initial;
+  }
+  subscribe(subscriber: (value: InstanceValue, sequence: number) => void) {
+    this.subscribers.push(subscriber);
+    return { dispose: () => { this.subscribers = this.subscribers.filter((s) => s !== subscriber); } };
+  }
+  // Simulates a landed recompute: publishes to every live subscriber, the way Instance's own
+  // watcher-driven recompute does.
+  publish(value: InstanceValue): void {
+    this.value = value;
+    this.sequence++;
+    for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
+  }
+}
 
 class FakeSource implements PluginListSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
   reorderPluginsCalls: { names: string[]; toIndex: number }[] = [];
   reorderPluginsError?: Error;
-  readPluginOrderCalls = 0;
-  readEnabledPluginsCalls = 0;
-  constructor(
-    private readonly order: string[] | Error,
-    private readonly enabled: string[] = [],
-  ) {}
-  readPluginOrder(): Promise<string[]> {
-    this.readPluginOrderCalls++;
-    return this.order instanceof Error ? Promise.reject(this.order) : Promise.resolve(this.order);
-  }
-  readEnabledPlugins(): Promise<string[]> {
-    this.readEnabledPluginsCalls++;
-    return this.order instanceof Error ? Promise.reject(this.order) : Promise.resolve(this.enabled);
-  }
-  readModlist(): Promise<ModlistEntry[]> { throw new Error('unused'); }
   setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     this.setPluginEnabledCalls.push({ pluginName, enabled });
     return Promise.resolve();
@@ -50,6 +76,15 @@ class FakeSource implements PluginListSource {
     return Promise.resolve();
   }
 }
+
+const makeProvider = (
+  plugins: LoadOrderPlugin[],
+  extra: Partial<{ source: PluginListSource; instance: FakeInstance; dataFolder: () => Promise<string | undefined> }> = {},
+) => {
+  const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
+  const source = extra.source ?? new FakeSource();
+  return new PluginListProvider({ instance, source, dataFolder: extra.dataFolder });
+};
 
 // The leading slot answers one question: can you change whether this loads? A lock fills it
 // where a togglable row renders a checkbox, since the platform has no non-interactive checkbox
@@ -93,16 +128,7 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   });
 });
 
-// Guards against giving the lock icon to every non-PluginNode row rather than scoping it to
-// ImplicitMasterNode.
-describe('leading slot — rows outside the load order render neither checkbox nor lock', () => {
-  it('ErrorNode has no checkbox and no lock', () => {
-    const node = new ErrorNode('boom');
-    expect(node.label).toBe('⚠ Failed to load: boom');
-    expect(node.checkboxState).toBeUndefined();
-    expect(node.iconPath).not.toEqual({ id: 'lock' });
-  });
-
+describe('leading slot — the empty-state row renders neither checkbox nor lock', () => {
   it('EmptyNode has no checkbox and no lock', () => {
     const node = new EmptyNode();
     expect(node.checkboxState).toBeUndefined();
@@ -110,9 +136,12 @@ describe('leading slot — rows outside the load order render neither checkbox n
   });
 });
 
-describe('PluginListProvider', () => {
+describe('PluginListProvider — rows come from the Instance value', () => {
   it('builds one row per plugins.txt line, in Plugin load order, with the enabled checkbox', async () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['A.esp', 'B.esp'], ['B.esp']) });
+    const provider = makeProvider([
+      plugin({ name: 'A.esp', slot: 0, enabled: false }),
+      plugin({ name: 'B.esp', slot: 1, enabled: true }),
+    ]);
     const rows = await provider.getChildren();
 
     expect(rows).toHaveLength(2);
@@ -124,24 +153,13 @@ describe('PluginListProvider', () => {
   });
 
   it('has no children under a row (flat list)', async () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['A.esp'], ['A.esp']) });
+    const provider = makeProvider([plugin({ name: 'A.esp', slot: 0 })]);
     const [row] = await provider.getChildren();
     expect(await provider.getChildren(row)).toEqual([]);
   });
 
-  it('renders a single error node when plugins.txt cannot be read', async () => {
-    const logged: string[] = [];
-    const provider = new PluginListProvider({ source: new FakeSource(new Error('boom')), log: (m) => logged.push(m) });
-    const rows = await provider.getChildren();
-
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(rows[0].tooltip).toBe('boom');
-    expect(logged.join('\n')).toContain('boom');
-  });
-
-  it('renders a single "No plugins" node when plugins.txt is empty', async () => {
-    const provider = new PluginListProvider({ source: new FakeSource([]) });
+  it('renders a single "No plugins" node when the Instance value carries none', async () => {
+    const provider = makeProvider([]);
     const rows = await provider.getChildren();
 
     expect(rows).toHaveLength(1);
@@ -149,9 +167,69 @@ describe('PluginListProvider', () => {
     expect(rows[0].label).toBe('No plugins');
   });
 
+  // Rival: the provider falls back to some read path of its own instead of the injected value.
+  // With that rival, this fixture's rows would be empty/wrong rather than what the value says.
+  it('rows exactly match the fixture value — not a re-derivation', async () => {
+    const provider = makeProvider([
+      plugin({ name: 'Zed.esp', slot: 0, enabled: true }),
+      plugin({ name: 'Aardvark.esp', slot: 1, enabled: false }),
+    ]);
+    const rows = await provider.getChildren();
+    expect(rows.map((r) => r.label)).toEqual(['Zed.esp', 'Aardvark.esp']); // file order, not alphabetical
+  });
+
+  // A losing copy of a listed name carries the same slot as the winning one (ADR-0044) — it
+  // must not become a second row for that name.
+  it('a losing copy of a listed name renders no row of its own', async () => {
+    const provider = makeProvider([
+      plugin({ name: 'Base.esp', slot: 0, origin: 'Winner', winning: true }),
+      plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', winning: false }),
+    ]);
+    const rows = (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
+    expect(rows).toHaveLength(1);
+  });
+
+  // A plugin file an enabled mod provides with no plugins.txt line (`slot: null`) is the
+  // plugins reconcile's business, never merged in by this provider.
+  it('an unlisted plugin copy (slot: null) gets no row', async () => {
+    const provider = makeProvider([
+      plugin({ name: 'Base.esp', slot: 0 }),
+      plugin({ name: 'Unlisted.esp', slot: null, winning: true }),
+    ]);
+    const rows = (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
+    expect(rows.map((n) => n.plugin.name)).toEqual(['Base.esp']);
+  });
+
+  // A listed name no mod provides (e.g. a vanilla master) still gets a row when no game
+  // directory is configured — only its path resolution, and any badge relying on it, degrade.
+  it('still renders a row for a listed name no mod provides, when the Data folder is unresolved', async () => {
+    const provider = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, origin: 'Data', path: '/unresolved/Fallout4.esm' }),
+      plugin({ name: 'Mod.esp', slot: 1, origin: 'SomeMod' }),
+    ], { dataFolder: () => Promise.resolve(undefined) });
+
+    const rows = (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
+    expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm', 'Mod.esp']);
+  });
+
+  // Rival: subscribe but drop the callback, or never subscribe — rows would stay at the value
+  // handed to the constructor.
+  it('re-renders on a new value published after construction', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const provider = makeProvider([], { instance });
+    expect((await provider.getChildren()).map((r) => r.label)).toEqual(['A.esp']);
+
+    let fired = false;
+    provider.onDidChangeTreeData(() => { fired = true; });
+    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]));
+
+    expect(fired).toBe(true); // not just the first render — a second, later value re-renders too
+    expect((await provider.getChildren()).map((r) => r.label)).toEqual(['A.esp', 'B.esp']);
+  });
+
   it('setPluginEnabled delegates to the source and fires a refresh', async () => {
-    const source = new FakeSource(['A.esp']);
-    const provider = new PluginListProvider({ source });
+    const source = new FakeSource();
+    const provider = makeProvider([plugin({ name: 'A.esp', slot: 0 })], { source });
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
 
@@ -161,25 +239,10 @@ describe('PluginListProvider', () => {
     expect(fired).toBe(true);
   });
 
-  // Asymmetry test: setPluginEnabled must invalidate — the next
-  // getChildren() has to re-read the source, since the toggle changed plugins.txt.
-  it('setPluginEnabled invalidates: a subsequent getChildren() re-reads the source', async () => {
-    const source = new FakeSource(['A.esp']);
-    const provider = new PluginListProvider({ source });
-    await provider.getChildren();
-    const callsAfterFirstRead = source.readPluginOrderCalls;
-
-    await provider.setPluginEnabled('A.esp', false);
-    await provider.getChildren();
-
-    expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
-  });
-
   // The event carries the only source of truth the composition root has for which plugin and
   // which state, so it must match exactly what was written (ADR-0035).
   it('setPluginEnabled fires onDidChangeParticipation with the plugin and its new state', async () => {
-    const source = new FakeSource(['A.esp']);
-    const provider = new PluginListProvider({ source });
+    const provider = makeProvider([plugin({ name: 'A.esp', slot: 0 })]);
     const seen: { plugin: string; enabled: boolean }[] = [];
     provider.onDidChangeParticipation((e) => seen.push(e));
 
@@ -191,7 +254,7 @@ describe('PluginListProvider', () => {
   // Firing from invalidate() would also fire for a filter keystroke or a watcher-observed edit,
   // neither of which is a participation change a backend should be told about.
   it('invalidate() alone does not fire onDidChangeParticipation', () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
+    const provider = makeProvider([plugin({ name: 'A.esp', slot: 0 })]);
     let fired = false;
     provider.onDidChangeParticipation(() => { fired = true; });
 
@@ -201,31 +264,35 @@ describe('PluginListProvider', () => {
   });
 
   it('invalidate() fires onDidChangeTreeData so the Refresh button can re-read', () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
+    const provider = makeProvider([plugin({ name: 'A.esp', slot: 0 })]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.invalidate();
     expect(fired).toBe(true);
   });
 
-  // Asymmetry test: invalidate() clears the cache, so the next
-  // getChildren() must re-read the source — unlike setFilter's render-only path.
-  it('invalidate() clears the cache: a subsequent getChildren() re-reads the source', async () => {
-    const source = new FakeSource(['A.esp']);
-    const provider = new PluginListProvider({ source });
-    await provider.getChildren();
-    const callsAfterFirstRead = source.readPluginOrderCalls;
+  // Asymmetry test: invalidate() re-pulls the Instance's current value and clears the row
+  // cache — unlike setFilter's render-only path, which must leave both alone.
+  it('invalidate() clears the cache and re-pulls the current instance value', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const provider = makeProvider([], { instance });
+    expect((await provider.getChildren()).map((r) => r.label)).toEqual(['A.esp']);
+
+    instance.value = valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]); // no publish()
 
     provider.invalidate();
-    await provider.getChildren();
 
-    expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
+    expect((await provider.getChildren()).map((r) => r.label)).toEqual(['A.esp', 'B.esp']);
   });
 });
 
 describe('PluginListProvider — filter', () => {
   it('narrows rows to plugins whose filename contains the text, case-insensitively', async () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp', 'Beta.esp', 'AlphaExtra.esp']) });
+    const provider = makeProvider([
+      plugin({ name: 'Alpha.esp', slot: 0 }),
+      plugin({ name: 'Beta.esp', slot: 1 }),
+      plugin({ name: 'AlphaExtra.esp', slot: 2 }),
+    ]);
     provider.setFilter('ALPHA');
     const rows = await provider.getChildren();
 
@@ -233,7 +300,7 @@ describe('PluginListProvider — filter', () => {
   });
 
   it('restores the full list when the filter is cleared', async () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp', 'Beta.esp']) });
+    const provider = makeProvider([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
     provider.setFilter('alpha');
     expect(await provider.getChildren()).toHaveLength(1);
 
@@ -242,7 +309,7 @@ describe('PluginListProvider — filter', () => {
   });
 
   it('returns an empty list (not the "No plugins" node) when the filter matches nothing', async () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp', 'Beta.esp']) });
+    const provider = makeProvider([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]);
     provider.setFilter('nomatch');
     const rows = await provider.getChildren();
 
@@ -250,59 +317,56 @@ describe('PluginListProvider — filter', () => {
     expect(rows.some((r) => r instanceof EmptyNode)).toBe(false);
   });
 
-  // The filter outlives a Refresh and whatever the re-read turns up: invalidate() clears the
-  // row cache and must not touch the term.
-  it('survives a refresh and an underlying data change, narrowing whatever the re-read returns', async () => {
-    const order = ['Alpha.esp', 'Beta.esp'];
-    const provider = new PluginListProvider({ source: new FakeSource(order) });
+  // The filter outlives a Refresh and whatever the re-pulled value turns up: invalidate() clears
+  // the row cache and must not touch the term.
+  it('survives an invalidate() and an underlying value change, narrowing whatever it turns up', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const provider = makeProvider([], { instance });
     provider.setFilter('alpha');
     expect((await provider.getChildren()).map((r) => r.label)).toEqual(['Alpha.esp']);
 
-    order.push('AlphaTwo.esp'); // a plugin arrives on disk
-    provider.invalidate();      // …and Refresh re-reads
+    instance.value = valueOf([
+      plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 }), plugin({ name: 'AlphaTwo.esp', slot: 2 }),
+    ]);
+    provider.invalidate();
 
     expect((await provider.getChildren()).map((r) => r.label)).toEqual(['Alpha.esp', 'AlphaTwo.esp']);
   });
 
   it('fires onDidChangeTreeData when the filter is set', () => {
-    const provider = new PluginListProvider({ source: new FakeSource(['Alpha.esp']) });
+    const provider = makeProvider([plugin({ name: 'Alpha.esp', slot: 0 })]);
     let fired = false;
     provider.onDidChangeTreeData(() => { fired = true; });
     provider.setFilter('a');
     expect(fired).toBe(true);
   });
 
-  // A filter keystroke must re-render already-built rows, never
-  // re-read plugins.txt/enabled state.
-  it('does not re-read the source (render-only, not invalidate)', async () => {
-    const source = new FakeSource(['Alpha.esp', 'Beta.esp']);
-    const provider = new PluginListProvider({ source });
-    await provider.getChildren();
-    const orderCallsAfterFirstRead = source.readPluginOrderCalls;
-    const enabledCallsAfterFirstRead = source.readEnabledPluginsCalls;
+  // A filter keystroke must re-render already-built rows, never rebuild them from the Instance
+  // value.
+  it('does not rebuild rows (render-only, not invalidate)', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const provider = makeProvider([], { instance });
+    await provider.getChildren(); // populates the cache off the value above
 
-    provider.setFilter('alpha');
-    await provider.getChildren();
+    instance.value = valueOf([plugin({ name: 'Alpha.esp', slot: 0 })]); // no publish(), no invalidate()
+    provider.setFilter('a');
+    const rows = await provider.getChildren();
 
-    expect(source.readPluginOrderCalls).toBe(orderCallsAfterFirstRead);
-    expect(source.readEnabledPluginsCalls).toBe(enabledCallsAfterFirstRead);
+    expect(rows.map((r) => r.label)).toEqual(['Alpha.esp', 'Beta.esp']); // the stale cache, not the mutated value
   });
 
-  // Mirror of ModListProvider: clearing the filter must restore all
-  // rows from the cache too, without triggering a re-read.
-  it('clearing the filter restores all rows without re-reading the source', async () => {
-    const source = new FakeSource(['Alpha.esp', 'Beta.esp']);
-    const provider = new PluginListProvider({ source });
+  it('clearing the filter restores all cached rows, without rebuilding', async () => {
+    const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
+    const provider = makeProvider([], { instance });
     await provider.getChildren();
     provider.setFilter('alpha');
     await provider.getChildren();
-    const callsAfterFilteredRead = source.readPluginOrderCalls;
 
+    instance.value = valueOf([plugin({ name: 'Alpha.esp', slot: 0 })]); // no publish(), no invalidate()
     provider.setFilter('');
     const rows = await provider.getChildren();
 
     expect(rows.map((r) => r.label)).toEqual(['Alpha.esp', 'Beta.esp']);
-    expect(source.readPluginOrderCalls).toBe(callsAfterFilteredRead);
   });
 });
 
@@ -366,11 +430,13 @@ const NONE = undefined as never; // the drag/drop methods ignore the Cancellatio
 
 describe('PluginListProvider — drag-and-drop reorder', () => {
   const ORDER = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
+  const fixturePlugins = (names: string[] = ORDER) => names.map((name, slot) => plugin({ name, slot }));
   const node = (name: string) => new PluginNode({ name, enabled: true });
 
-  async function drag(source: FakeSource, moved: string[], target: string | undefined) {
+  async function drag(source: FakeSource, moved: string[], target: string | undefined, names: string[] = ORDER) {
     const reports: { severity: string; message: string }[] = [];
     const provider = new PluginListProvider({
+      instance: new FakeInstance(valueOf(fixturePlugins(names))),
       source,
       reporter: { report: (severity, message) => reports.push({ severity, message }) },
     });
@@ -385,15 +451,15 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   }
 
   it('handleDrag serialises the whole selection, not just the grabbed row', () => {
-    const provider = new PluginListProvider({ source: new FakeSource(ORDER) });
+    const provider = makeProvider(fixturePlugins());
     const dt = new FakeDataTransfer();
     provider.handleDrag([node('A.esp'), node('C.esp')], dt as never, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
     expect((item?.value as { names: string[] }).names).toEqual(['A.esp', 'C.esp']);
   });
 
-  it('handleDrag ignores non-plugin nodes (Empty/Error) in the selection', () => {
-    const provider = new PluginListProvider({ source: new FakeSource(ORDER) });
+  it('handleDrag ignores non-plugin nodes (Empty) in the selection', () => {
+    const provider = makeProvider(fixturePlugins());
     const dt = new FakeDataTransfer();
     provider.handleDrag([new EmptyNode(), node('B.esp')], dt as never, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
@@ -401,21 +467,21 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   });
 
   it('single-row down-drag onto a lower row reorders with the post-removal index', async () => {
-    const source = new FakeSource(ORDER);
+    const source = new FakeSource();
     const { fired } = await drag(source, ['A.esp'], 'D.esp');
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 2 }]);
     expect(fired).toBe(true);
   });
 
   it('drop past the last row (undefined target) appends', async () => {
-    const source = new FakeSource(ORDER);
+    const source = new FakeSource();
     await drag(source, ['B.esp'], undefined);
     expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp'], toIndex: 4 }]);
   });
 
   it('drop onto a non-plugin node (empty state) appends', async () => {
-    const source = new FakeSource(['A.esp']);
-    const provider = new PluginListProvider({ source });
+    const source = new FakeSource();
+    const provider = makeProvider([plugin({ name: 'A.esp', slot: 0 })], { source });
     await provider.getChildren();
     const dt = new FakeDataTransfer();
     provider.handleDrag([node('A.esp')], dt as never, NONE);
@@ -423,18 +489,17 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 0 }]);
   });
 
-  // VS Code can hand this controller a drop target that is not one of its rows. "Not my row" is
-  // not "past the last row", which reads as the losing end of the load order.
-  it('pluginFileOf names the file a row stands for, and nothing for the rows that stand for none', () => {
+  it('pluginFileOf names the file a row stands for, and nothing for the empty-state row', () => {
     expect(pluginFileOf(node('A.esp'))).toBe('A.esp');
     expect(pluginFileOf(new ImplicitMasterNode('Fallout4.esm'))).toBe('Fallout4.esm');
     expect(pluginFileOf(new EmptyNode())).toBeUndefined();
-    expect(pluginFileOf(new ErrorNode('boom'))).toBeUndefined();
   });
 
+  // VS Code can hand this controller a drop target that is not one of its rows. "Not my row" is
+  // not "past the last row", which reads as the losing end of the load order.
   it('drop onto a row this tree does not own is refused, not treated as the end of the list', async () => {
-    const source = new FakeSource(ORDER);
-    const provider = new PluginListProvider({ source });
+    const source = new FakeSource();
+    const provider = makeProvider(fixturePlugins(), { source });
     await provider.getChildren();
     const dt = new FakeDataTransfer();
     provider.handleDrag([node('A.esp')], dt as never, NONE);
@@ -445,20 +510,20 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   });
 
   it('contiguous multi-selection moves as a block to the target index', async () => {
-    const source = new FakeSource(ORDER);
+    const source = new FakeSource();
     await drag(source, ['B.esp', 'C.esp', 'D.esp'], 'A.esp');
     expect(source.reorderPluginsCalls).toEqual([{ names: ['B.esp', 'C.esp', 'D.esp'], toIndex: 0 }]);
   });
 
   it('non-contiguous multi-selection counts only moved rows above the target', async () => {
-    const source = new FakeSource(ORDER);
+    const source = new FakeSource();
     await drag(source, ['A.esp', 'C.esp', 'E.esp'], 'D.esp');
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp', 'C.esp', 'E.esp'], toIndex: 1 }]);
   });
 
   it('an empty drag payload is a no-op (no write)', async () => {
-    const source = new FakeSource(ORDER);
-    const provider = new PluginListProvider({ source });
+    const source = new FakeSource();
+    const provider = makeProvider(fixturePlugins(), { source });
     await provider.getChildren();
     await provider.handleDrop(node('A.esp'), new FakeDataTransfer() as never, NONE);
     expect(source.reorderPluginsCalls).toEqual([]);
@@ -467,13 +532,13 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   // A drop position comes from the full plugins.txt order, never the displayed row list: a name
   // filter narrows which rows show, not the load order they belong to (ADR-0035).
   it('produces the same load-order position with a name filter hiding a row between the drag and its target, as with no filter at all', async () => {
-    const ORDER = ['M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'];
+    const NAMES = ['M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'];
 
-    const baselineSource = new FakeSource(ORDER);
-    await drag(baselineSource, ['M1.esp'], 'M3.esp');
+    const baselineSource = new FakeSource();
+    await drag(baselineSource, ['M1.esp'], 'M3.esp', NAMES);
 
-    const filteredSource = new FakeSource(ORDER);
-    const provider = new PluginListProvider({ source: filteredSource });
+    const filteredSource = new FakeSource();
+    const provider = new PluginListProvider({ instance: new FakeInstance(valueOf(fixturePlugins(NAMES))), source: filteredSource });
     await provider.getChildren(); // populate the cached order
     provider.setFilter('m'); // matches M1/M2/M3 only — X1.esp sits hidden between the drag and its target
     const visible = await provider.getChildren();
@@ -487,39 +552,24 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
   });
 
   it('surfaces a write failure via the reporter and resyncs the tree (ADR-0026)', async () => {
-    const source = new FakeSource(ORDER);
+    const source = new FakeSource();
     source.reorderPluginsError = new Error('disk full');
     const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
     expect(reports).toHaveLength(1);
     expect(reports[0].severity).toBe('error');
     expect(fired).toBe(true); // refresh fired to resync the moved row
   });
-
-  // Asymmetry test: a successful drop must invalidate — the next
-  // getChildren() has to re-read the source, since the drop changed plugins.txt.
-  it('a successful drop invalidates: a subsequent getChildren() re-reads the source', async () => {
-    const source = new FakeSource(ORDER);
-    const provider = new PluginListProvider({ source });
-    await provider.getChildren();
-    const callsAfterFirstRead = source.readPluginOrderCalls;
-
-    const dt = new FakeDataTransfer();
-    provider.handleDrag(['A.esp'].map(node), dt as never, NONE);
-    await provider.handleDrop(node('D.esp'), dt as never, NONE);
-    await provider.getChildren();
-
-    expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
-  });
 });
 
-// End-to-end: the real Mo2ModlistSource over a temp plugins.txt, driven through the
-// provider's drag → drop, asserting the on-disk order and byte-faithfulness — a
-// round-trip through the tree and the file, no VS Code process.
+// End-to-end: the real Mo2ModlistSource over a temp plugins.txt, driven through the provider's
+// drag → drop, asserting the on-disk order and byte-faithfulness — independent of the fixture
+// value that supplies the rows being dragged.
 describe('PluginListProvider — drag reorder round-trips through plugins.txt on disk', () => {
   let dir: string;
   let source: Mo2ModlistSource;
   const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
   const node = (name: string) => new PluginNode({ name, enabled: true });
+  const fixturePlugins = () => ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'].map((name, slot) => plugin({ name, slot }));
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugin-dnd-'));
@@ -533,7 +583,7 @@ describe('PluginListProvider — drag reorder round-trips through plugins.txt on
   });
 
   async function dragToDisk(moved: string[], target: string | undefined) {
-    const provider = new PluginListProvider({ source });
+    const provider = new PluginListProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
     await provider.getChildren(); // cache the rendered order
     const dt = new FakeDataTransfer();
     provider.handleDrag(moved.map(node), dt as never, NONE);
@@ -557,10 +607,29 @@ describe('PluginListProvider — drag reorder round-trips through plugins.txt on
   });
 });
 
-// Order-aware missing-master badge wired through the provider over a real MO2
-// instance (temp dir, real plugins.txt + mod plugins + a vanilla Data/ plugin),
-// mirroring ModListProvider.test.ts's status-badge block but for plugin order.
-describe('PluginListProvider — order-aware missing-master badge (instanceRoot provided)', () => {
+describe('PluginListProvider — resolvePluginPath (Reveal in Explorer)', () => {
+  it('resolves a plugin name to its winning copy\'s path', async () => {
+    const provider = makeProvider([
+      plugin({ name: 'Base.esp', slot: 0, path: '/data/mods/Winner/Base.esp', winning: true }),
+      plugin({ name: 'Base.esp', slot: 0, origin: 'Loser', path: '/data/mods/Loser/Base.esp', winning: false }),
+    ]);
+    expect(await provider.resolvePluginPath('Base.esp')).toBe('/data/mods/Winner/Base.esp');
+  });
+
+  it('returns undefined for a name with no winning copy', async () => {
+    const provider = makeProvider([plugin({ name: 'Base.esp', slot: 0, winning: false })]);
+    expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
+  });
+
+  it('returns undefined for an unknown name', async () => {
+    const provider = makeProvider([plugin({ name: 'Base.esp', slot: 0 })]);
+    expect(await provider.resolvePluginPath('NoSuchPlugin.esp')).toBeUndefined();
+  });
+});
+
+// Order-aware missing-master badge, driven off fixture rows pointing at real plugin bytes
+// on disk — no MO2 instance directory needed, since rows and order come from the fixture value.
+describe('PluginListProvider — order-aware missing-master badge', () => {
   let dir: string;
   const pluginNodes = async (provider: PluginListProvider): Promise<PluginNode[]> =>
     (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
@@ -568,68 +637,82 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugin-badge-'));
-    const dataFolder = join(dir, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    // A vanilla plugin no mod provides — resolved via gamePath/Data.
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    // Two mods: Provider ships Base.esp; Consumer ships Child.esp mastering Base.esp.
-    for (const [modName, file, masters] of [
-      ['Provider', 'Base.esp', ['Fallout4.esm']],
-      ['Consumer', 'Child.esp', ['Base.esp']],
-    ] as const) {
-      await mkdir(join(dir, 'mods', modName), { recursive: true });
-      await writeFile(join(dir, 'mods', modName, file), buildTes4Buffer([...masters]));
-    }
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
-    );
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Consumer\r\n+Provider\r\n');
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  const provider = () =>
-    new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
+  async function writePlugin(name: string, masters: string[]): Promise<string> {
+    const path = join(dir, name);
+    await writeFile(path, buildTes4Buffer(masters));
+    return path;
+  }
 
   it('badges a plugin whose master is sequenced after it', async () => {
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
-    const nodes = await pluginNodes(provider());
+    const [f4, child, base] = await Promise.all([
+      writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp']), writePlugin('Base.esp', []),
+    ]);
+    const provider = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
+      plugin({ name: 'Child.esp', slot: 1, path: child }),
+      plugin({ name: 'Base.esp', slot: 2, path: base }),
+    ]);
+    const nodes = await pluginNodes(provider);
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
     expect(byName(nodes, 'Child.esp').tooltip).toContain('Base.esp');
   });
 
   it('badges a plugin whose master is absent from plugins.txt entirely', async () => {
-    // Child.esp masters Base.esp, but Base.esp has no line at all → flagged.
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\n');
-    const nodes = await pluginNodes(provider());
+    // Child.esp masters Base.esp; Base.esp has no fixture entry at all, so it is flagged.
+    const [f4, child] = await Promise.all([writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp'])]);
+    const provider = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
+      plugin({ name: 'Child.esp', slot: 1, path: child }),
+    ]);
+    const nodes = await pluginNodes(provider);
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });
 
   it('leaves a correctly-ordered plugin unbadged', async () => {
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nBase.esp\r\nChild.esp\r\n');
-    const nodes = await pluginNodes(provider());
+    const [f4, base, child] = await Promise.all([
+      writePlugin('Fallout4.esm', []), writePlugin('Base.esp', []), writePlugin('Child.esp', ['Base.esp']),
+    ]);
+    const provider = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
+      plugin({ name: 'Base.esp', slot: 1, path: base }),
+      plugin({ name: 'Child.esp', slot: 2, path: child }),
+    ]);
+    const nodes = await pluginNodes(provider);
     expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined();
     expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
   });
 
   it('keeps a badge on a filtered-in row (badges computed on the full order, not the visible subset)', async () => {
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
-    const p = provider();
+    const [f4, child, base] = await Promise.all([
+      writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp']), writePlugin('Base.esp', []),
+    ]);
+    const p = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
+      plugin({ name: 'Child.esp', slot: 1, path: child }),
+      plugin({ name: 'Base.esp', slot: 2, path: base }),
+    ]);
     p.setFilter('child'); // hides Fallout4.esm + Base.esp, leaving only the out-of-order Child.esp
     const nodes = await pluginNodes(p);
     expect(nodes.map((n) => n.plugin.name)).toEqual(['Child.esp']);
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });
 
-  // Same assertion as above, but the filter is set AFTER an initial
-  // unfiltered getChildren() — exercising the cache-reuse path in getChildren()
-  // (the badge must survive from the cached rows, not a fresh compute).
+  // Same assertion, filter set after an initial unfiltered read: exercises the cache-reuse
+  // path — the badge must survive from cached rows, not a fresh compute.
   it('keeps a badge on a filtered-in row when the filter is set after an initial unfiltered read (cache-reuse path)', async () => {
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
-    const p = provider();
+    const [f4, child, base] = await Promise.all([
+      writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp']), writePlugin('Base.esp', []),
+    ]);
+    const p = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
+      plugin({ name: 'Child.esp', slot: 1, path: child }),
+      plugin({ name: 'Base.esp', slot: 2, path: base }),
+    ]);
     const unfiltered = await pluginNodes(p); // populates the cache
     expect(byName(unfiltered, 'Child.esp').iconPath).toEqual({ id: 'error' });
 
@@ -640,163 +723,66 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
   });
 
-  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged, with implicit rows present', async () => {
-    // Implicit rows change the row set, not this per-pair order check, which flags a genuinely
-    // late real-file master whether or not it is vanilla.
-    await mkdir(join(dir, 'mods', 'Late'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'Late', 'Late.esp'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'mods', 'Provider', 'Base.esp'), buildTes4Buffer(['Fallout4.esm', 'Late.esp']));
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Consumer\r\n+Provider\r\n+Late\r\n');
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nBase.esp\r\nLate.esp\r\nChild.esp\r\n');
-    const nodes = await pluginNodes(provider());
+  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged', async () => {
+    const [f4, base, late] = await Promise.all([
+      writePlugin('Fallout4.esm', []), writePlugin('Base.esp', ['Fallout4.esm', 'Late.esp']), writePlugin('Late.esp', []),
+    ]);
+    const provider = makeProvider([
+      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
+      plugin({ name: 'Base.esp', slot: 1, path: base }),
+      plugin({ name: 'Late.esp', slot: 2, path: late }),
+    ]);
+    const nodes = await pluginNodes(provider);
     expect(byName(nodes, 'Base.esp').iconPath).toEqual({ id: 'error' });
     expect(byName(nodes, 'Base.esp').tooltip).toContain('Late.esp');
   });
 
+  // A stale out-of-position plugins.txt line for an implicit master must not false-flag a
+  // plugin declaring it: implicit rows sort first regardless of that line.
   it('a discovered implicit (vanilla) master never false-flags a plugin declaring it, even if plugins.txt lists it out of position', async () => {
-    // Fallout4.esm is discovered from dataFolder and rendered as an always-first implicit row,
-    // so the game's actual load order is what gets checked, not plugins.txt's stale line.
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Base.esp\r\nFallout4.esm\r\nChild.esp\r\n');
-    const nodes = await pluginNodes(provider());
-    expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
-  });
-
-  // The index build fails here, not the narrower badge pass, so the warning must name both
-  // things that degrade: badges and a disk-derived row.
-  it('renders the plain tree (badges AND disk-derived rows degraded) with a warning naming both when the file index build fails', async () => {
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
-    const logs: string[] = [];
-    const reports: { severity: string; message: string }[] = [];
-    // instanceRoot pointed at a *file*, not a directory: readModlist hits ENOTDIR,
-    // failing the index build without failing the plugins.txt read (which uses the real dir).
-    const source = new Mo2ModlistSource(dir);
-    const provider = new PluginListProvider({ source, log: (m) => logs.push(m), reporter: { report: (severity, message) => reports.push({ severity, message }) }, instanceRoot: join(dir, 'ModOrganizer.ini') });
-    const rows = await provider.getChildren();
-    const nodes = rows.filter((n): n is PluginNode => n.kind === 'plugin');
-
-    expect(rows.every((n) => n.kind !== 'error')).toBe(true); // tree still rendered
-    expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined(); // no badge — computation failed
-    expect(reports).toEqual([{
-      severity: 'warning',
-      message: expect.stringMatching(/badges.*inaccurate/s),
-    }]);
-    expect(logs.some((l) => l.includes('file index build failed'))).toBe(true);
-  });
-});
-
-// The tree is a pure read of plugins.txt: a plugin file on disk with no line is the plugins
-// reconcile's business, never merged in by the provider.
-describe('PluginListProvider — rows are exactly plugins.txt\'s lines, never disk-derived', () => {
-  let dir: string;
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-honest-'));
-    await mkdir(join(dir, 'mods', 'Provider'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'Provider', 'Base.esp'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'mods', 'Provider', 'Unlisted.esp'), buildTes4Buffer([]));
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
-    );
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Provider\r\n');
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Base.esp\r\n');
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  it('a plugin file an enabled mod provides with no plugins.txt line gets no row', async () => {
-    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir });
-    const rows = (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
-    expect(rows.map((n) => n.plugin.name)).toEqual(['Base.esp']);
-  });
-});
-
-describe('PluginListProvider — resolvePluginPath (Reveal in Explorer)', () => {
-  let dir: string;
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-reveal-'));
-    const dataFolder = join(dir, 'Game', 'Data');
+    const dataFolder = join(dir, 'Data');
     await mkdir(dataFolder, { recursive: true });
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    // A vanilla plugin no mod provides — resolved via gamePath/Data.
     await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    // Provider ships Base.esp (a mod-provided winner).
-    await mkdir(join(dir, 'mods', 'Provider'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'Provider', 'Base.esp'), buildTes4Buffer(['Fallout4.esm']));
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
-    );
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Provider\r\n');
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
+    const [base, f4Listed] = await Promise.all([writePlugin('Base.esp', ['Fallout4.esm']), writePlugin('Fallout4.esm', [])]);
 
-  it('resolves a mod-provided plugin to the winning mod copy', async () => {
-    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
-    expect(await provider.resolvePluginPath('Base.esp')).toBe(join(dir, 'mods', 'Provider', 'Base.esp'));
-  });
+    const provider = makeProvider([
+      plugin({ name: 'Base.esp', slot: 0, path: base }),
+      plugin({ name: 'Fallout4.esm', slot: 1, path: f4Listed }), // stale line, positioned AFTER Base.esp
+    ], { dataFolder: () => Promise.resolve(dataFolder) });
 
-  it('resolves an unmanaged vanilla plugin to the game Data folder', async () => {
-    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
-    expect(await provider.resolvePluginPath('Fallout4.esm')).toBe(join(dir, 'Game', 'Data', 'Fallout4.esm'));
-  });
-
-  it('returns undefined without touching the source when no instanceRoot is configured', async () => {
-    const source = new FakeSource(['Base.esp']); // readModlist throws if ever called
-    const provider = new PluginListProvider({ source });
-    expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
-  });
-
-  it('returns undefined and logs (no throw) when resolution fails', async () => {
-    const logs: string[] = [];
-    // instanceRoot pointed at a *file*: readModlist hits ENOTDIR.
-    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), log: (m) => logs.push(m), instanceRoot: join(dir, 'ModOrganizer.ini') });
-    expect(await provider.resolvePluginPath('Base.esp')).toBeUndefined();
-    expect(logs.some((l) => l.includes('resolvePluginPath'))).toBe(true);
+    const nodes = await pluginNodes(provider);
+    expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
   });
 });
 
 // Vanilla masters render as forced-on rows ahead of plugins.txt's lines, so their absence never
-// makes a plugin declaring one show a false "missing master".
+// shows a false missing-master badge. Sourced from a real dataFolder via discoverImplicitMasters.
 describe('PluginListProvider — implicit (vanilla) master rows', () => {
   let dir: string;
-  const dataFolder = () => join(dir, 'Game', 'Data');
-  const providerFor = (extra: Partial<import('./PluginListProvider').PluginListProviderOptions> = {}) =>
-    new PluginListProvider({
-      source: new Mo2ModlistSource(dir),
-      instanceRoot: dir,
-      dataFolder: () => Promise.resolve(dataFolder()),
-      ...extra,
-    });
+  let dataFolder: string;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'plugin-implicit-'));
-    await mkdir(dataFolder(), { recursive: true });
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
-    );
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '');
+    dataFolder = join(dir, 'Data');
+    await mkdir(dataFolder, { recursive: true });
   });
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  const providerFor = (plugins: LoadOrderPlugin[], folder: string | undefined = dataFolder) =>
+    makeProvider(plugins, { dataFolder: () => Promise.resolve(folder) });
+
   it('renders implicit masters as ImplicitMasterNode rows preceding plugins.txt rows, in topological order, with no checkbox and contextValue pluginImplicit', async () => {
     // DLCCoast.esm masters Fallout4.esm — alphabetically DLCCoast < Fallout4, which
     // would be wrong; the correct topological order is Fallout4.esm first.
-    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
-    await writeFile(join(dataFolder(), 'DLCCoast.esm'), buildTes4Buffer(['Fallout4.esm']));
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
-    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    await writeFile(join(dataFolder, 'DLCCoast.esm'), buildTes4Buffer(['Fallout4.esm']));
+    const modPath = join(dir, 'Mod.esp');
+    await writeFile(modPath, buildTes4Buffer([]));
 
-    const rows = await providerFor().getChildren();
+    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]).getChildren();
+
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm', 'DLCCoast.esm', 'Mod.esp']);
     expect(rows[0]).toBeInstanceOf(ImplicitMasterNode);
     expect(rows[1]).toBeInstanceOf(ImplicitMasterNode);
@@ -806,15 +792,19 @@ describe('PluginListProvider — implicit (vanilla) master rows', () => {
   });
 
   it('a name in both dataFolder and plugins.txt renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {
-    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
-    await writeFile(join(dataFolder(), 'ccBGSFO4044-HellfirePowerArmor.esl'), buildTes4Buffer(['Fallout4.esm']));
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    await writeFile(join(dataFolder, 'ccBGSFO4044-HellfirePowerArmor.esl'), buildTes4Buffer(['Fallout4.esm']));
     // plugins.txt also lists the CC .esl (a stale/redundant entry — real LitR shape).
-    await writeFile(
-      join(dir, 'profiles', 'Default', 'plugins.txt'),
-      'Fallout4.esm\r\n*ccBGSFO4044-HellfirePowerArmor.esl\r\n',
-    );
+    const cclPath = join(dir, 'ccBGSFO4044-HellfirePowerArmor.esl');
+    await writeFile(cclPath, buildTes4Buffer(['Fallout4.esm']));
+    const f4Path = join(dir, 'Fallout4.esm');
+    await writeFile(f4Path, buildTes4Buffer([]));
 
-    const rows = await providerFor().getChildren();
+    const rows = await providerFor([
+      plugin({ name: 'Fallout4.esm', slot: 0, path: f4Path }),
+      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1, path: cclPath }),
+    ]).getChildren();
+
     const labels = rows.map((r) => r.label);
     expect(labels.filter((l) => l === 'ccBGSFO4044-HellfirePowerArmor.esl')).toHaveLength(1);
     expect(labels.filter((l) => l === 'Fallout4.esm')).toHaveLength(1);
@@ -822,25 +812,19 @@ describe('PluginListProvider — implicit (vanilla) master rows', () => {
   });
 
   it('real LitR shape: a mod master declaring Fallout4.esm (present only in dataFolder, absent from plugins.txt) shows no false missing-master badge', async () => {
-    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
-    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer(['Fallout4.esm']));
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
-    // Fallout4.esm has NO line in plugins.txt at all — the bug's exact reproduction.
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
-
-    const rows = await providerFor().getChildren();
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    const modPath = join(dir, 'Mod.esp');
+    await writeFile(modPath, buildTes4Buffer(['Fallout4.esm']));
+    // Fallout4.esm has NO fixture entry at all — the bug's exact reproduction.
+    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]).getChildren();
     const modRow = rows.find((r) => r.label === 'Mod.esp') as PluginNode;
     expect(modRow.iconPath).toBeUndefined();
   });
 
   it('a master genuinely absent from both Data/ and plugins.txt is still flagged', async () => {
-    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer(['NoSuchMaster.esm']));
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
-
-    const rows = await providerFor().getChildren();
+    const modPath = join(dir, 'Mod.esp');
+    await writeFile(modPath, buildTes4Buffer(['NoSuchMaster.esm']));
+    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]).getChildren();
     const modRow = rows.find((r) => r.label === 'Mod.esp') as PluginNode;
     expect(modRow.iconPath).toEqual({ id: 'error' });
     expect(modRow.tooltip).toContain('NoSuchMaster.esm');
@@ -848,27 +832,27 @@ describe('PluginListProvider — implicit (vanilla) master rows', () => {
 
   it('degrades to no implicit rows (logged) when the Data folder is unresolved/unreadable, tree still renders', async () => {
     const logs: string[] = [];
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
-    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+    const modPath = join(dir, 'Mod.esp');
+    await writeFile(modPath, buildTes4Buffer([]));
 
-    const provider = providerFor({ dataFolder: () => Promise.resolve(join(dir, 'no', 'such', 'Data')), log: (m) => logs.push(m) });
+    const provider = new PluginListProvider({
+      instance: new FakeInstance(valueOf([plugin({ name: 'Mod.esp', slot: 0, path: modPath })])),
+      source: new FakeSource(),
+      dataFolder: () => Promise.resolve(join(dir, 'no', 'such', 'Data')),
+      log: (m) => logs.push(m),
+    });
     const rows = await provider.getChildren();
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
-    expect(rows.every((n) => n.kind !== 'error')).toBe(true);
     expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
   });
 
   it('handleDrag still filters to only "plugin" nodes, excluding implicit rows for free (no code change needed)', async () => {
-    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Mod.esp\r\n');
-    await mkdir(join(dir, 'mods', 'SomeMod'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
+    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
+    const modPath = join(dir, 'Mod.esp');
+    await writeFile(modPath, buildTes4Buffer([]));
 
-    const provider = providerFor();
+    const provider = providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]);
     const rows = await provider.getChildren();
     const dt = new FakeDataTransfer();
     provider.handleDrag(rows, dt as never, NONE);
@@ -877,62 +861,42 @@ describe('PluginListProvider — implicit (vanilla) master rows', () => {
   });
 });
 
+// The implicit block has no plugins.txt line, so a drop onto it lands at file-index 0 —
+// computed from the fixture's slots, never the implicit names.
 describe('PluginListProvider — implicit master drop-index mapping', () => {
-  let dir: string;
-  const pluginsTxt = () => join(dir, 'profiles', 'Default', 'plugins.txt');
-  const dataFolder = () => join(dir, 'Game', 'Data');
   const node = (name: string) => new PluginNode({ name, enabled: true });
+  const fixturePlugins = () => [plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'C.esp', slot: 1 })];
 
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-implicit-drop-'));
-    await mkdir(dataFolder(), { recursive: true });
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    await writeFile(join(dataFolder(), 'Fallout4.esm'), buildTes4Buffer([]));
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
-    );
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '');
-    // Raw plugins.txt has NO implicit-master line — Fallout4.esm is purely a
-    // synthetic display row. B.esp/C.esp are the real, draggable file rows.
-    await writeFile(pluginsTxt(), '*B.esp\r\n*C.esp\r\n');
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  async function dragToDisk(moved: string[], target: PluginNode | ImplicitMasterNode | undefined) {
-    const source = new Mo2ModlistSource(dir);
-    const provider = new PluginListProvider({ source, instanceRoot: dir, dataFolder: () => Promise.resolve(dataFolder()) });
-    await provider.getChildren(); // cache the rendered order (raw plugins.txt order — no implicit lines)
-    const dt = new FakeDataTransfer();
-    provider.handleDrag(moved.map(node), dt as never, NONE);
-    await provider.handleDrop(target, dt as never, NONE);
-  }
-
-  it('dropping onto the implicit block lands the moved plugin at file-index 0, and the file never gains an implicit-master line', async () => {
-    const rows = await new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(dataFolder()) }).getChildren();
-    const implicitRow = rows.find((r): r is ImplicitMasterNode => r instanceof ImplicitMasterNode)!;
-
-    await dragToDisk(['C.esp'], implicitRow);
-
-    const text = await readFile(pluginsTxt(), 'utf8');
-    expect(text).toBe('*C.esp\r\n*B.esp\r\n'); // C moved to file-index 0
-    expect(text).not.toContain('Fallout4.esm'); // never written into plugins.txt
-  });
-
-  it('dropping onto a normal row is unaffected by the implicit prefix — same file index as with no dataFolder/implicit rows at all', async () => {
-    await dragToDisk(['C.esp'], node('B.esp'));
-    expect(await readFile(pluginsTxt(), 'utf8')).toBe('*C.esp\r\n*B.esp\r\n');
-
-    // Reset and verify the same drop with no dataFolder produces the identical result.
-    await writeFile(pluginsTxt(), '*B.esp\r\n*C.esp\r\n');
-    const source = new Mo2ModlistSource(dir);
-    const provider = new PluginListProvider({ source }); // no instanceRoot/dataFolder — no implicit rows
+  it('dropping onto the implicit block computes file-index 0', async () => {
+    const source = new FakeSource();
+    const provider = new PluginListProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
     await provider.getChildren();
     const dt = new FakeDataTransfer();
-    provider.handleDrag(['C.esp'].map(node), dt as never, NONE);
-    await provider.handleDrop(node('B.esp'), dt as never, NONE);
-    expect(await readFile(pluginsTxt(), 'utf8')).toBe('*C.esp\r\n*B.esp\r\n');
+    provider.handleDrag([node('C.esp')], dt as never, NONE);
+
+    await provider.handleDrop(new ImplicitMasterNode('Fallout4.esm'), dt as never, NONE);
+
+    expect(source.reorderPluginsCalls).toEqual([{ names: ['C.esp'], toIndex: 0 }]);
+  });
+
+  it('dropping onto a normal row is unaffected by whether implicit rows exist at all', async () => {
+    const withImplicitSource = new FakeSource();
+    const withImplicit = new PluginListProvider({
+      instance: new FakeInstance(valueOf(fixturePlugins())), source: withImplicitSource,
+      dataFolder: () => Promise.resolve('/some/Data'),
+    });
+    await withImplicit.getChildren();
+    const dt1 = new FakeDataTransfer();
+    withImplicit.handleDrag([node('C.esp')], dt1 as never, NONE);
+    await withImplicit.handleDrop(node('B.esp'), dt1 as never, NONE);
+
+    const noImplicitSource = new FakeSource();
+    const noImplicit = new PluginListProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source: noImplicitSource });
+    await noImplicit.getChildren();
+    const dt2 = new FakeDataTransfer();
+    noImplicit.handleDrag([node('C.esp')], dt2 as never, NONE);
+    await noImplicit.handleDrop(node('B.esp'), dt2 as never, NONE);
+
+    expect(withImplicitSource.reorderPluginsCalls).toEqual(noImplicitSource.reorderPluginsCalls);
   });
 });

@@ -3,32 +3,26 @@ import { join } from 'node:path';
 import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
-import {
-  buildFileConflictIndex,
-  rootLevelWinners,
-  type FileConflictIndex,
-} from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
-import { resolvePluginPaths } from './loadOrderSnapshot';
 import { discoverImplicitMasters } from './vanillaMasters';
-import { ErrorNode } from './ErrorNode';
+import type { Instance, InstanceValue } from './instance';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
 // Hoisted out of the constructor so an omitted `dataFolder` is not a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
-export type PluginListSource = Pick<
-  IModlistSource, 'setPluginEnabled' | 'readModlist' | 'readPluginOrder' | 'readEnabledPlugins' | 'reorderPlugins'
->;
+export type PluginListSource = Pick<IModlistSource, 'setPluginEnabled' | 'reorderPlugins'>;
 
 /** `dataFolder` is a getter, not a settled `Promise`: the setting it resolves is editable while
  *  Modbench runs, so a value captured at construction could go stale for the provider's life. */
 export interface PluginListProviderOptions {
+  /** Name, origin, slot, enabled and winning for every plugin copy — the row provider's only
+   *  row input (ADR-0047). */
+  instance: Pick<Instance, 'value' | 'subscribe'>;
   source: PluginListSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
-  instanceRoot?: string;
   dataFolder?: () => Promise<string | undefined>;
 }
 
@@ -94,14 +88,14 @@ export class EmptyNode extends vscode.TreeItem {
   }
 }
 
-export type PluginListNode = PluginNode | ImplicitMasterNode | ErrorNode | EmptyNode;
+export type PluginListNode = PluginNode | ImplicitMasterNode | EmptyNode;
 
 // The view is shared, so a drop must be able to tell these rows from another provider's.
-const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster', 'error', 'empty']);
+const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster', 'empty']);
 
-/** The plugin file a row stands for, undefined for the error and empty-state rows. The boundary
- *  object CONTEXT-MAP.md names — the only thing about these rows anything outside Mod
- *  Management needs to know. */
+/** The plugin file a row stands for, undefined for the empty-state row. The boundary object
+ *  CONTEXT-MAP.md names — the only thing about these rows anything outside Mod Management
+ *  needs to know. */
 export function pluginFileOf(node: PluginListNode): string | undefined {
   if (node.kind === 'plugin') return node.plugin.name;
   if (node.kind === 'implicitMaster') return node.name;
@@ -116,9 +110,10 @@ export interface PluginParticipationChange {
   enabled: boolean;
 }
 
-/** One row per plugins.txt line, in Plugin load order. */
+/** One row per plugins.txt line, in Plugin load order — read entirely from the Instance value
+ *  (ADR-0047); this provider owns no cache or watcher over MO2's files itself. */
 export class PluginListProvider
-  implements vscode.TreeDataProvider<PluginListNode>, vscode.TreeDragAndDropController<PluginListNode>
+  implements vscode.TreeDataProvider<PluginListNode>, vscode.TreeDragAndDropController<PluginListNode>, vscode.Disposable
 {
   readonly dropMimeTypes = [DND_MIME] as const;
   readonly dragMimeTypes = [DND_MIME] as const;
@@ -133,33 +128,46 @@ export class PluginListProvider
   private readonly source: PluginListSource;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
-  private readonly instanceRoot?: string;
   private readonly dataFolder: () => Promise<string | undefined>;
+  private readonly instance: Pick<Instance, 'value' | 'subscribe'>;
+  private instanceValue: InstanceValue;
+  private readonly instanceSubscription: vscode.Disposable;
   // plugins.txt's raw file order as last rendered, so a drop computes its index against what
   // the user dragged against rather than a fresh read an external edit could skew.
   private lastOrder: string[] = [];
   private filterText = '';
   private filterLower = '';
-  // Unfiltered rows, so a filter keystroke re-renders instead of re-reading plugins.txt and
-  // re-walking the conflict index. `invalidate()` clears it; `render()` leaves it intact.
+  // Unfiltered rows, so a filter keystroke re-renders instead of re-walking the Instance value.
+  // `invalidate()` clears it; `render()` leaves it intact.
   private cache?: { rows: PluginListNode[] };
 
-  /** `instanceRoot` enables the order-aware missing-master badge and is omitted by tests using
-   *  an in-memory source; an undefined `dataFolder` degrades the vanilla-plugin lookups. */
   constructor(options: PluginListProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
-    this.instanceRoot = options.instanceRoot;
     this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
+    this.instance = options.instance;
+    this.instanceValue = options.instance.value;
+    this.instanceSubscription = options.instance.subscribe((value) => {
+      this.instanceValue = value;
+      this.invalidate();
+    });
   }
 
+  dispose(): void {
+    this.instanceSubscription.dispose();
+  }
+
+  // Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
+  // a caller forcing a resync (a failed write, `refreshAll`) gets whatever the Instance is
+  // currently holding, not a snapshot that predates it.
   invalidate(): void {
+    this.instanceValue = this.instance.value;
     this.cache = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  // A filter keystroke changes nothing on disk, so it must not force a re-read.
+  // A filter keystroke changes nothing on disk, so it must not force a re-render off a stale cache.
   private render(): void {
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -172,29 +180,20 @@ export class PluginListProvider
     this.render();
   }
 
-  /** The write reads plugins.txt fresh rather than trusting this provider's possibly stale row
-   *  cache; a name whose line has meanwhile gone is a no-op. */
+  /** The write reaches disk; the Instance's own watcher is what brings the result back
+   *  (ADR-0047 point 6). `invalidate()` here only re-renders the still-cached rows early. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
     this._onDidChangeParticipation.fire({ plugin: pluginName, enabled });
   }
 
-  /** The winning copy in the Mod override order, else the game's Data folder for a plugin no
-   *  mod provides. Undefined when resolution fails; a fresh read each call, since the one
-   *  caller is a rare explicit action. */
-  async resolvePluginPath(name: string): Promise<string | undefined> {
-    if (!this.instanceRoot) return undefined;
-    try {
-      const entries = await this.source.readModlist();
-      const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
-      const dataFolder = await this.dataFolder();
-      if (!dataFolder) return undefined;
-      return resolvePluginPaths([name], index, dataFolder).get(name);
-    } catch (e) {
-      this.log(`[PluginListProvider] resolvePluginPath("${name}") failed: ${e instanceof Error ? e.message : String(e)}`);
-      return undefined;
-    }
+  /** The winning copy's own path, already resolved on the Instance value — undefined for a name
+   *  with no winning copy. A synchronous lookup, `Promise`-wrapped only to keep the caller's
+   *  `await` unchanged. */
+  resolvePluginPath(name: string): Promise<string | undefined> {
+    const folded = name.toLowerCase();
+    return Promise.resolve(this.instanceValue.plugins.find((p) => p.winning && p.name.toLowerCase() === folded)?.path);
   }
 
   getTreeItem(element: PluginListNode): vscode.TreeItem {
@@ -206,7 +205,6 @@ export class PluginListProvider
 
     if (!this.cache) {
       const built = await this.buildRows();
-      if (built.kind === 'error') return [new ErrorNode(built.message)];
       if (built.kind === 'empty') return [new EmptyNode()];
       this.cache = built.cache;
     }
@@ -218,51 +216,40 @@ export class PluginListProvider
       : this.cache.rows;
   }
 
-  // Returns a discriminated result rather than caching an error or empty placeholder, so a
-  // transient read failure never sticks around as stale cached state.
   private async buildRows(): Promise<
-    | { kind: 'error'; message: string }
     | { kind: 'empty' }
     | { kind: 'ok'; cache: { rows: PluginListNode[] } }
   > {
-    let order: string[];
-    let enabled: string[];
-    try {
-      [order, enabled] = await Promise.all([
-        this.source.readPluginOrder(),
-        this.source.readEnabledPlugins(),
-      ]);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[PluginListProvider] readPluginOrder failed: ${message}`);
-      return { kind: 'error', message };
-    }
+    const dataFolder = await this.dataFolder();
+    const implicitNames = await discoverImplicitMasters(dataFolder, this.log);
+    const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
 
-    this.lastOrder = order;
+    // One entry per plugins.txt line: the winning copy of every listed name, in file order
+    // (ADR-0044) — a losing copy of the same name carries the same slot and is excluded.
+    const listed = this.instanceValue.plugins
+      .filter((p) => p.slot !== null && p.winning)
+      .sort((a, b) => a.slot! - b.slot!);
+    this.lastOrder = listed.map((p) => p.name);
 
     // A name in both sets renders once, as the implicit row. `fullOrder` is display and badge
     // order only: `this.lastOrder` stays plugins.txt's raw order, which is what write positions
     // are computed against.
-    const dataFolder = await this.dataFolder();
-    const implicitNames = await discoverImplicitMasters(dataFolder, this.log);
-    const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
-    const dedupedOrder = order.filter((n) => !implicitLower.has(n.toLowerCase()));
-
-    // Rows are exactly plugins.txt's lines: a plugin file on disk with no line is the plugins
-    // reconcile's business, never merged in here.
-    const index = await this.buildFileIndex();
-    const winnerByName = index ? rootLevelWinners(index) : undefined;
-    const fullOrder = [...implicitNames, ...dedupedOrder];
-
+    const dedupedOrder = listed.filter((p) => !implicitLower.has(p.name.toLowerCase()));
+    const fullOrder = [...implicitNames, ...dedupedOrder.map((p) => p.name)];
     if (fullOrder.length === 0) return { kind: 'empty' };
-    const enabledSet = new Set(enabled);
+
+    // Every physical plugin copy's own winning path — the badge pass's only way to open a
+    // plugin's own file and read its declared masters.
+    const winnerByName = new Map(
+      this.instanceValue.plugins.filter((p) => p.winning).map((p) => [p.name.toLowerCase(), p.path] as const),
+    );
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.
-    const statuses = winnerByName ? await this.computeOrderStatuses(fullOrder, winnerByName, dataFolder) : undefined;
+    const statuses = await this.computeOrderStatuses(fullOrder, winnerByName, dataFolder);
     this.lastImplicitNames = new Set(implicitNames.map((n) => n.toLowerCase()));
     const rows: PluginListNode[] = [
       ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
-      ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
+      ...dedupedOrder.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, statuses?.get(p.name))),
     ];
     return { kind: 'ok', cache: { rows } };
   }
@@ -276,25 +263,6 @@ export class PluginListProvider
 
   // A secondary, non-blocking step: on failure the tree still renders every plugins.txt line,
   // without badges. The loss is reported because a missing badge looks like "nothing to flag".
-  private async buildFileIndex(): Promise<FileConflictIndex | undefined> {
-    if (!this.instanceRoot) return undefined;
-    try {
-      const entries = await this.source.readModlist();
-      return await buildFileConflictIndex(entries, this.instanceRoot, this.log);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[PluginListProvider] file index build failed (badges degrade): ${message}`);
-      this.reporter?.report(
-        'warning',
-        'Could not read mod files on disk — plugin master-order badges may be inaccurate.',
-        message,
-      );
-      return undefined;
-    }
-  }
-
-  // `winnerByName` is built once by the caller: a full scan across every mod's files, not free
-  // to repeat. Its own try/catch, so a badge failure never takes away rows already found.
   private async computeOrderStatuses(
     order: string[], winnerByName: Map<string, string>, dataFolder: string | undefined,
   ): Promise<Map<string, PluginOrderStatus> | undefined> {
