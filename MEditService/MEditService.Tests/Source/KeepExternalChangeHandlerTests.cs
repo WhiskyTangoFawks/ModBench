@@ -4,14 +4,13 @@ using MEditService.Core.Records;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
-public sealed class ExternalChangeEditLanderTests : IDisposable
+public sealed class KeepExternalChangeHandlerTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 

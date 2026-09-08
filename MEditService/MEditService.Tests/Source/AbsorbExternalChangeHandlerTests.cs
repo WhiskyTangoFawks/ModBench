@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
-public sealed class ExternalChangeAbsorberTests : IDisposable
+public sealed class AbsorbExternalChangeHandlerTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
 

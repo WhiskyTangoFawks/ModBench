@@ -20,15 +20,13 @@ public sealed class AbsorbExternalChangeHandler
     public AbsorbResult Absorb(string modFolder, string pluginName, string pluginPath, LoadOrder loadOrder)
     {
         var result = Run(modFolder, pluginName, pluginPath, loadOrder);
-        // Nothing logged a refusal here before; Track's own endpoint already logs its refusal, so
-        // Absorb gains the same posture.
+        // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
         if (!result.Applied)
             _logger.LogWarning("Refused to absorb {Plugin}: {Reason}", pluginName, result.RefusalReason);
         return result;
     }
 
-    // The gesture's own body, unchanged from before this ticket — static because none of it reads
-    // this handler's state.
+    // Static because none of it reads this handler's state.
     private static AbsorbResult Run(string modFolder, string pluginName, string pluginPath, LoadOrder loadOrder)
     {
         // A fresh deep parse of the binary now on disk, never a cached load-order view — that stale view

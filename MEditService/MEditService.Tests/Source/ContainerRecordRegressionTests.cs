@@ -295,7 +295,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         });
 
         var entries = new List<LogEntry>();
-        var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
+        using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
         var handler = new KeepExternalChangeHandler(
             SharedSchemaReflector.Instance, loggerFactory.CreateLogger<KeepExternalChangeHandler>());
 
