@@ -13,7 +13,7 @@ public sealed class IndexStoreRebuildTests
     }
 
     [Fact]
-    public async Task ARebuildWithAReadInFlight_LeavesNothingOfTheOldFileBehind()
+    public async Task ARebuildWithAReadInFlight_WaitsForIt_AndLeavesNothingOfTheOldFileBehind()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"idx-rebuild-{Guid.NewGuid():N}");
         var store = new IndexStore(NullLogger.Instance, Path.Combine(dir, "index.duckdb"));
@@ -24,10 +24,13 @@ public sealed class IndexStoreRebuildTests
 
             var inFlight = store.OpenReadConnection();
             Assert.Equal(1, MarkerTables(inFlight));
-            var released = Task.Run(async () => { await Task.Delay(300); inFlight.Dispose(); });
 
-            store.RebuildFile();
-            await released;
+            var rebuild = Task.Run(store.RebuildFile);
+            var raced = await Task.WhenAny(rebuild, Task.Delay(TimeSpan.FromMilliseconds(250)));
+            Assert.True(raced != rebuild, "the rebuild did not wait for the read in flight");
+
+            inFlight.Dispose();
+            await rebuild.WaitAsync(TimeSpan.FromSeconds(30));
 
             using var afterwards = store.OpenReadConnection();
             Assert.True(MarkerTables(afterwards) == 0, "the rebuilt index still holds the old file's table — a read in flight kept the deleted file's database alive");

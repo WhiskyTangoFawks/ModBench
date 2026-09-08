@@ -77,7 +77,7 @@ internal sealed class IndexStore : IDisposable
         lock (_rebuildGate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            while (_rebuilding) Monitor.Wait(_rebuildGate);
+            WaitWhile(() => _rebuilding, "being rebuilt");
             var connection = _databasePath == null ? Connection.Duplicate() : new DuckDBConnection($"DataSource={_databasePath}");
             connection.Open();
             _readsInFlight++;
@@ -87,11 +87,26 @@ internal sealed class IndexStore : IDisposable
     }
 
     // A reopen while a read connection is still open gets DuckDB.NET's cached instance of the file
-    // the rebuild just deleted, so a rebuild waits for reads in flight.
+    // the rebuild just deleted, so a rebuild waits for reads in flight. Taken inside both
+    // IndexProjector's lock and the write gate, never outside either.
     private readonly object _rebuildGate = new();
     private int _readsInFlight;
     private bool _rebuilding;
     private bool _disposed;
+
+    // Called under _rebuildGate. Bounded for the reason IndexWriteGate.DefaultTimeout gives: a read
+    // connection that is never disposed would otherwise wedge every later rebuild and read behind
+    // it, with nothing said.
+    private void WaitWhile(Func<bool> pending, string what)
+    {
+        var deadline = DateTime.UtcNow + IndexWriteGate.DefaultTimeout;
+        while (pending())
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero || !Monitor.Wait(_rebuildGate, remaining))
+                throw new TimeoutException($"The index is still {what} after {IndexWriteGate.DefaultTimeout.TotalSeconds:0.###}s.");
+        }
+    }
 
     public void Dispose()
     {
@@ -170,7 +185,7 @@ internal sealed class IndexStore : IDisposable
             _rebuilding = true;
             try
             {
-                while (_readsInFlight > 0) Monitor.Wait(_rebuildGate);
+                WaitWhile(() => _readsInFlight > 0, "serving reads");
                 Connection.Dispose();
                 File.Delete(_databasePath!);
                 Connection = OpenFile();
