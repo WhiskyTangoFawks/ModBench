@@ -11,9 +11,14 @@ namespace MEditService.Tests.TestSupport;
 /// per gesture over it, the codec and the schema.</summary>
 internal static class TestEditService
 {
-    internal static EditRecordHandler EditHandler(LoadOrderHolder holder) =>
-        new(holder, Resolver, new DefaultModImporter(), new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
-            SharedSchemaReflector.Instance, NullLogger<EditRecordHandler>.Instance);
+    internal static EditRecordHandler EditHandler(LoadOrderHolder holder)
+    {
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+        var targets = new WriteTargets(
+            holder, new DefaultModImporter(), codec, SharedSchemaReflector.Instance, NullLogger<WriteTargets>.Instance);
+        return new EditRecordHandler(
+            targets, holder, Resolver, codec, SharedSchemaReflector.Instance, NullLogger<EditRecordHandler>.Instance);
+    }
 
     internal static EditRecordHandler EditHandler(IndexProjector index) => EditHandler(HolderOver(index));
 

@@ -11,17 +11,30 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Edit gesture's handler (ADR-0046 invariant 3). Its four shared write concerns come
-/// from <see cref="WriteTargets"/>, so nothing here re-derives a target, a gate or a rename.</summary>
-public sealed class EditRecordHandler(
-    LoadOrderHolder loadOrder,
-    Func<LoadOrder, FormLinkResolver> resolvers,
-    IModImporter importer,
-    RecordTextCodec codec,
-    SchemaReflector schemaReflector,
-    ILogger<EditRecordHandler> logger)
+/// <summary>The Edit gesture's handler (ADR-0046 invariant 3). Its four shared write concerns are
+/// <see cref="WriteTargets"/>'s, so nothing here re-derives a target, a gate or a rename.</summary>
+public sealed class EditRecordHandler
 {
-    private readonly WriteTargets _targets = new(loadOrder, importer, codec, schemaReflector, logger);
+    private readonly WriteTargets _targets;
+    private readonly LoadOrderHolder _loadOrder;
+    private readonly Func<LoadOrder, FormLinkResolver> _resolvers;
+    private readonly RecordTextCodec _codec;
+    private readonly SchemaReflector _schemaReflector;
+    private readonly ILogger<EditRecordHandler> _logger;
+
+    // Internal because the shared module is, which is why this assembly registers its own handlers
+    // (MEditService.Core.Composition) rather than the host naming a type it cannot see.
+    internal EditRecordHandler(
+        WriteTargets targets,
+        LoadOrderHolder loadOrder,
+        Func<LoadOrder, FormLinkResolver> resolvers,
+        RecordTextCodec codec,
+        SchemaReflector schemaReflector,
+        ILogger<EditRecordHandler> logger)
+    {
+        (_targets, _loadOrder, _resolvers, _codec, _schemaReflector, _logger) =
+            (targets, loadOrder, resolvers, codec, schemaReflector, logger);
+    }
 
     /// <summary>The single write path (ADR-0041): one envelope, patched onto the record's document
     /// by <see cref="DocumentEdit"/>, landed here as a working-tree change. This method owns only
@@ -32,7 +45,7 @@ public sealed class EditRecordHandler(
         var (release, identity, unit, repository) = editTarget;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
-        var schemas = schemaReflector.GetSchemas(release);
+        var schemas = _schemaReflector.GetSchemas(release);
         if (!schemas.TryGetValue(identity.RecordType, out var schema))
         {
             return RecordEditResult.RefusedAt(
@@ -77,11 +90,11 @@ public sealed class EditRecordHandler(
 
         Func<string, string> roundTrip = schema.IsHeader
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
-            : patched => codec.RoundTrip(patched, release, unit.OwnerRecordType);
+            : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
 
         // One resolver per gesture over the load order as it stands now, so every link in this record
         // is answered from one reading of the tree and none outlives the write.
-        using var resolver = resolvers(loadOrder.Current);
+        using var resolver = _resolvers(_loadOrder.Current);
         var request = new DocumentEditRequest(text, prefix, schema, envelope, release, resolver.Resolve, roundTrip);
 
         string newText;
@@ -112,9 +125,9 @@ public sealed class EditRecordHandler(
         _targets.RenameTo(repository, plugin, target, newEditorId);
         repository.Put(plugin, new SourceDocument(target.FormKey, target.RecordType, newEditorId, newText));
 
-        if (logger.IsEnabled(LogLevel.Information))
+        if (_logger.IsEnabled(LogLevel.Information))
         {
-            logger.LogInformation(
+            _logger.LogInformation(
                 "Edited {Op} {Path} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
                 envelope.Op, spelled, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
         }
