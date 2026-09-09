@@ -40,6 +40,10 @@ _Avoid_: fingerprint, version stamp, provenance (Editing's commit-trailer term)
 A single distributable file sitting in the instance's shared `downloads/` folder (`.zip`/`.7z`/`.rar`), with an optional MO2-written `.meta` sidecar carrying its Nexus metadata. A download is the **uninstalled state of a mod**: installing one produces a `mods/<name>/` folder, and the two are linked only derivably, via the installed mod's `meta.ini` `installationFile` — never by stored state on the download. The relationship is many-to-many (one download can be installed into several mods; a merged mod can come from several downloads), so no download "belongs to" a mod.
 _Avoid_: archive (that is BA2/BSA — see **Mod**), package
 
+**Upgrade**:
+Installing a download over a mod already installed from the same Nexus mod id: the folder's contents are replaced in place around `.git`, so the mod's identity and every watcher armed on it survive. Distinct from a fresh install, which lands a new `mods/<name>/` folder. The Downloads view's upgrade pick decides the target; filename is never consulted, only meta.ini's mod id and file id.
+_Avoid_: reinstall, update (Nexus's own word for a different, unbuilt gesture)
+
 **Download status**:
 A download's install state, read from its `.meta`: **Downloaded** (neither flag), **Installed** (`installed=true`), **Uninstalled** (`uninstalled=true`). Strictly orthogonal to **Hidden** below — the two are derived from different keys and are never conflated.
 _Avoid_: Removed (MO2's `.meta` key `removed` means *hidden*, so "Removed" collides with the other axis; MO2 itself displays "Uninstalled")

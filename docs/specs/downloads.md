@@ -131,6 +131,12 @@ bookkeeping.
     the same filter I use on every other Modbench list, so that I can find one without
     scrolling and without learning a second way to search (VS Code's native tree Find
     remains available on this tree as it is on every tree).
+33. As a user installing a download whose Nexus mod id I already have installed, I want
+    Modbench to ask which installed mod it upgrades, with the likely one pre-selected, so
+    that a mod author's file naming never writes over the wrong folder.
+34. As a user installing a second file from a page I've already installed, I want an
+    "Install as a new mod…" option in that same pick, so that optional files and patches
+    still install as their own mod.
 
 ## Implementation Decisions
 
@@ -275,8 +281,23 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   - **Install** — reuse the existing `modbench.modList.installFromArchive` flow
     (extract → detect root → install into the loadout, stamping `installationFile` into
     the new mod's `meta.ini`), pre-supplied with this row's download path (skipping the
-    file-picker). On **success**, write `installed=true` back to the download's `.meta`,
-    so the row's Status transitions Downloaded → Installed live via the watcher.
+    file-picker). When the download's Nexus mod id matches an installed mod's, **the
+    upgrade pick** (below) runs first and its chosen target, if any, rides along as a
+    fifth argument the command uses in place of its own name prompt. On **success**,
+    write `installed=true` back to the download's `.meta`, so the row's Status
+    transitions Downloaded → Installed live via the watcher.
+  - **The upgrade pick** — `selectUpgradeCandidates` (`upgradeCandidates.ts`), pure over
+    the Instance value and the download's `modID`/`fileID`, finds the installed mods
+    whose meta.ini mod id equals the download's; each candidate carries whether meta.ini's
+    own `installedFiles` records the download's file id, or failing that whether the
+    download named by the candidate's `installationFile` does. Filename is never
+    consulted. **No candidates** — no mod id on the download, or no installed mod sharing
+    it — skips the pick and installs exactly as before. Otherwise a `QuickPick` shows one
+    row per candidate (label: mod name and version; description: "File ID match" when
+    that candidate matched, named and sorted first, which is what makes it the QuickPick's
+    default-highlighted row) plus a trailing "Install as a new mod…" row. Choosing a
+    candidate upgrades that mod's folder in place (ADR-0047 point 6); choosing "new mod"
+    or pressing **Esc** runs today's flow — Esc installs nothing.
   - **Visit on Nexus** — open `https://www.nexusmods.com/{gameSlug}/mods/{modID}`, where
     `gameSlug` derives from the instance's game (the existing MO2 game-name → Nexus-slug
     mapping) and `modID` from the `.meta`. **Gated off** when there's no `modID`
@@ -344,6 +365,12 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   its own direct `registerCommand` call, no id -> handler lookup table in between.
   `registerDownloadsSortCommand` and `registerDownloadsHiddenToggleCommands` wire the
   toolbar. Every command calls its action function directly — no round trip.
+  `installArchive` additionally takes the Instance (read-only) to run the upgrade pick
+  before it calls the install command.
+- **`upgradeCandidates.ts`** (`selectUpgradeCandidates`) is the pure candidate-selection
+  seam the upgrade pick is built on: an `InstanceValue` and a download's `modID`/`fileID`
+  in, ordered `UpgradeCandidate[]` out, no `vscode` import. `DownloadsPanel.ts`'s
+  `upgradePickItems` is the one place that turns a candidate into a `QuickPickItem`.
 - **`downloadsWatcher.ts`** is the Instance's own watcher over `downloads/` (ADR-0047); the
   tree has no watcher of its own and there is no manual Refresh — see *Toolbar*.
 - **`HiddenDownloadDecorationProvider`** dims hidden rows: a stateless
@@ -384,7 +411,19 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   actions, all through the actual registered callback rather than a handler reached by any other
   path; `deleteArchives`' once-for-the-whole-batch confirmation, including the
   single-item-reuses-singular-text case; `registerDownloadsSortCommand` and
-  `registerDownloadsHiddenToggleCommands` against the mocked provider.
+  `registerDownloadsHiddenToggleCommands` against the mocked provider. The upgrade pick, against
+  a scripted `Pick<Instance, 'value'>` and the mocked `vscode.window.showQuickPick` (never real
+  VS Code UI): the pick's rows, their order and the file-id match's active-row placement;
+  choosing a candidate or "Install as a new mod…" carries the right target into the install
+  command; Esc calls the install command with nothing; a download with no mod id, or one an
+  installed mod does not share, never shows the pick.
+- **`upgradeCandidates.test.ts`** (Vitest, no `vscode`): `selectUpgradeCandidates` as a pure
+  function over fixture `InstanceValue`/download shapes — one candidate with a file-id match,
+  several without, none (no mod id on the download, and no installed mod sharing one that is
+  present), and a match found only through the sidecar named by `installationFile`.
+- **`modManagementCommands.test.ts`**: `registerModInstallCommands`'s `installFromArchive`
+  command — a supplied target bypasses `promptModName` and installs under that name; no target
+  reaches the prompt as it does today, cancelling it installs nothing.
 - **`downloadsWatcher.test.ts`**: debounces multiple rapid fs events into one `onChange`
   call.
 - **`HiddenDownloadDecorationProvider.test.ts`**: decorates only rows both under the
