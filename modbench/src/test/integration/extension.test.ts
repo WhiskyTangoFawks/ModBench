@@ -88,6 +88,9 @@ const requestLog: string[] = [];
 // simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
 // one load and a reload of the same load order.
 let mockPluginsOverride: MockPlugin[] | null = null;
+// GET /implicit-masters: the plugins this install loads with no plugins.txt line. Empty by
+// default, so a suite's Data/ stubs are presence without being forced on.
+let mockImplicitMasters: string[] = [];
 // Makes the next PUT /load-order fail the way a bad game directory would. ADR-0044's contract
 // disposes the previous scope first, so the mock must not set loadOrderHeld on this path.
 let putLoadOrderShouldFail = false;
@@ -134,6 +137,7 @@ function resetMockBackend(): void {
   loadOrderHeld = false;
   requestLog.length = 0;
   mockPluginsOverride = null;
+  mockImplicitMasters = [];
   putLoadOrderShouldFail = false;
   rebuildIndexShouldFail = false;
   getPluginsShouldFail = false;
@@ -251,6 +255,13 @@ function createMockBackend(): http.Server {
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(mockPluginsOverride ?? MOCK_PLUGINS));
+      return;
+    }
+    // Answered from the game directory alone, with no load order held — the Plugins rows and the
+    // plugins.txt reconcile both ask it before any PUT (ADR-0021).
+    if (url.startsWith('/implicit-masters')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(mockImplicitMasters));
       return;
     }
     // A plugin row's children come from here once the backend is running.
@@ -948,6 +959,31 @@ describe('Plugin load-order rows expand into records', () => {
 
   it('exposes the merged Plugins tree from activate()', () => {
     assert.ok(pluginsTree(), 'activate() should return { pluginsTree } for the open workspace');
+  });
+
+  // The extension parses no plugin binary (ADR-0021), so the forced-on rows can only be the
+  // backend's answer — nothing here discovers them from the Data folder.
+  it('renders the implicit masters the backend names, ahead of the plugins.txt rows', async () => {
+    const tree = pluginsTree()!;
+    mockImplicitMasters = ['Fallout4.esm'];
+    try {
+      pluginListProviderOf()!.invalidate();
+      const rows = await tree.getChildren();
+
+      assert.strictEqual(rowName(rows[0]), 'Fallout4.esm', 'the backend-named implicit master leads the rows');
+      assert.strictEqual(tree.getTreeItem(rows[0]).contextValue, 'pluginImplicit');
+    } finally {
+      mockImplicitMasters = [];
+      pluginListProviderOf()!.invalidate();
+    }
+  });
+
+  it('renders no implicit row when the backend names none', async () => {
+    const tree = pluginsTree()!;
+    pluginListProviderOf()!.invalidate();
+    const rows = await tree.getChildren();
+
+    assert.ok(!rows.some((r) => tree.getTreeItem(r).contextValue === 'pluginImplicit'));
   });
 
   it('renders the load order as leaves with no backend running', async () => {
@@ -1671,12 +1707,15 @@ describe('Progressive load', () => {
   // Master issues derive from the whole load order, so mid-load they would flag masters not
   // opened yet. The backend suppresses them while loading; this asserts the suppression holds
   // end to end and then lifts by itself.
-  it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
+  it('leaves master issues off the rows until the load completes, then decorates them with no user action', async function () {
+    // The chevron lands in ~57 ms on an idle box; these budgets are for a machine running
+    // several extension hosts at once, where the default 10 s wait starved.
+    this.timeout(60_000);
     setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     const launch = enterEditing();
 
     await waitFor('MissingMaster.esp to gain a chevron mid-load', async () =>
-      (await itemFor('MissingMaster.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+      (await itemFor('MissingMaster.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed, 30_000);
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
       !(typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm')),

@@ -4,10 +4,9 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { buildFileConflictIndex, foldPath, rootLevelWinners, type FileConflictIndex } from '../fileConflictIndex';
-import { isPluginFile } from '../masterReader';
+import { isPluginFile } from '../pluginFile';
 import { parseModlist } from '../mo2/modlistText';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2/pluginsText';
-import { discoverImplicitMasters } from '../vanillaMasters';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */
@@ -117,7 +116,7 @@ async function overwritePlugins(instanceRoot: string): Promise<Map<string, strin
   }
 }
 
-// An implicit master is left out: the tree renders it from Data, never from a line, so a
+// An implicit master is left out: the tree gives it a row of its own, never from a line, so a
 // mod's copy of one must not earn a line.
 function providedPlugins(
   index: FileConflictIndex, overwrite: ReadonlyMap<string, string>, implicit: ReadonlySet<string>,
@@ -131,22 +130,36 @@ function providedPlugins(
   return provided;
 }
 
+/** Answers the plugins this install loads with no plugins.txt line, or `undefined` when the
+ *  backend that knows them cannot be reached. Only the backend can answer it: deriving the set
+ *  here would mean parsing plugin headers (ADR-0021). */
+export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
+
 /** plugins.txt is the complete inventory the Plugins tree reads, so when disk disagrees the file
  *  is updated (docs/specs/plugins.md). Any failure to enumerate disk refuses the whole run — an
  *  errored walk must never read as "everything vanished". */
 export async function reconcilePlugins(
-  instanceRoot: string, profile: string, dataFolder: string | undefined, log: (msg: string) => void,
+  instanceRoot: string, profile: string, dataFolder: string | undefined,
+  implicitMasters: ImplicitMasterSource, log: (msg: string) => void,
 ): Promise<PluginsReconcileResult> {
   let provided: ReadonlyMap<string, string>;
   let inData: ReadonlySet<string> | undefined;
   try {
+    const implicit = await implicitMasters();
+    // Without them every verdict is a guess: a mod's copy of a vanilla master earns a line, and
+    // a line for one is pruned. So the run does nothing, as an unresolved game directory
+    // already does for pruning.
+    if (implicit === undefined) {
+      log('[plugins] the implicit masters are unknown — appending and pruning nothing this run');
+      return { applied: true, wrote: false, append: [], prune: [] };
+    }
     const entries = parseModlist(await readFile(join(instanceRoot, 'profiles', profile, 'modlist.txt'), 'utf8'));
     const [index, overwrite] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       overwritePlugins(instanceRoot),
     ]);
     inData = dataFolder === undefined ? undefined : new Set((await rootLevelPlugins(dataFolder)).keys());
-    provided = providedPlugins(index, overwrite, new Set((await discoverImplicitMasters(dataFolder, log)).map(foldPath)));
+    provided = providedPlugins(index, overwrite, new Set(implicit.map(foldPath)));
   } catch (err) {
     return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
   }

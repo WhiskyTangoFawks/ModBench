@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { reorderPlugins } from './commands/plugins';
 import { parsePlugins } from './mo2/pluginsText';
-import { buildTes4Buffer } from './test/buildTes4Buffer';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from './loadOrderSnapshot';
 import type { InstanceValue } from './instance';
 import {
@@ -18,7 +17,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  PluginListProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
+  PluginListProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf,
   type PluginListSource,
 } from './PluginListProvider';
 import { ErrorNode } from './ErrorNode';
@@ -97,11 +96,18 @@ const writesTo = (instanceRoot: string): PluginListSource => ({
 
 const makeProvider = (
   plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
-  extra: Partial<{ source: PluginListSource; instance: FakeInstance; dataFolder: () => Promise<string | undefined> }> = {},
+  extra: Partial<{
+    source: PluginListSource;
+    instance: FakeInstance;
+    dataFolder: () => Promise<string | undefined>;
+    implicitMasters: () => Promise<readonly string[] | undefined>;
+  }> = {},
 ) => {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
   const source = extra.source ?? new FakeSource();
-  return new PluginListProvider({ instance, source, dataFolder: extra.dataFolder });
+  return new PluginListProvider({
+    instance, source, dataFolder: extra.dataFolder, implicitMasters: extra.implicitMasters,
+  });
 };
 
 // The leading slot answers one question: can you change whether this loads? A lock fills it
@@ -338,7 +344,7 @@ describe('PluginListProvider — rows come from the Instance value', () => {
     let settled = false;
     const pending = provider.getChildren().then((rows) => { settled = true; return rows; });
     // A macrotask boundary, not a microtask one: buildRows() itself hops several microtasks
-    // (dataFolder(), discoverImplicitMasters()), so a single `await Promise.resolve()` would
+    // (dataFolder(), implicitMasters()), so a single `await Promise.resolve()` would
     // pass whether or not getChildren() actually waits on the Instance.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
@@ -444,53 +450,13 @@ describe('PluginListProvider — filter', () => {
   });
 });
 
-describe('PluginNode — order-aware missing-master badge', () => {
-  it('overlays an error icon, description, and per-master tooltip when a master is not loaded before it', () => {
-    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp'] });
-    expect(node.iconPath).toEqual({ id: 'error' });
-    expect(node.description).toContain('not loaded before');
-    expect(node.tooltip).toContain('Base.esp');
-    expect(node.tooltip).toContain('is not loaded before this plugin');
-  });
-
-  it("uses wording distinct from the Mods tree's presence-only badge", () => {
-    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp'] });
-    // The Mods tree says "Missing master:" — this order-aware badge must not, so the
-    // two never read as contradicting each other when they legitimately disagree.
-    expect(String(node.tooltip)).not.toContain('Missing master:');
-    expect(String(node.description)).not.toContain('Missing master:');
-  });
-
-  it('summarises the count when more than one master is out of order', () => {
-    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp', 'Other.esp'] });
-    expect(node.description).toContain('2');
-    expect(node.tooltip).toContain('Base.esp');
-    expect(node.tooltip).toContain('Other.esp');
-  });
-
-  it('renders a plain row (no badge) with no status or an ok status', () => {
-    const plain = new PluginNode({ name: 'A.esp', enabled: true });
-    expect(plain.iconPath).toBeUndefined();
-    expect(plain.description).toBeUndefined();
-
-    const ok = new PluginNode({ name: 'A.esp', enabled: true }, { kind: 'ok' });
-    expect(ok.iconPath).toBeUndefined();
-    expect(ok.description).toBeUndefined();
-  });
-});
-
-// The flagged master names have to be reachable structurally, not by parsing rendered tooltip
-// text (ADR-0037).
-describe('orderIssueMastersOf', () => {
-  it('returns the flagged master names for a masterNotLoadedBefore row', () => {
-    const node = new PluginNode({ name: 'Child.esp', enabled: true }, { kind: 'masterNotLoadedBefore', masters: ['Base.esp', 'Other.esp'] });
-    expect(orderIssueMastersOf(node)).toEqual(['Base.esp', 'Other.esp']);
-  });
-
-  it('returns undefined for a plain row, an ok status, or a non-plugin row', () => {
-    expect(orderIssueMastersOf(new PluginNode({ name: 'A.esp', enabled: true }))).toBeUndefined();
-    expect(orderIssueMastersOf(new PluginNode({ name: 'A.esp', enabled: true }, { kind: 'ok' }))).toBeUndefined();
-    expect(orderIssueMastersOf(new ImplicitMasterNode('Fallout4.esm'))).toBeUndefined();
+// Every master verdict is the backend's, applied by PluginsTreeComposite over these rows: a row
+// this provider builds carries no badge of its own (ADR-0021).
+describe('PluginNode', () => {
+  it('renders a plain row — no icon, no description', () => {
+    const node = new PluginNode({ name: 'A.esp', enabled: true });
+    expect(node.iconPath).toBeUndefined();
+    expect(node.description).toBeUndefined();
   });
 });
 
@@ -702,166 +668,27 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer)', () => 
   });
 });
 
-// Order-aware missing-master badge, driven off fixture rows pointing at real plugin bytes
-// on disk — no MO2 instance directory needed, since rows and order come from the fixture value.
-describe('PluginListProvider — order-aware missing-master badge', () => {
-  let dir: string;
-  const pluginNodes = async (provider: PluginListProvider): Promise<PluginNode[]> =>
-    (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
-  const byName = (nodes: PluginNode[], name: string) => nodes.find((n) => n.plugin.name === name)!;
-
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-badge-'));
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  async function writePlugin(name: string, masters: string[]): Promise<string> {
-    const path = join(dir, name);
-    await writeFile(path, buildTes4Buffer(masters));
-    return path;
-  }
-
-  it('badges a plugin whose master is sequenced after it', async () => {
-    const [f4, child, base] = await Promise.all([
-      writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp']), writePlugin('Base.esp', []),
-    ]);
-    const provider = makeProvider([
-      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
-      plugin({ name: 'Child.esp', slot: 1, path: child }),
-      plugin({ name: 'Base.esp', slot: 2, path: base }),
-    ]);
-    const nodes = await pluginNodes(provider);
-    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
-    expect(byName(nodes, 'Child.esp').tooltip).toContain('Base.esp');
+// Implicit masters render as forced-on rows ahead of plugins.txt's lines. The backend names
+// them (ADR-0021); this provider only places them.
+describe('PluginListProvider — implicit master rows', () => {
+  const DATA = '/game/Data';
+  // `null` stands for the absence in both slots: a backend that could not answer, and an
+  // unresolved Data folder. An explicit `undefined` would select the default instead.
+  const providerFor = (
+    plugins: (LoadOrderPlugin | LoadOrderPluginLine)[],
+    implicit: readonly string[] | null = [],
+    folder: string | null = DATA,
+  ) => makeProvider(plugins, {
+    dataFolder: () => Promise.resolve(folder ?? undefined),
+    implicitMasters: () => Promise.resolve(implicit ?? undefined),
   });
 
-  it('badges a plugin whose master is absent from plugins.txt entirely', async () => {
-    // Child.esp masters Base.esp; Base.esp has no fixture entry at all, so it is flagged.
-    const [f4, child] = await Promise.all([writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp'])]);
-    const provider = makeProvider([
-      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
-      plugin({ name: 'Child.esp', slot: 1, path: child }),
-    ]);
-    const nodes = await pluginNodes(provider);
-    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
-  });
-
-  it('leaves a correctly-ordered plugin unbadged', async () => {
-    const [f4, base, child] = await Promise.all([
-      writePlugin('Fallout4.esm', []), writePlugin('Base.esp', []), writePlugin('Child.esp', ['Base.esp']),
-    ]);
-    const provider = makeProvider([
-      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
-      plugin({ name: 'Base.esp', slot: 1, path: base }),
-      plugin({ name: 'Child.esp', slot: 2, path: child }),
-    ]);
-    const nodes = await pluginNodes(provider);
-    expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined();
-    expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
-  });
-
-  it('keeps a badge on a filtered-in row (badges computed on the full order, not the visible subset)', async () => {
-    const [f4, child, base] = await Promise.all([
-      writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp']), writePlugin('Base.esp', []),
-    ]);
-    const p = makeProvider([
-      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
-      plugin({ name: 'Child.esp', slot: 1, path: child }),
-      plugin({ name: 'Base.esp', slot: 2, path: base }),
-    ]);
-    p.setFilter('child'); // hides Fallout4.esm + Base.esp, leaving only the out-of-order Child.esp
-    const nodes = await pluginNodes(p);
-    expect(nodes.map((n) => n.plugin.name)).toEqual(['Child.esp']);
-    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
-  });
-
-  // Same assertion, filter set after an initial unfiltered read: exercises the cache-reuse
-  // path — the badge must survive from cached rows, not a fresh compute.
-  it('keeps a badge on a filtered-in row when the filter is set after an initial unfiltered read (cache-reuse path)', async () => {
-    const [f4, child, base] = await Promise.all([
-      writePlugin('Fallout4.esm', []), writePlugin('Child.esp', ['Base.esp']), writePlugin('Base.esp', []),
-    ]);
-    const p = makeProvider([
-      plugin({ name: 'Fallout4.esm', slot: 0, path: f4 }),
-      plugin({ name: 'Child.esp', slot: 1, path: child }),
-      plugin({ name: 'Base.esp', slot: 2, path: base }),
-    ]);
-    const unfiltered = await pluginNodes(p); // populates the cache
-    expect(byName(unfiltered, 'Child.esp').iconPath).toEqual({ id: 'error' });
-
-    p.setFilter('child');
-    const nodes = await pluginNodes(p);
-
-    expect(nodes.map((n) => n.plugin.name)).toEqual(['Child.esp']);
-    expect(byName(nodes, 'Child.esp').iconPath).toEqual({ id: 'error' });
-  });
-
-  // Implicit rows (Fallout4.esm, via dataFolder) are present alongside the two real plugins.txt
-  // lines, so this per-pair order check is proven not to special-case vanilla even when the
-  // implicit-row injection is also active.
-  it('checkMasterOrder itself does not special-case vanilla — a real (non-implicit) plugins.txt master sequenced after its dependent is still flagged, with implicit rows present', async () => {
-    const dataFolder = join(dir, 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    const [base, late] = await Promise.all([
-      writePlugin('Base.esp', ['Fallout4.esm', 'Late.esp']), writePlugin('Late.esp', []),
-    ]);
-    const provider = makeProvider([
-      plugin({ name: 'Base.esp', slot: 0, path: base }),
-      plugin({ name: 'Late.esp', slot: 1, path: late }),
-    ], { dataFolder: () => Promise.resolve(dataFolder) });
-    const nodes = await pluginNodes(provider);
-    expect(byName(nodes, 'Base.esp').iconPath).toEqual({ id: 'error' });
-    expect(byName(nodes, 'Base.esp').tooltip).toContain('Late.esp');
-  });
-
-  // A stale out-of-position plugins.txt line for an implicit master must not false-flag a
-  // plugin declaring it: implicit rows sort first regardless of that line.
-  it('a discovered implicit (vanilla) master never false-flags a plugin declaring it, even if plugins.txt lists it out of position', async () => {
-    const dataFolder = join(dir, 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    const [base, f4Listed] = await Promise.all([writePlugin('Base.esp', ['Fallout4.esm']), writePlugin('Fallout4.esm', [])]);
-
-    const provider = makeProvider([
-      plugin({ name: 'Base.esp', slot: 0, path: base }),
-      plugin({ name: 'Fallout4.esm', slot: 1, path: f4Listed }), // stale line, positioned AFTER Base.esp
-    ], { dataFolder: () => Promise.resolve(dataFolder) });
-
-    const nodes = await pluginNodes(provider);
-    expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
-  });
-});
-
-// Vanilla masters render as forced-on rows ahead of plugins.txt's lines, so their absence never
-// shows a false missing-master badge. Sourced from a real dataFolder via discoverImplicitMasters.
-describe('PluginListProvider — implicit (vanilla) master rows', () => {
-  let dir: string;
-  let dataFolder: string;
-
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-implicit-'));
-    dataFolder = join(dir, 'Data');
-    await mkdir(dataFolder, { recursive: true });
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  const providerFor = (plugins: (LoadOrderPlugin | LoadOrderPluginLine)[], folder: string | undefined = dataFolder) =>
-    makeProvider(plugins, { dataFolder: () => Promise.resolve(folder) });
-
-  it('renders implicit masters as ImplicitMasterNode rows preceding plugins.txt rows, in topological order, with no checkbox and contextValue pluginImplicit', async () => {
-    // DLCCoast.esm masters Fallout4.esm — alphabetically DLCCoast < Fallout4, which
-    // would be wrong; the correct topological order is Fallout4.esm first.
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    await writeFile(join(dataFolder, 'DLCCoast.esm'), buildTes4Buffer(['Fallout4.esm']));
-    const modPath = join(dir, 'Mod.esp');
-    await writeFile(modPath, buildTes4Buffer([]));
-
-    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]).getChildren();
+  it('renders the backend\'s names as ImplicitMasterNode rows preceding plugins.txt rows, in the order given, with no checkbox and contextValue pluginImplicit', async () => {
+    // The backend answers in load order; the tree preserves it rather than sorting, which would
+    // put DLCCoast.esm ahead of the Fallout4.esm it masters.
+    const rows = await providerFor(
+      [plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm', 'DLCCoast.esm'],
+    ).getChildren();
 
     expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm', 'DLCCoast.esm', 'Mod.esp']);
     expect(rows[0]).toBeInstanceOf(ImplicitMasterNode);
@@ -871,68 +698,56 @@ describe('PluginListProvider — implicit (vanilla) master rows', () => {
     expect(rows[2]).toBeInstanceOf(PluginNode);
   });
 
-  it('a name in both dataFolder and plugins.txt renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    await writeFile(join(dataFolder, 'ccBGSFO4044-HellfirePowerArmor.esl'), buildTes4Buffer(['Fallout4.esm']));
-    // plugins.txt also lists the CC .esl (a stale/redundant entry — real LitR shape).
-    const cclPath = join(dir, 'ccBGSFO4044-HellfirePowerArmor.esl');
-    await writeFile(cclPath, buildTes4Buffer(['Fallout4.esm']));
-    const f4Path = join(dir, 'Fallout4.esm');
-    await writeFile(f4Path, buildTes4Buffer([]));
+  it('resolves each implicit row\'s file inside the Data folder, for the graying decoration to key on', async () => {
+    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']).getChildren();
+    expect((rows[0] as ImplicitMasterNode).resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
+  });
 
+  it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {
     const rows = await providerFor([
-      plugin({ name: 'Fallout4.esm', slot: 0, path: f4Path }),
-      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1, path: cclPath }),
-    ]).getChildren();
+      plugin({ name: 'Fallout4.esm', slot: 0 }),
+      plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1 }),
+    ], ['Fallout4.esm', 'ccBGSFO4044-HellfirePowerArmor.esl']).getChildren();
 
     const labels = rows.map((r) => r.label);
-    expect(labels.filter((l) => l === 'ccBGSFO4044-HellfirePowerArmor.esl')).toHaveLength(1);
-    expect(labels.filter((l) => l === 'Fallout4.esm')).toHaveLength(1);
-    expect(rows.find((r) => r.label === 'ccBGSFO4044-HellfirePowerArmor.esl')).toBeInstanceOf(ImplicitMasterNode);
+    expect(labels).toEqual(['Fallout4.esm', 'ccBGSFO4044-HellfirePowerArmor.esl']);
+    expect(rows.every((r) => r instanceof ImplicitMasterNode)).toBe(true);
   });
 
-  it('real LitR shape: a mod master declaring Fallout4.esm (present only in dataFolder, absent from plugins.txt) shows no false missing-master badge', async () => {
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    const modPath = join(dir, 'Mod.esp');
-    await writeFile(modPath, buildTes4Buffer(['Fallout4.esm']));
-    // Fallout4.esm has NO fixture entry at all — the bug's exact reproduction.
-    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]).getChildren();
-    const modRow = rows.find((r) => r.label === 'Mod.esp') as PluginNode;
-    expect(modRow.iconPath).toBeUndefined();
+  it('matches a plugins.txt line to an implicit name case-insensitively', async () => {
+    const rows = await providerFor([plugin({ name: 'FALLOUT4.ESM', slot: 0 })], ['Fallout4.esm']).getChildren();
+    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
-  it('a master genuinely absent from both Data/ and plugins.txt is still flagged', async () => {
-    const modPath = join(dir, 'Mod.esp');
-    await writeFile(modPath, buildTes4Buffer(['NoSuchMaster.esm']));
-    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]).getChildren();
-    const modRow = rows.find((r) => r.label === 'Mod.esp') as PluginNode;
-    expect(modRow.iconPath).toEqual({ id: 'error' });
-    expect(modRow.tooltip).toContain('NoSuchMaster.esm');
+  it('publishes the implicit names, lowercased, for the graying decoration provider', async () => {
+    const provider = providerFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']);
+    await provider.getChildren();
+    expect([...provider.implicitMasterNames()]).toEqual(['fallout4.esm']);
   });
 
-  it('degrades to no implicit rows (logged) when the Data folder is unresolved/unreadable, tree still renders', async () => {
-    const logs: string[] = [];
-    const modPath = join(dir, 'Mod.esp');
-    await writeFile(modPath, buildTes4Buffer([]));
-
-    const provider = new PluginListProvider({
-      instance: new FakeInstance(valueOf([plugin({ name: 'Mod.esp', slot: 0, path: modPath })])),
-      source: new FakeSource(),
-      dataFolder: () => Promise.resolve(join(dir, 'no', 'such', 'Data')),
-      log: (m) => logs.push(m),
-    });
-    const rows = await provider.getChildren();
+  // The rival: treating an unreachable backend as "no implicit masters" here would be harmless,
+  // but it must not invent rows either — an unknown answer renders nothing, and the tree still
+  // renders every plugins.txt line.
+  it('renders no implicit row, and every plugins.txt line, when the backend cannot be reached', async () => {
+    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0 })], null).getChildren();
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
     expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
+    expect([...providerFor([], null).implicitMasterNames()]).toEqual([]);
+  });
+
+  it('renders only implicit rows when plugins.txt is empty, rather than the empty state', async () => {
+    const rows = await providerFor([], ['Fallout4.esm']).getChildren();
+    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
+  });
+
+  it('leaves an implicit row without a resourceUri when the Data folder is unresolved', async () => {
+    const rows = await providerFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm'], null).getChildren();
+    expect((rows[0] as ImplicitMasterNode).resourceUri).toBeUndefined();
   });
 
   it('handleDrag still filters to only "plugin" nodes, excluding implicit rows for free (no code change needed)', async () => {
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    const modPath = join(dir, 'Mod.esp');
-    await writeFile(modPath, buildTes4Buffer([]));
-
-    const provider = providerFor([plugin({ name: 'Mod.esp', slot: 0, path: modPath })]);
+    const provider = providerFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']);
     const rows = await provider.getChildren();
     const dt = new FakeDataTransfer();
     provider.handleDrag(rows, dt as never, NONE);

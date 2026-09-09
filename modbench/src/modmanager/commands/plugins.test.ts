@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendPlugin, pluginLinesDelta, reconcilePlugins, reorderPlugins, setPluginEnabled } from './plugins';
-import { buildTes4Buffer } from '../test/buildTes4Buffer';
 
 const PROFILE = 'Default';
 const INITIAL = '# header\r\n*Base.esp\r\nOther.esp\r\n';
@@ -133,11 +132,18 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
   const pluginsPath = () => join(dir, 'profiles', PROFILE, 'plugins.txt');
   const plugins = () => readFile(pluginsPath(), 'utf8');
   const mtime = async () => (await stat(pluginsPath())).mtime;
-  // `null` = the game directory is unresolved (an explicit `undefined` would select the default).
-  const run = (dataFolder: string | null = join(dir, 'Game', 'Data')) =>
-    reconcilePlugins(dir, PROFILE, dataFolder ?? undefined, () => {});
+  const logs: string[] = [];
+  // `null` stands for both unknowables — an unresolved game directory and a backend that could
+  // not answer. An explicit `undefined` would select the default rather than the absence.
+  const run = (
+    dataFolder: string | null = join(dir, 'Game', 'Data'),
+    implicit: readonly string[] | null = [],
+  ) => reconcilePlugins(
+    dir, PROFILE, dataFolder ?? undefined, () => Promise.resolve(implicit ?? undefined),
+    (m) => logs.push(m));
 
   beforeEach(async () => {
+    logs.length = 0;
     dir = await mkdtemp(join(tmpdir(), 'plugins-reconcile-'));
     await mkdir(join(dir, 'mods', 'Provider'), { recursive: true });
     await mkdir(join(dir, 'mods', 'Dormant'), { recursive: true });
@@ -184,12 +190,29 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
     expect(await plugins()).toBe('*Base.esp\r\n');
   });
 
-  it('an implicit master (a vanilla plugin in Data) that an enabled mod also ships is never appended: the tree has no line-backed row for it', async () => {
-    await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), buildTes4Buffer([]));
+  it('an implicit master the backend reports, which an enabled mod also ships, is never appended: the tree has no line-backed row for it', async () => {
+    await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
+    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
 
-    expect(await run()).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await run(undefined, ['Fallout4.esm'])).toEqual({ applied: true, wrote: false, append: [], prune: [] });
     expect(await plugins()).toBe('# header\r\n*Base.esp\r\n');
+  });
+
+  // The rival this forbids: ignoring the backend's answer. Then the mod's copy is an ordinary
+  // unlisted plugin and earns a line.
+  it('appends a mod-shipped vanilla plugin the backend does not call implicit', async () => {
+    await writeFile(join(dir, 'Game', 'Data', 'Fallout4.esm'), 'vanilla');
+    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
+
+    expect(await run(undefined, [])).toEqual({
+      applied: true, wrote: true, append: ['Fallout4.esm'], prune: [],
+    });
+  });
+
+  it('an implicit master matches its plugins.txt line case-insensitively', async () => {
+    await writeFile(join(dir, 'mods', 'Provider', 'Fallout4.esm'), 'a mod\'s copy');
+
+    expect(await run(undefined, ['FALLOUT4.ESM'])).toEqual({ applied: true, wrote: false, append: [], prune: [] });
   });
 
   it('a Data folder that resolved but is gone from disk refuses: nothing pruned, nothing written', async () => {
@@ -214,6 +237,20 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
 
     expect(await run(null)).toEqual({ applied: true, wrote: true, append: ['New.esp'], prune: [] });
     expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\nNew.esp\r\n');
+  });
+
+  // Unknowable, not empty: treating an unreachable backend as "no implicit masters" would append
+  // a line for every mod-shipped vanilla master and prune every line naming one.
+  it('with the implicit masters unknown, appends and prunes nothing, and says so in the log', async () => {
+    await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), 'plugin');
+    await writeFile(pluginsPath(), '*Base.esp\r\n*Gone.esp\r\n');
+    const old = new Date('2020-01-01T00:00:00Z');
+    await utimes(pluginsPath(), old, old);
+
+    expect(await run(undefined, null)).toEqual({ applied: true, wrote: false, append: [], prune: [] });
+    expect(await plugins()).toBe('*Base.esp\r\n*Gone.esp\r\n');
+    expect(await mtime()).toEqual(old);
+    expect(logs.join('\n')).toContain('implicit masters are unknown');
   });
 
   it('an empty delta writes nothing at all: the file on disk is not touched', async () => {

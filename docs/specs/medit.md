@@ -160,7 +160,7 @@ Per-surface testing decisions live in the surface specs. Shared:
 - **Run Script…** across load order/record/plugin — planned, not yet shipped.
 - **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side is a
   Mod-Management-adjacent concern (see [mods.md](mods.md) Out of Scope); deferred.
-- **Load-order editing** (checkbox, drag reorder, the missing-master badge) — Mod Management's
+- **Load-order editing** (checkbox, drag reorder, the master-issue badge) — Mod Management's
   own facet of the merged Plugins tree ([plugins.md](plugins.md) § Row model), not an Editing
   concern.
 - Anything surface-specific — see the surface specs.

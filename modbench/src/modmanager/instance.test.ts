@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from './test/corpusFixture';
-import { buildTes4Buffer } from './test/buildTes4Buffer';
 import { setEnabledInText } from './mo2/modlistText';
 import { setSelectedProfileInText } from './mo2/modOrganizerIni';
 import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
@@ -652,29 +651,18 @@ async function minimalInstance(): Promise<{
 }
 
 describe('Instance — per-mod status and the overwrite count', () => {
-  it('computes a missing-master status for a mod whose plugin declares a master nothing provides', async () => {
+  // The value carries no verdict about a plugin's declared masters at all: that fact is the
+  // backend's, reported per plugin on the Plugins rows (ADR-0021).
+  it('has no status kind derived from a plugin file, whatever the plugin declares', async () => {
     const { root, instance } = await minimalInstance();
-    await writeFile(join(root, 'mods', 'Consumer', 'Child.esp'), buildTes4Buffer(['NoSuchMaster.esm']));
+    await writeFile(join(root, 'mods', 'Consumer', 'Child.esp'), 'TES4 masters: NoSuchMaster.esm');
 
     await instance.refresh();
 
     expect(instance.value.modStatuses.get('Consumer')).toEqual({
-      status: { kind: 'missingMaster', masters: ['NoSuchMaster.esm'] },
+      status: { kind: 'ok' },
       conflictLines: [],
     });
-  });
-
-  it('resolves a declared master from the injected Data folder, so no missing-master status', async () => {
-    const { root, instance, setDetectPaths } = await minimalInstance();
-    const dataFolder = join(root, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    setDetectPaths(() => Promise.resolve({ dataFolder, pluginsTxt: dataFolder }));
-    await writeFile(join(root, 'mods', 'Consumer', 'Child.esp'), buildTes4Buffer(['Fallout4.esm']));
-
-    await instance.refresh();
-
-    expect(instance.value.modStatuses.get('Consumer')?.status).toEqual({ kind: 'ok' });
   });
 
   it('carries the overwrite/ folder\'s file count, recursive', async () => {

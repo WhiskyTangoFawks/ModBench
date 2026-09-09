@@ -8,7 +8,6 @@ import type { Mod, Separator, ModlistEntry } from './model';
 import { buildFileConflictIndex, rootLevelWinners, foldPath } from './fileConflictIndex';
 import { parseModlist } from './mo2/modlistText';
 import { computeModStatuses } from './statusChecker';
-import { readVanillaMasters } from './vanillaMasters';
 import { deploy } from './deployer';
 import { makeDeployerFixture, makeIndex } from './test/deployerFixture';
 
@@ -320,9 +319,6 @@ const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? join(homedir(), 'Games',
 const litrModlistPath = join(litrInstance, 'profiles', 'Life in the Ruins', 'modlist.txt');
 const hasLitr = existsSync(litrModlistPath);
 
-// This opt-in test is already coupled to the instance's exact on-disk shape, so hardcoding the
-// sibling "Stock Game Folder" is no more fragile than the mod names and needs no resolver.
-const litrVanillaData = join(litrInstance, 'Stock Game Folder', 'Data');
 
 function fakeReporter() {
   return { report: () => {} };
@@ -363,9 +359,8 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     }
 
     // 2. Badge — statusChecker.ts's per-mod status, built from the SAME index, against the real
-    // instance (read-only: modFolderExists/readMasters stat calls, never a write).
-    const vanillaMasters = await readVanillaMasters(litrVanillaData, () => {});
-    const statuses = await computeModStatuses([fixEntry, baseEntry], litrInstance, index, vanillaMasters, () => {});
+    // instance (read-only: modFolderExists stat calls, never a write).
+    const statuses = await computeModStatuses([fixEntry, baseEntry], litrInstance, index);
     expect(statuses.get(fixName)?.status).toEqual({ kind: 'overrides', count: contested.length });
     // baseName's real count is 5: it also ships an .esl another enabled mod happens to ship,
     // a separate real collision that is part of its honest badge.

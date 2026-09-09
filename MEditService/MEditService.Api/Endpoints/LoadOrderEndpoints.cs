@@ -75,6 +75,18 @@ public static class LoadOrderEndpoints
             .Produces<SequenceAwaitResponse>()
             .ProducesProblem(400);
 
+        // Answered from the game directory alone, with no load order held: Mod Management asks it
+        // while reconciling plugins.txt, which is what a PUT is built from.
+        app.MapGet("/implicit-masters", GetImplicitMasters)
+            .WithName("GetImplicitMasters")
+            .WithTags(Tag)
+            .WithDescription(
+                "The plugin filenames this install loads without a plugins.txt line of their own: " +
+                "the release's implicit masters present in the given Data folder, then that " +
+                "folder's Creation Club catalog. Load order.")
+            .Produces<IReadOnlyList<string>>()
+            .ProducesProblem(400);
+
         // ADR-0046: Refresh's own first step — the PUT /load-order that follows is then an
         // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds
         // the file.
@@ -227,6 +239,16 @@ public static class LoadOrderEndpoints
     }
 
     private static IResult GetSequence(IndexProjector index) => Results.Ok(index.Sequence);
+
+    // An absent directory is a bad request, not an empty answer: "no implicit masters" and "that
+    // folder isn't there" want opposite responses from the caller.
+    internal static IResult GetImplicitMasters(string gameDirectory, string gameRelease)
+    {
+        if (!Directory.Exists(gameDirectory))
+            return Results.Problem($"Game directory not found: {gameDirectory}", statusCode: 400);
+        if (ParseGameRelease(gameRelease, out var release) is { } releaseErr) return releaseErr;
+        return Results.Ok(HeldPlugins.ForcedNames(gameDirectory, release));
+    }
 
     private static async Task<IResult> AwaitSequence(IndexProjector index, long atLeast, int timeoutMs = 5000)
     {
