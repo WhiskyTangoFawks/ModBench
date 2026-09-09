@@ -737,6 +737,7 @@ export interface components {
         ExternalChangeActionResponse: {
             succeeded: boolean;
             refusalReason?: string | null;
+            rebase?: components["schemas"]["RebaseResponse"] | null;
         };
         FieldDiff: {
             fieldName: string;

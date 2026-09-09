@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The offered rebase (ADR-0046 invariant 3), origin-scoped: the repo, not any one plugin
+/// <summary>The manual, re-runnable rebase, origin-scoped: the repo, not any one plugin
 /// inside it, is the unit of baselines and rebase.</summary>
 public sealed class RebaseEditBranchHandler
 {

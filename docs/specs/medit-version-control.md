@@ -36,7 +36,7 @@ review work:
 | **Track** | Plugin-row context menu / palette → preset QuickPick → progress notification |
 | **Review & commit** | VS Code's native Source Control panel, one repo group per tracked mod (`vscode.git` `openRepository`) |
 | **Save & Compile** | Command from the record editor, plugin row, and palette; diagnostics to the Problems panel |
-| **External change** | One modal dialog per affected repo; rebase offer as a follow-up notification |
+| **External change** | One modal dialog per affected repo; Absorb rebases the edit branch at once |
 
 ## The workflows
 
@@ -54,12 +54,12 @@ using git.
   which is this workflow's one discipline, kept by the user, not by Modbench.
 - **Take an upstream update** — a standard rebase: the branch stands still, `main` moves
   under it. The update lands as an external binary change; `Absorb Upstream Update`
-  commits the new pristine state to `main` as new baselines, and the offered rebase is
-  `git rebase` with the platform's merge editor for conflicts. Uncommitted dirt refuses
-  the rebase exactly as git would — commit, stash, or discard first is ordinary git
-  hygiene, not a Modbench rule. Under the Everything preset the update also overwrites
-  tracked assets in place, arriving as working-tree changes to be sorted with the same
-  gestures.
+  commits the new pristine state to `main` as new baselines, then rebases the edit branch
+  onto it at once — `git rebase` with the platform's merge editor for conflicts.
+  Uncommitted dirt refuses the rebase exactly as git would — commit, stash, or discard
+  first is ordinary git hygiene, not a Modbench rule. Under the Everything preset the
+  update also overwrites tracked assets in place, arriving as working-tree changes to be
+  sorted with the same gestures.
 - **Author a mod** — feature-branch-and-merge, the default workflow of every codebase.
   Identical to modifying with one difference: the user merges the edit branch into `main`
   at will, because `main` is the release line, not a pristine record. Nothing selects
@@ -306,14 +306,17 @@ self-echo of Modbench's own writes is suppressed, crash markers route to Crash r
   workflows: for an authored mod's own xEdit load order the meta tell doesn't fire and the
   default is already `Keep as My Edit`.
 - **Absorb Upstream Update**: new baselines committed to `main` by plumbing (no checkout,
-  fresh trailers), then a non-modal notification offers the rebase (`Rebase Now` /
-  `Later`). A binary Mutagen cannot parse, or a missing git, refuses instead: an error
-  notification names the plugin and the reason, nothing is committed, no rebase is offered, and
-  the question stays unanswered so `Keep as My Edit` is still open. Absorb commits to `main` as it stands: if the user has merged into `main`
+  fresh trailers), then the edit branch rebased onto the new baseline at once, no separate
+  offer. A clean replay is silent. A refusal over uncommitted dirt names the paths —
+  commit, stash, or discard is the user's move, then re-run via `Modbench: Rebase onto
+  Updated Baseline`; a conflict opens VS Code's native merge editor on the source JSON.
+  Either way the baseline commit stands: `main` moved and the trailers are written
+  regardless of what the rebase does next. A binary Mutagen cannot parse, or a missing
+  git, refuses the whole gesture instead: an error notification names the plugin and the
+  reason, nothing is committed, and the question stays unanswered so `Keep as My Edit` is
+  still open. Absorb commits to `main` as it stands: if the user has merged into `main`
   (the Authored workflow), there is no pristine left to diff against — that is the
-  topology they chose, not a state Modbench detects or repairs. Rebase with any uncommitted dirt refuses, naming the paths — commit, stash, or
-  discard is the user's move, then re-run via `Modbench: Rebase onto Updated Baseline`.
-  Conflicts open in VS Code's native merge editor on the source JSON.
+  topology they chose, not a state Modbench detects or repairs.
 - **Keep as My Edit**: the change deserializes into working-tree dirt on the affected
   records — commit or revert as usual. A same-record collision with existing uncommitted
   dirt refuses first, naming the records.

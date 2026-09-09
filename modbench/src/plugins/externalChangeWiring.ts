@@ -24,7 +24,6 @@ export function wireExternalChangePending(
   return subscribeExternalChangePending({
     client,
     showDialog: (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
-    showRebaseOffer: (message, ...buttons) => Promise.resolve(vscode.window.showInformationMessage(message, ...buttons)),
     openMergeEditor: makeMergeEditorOpener(client, outputChannel),
     showError: (message) => void vscode.window.showErrorMessage(message),
     refreshTree: () => treeProvider.refresh(),

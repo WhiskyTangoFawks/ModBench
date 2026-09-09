@@ -1,6 +1,6 @@
 import type { MEditClient, UnansweredExternalChange } from './client';
 import type { ShowExternalChangeDialog } from '../plugins/externalChangeDialog';
-import { handleUnanswered, type ShowRebaseOffer } from '../plugins/externalChangeGestures';
+import { handleUnanswered } from '../plugins/externalChangeGestures';
 
 /** `origin` rides along explicitly because re-deriving it from the unanswered queue when the
  *  merge editor opens would race the very MarkAnswered call that caused this rebase. */
@@ -10,7 +10,6 @@ export interface ExternalChangeCoordinatorDeps {
   // The three write verbs Keep/Absorb/Rebase dispatch to, narrowed off the port (ADR-0022).
   client: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
   showDialog: ShowExternalChangeDialog;
-  showRebaseOffer: ShowRebaseOffer;
   openMergeEditor: OpenMergeEditor;
   /** ADR-0026: the gesture's own refusal, verbatim — Keep/Absorb/Rebase share this one surface. */
   showError: (message: string) => void;
