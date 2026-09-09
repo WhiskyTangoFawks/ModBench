@@ -4,7 +4,7 @@ import type {
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
   ContainerChildSummary,
 } from '../medit/ApiClient';
-import type { PluginRepository } from '../medit/PluginRepository';
+import type { MEditClient } from '../medit/client';
 import { recordResourceUri } from '../medit/recordResourceUri';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 export { headerFormKeyFor } from '../medit/formKeyIdentity';
@@ -291,6 +291,12 @@ function containerChildTypeOf(recordType: string): 'qust' | 'dial' | undefined {
 type PageCache = Map<string, { items: RecordSummary[]; total: number }>;
 type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
 
+type RecordBrowserClient = Pick<
+  MEditClient,
+  'getRecordTypes' | 'getRecords' | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences'
+  | 'getInteriorCells' | 'getContainerChildren'
+>;
+
 export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNode> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginTreeNode | undefined | null>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -316,7 +322,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly trackedPlugins = new Set<string>();
   private readonly log: (msg: string) => void;
 
-  constructor(private readonly repository: PluginRepository, log?: (msg: string) => void) {
+  constructor(private readonly repository: RecordBrowserClient, log?: (msg: string) => void) {
     this.log = log ?? (() => {});
   }
 

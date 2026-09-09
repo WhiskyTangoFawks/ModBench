@@ -7,7 +7,8 @@ import { parsePlugins } from '../../modmanager/mo2/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../modmanager/loadOrderSnapshot';
 import type { InstanceValue } from '../../modmanager/instance';
 import type { PluginDiagnosisReport, PluginMetadata } from '../../medit/ApiClient';
-import type { PluginRepository, RecordPage } from '../../medit/PluginRepository';
+import type { RecordPage } from '../../medit/PluginRepository';
+import { InMemoryMEditClient } from '../../medit/client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFilePlain, uriFrom, DataTransferItem, DataTransfer,
@@ -21,7 +22,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import {
   PluginsTreeProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf,
-  type PluginFactsClient, type PluginListSource,
+  type PluginListSource,
 } from '../PluginsTreeProvider';
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
@@ -129,71 +130,40 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
   };
 }
 
-// The in-memory mEdit client: it counts its reads, so "one read per reconcile" is assertable,
-// and it can be made to fail, so the degraded paths run without a backend.
-class FakeClient implements PluginFactsClient {
-  getPluginsCalls = 0;
-  getDiagnosesCalls = 0;
-  failGetPlugins = false;
-  failGetDiagnoses = false;
-  constructor(
-    public plugins: PluginMetadata[] = [],
-    public diagnoses: PluginDiagnosisReport[] = [],
-  ) {}
-  getPlugins(): Promise<PluginMetadata[]> {
-    this.getPluginsCalls++;
-    return this.failGetPlugins
-      ? Promise.reject(new Error('GET /plugins failed (503)'))
-      : Promise.resolve(this.plugins);
-  }
-  getDiagnoses(): Promise<PluginDiagnosisReport[]> {
-    this.getDiagnosesCalls++;
-    return this.failGetDiagnoses
-      ? Promise.reject(new Error('GET /plugins/diagnoses failed (503)'))
-      : Promise.resolve(this.diagnoses);
-  }
-}
-
 function diagnosis(pluginName: string, text: string, origin = 'SomeMod'): PluginDiagnosisReport {
   return { plugin: pluginName, origin, defectClass: 'fixed-size-subrecord-short', message: text, text };
 }
 
-// The record browser is the real one over an in-memory repository, so a row's children are what
-// it actually builds and delegation is asserted end to end.
-function makeRepository(overrides: Partial<{
+// getPlugins/getDiagnoses go through setQueryAnswer so .calls stays what "one read per
+// reconcile" counts against; the record methods are spied for direct assertion and re-scripting.
+function makeClient(overrides: Partial<{
+  plugins: PluginMetadata[];
+  diagnoses: PluginDiagnosisReport[];
   recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
   records: RecordPage;
   worldspaces: unknown[];
   worldspaceBlocks: unknown;
   interiorCells: unknown;
-}> = {}): PluginRepository {
-  return {
-    getPlugins: vi.fn().mockResolvedValue([]),
-    getDiagnoses: vi.fn().mockResolvedValue([]),
-    getRecordTypes: vi.fn().mockResolvedValue(overrides.recordTypes ?? []),
-    getRecords: vi.fn().mockResolvedValue(overrides.records ?? { items: [], total: 0 }),
-    searchRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
-    getReferences: vi.fn().mockResolvedValue([]),
-    setFilter: vi.fn().mockResolvedValue(null),
-    clearFilter: vi.fn().mockResolvedValue(undefined),
-    getActiveFilter: vi.fn().mockResolvedValue(null),
-    getWorldspaces: vi.fn().mockResolvedValue(overrides.worldspaces ?? []),
-    getWorldspaceBlocks: vi.fn().mockResolvedValue(overrides.worldspaceBlocks ?? { blocks: [], topCells: [] }),
-    getCellReferences: vi.fn().mockResolvedValue({ persistent: [], temporary: [] }),
-    getContainerChildren: vi.fn().mockResolvedValue([]),
-    editRecord: vi.fn(),
-    getInteriorCells: vi.fn().mockResolvedValue(overrides.interiorCells ?? { items: [], total: 0 }),
-    getRecordOwner: vi.fn(),
-    peekNextFreeFormKey: vi.fn(),
-    getRecordOverridePlugins: vi.fn(),
-  };
+}> = {}): InMemoryMEditClient {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getPlugins', overrides.plugins ?? []);
+  client.setQueryAnswer('getDiagnoses', overrides.diagnoses ?? []);
+  vi.spyOn(client, 'getRecordTypes').mockResolvedValue((overrides.recordTypes ?? []).map((rt) => ({
+    type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
+  })));
+  vi.spyOn(client, 'getRecords').mockResolvedValue(overrides.records ?? { items: [], total: 0 });
+  vi.spyOn(client, 'getWorldspaces').mockResolvedValue((overrides.worldspaces ?? []) as never);
+  vi.spyOn(client, 'getWorldspaceBlocks').mockResolvedValue((overrides.worldspaceBlocks ?? { blocks: [], topCells: [] }) as never);
+  vi.spyOn(client, 'getCellReferences').mockResolvedValue({ persistent: [], temporary: [] });
+  vi.spyOn(client, 'getContainerChildren').mockResolvedValue([]);
+  vi.spyOn(client, 'getInteriorCells').mockResolvedValue((overrides.interiorCells ?? { items: [], total: 0 }) as never);
+  return client;
 }
 
 interface Harness {
   tree: PluginsTreeProvider;
-  client: FakeClient;
+  client: InMemoryMEditClient;
   records: PluginTreeProvider;
-  repository: PluginRepository;
   instance: FakeInstance;
   source: FakeSource;
   logged: { level: string; msg: string }[];
@@ -204,8 +174,7 @@ function makeTree(
   extra: Partial<{
     source: FakeSource;
     instance: FakeInstance;
-    client: FakeClient;
-    repository: PluginRepository;
+    client: InMemoryMEditClient;
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     dataFolder: () => Promise<string | undefined>;
     implicitMasters: () => Promise<readonly string[] | undefined>;
@@ -213,9 +182,8 @@ function makeTree(
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
   const source = extra.source ?? new FakeSource();
-  const client = extra.client ?? new FakeClient();
-  const repository = extra.repository ?? makeRepository();
-  const records = new PluginTreeProvider(repository);
+  const client = extra.client ?? makeClient();
+  const records = new PluginTreeProvider(client);
   const logged: { level: string; msg: string }[] = [];
   const tree = new PluginsTreeProvider({
     instance, source, client, records,
@@ -224,7 +192,7 @@ function makeTree(
     dataFolder: extra.dataFolder,
     implicitMasters: extra.implicitMasters,
   });
-  return { tree, client, records, repository, instance, source, logged };
+  return { tree, client, records, instance, source, logged };
 }
 
 // A reconcile is what fills the tree's facts; every decoration test drives it rather than
@@ -233,9 +201,15 @@ function makeTree(
 async function reconcile(
   h: Harness, plugins: PluginMetadata[], failures: { name: string; reason: string }[] = [],
 ): Promise<void> {
-  h.client.plugins = plugins;
+  h.client.setQueryAnswer('getPlugins', plugins);
   await h.tree.applyReconciled(failures);
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+// Recorded calls to one query, replacing the old per-method counter: "one read per reconcile"
+// is asserted against the adapter's own call log, not a hand-rolled tally.
+function callCount(client: InMemoryMEditClient, method: string): number {
+  return client.calls.filter((c) => c.method === method).length;
 }
 
 // ── row nodes ────────────────────────────────────────────────────────────────
@@ -992,10 +966,9 @@ const B_ROW = () => plugin({ name: 'B.esp', slot: 1, origin: 'SomeMod' });
 // mEdit is always running (target-architecture.md): a client that answers every call with a
 // rejection is what a real disconnect looks like from here, indistinguishable from one this
 // provider has simply not synced with yet.
-function makeDisconnectedClient(): FakeClient {
-  const client = new FakeClient();
-  client.failGetPlugins = true;
-  client.failGetDiagnoses = true;
+function makeDisconnectedClient(): InMemoryMEditClient {
+  const client = makeClient();
+  client.disconnected();
   return client;
 }
 
@@ -1054,31 +1027,31 @@ describe('PluginsTreeProvider — rows are always collapsible', () => {
 
 describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
   it('never asks the record browser before any reconcile has landed, answering one error node instead', async () => {
-    const { tree, repository } = makeTree([A_ROW()]);
+    const { tree, client } = makeTree([A_ROW()]);
     const [row] = await tree.getChildren();
 
     const children = await tree.getChildren(row);
 
     expect(children).toEqual([expect.any(ErrorNode)]);
-    expect(repository.getRecordTypes).not.toHaveBeenCalled();
+    expect(client.getRecordTypes).not.toHaveBeenCalled();
   });
 
   it('reads no plugin facts before a reconcile', async () => {
     const { tree, client } = makeTree([A_ROW()]);
     const [row] = await tree.getChildren();
     tree.getTreeItem(row);
-    expect(client.getPluginsCalls).toBe(0);
+    expect(callCount(client, 'getPlugins')).toBe(0);
   });
 
   it('matches the load order case-insensitively when deciding a row is held', async () => {
-    const repository = makeRepository({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW()], { repository });
+    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
+    const h = makeTree([A_ROW()], { client });
     await reconcile(h, [held('a.ESP')]);
     const [row] = await h.tree.getChildren();
 
     const children = await h.tree.getChildren(row);
 
-    expect(repository.getRecordTypes).toHaveBeenCalledWith('A.esp', undefined);
+    expect(client.getRecordTypes).toHaveBeenCalledWith('A.esp', undefined);
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
   });
 
@@ -1095,15 +1068,15 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
   // A progressive tick lets a landed plugin's row expand into real records before the reconcile
   // completes, and it costs no client read of its own.
   it('applyIndexed lets a landed plugin expand into records, and leaves an un-landed one still indexing', async () => {
-    const repository = makeRepository({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW(), B_ROW()], { repository });
+    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
+    const h = makeTree([A_ROW(), B_ROW()], { client });
     const rows = await h.tree.getChildren();
 
     h.tree.applyIndexed(['A.esp'], []);
 
     expect((await h.tree.getChildren(rows[0]))[0]).toBeInstanceOf(RecordTypeNode);
     expect(await h.tree.getChildren(rows[1])).toEqual([expect.any(IndexingNode)]);
-    expect(h.client.getPluginsCalls).toBe(0);
+    expect(callCount(h.client, 'getPlugins')).toBe(0);
   });
 
   it('expanding after mEdit closes answers with one error node, never an empty list', async () => {
@@ -1195,7 +1168,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
 
     expect(await h.tree.applyReconciled([])).toBeUndefined();
 
-    expect(h.client.getPluginsCalls).toBeGreaterThan(0);
+    expect(callCount(h.client, 'getPlugins')).toBeGreaterThan(0);
   });
 
   it('renders the rows, in load order, the same as if it were connected', async () => {
@@ -1289,7 +1262,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['B.esp']);
 
     // Stands in for clearFilter's real hand-off: refreshMatchingPlugins re-reads the facts.
-    h.client.plugins = [held('A.esp'), held('B.esp')];
+    h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
     await h.tree.refreshFacts();
 
     expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['A.esp', 'B.esp']);
@@ -1306,7 +1279,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     instance.publish(valueOf([
       plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'A.esp', slot: 1 }),
     ]));
-    h.client.plugins = [held('A.esp'), held('B.esp')];
+    h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
     await h.tree.refreshFacts();
 
     expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['B.esp', 'A.esp']);
@@ -1338,7 +1311,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
     expect(await h.tree.getChildren()).toEqual([]);
 
-    h.client.failGetPlugins = true;
+    h.client.getPlugins = vi.fn().mockRejectedValue(new Error('GET /plugins failed (503)'));
     expect(await h.tree.refreshFacts()).toBeUndefined();
 
     expect(await h.tree.getChildren()).toHaveLength(1);
@@ -1385,17 +1358,17 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 // ── children ─────────────────────────────────────────────────────────────────
 
 describe('PluginsTreeProvider — a row expands into the record browser children', () => {
-  const withRecords = (repository: PluginRepository) => makeTree([A_ROW()], { repository });
+  const withRecords = (client: InMemoryMEditClient) => makeTree([A_ROW()], { client });
 
   it('asks the record browser for that plugin children, by filename', async () => {
-    const repository = makeRepository({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
-    const h = withRecords(repository);
+    const client = makeClient({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
+    const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
     const children = await h.tree.getChildren(row);
 
-    expect(repository.getRecordTypes).toHaveBeenCalledWith('A.esp', undefined);
+    expect(client.getRecordTypes).toHaveBeenCalledWith('A.esp', undefined);
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
     expect((children[0] as RecordTypeNode).label).toBe('Weapon');
@@ -1408,11 +1381,11 @@ describe('PluginsTreeProvider — a row expands into the record browser children
       editorId: 'TheWeapon', origin: 'SomeMod', workingTreeState: 'None',
       hasContainerChildren: false, hasParseFailure: false,
     };
-    const repository = makeRepository({
+    const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
       records: { items: [record], total: 1 } as never,
     });
-    const h = withRecords(repository);
+    const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
     const [recordType] = await h.tree.getChildren(row);
@@ -1424,7 +1397,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   });
 
   it('renders the worldspace and cell hierarchy under a row', async () => {
-    const repository = makeRepository({
+    const client = makeClient({
       recordTypes: [{ type: 'wrld', count: 1, displayName: 'Worldspace' }],
       worldspaces: [{ formKey: 'w:A.esp', editorId: 'Commonwealth', hasParseFailure: false }],
       worldspaceBlocks: {
@@ -1435,7 +1408,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
         }],
       },
     });
-    const h = withRecords(repository);
+    const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
@@ -1458,11 +1431,11 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const items = Array.from({ length: 50 }, (_, i) => ({
       formKey: `i${i}:A.esp`, editorId: `IntCell${i}`, cellX: i, cellY: 0, isPersistentWorldspaceCell: false,
     }));
-    const repository = makeRepository({
+    const client = makeClient({
       recordTypes: [{ type: 'cell', count: 120, displayName: 'Cell' }],
       interiorCells: { items, total: 120 },
     });
-    const h = withRecords(repository);
+    const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
@@ -1476,8 +1449,8 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   });
 
   it('renders a child tree item through the record browser, not the row path', async () => {
-    const repository = makeRepository({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
-    const h = withRecords(repository);
+    const client = makeClient({ recordTypes: [{ type: 'weap', count: 5, displayName: 'Weapon' }] });
+    const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
     const [recordType] = await h.tree.getChildren(row);
@@ -1489,9 +1462,9 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   // The record browser answers a failed fetch with an error node (ADR-0026) — the merged tree
   // must not turn that into an empty list on its way through.
   it('renders whatever the record browser returns for a failed fetch, rather than swallowing it', async () => {
-    const repository = makeRepository();
-    (repository.getRecordTypes as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
-    const h = withRecords(repository);
+    const client = makeClient();
+    (client.getRecordTypes as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
+    const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
@@ -1575,7 +1548,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
 
     // Going read-only → editable on the same (reused) row object restores exactly the row's own
     // tooltip, rather than leaving the read-only note stuck on top of it.
-    h.client.plugins = [held('Fallout4.esm', { origin: 'Data' })];
+    h.client.setQueryAnswer('getPlugins', [held('Fallout4.esm', { origin: 'Data' })]);
     await h.tree.refreshFacts();
 
     expect((await rowItem(h)).tooltip).toBe(
@@ -1788,7 +1761,7 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
 
   it('decorates a diagnosed plugin row with the warning badge and the diagnosis text', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.diagnoses = [diagnosis('A.ESP', REGN)];
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.ESP', REGN)]);
     await reconcile(h, [held('A.esp')]);
 
     const item = await rowItem(h);
@@ -1798,7 +1771,7 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
 
   it('two diagnoses on one plugin read as a count and both tooltip lines', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.diagnoses = [diagnosis('A.esp', 'first diagnosis'), diagnosis('A.esp', 'second diagnosis')];
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'first diagnosis'), diagnosis('A.esp', 'second diagnosis')]);
     await reconcile(h, [held('A.esp')]);
 
     const item = await rowItem(h);
@@ -1809,11 +1782,11 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
 
   it('a reconcile clears the previous scan diagnoses when the new scan finds nothing', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.diagnoses = [diagnosis('A.esp', 'some diagnosis')];
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
     await reconcile(h, [held('A.esp')]);
     expect((await rowItem(h)).description).toBe('⚠ Malformed plugin');
 
-    h.client.diagnoses = [];
+    h.client.setQueryAnswer('getDiagnoses', []);
     await reconcile(h, [held('A.esp')]);
 
     const item = await rowItem(h);
@@ -1825,7 +1798,7 @@ describe('PluginsTreeProvider — malformed-plugin diagnosis decoration', () => 
   it('publishes the scan for the Problems panel as well as the row badge', async () => {
     const published: PluginDiagnosisReport[][] = [];
     const h = makeTree([A_ROW()], { publishDiagnoses: (reports) => published.push(reports) });
-    h.client.diagnoses = [diagnosis('A.esp', 'some diagnosis')];
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
 
     await reconcile(h, [held('A.esp')]);
 
@@ -1862,7 +1835,7 @@ describe('PluginsTreeProvider — decoration precedence', () => {
 
   it('a parse failure keeps authority over a diagnosis on the same row', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.diagnoses = [diagnosis('A.esp', 'some diagnosis')];
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
     await reconcile(h, [held('A.esp', { hasParseFailure: true })]);
 
     const item = await rowItem(h);
@@ -1872,7 +1845,7 @@ describe('PluginsTreeProvider — decoration precedence', () => {
 
   it('a load failure keeps authority over a diagnosis on the same row', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.diagnoses = [diagnosis('A.esp', 'some diagnosis')];
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
     await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).description).toBe('✗ Failed to load');
@@ -1979,7 +1952,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
 
   it('reads the diagnoses from its own copy, not the other copy', async () => {
     const h = makeTree([SHARED_ROW()]);
-    h.client.diagnoses = [diagnosis('Shared.esp', 'ModB is malformed', 'ModB')];
+    h.client.setQueryAnswer('getDiagnoses', [diagnosis('Shared.esp', 'ModB is malformed', 'ModB')]);
     await reconcile(h, [
       held('Shared.esp', { origin: 'ModA' }),
       held('Shared.esp', { origin: 'ModB' }),
@@ -2025,35 +1998,35 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
   it('reads the plugin list once per reconcile, not once per rendered row', async () => {
     const h = makeTree([A_ROW(), B_ROW(), plugin({ name: 'C.esp', slot: 2 })]);
     await reconcile(h, [held('A.esp'), held('B.esp'), held('C.esp')]);
-    expect(h.client.getPluginsCalls).toBe(1);
+    expect(callCount(h.client, 'getPlugins')).toBe(1);
 
     const rows = await h.tree.getChildren();
     for (const row of rows) h.tree.getTreeItem(row);
 
     expect(rows).toHaveLength(3);
-    expect(h.client.getPluginsCalls).toBe(1);
+    expect(callCount(h.client, 'getPlugins')).toBe(1);
   });
 
   it('reads the malformed-plugin scan once per reconcile, not once per rendered row', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
-    expect(h.client.getDiagnosesCalls).toBe(1);
+    expect(callCount(h.client, 'getDiagnoses')).toBe(1);
 
     for (const row of await h.tree.getChildren()) h.tree.getTreeItem(row);
 
-    expect(h.client.getDiagnosesCalls).toBe(1);
+    expect(callCount(h.client, 'getDiagnoses')).toBe(1);
   });
 
   it('reads nothing at all while rendering children', async () => {
-    const repository = makeRepository({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
-    const h = makeTree([A_ROW()], { repository });
+    const client = makeClient({ recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }] });
+    const h = makeTree([A_ROW()], { client });
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
     const children = await h.tree.getChildren(row);
     for (const child of children) h.tree.getTreeItem(child);
 
-    expect(h.client.getPluginsCalls).toBe(1);
+    expect(callCount(h.client, 'getPlugins')).toBe(1);
   });
 
   it('reads once more per fact refresh, and no more than once', async () => {
@@ -2062,14 +2035,14 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
     await h.tree.refreshFacts();
 
-    expect(h.client.getPluginsCalls).toBe(2);
+    expect(callCount(h.client, 'getPlugins')).toBe(2);
   });
 
   // ADR-0026: a failed read is an error and a failed background scan is a warning, so the two
   // cannot arrive at the same channel level.
   it('reports a failed plugin read at error, naming the reason once', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.failGetPlugins = true;
+    h.client.getPlugins = vi.fn().mockRejectedValue(new Error('GET /plugins failed (503)'));
 
     await h.tree.applyReconciled([]);
 
@@ -2081,7 +2054,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
   it('reports a failed malformed-plugin scan at warn, below the read that succeeded', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.failGetDiagnoses = true;
+    h.client.getDiagnoses = vi.fn().mockRejectedValue(new Error('GET /plugins/diagnoses failed (503)'));
 
     await reconcile(h, [held('A.esp')]);
 
@@ -2094,7 +2067,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
   // A slow read answering after teardown would resurrect a held load order on a dead backend.
   it('drops a reconcile answer that lands after the tree was cleared', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.plugins = [held('A.esp')];
+    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
     const landing = h.tree.applyReconciled([]);
     h.tree.clear();
 
