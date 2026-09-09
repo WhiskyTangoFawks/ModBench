@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { PluginMetadata, RecordSummary, ContainerChildSummary } from '../ApiClient';
-import type { PluginRepository, RecordPage } from '../PluginRepository';
+import type { PluginMetadata, RecordSummary, ContainerChildSummary } from '../../medit/ApiClient';
+import type { PluginRepository, RecordPage } from '../../medit/PluginRepository';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
@@ -14,7 +14,7 @@ import {
   ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
 import type { PluginTreeNode } from '../PluginTreeProvider';
-import { recordResourceUri } from '../recordResourceUri';
+import { recordResourceUri } from '../../medit/recordResourceUri';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

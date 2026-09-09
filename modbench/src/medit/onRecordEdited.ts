@@ -1,5 +1,5 @@
 import type * as vscode from 'vscode';
-import type { PluginTreeProvider } from './PluginTreeProvider';
+import type { PluginTreeProvider } from '../plugins/PluginTreeProvider';
 import type { RecordDecorationProvider } from './RecordDecorationProvider';
 import { recordResourceUri } from './recordResourceUri';
 import type { ExtensionToWebview } from './messages';

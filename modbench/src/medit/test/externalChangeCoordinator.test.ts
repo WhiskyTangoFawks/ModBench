@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  subscribeExternalChangePending, runRebase, rebaseOfferMessage,
-  REBASE_NOW_BUTTON, REBASE_LATER_BUTTON,
+  subscribeExternalChangePending,
   type ExternalChangeCoordinatorDeps,
 } from '../externalChangeCoordinator';
-import { ABSORB_BUTTON, KEEP_BUTTON } from '../externalChangeDialog';
+import { ABSORB_BUTTON, KEEP_BUTTON } from '../../plugins/externalChangeDialog';
+import { rebaseOfferMessage, REBASE_NOW_BUTTON, REBASE_LATER_BUTTON } from '../../plugins/externalChangeGestures';
 import type { NotificationEvent } from '../ApiClient';
 import { FakeNotificationSubscriber } from '../NotificationSubscriber';
 
@@ -35,12 +35,6 @@ function makeDeps(overrides: Partial<ExternalChangeCoordinatorDeps> = {}): Exter
 function flush(): Promise<void> {
   return new Promise((resolve) => { setTimeout(resolve, 0); });
 }
-
-describe('rebaseOfferMessage', () => {
-  it('names the edit branch and the origin', () => {
-    expect(rebaseOfferMessage('ModA')).toBe('main moved ahead of "edit" in ModA.');
-  });
-});
 
 describe('subscribeExternalChangePending', () => {
   it('does nothing until a notification arrives', () => {
@@ -167,28 +161,5 @@ describe('subscribeExternalChangePending', () => {
     await flush();
 
     expect(deps.showDialog).not.toHaveBeenCalled();
-  });
-});
-
-describe('runRebase', () => {
-  it('opens the native merge editor on every conflicted path', async () => {
-    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/A.esp/x.json', 'source/A.esp/y.json'] }) } as any;
-    const openMergeEditor = vi.fn().mockResolvedValue(undefined);
-
-    const result = await runRebase({ controller, openMergeEditor }, 'ModA');
-
-    expect(result?.outcome).toBe('Conflicted');
-    expect(openMergeEditor).toHaveBeenCalledTimes(2);
-    expect(openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/x.json');
-    expect(openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/y.json');
-  });
-
-  it('opens nothing on a clean rebase', async () => {
-    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] }) } as any;
-    const openMergeEditor = vi.fn();
-
-    await runRebase({ controller, openMergeEditor }, 'ModA');
-
-    expect(openMergeEditor).not.toHaveBeenCalled();
   });
 });
