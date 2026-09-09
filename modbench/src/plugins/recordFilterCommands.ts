@@ -27,6 +27,12 @@ export interface FilterCommandDeps {
 export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposable[] {
   const { scriptsPath, controller, treeProvider, refreshMatchingPlugins, setFilterActive } = deps;
 
+  // Symmetric on purpose (ADR-0035): a set and a clear both re-derive the same two things.
+  const refreshAfterFilterChange = (): void => {
+    treeProvider.refresh();
+    refreshMatchingPlugins();
+  };
+
   const applyFilter = async (sql: string, label?: string): Promise<void> => {
     const error = await controller.setFilter(sql);
     if (error) {
@@ -34,8 +40,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
       return;
     }
     setFilterActive(true, sql, label);
-    treeProvider.refresh();
-    refreshMatchingPlugins();
+    refreshAfterFilterChange();
   };
 
   return [
@@ -68,8 +73,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
     vscode.commands.registerCommand('modbench.clearFilter', async () => {
       await controller.clearFilter();
       setFilterActive(false);
-      treeProvider.refresh();
-      refreshMatchingPlugins();
+      refreshAfterFilterChange();
     }),
   ];
 }

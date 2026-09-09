@@ -225,8 +225,8 @@ export class EditingController {
     await this.deps.repository.clearFilter();
   }
 
-  /** `undefined` — distinct from `null` ("no active filter") — means the read itself failed;
-   *  `message` is the whole toast the caller shows. */
+  /** A `WriteRefused` — distinct from `null` ("no active filter") — means the read itself
+   *  failed; its `message` is the whole toast the caller shows. */
   async syncFilterState(): Promise<string | null | WriteRefused> {
     try {
       return await this.deps.repository.getActiveFilter();

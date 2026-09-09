@@ -30,11 +30,16 @@ export async function handleUnanswered(deps: ExternalChangeCoordinatorDeps, unan
   }
 }
 
+function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTree' | 'refreshMatchingPlugins'>): void {
+  deps.refreshTree();
+  deps.refreshMatchingPlugins();
+}
+
 async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange): Promise<void> {
   const result = await deps.controller.keepAsMyEdit(item.plugin, item.origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
   // A refused Keep (a same-record collision) changed nothing — no reason to refresh.
-  if (result?.succeeded) { deps.refreshTree(); deps.refreshMatchingPlugins(); }
+  if (result?.succeeded) refreshAfterWrite(deps);
 }
 
 async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange): Promise<void> {
@@ -43,11 +48,13 @@ async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, item: Unanswe
   if (!result?.succeeded) {
     // A refusal rides a 200, which the WriteRefused check above never sees — unsurfaced it
     // leaves the plugin unabsorbed and still read-only with nothing saying why (ADR-0026).
-    if (result) deps.showError(`mEdit: Could not absorb the upstream update for "${item.plugin}" — ${result.refusalReason ?? ''}`);
+    if (result) {
+      deps.log?.(`[externalChangeGestures] absorbUpstreamUpdate(${item.plugin}) refused: ${result.refusalReason ?? ''}`);
+      deps.showError(`mEdit: Could not absorb the upstream update for "${item.plugin}" — ${result.refusalReason ?? ''}`);
+    }
     return;
   }
-  deps.refreshTree();
-  deps.refreshMatchingPlugins();
+  refreshAfterWrite(deps);
 
   const choice = await deps.showRebaseOffer(rebaseOfferMessage(item.origin), REBASE_NOW_BUTTON, REBASE_LATER_BUTTON);
   if (choice !== REBASE_NOW_BUTTON) return; // 'Later' — the branch stays honestly behind main.
@@ -82,7 +89,6 @@ export async function runRebase(
   }
   // Refresh happens either way — `Conflicted` leaves the repo mid-rebase, which the panel must
   // reflect.
-  deps.refreshTree();
-  deps.refreshMatchingPlugins();
+  refreshAfterWrite(deps);
   return result;
 }
