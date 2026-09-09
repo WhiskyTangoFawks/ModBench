@@ -492,8 +492,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
         Chmod(_mod.ModFolder, "500"); // read+execute only — the touched record's rewrite can't land
         try
         {
-            var result = PluginEndpoints.KeepExternalChange(
-                IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
+            var result = PluginEndpoints.KeepExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
                 _mod.Index, TestEditService.KeepHandler(), new ModFolderWatcher(), loggerFactory);
 
             var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
@@ -512,8 +511,7 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.KeepExternalChange(
-            IndexedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
+        var result = PluginEndpoints.KeepExternalChange(new ExternalChangeActionRequest("NoSuchOrigin"),
             _mod.Index, TestEditService.KeepHandler(), new ModFolderWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);

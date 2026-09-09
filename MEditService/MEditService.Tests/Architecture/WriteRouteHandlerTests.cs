@@ -27,8 +27,8 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/track", typeof(TrackHandler)),
         ("POST", "/plugins/{plugin}/compile", typeof(CompilePluginHandler)),
         ("POST", "/plugins/{plugin}/records", typeof(CreateRecordHandler)),
-        ("POST", "/plugins/{plugin}/external-change/absorb", typeof(AbsorbExternalChangeHandler)),
-        ("POST", "/plugins/{plugin}/external-change/keep", typeof(KeepExternalChangeHandler)),
+        ("POST", "/plugins/external-change/absorb", typeof(AbsorbExternalChangeHandler)),
+        ("POST", "/plugins/external-change/keep", typeof(KeepExternalChangeHandler)),
         ("POST", "/plugins/rebase", typeof(RebaseEditBranchHandler)),
         ("POST", "/plugins/rebase/continue", typeof(ContinueRebaseEditBranchHandler)),
         // A read, and still a gesture: what Create and Renumber would allocate, asked without

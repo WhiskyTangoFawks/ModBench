@@ -53,7 +53,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var ok = Assert.IsAssignableFrom<Ok<List<UnansweredExternalChangeResponse>>>(result);
         var unanswered = Assert.Single(ok.Value!);
-        Assert.Equal(IndexedModFixture.PluginName, unanswered.Plugin);
+        Assert.Equal([IndexedModFixture.PluginName], unanswered.Plugins);
         Assert.Equal(IndexedModFixture.ModFolderOrigin, unanswered.Origin);
         Assert.True(unanswered.MetaChanged);
         Assert.Equal("1.0", unanswered.OldVersion);
@@ -70,8 +70,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.AbsorbExternalChange(
-            IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
+        var result = PluginEndpoints.AbsorbExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
             _mod.Index, TestEditService.AbsorbHandler(), watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
@@ -85,8 +84,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.AbsorbExternalChange(
-            IndexedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
+        var result = PluginEndpoints.AbsorbExternalChange(new ExternalChangeActionRequest("NoSuchOrigin"),
             _mod.Index, TestEditService.AbsorbHandler(), new ModFolderWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
@@ -106,8 +104,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.AbsorbExternalChange(
-            IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
+        var result = PluginEndpoints.AbsorbExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
             _mod.Index, TestEditService.AbsorbHandler(), watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
@@ -126,8 +123,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.KeepExternalChange(
-            IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
+        var result = PluginEndpoints.KeepExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
             _mod.Index, TestEditService.KeepHandler(), new ModFolderWatcher(), loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);

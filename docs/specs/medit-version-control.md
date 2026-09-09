@@ -292,9 +292,10 @@ using git.
 
 ### External change: the one dialog
 
-When a tracked plugin's binary changes outside
-Modbench (bridge watcher live, hash check at load — both compare against the parked ref;
-self-echo of Modbench's own writes is suppressed, crash markers route to Crash recovery):
+When a tracked plugin's binary changes outside Modbench, or (Everything preset) a tracked file
+outside `source/` differs from git's own view of the edit branch (bridge watcher live, hash check
+at load — both compare against the parked ref or git status; self-echo of Modbench's own writes is
+suppressed, crash markers route to Crash recovery):
 
 - **One native modal per affected mod repo**, queued sequentially when several changed —
   never a mega-dialog. Message names the plugin and mod folder; detail states what was
@@ -305,23 +306,29 @@ self-echo of Modbench's own writes is suppressed, crash markers route to Crash r
   (ADR-0041); the human always answers. The dialog is uniform across
   workflows: for an authored mod's own xEdit load order the meta tell doesn't fire and the
   default is already `Keep as My Edit`.
-- **Absorb Upstream Update**: new baselines committed to `main` by plumbing (no checkout,
+- **Both answers are per mod**: every plugin the mod holds and every changed tracked file
+  outside `source/` answer together, not just the plugin whose bytes raised the question.
+- **Absorb Upstream Update**: every plugin re-serialized as new baselines, plus every changed
+  tracked file's current bytes or its deletion, committed to `main` by plumbing (no checkout,
   fresh trailers), then the edit branch rebased onto the new baseline at once, no separate
-  offer. A clean replay is silent. A refusal over uncommitted dirt names the paths —
-  commit, stash, or discard is the user's move, then re-run via `Modbench: Rebase onto
-  Updated Baseline`; a conflict opens VS Code's native merge editor on the source JSON.
-  Either way the baseline commit stands: `main` moved and the trailers are written
-  regardless of what the rebase does next. A binary Mutagen cannot parse, or a missing
-  git, refuses the whole gesture instead: an error notification names the plugin and the
+  offer. A clean replay is silent. A refusal over uncommitted dirt in the source tree names the
+  paths — commit, stash, or discard is the user's move, then re-run via `Modbench: Rebase onto
+  Updated Baseline`; a conflict opens VS Code's native merge editor on the source JSON. A
+  changed tracked file outside the source tree rides the rebase through regardless (`--autostash`):
+  Absorb already staged or matched it. Either way the baseline commit stands: `main` moved and the
+  trailers are written regardless of what the rebase does next. A binary Mutagen cannot parse, or a
+  missing git, refuses the whole gesture instead: an error notification names the plugin and the
   reason, nothing is committed, and the question stays unanswered so `Keep as My Edit` is
   still open. Absorb commits to `main` as it stands: if the user has merged into `main`
   (the Authored workflow), there is no pristine left to diff against — that is the
   topology they chose, not a state Modbench detects or repairs.
-- **Keep as My Edit**: the change deserializes into working-tree dirt on the affected
-  records — commit or revert as usual. A same-record collision with existing uncommitted
-  dirt refuses first, naming the records.
-- **Esc = defer, per-plugin read-only**: nothing is written; the plugin refuses edits
-  (signposting the unanswered question) until answered; reads keep serving last-known state;
+- **Keep as My Edit**: each plugin's change deserializes into working-tree dirt on the affected
+  records — commit or revert as usual — and every changed tracked file stages as-is (deletions
+  staged too), so the same bytes cannot re-raise the question. A same-record collision with
+  existing uncommitted dirt refuses the whole gesture, naming the records; a tracked file already
+  staged from an earlier, unresolved answer refuses it too, naming the path.
+- **Esc = defer, per-mod read-only**: nothing is written; every plugin the mod holds refuses
+  edits (signposting the unanswered question) until answered; reads keep serving last-known state;
   the question re-asks at next detection or load.
 - A destroyed repo (MO2 Replace install) is **not** this dialog — the mod reads as
   untracked, per ADR-0041.

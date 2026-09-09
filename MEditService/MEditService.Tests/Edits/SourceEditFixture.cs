@@ -114,6 +114,11 @@ public sealed class SourceEditFixture : IDisposable
 
     public SourceRepository? Repository => SourceRepository.Open(ModFolder, GameRelease.Fallout4);
 
+    /// <summary>The mod-level Absorb/Keep gestures take a plugin list, not one plugin — this fixture's
+    /// own single plugin, wrapped.</summary>
+    public IReadOnlyList<RegisteredCopy> PluginCopies(string pluginPath) =>
+        [new RegisteredCopy(ActualPluginName, ModFolderOrigin, pluginPath, 0, true, true)];
+
     public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
         Path.Combine(ModFolder, RelativeSourcePath(formKey, recordType, editorId));
 

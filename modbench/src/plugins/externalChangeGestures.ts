@@ -3,14 +3,17 @@ import { runExternalChangeDialogs } from './externalChangeDialog';
 import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../medit/client';
 import type { ExternalChangeCoordinatorDeps } from '../medit/externalChangeCoordinator';
 
-// The coordinator decides *when* to call this; this decides what each dialog answer does —
-// Absorb Upstream Update or Keep as My Edit.
+// The coordinator decides *when* to call this; this decides what each dialog answer does — Absorb
+// or Keep, origin-scoped (ADR-0041 amendment), so several plugins in one group share one call.
 export async function handleUnanswered(deps: ExternalChangeCoordinatorDeps, unanswered: UnansweredExternalChange[]): Promise<void> {
   const outcomes = await runExternalChangeDialogs(unanswered, deps.showDialog);
+  const dispatched = new Set<string>();
   for (const { change: item, answer } of outcomes) {
+    if (dispatched.has(item.origin)) continue;
+    dispatched.add(item.origin);
     // Sequential, deliberately: two dispatches for one repository (two plugins in the same folder
     // can both be queued) must not overlap.
-    await dispatchOne(deps, item, answer);
+    await dispatchOne(deps, item.origin, answer);
   }
 }
 
@@ -19,10 +22,11 @@ function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTre
   deps.refreshMatchingPlugins();
 }
 
-async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange): Promise<void> {
-  const result = await deps.client.keepAsMyEdit(item.plugin, item.origin);
+async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
+  const result = await deps.client.keepAsMyEdit(origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
-  // A refused Keep (a same-record collision) changed nothing — no reason to refresh.
+  // A refused Keep (a same-record or already-staged-tracked-file collision) changed nothing —
+  // no reason to refresh.
   if (result?.succeeded) refreshAfterWrite(deps);
 }
 
@@ -38,30 +42,30 @@ async function applyRebaseOutcome(
   }
 }
 
-async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange): Promise<void> {
-  const result = await deps.client.absorbUpstreamUpdate(item.plugin, item.origin);
+async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
+  const result = await deps.client.absorbUpstreamUpdate(origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
   if (!result?.succeeded) {
     // A refusal rides a 200, which the WriteRefused check above never sees — unsurfaced it
-    // leaves the plugin unabsorbed and still read-only with nothing saying why (ADR-0026).
+    // leaves the mod unabsorbed and still read-only with nothing saying why (ADR-0026).
     if (result) {
-      deps.log?.(`[externalChangeGestures] absorbUpstreamUpdate(${item.plugin}) refused: ${result.refusalReason ?? ''}`);
-      deps.showError(`mEdit: Could not absorb the upstream update for "${item.plugin}" — ${result.refusalReason ?? ''}`);
+      deps.log?.(`[externalChangeGestures] absorbUpstreamUpdate(${origin}) refused: ${result.refusalReason ?? ''}`);
+      deps.showError(`mEdit: Could not absorb the upstream update for "${origin}" — ${result.refusalReason ?? ''}`);
     }
     return;
   }
-  if (result.rebase) await applyRebaseOutcome(deps, item.origin, result.rebase);
+  if (result.rebase) await applyRebaseOutcome(deps, origin, result.rebase);
   refreshAfterWrite(deps);
 }
 
 async function dispatchOne(
-  deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange, answer: ExternalChangeDialogAnswer,
+  deps: ExternalChangeCoordinatorDeps, origin: string, answer: ExternalChangeDialogAnswer,
 ): Promise<void> {
   // 'defer' (Esc/dismiss) writes nothing and calls nothing: the backend's queue still holds the
   // question, so the next detection (a live change, or the next load-time check) asks it again.
   if (answer === 'defer') return;
-  if (answer === 'keep') return dispatchKeep(deps, item);
-  return dispatchAbsorb(deps, item);
+  if (answer === 'keep') return dispatchKeep(deps, origin);
+  return dispatchAbsorb(deps, origin);
 }
 
 // The manual, re-runnable rebase gesture, origin-scoped: the repo, not any one plugin, is the unit

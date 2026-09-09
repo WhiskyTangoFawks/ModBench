@@ -333,23 +333,25 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** A refusal (e.g. "could not be parsed") rides a 200 as `succeeded: false` — the caller reads
+  /** Origin-scoped: the mod, not one plugin in it, is the unit both answers cover. A refusal
+   *  (e.g. "could not be parsed") rides a 200 as `succeeded: false` — the caller reads
    *  `refusalReason` off the returned value itself. */
-  async absorbUpstreamUpdate(plugin: string, origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
+  async absorbUpstreamUpdate(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
     return this.mutate<ExternalChangeActionResult>({
-      op: `absorbUpstreamUpdate(${plugin})`,
-      failMsg: `mEdit: Could not absorb the upstream update for "${plugin}"`,
-      post: () => this.apiClient.POST('/plugins/{plugin}/external-change/absorb', { params: { path: { plugin } }, body: { origin } }),
+      op: `absorbUpstreamUpdate(${origin})`,
+      failMsg: `mEdit: Could not absorb the upstream update for "${origin}"`,
+      post: () => this.apiClient.POST('/plugins/external-change/absorb', { body: { origin } }),
     });
   }
 
-  /** A same-record collision with existing working-tree dirt is a typed refusal
-   *  (`succeeded === false`, `refusalReason` naming the records), never an HTTP error. */
-  async keepAsMyEdit(plugin: string, origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
+  /** Origin-scoped. A collision (a record or an already-staged tracked file) with existing
+   *  working-tree dirt is a typed refusal (`succeeded === false`, `refusalReason` naming it),
+   *  never an HTTP error. */
+  async keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
     return this.mutate<ExternalChangeActionResult>({
-      op: `keepAsMyEdit(${plugin})`,
-      failMsg: `mEdit: Could not keep "${plugin}" as your own edit`,
-      post: () => this.apiClient.POST('/plugins/{plugin}/external-change/keep', { params: { path: { plugin } }, body: { origin } }),
+      op: `keepAsMyEdit(${origin})`,
+      failMsg: `mEdit: Could not keep "${origin}" as your own edit`,
+      post: () => this.apiClient.POST('/plugins/external-change/keep', { body: { origin } }),
     });
   }
 

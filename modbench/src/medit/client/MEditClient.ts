@@ -115,8 +115,9 @@ export interface MEditClient {
     requestedFormKey?: string, onEslContradiction?: (message: string) => Promise<boolean>,
   ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined>;
   compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined>;
-  absorbUpstreamUpdate(plugin: string, origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
-  keepAsMyEdit(plugin: string, origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
+  // Origin-scoped, like rebase: the mod, not one plugin in it, is the unit both answers cover.
+  absorbUpstreamUpdate(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
+  keepAsMyEdit(origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
   rebaseOntoMain(origin: string): Promise<RebaseResult | WriteRefused | undefined>;
   continueRebase(origin: string): Promise<RebaseResult | WriteRefused | undefined>;
   // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".

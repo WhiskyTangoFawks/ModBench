@@ -38,7 +38,8 @@ public sealed class IndexedModFixture : IDisposable
 
     private IndexedModFixture(
         bool track, string pluginName, bool isLight = false, bool persistent = false,
-        INotificationPublisher? notifications = null)
+        INotificationPublisher? notifications = null, SourcePreset preset = SourcePreset.Edits,
+        Action<string>? beforeTrack = null)
     {
         ActualPluginName = pluginName;
         Plugin = new PluginKey(pluginName, ModFolderOrigin);
@@ -68,13 +69,20 @@ public sealed class IndexedModFixture : IDisposable
 
         if (track)
         {
+            beforeTrack?.Invoke(ModFolder);
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Index, ModFolderOrigin, SourcePreset.Edits)
+                .TrackAsync(Index, ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }
     }
 
     public static IndexedModFixture Tracked() => new(track: true, PluginName);
+
+    /// <summary>Tracked under the Everything preset, so assets alongside the plugin are git-tracked
+    /// too. <paramref name="beforeTrack"/> writes any asset files into the mod folder before Track's
+    /// own initial commit picks them up.</summary>
+    public static IndexedModFixture TrackedEverything(Action<string>? beforeTrack = null) =>
+        new(track: true, PluginName, preset: SourcePreset.Everything, beforeTrack: beforeTrack);
 
     /// <summary>Tracked, with every projection the index publishes recorded: what a watcher's signal
     /// reaches the front end as (ADR-0046).</summary>

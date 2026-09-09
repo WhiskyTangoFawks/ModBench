@@ -81,9 +81,20 @@ describe('handleUnanswered', () => {
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(client.keepAsMyEdit).toHaveBeenCalledWith('Fixture.esp', 'ModA');
+    expect(client.keepAsMyEdit).toHaveBeenCalledWith('ModA');
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
+  });
+
+  // Both plugins share one origin, so one dialog answer must dispatch exactly one call.
+  it('two plugins sharing one origin dispatch one call, not two', async () => {
+    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
+    const deps = makeDispatchDeps(client, KEEP_BUTTON);
+
+    await handleUnanswered(deps, [unanswered({ plugin: 'A.esp' }), unanswered({ plugin: 'B.esp' })]);
+
+    expect(client.keepAsMyEdit).toHaveBeenCalledTimes(1);
+    expect(client.keepAsMyEdit).toHaveBeenCalledWith('ModA');
   });
 
   // The rival: a refused Keep (a same-record collision) still refreshing would show the user a
@@ -98,12 +109,12 @@ describe('handleUnanswered', () => {
   });
 
   it('a WriteRefused Keep shows the ready-to-show message', async () => {
-    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not keep "Fixture.esp" as your own edit — boom' }) };
+    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not keep "ModA" as your own edit — boom' }) };
     const deps = makeDispatchDeps(client, KEEP_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(deps.showError).toHaveBeenCalledWith('mEdit: Could not keep "Fixture.esp" as your own edit — boom');
+    expect(deps.showError).toHaveBeenCalledWith('mEdit: Could not keep "ModA" as your own edit — boom');
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
@@ -167,7 +178,7 @@ describe('handleUnanswered', () => {
     await handleUnanswered(deps, [unanswered()]);
 
     expect(deps.showError).toHaveBeenCalledWith(
-      'mEdit: Could not absorb the upstream update for "Fixture.esp" — could not be parsed',
+      'mEdit: Could not absorb the upstream update for "ModA" — could not be parsed',
     );
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });

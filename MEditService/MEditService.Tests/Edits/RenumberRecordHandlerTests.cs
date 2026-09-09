@@ -184,7 +184,7 @@ public sealed class RenumberRecordHandlerTests
     public void RenumberRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
         using var mod = SourceEditFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(mod.ModFolder, "unanswered");
 
         var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
