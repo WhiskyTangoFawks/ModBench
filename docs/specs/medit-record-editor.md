@@ -594,8 +594,8 @@ rather than merely omits.
   still caveat.
 - **A panel already open when the sweep lands refetches its comparison**, not just clears its own
   banner over stale content — the extension host broadcasts `CONFLICTS_COMPUTED` to every
-  open record panel exactly once, from `EditingController.reportReconciled`, the one point a
-  `putLoadOrder` call is known to have completed the sweep. Not the `load-order-status`
+  open record panel exactly once, from the load-order outcome module's `reportLoadOrderResult`,
+  the one point a `putLoadOrder` call is known to have completed the sweep. Not the `load-order-status`
   notification stream `plugins.md`'s own progress indicator subscribes to: that subscription is
   torn down at essentially the same instant the backend sets `conflictsComputed`, so it cannot
   reliably observe the transition — reusing the load's own completion is the reliable choke
