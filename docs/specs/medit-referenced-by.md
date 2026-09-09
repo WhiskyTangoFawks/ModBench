@@ -135,7 +135,8 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   fetch-failure-is-not-empty convention every tree in this product follows
   ([ADR-0026](../adr/0026-error-surfacing-policy.md)).
 - Reference data comes from the backend (`GET /records/{formKey}/references`) through the
-  generated `ApiClient`, never raw `fetch()`; this surface renders it and does not derive it.
+  mEdit client's references query, never raw `fetch()` and never the generated client directly;
+  this surface renders it and does not derive it.
 
 ### A condition's references
 
@@ -182,7 +183,7 @@ deferred**, and that narrowing is a recorded decision, not an omission:
 ## Testing Decisions
 
 - **Good tests assert external behavior, not implementation details** — for this surface that
-  means observing the tree through `getChildren`/`getTreeItem` against a stubbed `ApiClient`:
+  means observing the tree through `getChildren`/`getTreeItem` against the in-memory mEdit client:
   given a references response, assert the rendered grouping (one group per referencing FormKey,
   plugin count shown only when more than one), the field rows, that a group's `command` targets
   the right FormKey, and the `onCountChanged` callback's reported count (a known number only on a
@@ -190,7 +191,7 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   *structure* — `referencedByCopyText`'s own tests are the one deliberate exception, since its
   contract genuinely is "given these nodes, produce this text," and real nodes obtained from the
   provider are used as that function's input rather than hand-built ones.
-- **Seam**: the tree provider's public surface against a stubbed `ApiClient` — Vitest,
+- **Seam**: the tree provider's public surface against the in-memory mEdit client — Vitest,
   `npm run test:unit`, no backend and no VS Code.
 - **`ActiveRecordTracker`** is tested on its own public surface (`setFormKey`/`setActivePanel`/
   `removePanel`/`current`/`onDidChangeActiveRecord`) with opaque panel-identity tokens — no
