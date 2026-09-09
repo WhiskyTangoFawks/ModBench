@@ -140,6 +140,27 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
     }
 
     [Fact]
+    public void UnderEdits_Keep_AHandChangedAsset_IsNeitherCommittedNorStagedEither()
+    {
+        _mod = IndexedModFixture.Tracked(); // The Edits preset, the fixture's own default.
+        var assetPath = Path.Combine(_mod.ModFolder, AssetRelativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
+        File.WriteAllBytes(assetPath, "hand-edited-outside-git"u8.ToArray());
+        WriteExternalRelease(0.9f);
+
+        Assert.Empty(SourceRepository.ChangedTrackedFilesOutsideSource(_mod.ModFolder));
+
+        var (loggerFactory, watcher) = Backend();
+        using var _dispose = loggerFactory;
+        var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.KeepExternalChange(
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Index,
+            TestEditService.KeepHandler(), watcher, loggerFactory));
+
+        Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
+        Assert.DoesNotContain(RawStatusLines(), s => s.Contains(AssetRelativePath, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Keep_OverAnAssetAlreadyDirtyInTheIndex_RefusesNamingThePath()
     {
         TrackWithAssets();
