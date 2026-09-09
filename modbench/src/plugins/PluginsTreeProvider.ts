@@ -141,9 +141,7 @@ interface PluginFacts {
   parseFailure?: boolean;
 }
 
-// ADR-0036: plugin identity is origin plus filename, so a fact is filed under both. A stated
-// origin reads that copy alone; `undefined` reads the name-only index, which is what a row the
-// answer names no matching copy for gets.
+// ADR-0036: plugin identity is origin plus filename, so every fact is filed under both.
 class ByPluginCopy<T> {
   private readonly byCopy = new Map<string, T>();
   private readonly byName = new Map<string, T>();
@@ -597,9 +595,8 @@ export class PluginsTreeProvider
     return this.matches?.get(file, this.joinOrigin(file, row)) === false;
   }
 
-  // ADR-0036: the row's own origin is the key every fact is read under — unless the client's
-  // answer names no such copy, as for an implicit master the game supplies and no origin owns,
-  // and then the filename alone has to answer.
+  // ADR-0036 keys every fact by origin. An implicit master has no mod origin to key on, so a row
+  // the client's answer names no copy for falls back to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
     const origin = row.kind === 'plugin' ? row.origin : undefined;
     return origin !== undefined && this.facts?.has(file, origin) === true ? origin : undefined;
