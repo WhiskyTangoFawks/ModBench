@@ -50,7 +50,9 @@ public sealed class ModFolderWatcher : IDisposable
     {
         lock (_gate)
         {
-            if (ModEntryFor(modFolder) is not { } mod) return;
+            // A tracked mod (the only caller of this overload) always carries the source
+            // registration too, which needs the subtree.
+            if (ModEntryFor(modFolder, recursive: true) is not { } mod) return;
             var plugin = mod.PluginFor(pluginName);
             plugin.Path = pluginPath;
             plugin.ClassificationArmed = true;
@@ -63,7 +65,7 @@ public sealed class ModFolderWatcher : IDisposable
     {
         lock (_gate)
         {
-            if (ModEntryFor(modFolder) is not { } mod) return;
+            if (ModEntryFor(modFolder, recursive: true) is not { } mod) return;
             var plugin = mod.PluginFor(pluginName);
             plugin.SourceRoot = sourceRoot;
             plugin.Origin = origin;
@@ -79,7 +81,9 @@ public sealed class ModFolderWatcher : IDisposable
 
         lock (_gate)
         {
-            if (ModEntryFor(modFolder) is not { } mod) return;
+            // Never recursive on its own: an untracked mod or the game's Data/ folder has no source
+            // tree or git refs for this route to answer for, and Data/ can hold thousands of files.
+            if (ModEntryFor(modFolder, recursive: false) is not { } mod) return;
             var plugin = mod.PluginFor(pluginName);
             plugin.Path = pluginPath;
             plugin.Origin = origin;
@@ -165,18 +169,23 @@ public sealed class ModFolderWatcher : IDisposable
         RaiseSafely(() => ExternalChangeReported?.Invoke(change));
     }
 
-    // Called under _gate. Lazily arms the mod's one recursive watcher; a mod folder that has
-    // vanished since the load order named it gets no watch, and no throw.
-    private ModEntry? ModEntryFor(string modFolder)
+    // Called under _gate. Lazily arms the mod's watcher, recursive only once needed — the game's
+    // Data/ folder never needs it. A vanished mod folder gets no watch, and no throw.
+    private ModEntry? ModEntryFor(string modFolder, bool recursive)
     {
-        if (_mods.TryGetValue(modFolder, out var existing)) return existing;
+        if (_mods.TryGetValue(modFolder, out var existing))
+        {
+            // Upgraded, never downgraded: another plugin sharing the folder may still need it.
+            if (recursive && !existing.Watcher.IncludeSubdirectories) existing.Watcher.IncludeSubdirectories = true;
+            return existing;
+        }
 
         FileSystemWatcher fsWatcher;
         try
         {
             fsWatcher = new FileSystemWatcher(modFolder)
             {
-                IncludeSubdirectories = true,
+                IncludeSubdirectories = recursive,
                 // FileName and DirectoryName: git and a compile both write through a rename, and
                 // .NET's inotify-backed Linux watcher gates Renamed on those bits.
                 NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
@@ -451,6 +460,7 @@ public sealed class ModFolderWatcher : IDisposable
     {
         public string ModFolder { get; } = modFolder;
         public GitWatchPaths Git { get; } = git;
+        public FileSystemWatcher Watcher { get; } = watcher;
         public Timer QuietTimer { get; } = quietTimer;
         public Timer MaxWindowTimer { get; } = maxWindowTimer;
         public bool BatchOpen { get; set; }
@@ -468,7 +478,7 @@ public sealed class ModFolderWatcher : IDisposable
 
         public void Dispose()
         {
-            watcher.Dispose();
+            Watcher.Dispose();
             QuietTimer.Dispose();
             MaxWindowTimer.Dispose();
         }

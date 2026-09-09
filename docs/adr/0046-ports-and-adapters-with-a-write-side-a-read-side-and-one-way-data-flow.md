@@ -74,8 +74,11 @@ These describe the present and may change without revisiting the invariants.
   mod, straight re-ingest; every other path is dropped. Settling is per mod: one quiet timer
   restarts on any event the mod's watch sees, so a write spanning several of its plugins settles
   as one batch; a second, non-restarting timer bounds the wait so a continuous stream still
-  projects. The watcher also signals Commands when a tracked plugin's bytes change outside,
-  because absorb-or-keep is a user decision; that is the one upward arrow.
+  projects. A folder that is only a re-ingest target — the game's `Data/` above all — watches
+  its own top level alone, never its subtree, until something registers it as tracked; that
+  registration upgrades the same watch rather than replacing it. The watcher also signals
+  Commands when a tracked plugin's bytes change outside, because absorb-or-keep is a user
+  decision; that is the one upward arrow.
 - The first transport adapter for notifications is a server-sent event stream on the HTTP API.
   The existing status polls migrate to it where they fit.
 - The projection sequence is one monotonic number per process, advanced once per logical

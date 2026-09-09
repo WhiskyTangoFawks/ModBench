@@ -531,4 +531,65 @@ public sealed class ModFolderWatcherTests
             Directory.Delete(modFolder, recursive: true);
         }
     }
+
+    // ---- recursion cost: an indexed-only folder (the game's Data/) never gets a subtree watch ----
+
+    [Fact]
+    public void WatchIndexed_DoesNotWatchSubdirectories()
+    {
+        var folder = NewModFolder();
+        try
+        {
+            var pluginPath = Path.Combine(folder, IndexedPlugin);
+            var original = "original"u8.ToArray();
+            File.WriteAllBytes(pluginPath, original);
+            var events = new List<IndexedBinaryEvent>();
+            using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.IndexedBinaryChanged = e => { lock (events) events.Add(e); return true; };
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, pluginPath, Sha256Of(original));
+
+            Directory.CreateDirectory(Path.Combine(folder, "Textures"));
+            File.WriteAllText(Path.Combine(folder, "Textures", "unrelated.txt"), "loose asset");
+            Thread.Sleep(400);
+            Assert.Equal(0, Count(events));
+
+            // The watch is alive all the same: the top-level plugin binary still settles.
+            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => Count(events) > 0, TimeSpan.FromSeconds(3));
+            Assert.Single(events);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    // The rival this pins: an upgrade that never happens leaves Track's own hand edits unseen.
+    [Fact]
+    public void Watch_UpgradesAnIndexedOnlyFolder_ToWatchItsSubdirectoriesToo()
+    {
+        var folder = NewModFolder();
+        try
+        {
+            var indexedPath = Path.Combine(folder, IndexedPlugin);
+            File.WriteAllBytes(indexedPath, "original"u8.ToArray());
+            using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(5));
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, indexedPath, Sha256Of("original"u8.ToArray()));
+
+            var batches = new List<IReadOnlyList<SourceChangeEvent>>();
+            watcher.SourceChanged = batch => { lock (batches) batches.Add(batch); };
+            var sourceRoot = NewSourceRoot(folder, "Tracked.esp");
+            watcher.Watch(folder, sourceRoot, "Tracked.esp", "TrackedOrigin");
+
+            Write(sourceRoot);
+            WaitUntil(() => batches.Count > 0, TimeSpan.FromSeconds(3));
+
+            var batch = Assert.Single(batches);
+            Assert.Equal("Tracked.esp", Assert.Single(batch).PluginName);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }
