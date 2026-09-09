@@ -6,7 +6,7 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ModlistEntry } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
-import { isPluginFile } from './masterReader';
+import { isPluginFile } from './pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from './mo2/pluginsText';
 

@@ -406,10 +406,11 @@ The extension owns the editing backend process
   archive loader handles them.
 - Per-mod status: **no conflicts** when all its files win; **N conflicts** when N files are
   overridden by a winning mod; **overrides N** when it overrides N files that losing mods
-  also provide; **missing master** when a plugin depends on a master not in the load
-  order (detected via a tiny TES4-header read, no Mutagen); **missing mod** when
-  `modlist.txt` references a folder absent on disk; and **update available** (*planned*)
-  when the Nexus version exceeds the installed `meta.ini` version.
+  also provide; **missing mod** when `modlist.txt` references a folder absent on disk; and
+  **update available** (*planned*) when the Nexus version exceeds the installed `meta.ini`
+  version. No status here is a fact about a plugin's contents: the extension parses no plugin
+  binary (ADR-0021), so master verdicts are the backend's and land on the Plugins rows
+  ([plugins.md](plugins.md)).
 - The hover tooltip lists the conflicting files and the winner. File-level conflicts here
   are distinct from record-level conflicts (the Editing context's `ConflictClassifier`) —
   each surfaces in its own view.
@@ -653,8 +654,8 @@ folder so the user can reassign or discard those files without leaving Modbench.
   enable/disable, reorder, separator ops — asserted byte-faithfully; the modlist.txt
   gesture commands (`modmanager/commands/modlist.ts`) — each verb against a temporary
   instance, asserting the bytes written (and `wrote: false` for a no-op) or the refusal
-  returned; and the `FileConflictIndex` — winner resolution, conflict/override counts,
-  missing-master and missing-mod detection.
+  returned; and the `FileConflictIndex` — winner resolution, conflict/override counts, and
+  missing-mod detection.
 - **Non-regular dirents inside `mods/<Mod>/`**: a symlink is followed transparently —
   file or directory — and participates in the index and deploy like a real entry, matching
   what `references/modorganizer/`'s own walker does with a reparse point. A symlinked file
@@ -689,7 +690,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
   `vortex.deployment.json` is contemplated; no text modlist exists to manage.
 - **Nexus integration** (`nxm://` install, update-available badge, endorsements) — a
   Downloads-tree concern; see [downloads.md](downloads.md).
-- **Plugin load-order management** (`plugins.txt` reorder/enable, missing-master, auto-sort)
+- **Plugin load-order management** (`plugins.txt` reorder/enable, master verdicts, auto-sort)
   — its own Mod-Management surface; see [plugins.md](plugins.md).
 - **Per-profile isolated saves and base-game config** (`local savegames` / INI) — optional
   MO2 features, deferred.

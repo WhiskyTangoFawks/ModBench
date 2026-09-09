@@ -53,12 +53,10 @@ public sealed class HeldPlugins : ILoadOrder
     public static IReadOnlyList<RegisteredCopy> Resolve(
         string gameDirectory, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
     {
-        var implicitKeys = ResolveImplicitKeys(gameDirectory, gameRelease);
-        var creationClubNames = ResolveCreationClubNames(gameDirectory, gameRelease);
-        var forcedNames = new HashSet<string>(implicitKeys, StringComparer.OrdinalIgnoreCase);
-        forcedNames.UnionWith(creationClubNames);
+        var names = ForcedNames(gameDirectory, gameRelease);
+        var forcedNames = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
 
-        var forced = implicitKeys.Concat(creationClubNames)
+        var forced = names
             .Select((name, i) => new RegisteredCopy(
                 name, PluginOrigin.DataDirectory, Path.Combine(gameDirectory, name), i, Enabled: true,
                 Winning: true, IsForced: true))
@@ -75,11 +73,18 @@ public sealed class HeldPlugins : ILoadOrder
         ];
     }
 
-    private static HashSet<string> ResolveImplicitKeys(string folder, GameRelease gameRelease) =>
-        Implicits.Get(gameRelease).Listings
+    /// <summary>The plugins this install loads with no plugins.txt line: the release's implicit
+    /// masters present in <paramref name="gameDirectory"/>, then its Creation Club catalog, which
+    /// varies per install. Load order, and a name both claim appears once.</summary>
+    public static IReadOnlyList<string> ForcedNames(string gameDirectory, GameRelease gameRelease) =>
+        [.. ResolveImplicitNames(gameDirectory, gameRelease)
+            .Concat(ResolveCreationClubNames(gameDirectory, gameRelease))
+            .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    private static List<string> ResolveImplicitNames(string folder, GameRelease gameRelease) =>
+        [.. Implicits.Get(gameRelease).Listings
             .Select(k => k.FileName.ToString())
-            .Where(name => File.Exists(Path.Combine(folder, name)))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .Where(name => File.Exists(Path.Combine(folder, name)))];
 
     // Mutagen's reader already filters to entries whose file exists, so a stale catalog entry
     // contributes nothing. Existence is checked first because LoadOrderListingsFromPath throws on a

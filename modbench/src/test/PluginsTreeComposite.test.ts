@@ -12,7 +12,7 @@ type MasterIssue = { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' 
 // context's vocabulary: a "row" is whatever the load-order provider hands out, a "child"
 // whatever the record provider hands back.
 
-interface FakeRow { file?: string; kind: string; orderIssueMasters?: string[] }
+interface FakeRow { file?: string; kind: string }
 interface FakeChild { id: string }
 
 class FakeRows {
@@ -72,7 +72,6 @@ function make(
     rows: rowSource,
     children,
     pluginFileOf: (row) => row.file,
-    orderIssueMastersOf: (row) => row.orderIssueMasters,
     hasMatchingRecords,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
@@ -702,71 +701,34 @@ describe('malformed-plugin diagnosis decoration', () => {
   });
 });
 
-// ADR-0037: the order-aware missing-master badge (Mod Management, no
-// load order needed) and this load-order-derived state are one concept in the merged tree, never two
-// decorations that can disagree.
-describe('PluginsTreeComposite — reconciling the order-aware badge with load order state', () => {
-  it('reports a master both signals flag only once, in the backend\'s richer wording', async () => {
-    const row: FakeRow = { file: 'A.esp', kind: 'plugin', orderIssueMasters: ['Ghost.esm'] };
-    const { composite, render } = make([row]);
+// Every master verdict is the backend's now: nothing in the extension reads a plugin's declared
+// masters (ADR-0021), so there is one signal to render, never two that can disagree.
+describe('PluginsTreeComposite — the backend is the only master-issue signal', () => {
+  it('renders the backend\'s wording for each flagged master, once', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
     composite.setLoadOrder(new Set(['A.esp']), new Map([
-      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
+      ['a.esp', { masterIssues: [
+        { masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const },
+        { masterName: 'Broken.esm', kind: 'Unloadable' as const },
+      ] }],
     ]));
-
-    const tooltip = composite.getTreeItem(row).tooltip as string;
-    expect(tooltip).toContain('Missing master: Ghost.esm');
-    expect(tooltip).not.toContain('is not loaded before this plugin');
-  });
-
-  it('preserves the frontend-only signal for a master that loaded fine but is merely mis-sequenced', async () => {
-    // The backend flags a different master; the order-aware badge separately flags "Late.esp",
-    // which the backend has nothing to say about — it loaded, Mutagen resolves it regardless of
-    // position, so MasterResolution.Classify never reports it.
-    const row: FakeRow = { file: 'A.esp', kind: 'plugin', orderIssueMasters: ['Late.esp'] };
-    const { composite, render } = make([row]);
-    await render();
-
-    composite.setLoadOrder(new Set(['A.esp']), new Map([
-      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
-    ]));
-
-    const tooltip = composite.getTreeItem(row).tooltip as string;
-    expect(tooltip).toContain('Missing master: Ghost.esm');
-    expect(tooltip).toContain('Master Late.esp is not loaded before this plugin');
-  });
-
-  it('leaves a frontend-only order badge completely untouched when the backend has nothing to add', async () => {
-    const rowSource = new FakeRows([PLUGIN_ROW]);
-    const original = rowSource.getTreeItem(PLUGIN_ROW);
-    original.tooltip = 'A.esp\nMaster Ghost.esm is not loaded before this plugin';
-    original.description = '✗ Master not loaded before this plugin';
-    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
-      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file,
-      orderIssueMastersOf: () => ['Ghost.esm'],
-    });
-    await composite.getChildren();
-
-    composite.setLoadOrder(new Set(['A.esp']));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
-    expect(item.tooltip).toBe('A.esp\nMaster Ghost.esm is not loaded before this plugin');
-    expect(item.description).toBe('✗ Master not loaded before this plugin');
+    expect(item.description).toBe('✗ 2 master issues');
+    const tooltip = item.tooltip as string;
+    expect(tooltip).toContain('Missing master: Ghost.esm');
+    expect(tooltip).toContain('Master Broken.esm cannot be loaded');
   });
 
-  it('works without a wired orderIssueMastersOf — the backend\'s own wording stands alone', async () => {
-    const rowSource = new FakeRows([PLUGIN_ROW]);
-    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
-      rows: rowSource, children: new FakeChildren(), pluginFileOf: (row) => row.file,
-    });
-    await composite.getChildren();
+  it('leaves a row the backend flags nothing on undecorated', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
 
-    composite.setLoadOrder(new Set(['A.esp']), new Map([
-      ['a.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }] }],
-    ]));
+    composite.setLoadOrder(new Set(['A.esp']), new Map([['a.esp', { masterIssues: [] }]]));
 
-    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master: Ghost.esm');
+    expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
   });
 });
 

@@ -8,7 +8,7 @@ import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagno
 import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider } from './modmanager/ModListProvider';
-import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode, type PluginListSource } from './modmanager/PluginListProvider';
+import { PluginListProvider, pluginFileOf, type PluginListNode, type PluginListSource } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite, type PluginFacts } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
@@ -22,7 +22,7 @@ import { makeRefreshAll } from './refreshAll';
 import { ToolboxProvider } from './ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled, type PluginsCommandResult } from './modmanager/commands/plugins';
+import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './modmanager/commands/plugins';
 import { createEmptyMod, reconcileMods } from './modmanager/commands/modlist';
 import { registerModsReconcile } from './modmanager/modsReconcile';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
@@ -105,8 +105,10 @@ interface PluginListDeps {
   reporter: Reporter;
   instanceRoot: string;
   // A getter through the single game-directory resolver, not a Promise settled once. Folds a
-  // resolution failure to undefined, degrading vanilla-master lookups and badges.
+  // resolution failure to undefined, which leaves an implicit row without a file to point at.
   dataFolder: () => Promise<string | undefined>;
+  /** The rows the game forces on, asked of the backend (ADR-0021). */
+  implicitMasters: ImplicitMasterSource;
   /** ADR-0047: the row provider's only row input — name, origin, slot, enabled and winning for
    *  every plugin copy. */
   instance: Instance;
@@ -118,11 +120,11 @@ interface PluginListDeps {
 // browser's children — so each row expands into its records. The composition root is the only
 // place that may know both.
 function registerPluginListView(deps: PluginListDeps): PluginListProvider {
-  const { own, session, outputChannel, reporter, instanceRoot, dataFolder, instance, recordBrowser } = deps;
+  const { own, session, outputChannel, reporter, instanceRoot, dataFolder, implicitMasters, instance, recordBrowser } = deps;
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
   const source = pluginListSource(instanceRoot, instance);
-  const pluginListProvider = own(new PluginListProvider({ instance, source, log, reporter, dataFolder }));
+  const pluginListProvider = own(new PluginListProvider({ instance, source, log, reporter, dataFolder, implicitMasters }));
   const composite = own(new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
     // A thin positional adapter, not `recordBrowser` directly: the composite's
@@ -135,9 +137,6 @@ function registerPluginListView(deps: PluginListDeps): PluginListProvider {
       onDidChangeTreeData: recordBrowser.onDidChangeTreeData,
     },
     pluginFileOf,
-    // ADR-0037: lets the composite reconcile the order-aware badge with load order state
-    // by master name, instead of two decorations that can disagree.
-    orderIssueMastersOf,
     // Undefined — never fetched, or nothing found for this file — reads as "matches", the
     // composite's own fallback for an accessor that has nothing to say.
     hasMatchingRecords: (file) => session.loadOrderSync?.matches(file.toLowerCase()),
@@ -524,10 +523,15 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   session.loadOrderSync = own(makeLoadOrderSync({
     session, instanceRoot, instance, controller, outputChannel, heldPluginFiles, showCrashRepairOffers,
   }));
+  // The backend answers this, never the extension (ADR-0021), and it needs the Data folder to
+  // answer at all — so an unresolved one is the same "unknown" an unreachable backend is.
+  const implicitMastersIn = (folder: string | undefined): Promise<string[] | undefined> =>
+    folder === undefined ? Promise.resolve(undefined) : controller.implicitMasters(folder);
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
   const runPluginsReconcile = async (profile: string, folder: string | undefined) => {
-    const result = await reconcilePlugins(instanceRoot, profile, folder, (msg) => outputChannel.debug(msg));
+    const result = await reconcilePlugins(
+      instanceRoot, profile, folder, () => implicitMastersIn(folder), (msg) => outputChannel.debug(msg));
     if (!result.applied) {
       outputChannel.error(`[modmanager] Plugins reconcile failed: ${result.refusal}`);
       return;
@@ -540,7 +544,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     }
   };
   const pluginListProvider = registerPluginListView({
-    own, session, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, instance, recordBrowser,
+    own, session, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder,
+    implicitMasters: async () => implicitMastersIn(await dataFolder()), instance, recordBrowser,
   });
   const { modListView, updateProfileDescription } = createModListView(own, modListProvider, instance);
   const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {

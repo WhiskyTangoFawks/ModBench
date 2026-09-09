@@ -57,8 +57,8 @@ versus "Master `Foo.esp` cannot be loaded"), so a cascade does not read as many 
 - **`PluginLoadFailure` gets surfaced.** `HeldPlugins` already isolates per-plugin load failures with
   a reason so one unparseable file cannot abort the load order; that state has never reached the
   tree. It becomes the error decoration, alongside the missing-master flag.
-- **The Plugin List's order-aware missing-master badge and this state become one concept** in one
-  tree, instead of two views disagreeing about the same plugin.
+- **This state is the Plugin List's only master verdict.** The extension parses no plugin binary
+  (ADR-0021), so no second signal exists for two views to disagree over.
 - **What it buys, which xEdit cannot:** the shadowed original in the patch-out-a-master workflow can
   be opened and diffed against the patched copy, with the removed master's references showing as
   unresolved — which is exactly the check that workflow needs.

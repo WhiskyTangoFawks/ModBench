@@ -28,7 +28,7 @@ context's `CONTEXT.md`:
 
 Reconstruct MO2's Plugins tab — view and manage `plugins.txt` (the Plugin load order) as a
 first-class, always-available part of the Mod-Management workflow: enable/disable, drag-and-drop
-reorder, missing-master detection — **and**, whenever the backend is running, be the entry
+reorder, master verdicts — **and**, whenever the backend is running, be the entry
 point for all per-record navigation in the mEdit view: browsing each plugin's records by type,
 spatially by worldspace and cell, and narrowing by name or by a SQL record filter. In xEdit these
 are one tree; this surface is Modbench's answer to the same design
@@ -66,10 +66,10 @@ scale it must work at.
 ## Solution
 
 A **Plugins** sidebar tree — one row per `plugins.txt` line, in Plugin load order — with a
-checkbox (enable/disable), drag-and-drop reorder (single- or multi-row), an order-aware
-missing-master badge, a name filter, and a Reveal-in-Explorer row action. It mirrors MO2's
-Plugins tab closely enough to alternate between the two on the same instance, with no backend
-required.
+checkbox (enable/disable), drag-and-drop reorder (single- or multi-row), a master-issue badge, a
+name filter, and a Reveal-in-Explorer row action. It mirrors MO2's Plugins tab closely enough to
+alternate between the two on the same instance. Rows, order and gestures need no backend; the
+implicit-master rows and the master-issue badge come from it (ADR-0021).
 
 Whenever the backend is running, every row also expands into that plugin's records — by
 type, spatially by worldspace and cell — narrowing on two independent axes: the row-level name
@@ -97,15 +97,11 @@ there is no separate load-order step.
    mutation in this bounded context does — no separate save step.
 5. As a user, I want to be able to toggle a vanilla/DLC/CC plugin's checkbox the same as any
    other row, so that Modbench doesn't invent a restriction MO2 itself doesn't have.
-6. As a user, I want a missing-master badge on a plugin whose master isn't loaded *before* it
-   — whether the master is absent entirely or just sequenced too late — so that I catch the
-   actual CTD-causing condition, not just "is the master present somewhere."
-7. As a user, I want that badge's message to make clear it's checking order, not just
-   presence, so that I understand why it can disagree with the Mods tree's own (presence-only,
-   mod-granularity) missing-master badge on the same plugin — and, once the backend is running and
-   a richer load-order-derived verdict exists for the same master, I want the two merged into one
-   badge rather than shown as a second decoration that might contradict the first (see Missing-
-   master badge (order-aware) and load-order-derived master/load-failure decoration).
+6. As a user, I want a badge on a plugin whose declared master did not resolve, so that I catch
+   the CTD-causing condition on the row that causes it.
+7. As a user, I want exactly one master verdict per row, from the one place that reads plugin
+   headers — the backend — so that two decorations can never contradict each other on the same
+   plugin (see Master-issue and load-failure decoration).
 8. As a user, I want to drag a plugin to a new position and have `plugins.txt` reordered
    immediately, so that fixing a load-order problem is a direct manipulation, not a form.
 9. As a user, I want to ctrl/shift-click to select multiple plugins and drag them together as
@@ -183,11 +179,10 @@ there is no separate load-order step.
 
 ### Scope
 
-- This spec covers the whole merged surface: the sidebar tree, checkbox, drag reorder, the
-  order-aware missing-master badge, the name filter, Refresh, Reveal-in-Explorer, and —
-  whenever the backend is running — record browsing, the spatial hierarchy, the SQL record
-  filter, record-authoring commands, and the load-order-derived master-issue and load-failure
-  decorations (ADR-0037).
+- This spec covers the whole merged surface: the sidebar tree, checkbox, drag reorder, the name
+  filter, Refresh, Reveal-in-Explorer, and — whenever the backend is running — the implicit-master
+  rows, record browsing, the spatial hierarchy, the SQL record filter, record-authoring commands,
+  and the master-issue and load-failure decorations (ADR-0037).
 - **Auto-sort** (dependency-aware topological sort, LOOT parity) is **out of scope, deferred
   indefinitely** — a possible future initiative of its own, not scheduled. See Out of Scope.
 - **Cross-highlight with the Mods tree** (selecting a plugin highlights its providing mod(s)
@@ -209,8 +204,8 @@ there is no separate load-order step.
 - **The leading slot answers exactly one question — "can you change whether this loads?"**
   ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)):
   a checkbox on a togglable `plugins.txt` line (`contextValue: "plugin"`); a lock icon on an
-  implicit master (`contextValue: "pluginImplicit"`, discovered from the game's Data folder rather
-  than a `plugins.txt` line) — forced on, neither toggled nor dragged; nothing at all on a row that
+  implicit master (`contextValue: "pluginImplicit"`, named by the backend rather than by a
+  `plugins.txt` line) — forced on, neither toggled nor dragged; nothing at all on a row that
   stands for no plugin file in the load order at all (today only the sentinel error/empty
   rows — non-participating copies are not displayed). The lock has one
   meaning: it is never about record editability, only about this row's own
@@ -458,29 +453,12 @@ end.
   and only withholds the chevron, since the row is itself an ordinary, fully-affordanced record
   row regardless of whether it has children.
 
-### Missing-master badge (order-aware) and load-order-derived master/load-failure decoration
+### Master-issue and load-failure decoration
 
-Two independent signals can land on the same plugin row, from two different sources, and
-[ADR-0037](../adr/0037-unresolvable-masters-are-indexed-and-flagged.md) is what keeps them from
-reading as disagreeing decorations.
-
-**Order-aware (Mod Management, no load order needed).** Stronger than the Mods tree's badge, and
-deliberately so — this view has the one thing the Mods tree structurally lacks: an actual plugin
-sequence to check order against.
-
-- For each plugin, read its declared masters via the existing `readMasters()`
-  (`masterReader.ts`, TES4 header read — already used by `statusChecker.ts`).
-- Flag the plugin if any declared master is **absent from `plugins.txt` entirely**, or
-  **present but positioned after this plugin's own line** — both are real CTD conditions; the
-  Mods tree's badge (presence-only, mod-granularity, no order dimension) only catches the
-  first.
-- Badge/tooltip text names the condition explicitly (e.g. "Master `{name}` is not loaded
-  before this plugin") so it reads distinctly from the Mods tree's "Missing master: {names}" —
-  the two can legitimately disagree on the same plugin, and the wording should make it obvious
-  why rather than looking like a bug. No ADR needed for this divergence — the modding-literate
-  audience understands presence-vs-order implicitly once the badge text says so.
-- Vanilla masters are ordinary rows in this list (per Row model above), so an order check
-  against them works the same as for any mod-provided master — no special-casing needed.
+Every master verdict on a row is the backend's. The extension parses no plugin binary
+([ADR-0021](../adr/0021-mod-manager-in-extension.md)), so there is one signal to render and
+nothing to reconcile — [ADR-0037](../adr/0037-unresolvable-masters-are-indexed-and-flagged.md)
+governs what it says.
 
 **Load-order-derived (Editing, once the backend is running — ADR-0037).** Presence-only, never
 order-aware — Mutagen resolves a master by reading it from the plugin's own header, so it never
@@ -496,16 +474,8 @@ xEdit's force-deactivate-and-cascade rule. There is no cascade: a plugin whose m
 *its own* missing master is not itself flagged — `masterIssues` only ever describes a plugin's
 own declared masters, never a transitive fact about a master's masters.
 
-**Reconciliation (AC8): one decoration, not two that can disagree.** `PluginsTreeComposite`
-combines the two signals by master name. A master both signals name is reported once, in the
-load-order-derived wording — richer because it distinguishes directly-missing from unloadable, a
-distinction the order-aware check has no way to make from a plain-text read of `plugins.txt`. A
-master the order-aware check flags that the load-order-derived signal does *not* — present in the
-load order, loaded successfully, but sequenced after this plugin's own line — is preserved and
-worded distinctly ("is not loaded before this plugin"), since that is a real CTD risk the
-load-order-derived signal structurally cannot see (order doesn't affect Mutagen's own resolution).
-When a load order is not running, or the load-order-derived signal has nothing to say about a row, the
-order-aware badge renders exactly as it does today, untouched.
+**With no backend running, a row carries no master verdict at all.** An absent badge means "not
+asked", not "nothing to flag" — the same reading every other backend-sourced decoration here has.
 
 **Neither signal, nor the reconciled decoration, nor the load-failure decoration below, ever
 touches the leading slot.** The checkbox/lock position is reserved for exactly one question —
@@ -678,8 +648,10 @@ overflow, then native **Collapse All** last.
   provides with no line gets one **appended, disabled** (discovery is not user intent to enable),
   ascending case-folded; every line whose plugin nothing provides — no enabled mod, not
   `overwrite/`, not the game's `Data/` folder (DLC and Creation Club lines stay) — is **pruned**.
-  A `.mohidden` file is not present. An implicit master (rendered from `Data/`, never from a
-  line) is never appended, even when a mod ships a copy. Matching is case-insensitive throughout. The edit is
+  A `.mohidden` file is not present. An implicit master (the backend's own list, rendered as a
+  row of its own, never from a line) is never appended, even when a mod ships a copy. With that
+  list unknown — no backend, or no game directory to ask about — nothing is appended or pruned
+  at all, since every verdict would then be a guess. Matching is case-insensitive throughout. The edit is
   surgical (ADR-0021): one read-modify-write on the commands' write chain, the delta computed from
   a fresh parse, no write at all when the resulting text is unchanged. It is a command like the
   three gestures beside it (ADR-0046) — it enumerates disk itself, reads no Instance, and returns
@@ -777,9 +749,10 @@ overflow, then native **Collapse All** last.
 
 - **Primary Mod-Management seam**: `pluginsText.ts` (parse + mutate), pure, Vitest-tested, no
   `vscode` import — same seam class as `modlistText.ts`/`metaIni.ts`/`downloads.ts`.
-- **Missing-master order-check**: a pure function taking (a plugin's declared masters via
-  `readMasters()`, the ordered plugin-name list, that plugin's own index) → a verdict. Lives
-  alongside or extends `statusChecker.ts`.
+- **Implicit masters**: `GET /implicit-masters` (`gameDirectory`, `gameRelease`) → the filenames
+  this install loads with no `plugins.txt` line, in load order: the release's implicit masters
+  present in that folder, then its Creation Club catalog. `HeldPlugins.ForcedNames`, the same
+  list a `PUT /load-order` prepends, answered with no load order held.
 - **Load-order-derived master classification** (ADR-0037): `MasterResolution.Classify`
   (`MEditService.Core/Queries/`), a pure function over data the load order already has
   (`LoadOrder.Plugins`, `LoadOrder.Failures`) — no Mutagen re-read. Consulted once per
@@ -788,8 +761,7 @@ overflow, then native **Collapse All** last.
 - **`PluginListProvider`** (`TreeDataProvider`, `modmanager/`): rows only, a
   `TreeDragAndDropController` reusing the Mods tree's established controller shape, and the row
   side of the Filter `InputBox` — none of this layer holds record-browsing logic. Exposes
-  `orderIssueMastersOf(node)` so the composite can read the order-aware badge's flagged
-  master names structurally, without parsing rendered tooltip text.
+  the implicit-master rows the backend named, and holds no master verdict of its own.
 - **`PluginTreeProvider`** (`medit/`): a row's children — record types, records, spatial
   hierarchy — unchanged in ownership by the merge; its `getPluginChildren(name)` is the public
   entry point a row built elsewhere (by `PluginListProvider`) expands into, and it is unit-tested
@@ -814,14 +786,14 @@ overflow, then native **Collapse All** last.
   - toggle: `*` prefix set/cleared, byte-faithful (CRLF/BOM/comments untouched).
   - reorder: single-row and multi-row (contiguous and non-contiguous selection) moves,
     byte-faithful.
-- **Missing-master order-check unit tests**: master present-and-before → ok; master
-  present-but-after → flagged; master absent → flagged; vanilla master present-and-before → ok
-  (no special-casing needed, per Row model).
+- **Implicit-master unit tests** (`MEditService.Tests/Plugins/HeldPluginsTests.cs`): an implicit
+  master present in the Data folder is listed, one missing from it is not, the Creation Club
+  catalog follows in its own order, and a plugin neither source claims is absent.
 - **Load-order-derived master classification unit tests** (`MEditService.Tests/Query/MasterResolutionTests.cs`):
   master absent from both the loaded and failed sets → `DirectlyMissing`; master present in the
   failed set → `Unloadable`; master successfully loaded → no issue; a plugin whose master's own
-  master is missing is not itself flagged (no cascade). The composite's reconciliation of this
-  with the order-aware badge, and its load-failure decoration, are covered by
+  master is missing is not itself flagged (no cascade). The composite's rendering of this, and
+  its load-failure decoration, are covered by
   `src/test/PluginsTreeComposite.test.ts` and `src/test/integration/extension.test.ts` — including
   a case where the wire response omits `masterIssues` entirely, asserting the row renders
   undecorated rather than throwing.
@@ -878,8 +850,8 @@ overflow, then native **Collapse All** last.
   favor of the (deferred) cross-highlight, matching MO2's implicit-link design rather than
   inventing a text column MO2 itself doesn't have.
 - **Guard-railing vanilla/DLC/CC masters** against being disabled — deliberately not added;
-  MO2 doesn't guard-rail it either, and the order-aware missing-master badge catches the
-  fallout if it happens.
+  MO2 doesn't guard-rail it either, and the backend's master-issue badge catches the fallout if
+  it happens.
 - **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
   user-written SQL against the generated per-type views, not a fixed toggle set (ADR-0018).
 - **Multi-step form-space operations** — compact FormIDs, copy-as-underride (moving a record

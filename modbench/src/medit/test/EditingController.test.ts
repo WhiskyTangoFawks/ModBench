@@ -869,6 +869,46 @@ describe('EditingController.resolveOrigin', () => {
   });
 });
 
+// ── implicit masters ────────────────────────────────────────────────────────
+//
+// Mod Management's plugins.txt reconcile asks this while deciding which disk plugins earn a
+// line. "Unknown" and "none" must not be the same answer: the reconcile writes on one.
+
+describe('EditingController.implicitMasters', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('answers the names the backend reports, in the order given', async () => {
+    const client = makeClient();
+    client.GET = vi.fn().mockResolvedValue({ data: ['Fallout4.esm', 'ccTest.esl'], response: { ok: true } });
+    const controller = new EditingController(makeDeps({ client }));
+
+    expect(await controller.implicitMasters('/game/Data')).toEqual(['Fallout4.esm', 'ccTest.esl']);
+    expect(client.GET).toHaveBeenCalledWith('/implicit-masters', {
+      params: { query: { gameDirectory: '/game/Data', gameRelease: 'Fallout4' } },
+    });
+  });
+
+  it('answers undefined, never an empty list, when the backend refuses', async () => {
+    const client = makeClient();
+    client.GET = vi.fn().mockResolvedValue(drainedError(400, 'Game directory not found'));
+    const log = vi.fn();
+    const controller = new EditingController(makeDeps({ client, log }));
+
+    expect(await controller.implicitMasters('/no/such/Data')).toBeUndefined();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('implicitMasters'));
+  });
+
+  it('answers undefined, never an empty list, when the backend is unreachable', async () => {
+    const client = makeClient();
+    client.GET = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    const log = vi.fn();
+    const controller = new EditingController(makeDeps({ client, log }));
+
+    expect(await controller.implicitMasters('/game/Data')).toBeUndefined();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('implicitMasters'));
+  });
+});
+
 // ── track ───────────────────────────────────────────────────────────────────
 
 describe('EditingController.track', () => {

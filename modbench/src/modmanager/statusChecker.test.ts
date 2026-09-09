@@ -3,9 +3,8 @@ import { mkdtemp, mkdir, rm, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Mod, ModlistEntry } from './model';
-import { buildFileConflictIndex, rootLevelWinners } from './fileConflictIndex';
-import { computeModStatuses, checkMasterOrder, computePluginOrderStatuses } from './statusChecker';
-import { buildTes4Buffer } from './test/buildTes4Buffer';
+import { buildFileConflictIndex } from './fileConflictIndex';
+import { computeModStatuses } from './statusChecker';
 
 // Passthrough by default, so one test can divert a single path to a synthetic non-ENOENT
 // error. chmod-based denial would be silently bypassed when the runner is root.
@@ -16,7 +15,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 
-async function writeMod(instanceRoot: string, name: string, files: Record<string, Buffer | string>) {
+async function writeMod(instanceRoot: string, name: string, files: Record<string, string>) {
   for (const [relPath, content] of Object.entries(files)) {
     const abs = join(instanceRoot, 'mods', name, relPath);
     await mkdir(join(abs, '..'), { recursive: true });
@@ -30,39 +29,16 @@ describe('computeModStatuses', () => {
   // "High" and "Low" conflict on meshes/shared.nif, and High is listed first — the winning end
   // of the Mod override order. "Ghost" is listed here but has no folder on disk.
   const entries: ModlistEntry[] = [
-    mod('MasterOK'),
-    mod('Provider'),
-    mod('VanillaOK'),
-    mod('CcOK'),
-    mod('Broken'),
-    mod('DisabledBroken', false),
+    mod('Disabled', false),
     mod('High'),
     mod('Low'),
     mod('Clean'),
     mod('Ghost'),
   ];
-  const vanillaMasters = new Set(['fallout4.esm', 'ccbgsfo4044-hellfirepowerarmor.esl']);
 
   beforeAll(async () => {
     instanceRoot = await mkdtemp(join(tmpdir(), 'medit-statuschecker-'));
-    await writeMod(instanceRoot, 'MasterOK', {
-      'MasterOK.esp': buildTes4Buffer(['ProvidedByOther.esm']),
-    });
-    await writeMod(instanceRoot, 'Provider', {
-      'ProvidedByOther.esm': buildTes4Buffer([]),
-    });
-    await writeMod(instanceRoot, 'VanillaOK', {
-      'VanillaOK.esp': buildTes4Buffer(['Fallout4.esm']),
-    });
-    await writeMod(instanceRoot, 'CcOK', {
-      'CcOK.esp': buildTes4Buffer(['ccBGSFO4044-HellfirePowerArmor.esl']),
-    });
-    await writeMod(instanceRoot, 'Broken', {
-      'Broken.esp': buildTes4Buffer(['DoesNotExist.esm']),
-    });
-    await writeMod(instanceRoot, 'DisabledBroken', {
-      'DisabledBroken.esp': buildTes4Buffer(['DoesNotExist.esm']),
-    });
+    await writeMod(instanceRoot, 'Disabled', { 'Disabled.esp': 'plugin bytes' });
     await writeMod(instanceRoot, 'High', { 'meshes/shared.nif': 'high' });
     await writeMod(instanceRoot, 'Low', { 'meshes/shared.nif': 'low' });
     await writeMod(instanceRoot, 'Clean', { 'meshes/clean.nif': 'clean' });
@@ -75,30 +51,11 @@ describe('computeModStatuses', () => {
 
   async function statuses() {
     const index = await buildFileConflictIndex(entries, instanceRoot, () => {});
-    return computeModStatuses(entries, instanceRoot, index, vanillaMasters, () => {});
+    return computeModStatuses(entries, instanceRoot, index);
   }
 
-  it('is ok when a master is satisfied by another enabled mod', async () => {
-    expect((await statuses()).get('MasterOK')?.status).toEqual({ kind: 'ok' });
-  });
-
-  it('is ok when a master is satisfied by the vanilla master set', async () => {
-    expect((await statuses()).get('VanillaOK')?.status).toEqual({ kind: 'ok' });
-  });
-
-  it('is ok when a master is a Creation Club .esl in the vanilla master set', async () => {
-    expect((await statuses()).get('CcOK')?.status).toEqual({ kind: 'ok' });
-  });
-
-  it('reports missingMaster when a master is satisfied by neither', async () => {
-    expect((await statuses()).get('Broken')?.status).toEqual({
-      kind: 'missingMaster',
-      masters: ['DoesNotExist.esm'],
-    });
-  });
-
-  it('does not flag a missing master on a disabled mod', async () => {
-    expect((await statuses()).get('DisabledBroken')).toEqual({ status: { kind: 'ok' }, conflictLines: [] });
+  it('is ok for a disabled mod, whose files are not deployed', async () => {
+    expect((await statuses()).get('Disabled')).toEqual({ status: { kind: 'ok' }, conflictLines: [] });
   });
 
   it('reports missingMod for a modlist entry with no folder on disk', async () => {
@@ -116,60 +73,30 @@ describe('computeModStatuses', () => {
     expect((await statuses()).get('High')?.status).toEqual({ kind: 'overrides', count: 1 });
   });
 
-  it('is ok for a mod with no masters and no conflicts', async () => {
+  it('is ok for a mod with no conflicts', async () => {
     expect((await statuses()).get('Clean')).toEqual({ status: { kind: 'ok' }, conflictLines: [] });
-  });
-
-  it('does not throw when a plugin fails to parse, and does not blank other mods\' statuses', async () => {
-    const corruptRoot = await mkdtemp(join(tmpdir(), 'medit-statuschecker-corrupt-'));
-    try {
-      await writeMod(corruptRoot, 'HasCorruptPlugin', {
-        'Valid.esp': buildTes4Buffer(['Fallout4.esm']),
-        'Corrupt.esp': 'this is not a TES4 plugin',
-      });
-      await writeMod(corruptRoot, 'Other', { 'meshes/other.nif': 'other' });
-      const corruptEntries: ModlistEntry[] = [mod('HasCorruptPlugin'), mod('Other')];
-      const logs: string[] = [];
-
-      const index = await buildFileConflictIndex(corruptEntries, corruptRoot, () => {});
-      const result = await computeModStatuses(corruptEntries, corruptRoot, index, vanillaMasters, (m) => logs.push(m));
-
-      expect(result.get('HasCorruptPlugin')?.status).toEqual({ kind: 'ok' });
-      expect(result.get('Other')?.status).toEqual({ kind: 'ok' });
-      expect(logs.some((l) => l.includes('Corrupt.esp'))).toBe(true);
-    } finally {
-      await rm(corruptRoot, { recursive: true, force: true });
-    }
   });
 
   it('skips separator entries entirely — no status map entry', async () => {
     // A separator has no mods/<name> folder on disk, so an unskipped one surfaces as missingMod.
     const withSeparator: ModlistEntry[] = [{ kind: 'separator', name: 'WEAPONS', enabled: true }, ...entries];
     const index = await buildFileConflictIndex(withSeparator, instanceRoot, () => {});
-    const result = await computeModStatuses(withSeparator, instanceRoot, index, vanillaMasters, () => {});
+    const result = await computeModStatuses(withSeparator, instanceRoot, index);
     expect(result.has('WEAPONS')).toBe(false);
   });
-});
 
-describe('computeModStatuses — non-plugin files are never read for masters', () => {
-  it('does not attempt to read masters from a mod-shipped non-plugin file', async () => {
-    // Every real mod archive ships non-plugin files (readmes, changelogs,
-    // textures) alongside its .esp/.esm — a real producer of a dotted,
-    // non-plugin-extension relativePath.
-    const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-readme-'));
+  // No status kind here is a fact about a plugin's contents: those are the backend's, reported
+  // per plugin on the Plugins rows (ADR-0021).
+  it('never reports a status derived from a plugin file, however malformed', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-garbage-'));
     try {
-      await writeMod(root, 'WithReadme', {
-        'WithReadme.esp': buildTes4Buffer([]),
-        'Readme.txt': 'Thanks for downloading!',
-      });
-      const readmeEntries: ModlistEntry[] = [mod('WithReadme')];
-      const index = await buildFileConflictIndex(readmeEntries, root, () => {});
-      const logs: string[] = [];
+      await writeMod(root, 'Garbage', { 'Garbage.esp': 'TES4 masters: NoSuchMaster.esm' });
+      const garbageEntries: ModlistEntry[] = [mod('Garbage')];
+      const index = await buildFileConflictIndex(garbageEntries, root, () => {});
 
-      const result = await computeModStatuses(readmeEntries, root, index, new Set(), (m) => logs.push(m));
+      const result = await computeModStatuses(garbageEntries, root, index);
 
-      expect(result.get('WithReadme')?.status).toEqual({ kind: 'ok' });
-      expect(logs.some((l) => l.includes('Readme.txt'))).toBe(false);
+      expect(result.get('Garbage')?.status).toEqual({ kind: 'ok' });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -184,7 +111,7 @@ describe('computeModStatuses — non-ENOENT stat failures propagate', () => {
   it('rejects rather than degrading to missingMod on a non-ENOENT stat error', async () => {
     const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-eacces-'));
     try {
-      await writeMod(root, 'Restricted', { 'Restricted.esp': buildTes4Buffer([]) });
+      await writeMod(root, 'Restricted', { 'Restricted.esp': 'plugin bytes' });
       const restrictedEntries: ModlistEntry[] = [mod('Restricted')];
       const index = await buildFileConflictIndex(restrictedEntries, root, () => {});
 
@@ -199,7 +126,7 @@ describe('computeModStatuses — non-ENOENT stat failures propagate', () => {
 
       try {
         await expect(
-          computeModStatuses(restrictedEntries, root, index, new Set(), () => {}),
+          computeModStatuses(restrictedEntries, root, index),
         ).rejects.toThrow(/EACCES|permission denied/);
       } finally {
         vi.mocked(stat).mockImplementation(actualStat);
@@ -219,154 +146,11 @@ describe('computeModStatuses — case-insensitive conflicts', () => {
 
   it('reports a badge conflict for case-variant paths from two mods, winner-by-priority', async () => {
     const index = await buildFileConflictIndex(entries, caseFixture, () => {});
-    const statuses = await computeModStatuses(entries, caseFixture, index, new Set(), () => {});
+    const statuses = await computeModStatuses(entries, caseFixture, index);
 
     expect(statuses.get('ModA')?.status).toEqual({ kind: 'overrides', count: 1 });
     const modB = statuses.get('ModB');
     expect(modB?.status).toEqual({ kind: 'conflicts', count: 1 });
     expect(modB?.conflictLines.join('\n')).toContain('ModA');
-  });
-});
-
-describe('checkMasterOrder', () => {
-  // order: the raw plugins.txt line order (index 0 = loads first).
-  const order = ['Fallout4.esm', 'Base.esp', 'Child.esp', 'Late.esp'];
-
-  it('is ok when a declared master is present and before this plugin', () => {
-    // Child.esp (index 2) depends on Base.esp (index 1) — loaded earlier.
-    expect(checkMasterOrder(['Base.esp'], order, 2)).toEqual({ kind: 'ok' });
-  });
-
-  it('flags a master present but positioned after this plugin', () => {
-    // Base.esp (index 1) depends on Late.esp (index 3) — loaded too late.
-    expect(checkMasterOrder(['Late.esp'], order, 1)).toEqual({
-      kind: 'masterNotLoadedBefore',
-      masters: ['Late.esp'],
-    });
-  });
-
-  it('flags a master absent from the plugin order entirely', () => {
-    expect(checkMasterOrder(['Missing.esm'], order, 2)).toEqual({
-      kind: 'masterNotLoadedBefore',
-      masters: ['Missing.esm'],
-    });
-  });
-
-  it('is ok for a vanilla master present and before, with no special-casing', () => {
-    // Base.esp (index 1) depends on Fallout4.esm (index 0) — an ordinary earlier row.
-    expect(checkMasterOrder(['Fallout4.esm'], order, 1)).toEqual({ kind: 'ok' });
-  });
-
-  it('matches master names case-insensitively', () => {
-    expect(checkMasterOrder(['base.ESP'], order, 2)).toEqual({ kind: 'ok' });
-  });
-
-  it('reports every offending master, keeping the ok ones out', () => {
-    // Child.esp (index 2): Base.esp is fine; Late.esp is after; Missing.esm is absent.
-    expect(checkMasterOrder(['Base.esp', 'Late.esp', 'Missing.esm'], order, 2)).toEqual({
-      kind: 'masterNotLoadedBefore',
-      masters: ['Late.esp', 'Missing.esm'],
-    });
-  });
-
-  it('flags a master positioned at exactly this plugin\'s own index — the documented "at" boundary', () => {
-    // A plugin declaring itself as its own master is malformed data no real editor writes, but
-    // it is the "at" boundary of this utility's contract.
-    expect(checkMasterOrder(['Self.esp'], ['Self.esp', 'Other.esp'], 0)).toEqual({
-      kind: 'masterNotLoadedBefore',
-      masters: ['Self.esp'],
-    });
-  });
-});
-
-describe('computePluginOrderStatuses', () => {
-  let root: string;
-  let dataFolder: string;
-
-  // A synthetic instance: two mods (Provider ships Base.esp; Consumer ships
-  // Child.esp which masters Base.esp) plus a vanilla plugin in the game's Data
-  // folder that Base.esp masters. plugins.txt order is set per-test.
-  const entries: ModlistEntry[] = [mod('Provider'), mod('Consumer')];
-
-  beforeAll(async () => {
-    root = await mkdtemp(join(tmpdir(), 'medit-pluginorder-'));
-    dataFolder = join(root, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
-    // A vanilla-only plugin that itself declares a master: proof that vanilla-row masters are
-    // read through dataFolder.
-    await writeFile(join(dataFolder, 'DLCRobot.esm'), buildTes4Buffer(['Fallout4.esm']));
-    await writeMod(root, 'Provider', { 'Base.esp': buildTes4Buffer(['Fallout4.esm']) });
-    await writeMod(root, 'Consumer', { 'Child.esp': buildTes4Buffer(['Base.esp']) });
-  });
-
-  afterAll(async () => {
-    await rm(root, { recursive: true, force: true });
-  });
-
-  async function statuses(order: string[], df: string | undefined = dataFolder) {
-    const index = await buildFileConflictIndex(entries, root, () => {});
-    return computePluginOrderStatuses(order, rootLevelWinners(index), df, () => {});
-  }
-
-  it('has no entry for a plugin whose masters are all present and before it', async () => {
-    // Fallout4.esm < Base.esp < Child.esp — every master loads first.
-    const result = await statuses(['Fallout4.esm', 'Base.esp', 'Child.esp']);
-    expect(result.get('Child.esp')).toBeUndefined();
-    expect(result.get('Base.esp')).toBeUndefined();
-  });
-
-  it('flags a mod-provided master sequenced after its dependant', async () => {
-    // Child.esp before Base.esp — its master loads too late.
-    const result = await statuses(['Fallout4.esm', 'Child.esp', 'Base.esp']);
-    expect(result.get('Child.esp')).toEqual({ kind: 'masterNotLoadedBefore', masters: ['Base.esp'] });
-  });
-
-  it('flags a vanilla-folder master (resolved via dataFolder) sequenced after its dependant', async () => {
-    // Base.esp before Fallout4.esm — the vanilla master loads too late.
-    const result = await statuses(['Base.esp', 'Fallout4.esm', 'Child.esp']);
-    expect(result.get('Base.esp')).toEqual({ kind: 'masterNotLoadedBefore', masters: ['Fallout4.esm'] });
-  });
-
-  it("reads a vanilla row's own masters via dataFolder and flags an out-of-order one", async () => {
-    // DLCRobot.esm (vanilla-only, in Data/) masters Fallout4.esm; placed before it.
-    const result = await statuses(['DLCRobot.esm', 'Fallout4.esm']);
-    expect(result.get('DLCRobot.esm')).toEqual({ kind: 'masterNotLoadedBefore', masters: ['Fallout4.esm'] });
-  });
-
-  it('still checks mod-provided masters when dataFolder is unresolved, degrading only vanilla-row lookups', async () => {
-    const logs: string[] = [];
-    const index = await buildFileConflictIndex(entries, root, () => {});
-    // Child before Base still flags (mod-provided path known). DLCRobot.esm is
-    // vanilla-only, so with no dataFolder its own file can't be read → degrades
-    // to no masters → ok, and a skip is logged.
-    const result = await computePluginOrderStatuses(
-      ['Child.esp', 'Base.esp', 'DLCRobot.esm', 'Fallout4.esm'],
-      rootLevelWinners(index),
-      undefined,
-      (m) => logs.push(m),
-    );
-    expect(result.get('Child.esp')).toEqual({ kind: 'masterNotLoadedBefore', masters: ['Base.esp'] });
-    expect(result.get('DLCRobot.esm')).toBeUndefined();
-    expect(logs.some((l) => l.includes('DLCRobot.esm'))).toBe(true);
-  });
-
-  it('does not throw or blank other plugins when one plugin fails to parse', async () => {
-    const corruptRoot = await mkdtemp(join(tmpdir(), 'medit-pluginorder-corrupt-'));
-    try {
-      const corruptData = join(corruptRoot, 'Game', 'Data');
-      await mkdir(corruptData, { recursive: true });
-      await writeMod(corruptRoot, 'Bad', { 'Corrupt.esp': 'not a TES4 plugin' });
-      await writeMod(corruptRoot, 'Good', { 'Good.esp': buildTes4Buffer(['Missing.esm']) });
-      const logs: string[] = [];
-      const index = await buildFileConflictIndex([mod('Bad'), mod('Good')], corruptRoot, () => {});
-      const result = await computePluginOrderStatuses(['Corrupt.esp', 'Good.esp'], rootLevelWinners(index), corruptData, (m) => logs.push(m));
-
-      expect(result.get('Corrupt.esp')).toBeUndefined(); // unreadable → treated as no masters
-      expect(result.get('Good.esp')).toEqual({ kind: 'masterNotLoadedBefore', masters: ['Missing.esm'] });
-      expect(logs.some((l) => l.includes('Corrupt.esp'))).toBe(true);
-    } finally {
-      await rm(corruptRoot, { recursive: true, force: true });
-    }
   });
 });

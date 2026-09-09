@@ -89,7 +89,7 @@ async function wiredInstance(): Promise<{
 
   const reconciles: Promise<PluginsReconcileResult>[] = [];
   registerPluginsReconcile(instance, (profile, dataFolder) => {
-    const run = reconcilePlugins(root, profile, dataFolder, () => {});
+    const run = reconcilePlugins(root, profile, dataFolder, () => Promise.resolve([]), () => {});
     reconciles.push(run);
     return run;
   });

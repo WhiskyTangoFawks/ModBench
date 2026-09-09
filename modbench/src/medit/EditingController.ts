@@ -299,6 +299,24 @@ export class EditingController {
     return plugins.find((p) => p.name === pluginName && p.inLoadOrder)?.origin;
   }
 
+  /** The plugins this install loads with no plugins.txt line — implicit masters and the Creation
+   *  Club catalog — in load order. `undefined` on any failure: "unknown" and "none" are different
+   *  answers, and Mod Management's reconcile treats them differently. */
+  async implicitMasters(gameDirectory: string, gameRelease = 'Fallout4'): Promise<string[] | undefined> {
+    let result;
+    try {
+      result = await this.deps.client.GET('/implicit-masters', { params: { query: { gameDirectory, gameRelease } } });
+    } catch (e) {
+      this.log(`[EditingController] implicitMasters failed: ${e instanceof Error ? e.message : String(e)}`);
+      return undefined;
+    }
+    if (!result.response.ok || result.data === undefined) {
+      this.log(`[EditingController] implicitMasters failed (${result.response.status}): ${errorText(result.error)}`);
+      return undefined;
+    }
+    return result.data;
+  }
+
   /** The Track gesture (ADR-0041): every loaded plugin sharing `origin` is tracked together,
    *  resolved backend-side. Nothing is refreshed on failure — a 409 means it was already
    *  tracked. */

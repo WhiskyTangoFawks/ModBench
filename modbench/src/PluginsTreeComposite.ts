@@ -21,9 +21,6 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
   /** The filename a row stands for, or undefined for a row that stands for no plugin file at all
    *  (an error or empty-state row). The composite's only knowledge of either side's node shapes. */
   pluginFileOf(row: TRow): string | undefined;
-  /** ADR-0037: the master names this row's own order-aware badge flagged. Optional, so a row with
-   *  a backend master issue and no wired accessor gets the backend's own wording, unreconciled. */
-  orderIssueMastersOf?(row: TRow): string[] | undefined;
   /** ADR-0035 §Filters: whether this plugin owns a record the active record filter matches. Only
    *  ever `false` while a filter is active, so `getChildren()` reads it alone to omit the row — a
    *  visible-but-inert row is still noise. */
@@ -141,7 +138,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     }
     const issues = facts?.masterIssues ?? [];
     if (issues.length > 0) {
-      this.applyMasterIssueDecoration(item, row, issues);
+      this.applyMasterIssueDecoration(item, issues);
       return;
     }
     if (facts?.parseFailure === true) {
@@ -181,15 +178,11 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
   }
 
-  // One decoration, not two that can disagree: a master the backend also flags is reported once,
-  // in its richer load-order-aware wording; an order-only one is preserved, worded distinctly.
-  private applyMasterIssueDecoration(item: vscode.TreeItem, row: TRow, issues: MasterIssue[]): void {
-    const backendCovered = new Set(issues.map((i) => i.masterName.toLowerCase()));
-    const orderOnly = (this.deps.orderIssueMastersOf?.(row) ?? []).filter((m) => !backendCovered.has(m.toLowerCase()));
-    const lines = [
-      ...issues.map((i) => i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`),
-      ...orderOnly.map((m) => `Master ${m} is not loaded before this plugin`),
-    ];
+  // The backend's own wording, which is the only master verdict there is: nothing here reads a
+  // plugin's declared masters (ADR-0021).
+  private applyMasterIssueDecoration(item: vscode.TreeItem, issues: MasterIssue[]): void {
+    const lines = issues.map((i) =>
+      i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`);
     item.iconPath = failurePrefixIcon();
     item.description = lines.length === 1 ? '✗ Master issue' : `✗ ${lines.length} master issues`;
     const note = lines.join('\n');

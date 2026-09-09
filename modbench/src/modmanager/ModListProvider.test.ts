@@ -823,9 +823,9 @@ describe('ModListProvider', () => {
       expect(modA.tooltip).toContain('nonexistent/path.dds');
     });
 
-    it('carries a missing-master status through unchanged', async () => {
+    it('carries a missing-mod status through unchanged', async () => {
       const statuses = new Map<string, ModStatusResult>([
-        ['ModA', { status: { kind: 'missingMaster', masters: ['Fallout4.esm'] }, conflictLines: [] }],
+        ['ModA', { status: { kind: 'missingMod' }, conflictLines: [] }],
       ]);
       const provider = makeProvider([mod('ModA')], {
         instance: new FakeInstance(valueOf([mod('ModA')], { modStatuses: statuses })),
@@ -834,7 +834,7 @@ describe('ModListProvider', () => {
       const modA = roots.find((n): n is ModNode => n instanceof ModNode)!;
 
       expect(modA.iconPath).toEqual({ id: 'error' });
-      expect(modA.tooltip).toContain('Missing master: Fallout4.esm');
+      expect(modA.tooltip).toContain('Missing mod');
     });
   });
 

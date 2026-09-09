@@ -38,7 +38,7 @@ describe('plugins.txt + profile corpus', () => {
 
   it('reconcilePlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await reconcilePlugins(dir, PROFILE, undefined, () => {});
+    const result = await reconcilePlugins(dir, PROFILE, undefined, () => Promise.resolve([]), () => {});
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

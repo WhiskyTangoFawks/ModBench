@@ -3,14 +3,14 @@ import { join } from 'node:path';
 import type { PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
-import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
-import { discoverImplicitMasters } from './vanillaMasters';
+import type { ImplicitMasterSource } from './commands/plugins';
 import type { Instance, InstanceValue } from './instance';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
-// Hoisted out of the constructor so an omitted `dataFolder` is not a fresh closure per instance.
+// Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
+const NO_IMPLICIT_MASTERS: ImplicitMasterSource = () => Promise.resolve([]);
 
 /** The two plugins.txt gestures the tree owns, bound to the instance root and the active
  *  profile by the composition root; a refused command reaches this provider as a rejection. */
@@ -29,6 +29,9 @@ export interface PluginListProviderOptions {
   log?: (msg: string) => void;
   reporter?: Reporter;
   dataFolder?: () => Promise<string | undefined>;
+  /** The rows the game forces on, which only the backend can name (ADR-0021). `undefined` — it
+   *  could not be reached — renders no implicit row rather than a guessed one. */
+  implicitMasters?: ImplicitMasterSource;
 }
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
@@ -36,10 +39,7 @@ export interface PluginListProviderOptions {
  *  (ADR-0044), not displayed. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
-  constructor(
-    public readonly plugin: PluginEntry,
-    public readonly orderStatus?: PluginOrderStatus,
-  ) {
+  constructor(public readonly plugin: PluginEntry) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
     // xEdit parity: selecting a plugin node shows its File Header, with no separate affordance.
@@ -49,23 +49,7 @@ export class PluginNode extends vscode.TreeItem {
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
-    if (orderStatus?.kind === 'masterNotLoadedBefore') {
-      const { masters } = orderStatus;
-      this.iconPath = new vscode.ThemeIcon('error');
-      this.description = masters.length === 1
-        ? '✗ Master not loaded before this plugin'
-        : `✗ ${masters.length} masters not loaded before this plugin`;
-      this.tooltip = [plugin.name, ...masters.map((m) => `Master ${m} is not loaded before this plugin`)].join('\n');
-    }
   }
-}
-
-/** Structured access to what the row otherwise bakes into icon, description and tooltip text,
- *  so a caller can dedupe by master name without parsing that text (ADR-0037). */
-export function orderIssueMastersOf(node: PluginListNode): string[] | undefined {
-  return node.kind === 'plugin' && node.orderStatus?.kind === 'masterNotLoadedBefore'
-    ? node.orderStatus.masters
-    : undefined;
 }
 
 /** MO2's checked-but-disabled checkbox is not reproducible: `TreeItemCheckboxState` has no
@@ -134,6 +118,7 @@ export class PluginListProvider
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly dataFolder: () => Promise<string | undefined>;
+  private readonly implicitMasters: ImplicitMasterSource;
   private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
@@ -155,6 +140,7 @@ export class PluginListProvider
     this.log = options.log ?? (() => {});
     this.reporter = options.reporter;
     this.dataFolder = options.dataFolder ?? NO_DATA_FOLDER;
+    this.implicitMasters = options.implicitMasters ?? NO_IMPLICIT_MASTERS;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
     this.firstValue = options.instance.sequence > 0
@@ -235,7 +221,9 @@ export class PluginListProvider
     | { kind: 'ok'; cache: { rows: PluginListNode[] } }
   > {
     const dataFolder = await this.dataFolder();
-    const implicitNames = await discoverImplicitMasters(dataFolder, this.log);
+    // An unreachable backend renders no implicit row: a plugins.txt line for one of them then
+    // renders as an ordinary row, which is what the file says, rather than a guessed lock.
+    const implicitNames = (await this.implicitMasters()) ?? [];
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
 
     // One entry per plugins.txt line: the winning copy of every listed name, in file order
@@ -245,27 +233,15 @@ export class PluginListProvider
       .sort((a, b) => a.slot! - b.slot!);
     this.lastOrder = listed.map((p) => p.name);
 
-    // A name in both sets renders once, as the implicit row. `fullOrder` is display and badge
-    // order only: `this.lastOrder` stays plugins.txt's raw order, which is what write positions
-    // are computed against.
+    // A name in both sets renders once, as the implicit row. Display order only:
+    // `this.lastOrder` stays plugins.txt's raw order, which write positions are computed against.
     const dedupedOrder = listed.filter((p) => !implicitLower.has(p.name.toLowerCase()));
-    const fullOrder = [...implicitNames, ...dedupedOrder.map((p) => p.name)];
-    if (fullOrder.length === 0) return { kind: 'empty' };
+    if (implicitNames.length + dedupedOrder.length === 0) return { kind: 'empty' };
 
-    // Every physical plugin copy's own winning path — the badge pass's only way to open a
-    // plugin's own file and read its declared masters. A line-only row has none to offer.
-    const winnerByName = new Map(
-      this.instanceValue.plugins
-        .filter((p): p is typeof p & { path: string } => p.winning && p.path !== undefined)
-        .map((p) => [p.name.toLowerCase(), p.path] as const),
-    );
-    // Badges are computed against the full order (never the filtered subset) so a
-    // filtered-out master still counts toward a visible row's order-aware verdict.
-    const statuses = await this.computeOrderStatuses(fullOrder, winnerByName, dataFolder);
-    this.lastImplicitNames = new Set(implicitNames.map((n) => n.toLowerCase()));
+    this.lastImplicitNames = implicitLower;
     const rows: PluginListNode[] = [
       ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
-      ...dedupedOrder.map((p) => new PluginNode({ name: p.name, enabled: p.enabled }, statuses?.get(p.name))),
+      ...dedupedOrder.map((p) => new PluginNode({ name: p.name, enabled: p.enabled })),
     ];
     return { kind: 'ok', cache: { rows } };
   }
@@ -276,21 +252,6 @@ export class PluginListProvider
   }
 
   private lastImplicitNames: ReadonlySet<string> = new Set();
-
-  // A secondary, non-blocking step: on failure the tree still renders every plugins.txt line,
-  // without badges. The loss is reported because a missing badge looks like "nothing to flag".
-  private async computeOrderStatuses(
-    order: string[], winnerByName: Map<string, string>, dataFolder: string | undefined,
-  ): Promise<Map<string, PluginOrderStatus> | undefined> {
-    try {
-      return await computePluginOrderStatuses(order, winnerByName, dataFolder, this.log);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[PluginListProvider] master-order status computation failed: ${message}`);
-      this.reporter?.report('warning', 'Could not compute plugin master-order status — badges may be inaccurate.', message);
-      return undefined;
-    }
-  }
 
   /** VS Code passes the whole selection when the grabbed row is part of it, so `source` is the
    *  full block to move. Non-plugin rows cannot move. */

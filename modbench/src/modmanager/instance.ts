@@ -23,7 +23,6 @@ import { resolveGameDirectory, type ConfigLike, type DetectPaths, type DetectWin
 import type { OnConfigChange } from './gameDirectoryResolver';
 import { isDeployed } from './deployer';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
-import { readVanillaMasters } from './vanillaMasters';
 import { countOverwriteFiles } from './overwriteFolder';
 
 // A change here must recompute exactly as a file event does — the Instance's own replacement
@@ -57,8 +56,8 @@ export interface InstanceValue {
   readonly gameDirectory: GameDirectory | undefined;
   /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
   readonly deployed: boolean;
-  /** Each mod's conflict/override/missing-master/missing-mod status, keyed by mod name — the
-   *  Mods tree's badges (ADR-0047). */
+  /** Each mod's conflict/override/missing-mod status, keyed by mod name — the Mods tree's
+   *  badges (ADR-0047). */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */
   readonly overwriteFileCount: number;
@@ -253,7 +252,7 @@ export class Instance implements vscode.Disposable {
     // between it and activeProfile/gameRelease below cannot land two generations in one value.
     const gameDirectory = await resolveGameDirectory(
       instanceRoot, config(), detectPaths, detectWinePrefix, () => Promise.resolve(iniText));
-    // Both derive from the same index and gameDirectory generation, so they run concurrently.
+    // Both derive from the same index generation, so they run concurrently.
     const [plugins, modStatuses] = await Promise.all([
       // An unresolved game directory loses only the Data-folder copies' paths: every
       // plugins.txt line still gets a row, existence/slot/enabled coming from the line
@@ -270,11 +269,7 @@ export class Instance implements vscode.Disposable {
         gameDirectory?.dataFolder,
         () => Promise.resolve(index),
       ),
-      // An unresolved game directory degrades to an empty vanilla-master set rather than
-      // failing the badge — same fallback readVanillaMasters/computeModStatuses already had
-      // as the Mods tree's own read, moved here unchanged (ADR-0047).
-      readVanillaMasters(gameDirectory?.dataFolder, log).then(
-        (vanillaMasters) => computeModStatuses(entries, instanceRoot, index, vanillaMasters, log)),
+      computeModStatuses(entries, instanceRoot, index),
     ]);
     return {
       mods: entries,

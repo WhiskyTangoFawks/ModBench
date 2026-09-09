@@ -174,4 +174,39 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         Assert.IsAssignableFrom<NoContent>(result);
     }
+
+    // No load order is held here on purpose: Mod Management asks this while reconciling the
+    // plugins.txt a PUT is built from, so it must answer from the game directory alone.
+    [Fact]
+    public void GetImplicitMasters_AnswersTheForcedNames_WithNoLoadOrderHeld()
+    {
+        using var data = new PluginFixtureBuilder("implicit-masters-api")
+            .WithPlugin("Fallout4.esm", listed: false)
+            .WithPlugin("UserMod.esp")
+            .Build();
+
+        var result = LoadOrderEndpoints.GetImplicitMasters(data.DataFolder, "Fallout4");
+
+        var ok = Assert.IsAssignableFrom<Ok<IReadOnlyList<string>>>(result);
+        Assert.Equal(["Fallout4.esm"], ok.Value);
+    }
+
+    [Fact]
+    public void GetImplicitMasters_Answers400_ForAnAbsentGameDirectory()
+    {
+        var result = LoadOrderEndpoints.GetImplicitMasters(
+            Path.Combine(Path.GetTempPath(), $"no-such-data-{Guid.NewGuid():N}"), "Fallout4");
+
+        Assert.Equal(400, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
+    }
+
+    [Fact]
+    public void GetImplicitMasters_Answers400_ForAnUnknownGameRelease()
+    {
+        using var data = new PluginFixtureBuilder("implicit-masters-release").WithPlugin("A.esp").Build();
+
+        var result = LoadOrderEndpoints.GetImplicitMasters(data.DataFolder, "Morrowind");
+
+        Assert.Equal(400, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
+    }
 }

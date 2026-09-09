@@ -34,7 +34,6 @@ function statusIconId(status?: ModStatusResult): string {
     case 'conflicts':
     case 'overrides':
       return 'warning';
-    case 'missingMaster':
     case 'missingMod':
       return 'error';
     default:
@@ -46,7 +45,6 @@ function statusLabel(status: ModStatus): string {
   switch (status.kind) {
     case 'conflicts': return `⚠ ${status.count} conflicts`;
     case 'overrides': return `⚠ Overrides ${status.count}`;
-    case 'missingMaster': return `✗ Missing master: ${status.masters.join(', ')}`;
     case 'missingMod': return '✗ Missing mod';
     case 'ok': return '';
   }

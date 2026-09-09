@@ -141,6 +141,45 @@ public sealed class HeldPluginsTests
         Assert.Equal(new Registration(null, Enabled: true, Winning: false), b.Registration);
     }
 
+    // ── ForcedNames ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void ForcedNames_AreTheImplicitMastersOnDisk_ThenTheCreationClubCatalog()
+    {
+        using var data = new PluginFixtureBuilder("forced-names")
+            .WithPlugin("Fallout4.esm", listed: false)
+            .WithPlugin("ccTest.esl", listed: false)
+            .WithPlugin(UserPlugin)
+            .WithCreationClubCatalog("ccTest.esl")
+            .Build();
+
+        var names = HeldPlugins.ForcedNames(data.DataFolder, GameRelease.Fallout4);
+
+        Assert.Equal(["Fallout4.esm", "ccTest.esl"], names);
+    }
+
+    // A plugin sitting in Data is not thereby forced: only the release's implicit list and the
+    // Creation Club catalog put a name here, so a mod-deployed file still needs its line.
+    [Fact]
+    public void ForcedNames_OmitAPluginNeitherSourceClaims()
+    {
+        using var data = new PluginFixtureBuilder("forced-names-unclaimed")
+            .WithPlugin(UserPlugin, listed: false)
+            .Build();
+
+        Assert.DoesNotContain(UserPlugin, HeldPlugins.ForcedNames(data.DataFolder, GameRelease.Fallout4));
+    }
+
+    [Fact]
+    public void ForcedNames_OmitAnImplicitMasterMissingFromDisk()
+    {
+        using var data = new PluginFixtureBuilder("forced-names-missing")
+            .WithPlugin("Fallout4.esm", listed: false)
+            .Build();
+
+        Assert.Equal(["Fallout4.esm"], HeldPlugins.ForcedNames(data.DataFolder, GameRelease.Fallout4));
+    }
+
     // ── Open ────────────────────────────────────────────────────────────────────
 
     [Fact]
