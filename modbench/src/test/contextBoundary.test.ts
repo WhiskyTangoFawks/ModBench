@@ -32,10 +32,18 @@ const EDITING_DIR = 'medit';
 const PLUGINS_VIEW_DIR = 'plugins';
 const GENERATED_DIR = 'generated';
 
-// The composition root wires every context together (CONTEXT.md calls the Toolbox also the
-// extension's composition root); none of these four is itself a Mods, Downloads, Toolbox or
-// Instance surface.
-const COMPOSITION_ROOT = ['toolbox.ts', 'extension.ts', 'session.ts', 'workspaceConfig.ts'];
+// Wires every context together (CONTEXT.md calls the Toolbox also the extension's composition root).
+const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'extension.ts'];
+
+// Activation-scoped shared state: holds type-only handles into both contexts so other
+// composition-root code can read them, but does not itself wire anything together.
+const SHARED_ACTIVATION_STATE = ['session.ts'];
+
+// Imports a non-FormKey utility (game-path autodetection) that happens to live under medit/,
+// tripping the blunt medit-path check as a false positive.
+const MEDIT_PATH_FALSE_POSITIVE = ['workspaceConfig.ts'];
+
+const COMPOSITION_ROOT = [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE];
 
 // Test names, descriptions and fixtures are prose and corpus data, never a decision.
 function isTestSupport(relativePath: string): boolean {
@@ -48,7 +56,7 @@ function isExcluded(relativePath: string): boolean {
   if (segments.includes(GENERATED_DIR)) return true; // mirrors the backend's schema, not a decision
   if (segments[0] === PLUGINS_VIEW_DIR) return true; // a record browser by design
   if (segments[0] === EDITING_DIR) return true; // Editing's own context, not the MO2 side this rule binds
-  if (COMPOSITION_ROOT.includes(relativePath)) return true; // composition root, wires every context
+  if (COMPOSITION_ROOT.includes(relativePath)) return true; // each entry's own reason is stated above
   if (isTestSupport(relativePath)) return true; // prose and corpus, not a decision
   return false;
 }
@@ -103,7 +111,7 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(EDITING_DIR, GENERATED_DIR, 'api.ts'))).toBe(true);
   });
 
-  it('the allowlist beyond the Plugins view and the generated client is exactly the composition root', () => {
+  it('the composition-root allowlist is exactly these four files', () => {
     expect(COMPOSITION_ROOT.sort()).toEqual(['extension.ts', 'session.ts', 'toolbox.ts', 'workspaceConfig.ts']);
   });
 
