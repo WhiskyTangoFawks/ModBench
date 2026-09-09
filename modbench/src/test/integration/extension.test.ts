@@ -1307,6 +1307,62 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
   });
 });
 
+// ADR-0035 §Filters: a live record filter is a fact about a live backend, so a crash must
+// forget it too — proving `clearTreeWhenBackendDies`'s own `backendManager.on('status', …)`
+// registration actually fires, not just its extracted logic in isolation.
+describe('a backend that goes unhealthy outside exitEditing forgets an active record filter', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+  const backendManagerOf = () =>
+    (ext?.exports as { backendManager?: { stop(): Promise<void> } } | undefined)?.backendManager;
+  let gameDir = '';
+
+  before(() => {
+    if (!root) return;
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-backend-death-filter-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
+  });
+
+  after(() => {
+    if (!root) return;
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  beforeEach(async () => {
+    if (!root) return;
+    resetMockBackend();
+    mockPluginsOverride = MOCK_PLUGINS.map((p) => (p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p));
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+    await enterEditing();
+    const tree = pluginsTree()!;
+    await waitFor('the activation reconcile to filter TestMod.esp out',
+      async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? undefined : true));
+  });
+
+  afterEach(async () => {
+    if (!root) return;
+    exitEditing();
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    resetMockBackend();
+  });
+
+  it('a backend that goes unhealthy outside exitEditing restores the row a record filter hid', async () => {
+    const tree = pluginsTree()!;
+
+    await backendManagerOf()?.stop();
+
+    const restored = await waitFor('clearTreeWhenBackendDies to restore the filtered-out row',
+      async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? true : undefined));
+    assert.strictEqual(restored, true);
+  });
+});
+
 // The record filter is a fact about the load order, so it cannot outlive one — a readout
 // describing a load order that is gone. The name filter survives a close: its rows remain.
 describe('The record-filter readout does not outlive its load order', () => {

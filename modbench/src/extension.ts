@@ -190,14 +190,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   wireAutoLaunch(session, context, outputChannel, toolbox.enterEditing);
 
-  // Exposed for integration tests — unused in production. `instance`: lets a test await past a
+  // Exposed for integration tests — unused in production. `backendManager`: a test drives an
+  // unhealthy transition directly, outside exitEditing. `instance`: lets a test await past a
   // sequence instead of sleeping.
   return {
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
     pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session),
-    instance: toolbox.instance,
+    backendManager: session.backendManager, instance: toolbox.instance,
   };
 }
 
