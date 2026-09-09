@@ -256,7 +256,7 @@ public sealed class IndexProjectorTests
         var notifications = new InMemoryNotificationPublisher();
         using var fixture = IndexedModFixture.Tracked(notifications);
         var index = (IndexProjector)fixture.Index;
-        using var watcher = new SourceChangeWatcher();
+        using var watcher = new ModFolderWatcher();
         var sourceChanges = new SourceChangeApplier(fixture.Index, index.WriteGate, watcher, notifications, NullLogger.Instance);
 
         var otherNpcSource = fixture.SourceFileFor(

@@ -33,7 +33,7 @@ public sealed class CascadeRollbackFixture : IDisposable
     private const string SecondMod = "SecondMod";
 
     private readonly ScatteredFixtureData _data;
-    private readonly SourceChangeWatcher? _watcher;
+    private readonly ModFolderWatcher? _watcher;
 
     /// <summary>Null unless <see cref="Watched"/> built one: the write side reads the load order
     /// value, and only the projection question needs an Index.</summary>
@@ -118,7 +118,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         // Short, because a test waits on the projection rather than on the clock; the composition
         // root's own window is 300 ms.
-        _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
+        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         var sourceChanges = new SourceChangeApplier(Index, Index.WriteGate, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
         Index.LoadOrderChanged = sourceChanges.RefreshWatches;

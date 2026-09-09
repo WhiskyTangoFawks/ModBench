@@ -34,7 +34,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         externalMod.Npcs.AddNew("UntouchedNpc");
         externalMod.WriteToBinary(pluginPath);
 
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
         ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index, watcher, NullLogger.Instance);
 
         var unanswered = Assert.Single(watcher.Unanswered());
@@ -45,7 +45,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     [Fact]
     public void RunAfterReconcile_QueuesNothing_WhenTheBinaryNeverChanged()
     {
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
 
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index, watcher, NullLogger.Instance);
 
@@ -63,7 +63,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder)); // sanity: the marker really is there.
 
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index, watcher, NullLogger.Instance);
 
         var offer = Assert.Single(offers);
@@ -82,7 +82,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         File.Delete(pluginPath);
 
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index, watcher, NullLogger.Instance);
 
         var offer = Assert.Single(offers);
@@ -100,7 +100,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         using var untracked = IndexedModFixture.Untracked();
         File.Delete(Path.Combine(untracked.ModFolder, IndexedModFixture.PluginName));
 
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(untracked.Index, watcher, NullLogger.Instance);
 
         Assert.Empty(offers);
@@ -111,7 +111,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     public void RunAfterReconcile_RegistersALiveWatch_SoFurtherChangesAreCaughtWithoutAnotherLoad()
     {
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
-        var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
+        var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
 
         ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index, watcher, NullLogger.Instance);
         Assert.Empty(watcher.Unanswered());

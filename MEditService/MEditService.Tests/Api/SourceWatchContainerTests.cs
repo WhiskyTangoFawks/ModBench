@@ -19,12 +19,12 @@ public sealed class SourceWatchContainerTests : IDisposable
 {
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly IndexedContainerFixture _fixture;
-    private readonly SourceChangeWatcher _watcher;
+    private readonly ModFolderWatcher _watcher;
 
     public SourceWatchContainerTests()
     {
         _fixture = new IndexedContainerFixture(_notifications);
-        _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
+        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         var sourceChanges = new SourceChangeApplier(_fixture.Index, _fixture.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
         _fixture.Index.LoadOrderChanged = sourceChanges.RefreshWatches;

@@ -43,8 +43,8 @@ public sealed class AbsorbRebaseTests : IDisposable
         mod.WriteToBinary(System.IO.Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName));
     }
 
-    private static (ILoggerFactory factory, ExternalChangeWatcher watcher) Backend() =>
-        (LoggerFactory.Create(_ => { }), new ExternalChangeWatcher());
+    private static (ILoggerFactory factory, ModFolderWatcher watcher) Backend() =>
+        (LoggerFactory.Create(_ => { }), new ModFolderWatcher());
 
     private Ok<ExternalChangeActionResponse> Absorb()
     {

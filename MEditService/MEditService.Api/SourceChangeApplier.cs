@@ -10,7 +10,7 @@ namespace MEditService.Api;
 /// The gate arrives separately from the Index because a batch is one write across several of the
 /// Index's own gated doors.</summary>
 internal sealed class SourceChangeApplier(
-    IndexProjector index, IndexWriteGate writeGate, SourceChangeWatcher watcher,
+    IndexProjector index, IndexWriteGate writeGate, ModFolderWatcher watcher,
     INotificationPublisher notifications, ILogger logger)
 {
     /// <summary>The watch set the load order now implies: one watch per tracked copy, and none for a

@@ -38,7 +38,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var result = LoadOrderEndpoints.PutLoadOrder(
             SnapshotRequest(), new IndexProjector(new RefusingIndexFactory()), holder,
-            new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            new ModFolderWatcher(), NullLoggerFactory.Instance);
 
         Assert.Equal(500, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
         Assert.Equal(previous, holder.Current);
@@ -75,7 +75,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var index = new IndexProjector(factory);
         var holder = new LoadOrderHolder();
         var put = Task.Run(() => LoadOrderEndpoints.PutLoadOrder(
-            Request(data), index, holder, new ExternalChangeWatcher(), NullLoggerFactory.Instance));
+            Request(data), index, holder, new ModFolderWatcher(), NullLoggerFactory.Instance));
         await factory.WaitUntilParkedAsync();
 
         var create = Task.Run(() => PluginEndpoints.CreatePlugin(
@@ -102,7 +102,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
                 _ => throw new InvalidOperationException("simulated crash between source and binary write")));
 
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), new ModFolderWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         var offer = Assert.Single(ok.Value!.CrashRepairOffers);
@@ -115,7 +115,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     public void PutLoadOrder_ReportsNoCrashRepairOffers_WhenNothingIsUnanswered()
     {
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), new ModFolderWatcher(), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         Assert.Empty(ok.Value!.CrashRepairOffers);
@@ -134,7 +134,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         using var thisWindow = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
 
-        var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new LoadOrderHolder(), new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+        var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new LoadOrderHolder(), new ModFolderWatcher(), NullLoggerFactory.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(423, problem.StatusCode);

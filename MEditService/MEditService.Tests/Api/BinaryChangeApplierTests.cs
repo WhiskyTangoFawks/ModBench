@@ -25,9 +25,9 @@ public sealed class BinaryChangeApplierTests
         }
     }
 
-    private static ExternalChangeWatcher StartWatching(IndexedModFixture fixture, INotificationPublisher? notifications = null)
+    private static ModFolderWatcher StartWatching(IndexedModFixture fixture, INotificationPublisher? notifications = null)
     {
-        var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
+        var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         var index = new BinaryChangeApplier(fixture.Index, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
         watcher.IndexedBinaryChanged = index.Apply;
         ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
@@ -101,7 +101,7 @@ public sealed class BinaryChangeApplierTests
     {
         using var fixture = IndexedModFixture.Tracked();
         var reindexed = new List<IndexedBinaryEvent>();
-        using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
+        using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         watcher.IndexedBinaryChanged = e => { lock (reindexed) reindexed.Add(e); return true; };
         ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
 
@@ -120,7 +120,7 @@ public sealed class BinaryChangeApplierTests
     [Fact]
     public void RunAfterReconcile_WatchesNothing_WhenThereIsNoLoadOrder()
     {
-        using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
+        using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
 
         using var noLoadOrder = new IndexProjector(SharedSchemaReflector.Instance);
 

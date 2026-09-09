@@ -108,7 +108,7 @@ over two readers, so "the read model never sees a dialect" holds for the header 
 rather than by coincidence. **Landed since**: the header is now a genuine *source unit* too —
 `SourceRecordPath`/`SourceRepository.Locate` locate the root `RecordData.json` directly (its own path
 shape, one segment shallower than a flat record's own), so it projects like any other record and an
-external edit to that file is picked up the Source watcher's own way, through `RefreshByKeys`
+external edit to that file is picked up the mod watcher's own way, through `RefreshByKeys`
 (ADR-0046). `SourceIngest.ReconcileHead`
 carries the header's own branch for the same reason — it cannot reuse `ReconcileHeadStructurally`,
 which diffs through `EnumerateMajorRecords`, and a `ModHeader` is not in that enumeration.

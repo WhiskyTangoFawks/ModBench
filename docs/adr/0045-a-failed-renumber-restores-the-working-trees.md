@@ -77,7 +77,7 @@ something broken behind after we are done is not.** This ADR is about failure at
 6. **The index is re-derived, not rolled back.** It is a projection of the source trees, and
    unwinding rows would be a second implementation of what a re-derivation already computes, free to
    drift from it. Nothing here re-derives anything itself: the cascade writes files and returns
-   (ADR-0046 invariant 4), and the restored files reach the Index through the Source watcher exactly
+   (ADR-0046 invariant 4), and the restored files reach the Index through the mod watcher exactly
    as the written ones would have. A mid-cascade failure can therefore leave no index rows behind at
    all — the rows only ever follow the files.
 
