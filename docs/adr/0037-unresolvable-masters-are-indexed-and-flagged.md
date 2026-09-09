@@ -64,7 +64,7 @@ versus "Master `Foo.esp` cannot be loaded"), so a cascade does not read as many 
   unresolved — which is exactly the check that workflow needs.
 - **What it costs:** a plugin the game cannot load is browsable, so the tree must be unambiguous
   about which rows those are. The error decoration (a `✗ Failed to load` / `✗ Master issue` row
-  description and tooltip, `PluginsTreeComposite`) ships and discharges part of that obligation.
+  description and tooltip, `PluginsTreeProvider`) ships and discharges part of that obligation.
   **Dimming does not** — ADR-0035 lists it only as one of several still-open UX options for how a
   non-participating copy surfaces, never a decision — so this obligation is only partially
   discharged today, and this ADR is invalid without the rest of it being designed.

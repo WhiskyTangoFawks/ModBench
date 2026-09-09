@@ -1,14 +1,13 @@
 import * as vscode from 'vscode';
 import { EditingController, type LoadOrderProgress } from './medit/EditingController';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
-import { PluginTreeNode, PluginTreeProvider } from './plugins/PluginTreeProvider';
-import type { CrashRepairOffer, PluginDiagnosisReport } from './medit/ApiClient';
-import { publishLoadDiagnoses, groupDiagnosesByPlugin } from './medit/loadDiagnostics';
+import { PluginTreeProvider } from './plugins/PluginTreeProvider';
+import type { CrashRepairOffer } from './medit/ApiClient';
+import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider } from './modmanager/ModListProvider';
-import { PluginListProvider, pluginFileOf, type PluginListNode, type PluginListSource } from './modmanager/PluginListProvider';
-import { PluginsTreeComposite, type PluginFacts } from './PluginsTreeComposite';
+import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
 import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
@@ -32,40 +31,20 @@ import { meditConfig, makeDetectPaths, makeDetectWinePrefix, setMo2InstanceConte
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 
-// Which plugin files Editing's load order names — the backend's own list, not the snapshot we
-// sent, because the backend prepends implicit masters. Keyed by filename, reading the
-// `inLoadOrder` copy: two held copies can share one (ADR-0044).
-export interface HeldPluginFiles {
-  files: Set<string>;
-  readOnly: Set<string>;
-  /** What the composite decorates each row from, keyed by filename — see `PluginFacts`. */
-  facts: Map<string, PluginFacts>;
-  /** Lowercased filename → does this plugin own a record the *current* record filter matches.
-   *  Carried in this hand-off because every reconcile reaches it downstream of `syncFilterState()`,
-   *  so the map never outlives the filter state it describes. */
-  matches: Map<string, boolean>;
-  /** Which of those plugins are tracked — their mod folder holds a `.git` (ADR-0041). A `.git`
-   *  appearing or vanishing is itself a `mods/**` watcher event, which is what makes tracking
-   *  reach the rows without a reload. */
-  tracked: Set<string>;
-}
-
 export interface ToolboxDeps {
   outputChannel: vscode.LogOutputChannel;
   session: ExtensionSession;
   controller: EditingController;
   /** The record browser the Plugins tree's rows expand into. Built by the editing side, which
-   *  owns the single instance both plugin trees read through. */
+   *  owns the single instance every record surface reads through. */
   recordBrowser: PluginTreeProvider;
-  /** The plugin files the backend's load order names, for deciding which rows can expand. */
-  heldPluginFiles: () => Promise<HeldPluginFiles>;
+  /** The two mEdit reads the tree's badges and chevrons come from. */
+  pluginFacts: PluginFactsClient;
   /** Run the loud crash-repair offer sequence for whatever a completed reconcile found. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
-  /** Fetch the session-load malformed-plugin scan and publish it. Held on the session so the
-   *  teardown writers can clear both diagnosis surfaces together. */
+  /** The malformed-plugin scan's Problems-panel collection. Held on the session so the teardown
+   *  writers can clear both diagnosis surfaces together. */
   loadDiagnostics: vscode.DiagnosticCollection;
-  /** The backend's session-load malformed-plugin scan, read once per landed reconcile. */
-  getDiagnoses: () => Promise<PluginDiagnosisReport[]>;
 }
 
 /** The Toolbox: the view of the instance, and the MO2 side's composition root. Everything below
@@ -75,7 +54,7 @@ export interface Toolbox extends vscode.Disposable {
    *  tests — production reaches all of these through the views. */
   modListProvider?: ModListProvider;
   downloadsProvider?: DownloadsProvider;
-  pluginListProvider?: PluginListProvider;
+  pluginsTree?: PluginsTreeProvider;
   instance?: Instance;
   enterEditing?: () => Promise<void>;
 }
@@ -109,68 +88,59 @@ interface PluginListDeps {
   dataFolder: () => Promise<string | undefined>;
   /** The rows the game forces on, asked of the backend (ADR-0021). */
   implicitMasters: ImplicitMasterSource;
-  /** ADR-0047: the row provider's only row input — name, origin, slot, enabled and winning for
-   *  every plugin copy. */
+  /** ADR-0047: the tree's only row input — name, origin, slot, enabled and winning for every
+   *  plugin copy. */
   instance: Instance;
-  /** The record browser that supplies a plugin row's children. Passed as the composite's
-   *  child source and never touched directly here. */
+  /** The record browser that supplies a plugin row's children. */
   recordBrowser: PluginTreeProvider;
+  /** Every plugin-keyed fact the tree's badges read. */
+  pluginFacts: PluginFactsClient;
+  /** The malformed-plugin scan's Problems-panel collection. */
+  loadDiagnostics: vscode.DiagnosticCollection;
 }
-// ADR-0035: the view is a `PluginsTreeComposite` over two providers — these rows and the record
-// browser's children — so each row expands into its records. The composition root is the only
-// place that may know both.
-function registerPluginListView(deps: PluginListDeps): PluginListProvider {
-  const { own, session, outputChannel, reporter, instanceRoot, dataFolder, implicitMasters, instance, recordBrowser } = deps;
-  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
-  const log = (msg: string) => outputChannel.info(msg);
+
+// ADR-0035: one tree, one owner — rows from the Instance, children from the record browser,
+// every badge from the facts the provider pulls itself.
+function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
+  const { own, session, outputChannel, reporter, instanceRoot, dataFolder, implicitMasters, instance } = deps;
+  // The tree states its own severity (ADR-0026); this routes it to the matching channel level.
+  const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source = pluginListSource(instanceRoot, instance);
-  const pluginListProvider = own(new PluginListProvider({ instance, source, log, reporter, dataFolder, implicitMasters }));
-  const composite = own(new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
-    rows: pluginListProvider,
-    // A thin positional adapter, not `recordBrowser` directly: the composite's
-    // `getPluginChildren(pluginFile)` has no `origin` slot (a root row never has one to give),
-    // while `PluginTreeProvider` keeps its `(name, origin?)` shape for browsing a losing copy.
-    children: {
-      getPluginChildren: (file) => recordBrowser.getPluginChildren(file),
-      getChildren: (child) => recordBrowser.getChildren(child),
-      getTreeItem: (child) => recordBrowser.getTreeItem(child),
-      onDidChangeTreeData: recordBrowser.onDidChangeTreeData,
-    },
-    pluginFileOf,
-    // Undefined — never fetched, or nothing found for this file — reads as "matches", the
-    // composite's own fallback for an accessor that has nothing to say.
-    hasMatchingRecords: (file) => session.loadOrderSync?.matches(file.toLowerCase()),
+  const pluginsTree = own(new PluginsTreeProvider({
+    instance, source, log, reporter, dataFolder, implicitMasters,
+    records: deps.recordBrowser,
+    client: deps.pluginFacts,
+    publishDiagnoses: (reports) => publishLoadDiagnoses(deps.loadDiagnostics, instanceRoot, reports),
   }));
-  session.pluginsTree = composite;
-  clearTreeWhenBackendDies(session, composite, recordBrowser);
+  session.pluginsTree = pluginsTree;
+  clearTreeWhenBackendDies(session, pluginsTree);
   const pluginListView = own(vscode.window.createTreeView('modbench.pluginListTree', {
-    treeDataProvider: composite,
+    treeDataProvider: pluginsTree,
     canSelectMany: true,
-    // Still the row provider's: a drag moves plugins.txt lines, which is a Mod-Management
-    // concern whether or not the rows happen to have children today.
-    dragAndDropController: pluginListProvider,
+    // A drag moves plugins.txt lines, which the same provider owns.
+    dragAndDropController: pluginsTree,
     // Title-bar rule 7 (docs/specs/containers.md): hierarchical trees get Collapse All, and this
     // one is hierarchical — plugin → record type → record.
     showCollapseAll: true,
   }));
   session.pluginsTreeView = pluginListView; // progress and message live here
-  session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginListProvider));
+  session.pluginsNameFilter = own(registerPluginsNameFilter(pluginListView, pluginsTree));
   // Grays an implicit master's row the way MO2 grays COL_NAME for a forceLoaded plugin — live
-  // against PluginListProvider's own implicitMasterNames() so it never drifts from the tree.
+  // against the tree's own implicitMasterNames() so it never drifts from what is rendered.
   own(vscode.window.registerFileDecorationProvider(
-    new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
+    new ImplicitMasterDecorationProvider(dataFolder, () => pluginsTree.implicitMasterNames()),
   ));
-  own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginListProvider, outputChannel)));
+  own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginsTree, outputChannel)));
   // ADR-0044: the one trigger for a PUT — a landed Instance recompute, never a gesture.
   own(wireLoadOrderSyncToInstance(instance, session.loadOrderSync!));
-  own(registerRevealInExplorerCommand(pluginListProvider, outputChannel));
-  return pluginListProvider;
+  own(registerRevealInExplorerCommand(pluginsTree, outputChannel));
+  return pluginsTree;
 }
 
 // The axis that narrows *which plugin rows* appear, composing with (never replacing) the record
 // filter's axis over which records appear under an expanded row.
 function registerPluginsNameFilter(
-  view: vscode.TreeView<PluginListNode | PluginTreeNode>, provider: PluginListProvider,
+  view: vscode.TreeView<PluginsTreeNode>, provider: PluginsTreeProvider,
 ): NameFilter {
   return registerNameFilter({
     view, viewId: 'modbench.pluginListTree', placeholder: 'Filter plugins…',
@@ -187,7 +157,6 @@ interface ReconcileDeps {
   instance: Instance;
   controller: EditingController;
   outputChannel: vscode.LogOutputChannel;
-  heldPluginFiles: () => Promise<HeldPluginFiles>;
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
 }
 
@@ -195,7 +164,7 @@ interface ReconcileDeps {
 // of Instance recomputes landing close together. `resolveGameDirectory`/`buildSnapshot` read one
 // Instance value together (closed over below), never two generations of it.
 function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
-  const { session, instanceRoot, instance, controller, outputChannel, heldPluginFiles, showCrashRepairOffers } = deps;
+  const { session, instanceRoot, instance, controller, outputChannel, showCrashRepairOffers } = deps;
   let snapshot: ReturnType<typeof loadOrderSnapshotOf>;
   return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
     isReceiving: () => session.backendManager?.isHealthy === true,
@@ -222,31 +191,16 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
         { onProgress, signal },
       ),
     syncFilterState: () => controller.syncFilterState(),
-    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, heldPluginFiles, failures, outputChannel, totalPlugins),
+    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, totalPlugins),
     presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
 }
 
-// ADR-0037: the same failures the toast inside putLoadOrder already consumed — folded in here, not
-// re-derived, so one plugin's row carries one value describing every fact about it.
-function withLoadFailures(
-  facts: Map<string, PluginFacts>,
-  failures: { name?: string | null; reason?: string | null }[],
-): Map<string, PluginFacts> {
-  const merged = new Map(facts);
-  for (const f of failures) {
-    const name = f.name ?? '?';
-    merged.set(name, { ...merged.get(name), loadFailure: f.reason ?? 'Unknown error' });
-  }
-  return merged;
-}
-
-// ADR-0035: rows gain chevrons here — and *finish* gaining them here. A progressive reconcile's
-// ticks carry only the indexed set, because read-only state and master issues are
-// whole-load-order derivations a partial tick cannot answer.
+// ADR-0035: rows gain chevrons here — and *finish* gaining them here. The tree reads the
+// backend's own plugin list itself; the failures the toast inside putLoadOrder already consumed
+// ride along rather than being re-derived.
 async function applyLoadOrderToTree(
   session: ExtensionSession,
-  heldPluginFiles: () => Promise<HeldPluginFiles>,
   failures: { name?: string | null; reason?: string | null }[],
   outputChannel: vscode.LogOutputChannel,
   // Carried in only to be logged next to what reached the tree. Deliberately not `plugins.length`
@@ -254,35 +208,25 @@ async function applyLoadOrderToTree(
   // healthy reconcile would read as short.
   totalPlugins: number,
 ): Promise<void> {
-  try {
-    const held = await heldPluginFiles();
-    // Do not remove as logging noise: `held.files.size + failures.length` landing close to
-    // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
-    outputChannel.info(
-      `[toolbox] applying reconciled load order to tree: ${held.files.size} in the load order, ${failures.length} failed, of ${totalPlugins} copies`,
-    );
-    // Set before setLoadOrder fires its re-render, so no row renders off a match set stale from
-    // whatever reconcile preceded this one.
-    session.loadOrderSync?.setMatches(held.matches);
-    session.pluginsTree?.setLoadOrder(held.files, withLoadFailures(held.facts, failures));
-    // The same read-only set, to the record rows — theirs is contextValue (Remove hidden), the
-    // plugin rows' is the tooltip note.
-    session.recordBrowserProvider?.setImmutablePlugins(held.readOnly);
-    // And tracked-ness, the record rows' other contextValue axis. Every reconcile re-pushes it: a
-    // `.git` appearing or vanishing under `mods/` is a watcher event, and that is a reconcile.
-    session.recordBrowserProvider?.setTrackedPlugins(held.tracked);
-    // Every reconcile re-runs the malformed-plugin scan — setLoadOrder above just cleared the last
-    // scan's decorations, and this brings the new answer when it lands.
-    session.refreshDiagnoses?.();
-  } catch (err) {
+  const held = await session.pluginsTree?.applyReconciled(failures);
+  if (held === undefined) {
     // Leaving every row a leaf is a safe *render* but not an honest one: the reconcile did land,
     // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0026).
-    const message = err instanceof Error ? err.message : String(err);
-    outputChannel.error(`[toolbox] reading the backend's plugin list failed; plugin rows will not expand: ${message}`);
+    outputChannel.error('[toolbox] the reconciled load order did not reach the tree; plugin rows will not expand');
     void vscode.window.showWarningMessage(
       'Modbench: The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records. Close and relaunch mEdit to retry.',
     );
+    return;
   }
+  // Do not remove as logging noise: `held.length + failures.length` landing close to
+  // `totalPlugins` is what tells a stuck-tail reconcile here from one broken upstream.
+  outputChannel.info(
+    `[toolbox] applying reconciled load order to tree: ${held.length} in the load order, ${failures.length} failed, of ${totalPlugins} copies`,
+  );
+  // Derived from the same read the tree just applied, so the two can never describe different
+  // reconciles.
+  session.loadOrderSync?.setMatches(
+    new Map(held.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
 }
 
 // Each tick's `totalPlugins` is the backend's count, implicit masters included — a larger number
@@ -293,10 +237,7 @@ function makeTreeProgressHandler(
 ): { onProgress: (status: LoadOrderProgress) => void; lastTotalPlugins: () => number } {
   let totalPlugins = 0;
   const applyTick = makeReconcileProgressHandler({
-    applyLoadOrder: (indexedPlugins, failures) => session.pluginsTree?.setLoadOrder(
-      new Set(indexedPlugins),
-      new Map(failures.map((f) => [f.name, { loadFailure: f.reason }] as const)),
-    ),
+    applyLoadOrder: (indexedPlugins, failures) => session.pluginsTree?.applyIndexed(indexedPlugins, failures),
   });
   return {
     onProgress: (status) => { totalPlugins = status.totalPlugins; applyTick(status); },
@@ -317,7 +258,7 @@ function makeEnterEditing(
 ): () => Promise<void> {
   const enter = async (): Promise<void> => {
     const { abandoned } = session.loadOrderSync!.arm();
-    // Overlaps with the backend starting below, same as PluginListProvider's own first-value
+    // Overlaps with the backend starting below, same as the tree's own first-value
     // wait: `flush()` must read a real Instance value, never the empty pre-first-read sentinel.
     const instanceReady = instance.sequence > 0 ? Promise.resolve() : instance.refresh();
     revealLog(); // the launch can take a while; let the user watch the step log
@@ -358,7 +299,7 @@ interface Mo2Side {
   instanceRoot: string;
   modListProvider: ModListProvider;
   downloadsProvider: DownloadsProvider;
-  pluginListProvider: PluginListProvider;
+  pluginsTree: PluginsTreeProvider;
   refreshAll: () => Promise<void>;
   enterEditing: () => Promise<void>;
 }
@@ -366,7 +307,7 @@ interface Mo2Side {
 // Undefined on the two paths with no MO2 instance to read: no workspace folder, and a folder
 // that is not one. Both leave the Toolbox view registered and row-less.
 function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
-  const { outputChannel, session, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
+  const { outputChannel, session, controller, recordBrowser, pluginFacts, loadDiagnostics, showCrashRepairOffers } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -405,7 +346,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     config: meditConfig, detectPaths, detectWinePrefix, onConfigChange: vscode.workspace.onDidChangeConfiguration,
   }));
   // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
-  // this kicks off the first real read. PluginListProvider's own `sequence === 0` guard is
+  // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
   void instance.refresh();
   // ADR-0047: rows, statuses and the overwrite count all come from the Instance value now —
@@ -414,7 +355,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
   // and enterEditing below need the session slot filled first.
   session.loadOrderSync = own(makeLoadOrderSync({
-    session, instanceRoot, instance, controller, outputChannel, heldPluginFiles, showCrashRepairOffers,
+    session, instanceRoot, instance, controller, outputChannel, showCrashRepairOffers,
   }));
   // The backend answers this, never the extension (ADR-0021), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
@@ -442,10 +383,10 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
       outputChannel.info(`[modmanager] Plugins reconcile pruned ${result.prune.length} plugins.txt line(s) with no plugin on disk: ${result.prune.join(', ')}`);
     }
   };
-  const pluginListProvider = registerPluginListView({
+  const pluginsTree = registerPluginListView({
     own, session, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
-    instance, recordBrowser,
+    instance, recordBrowser, pluginFacts, loadDiagnostics,
   });
   const { modListView, updateProfileDescription } = createModListView(own, modListProvider, instance);
   const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {
@@ -493,12 +434,12 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     // not just a re-render of whatever the Instance last landed.
     invalidateMods: () => { void instance.refresh(); modListProvider.invalidate(); },
     // Same as invalidateMods above: Plugins renders the Instance value too (ADR-0047).
-    invalidatePlugins: () => { void instance.refresh(); pluginListProvider.invalidate(); },
+    invalidatePlugins: () => { void instance.refresh(); pluginsTree.invalidate(); },
     // Same as invalidatePlugins above: Downloads renders the Instance value too (ADR-0047).
     invalidateDownloads: () => { void instance.refresh(); downloadsProvider.invalidate(); },
     updateProfileDescription,
   });
-  return { instance, instanceRoot, modListProvider, downloadsProvider, pluginListProvider, refreshAll, enterEditing };
+  return { instance, instanceRoot, modListProvider, downloadsProvider, pluginsTree, refreshAll, enterEditing };
 }
 
 const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
@@ -506,7 +447,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 };
 
 export function createToolbox(deps: ToolboxDeps): Toolbox {
-  const { outputChannel, session, controller, loadDiagnostics, getDiagnoses } = deps;
+  const { outputChannel, controller } = deps;
   const owned: vscode.Disposable[] = [];
   const own: Own = (disposable) => {
     owned.push(disposable);
@@ -530,28 +471,10 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
   }));
   own(registerCreatePluginCommand(controller, mo2, outputChannel));
 
-  // ADR-0026 background tier — the scan is advisory, so a blip logs and retries next reconcile,
-  // never toasts. Fire-and-forget: the tree hand-off must not wait on a whole-load-order scan.
-  let diagnosisScanGeneration = 0;
-  session.refreshDiagnoses = () => {
-    // No instance root means no MO2 workspace — nothing a diagnosis could point at.
-    if (!mo2) return;
-    // Generation guard: a slow scan answering after a newer reconcile's own refresh (or after
-    // teardown cleared everything) must not resurrect a stale answer.
-    const generation = ++diagnosisScanGeneration;
-    void getDiagnoses().then((reports) => {
-      if (generation !== diagnosisScanGeneration) return;
-      publishLoadDiagnoses(loadDiagnostics, mo2.instanceRoot, reports);
-      session.pluginsTree?.setDiagnoses(groupDiagnosesByPlugin(reports));
-    }).catch((err: unknown) => {
-      outputChannel.warn(`[toolbox] the malformed-plugin scan could not be read: ${err instanceof Error ? err.message : String(err)}`);
-    });
-  };
-
   return {
     modListProvider: mo2?.modListProvider,
     downloadsProvider: mo2?.downloadsProvider,
-    pluginListProvider: mo2?.pluginListProvider,
+    pluginsTree: mo2?.pluginsTree,
     instance: mo2?.instance,
     enterEditing: mo2?.enterEditing,
     dispose: () => {

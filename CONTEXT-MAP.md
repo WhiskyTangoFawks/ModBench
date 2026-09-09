@@ -15,7 +15,7 @@ backend are still named `mEdit`/`MEditService` for historical reasons.)
 Each UI surface has a living spec in [docs/specs/](./docs/specs/) — a surface belongs to exactly
 one context and uses its vocabulary, with one composition-root exception: the Plugins tree is Mod
 Management's, but once a load order is running it also renders Editing's record rows, supplied
-only as data through the `PluginsTreeComposite` seam — never a Mod Management→backend call (see
+only as data through the one tree provider that owns both — never a Mod Management→backend call (see
 Relationship below).
 
 ## Contexts
@@ -38,6 +38,6 @@ Relationship below).
   learns by *observation* at its own touch points (load-time hash check, the bridge
   watcher) — required by the never-assume-exclusive-ownership rule, since MO2, xEdit,
   or the user can install, update, or delete any mod outside Modbench. Source-derived
-  state reaches Mod Management surfaces only as data through composition roots (the
-  `PluginsTreeComposite` pattern), never via a Mod Management→backend call.
+  state reaches Mod Management surfaces only as data read by the Plugins view's own provider,
+  never via a Mod Management→backend call.
 - **Shared vocabulary — override order, winning vs losing.** Every conflict is decided by an **override order**, whose ends are the **winning** and **losing** ends — never by position in a file or a view (that is *view order*, a separate configurable presentation choice). There are two distinct override orders: Mod Management's **Mod override order** (Modlist priority, `modlist.txt`, file-level winner) and Editing's **Plugin override order** / Plugin load order (`plugins.txt`, record-level winner). Say which one you mean, and never say "higher/lower priority" — say winning/losing. Anchor invariant: **vanilla content is losing-most on both axes** (`Fallout4.esm` records, vanilla `Data/` files lose to everything). `plugins.txt` itself is owned and written by Mod Management's Plugins view even though the ordering concept it encodes is consumed by Editing — see each context's `CONTEXT.md`.

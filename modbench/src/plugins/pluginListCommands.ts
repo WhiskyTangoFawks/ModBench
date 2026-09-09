@@ -1,22 +1,21 @@
 import * as vscode from 'vscode';
 import type { EditingController } from '../medit/EditingController';
 import type { Instance } from '../modmanager/instance';
-import { PluginListProvider, type PluginListNode } from '../modmanager/PluginListProvider';
+import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
 import { appendPlugin } from '../modmanager/commands/plugins';
 import { makeReporter } from '../reporter';
 
 // The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin copy
-// wins, where its file lives), so it reads through the row provider rather than a disk lookup
-// of its own.
+// wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
 export function registerRevealInExplorerCommand(
-  pluginListProvider: PluginListProvider, outputChannel: vscode.LogOutputChannel,
+  pluginsTree: PluginsTreeProvider, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
   const revealReporter = makeReporter(outputChannel, 'pluginListTree.revealInExplorer');
   return vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
-    const filePath = await pluginListProvider.resolvePluginPath(name);
+    const filePath = await pluginsTree.resolvePluginPath(name);
     if (!filePath) {
       // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
       revealReporter.report('error', `Could not resolve a file location for "${name}".`);
@@ -59,11 +58,11 @@ function promptPluginName(): Thenable<string | undefined> {
 // `appendPlugin` add the load-order line — never the other way around, so the load order can
 // never name a file that does not exist.
 async function appendCreatedPluginToLoadOrder(
-  instanceRoot: string, instance: Instance, pluginListProvider: PluginListProvider,
+  instanceRoot: string, instance: Instance, pluginsTree: PluginsTreeProvider,
   pluginName: string, outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
   const result = await appendPlugin(instanceRoot, instance.value.activeProfile, pluginName);
-  pluginListProvider.invalidate();
+  pluginsTree.invalidate();
   if (!result.applied) {
     makeReporter(outputChannel, 'newPlugin').report(
       'error',
@@ -77,7 +76,7 @@ async function appendCreatedPluginToLoadOrder(
 
 export function registerCreatePluginCommand(
   controller: EditingController,
-  mo2: { instance: Instance; instanceRoot: string; pluginListProvider: PluginListProvider } | undefined,
+  mo2: { instance: Instance; instanceRoot: string; pluginsTree: PluginsTreeProvider } | undefined,
   outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
   const reporter = makeReporter(outputChannel, 'newPlugin');
@@ -98,6 +97,6 @@ export function registerCreatePluginCommand(
     const created = await controller.createPlugin(name, destination.path, destination.origin);
     if (!created) return;
 
-    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginListProvider, created.name, outputChannel);
+    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginsTree, created.name, outputChannel);
   });
 }

@@ -88,10 +88,10 @@ function makeRepository(overrides: Partial<{
 }
 
 // getPluginChildren(name) is the one way into a plugin's children — there is no root listing
-// (also true in production: PluginsTreeComposite always calls it directly, never
+// (also true in production: PluginsTreeProvider always calls it directly, never
 // getChildren(undefined) — see the comment on getChildren itself).
 
-// The merged tree's name filter is covered in PluginListProvider.test.ts — this provider has
+// The merged tree's name filter is covered in PluginsTreeProvider.test.ts — this provider has
 // none of its own.
 
 // ── getPluginChildren (record types) ────────────────────────────────────────────
@@ -265,7 +265,7 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
 });
 
 // The merged tree's plugin rows (contextValue "plugin"/"pluginImplicit", lock icon absent —
-// see plugins.md) are covered in PluginListProvider.test.ts; this provider has no plugin-row
+// see plugins.md) are covered in PluginsTreeProvider.test.ts; this provider has no plugin-row
 // node of its own.
 
 // ── WorldspacesNode ───────────────────────────────────────────────────────────

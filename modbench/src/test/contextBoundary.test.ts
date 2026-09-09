@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// ADR-0035: the merge is structural — Mod Management owns the rows, Editing the children.
-// The boundary is an invariant about source text, so it is checked as one.
+// ADR-0035: one Plugins tree with one owner. The record browser it delegates to still speaks
+// none of Mod Management's vocabulary, and that is an invariant about source text.
 
 const SRC = join(__dirname, '..');
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
@@ -13,18 +13,8 @@ function importsOf(source: string): string[] {
 }
 
 describe('bounded-context boundary in the merged Plugins tree', () => {
-  it('the row provider imports nothing from Editing', () => {
-    expect(importsOf(read('modmanager/PluginListProvider.ts')).filter((s) => s.includes('medit'))).toEqual([]);
-  });
-
   it('the child provider imports nothing from Mod Management', () => {
     expect(importsOf(read('plugins/PluginTreeProvider.ts')).filter((s) => s.includes('modmanager'))).toEqual([]);
-  });
-
-  it('the composite imports from neither context', () => {
-    const imports = importsOf(read('PluginsTreeComposite.ts'));
-    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
-    expect(imports).toEqual(['vscode', './failurePrefixIcon']);
   });
 
   // The one shared presentation primitive both trees decorate with. It belongs to neither context
@@ -33,8 +23,8 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect(importsOf(read('failurePrefixIcon.ts'))).toEqual(['vscode']);
   });
 
-  // The name filter serves views from both contexts, so like the composite it belongs to neither
-  // folder and lives at the composition root; the same structural-deps check keeps that honest.
+  // The name filter serves views from both contexts, so it belongs to neither folder and lives
+  // at the composition root; the same structural-deps check keeps that honest.
   it('the name filter imports from neither context', () => {
     const imports = importsOf(read('nameFilter.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
@@ -69,22 +59,15 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
   });
 
-  // Plain modmanager/ modules reachable from the composition root: held to the same "imports
-  // nothing from Editing" bar PluginListProvider gets, not the stricter "nothing but vscode" one,
-  // since these have real modmanager-internal dependencies.
+  // Plain modmanager/ modules reachable from the composition root: held to an "imports nothing
+  // from Editing" bar rather than the stricter "nothing but vscode" one, since these have real
+  // modmanager-internal dependencies.
   it('pluginDestination.ts imports nothing from Editing', () => {
     expect(importsOf(read('modmanager/pluginDestination.ts')).filter((s) => s.includes('medit'))).toEqual([]);
   });
 
   it('model.ts imports nothing from Editing', () => {
     expect(importsOf(read('modmanager/model.ts')).filter((s) => s.includes('medit'))).toEqual([]);
-  });
-
-  it('the row provider contains no record vocabulary', () => {
-    // Editing's "Immutable plugin" is a distinct concept from this row's own "cannot be toggled or
-    // moved" lock (ADR-0035). Bare `readonly` is a TypeScript keyword, not the domain term.
-    const offending = [...read('modmanager/PluginListProvider.ts').matchAll(/\b(records?|formkeys?|recordtypes?|editorids?|immutable|read-only)\b/gi)];
-    expect(offending.map((m) => m[0])).toEqual([]);
   });
 
   it('the child provider contains no mod vocabulary', () => {

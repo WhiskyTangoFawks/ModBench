@@ -37,8 +37,8 @@ function markFailure(item: vscode.TreeItem, tooltip: string): void {
 }
 
 // This provider deliberately has no plugin-row node — the merged tree's plugin rows are
-// modmanager/PluginListProvider's. Do not reintroduce one: reconciling a "pluginImmutable"
-// contextValue with that side's read-only-ness story is an open question.
+// PluginsTreeProvider's. Do not reintroduce one: reconciling a "pluginImmutable" contextValue
+// with the row's own read-only-ness story is an open question.
 
 export class RecordTypeNode extends vscode.TreeItem {
   readonly kind = 'recordType' as const;
@@ -295,9 +295,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // surface that pages. Cleared on a successful retry;
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
-  // Lowercased filenames of the load order's immutable plugins (the same set extension.ts
-  // already hands PluginsTreeComposite.setLoadOrder as readOnlyFiles) — record/placed rows under
-  // one hide Remove via their contextValue, matching the column header's !immutable `when` gate.
+  // Lowercased filenames of the load order's immutable plugins, pushed in from the tree's own
+  // `GET /plugins` read — record/placed rows under one hide Remove via their contextValue,
+  // matching the column header's !immutable `when` gate.
   private readonly immutablePlugins = new Set<string>();
   // Lowercased filenames of the load order's *tracked* plugins, from the same `GET /plugins`
   // answer the immutable set comes from — never a filesystem probe from here: tracked-ness is a
@@ -391,8 +391,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   async getChildren(element?: PluginTreeNode): Promise<PluginTreeNode[]> {
-    // `element` is never actually undefined here — the composite calls this only with a defined
-    // element, and root rows come from PluginListProvider. This case stays only to satisfy
+    // `element` is never actually undefined here — `PluginsTreeProvider` calls this only with a
+    // defined element, and it owns the root rows. This case stays only to satisfy
     // vscode.TreeDataProvider<T>'s own optional-parameter contract.
     if (!element) return [];
     if (element instanceof RecordTypeNode) return this.fetchRecords(element);
@@ -473,9 +473,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return value;
   }
 
-  /** Keyed by filename rather than by a node this provider built: `PluginsTreeComposite` expands
-   *  rows built by `PluginListProvider`, and its whole knowledge of this side is a plugin
-   *  filename (ADR-0035). */
+  /** Keyed by filename rather than by a node this provider built: `PluginsTreeProvider` expands
+   *  its own load-order rows, whose whole knowledge of this side is a plugin filename
+   *  (ADR-0035). */
   async getPluginChildren(pluginName: string, origin?: string): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);

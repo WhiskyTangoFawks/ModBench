@@ -7,7 +7,7 @@ import type { PluginRepository } from '../medit/PluginRepository';
 import { makeMergeEditorOpener, compileAndReport, reportCompileTargetError } from '../medit/editorCommands';
 import { runRebase } from './externalChangeGestures';
 import { trackProgressMessage } from '../medit/trackProgress';
-import { pluginFileOf, type PluginListNode } from '../modmanager/PluginListProvider';
+import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
 import { makeReporter } from '../reporter';
 import { withPluginsViewProgress, type ExtensionSession } from '../session';
 import { say } from '../editingTeardown';
