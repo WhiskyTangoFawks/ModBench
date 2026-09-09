@@ -3,9 +3,6 @@
  *  after it, never a race of two. */
 export interface LoadOrderSyncDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown>
   extends ReconcileStepDepsWithoutArm<TPlugin, TProgress, TOffer> {
-  /** Mod Management works with no backend running — the ordinary case, not a failure — so a
-   *  request with no receiver is dropped silently rather than surfacing as a doomed call. */
-  isReceiving: () => boolean;
   /** How long to wait for a burst to finish before sending. Two watchers can fire for one
    *  mod-level change, and a drag reorder rewrites plugins.txt once per drop — none of those
    *  deserve a PUT each. */
@@ -25,15 +22,15 @@ export interface LoadOrderSync {
   request(): void;
   /** Send now, waiting for any in-flight send first. Resolves with the outcome of the run this
    *  call itself causes, never a later run it coalesced with; `undefined` only when nothing was
-   *  sent at all (disposed, or no receiver). */
+   *  sent at all, which today means disposed. */
   flush(): Promise<ReconcileOutcome | undefined>;
   dispose(): void;
   /** Replacing a superseded reconcile's scope never aborts it — the backend answers that one 409.
    *  Call before the reconcile's first await, not just before the PUT: a launch has an earlier
-   *  phase that must honour Close mEdit too. */
+   *  phase that must honour a departing backend. */
   arm(): { signal: AbortSignal; abandoned: () => boolean };
   /** Cancel whatever reconcile is armed without touching future `request()`/`flush()` calls; a
-   *  later Launch mEdit still finds this object able to serve them. */
+   *  later relaunch still finds this object able to serve them. */
   abandon(): void;
 }
 
@@ -105,10 +102,6 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
   const sequencer = createReconcileSequencer<TPlugin, TProgress, TOffer>({ ...deps, arm });
 
   const run = async (): Promise<ReconcileOutcome | undefined> => {
-    if (!deps.isReceiving()) {
-      deps.log('[loadOrderSync] no receiver for the load order snapshot; dropping the request');
-      return undefined;
-    }
     let outcome: ReconcileOutcome | undefined;
     try {
       await deps.withProgress(async () => { outcome = await sequencer.reconcile(); });

@@ -115,7 +115,7 @@ let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 // blocks for the whole indexing run, and the progressive-load assertions are about that window.
 let releasePutLoadOrder: (() => void) | null = null;
 let holdPutLoadOrder = false;
-// `BackendManager.start()` gates on GET /health, so holding it parks a launch in its first
+// The client's `start()` gates on GET /health, so holding it parks a launch in its first
 // phase — the window a mid-load close also has to survive. One-shot: releasing clears the hold.
 let releaseHealth: (() => void) | null = null;
 let holdHealth = false;
@@ -199,6 +199,10 @@ function createMockBackend(): http.Server {
           res.end(JSON.stringify({ error: 'simulated load failure' }));
           return;
         }
+        // The real load publishes its progress from the moment it starts, which is why the
+        // extension subscribes before the PUT.
+        pushLoadOrderStatus();
+
         // The real load blocks for the whole indexing run. Held open so a test can observe
         // the tree mid-load; answered immediately otherwise, as most suites expect.
         const answer = () => {
@@ -282,7 +286,7 @@ before(async function () {
   this.timeout(15000);
 
   // The mock backend must be up before the extension activates so
-  // BackendManager's first poll succeeds.
+  // the client's first health poll succeeds.
   mockBackend = createMockBackend();
   await new Promise<void>(r => mockBackend.listen(TEST_PORT, '127.0.0.1', () => r()));
 
@@ -295,7 +299,7 @@ before(async function () {
     await new Promise(r => setTimeout(r, 100));
   }
 
-  // Give BackendManager time to poll and reach 'attached' (polls every 500 ms).
+  // Give the client time to poll and reach 'attached' (polls every 500 ms).
   await new Promise(r => setTimeout(r, 2000));
 });
 
@@ -990,7 +994,7 @@ describe('Plugin load-order rows expand into records', () => {
     assert.ok(!rows.some((r) => tree.getTreeItem(r).contextValue === 'pluginImplicit'));
   });
 
-  it('renders every row collapsible before mEdit has ever launched, expanding to one error node', async () => {
+  it('renders every row collapsible, whether or not mEdit has launched', async () => {
     const tree = pluginsTree()!;
     const rows = await tree.getChildren();
 
@@ -1005,8 +1009,9 @@ describe('Plugin load-order rows expand into records', () => {
       );
     }
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
-    assert.strictEqual(children.length, 1, 'expanding before mEdit is up answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'error', 'the one node is the record browser\'s own error node');
+    assert.strictEqual(children.length, 1, 'expanding answers exactly one node, never an empty list');
+    assert.strictEqual(nodeKind(children[0]), 'recordType',
+      'the load order an earlier launch left held is what the row expands into');
   });
 
   it('launching mEdit gives a row real children, without reordering the load order', async () => {
@@ -1050,7 +1055,9 @@ describe('Plugin load-order rows expand into records', () => {
     assert.deepStrictEqual((await tree.getChildren(other)).map((c) => (c as vscode.TreeItem).label), ['Weapon']);
   });
 
-  it('keeps every row collapsible when mEdit closes, expanding to one error node, keeping the load order', async () => {
+  // ADR-0022: the view has no shape to revert to, so a backend that goes takes nothing with it —
+  // the row's own content is what reports the absence, on the expand that asks for it.
+  it('keeps every row and its chevron when mEdit closes', async () => {
     const tree = pluginsTree()!;
 
     exitEditing();
@@ -1065,7 +1072,8 @@ describe('Plugin load-order rows expand into records', () => {
     }
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
     assert.strictEqual(children.length, 1, 'expanding after close answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'error', 'the one node is the record browser\'s own error node');
+    assert.strictEqual(nodeKind(children[0]), 'recordType',
+      'closing takes nothing from the tree, so the row still expands into the held load order');
   });
 });
 
@@ -1105,12 +1113,6 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('carries no read-only tooltip before a load order exists', async () => {
-    const tree = pluginsTree()!;
-    const row = findRow(await tree.getChildren(), 'Immutable.esm');
-    assert.strictEqual(tree.getTreeItem(row).tooltip, undefined);
-  });
-
   it('gains a read-only tooltip once the load order reports it immutable', async () => {
     await enterEditing();
     const tree = pluginsTree()!;
@@ -1119,14 +1121,6 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     const tooltip = tree.getTreeItem(row).tooltip;
 
     assert.ok(typeof tooltip === 'string' && tooltip.includes('read-only'), `expected a read-only tooltip, got: ${String(tooltip)}`);
-  });
-
-  it('loses the tooltip again once the mEdit closes', async () => {
-    exitEditing();
-    const tree = pluginsTree()!;
-    const row = findRow(await tree.getChildren(), 'Immutable.esm');
-
-    assert.strictEqual(tree.getTreeItem(row).tooltip, undefined);
   });
 });
 
@@ -1315,18 +1309,24 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
     const after = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'a failed reconcile leaves the load order the backend already holds in place, so the rows stay expandable');
+    // ADR-0044: the failed PUT tore nothing down, so the row expands into the records the backend
+    // still holds. "Still indexing" would promise a completion that is not coming.
+    const children = await tree.getChildren(after);
+    assert.strictEqual(children.length, 1, 'expanding after a failed reconcile answers exactly one node');
+    assert.strictEqual(nodeKind(children[0]), 'recordType',
+      'a failed PUT leaves the held load order behind the chevron, never a row stuck on "still indexing"');
   });
 });
 
-// ADR-0035 §Filters: a live record filter is a fact about a live backend, so a crash must
-// forget it too — proving `clearTreeWhenBackendDies`'s own `backendManager.on('status', …)`
-// registration actually fires, not just its extracted logic in isolation.
-describe('a backend that goes unhealthy outside exitEditing forgets an active record filter', () => {
+// ADR-0022: mEdit runs for the extension's whole lifetime, so a status change is news the views
+// report — none of them has a shape to revert to. Driven through the real status transition, not
+// its extracted wiring in isolation.
+describe('a client that reports stopped outside exitEditing leaves the Plugins tree\'s shape alone', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const backendManagerOf = () =>
-    (ext?.exports as { backendManager?: { stop(): Promise<void> } } | undefined)?.backendManager;
+  const clientOf = () =>
+    (ext?.exports as { client?: { stop(): Promise<void>; status: string } } | undefined)?.client;
   let gameDir = '';
 
   before(() => {
@@ -1363,127 +1363,31 @@ describe('a backend that goes unhealthy outside exitEditing forgets an active re
     resetMockBackend();
   });
 
-  it('a backend that goes unhealthy outside exitEditing restores the row a record filter hid', async () => {
+  it('the row a record filter hid stays hidden', async () => {
     const tree = pluginsTree()!;
 
-    await backendManagerOf()?.stop();
+    await clientOf()?.stop();
+    await new Promise((r) => setTimeout(r, 200)); // let the status listener's refresh land
 
-    const restored = await waitFor('clearTreeWhenBackendDies to restore the filtered-out row',
-      async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? true : undefined));
-    assert.strictEqual(restored, true);
-  });
-});
-
-// The record filter is a fact about the load order, so it cannot outlive one — a readout
-// describing a load order that is gone. The name filter survives a close: its rows remain.
-describe('The record-filter readout does not outlive its load order', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const description = () =>
-    (ext?.exports as { pluginListView?: { description?: string } } | undefined)?.pluginListView?.description;
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-readout-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+    assert.ok(!(await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp'),
+      'a stopped client is not a reason to un-narrow a view the user narrowed');
   });
 
-  after(async () => {
-    if (!root) return;
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '');
-    fs.rmSync(gameDir, { recursive: true, force: true });
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    resetMockBackend();
-  });
-
-  it('an explicit Close mEdit takes the record filter out of the description', async () => {
+  // The expand is the discriminator: a tree that forgot its load order answers "mEdit is not
+  // connected" for every row, whatever the row's own content would have been.
+  it('a row still in the tree keeps the load order behind its chevron', async () => {
+    mockPluginsOverride = null; // this one is about the rows the filter left alone
+    const tree = pluginsTree()!;
     await enterEditing();
-    // Applied from an open document — the one record-filter entry point a test can drive; the
-    // other opens a quick pick over the scripts folder.
-    const doc = await vscode.workspace.openTextDocument({ language: 'sql', content: 'SELECT form_key FROM "npc_"' });
-    await vscode.window.showTextDocument(doc);
-    await vscode.commands.executeCommand('modbench.setFilterFromDocument');
-    assert.ok(description()?.includes('records:'),
-      `sanity: the description must name the record filter before Close mEdit, or clearing it proves nothing (was: ${description() ?? 'unset'})`);
+    const row = findRow(await tree.getChildren(), 'TestMod.esp');
 
-    exitEditing();
+    await clientOf()?.stop();
+    await new Promise((r) => setTimeout(r, 200));
 
-    assert.ok(!(description() ?? '').includes('records:'),
-      'a load order that does not exist must not leave the view still claiming a record filter');
-  });
-});
-
-// Close mEdit must clear the readout, the context key the Clear action is gated on, and the code
-// lens's notion of which SQL is active; all go through the filter's single writer.
-
-// The context key is unreadable from a test, but the code lens is a genuinely registered
-// provider, so proving it clears proves that single writer ran.
-describe('Close mEdit clears the record filter\'s code lens too, not just the readout', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  // FilterCodeLensProvider renders lenses only for documents inside scriptsPath, resolved once
-  // at activate() and not reconfigurable. The file goes in an mkdtempSync'd subdirectory so a
-  // leak reads as this test's own; a subdirectory still matches the prefix gate.
-  const scriptsDir = path.join(os.homedir(), '.medit', 'scripts');
-  const sql = 'SELECT form_key FROM "npc_"';
-  let gameDir = '';
-  let scriptsSubdir = '';
-  let scriptsFile = '';
-
-  const codeLensCommandFor = async (uri: vscode.Uri): Promise<string | undefined> => {
-    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[] | undefined>('vscode.executeCodeLensProvider', uri);
-    return lenses?.at(0)?.command?.command;
-  };
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-lens-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
-    fs.mkdirSync(scriptsDir, { recursive: true });
-    scriptsSubdir = fs.mkdtempSync(path.join(scriptsDir, '__test-354-'));
-    scriptsFile = path.join(scriptsSubdir, 'filter-lens.sql');
-    fs.writeFileSync(scriptsFile, sql);
-  });
-
-  after(async () => {
-    if (!root) return;
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '');
-    fs.rmSync(gameDir, { recursive: true, force: true });
-    // Tolerate the directory already being gone; a cleanup failure here must never mask the
-    // test's own assertion result.
-    try { fs.rmSync(scriptsSubdir, { recursive: true, force: true }); } catch { /* best-effort */ }
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    resetMockBackend();
-  });
-
-  it('an explicit Close mEdit clears the code lens the same way it clears the readout', async () => {
-    await enterEditing();
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(scriptsFile));
-    await vscode.window.showTextDocument(doc);
-    await vscode.commands.executeCommand('modbench.setFilterFromDocument');
-
-    assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.clearFilter',
-      'sanity: the code lens must report the filter active before Close mEdit, or clearing it proves nothing');
-
-    exitEditing();
-
-    assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.setFilterFromDocument',
-      'a load order that does not exist must not leave the code lens still claiming its SQL is active');
+    const children = await tree.getChildren(row);
+    assert.ok(children.length > 0, 'the row must still expand into something');
+    assert.ok(!children.some((c) => tree.getTreeItem(c).label === 'mEdit is not connected.'),
+      'the tree kept its load order, so the row expands into records');
   });
 });
 
@@ -1600,11 +1504,20 @@ describe('Progressive load', () => {
     await childrenFor(name);
     return recordTypesAttempted(name) ? true : undefined;
   });
+  // A load that has begun holds nothing yet, and its first tick is the moment the tree stops
+  // describing whatever load order preceded it. Every assertion about a *this*-load state
+  // starts here.
+  const launchAndAwaitOpeningTick = async (): Promise<{ launch: Promise<void> }> => {
+    const launch = enterEditing();
+    await waitFor('the load\'s opening tick to reach the tree', () => stillIndexing('TestMod.esp'));
+    // Boxed: returning it bare would flatten it and await the load these tests leave in flight.
+    return { launch };
+  };
 
   it('makes a plugin browsable as soon as it is indexed, while a later one is still indexing', async () => {
-    setIndexed(['TestMod.esp']);
-    const launch = enterEditing();
+    const { launch } = await launchAndAwaitOpeningTick();
 
+    setIndexed(['TestMod.esp']);
     await waitForIndexed('TestMod.esp');
 
     // What makes it progressive rather than merely early: a plugin the load has not reached
@@ -1621,8 +1534,8 @@ describe('Progressive load', () => {
 
   // A per-plugin failure surfaces when it occurs, not only at the end of the load.
   it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
+    const { launch } = await launchAndAwaitOpeningTick();
     setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', reason: 'RACE parse' }] });
-    const launch = enterEditing();
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');
@@ -1636,11 +1549,11 @@ describe('Progressive load', () => {
     await launch;
   });
 
-  // Closing mEdit mid-load is a deliberate abandonment: the stream closes and a row's content
-  // goes with the load order. The "no error toast" half lives at the LoadOrderController seam.
-  it('closes the notification stream and clears the view when mEdit is closed mid-load', async () => {
+  // Closing mEdit mid-load is a deliberate abandonment: the stream closes with the backend it was
+  // opened against. The "no error toast" half lives at the LoadOrderController seam.
+  it('closes the notification stream when mEdit is closed mid-load', async () => {
+    const { launch } = await launchAndAwaitOpeningTick();
     setIndexed(['TestMod.esp']);
-    const launch = enterEditing();
     await waitForIndexed('TestMod.esp');
     const connectionsAtLoad = requestLog.filter((l) => l === 'GET /notifications/stream').length;
     assert.ok(connectionsAtLoad > 0, 'the load should have been subscribed before it was abandoned');
@@ -1658,7 +1571,6 @@ describe('Progressive load', () => {
     );
     const children = await childrenFor('TestMod.esp');
     assert.strictEqual(children.length, 1, 'expanding after an abandoned load answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'error', 'a row\'s content goes with the load order, not just its badges');
     assert.strictEqual(
       (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
       undefined,
@@ -1700,9 +1612,9 @@ describe('Progressive load', () => {
   // opened yet. The backend suppresses them while loading; this asserts the suppression holds
   // end to end and then lifts by itself.
   it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
-    setIndexed(['TestMod.esp', 'MissingMaster.esp']);
-    const launch = enterEditing();
+    const { launch } = await launchAndAwaitOpeningTick();
 
+    setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(

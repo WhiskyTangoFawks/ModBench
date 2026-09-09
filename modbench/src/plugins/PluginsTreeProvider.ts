@@ -527,20 +527,6 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  /** Everything the backend's load order stops answering when it goes: the chevrons, every badge,
-   *  and the record rows' immutable and tracked sets. */
-  clear(): void {
-    this.generation++;
-    this.heldFiles = undefined;
-    this.facts = undefined;
-    this.matches = undefined;
-    this.diagnoses = undefined;
-    this.loadFailures = new Map();
-    this.records?.setImmutablePlugins([]);
-    this.records?.setTrackedPlugins([]);
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
   // ADR-0044: keyed by filename, reading the `inLoadOrder` copies — two held copies can share
   // one. A failed read is never swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {

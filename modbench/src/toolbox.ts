@@ -21,22 +21,24 @@ import { makeReporter } from './reporter';
 import { makeRefreshAll } from './refreshAll';
 import { ToolboxProvider } from './ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
+import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './modmanager/commands/plugins';
 import { reconcileMods } from './modmanager/commands/modlist';
 import { registerModsReconcile } from './modmanager/modsReconcile';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
-import { say, clearTreeWhenBackendDies, exitEditing } from './editingTeardown';
+import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, makeDetectWinePrefix, setMo2InstanceContext } from './workspaceConfig';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 
-// The five port members every gesture and the reconcile in this file call — narrowed off
+// The port members every gesture, the reconcile and the launch in this file call — narrowed off
 // `MEditClient` (ADR-0022), never the controller or the repository.
 export type ToolboxClient = Pick<MEditClient,
-  'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'>;
+  'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'
+  | 'status' | 'start' | 'stop' | 'onStatusChanged'>;
 
 export interface ToolboxDeps {
   outputChannel: vscode.LogOutputChannel;
@@ -126,7 +128,6 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     publishDiagnoses: (reports) => publishLoadDiagnoses(deps.loadDiagnostics, instanceRoot, reports),
   }));
   session.pluginsTree = pluginsTree;
-  clearTreeWhenBackendDies(session, pluginsTree);
   const pluginListView = own(vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: pluginsTree,
     canSelectMany: true,
@@ -200,7 +201,6 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
   } = deps;
   let snapshot: ReturnType<typeof loadOrderSnapshotOf>;
   return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
-    isReceiving: () => session.backendManager?.isHealthy === true,
     debounceMs: 250,
     log: (msg) => outputChannel.debug(msg),
     withProgress: (work) => withPluginsViewProgress(session, work),
@@ -293,7 +293,8 @@ function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
 // ADR-0035: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(
-  session: ExtensionSession, instance: Instance, outputChannel: vscode.LogOutputChannel, revealLog: () => void,
+  session: ExtensionSession, instance: Instance, client: ToolboxClient,
+  outputChannel: vscode.LogOutputChannel, revealLog: () => void,
 ): () => Promise<void> {
   const enter = async (): Promise<void> => {
     const { abandoned } = session.loadOrderSync!.arm();
@@ -303,33 +304,21 @@ function makeEnterEditing(
     revealLog(); // the launch can take a while; let the user watch the step log
     say(session, 'Starting backend…');
     outputChannel.info('[toolbox] entering editing: starting backend');
-    await session.backendManager!.start();
-    // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
+    await client.start();
+    // Before the status gate, deliberately: a close stops the backend, so an abandoned launch
     // would otherwise fail this check and report the stop it asked for as a startup failure.
     if (abandoned()) { reportAbandoned(outputChannel); return; }
-    if (!session.backendManager!.isHealthy) {
-      exitEditing(session); // tear down the half-started backend and reset the view
+    if (client.status !== 'attached') {
+      exitEditing(session, client); // tear down the half-started backend
       void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
       return;
     }
     await instanceReady;
     // No game directory means nothing to build a snapshot from — don't strand the UI in an empty
     // editing view. `flush()` is used because this path wants the outcome, not just a promise.
-    if ((await session.loadOrderSync!.flush()) === 'no-game-directory') exitEditing(session);
+    if ((await session.loadOrderSync!.flush()) === 'no-game-directory') exitEditing(session, client);
   };
   return () => withPluginsViewProgress(session, enter);
-}
-
-// A crash-restart is a fresh backend, so the reconcile runs again from scratch — the same re-entry
-// path a fresh launch takes, not a bespoke recovery.
-function wireEnterEditingOnRestart(
-  session: ExtensionSession, enterEditing: () => Promise<void>, outputChannel: vscode.LogOutputChannel,
-): void {
-  session.backendManager!.on('restarted', () => {
-    void enterEditing().catch((err: unknown) =>
-      outputChannel.error(`[toolbox] reload after backend restart failed: ${err instanceof Error ? err.message : String(err)}`),
-    );
-  });
 }
 
 
@@ -444,8 +433,11 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
-  const enterEditing = makeEnterEditing(session, instance, outputChannel, () => outputChannel.show(true));
-  wireEnterEditingOnRestart(session, enterEditing, outputChannel);
+  const { enter: enterEditing } = own(enterEditingAcrossRestarts(
+    client,
+    makeEnterEditing(session, instance, client, outputChannel, () => outputChannel.show(true)),
+    (msg) => outputChannel.error(`[toolbox] ${msg}`),
+  ));
   own(modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)));
   ownAll(own, registerModListCoreCommands(instanceRoot, modListProvider, instance, outputChannel, updateProfileDescription));
   ownAll(own, registerDeployCommands(instanceRoot, instance, outputChannel, gameDirResolver));

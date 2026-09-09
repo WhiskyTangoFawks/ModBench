@@ -5,18 +5,21 @@ import { PassThrough } from 'node:stream';
 
 vi.mock('node:http');
 
-import { BackendManager, type StatusBarAdapter } from '../BackendManager';
+import { BackendLifecycle } from '../backendLifecycle';
+import type { BackendStatus } from '../MEditClient';
 
-function makeStatusBar(): StatusBarAdapter & { texts: string[]; disposed: boolean } {
-  const texts: string[] = [];
-  const bar = {
-    texts,
-    disposed: false,
-    setText(t: string) { texts.push(t); },
-    show() {},
-    dispose() { bar.disposed = true; },
-  };
-  return bar;
+function record(lifecycle: BackendLifecycle): BackendStatus[] {
+  const statuses: BackendStatus[] = [];
+  lifecycle.onStatusChanged((s) => statuses.push(s));
+  return statuses;
+}
+
+// A crash-restart reaches attached again with no event of its own, so a test that waits for the
+// fresh process waits for that second attach.
+function nextAttach(lifecycle: BackendLifecycle): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const off = lifecycle.onStatusChanged((s) => { if (s === 'attached') { off(); resolve(); } });
+  });
 }
 
 function makeHealthyHttpGet() {
@@ -35,28 +38,19 @@ function makeFailingHttpGet() {
   });
 }
 
-describe('BackendManager', () => {
-  let statusBar: ReturnType<typeof makeStatusBar>;
+describe('BackendLifecycle', () => {
+  beforeEach(() => { vi.resetAllMocks(); });
+  afterEach(() => { vi.restoreAllMocks(); });
 
-  beforeEach(() => {
-    statusBar = makeStatusBar();
-    vi.resetAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('emits attached when backend is already running', async () => {
+  it('attaches when a backend is already running', async () => {
     makeHealthyHttpGet();
 
-    const mgr = new BackendManager({ port: 5172, statusBar });
-    const statuses: string[] = [];
-    mgr.on('status', (s) => statuses.push(s));
+    const lifecycle = new BackendLifecycle({ port: 5172 });
+    const statuses = record(lifecycle);
 
-    await mgr.connect();
+    await lifecycle.start();
 
-    expect(mgr.isHealthy).toBe(true);
+    expect(lifecycle.status).toBe('attached');
     expect(statuses).toEqual(['attached']);
   });
 
@@ -73,28 +67,26 @@ describe('BackendManager', () => {
       return req as any;
     });
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 10 });
-    const statuses: string[] = [];
-    mgr.on('status', (s) => statuses.push(s));
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 10 });
+    const statuses = record(lifecycle);
 
-    await mgr.connect();
+    await lifecycle.start();
 
-    expect(mgr.isHealthy).toBe(true);
+    expect(lifecycle.status).toBe('attached');
     expect(statuses).toEqual(['attached']);
     expect(http.get).toHaveBeenCalledTimes(3);
   });
 
-  it('emits disconnected when backend never starts within timeout', async () => {
+  it('reports disconnected when backend never starts within timeout', async () => {
     makeFailingHttpGet();
 
-    const statuses: string[] = [];
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 10, pollTimeoutMs: 50 });
-    mgr.on('status', (s) => statuses.push(s));
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 10, pollTimeoutMs: 50 });
+    const statuses = record(lifecycle);
 
-    await mgr.connect();
+    await lifecycle.start();
 
     expect(statuses).toContain('disconnected');
-    expect(mgr.isHealthy).toBe(false);
+    expect(lifecycle.status).toBe('disconnected');
   });
 });
 
@@ -120,9 +112,8 @@ function makeToggleableHttpGet(state: { healthy: boolean }) {
   });
 }
 
-describe('BackendManager.start', () => {
-  let statusBar: ReturnType<typeof makeStatusBar>;
-  beforeEach(() => { statusBar = makeStatusBar(); vi.resetAllMocks(); });
+describe('BackendLifecycle.start', () => {
+  beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => vi.restoreAllMocks());
 
   it('spawns the backend with --urls and attaches once healthy', async () => {
@@ -130,22 +121,22 @@ describe('BackendManager.start', () => {
     makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x/backend' });
-    await mgr.start();
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend' });
+    await lifecycle.start();
 
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172']);
-    expect(mgr.isHealthy).toBe(true);
+    expect(lifecycle.status).toBe('attached');
   });
 
   it('attaches to an already-healthy backend without spawning', async () => {
     makeHealthyHttpGet();
     const spawn = vi.fn(() => makeChild());
 
-    const mgr = new BackendManager({ port: 5172, statusBar, spawn, executablePath: '/x/backend' });
-    await mgr.start();
+    const lifecycle = new BackendLifecycle({ port: 5172, spawn, executablePath: '/x/backend' });
+    await lifecycle.start();
 
     expect(spawn).not.toHaveBeenCalled();
-    expect(mgr.isHealthy).toBe(true);
+    expect(lifecycle.status).toBe('attached');
   });
 
   // The Output channel's level, translated by the caller into Serilog
@@ -155,11 +146,11 @@ describe('BackendManager.start', () => {
     makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
-    const mgr = new BackendManager({
-      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
       serilogLevelArgs: () => ['--Serilog:MinimumLevel:Default', 'Debug'],
     });
-    await mgr.start();
+    await lifecycle.start();
 
     expect(spawn).toHaveBeenCalledWith(
       '/x/backend',
@@ -172,11 +163,11 @@ describe('BackendManager.start', () => {
     makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
-    const mgr = new BackendManager({
-      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
       serilogLevelArgs: () => [],
     });
-    await mgr.start();
+    await lifecycle.start();
 
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172']);
   });
@@ -187,28 +178,27 @@ async function waitForLines(lines: string[], n: number) {
   for (let i = 0; i < 50 && lines.length < n; i++) await new Promise((r) => setTimeout(r, 2));
 }
 
-async function startWithOutput(statusBar: StatusBarAdapter) {
+async function startWithOutput() {
   const state = { healthy: false };
   makeToggleableHttpGet(state);
   const child = makeChild();
   const spawn = vi.fn(() => { state.healthy = true; return child; });
   const lines: string[] = [];
 
-  const mgr = new BackendManager({
-    port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
+  const lifecycle = new BackendLifecycle({
+    port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x',
     onOutput: (line, source) => lines.push(`${line} ${source}`),
   });
-  await mgr.start();
-  return { mgr, child, lines };
+  await lifecycle.start();
+  return { lifecycle, child, lines };
 }
 
-describe('BackendManager output forwarding', () => {
-  let statusBar: ReturnType<typeof makeStatusBar>;
-  beforeEach(() => { statusBar = makeStatusBar(); vi.resetAllMocks(); });
+describe('BackendLifecycle output forwarding', () => {
+  beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => vi.restoreAllMocks());
 
   it('forwards whole lines, tagged with the stream they came from', async () => {
-    const { child, lines } = await startWithOutput(statusBar);
+    const { child, lines } = await startWithOutput();
 
     child.stdout.write('[08:30:45 INF] Indexed 500 records\n');
     child.stderr.write('Unhandled exception. boom\n');
@@ -221,7 +211,7 @@ describe('BackendManager output forwarding', () => {
   });
 
   it('reassembles a line split across chunks and strips the CRLF a Windows backend writes', async () => {
-    const { child, lines } = await startWithOutput(statusBar);
+    const { child, lines } = await startWithOutput();
 
     child.stdout.write('[08:30:45 INF] Indexed ');
     child.stdout.write('500 records\r\n');
@@ -236,8 +226,8 @@ describe('BackendManager output forwarding', () => {
     const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
-    await mgr.start();
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    await lifecycle.start();
 
     child.stdout.write('[08:30:45 INF] nobody is listening\n');
     await new Promise((r) => setTimeout(r, 5));
@@ -246,27 +236,46 @@ describe('BackendManager output forwarding', () => {
   });
 });
 
-describe('BackendManager crash-restart / stop', () => {
-  let statusBar: ReturnType<typeof makeStatusBar>;
-  beforeEach(() => { statusBar = makeStatusBar(); vi.resetAllMocks(); });
+describe('BackendLifecycle crash-restart / stop', () => {
+  beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
-  it('re-spawns and emits "restarted" when the backend exits unexpectedly', async () => {
+  it('re-spawns and reaches attached again when the backend exits unexpectedly', async () => {
     const state = { healthy: false };
     makeToggleableHttpGet(state);
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
-    await mgr.start();
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    await lifecycle.start();
 
-    const restarted = new Promise<void>((res) => mgr.on('restarted', () => res()));
+    const restarted = nextAttach(lifecycle);
     state.healthy = false;          // backend died
     children[0].emit('exit', 1);    // unexpected exit
     await restarted;
 
     expect(spawn).toHaveBeenCalledTimes(2);
-    expect(mgr.isHealthy).toBe(true);
+    expect(lifecycle.status).toBe('attached');
+  });
+
+  // The crash is the news the views act on: the reconcile is abandoned and the status bar says
+  // so, rather than the tree silently holding a load order no process is behind.
+  it('reports disconnected the moment the backend dies, before the restart is attempted', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
+
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    await lifecycle.start();
+    const statuses = record(lifecycle);
+
+    const restarted = nextAttach(lifecycle);
+    state.healthy = false;
+    children[0].emit('exit', 1);
+    await restarted;
+
+    expect(statuses).toEqual(['disconnected', 'starting', 'attached']);
   });
 
   it('does not double-spawn when start() is called concurrently', async () => {
@@ -274,11 +283,11 @@ describe('BackendManager crash-restart / stop', () => {
     makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
-    await Promise.all([mgr.start(), mgr.start()]);
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    await Promise.all([lifecycle.start(), lifecycle.start()]);
 
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(mgr.isHealthy).toBe(true);
+    expect(lifecycle.status).toBe('attached');
   });
 
   it('stop() during an in-flight start() cancels it — a late healthy response does not resurrect the load order', async () => {
@@ -287,19 +296,18 @@ describe('BackendManager crash-restart / stop', () => {
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; }); // spawn does NOT make it healthy → connect keeps polling
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, pollTimeoutMs: 1000, spawn, executablePath: '/x' });
-    const statuses: string[] = [];
-    mgr.on('status', (s) => statuses.push(s));
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, pollTimeoutMs: 1000, spawn, executablePath: '/x' });
+    const statuses = record(lifecycle);
 
-    const startP = mgr.start();
+    const startP = lifecycle.start();
     await new Promise((r) => setTimeout(r, 15)); // let it spawn + begin polling
-    const stopP = mgr.stop();
+    const stopP = lifecycle.stop();
     children[0].emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
     state.healthy = true;                        // backend "comes up" after the user closed
     await Promise.all([startP, stopP]);
     await new Promise((r) => setTimeout(r, 20)); // let any stray poll fire
 
-    expect(mgr.isHealthy).toBe(false);
+    expect(lifecycle.status).toBe('stopped');
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(statuses).not.toContain('attached');
   });
@@ -310,15 +318,15 @@ describe('BackendManager crash-restart / stop', () => {
     // Every spawned child dies immediately and never becomes healthy.
     const spawn = vi.fn(() => { const c = makeChild(); process.nextTick(() => c.emit('exit', 1)); return c; });
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x' });
-    const statuses: string[] = [];
-    mgr.on('status', (s) => statuses.push(s));
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x' });
+    const statuses = record(lifecycle);
 
-    await mgr.start();
+    await lifecycle.start();
     await new Promise((r) => setTimeout(r, 150)); // let the restart chain settle
 
     expect(spawn.mock.calls.length).toBeLessThanOrEqual(5); // bounded, not infinite
     expect(statuses).toContain('disconnected');
+    expect(lifecycle.status).toBe('disconnected');
   });
 
   it('forwards output from the restarted child, not just the first one', async () => {
@@ -328,13 +336,13 @@ describe('BackendManager crash-restart / stop', () => {
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
     const lines: string[] = [];
 
-    const mgr = new BackendManager({
-      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x',
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x',
       onOutput: (l) => lines.push(l),
     });
-    await mgr.start();
+    await lifecycle.start();
 
-    const restarted = new Promise<void>((res) => mgr.on('restarted', () => res()));
+    const restarted = nextAttach(lifecycle);
     state.healthy = false;
     children[0].emit('exit', 1);
     await restarted;
@@ -345,19 +353,19 @@ describe('BackendManager crash-restart / stop', () => {
     expect(lines).toEqual(['[08:30:50 INF] back up']);
   });
 
+  // deactivate() awaits this, so a reload cannot build a replacement client — which would hold no
+  // reference to this child — before the old child is gone.
   it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed', async () => {
     const state = { healthy: false };
     makeToggleableHttpGet(state);
     const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });
 
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
-    await mgr.start();
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    await lifecycle.start();
+    const statuses = record(lifecycle);
 
-    const statuses: string[] = [];
-    mgr.on('status', (s) => statuses.push(s));
-
-    const stopped = mgr.stop();
+    const stopped = lifecycle.stop();
     expect(child.kill).toHaveBeenCalledWith('SIGTERM');
     expect(statuses).not.toContain('stopped');
 
@@ -366,7 +374,7 @@ describe('BackendManager crash-restart / stop', () => {
 
     expect(statuses).toEqual(['stopped']);
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect(mgr.isHealthy).toBe(false);
+    expect(lifecycle.status).toBe('stopped');
   });
 
   it('escalates to SIGKILL if the child never exits within the grace period, then confirms exit', async () => {
@@ -376,15 +384,13 @@ describe('BackendManager crash-restart / stop', () => {
     const child = makeChild(); // never emits 'exit' on its own — models a hung, non-yielding backend
     const spawn = vi.fn(() => { state.healthy = true; return child; });
 
-    const mgr = new BackendManager({
-      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x', stopGracePeriodMs: 3000,
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', stopGracePeriodMs: 3000,
     });
-    await mgr.start();
+    await lifecycle.start();
+    const statuses = record(lifecycle);
 
-    const statuses: string[] = [];
-    mgr.on('status', (s) => statuses.push(s));
-
-    const stopped = mgr.stop();
+    const stopped = lifecycle.stop();
     expect(child.kill).toHaveBeenCalledTimes(1);
     expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
 
@@ -398,51 +404,5 @@ describe('BackendManager crash-restart / stop', () => {
     await stopped;
 
     expect(statuses).toEqual(['stopped']);
-  });
-
-  it('dispose() awaits confirmed child exit before resolving (exercises the deactivate() path)', async () => {
-    const state = { healthy: false };
-    makeToggleableHttpGet(state);
-    const child = makeChild();
-    const spawn = vi.fn(() => { state.healthy = true; return child; });
-
-    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
-    await mgr.start();
-
-    const disposed = mgr.dispose();
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
-    expect(statusBar.disposed).toBe(false);
-
-    child.emit('exit', 0);
-    await disposed;
-
-    expect(statusBar.disposed).toBe(true);
-  });
-
-  it('dispose() escalates to SIGKILL if the child never exits within the grace period, then confirms exit (via deactivate())', async () => {
-    vi.useFakeTimers();
-    const state = { healthy: false };
-    makeToggleableHttpGet(state);
-    const child = makeChild(); // never emits 'exit' on its own — models a hung, non-yielding backend
-    const spawn = vi.fn(() => { state.healthy = true; return child; });
-
-    const mgr = new BackendManager({
-      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x', stopGracePeriodMs: 3000,
-    });
-    await mgr.start();
-
-    const disposed = mgr.dispose();
-    expect(child.kill).toHaveBeenCalledTimes(1);
-    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
-
-    await vi.advanceTimersByTimeAsync(3000); // grace period elapses with no exit
-    expect(child.kill).toHaveBeenCalledTimes(2);
-    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
-    expect(statusBar.disposed).toBe(false);
-
-    child.emit('exit', null); // the OS finally reaps it after SIGKILL
-    await disposed;
-
-    expect(statusBar.disposed).toBe(true);
   });
 });

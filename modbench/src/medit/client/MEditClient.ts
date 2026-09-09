@@ -7,10 +7,13 @@ import type {
 import type { WriteRefused, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput } from '../EditingController';
 import type { RecordEditOutcome, RecordPage, CellPage, PluginRecordTypeCount } from '../PluginRepository';
 import type { NotificationKind } from '../NotificationSubscriber';
-import type { BackendStatus } from '../BackendManager';
 import type { RecordEditEnvelope } from '../messages';
 
-export type { WriteRefused, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, NotificationKind, NotificationEvent, BackendStatus };
+export type { WriteRefused, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, NotificationKind, NotificationEvent };
+
+/** The backend process as the extension reports it: starting while it comes up, attached while
+ *  it answers, disconnected when it has gone, stopped when the extension took it down. */
+export type BackendStatus = 'starting' | 'attached' | 'disconnected' | 'stopped';
 export { isRefused } from '../EditingController';
 
 // ApiClient.ts aliases the wire shapes its own module needs; these are the port's own, named

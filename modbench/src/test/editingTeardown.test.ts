@@ -1,67 +1,41 @@
 import { describe, it, expect, vi } from 'vitest';
-import { exitEditing, clearTreeWhenBackendDies, refreshMatchingPlugins, say } from '../editingTeardown';
+import { exitEditing, refreshMatchingPlugins, say } from '../editingTeardown';
 
 function makeSession(facts: { name: string; hasMatchingRecords: boolean }[] = []) {
   return {
     loadOrderSync: { abandon: vi.fn() },
-    pluginsTree: { clear: vi.fn(), refreshFacts: vi.fn().mockResolvedValue(facts) },
+    pluginsTree: { refreshFacts: vi.fn().mockResolvedValue(facts) },
     pluginsTreeView: { message: 'loading…' as string | undefined },
     pluginsNameFilter: { refresh: vi.fn() },
-    backendManager: { isHealthy: false, on: vi.fn(), stop: vi.fn().mockResolvedValue(undefined) },
-    setFilterActive: vi.fn(),
-    loadDiagnostics: { clear: vi.fn() },
-    notificationSubscriber: { stop: vi.fn() },
   };
 }
 
-describe('exitEditing', () => {
-  // The tree's own `clear()` is what takes the chevrons, every badge, and the record rows'
-  // immutable and tracked sets; this asserts the writers only this module owns.
-  it('clears every statement about the departing backend: tree, message, filter UI', () => {
-    const session = makeSession();
+const makeClient = () => ({ stop: vi.fn().mockResolvedValue(undefined) });
 
-    exitEditing(session);
+describe('exitEditing', () => {
+  it('abandons the reconcile before stopping the backend it was talking to', () => {
+    const session = makeSession();
+    const client = makeClient();
+
+    exitEditing(session, client);
 
     expect(session.loadOrderSync.abandon).toHaveBeenCalled();
-    expect(session.pluginsTree.clear).toHaveBeenCalled();
-    expect(session.pluginsTreeView.message).toBeUndefined();
-    expect(session.setFilterActive).toHaveBeenCalledWith(false);
-    expect(session.backendManager.stop).toHaveBeenCalled();
-    expect(session.loadDiagnostics.clear).toHaveBeenCalled();
+    expect(client.stop).toHaveBeenCalled();
+  });
+
+  // The views keep their shape across a backend that goes: the rows stay and expand into an
+  // error node, and the reconcile that replaces the diagnoses does so wholesale.
+  it('takes nothing away from the views', () => {
+    const session = makeSession();
+
+    exitEditing(session, makeClient());
+
+    expect(session.pluginsTreeView.message).toBe('loading…');
+    expect(session.pluginsNameFilter.refresh).not.toHaveBeenCalled();
   });
 
   it('tolerates a session whose fields were never built', () => {
-    expect(() => exitEditing({})).not.toThrow();
-  });
-});
-
-describe('clearTreeWhenBackendDies', () => {
-  function wire(isHealthy: boolean) {
-    const session = makeSession();
-    session.backendManager.isHealthy = isHealthy;
-    const tree = { clear: vi.fn() };
-    clearTreeWhenBackendDies(session, tree);
-    const statusListener = session.backendManager.on.mock.calls[0][1] as () => void;
-    return { session, tree, statusListener };
-  }
-
-  it('an unhealthy status clears the tree and the diagnoses together', () => {
-    const { session, tree, statusListener } = wire(false);
-
-    statusListener();
-
-    expect(tree.clear).toHaveBeenCalled();
-    expect(session.loadDiagnostics.clear).toHaveBeenCalled();
-    expect(session.notificationSubscriber.stop).toHaveBeenCalled();
-  });
-
-  it('a healthy status clears nothing', () => {
-    const { session, tree, statusListener } = wire(true);
-
-    statusListener();
-
-    expect(tree.clear).not.toHaveBeenCalled();
-    expect(session.notificationSubscriber.stop).not.toHaveBeenCalled();
+    expect(() => exitEditing({}, makeClient())).not.toThrow();
   });
 });
 
