@@ -2,9 +2,8 @@ import * as vscode from 'vscode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
-  ContainerChildSummary,
-} from '../medit/ApiClient';
-import type { MEditClient } from '../medit/client';
+  ContainerChildSummary, MEditClient,
+} from '../medit/client';
 import { recordResourceUri } from '../medit/recordResourceUri';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 export { headerFormKeyFor } from '../medit/formKeyIdentity';
@@ -480,11 +479,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     }
   }
 
-  // A failed fetch caches nothing, so the next expand retries.
-  private async getOrFetch<T>(map: Map<string, T>, key: string, fetch: () => Promise<T>): Promise<T> {
+  // A failed load caches nothing, so the next expand retries. `load`, never `fetch`: this has
+  // nothing to do with the backend seam the client folder owns.
+  private async getOrFetch<T>(map: Map<string, T>, key: string, load: () => Promise<T>): Promise<T> {
     let value = map.get(key);
     if (value === undefined) {
-      value = await fetch();
+      value = await load();
       map.set(key, value);
     }
     return value;

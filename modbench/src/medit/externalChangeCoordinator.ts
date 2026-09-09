@@ -1,7 +1,5 @@
-import type { MEditClient } from './client';
+import type { MEditClient, UnansweredExternalChange } from './client';
 import type { ShowExternalChangeDialog } from '../plugins/externalChangeDialog';
-import type { UnansweredExternalChange } from './ApiClient';
-import type { NotificationSubscriber } from './NotificationSubscriber';
 import { handleUnanswered, type ShowRebaseOffer } from '../plugins/externalChangeGestures';
 
 /** `origin` rides along explicitly because re-deriving it from the unanswered queue when the
@@ -27,7 +25,7 @@ export interface ExternalChangeCoordinatorDeps {
 // no poll); the dialog and the gestures it dispatches to are the Plugins view's
 // (plugins/externalChangeGestures.ts). Returns the unsubscribe function.
 export function subscribeExternalChangePending(
-  deps: ExternalChangeCoordinatorDeps, notificationSubscriber: NotificationSubscriber,
+  deps: ExternalChangeCoordinatorDeps, notificationSubscriber: Pick<MEditClient, 'subscribe'>,
 ): () => void {
   const log = deps.log ?? (() => {});
   return notificationSubscriber.subscribe('external-change-pending', (event) => {

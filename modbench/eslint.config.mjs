@@ -23,24 +23,16 @@ export default tseslint.config(
     {
         files: ['src/modmanager/**/*.ts'],
         rules: {
-            'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**', '**/ApiClient*'], message: 'Mod Management never calls the backend.' }] }],
+            'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**'], message: 'Mod Management never calls the backend.' }] }],
         },
     },
 
     // Every backend call goes through the generated client, so the wire shape stays typed.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
-        ignores: ['src/medit/ApiClient.ts'],
+        ignores: ['src/medit/client/apiClient.ts'],
         rules: {
-            'no-restricted-globals': ['error', { name: 'fetch', message: 'Backend HTTP goes through ApiClient.' }],
-        },
-    },
-
-    // ADR-0012: controllers take no VS Code types, so chat tool handlers can call them directly.
-    {
-        files: ['src/**/*Controller.ts'],
-        rules: {
-            'no-restricted-imports': ['error', { paths: [{ name: 'vscode', message: 'Controllers take no VS Code types (ADR-0012).' }] }],
+            'no-restricted-globals': ['error', { name: 'fetch', message: 'Backend HTTP goes through the mEdit client.' }],
         },
     },
 

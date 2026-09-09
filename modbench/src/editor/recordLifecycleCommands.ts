@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from '../medit/client';
-import { isRefused } from '../medit/client';
+import { isRefused, type MEditClient } from '../medit/client';
 import { promptEslFlagRemoval } from '../medit/promptEslFlagRemoval';
+import { resolveOrigin } from '../medit/resolveOrigin';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
 import { renumberConfirmMessage } from './renumberConfirm';
 import { makeReporter } from '../reporter';
@@ -44,22 +44,6 @@ export function recordTypeIdentity(arg: unknown): RecordTypeIdentity | undefined
   return { plugin: n.plugin, origin: n.origin, recordType: n.recordType };
 }
 
-// The port has no `resolveOrigin`, only `EditingController` does. Derived here from
-// `getPlugins()`, the same lookup that method performs; a transport failure degrades to
-// `undefined` (ADR-0026), logged rather than thrown.
-async function resolveOrigin(
-  client: Pick<MEditClient, 'getPlugins'>, pluginName: string, outputChannel: vscode.LogOutputChannel,
-): Promise<string | undefined> {
-  let plugins;
-  try {
-    plugins = await client.getPlugins();
-  } catch (e) {
-    outputChannel.info(`[recordLifecycleCommands] resolveOrigin(${pluginName}) failed: ${e instanceof Error ? e.message : String(e)}`);
-    return undefined;
-  }
-  return plugins.find((p) => p.name === pluginName && p.inLoadOrder)?.origin;
-}
-
 // A node's own `origin` when the row already carries it (ADR-0036), else derived from
 // `getPlugins()`; reports and returns undefined when neither answers.
 function makeResolveOriginOrReport(
@@ -67,7 +51,7 @@ function makeResolveOriginOrReport(
 ): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
   const reporter = makeReporter(outputChannel, 'recordLifecycle');
   return async (node) => {
-    const origin = node.origin ?? await resolveOrigin(client, node.pluginName, outputChannel);
+    const origin = node.origin ?? await resolveOrigin(client, node.pluginName, (msg) => outputChannel.info(msg));
     if (!origin) {
       reporter.report('error', `Could not resolve which mod "${node.pluginName}" belongs to.`);
     }

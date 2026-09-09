@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
-import type { PluginMetadata } from '../../medit/ApiClient';
+import type { PluginMetadata } from '../../medit/client';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -100,7 +100,7 @@ let rebuildIndexShouldFail = false;
 // distinct from the 503 "no load order held" answer, which is a normal state, not a failure.
 let getPluginsShouldFail = false;
 // Mutable per-test so a suite can script a load landing one plugin at a time. `state` is carried
-// even though PluginRepository drops it: it is non-nullable on the wire.
+// even though the mEdit client drops it: it is non-nullable on the wire.
 type MockLoadOrderStatus = {
   state: 'None' | 'Reconciling' | 'Ready';
   totalPlugins: number;
@@ -218,7 +218,7 @@ function createMockBackend(): http.Server {
         if (!holdPutLoadOrder) return answer();
         holdPutLoadOrder = false;
         // The real backend's first tick lands once Reconcile is under way, after this PUT lands —
-        // which is also after EditingController.putLoadOrder has subscribed.
+        // which is also after HttpMEditClient.putLoadOrder has subscribed.
         pushLoadOrderStatus();
         releasePutLoadOrder = () => { releasePutLoadOrder = null; answer(); };
       });

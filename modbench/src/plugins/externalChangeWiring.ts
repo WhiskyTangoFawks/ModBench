@@ -4,7 +4,6 @@ import type { MEditClient } from '../medit/client';
 import {
   subscribeExternalChangePending, type OpenMergeEditor,
 } from '../medit/externalChangeCoordinator';
-import type { NotificationSubscriber } from '../medit/NotificationSubscriber';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 
 // Its own file, not externalChangeGestures.ts: `subscribeExternalChangePending` (a value import)
@@ -17,7 +16,7 @@ import type { PluginTreeProvider } from './PluginTreeProvider';
 export function wireExternalChangePending(
   client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>,
   outputChannel: vscode.LogOutputChannel,
-  notificationSubscriber: NotificationSubscriber, treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
+  notificationSubscriber: Pick<MEditClient, 'subscribe'>, treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
 ): () => void {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.

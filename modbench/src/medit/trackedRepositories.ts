@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { PluginMetadata } from './ApiClient';
+import type { PluginMetadata } from './client';
 
 // ADR-0041: tracked *is* the presence of `.git` — a filesystem check, no registry, no backend.
 function isTracked(modFolder: string): boolean {

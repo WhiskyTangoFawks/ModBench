@@ -4,7 +4,7 @@ import { implicitMastersFrom, rebuildIndexVia, putLoadOrderVia } from './toolbox
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
 import { reportLoadOrderResult, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import type { CrashRepairOffer, LoadOrderStatus as LoadOrderProgress } from './medit/ApiClient';
+import type { CrashRepairOffer, LoadOrderStatus as LoadOrderProgress } from './medit/client';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';

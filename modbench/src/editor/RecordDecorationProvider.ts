@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { WorkingTreeState } from '../medit/ApiClient';
+import type { WorkingTreeState } from '../medit/client';
 import { parseRecordResourceUri } from '../medit/recordResourceUri';
 
 /** Record-row M/A badges in git's own vocabulary; no D badge, since a deleted record has no

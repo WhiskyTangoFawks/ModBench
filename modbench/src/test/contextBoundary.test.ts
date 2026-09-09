@@ -345,6 +345,12 @@ describe('Editor and the Plugins view import from neither each other', () => {
     expect(crossFolderOffenders(SRC, PLUGINS_VIEW_DIR, [EDITOR_DIR])).toEqual([]);
   });
 
+  // Editing sits below Editor in the dependency direction (Editor imports the client, never the
+  // reverse): a medit/ file reaching into editor/ would cycle the two.
+  it('nothing under Editing imports from Editor', () => {
+    expect(crossFolderOffenders(SRC, EDITING_DIR, [EDITOR_DIR])).toEqual([]);
+  });
+
   describe('a plant in each direction is caught, and the same plant inside its own side is not', () => {
     function withPlantedTree(run: (root: string) => void): void {
       const root = mkdtempSync(join(tmpdir(), 'medit-editor-plugins-boundary-'));
@@ -382,24 +388,24 @@ describe('Editor and the Plugins view import from neither each other', () => {
       });
     });
 
-    it('the same Editor import, planted inside Editor\'s own directory, is not caught by the Plugins-side check', () => {
+    it('an Editor import planted in an Editing-shaped file is caught', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'plugins'), { recursive: true });
-        mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
-        writeFileSync(join(root, 'editor', 'ActiveRecordTracker.ts'), 'export class ActiveRecordTracker {}\n');
-        expect(crossFolderOffenders(root, PLUGINS_VIEW_DIR, [EDITOR_DIR]).map((o) => o.path))
-          .toEqual([join('plugins', 'SomeProvider.ts')]);
+        mkdirSync(join(root, 'medit'), { recursive: true });
+        writeFileSync(join(root, 'medit', 'someModule.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        expect(crossFolderOffenders(root, EDITING_DIR, [EDITOR_DIR]).map((o) => o.path))
+          .toEqual([join('medit', 'someModule.ts')]);
       });
     });
 
-    // The rival this guards: matching a directory name as a substring rather than a path segment
-    // would also flag an Editor-shaped module that merely imports from something named similarly.
-    it('an Editor-side module importing from a differently-named sibling is not caught', () => {
+    // The "own side" negative control for this direction: a Plugins-shaped file whose import
+    // merely stays inside its own folder must not be caught alongside the one that crosses over.
+    it('a Plugins-view file importing its own sibling is not caught alongside one that crosses to Editor', () => {
       withPlantedTree((root) => {
-        mkdirSync(join(root, 'editor'), { recursive: true });
-        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import { makeReporter } from '../reporter';\n");
-        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR])).toEqual([]);
+        mkdirSync(join(root, 'plugins'), { recursive: true });
+        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        writeFileSync(join(root, 'plugins', 'OtherProvider.ts'), "import { PluginTreeNode } from './PluginTreeProvider';\n");
+        expect(crossFolderOffenders(root, PLUGINS_VIEW_DIR, [EDITOR_DIR]).map((o) => o.path))
+          .toEqual([join('plugins', 'SomeProvider.ts')]);
       });
     });
   });

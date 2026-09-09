@@ -1,6 +1,4 @@
-import type { components } from '../medit/generated/api';
-
-type ReferenceResult = components['schemas']['ReferenceResult'];
+import type { ReferenceResult } from '../medit/client';
 
 /** A legal renumber cascades automatically behind one up-front confirm stating the blast radius.
  *  Null when nothing references the record. Plugins dedupe case-insensitively — a filename is not

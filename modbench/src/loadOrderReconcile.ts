@@ -143,7 +143,7 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
 /** What a caller branches on once a reconcile settles. */
 export type ReconcileOutcome = 'reconciled' | 'no-game-directory' | 'failed' | 'abandoned';
 
-/** A tagged union matching `EditingController.LoadOrderOutcome`: `failed` and `abandoned` are
+/** A tagged union matching the mEdit client's own `LoadOrderOutcome`: `failed` and `abandoned` are
  *  nothing-more-to-say endings, not a `reconciled` with empty arrays. */
 export type PutLoadOrderResult<TOffer> =
   | { outcome: 'reconciled'; failures: LoadFailure[]; crashRepairOffers: TOffer[] }

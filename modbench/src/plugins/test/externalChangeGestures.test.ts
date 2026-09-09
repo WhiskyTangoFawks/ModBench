@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runRebase, rebaseOfferMessage, handleUnanswered } from '../externalChangeGestures';
 import { KEEP_BUTTON, ABSORB_BUTTON } from '../externalChangeDialog';
-import type { UnansweredExternalChange } from '../../medit/ApiClient';
+import type { UnansweredExternalChange } from '../../medit/client';
 
 function makeRebaseDeps(controller: unknown) {
   return {

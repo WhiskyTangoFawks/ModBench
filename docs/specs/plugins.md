@@ -298,7 +298,7 @@ end.
 - **Mechanism: subscribe, don't poll.** The load POST stays blocking, and progress rides the
   `load-order-status` notification on the SSE stream (ADR-0046 invariant 12) alongside the
   still in-flight `PUT /load-order`, which remains the completion signal. The extension's
-  subscription is one call, `EditingController.subscribeStatus`, unsubscribed once the PUT
+  subscription is one call, the mEdit client's own `subscribeStatus`, unsubscribed once the PUT
   settles; the session-wide stream itself is opened by the mEdit client the moment its status
   reaches attached, not on the first reconcile, so this same first `PUT`'s own progress can ride it.
 - **A progress tick is never the last word.** Ticks carry only the indexed set and the failures;
@@ -550,7 +550,7 @@ exactly one more PUT after it, never a race. The sync has no health pre-check: a
 backend that is not attached is refused by the transport and reported as a failed reconcile, and
 a failed reconcile tears nothing down. One PUT is one reconcile
 (`createReconcileSequencer`, folded into `loadOrderSync` itself — `src/loadOrderReconcile.ts`):
-snapshot → `EditingController.putLoadOrder` → filter sync → the tree hand-off, the same sequence
+snapshot → the mEdit client's own `putLoadOrder` → filter sync → the tree hand-off, the same sequence
 the activation-time launch runs (via `loadOrderSync.flush()`) after the backend comes up.
 
 **A failed PUT tears nothing down.** The backend keeps whatever it held; the error is surfaced
@@ -773,8 +773,9 @@ overflow, then native **Collapse All** last.
   master verdict of its own. `applyReconciled` is the completed reconcile's one hand-off.
 - **`PluginTreeProvider`** (`plugins/`): a row's children — record types, records, spatial
   hierarchy. Its `getPluginChildren(name)` is the entry point a load-order row expands into, and
-  it is unit-tested without VS Code (`PluginRepository`, not `ApiClient`). It imports nothing from
-  Mod Management, enforced by `src/test/contextBoundary.test.ts`.
+  it is unit-tested without VS Code, against the mEdit client port (`MEditClient`), never the
+  generated client directly. It imports nothing from Mod Management, enforced by
+  `src/test/contextBoundary.test.ts`.
 
 ## Testing Decisions
 
@@ -799,9 +800,10 @@ overflow, then native **Collapse All** last.
   `src/plugins/test/PluginsTreeProvider.test.ts` and `src/test/integration/extension.test.ts` —
   including a case where the wire response omits `masterIssues` entirely, asserting the row
   renders undecorated rather than throwing.
-- **Record-browsing unit seam**: `PluginTreeProvider` takes a `PluginRepository`, not an
-  `ApiClient` — unit-tested without VS Code (Vitest, `npm run test:unit`). New data queries go
-  on the `PluginRepository` interface and are implemented in `ApiPluginRepository`.
+- **Record-browsing unit seam**: `PluginTreeProvider` takes the mEdit client port (`MEditClient`),
+  never the generated client directly — unit-tested without VS Code (Vitest, `npm run
+  test:unit`) against `InMemoryMEditClient`. New data queries go on `MEditClient` and are
+  implemented in `HttpMEditClient` (`medit/client/`).
 - **Tree seam**: `PluginsTreeProvider`'s own `getChildren`/`getTreeItem`/`applyReconciled` —
   rows off a fixture Instance value, that every row stays collapsible whatever the client reports,
   a row's content on expand (records, "still indexing", or the error node) in each state, every
@@ -810,10 +812,11 @@ overflow, then native **Collapse All** last.
   the bounded-context boundary itself (`src/test/contextBoundary.test.ts`).
 - **Record semantics and conflict classification** are the backend's responsibility and tested
   there (`MEditService/CLAUDE.md`); this surface consumes representative responses as fixtures.
-- **Progressive-load seams.** The subscription itself is `EditingController.putLoadOrder`
-  with an `onProgress` callback and an `AbortSignal` — HTTP orchestration with no VS Code types,
-  so tick reporting and the three outcomes (reconciled / failed / abandoned) are unit-tested with
-  a fake client and `FakeNotificationSubscriber` (ADR-0046 invariant 12). The incompleteness
+- **Progressive-load seams.** The subscription itself is the mEdit client's own `putLoadOrder`
+  with an `onProgress` callback and an `AbortSignal` — HTTP orchestration with no VS Code types.
+  Tick reporting and the three outcomes (reconciled / failed / abandoned) are per-verb behavior,
+  the backend's own handler tests to pin; the mEdit client's own unit tests cover only its
+  transport, timeout and error-mapping logic. The incompleteness
   statement's text is a pure function (`medit/loadOrderProgress.ts`). What only a live window can
   show — a row becoming browsable one plugin at a time, a mid-load failure decoration, master issues
   staying off until completion, `TreeView.message` appearing and clearing, and a mid-load close

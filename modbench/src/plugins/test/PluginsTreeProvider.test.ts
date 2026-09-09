@@ -6,9 +6,7 @@ import { reorderPlugins, setPluginEnabled } from '../../modmanager/commands/plug
 import { parsePlugins } from '../../modmanager/mo2/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../modmanager/loadOrderSnapshot';
 import type { InstanceValue } from '../../modmanager/instance';
-import type { PluginDiagnosisReport, PluginMetadata } from '../../medit/ApiClient';
-import type { RecordPage } from '../../medit/PluginRepository';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient, type PluginDiagnosisReport, type PluginMetadata, type RecordPage } from '../../medit/client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFilePlain, uriFrom, DataTransferItem, DataTransfer,
@@ -134,8 +132,6 @@ function diagnosis(pluginName: string, text: string, origin = 'SomeMod'): Plugin
   return { plugin: pluginName, origin, defectClass: 'fixed-size-subrecord-short', message: text, text };
 }
 
-// getPlugins/getDiagnoses go through setQueryAnswer so .calls stays what "one read per
-// reconcile" counts against; the record methods are spied for direct assertion and re-scripting.
 function makeClient(overrides: Partial<{
   plugins: PluginMetadata[];
   diagnoses: PluginDiagnosisReport[];
@@ -148,15 +144,15 @@ function makeClient(overrides: Partial<{
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getPlugins', overrides.plugins ?? []);
   client.setQueryAnswer('getDiagnoses', overrides.diagnoses ?? []);
-  vi.spyOn(client, 'getRecordTypes').mockResolvedValue((overrides.recordTypes ?? []).map((rt) => ({
+  client.setQueryAnswer('getRecordTypes', (overrides.recordTypes ?? []).map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
   })));
-  vi.spyOn(client, 'getRecords').mockResolvedValue(overrides.records ?? { items: [], total: 0 });
-  vi.spyOn(client, 'getWorldspaces').mockResolvedValue((overrides.worldspaces ?? []) as never);
-  vi.spyOn(client, 'getWorldspaceBlocks').mockResolvedValue((overrides.worldspaceBlocks ?? { blocks: [], topCells: [] }) as never);
-  vi.spyOn(client, 'getCellReferences').mockResolvedValue({ persistent: [], temporary: [] });
-  vi.spyOn(client, 'getContainerChildren').mockResolvedValue([]);
-  vi.spyOn(client, 'getInteriorCells').mockResolvedValue((overrides.interiorCells ?? { items: [], total: 0 }) as never);
+  client.setQueryAnswer('getRecords', overrides.records ?? { items: [], total: 0 });
+  client.setQueryAnswer('getWorldspaces', (overrides.worldspaces ?? []) as never);
+  client.setQueryAnswer('getWorldspaceBlocks', (overrides.worldspaceBlocks ?? { blocks: [], topCells: [] }) as never);
+  client.setQueryAnswer('getCellReferences', { persistent: [], temporary: [] });
+  client.setQueryAnswer('getContainerChildren', []);
+  client.setQueryAnswer('getInteriorCells', (overrides.interiorCells ?? { items: [], total: 0 }) as never);
   return client;
 }
 
@@ -970,15 +966,10 @@ function makeDisconnectedClient(): InMemoryMEditClient {
   return disconnect(makeClient());
 }
 
-// `makeClient` stubs the record reads with spies, which keep answering through the adapter's own
-// `disconnected()`, so a client modelling a real disconnect refuses those reads too.
+// The adapter's own `disconnected()` clears every scripted answer, record reads included, and
+// every subsequent query rejects — the same shape a real disconnected backend's read side takes.
 function disconnect(client: InMemoryMEditClient): InMemoryMEditClient {
   client.disconnected();
-  const reads = [
-    'getRecordTypes', 'getRecords', 'getWorldspaces', 'getWorldspaceBlocks',
-    'getCellReferences', 'getContainerChildren', 'getInteriorCells',
-  ] as const;
-  for (const read of reads) vi.mocked(client[read]).mockRejectedValue(new Error('ECONNREFUSED'));
   return client;
 }
 
@@ -1043,7 +1034,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     const children = await tree.getChildren(row);
 
     expect(children).toEqual([expect.any(ErrorNode)]);
-    expect(client.getRecordTypes).not.toHaveBeenCalled();
+    expect(callCount(client, 'getRecordTypes')).toBe(0);
   });
 
   it('reads no plugin facts before a reconcile', async () => {
@@ -1061,7 +1052,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
 
     const children = await h.tree.getChildren(row);
 
-    expect(client.getRecordTypes).toHaveBeenCalledWith('A.esp', undefined);
+    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', undefined] });
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
   });
 
@@ -1322,7 +1313,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
     expect(await h.tree.getChildren()).toEqual([]);
 
-    h.client.getPlugins = vi.fn().mockRejectedValue(new Error('GET /plugins failed (503)'));
+    h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
     expect(await h.tree.refreshFacts()).toBeUndefined();
 
     expect(await h.tree.getChildren()).toHaveLength(1);
@@ -1349,8 +1340,10 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
     let resolveSlow!: (plugins: PluginMetadata[]) => void;
     const slow = new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; });
-    let calls = 0;
-    h.client.getPlugins = vi.fn(() => (++calls === 1 ? slow : Promise.resolve([held('A.esp')])));
+    // The first call answers with the still-pending `slow`; every call after falls through to
+    // the fixed answer below, once the queued step is drained.
+    h.client.setQueryAnswerOnce('getPlugins', slow as unknown as PluginMetadata[]);
+    h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
 
     // Setting the filter starts a fact re-read the backend is slow to answer.
     const filterSet = h.tree.refreshFacts();
@@ -1379,7 +1372,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
     const children = await h.tree.getChildren(row);
 
-    expect(client.getRecordTypes).toHaveBeenCalledWith('A.esp', undefined);
+    expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', undefined] });
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
     expect((children[0] as RecordTypeNode).label).toBe('Weapon');
@@ -1474,7 +1467,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
   // must not turn that into an empty list on its way through.
   it('renders whatever the record browser returns for a failed fetch, rather than swallowing it', async () => {
     const client = makeClient();
-    (client.getRecordTypes as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
+    client.setQueryFailure('getRecordTypes', new Error('boom'));
     const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
@@ -2061,7 +2054,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
   // cannot arrive at the same channel level.
   it('reports a failed plugin read at error, naming the reason once', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.getPlugins = vi.fn().mockRejectedValue(new Error('GET /plugins failed (503)'));
+    h.client.setQueryFailure('getPlugins', new Error('GET /plugins failed (503)'));
 
     await h.tree.applyReconciled([]);
 
@@ -2073,7 +2066,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
   it('reports a failed malformed-plugin scan at warn, below the read that succeeded', async () => {
     const h = makeTree([A_ROW()]);
-    h.client.getDiagnoses = vi.fn().mockRejectedValue(new Error('GET /plugins/diagnoses failed (503)'));
+    h.client.setQueryFailure('getDiagnoses', new Error('GET /plugins/diagnoses failed (503)'));
 
     await reconcile(h, [held('A.esp')]);
 

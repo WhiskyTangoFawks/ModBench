@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createApiClient, errorText, toLoadOrderStatus } from '../ApiClient';
+import { createApiClient, errorText, toLoadOrderStatus } from '../apiClient';
 
 describe('createApiClient', () => {
   it('uses the supplied port in the base URL', () => {

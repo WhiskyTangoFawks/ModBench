@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CrashRepairOffer } from '../ApiClient';
+import type { CrashRepairOffer } from '../client';
 import {
   messageFor, presentCrashRepairOffers,
   REPAIR_WORKING_TREE_BUTTON, REPAIR_AT_MAIN_BUTTON,

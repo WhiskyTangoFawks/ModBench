@@ -1,7 +1,6 @@
 import type { ExternalChangeDialogAnswer } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
-import type { UnansweredExternalChange, RebaseResult } from '../medit/ApiClient';
-import { isRefused } from '../medit/client';
+import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../medit/client';
 import type { ExternalChangeCoordinatorDeps } from '../medit/externalChangeCoordinator';
 
 /** The rebase offer is a separate, non-modal notification by contract, never folded into the

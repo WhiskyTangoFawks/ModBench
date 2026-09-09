@@ -1,154 +1,611 @@
-import type { EditingController } from '../EditingController';
-import type { PluginRepository } from '../PluginRepository';
-import type { NotificationSubscriber } from '../NotificationSubscriber';
+import type { RecordEditEnvelope } from '../messages';
+import {
+  createApiClient, errorText, isWriteGateTimeout, openNotificationStream,
+  toLoadOrderStatus, writeGateBusyMessage, type ApiClient,
+} from './apiClient';
+import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
-import type { MEditClient, NotificationKind, NotificationEvent, BackendStatus } from './MEditClient';
+import { SseNotificationSubscriber } from './notificationStream';
+import {
+  type BackendStatus, type CellPage, type CellReferences, type CompileResult,
+  type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
+  type LoadOrderPluginInput, type MEditClient, type NotificationEvent, type NotificationKind,
+  type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
+  type RebaseResult, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
+  type RecordCreateResponse, type RecordDeleteResponse, type RecordEditOutcome, type RecordPage,
+  type RecordRenumberResponse, type ReferenceResult, type TrackResponse, type TrackStatus,
+  type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused,
+} from './MEditClient';
+
+// No convention in ADR-0026 or docs/specs/plugins.md anchors this: 30s is an ordinary
+// HTTP-client default. A slow call and a hung one look the same to the tree, so nothing tries to
+// tell them apart.
+export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 export interface HttpMEditClientDeps {
-  controller: EditingController;
-  repository: PluginRepository;
-  /** The stream this client opens and closes with the backend — `SseNotificationSubscriber` in
-   *  production. */
-  notificationSubscriber: NotificationSubscriber & { start(): void; stop(): void };
   /** The process this client is the front of; nothing outside this module configures it. */
   backend: BackendLifecycleOptions;
+  /** Overrides the production fetch (undici, unlimited timeouts) — a test scripts the backend's
+   *  HTTP responses through this. */
+  fetch?: (input: Request) => Promise<Response>;
+  log?: (msg: string) => void;
+  timeoutMs?: number;
 }
 
-/** Composition over the modules behind the seam: every method forwards to `EditingController`,
- *  `PluginRepository` or `NotificationSubscriber`, and the process is this client's own. */
-export class HttpMEditClient implements MEditClient {
-  private readonly lifecycle: BackendLifecycle;
+// An esl-contradiction refusal's `error` never carries this extension on any other refusal, so a
+// truthy check is enough.
+function eslContradictionMessage(error: unknown): string | undefined {
+  const problem = error as { eslContradiction?: boolean; detail?: string } | undefined;
+  return problem?.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
+}
 
-  constructor(private readonly deps: HttpMEditClientDeps) {
+/** ADR-0022/ADR-0046: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
+ *  and the notification stream live only here, composed behind {@link MEditClient}. */
+export class HttpMEditClient implements MEditClient {
+  private readonly apiClient: ApiClient;
+  private readonly log: (msg: string) => void;
+  private readonly timeoutMs: number;
+  private readonly lifecycle: BackendLifecycle;
+  private readonly notifications: SseNotificationSubscriber;
+
+  constructor(deps: HttpMEditClientDeps) {
+    this.log = deps.log ?? (() => {});
+    this.timeoutMs = deps.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+    this.apiClient = createApiClient(deps.backend.port, deps.fetch ?? createUnlimitedFetch());
+    this.notifications = new SseNotificationSubscriber({
+      openStream: (signal) => openNotificationStream(this.apiClient, signal),
+      log: deps.log,
+    });
     this.lifecycle = new BackendLifecycle(deps.backend);
     // ADR-0046 invariant 12: the stream is open exactly while the backend is attached, so no
     // module outside this one starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
-      if (status === 'attached') deps.notificationSubscriber.start();
-      else deps.notificationSubscriber.stop();
+      if (status === 'attached') this.notifications.start();
+      else this.notifications.stop();
     });
   }
 
-  get status(): BackendStatus { return this.lifecycle.status; }
+  // ── lifecycle ────────────────────────────────────────────────────────────
 
+  get status(): BackendStatus { return this.lifecycle.status; }
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
     return this.lifecycle.onStatusChanged(listener);
   }
-
   start(): Promise<void> { return this.lifecycle.start(); }
   stop(): Promise<void> { return this.lifecycle.stop(); }
 
+  // ── notifications ────────────────────────────────────────────────────────
+
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
-    return this.deps.notificationSubscriber.subscribe(kind, listener);
+    return this.notifications.subscribe(kind, listener);
   }
 
-  putLoadOrder(...args: Parameters<MEditClient['putLoadOrder']>): ReturnType<MEditClient['putLoadOrder']> {
-    return this.deps.controller.putLoadOrder(...args);
+  // ADR-0046 invariant 12: `putLoadOrder` and `track` each ride one notification kind. `extract`
+  // picks that kind's payload out of the flat wire envelope; undefined skips the event.
+  private subscribeStatus<T>(
+    kind: NotificationKind,
+    extract: (event: NotificationEvent) => T | undefined,
+    onProgress: ((status: T) => void) | undefined,
+  ): () => void {
+    if (!onProgress) return () => {};
+    return this.notifications.subscribe(kind, (event) => {
+      const status = extract(event);
+      if (status !== undefined) onProgress(status);
+    });
   }
 
-  createPlugin(...args: Parameters<MEditClient['createPlugin']>): ReturnType<MEditClient['createPlugin']> {
-    return this.deps.controller.createPlugin(...args);
-  }
-  rebuildIndex(...args: Parameters<MEditClient['rebuildIndex']>): ReturnType<MEditClient['rebuildIndex']> {
-    return this.deps.controller.rebuildIndex(...args);
-  }
-  track(...args: Parameters<MEditClient['track']>): ReturnType<MEditClient['track']> {
-    return this.deps.controller.track(...args);
-  }
-  createRecord(...args: Parameters<MEditClient['createRecord']>): ReturnType<MEditClient['createRecord']> {
-    return this.deps.controller.createRecord(...args);
-  }
-  deleteRecord(...args: Parameters<MEditClient['deleteRecord']>): ReturnType<MEditClient['deleteRecord']> {
-    return this.deps.controller.deleteRecord(...args);
-  }
-  renumberRecord(...args: Parameters<MEditClient['renumberRecord']>): ReturnType<MEditClient['renumberRecord']> {
-    return this.deps.controller.renumberRecord(...args);
-  }
-  copyRecordAsOverride(
-    ...args: Parameters<MEditClient['copyRecordAsOverride']>
-  ): ReturnType<MEditClient['copyRecordAsOverride']> {
-    return this.deps.controller.copyRecordAsOverride(...args);
-  }
-  copyRecordAsNewRecord(
-    ...args: Parameters<MEditClient['copyRecordAsNewRecord']>
-  ): ReturnType<MEditClient['copyRecordAsNewRecord']> {
-    return this.deps.controller.copyRecordAsNewRecord(...args);
-  }
-  compile(...args: Parameters<MEditClient['compile']>): ReturnType<MEditClient['compile']> {
-    return this.deps.controller.compile(...args);
-  }
-  absorbUpstreamUpdate(
-    ...args: Parameters<MEditClient['absorbUpstreamUpdate']>
-  ): ReturnType<MEditClient['absorbUpstreamUpdate']> {
-    return this.deps.controller.absorbUpstreamUpdate(...args);
-  }
-  keepAsMyEdit(...args: Parameters<MEditClient['keepAsMyEdit']>): ReturnType<MEditClient['keepAsMyEdit']> {
-    return this.deps.controller.keepAsMyEdit(...args);
-  }
-  rebaseOntoMain(...args: Parameters<MEditClient['rebaseOntoMain']>): ReturnType<MEditClient['rebaseOntoMain']> {
-    return this.deps.controller.rebaseOntoMain(...args);
-  }
-  continueRebase(...args: Parameters<MEditClient['continueRebase']>): ReturnType<MEditClient['continueRebase']> {
-    return this.deps.controller.continueRebase(...args);
-  }
-  editRecord(...args: Parameters<MEditClient['editRecord']>): ReturnType<MEditClient['editRecord']> {
-    return this.deps.repository.editRecord(...args);
+  // ── writes ───────────────────────────────────────────────────────────────
+
+  // Every write verb below shares this shape: POST, map a non-ok response or a thrown request
+  // onto WriteRefused, otherwise hand back the wire data untouched. No refresh, no toast — the
+  // caller does both, from what this returns.
+  private async mutate<T>(spec: {
+    op: string;
+    failMsg: string;
+    post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
+    onEslContradiction?: (message: string) => Promise<T | WriteRefused | undefined>;
+  }): Promise<T | WriteRefused | undefined> {
+    try {
+      const { data, error, response } = await spec.post();
+      if (!response.ok) {
+        const eslMessage = spec.onEslContradiction && eslContradictionMessage(error);
+        if (eslMessage) return spec.onEslContradiction!(eslMessage);
+        // Contended, not broken — the write was never attempted, so this is worth repeating.
+        // Before the generic branch, which would relay the backend's own timeout prose verbatim
+        // and read as fatally as a load order that has gone away.
+        if (isWriteGateTimeout(error)) {
+          this.log(`[HttpMEditClient] ${spec.op} hit the write gate (${response.status}): ${errorText(error)}`);
+          return { refused: true, message: writeGateBusyMessage(spec.failMsg) };
+        }
+        const text = errorText(error);
+        this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
+        return { refused: true, message: `${spec.failMsg} — ${text}` };
+      }
+      return data;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[HttpMEditClient] ${spec.op} threw: ${message}`);
+      return { refused: true, message: `${spec.failMsg} — ${message}` };
+    }
   }
 
-  getPlugins(): ReturnType<MEditClient['getPlugins']> { return this.deps.repository.getPlugins(); }
-  getDiagnoses(): ReturnType<MEditClient['getDiagnoses']> { return this.deps.repository.getDiagnoses(); }
-  getRecordTypes(...args: Parameters<MEditClient['getRecordTypes']>): ReturnType<MEditClient['getRecordTypes']> {
-    return this.deps.repository.getRecordTypes(...args);
+  async createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused> {
+    const { error, response, data } = await this.apiClient.POST('/plugins/create', { body: { name, path, origin } });
+    if (!response.ok) {
+      const text = errorText(error);
+      this.log(`[HttpMEditClient] createPlugin failed (${response.status}): ${text}`);
+      return { refused: true, message: `mEdit: Failed to create plugin — ${text}` };
+    }
+    return data ?? { name, path, origin, slot: null };
   }
-  getRecords(...args: Parameters<MEditClient['getRecords']>): ReturnType<MEditClient['getRecords']> {
-    return this.deps.repository.getRecords(...args);
+
+  /** ADR-0046: Refresh's first step — drops the instance's index file and reopens it empty,
+   *  refusing (423) exactly as `putLoadOrder` does when another window holds it. `onFailure` is
+   *  the caller's report, never a bare toast (modbench/CLAUDE.md). */
+  async rebuildIndex(
+    instanceRoot: string, onFailure: (message: string, detail: string) => void, gameRelease: string,
+  ): Promise<boolean> {
+    const { error, response } = await this.apiClient.POST('/index/rebuild', { body: { instanceRoot, gameRelease } });
+    if (!response.ok) {
+      const text = errorText(error);
+      this.log(`[HttpMEditClient] rebuildIndex failed (${response.status}): ${text}`);
+      onFailure('mEdit: Could not rebuild the index', text);
+      return false;
+    }
+    return true;
   }
-  searchRecords(...args: Parameters<MEditClient['searchRecords']>): ReturnType<MEditClient['searchRecords']> {
-    return this.deps.repository.searchRecords(...args);
+
+  /** `gameDirectory` must be the resolved Data folder — the backend prepends implicit masters
+   *  from it. The backend keys its persistent index on `instanceRoot` (ADR-0001) because `origin`
+   *  is a folder *name*, unique only within one instance. */
+  async putLoadOrder(
+    plugins: LoadOrderPluginInput[],
+    gameDirectory: string,
+    instanceRoot: string,
+    gameRelease: string,
+    options: LoadOrderOptions = {},
+  ): Promise<LoadOrderOutcome> {
+    // The PUT stays blocking and the generated openapi-fetch client has no streaming path, so
+    // progress rides the load-order-status notification alongside the still in-flight PUT.
+    const unsubscribe = this.subscribeStatus(
+      'load-order-status', (event) => (event.loadOrderStatus ? toLoadOrderStatus(event.loadOrderStatus) : undefined),
+      options.onProgress,
+    );
+    // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
+    // loses every tick published before it connects — and with them the progressive chevrons.
+    await this.notifications.whenConnected();
+    let result;
+    try {
+      result = await this.apiClient.PUT('/load-order', {
+        body: { plugins, gameDirectory, instanceRoot, gameRelease },
+        // Aborts the request itself rather than leaving it to notice a dead socket.
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+    } catch (e) {
+      if (this.wasDeliberatelyAborted(options.signal)) return { outcome: 'abandoned' };
+      throw e;
+    } finally {
+      unsubscribe();
+    }
+    const { data, error, response } = result;
+    // 409 is the backend saying this snapshot was superseded: treating it as a failure would make
+    // the caller act on a load order the newer snapshot now owns. Checked before `!response.ok`,
+    // which would otherwise swallow it.
+    if (response.status === 409) {
+      this.log(`[HttpMEditClient] putLoadOrder was superseded (409): ${errorText(error)}`);
+      return { outcome: 'abandoned' };
+    }
+    if (!response.ok) {
+      const text = errorText(error);
+      this.log(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
+      return { outcome: 'failed', message: `mEdit: Failed to send the load order — ${text}` };
+    }
+    // `data` is undefined only on a non-ok response, already returned above; both lists are
+    // non-nullable on the wire, so there is nothing left to coalesce per field.
+    const reconciled = data ?? { failures: [], crashRepairOffers: [] };
+    return { outcome: 'reconciled', failures: reconciled.failures, crashRepairOffers: reconciled.crashRepairOffers };
   }
-  getRecordOwner(...args: Parameters<MEditClient['getRecordOwner']>): ReturnType<MEditClient['getRecordOwner']> {
-    return this.deps.repository.getRecordOwner(...args);
+
+  // An abort is the one rejection that is not a failure: the teardown is already underway.
+  private wasDeliberatelyAborted(signal: AbortSignal | undefined): boolean {
+    if (!signal?.aborted) return false;
+    this.log('[HttpMEditClient] putLoadOrder was aborted — mEdit was closed while it reconciled');
+    return true;
   }
-  getRecordOverridePlugins(
-    ...args: Parameters<MEditClient['getRecordOverridePlugins']>
-  ): ReturnType<MEditClient['getRecordOverridePlugins']> {
-    return this.deps.repository.getRecordOverridePlugins(...args);
+
+  /** The Track gesture (ADR-0041): every loaded plugin sharing `origin` is tracked together,
+   *  resolved backend-side. A 409 means it was already tracked. */
+  async track(
+    origin: string, preset: 'Edits' | 'Everything', options: { onProgress?: (status: TrackStatus) => void } = {},
+  ): Promise<TrackResponse | WriteRefused> {
+    // The POST stays blocking, so progress rides the track-progress notification alongside it.
+    const unsubscribe = this.subscribeStatus('track-progress', (event) => event.trackProgress ?? undefined, options.onProgress);
+    try {
+      return await this.mutate<TrackResponse>({
+        op: `track(${origin})`,
+        failMsg: `mEdit: Could not track "${origin}"`,
+        post: () => this.apiClient.POST('/plugins/track', { body: { origin, preset } }),
+      }) as TrackResponse | WriteRefused;
+    } finally {
+      unsubscribe();
+    }
   }
-  peekNextFreeFormKey(
-    ...args: Parameters<MEditClient['peekNextFreeFormKey']>
-  ): ReturnType<MEditClient['peekNextFreeFormKey']> {
-    return this.deps.repository.peekNextFreeFormKey(...args);
+
+  /** `formKey` is xEdit's typed-FormID path; left undefined, the backend auto-allocates.
+   *  `onEslContradiction` opts in to prompt-and-retry; resolves `undefined` when the caller
+   *  declines the prompt — nothing happened, not a refusal. */
+  async createRecord(
+    plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
+    onEslContradiction?: (message: string) => Promise<boolean>,
+  ): Promise<RecordCreateResponse | WriteRefused | undefined> {
+    return this.mutate<RecordCreateResponse>({
+      op: `createRecord(${plugin}, ${recordType})`,
+      failMsg: `mEdit: Could not create a new ${recordType} record in "${plugin}"`,
+      post: () => this.apiClient.POST('/plugins/{plugin}/records', {
+        params: { path: { plugin } },
+        body: { origin, recordType, editorId: editorId ?? null, formKey: formKey ?? null },
+      }),
+      onEslContradiction: onEslContradiction && (async (message) => (
+        (await onEslContradiction(message))
+          ? this.createRecord(plugin, origin, recordType, editorId, formKey, onEslContradiction)
+          : undefined
+      )),
+    });
   }
-  getReferences(...args: Parameters<MEditClient['getReferences']>): ReturnType<MEditClient['getReferences']> {
-    return this.deps.repository.getReferences(...args);
+
+  /** The source file goes away and the null-Body mechanism takes it from there: gone at
+   *  Effective, still served at Head until compiled. This method never asks for confirmation. */
+  async deleteRecord(formKey: string, plugin: string, origin: string): Promise<RecordDeleteResponse | WriteRefused | undefined> {
+    return this.mutate<RecordDeleteResponse>({
+      op: `deleteRecord(${formKey})`,
+      failMsg: `mEdit: Could not delete ${formKey}`,
+      post: () => this.apiClient.POST('/records/{formKey}/delete', { params: { path: { formKey } }, body: { plugin, origin } }),
+    });
   }
-  getWorldspaces(...args: Parameters<MEditClient['getWorldspaces']>): ReturnType<MEditClient['getWorldspaces']> {
-    return this.deps.repository.getWorldspaces(...args);
+
+  /** A delete+create pair plus the cross-plugin reference cascade; an override is refused
+   *  server-side (native records only). `newFormKey` left undefined auto-allocates. */
+  async renumberRecord(
+    formKey: string, plugin: string, origin: string, newFormKey?: string,
+  ): Promise<RecordRenumberResponse | WriteRefused | undefined> {
+    return this.mutate<RecordRenumberResponse>({
+      op: `renumberRecord(${formKey})`,
+      failMsg: `mEdit: Could not renumber ${formKey}`,
+      post: () => this.apiClient.POST('/records/{formKey}/renumber', {
+        params: { path: { formKey } },
+        body: { plugin, origin, newFormKey: newFormKey ?? null },
+      }),
+    });
   }
-  getWorldspaceBlocks(
-    ...args: Parameters<MEditClient['getWorldspaceBlocks']>
-  ): ReturnType<MEditClient['getWorldspaceBlocks']> {
-    return this.deps.repository.getWorldspaceBlocks(...args);
+
+  /** No confirmation — xEdit's own CopyInto asks nothing before an override copy. Success
+   *  carries no new FormKey: an override echoes the caller's own. */
+  async copyRecordAsOverride(
+    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
+  ): Promise<RecordCopyAsOverrideResponse | WriteRefused | undefined> {
+    return this.mutate<RecordCopyAsOverrideResponse>({
+      op: `copyRecordAsOverride(${formKey})`,
+      failMsg: `mEdit: Could not copy ${formKey} into "${destinationPlugin}"`,
+      post: () => this.apiClient.POST('/records/{formKey}/copy-as-override', {
+        params: { path: { formKey } },
+        body: { sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin },
+      }),
+    });
   }
-  getCellReferences(
-    ...args: Parameters<MEditClient['getCellReferences']>
-  ): ReturnType<MEditClient['getCellReferences']> {
-    return this.deps.repository.getCellReferences(...args);
+
+  /** A deep copy under a fresh FormKey, no EditorID prompt. Resolves `undefined` when the caller
+   *  declines the ESL prompt. */
+  async copyRecordAsNewRecord(
+    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
+    requestedFormKey?: string, onEslContradiction?: (message: string) => Promise<boolean>,
+  ): Promise<RecordCopyAsNewRecordResponse | WriteRefused | undefined> {
+    return this.mutate<RecordCopyAsNewRecordResponse>({
+      op: `copyRecordAsNewRecord(${formKey})`,
+      failMsg: `mEdit: Could not copy ${formKey} into "${destinationPlugin}"`,
+      post: () => this.apiClient.POST('/records/{formKey}/copy-as-new-record', {
+        params: { path: { formKey } },
+        body: {
+          sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey: requestedFormKey ?? null,
+        },
+      }),
+      onEslContradiction: onEslContradiction && (async (message) => (
+        (await onEslContradiction(message))
+          ? this.copyRecordAsNewRecord(
+            formKey, sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey,
+            onEslContradiction,
+          )
+          : undefined
+      )),
+    });
   }
-  getInteriorCells(...args: Parameters<MEditClient['getInteriorCells']>): ReturnType<MEditClient['getInteriorCells']> {
-    return this.deps.repository.getInteriorCells(...args);
+
+  /** {@link WriteRefused} on a transport/HTTP failure — distinct from `succeeded: false`, a typed
+   *  refusal the caller reads off the returned `CompileResult` itself. Never refreshes the tree:
+   *  a compiled binary changes only bytes on disk. */
+  async compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | WriteRefused | undefined> {
+    return this.mutate<CompileResult>({
+      op: `compile(${plugin})`,
+      failMsg: `mEdit: Could not compile "${plugin}"`,
+      post: () => this.apiClient.POST('/plugins/{plugin}/compile', { params: { path: { plugin } }, body: { origin, ref: atRef ?? null } }),
+    });
   }
-  getContainerChildren(
-    ...args: Parameters<MEditClient['getContainerChildren']>
-  ): ReturnType<MEditClient['getContainerChildren']> {
-    return this.deps.repository.getContainerChildren(...args);
+
+  /** A refusal (e.g. "could not be parsed") rides a 200 as `succeeded: false` — the caller reads
+   *  `refusalReason` off the returned value itself. */
+  async absorbUpstreamUpdate(plugin: string, origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
+    return this.mutate<ExternalChangeActionResult>({
+      op: `absorbUpstreamUpdate(${plugin})`,
+      failMsg: `mEdit: Could not absorb the upstream update for "${plugin}"`,
+      post: () => this.apiClient.POST('/plugins/{plugin}/external-change/absorb', { params: { path: { plugin } }, body: { origin } }),
+    });
   }
-  implicitMasters(...args: Parameters<MEditClient['implicitMasters']>): ReturnType<MEditClient['implicitMasters']> {
-    return this.deps.controller.implicitMasters(...args);
+
+  /** A same-record collision with existing working-tree dirt is a typed refusal
+   *  (`succeeded === false`, `refusalReason` naming the records), never an HTTP error. */
+  async keepAsMyEdit(plugin: string, origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined> {
+    return this.mutate<ExternalChangeActionResult>({
+      op: `keepAsMyEdit(${plugin})`,
+      failMsg: `mEdit: Could not keep "${plugin}" as your own edit`,
+      post: () => this.apiClient.POST('/plugins/{plugin}/external-change/keep', { params: { path: { plugin } }, body: { origin } }),
+    });
   }
-  setFilter(...args: Parameters<MEditClient['setFilter']>): ReturnType<MEditClient['setFilter']> {
-    return this.deps.repository.setFilter(...args);
+
+  /** Origin-scoped: the repo, not any one plugin, is the unit of baselines and rebase. */
+  async rebaseOntoMain(origin: string): Promise<RebaseResult | WriteRefused | undefined> {
+    return this.postRebase('/plugins/rebase', origin, 'rebaseOntoMain');
   }
-  clearFilter(): ReturnType<MEditClient['clearFilter']> { return this.deps.repository.clearFilter(); }
-  getActiveFilter(): ReturnType<MEditClient['getActiveFilter']> { return this.deps.repository.getActiveFilter(); }
+
+  /** Resumes a rebase left mid-flight by {@link rebaseOntoMain}'s own `Conflicted` outcome, after
+   *  the user hand-resolves the conflicted source file(s) in the native merge editor. */
+  async continueRebase(origin: string): Promise<RebaseResult | WriteRefused | undefined> {
+    return this.postRebase('/plugins/rebase/continue', origin, 'continueRebase');
+  }
+
+  private async postRebase(
+    path: '/plugins/rebase' | '/plugins/rebase/continue', origin: string, opName: string,
+  ): Promise<RebaseResult | WriteRefused | undefined> {
+    return this.mutate<RebaseResult>({
+      op: `${opName}(${origin})`,
+      failMsg: `mEdit: Could not rebase "${origin}"`,
+      post: () => this.apiClient.POST(path, { body: { origin } }),
+    });
+  }
+
+  /** ADR-0041: the single write path. A refusal (untracked plugin, a link that would dangle) is
+   *  an expected answer and comes back typed; only a transport failure rejects. */
+  async editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome> {
+    const spelled = JSON.stringify(envelope.path);
+    const { data, error, response } = await this.apiClient.POST('/records/{formKey}/edit', {
+      params: { path: { formKey } },
+      body: { plugin, origin, ...envelope },
+    });
+    if (response.ok && data?.applied) return { applied: true };
+
+    // The one gate-wrapped write that does not reach the user through `mutate`, so the busy
+    // branch is stated here too, before the refusal shaping below would relay the gate's prose
+    // as a judgement on this edit.
+    if (isWriteGateTimeout(error)) {
+      const message = writeGateBusyMessage('Could not edit this record');
+      this.log(`[HttpMEditClient] editRecord(${formKey} ${envelope.op} ${spelled}) hit the write gate (${response.status})`);
+      return { applied: false, refusal: 'WriteGateBusy', message };
+    }
+
+    // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
+    // from the status: only it tells "not tracked" from "no folder", whose ways out differ.
+    const problem = error as { refusal?: string; detail?: string } | undefined;
+    const outcome: RecordEditOutcome = {
+      applied: false,
+      refusal: problem?.refusal ?? 'Unknown',
+      message: problem?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
+    };
+    this.log(`[HttpMEditClient] editRecord(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
+    return outcome;
+  }
+
+  // ── reads ────────────────────────────────────────────────────────────────
+
+  // Never swallow a read failure into an empty list: it would be indistinguishable from
+  // genuinely empty data, so the tree could not render an ErrorNode (ADR-0026). A 200 with an
+  // absent body is a legitimate empty result.
+  private ensureOk(what: string, response: Response, error?: unknown): void {
+    if (response.ok) return;
+    const text = errorText(error);
+    const detail = text ? `: ${text}` : '';
+    const msg = `${what} failed (${response.status})${detail}`;
+    this.log(`[HttpMEditClient] ${msg}`);
+    throw new Error(msg);
+  }
+
+  // Races rather than trusting the fetch to honor the signal: a hung backend and an
+  // uncooperative test double both still settle the promise. The signal is aborted anyway, so a
+  // fetch that honors it cancels for real.
+  private async withTimeout<T>(what: string, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    let timer!: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error(`${what} timed out after ${this.timeoutMs}ms`));
+      }, this.timeoutMs);
+    });
+    try {
+      return await Promise.race([fn(controller.signal), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async getPlugins(): Promise<PluginMetadata[]> {
+    const { data, error, response } = await this.apiClient.GET('/plugins', {});
+    this.ensureOk('GET /plugins', response, error);
+    return data ?? [];
+  }
+
+  async getDiagnoses(): Promise<PluginDiagnosisReport[]> {
+    const { data, error, response } = await this.apiClient.GET('/plugins/diagnoses', {});
+    this.ensureOk('GET /plugins/diagnoses', response, error);
+    return data ?? [];
+  }
+
+  async getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]> {
+    return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/record-types', {
+        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getRecordTypes(${plugin})`, response, error);
+      return data ?? [];
+    });
+  }
+
+  async getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage> {
+    return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/records', {
+        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        signal,
+      });
+      this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
+      return data ?? { items: [], total: 0 };
+    });
+  }
+
+  async searchRecords(query: string, validTypes: string[]): Promise<RecordPage> {
+    const { data, error, response } = await this.apiClient.GET('/records', {
+      params: { query: { search: query, ...(validTypes.length === 1 ? { type: validTypes[0] } : {}), limit: 20 } },
+    });
+    this.ensureOk(`searchRecords(${query})`, response, error);
+    return data ?? { items: [], total: 0 };
+  }
+
+  async getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined> {
+    const { data, error, response } = await this.apiClient.GET('/records/{formKey}', { params: { path: { formKey } } });
+    if (response.status === 404) return undefined;
+    this.ensureOk(`getRecordOwner(${formKey})`, response, error);
+    return data ? { plugin: data.plugin, origin: data.origin } : undefined;
+  }
+
+  // See the interface's own doc comment — a 404 (unknown FormKey) is "nothing carries it
+  // yet", not a fault, same posture as getRecordOwner's own 404 case above.
+  async getRecordOverridePlugins(formKey: string): Promise<string[]> {
+    const { data, error, response } = await this.apiClient.GET('/records/{formKey}/compare', { params: { path: { formKey } } });
+    if (response.status === 404) return [];
+    this.ensureOk(`getRecordOverridePlugins(${formKey})`, response, error);
+    return (data?.overrides ?? []).map((o) => o.plugin);
+  }
+
+  async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {
+    const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/next-form-key', {
+      params: { path: { plugin }, query: { origin } },
+    });
+    this.ensureOk(`peekNextFreeFormKey(${plugin})`, response, error);
+    return data?.formKey ?? '';
+  }
+
+  async getReferences(formKey: string): Promise<ReferenceResult[]> {
+    const { data, error, response } = await this.apiClient.GET('/records/{formKey}/references', { params: { path: { formKey } } });
+    this.ensureOk(`getReferences(${formKey})`, response, error);
+    return data ?? [];
+  }
+
+  async setFilter(sql: string): Promise<string | null> {
+    try {
+      const { error, response } = await this.apiClient.POST('/load-order/filter', { body: { sql } });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[HttpMEditClient] setFilter failed (${response.status}): ${text}`);
+        return text;
+      }
+      return null;
+    } catch (e) {
+      this.log(`[HttpMEditClient] setFilter failed: ${e instanceof Error ? e.message : String(e)}`);
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  async clearFilter(): Promise<void> {
+    try {
+      const { error, response } = await this.apiClient.DELETE('/load-order/filter', {});
+      if (!response.ok) this.log(`[HttpMEditClient] clearFilter failed (${response.status}): ${errorText(error)}`);
+    } catch (e) {
+      this.log(`[HttpMEditClient] clearFilter failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async getActiveFilter(): Promise<string | null> {
+    const { data, error, response } = await this.apiClient.GET('/load-order/filter', {});
+    this.ensureOk('getActiveFilter', response, error);
+    return data?.sql ?? null;
+  }
+
+  async getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]> {
+    return this.withTimeout(`getWorldspaces(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces', {
+        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getWorldspaces(${plugin})`, response, error);
+      return data ?? [];
+    });
+  }
+
+  async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks> {
+    return this.withTimeout(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
+        params: { path: { plugin, formKey: worldspaceFormKey }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
+      return data ?? { topCells: [], blocks: [] };
+    });
+  }
+
+  async getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences> {
+    return this.withTimeout(`getCellReferences(${plugin}, ${cellFormKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/cells/{formKey}/references', {
+        params: { path: { plugin, formKey: cellFormKey }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
+      return data ?? { persistent: [], temporary: [] };
+    });
+  }
+
+  async getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage> {
+    return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/interior-cells', {
+        params: { path: { plugin }, query: { offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        signal,
+      });
+      this.ensureOk(`getInteriorCells(${plugin})`, response, error);
+      return data ?? { items: [], total: 0 };
+    });
+  }
+
+  async getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]> {
+    return this.withTimeout(`getContainerChildren(${plugin}, ${parentFormKey})`, async (signal) => {
+      const { data, error, response } = await this.apiClient.GET('/plugins/{plugin}/records/{formKey}/children', {
+        params: { path: { plugin, formKey: parentFormKey }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
+      return data ?? [];
+    });
+  }
+
+  /** The plugins this install loads with no plugins.txt line, in load order. `undefined` on any
+   *  failure: "unknown" and "none" are different answers, and the reconcile writes on one. */
+  async implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined> {
+    let result;
+    try {
+      result = await this.apiClient.GET('/implicit-masters', { params: { query: { gameDirectory, gameRelease } } });
+    } catch (e) {
+      this.log(`[HttpMEditClient] implicitMasters failed: ${e instanceof Error ? e.message : String(e)}`);
+      return undefined;
+    }
+    if (!result.response.ok || result.data === undefined) {
+      this.log(`[HttpMEditClient] implicitMasters failed (${result.response.status}): ${errorText(result.error)}`);
+      return undefined;
+    }
+    return result.data;
+  }
 }
