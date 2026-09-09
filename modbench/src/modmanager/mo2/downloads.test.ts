@@ -58,6 +58,15 @@ describe('parseDownloadMeta', () => {
     expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').modID).toBeUndefined();
   });
 
+  it('reads fileID as the Nexus file id', () => {
+    expect(parseDownloadMeta('[General]\r\nfileID=456\r\n').fileID).toBe('456');
+  });
+
+  it('treats fileID=0 or an absent fileID as no id, same as modID', () => {
+    expect(parseDownloadMeta('[General]\r\nfileID=0\r\n').fileID).toBeUndefined();
+    expect(parseDownloadMeta('[General]\r\ninstalled=true\r\n').fileID).toBeUndefined();
+  });
+
   it('reads removed=true as hidden (a separate axis from Status)', () => {
     expect(parseDownloadMeta('[General]\r\nremoved=true\r\n').hidden).toBe(true);
   });
@@ -358,5 +367,15 @@ describe('buildDownloadRows', () => {
   it('carries version through from .meta', () => {
     const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nversion=1.2.3\r\n')]);
     expect(rows[0].version).toBe('1.2.3');
+  });
+
+  it('carries fileID through from .meta', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nfileID=456\r\n')]);
+    expect(rows[0].fileID).toBe('456');
+  });
+
+  it('carries no fileID when the sidecar has none', () => {
+    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nmodID=12345\r\n')]);
+    expect(rows[0].fileID).toBeUndefined();
   });
 });

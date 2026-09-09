@@ -1,6 +1,13 @@
 // A read-view over the raw MO2 files: these types never own serialization, which stays with
 // the byte-faithful text transforms in mo2/.
 
+/** One meta.ini `[installedFiles]` entry — a Nexus mod/file id pair MO2 recorded as
+ *  installed. Field names match the array's own (lowercase) keys. */
+export interface InstalledFileId {
+  modid: string;
+  fileid: string;
+}
+
 export interface Mod {
   kind: 'mod';
   name: string;
@@ -9,6 +16,9 @@ export interface Mod {
   version?: string;
   nexusId?: string;
   archiveFilename?: string;
+  /** meta.ini's `[installedFiles]` array, in index order; undefined when the
+   *  section is absent — the upgrade pick's exact-file match. */
+  installedFiles?: readonly InstalledFileId[];
 }
 
 export interface Separator {
