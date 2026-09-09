@@ -1,8 +1,10 @@
 // The only per-game knowledge left in the extension is two tables keyed by release —
-// modmanager/mo2/gamePaths.ts and modmanager/mo2/loadOrderDestination.ts. Every other file
-// names no game.
+// modmanager/mo2/gamePaths.ts and modmanager/mo2/loadOrderDestination.ts. Scoped to src/:
+// webview/src/presentation.ts's per-game schema is Editing's own concern.
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
 import { knownReleases, gamePathInfoForRelease } from '../modmanager/mo2/gamePaths';
 import { loadOrderAppDataFolder } from '../modmanager/mo2/loadOrderDestination';
@@ -70,26 +72,46 @@ function tsFiles(dir: string): string[] {
   return out;
 }
 
+// Shared by the production assertion and the self-test below, so a broken walk — a wrong root, a
+// silently-excluded directory — fails both the same way, not just the regex.
+function findOffenders(root: string, tableFiles: string[], allowlist: string[]): Record<string, string[]> {
+  const offenders: Record<string, string[]> = {};
+  for (const path of tsFiles(root).filter((p) => !p.endsWith(SELF))) {
+    const relPath = relative(root, path);
+    if (tableFiles.includes(relPath) || allowlist.includes(relPath) || isTestSupport(relPath)) continue;
+    const hits = gameNameLiteralsIn(readFileSync(path, 'utf8'));
+    if (hits.length > 0) offenders[relPath] = hits;
+  }
+  return offenders;
+}
+
 // Covered: a table literal or a script-extender token, planted anywhere in production source,
 // case-insensitively. Not covered: a name built at runtime, or a game the table does not yet
 // know — pluginBinaryScan.test.ts's own limit.
 
 describe('no extension file names a game outside the two tables', () => {
-  const scanned = tsFiles(SRC).filter((path) => !path.endsWith(SELF));
-
   it('covers the whole extension source tree', () => {
-    expect(scanned.length).toBeGreaterThan(100);
+    expect(tsFiles(SRC).filter((path) => !path.endsWith(SELF)).length).toBeGreaterThan(100);
   });
 
   it('scans clean outside the two tables and the allowlist', () => {
-    const offenders: Record<string, string[]> = {};
-    for (const path of scanned) {
-      const relPath = relative(SRC, path);
-      if (TABLE_FILES.includes(relPath) || ALLOWLIST.includes(relPath) || isTestSupport(relPath)) continue;
-      const hits = gameNameLiteralsIn(readFileSync(path, 'utf8'));
-      if (hits.length > 0) offenders[relPath] = hits;
+    expect(findOffenders(SRC, TABLE_FILES, ALLOWLIST)).toEqual({});
+  });
+
+  // Rival: the traversal itself breaks (wrong root, an excluded directory) rather than the
+  // regex — this runs the real walk over a real file, not a hand-built string.
+  it('the tree walk itself catches a planted game name, not just the matcher', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'medit-game-name-scan-'));
+    try {
+      await mkdir(join(dir, 'nested'));
+      await writeFile(join(dir, 'topLevel.ts'), "export const label = 'not a game';\n");
+      await writeFile(join(dir, 'nested', 'plantedGame.ts'), "export const label = 'Skyrim';\n");
+      const offenders = findOffenders(dir, [], []);
+      expect(Object.keys(offenders)).toEqual([join('nested', 'plantedGame.ts')]);
+      expect(offenders[join('nested', 'plantedGame.ts')]).toEqual(expect.arrayContaining(['Skyrim']));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
-    expect(offenders).toEqual({});
   });
 
   it('the allowlist is exactly the one stated exemption', () => {
