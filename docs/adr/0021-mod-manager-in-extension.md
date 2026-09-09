@@ -9,8 +9,8 @@ status: accepted
 **The mod-management subsystem lives in the extension** (`modbench/src/modmanager/`), not in
 `MEditService`: install, enable/disable, ordering, file-conflict index, hardlink deploy/purge,
 game-path resolution. Mod management is file/HTTP/JSON work, and **the extension parses no
-plugin binary** — every fact about a plugin's contents, its master list and the implicit masters
-this install forces on included, comes from the backend through the generated client, asserted by
+plugin binary** — a plugin's declared masters, and which plugins this install loads with no
+`plugins.txt` line, both come from the backend through the generated client, asserted by
 `modbench/src/test/pluginBinaryScan.test.ts`. Node provides hardlinks natively
 (`fs.link`), and the mod-manager UI surface (tree views, status bar) already lives in the
 extension — `SecretStorage` and a `nxm://` handler are designed to live there too once built

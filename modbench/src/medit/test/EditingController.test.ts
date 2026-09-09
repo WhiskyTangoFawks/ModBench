@@ -882,7 +882,7 @@ describe('EditingController.implicitMasters', () => {
     client.GET = vi.fn().mockResolvedValue({ data: ['Fallout4.esm', 'ccTest.esl'], response: { ok: true } });
     const controller = new EditingController(makeDeps({ client }));
 
-    expect(await controller.implicitMasters('/game/Data')).toEqual(['Fallout4.esm', 'ccTest.esl']);
+    expect(await controller.implicitMasters('/game/Data', 'Fallout4')).toEqual(['Fallout4.esm', 'ccTest.esl']);
     expect(client.GET).toHaveBeenCalledWith('/implicit-masters', {
       params: { query: { gameDirectory: '/game/Data', gameRelease: 'Fallout4' } },
     });
@@ -894,7 +894,7 @@ describe('EditingController.implicitMasters', () => {
     const log = vi.fn();
     const controller = new EditingController(makeDeps({ client, log }));
 
-    expect(await controller.implicitMasters('/no/such/Data')).toBeUndefined();
+    expect(await controller.implicitMasters('/no/such/Data', 'Fallout4')).toBeUndefined();
     expect(log).toHaveBeenCalledWith(expect.stringContaining('implicitMasters'));
   });
 
@@ -904,7 +904,7 @@ describe('EditingController.implicitMasters', () => {
     const log = vi.fn();
     const controller = new EditingController(makeDeps({ client, log }));
 
-    expect(await controller.implicitMasters('/game/Data')).toBeUndefined();
+    expect(await controller.implicitMasters('/game/Data', 'Fallout4')).toBeUndefined();
     expect(log).toHaveBeenCalledWith(expect.stringContaining('implicitMasters'));
   });
 });

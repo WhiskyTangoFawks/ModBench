@@ -6,7 +6,8 @@ import type { Instance } from './instance';
 // and the loop stops; a reconcile that wrote unconditionally would never end it.
 export function registerPluginsReconcile(
   instance: Pick<Instance, 'subscribe'>,
-  run: (profile: string, dataFolder: string | undefined) => Promise<unknown>,
+  run: (profile: string, dataFolder: string | undefined, gameName: string) => Promise<unknown>,
 ): vscode.Disposable {
-  return instance.subscribe((value) => void run(value.activeProfile, value.gameDirectory?.dataFolder));
+  return instance.subscribe((value) =>
+    void run(value.activeProfile, value.gameDirectory?.dataFolder, value.gameRelease));
 }

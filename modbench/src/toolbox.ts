@@ -12,6 +12,7 @@ import { PluginListProvider, pluginFileOf, type PluginListNode, type PluginListS
 import { PluginsTreeComposite, type PluginFacts } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
+import { gameReleaseForGame } from './modmanager/mo2/gameRelease';
 import type { Reporter } from './modmanager/deployer';
 import type { LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
 import { resolvePluginDestination, type PluginDestinationChoice } from './modmanager/pluginDestination';
@@ -523,15 +524,21 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   session.loadOrderSync = own(makeLoadOrderSync({
     session, instanceRoot, instance, controller, outputChannel, heldPluginFiles, showCrashRepairOffers,
   }));
-  // The backend answers this, never the extension (ADR-0021), and it needs the Data folder to
-  // answer at all — so an unresolved one is the same "unknown" an unreachable backend is.
-  const implicitMastersIn = (folder: string | undefined): Promise<string[] | undefined> =>
-    folder === undefined ? Promise.resolve(undefined) : controller.implicitMasters(folder);
+  // The backend answers this, never the extension (ADR-0021), and it needs both the Data folder
+  // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
+  // backend are one answer: unknown.
+  const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> => {
+    const release = gameReleaseForGame(gameName);
+    return folder === undefined || release === undefined
+      ? Promise.resolve(undefined)
+      : controller.implicitMasters(folder, release);
+  };
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
-  const runPluginsReconcile = async (profile: string, folder: string | undefined) => {
+  const runPluginsReconcile = async (profile: string, folder: string | undefined, gameName: string) => {
     const result = await reconcilePlugins(
-      instanceRoot, profile, folder, () => implicitMastersIn(folder), (msg) => outputChannel.debug(msg));
+      instanceRoot, profile, folder, () => implicitMastersIn(folder, gameName),
+      (msg) => outputChannel.debug(msg));
     if (!result.applied) {
       outputChannel.error(`[modmanager] Plugins reconcile failed: ${result.refusal}`);
       return;
@@ -545,7 +552,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   };
   const pluginListProvider = registerPluginListView({
     own, session, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder,
-    implicitMasters: async () => implicitMastersIn(await dataFolder()), instance, recordBrowser,
+    implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
+    instance, recordBrowser,
   });
   const { modListView, updateProfileDescription } = createModListView(own, modListProvider, instance);
   const runModAction = async (logLabel: string, failMessage: string, action: () => Promise<void>) => {

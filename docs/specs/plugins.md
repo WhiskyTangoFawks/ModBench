@@ -650,8 +650,8 @@ overflow, then native **Collapse All** last.
   `overwrite/`, not the game's `Data/` folder (DLC and Creation Club lines stay) — is **pruned**.
   A `.mohidden` file is not present. An implicit master (the backend's own list, rendered as a
   row of its own, never from a line) is never appended, even when a mod ships a copy. With that
-  list unknown — no backend, or no game directory to ask about — nothing is appended or pruned
-  at all, since every verdict would then be a guess. Matching is case-insensitive throughout. The edit is
+  list unknown — an unreachable backend, no game directory to ask about, or a game Mutagen has no
+  release for — nothing is appended or pruned at all, since every verdict would then be a guess. Matching is case-insensitive throughout. The edit is
   surgical (ADR-0021): one read-modify-write on the commands' write chain, the delta computed from
   a fresh parse, no write at all when the resulting text is unchanged. It is a command like the
   three gestures beside it (ADR-0046) — it enumerates disk itself, reads no Instance, and returns
@@ -752,7 +752,10 @@ overflow, then native **Collapse All** last.
 - **Implicit masters**: `GET /implicit-masters` (`gameDirectory`, `gameRelease`) → the filenames
   this install loads with no `plugins.txt` line, in load order: the release's implicit masters
   present in that folder, then its Creation Club catalog. `HeldPlugins.ForcedNames`, the same
-  list a `PUT /load-order` prepends, answered with no load order held.
+  list a `PUT /load-order` prepends, answered with no load order held. `gameRelease` is Mutagen's
+  own name, translated from `ModOrganizer.ini`'s `gameName` by `mo2/gameRelease.ts` — the two
+  vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no release is one of the
+  unknowables above.
 - **Load-order-derived master classification** (ADR-0037): `MasterResolution.Classify`
   (`MEditService.Core/Queries/`), a pure function over data the load order already has
   (`LoadOrder.Plugins`, `LoadOrder.Failures`) — no Mutagen re-read. Consulted once per

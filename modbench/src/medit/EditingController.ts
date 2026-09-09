@@ -299,10 +299,10 @@ export class EditingController {
     return plugins.find((p) => p.name === pluginName && p.inLoadOrder)?.origin;
   }
 
-  /** The plugins this install loads with no plugins.txt line — implicit masters and the Creation
-   *  Club catalog — in load order. `undefined` on any failure: "unknown" and "none" are different
-   *  answers, and Mod Management's reconcile treats them differently. */
-  async implicitMasters(gameDirectory: string, gameRelease = 'Fallout4'): Promise<string[] | undefined> {
+  /** The plugins this install loads with no plugins.txt line, in load order. `undefined` on any
+   *  failure: "unknown" and "none" are different answers, and the reconcile writes on one. The
+   *  release is required — the set differs per game. */
+  async implicitMasters(gameDirectory: string, gameRelease: string): Promise<string[] | undefined> {
     let result;
     try {
       result = await this.deps.client.GET('/implicit-masters', { params: { query: { gameDirectory, gameRelease } } });

@@ -1707,12 +1707,15 @@ describe('Progressive load', () => {
   // Master issues derive from the whole load order, so mid-load they would flag masters not
   // opened yet. The backend suppresses them while loading; this asserts the suppression holds
   // end to end and then lifts by itself.
-  it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
+  it('leaves master issues off the rows until the load completes, then decorates them with no user action', async function () {
+    // The chevron lands in ~57 ms on an idle box; these budgets are for a machine running
+    // several extension hosts at once, where the default 10 s wait starved.
+    this.timeout(60_000);
     setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     const launch = enterEditing();
 
     await waitFor('MissingMaster.esp to gain a chevron mid-load', async () =>
-      (await itemFor('MissingMaster.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+      (await itemFor('MissingMaster.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed, 30_000);
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
       !(typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm')),

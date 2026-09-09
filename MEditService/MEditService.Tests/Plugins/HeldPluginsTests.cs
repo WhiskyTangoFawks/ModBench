@@ -180,6 +180,24 @@ public sealed class HeldPluginsTests
         Assert.Equal(["Fallout4.esm"], HeldPlugins.ForcedNames(data.DataFolder, GameRelease.Fallout4));
     }
 
+    // Resolve concatenated the two forced sources without deduping; ForcedNames distincts, which
+    // is what Resolve's own "held exactly once" already promised. Pinned so the extraction cannot
+    // quietly change what Resolve answers.
+    [Fact]
+    public void Resolve_NameBothForcedSourcesClaim_IsHeldExactlyOnce()
+    {
+        using var data = new PluginFixtureBuilder("forced-both-sources")
+            .WithPlugin("Fallout4.esm", listed: false)
+            .WithCreationClubCatalog("Fallout4.esm")
+            .Build();
+
+        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
+
+        var fo4 = Assert.Single(resolved, p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
+        Assert.True(fo4.IsForced);
+        Assert.Equal(0, fo4.Registration.LoadOrderIndex);
+    }
+
     // ── Open ────────────────────────────────────────────────────────────────────
 
     [Fact]
