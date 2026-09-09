@@ -1,18 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
-import { type CompileResult } from './ApiClient';
 import { EditingController, isRefused } from './EditingController';
 import { PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from '../plugins/PluginTreeProvider';
 import { registerLoadMoreCommand, registerFilterCommands } from '../plugins/recordFilterCommands';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
-import { type CompileTarget } from './compileTarget';
 import { offerEslFlagRemoval, type EslFlagRemovalTarget } from './eslFlagRemovalPrompt';
 import { ApiPluginRepository, type PluginRepository } from './PluginRepository';
-import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from './trackedRepositories';
-import { subscribeExternalChangePending, type OpenMergeEditor } from './externalChangeCoordinator';
-import type { NotificationSubscriber } from './NotificationSubscriber';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ColumnHeaderContext } from './messages';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
@@ -116,7 +111,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
     registerLoadMoreCommand(treeProvider),
-    ...registerFilterCommands({ scriptsPath, controller, treeProvider, refreshMatchingPlugins, setFilterActive }),
+    ...registerFilterCommands({ scriptsPath, client: controller, treeProvider, refreshMatchingPlugins, setFilterActive }),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.showReferencedBy',
@@ -323,133 +318,6 @@ export async function runCopyRecordCommand(
     void vscode.window.showInformationMessage(`Modbench: Copied as ${result.newFormKey} into ${destination.name}.`);
   }
 }
-/** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
- *  which forces the repository to re-check the working tree, the same effect the SCM panel's own
- *  manual Refresh button has. */
-export interface MinimalRepository {
-  status(): Thenable<unknown>;
-}
-// Deliberately not the full upstream `git.d.ts`, just the members called, so nothing here can
-// drift against an API this extension otherwise never touches. `openRepository` resolves `null`
-// for "declined to open".
-interface MinimalGitApi {
-  openRepository(uri: vscode.Uri): Thenable<MinimalRepository | null>;
-}
-interface GitExtensionExports {
-  getAPI(version: 1): MinimalGitApi;
-}
-
-/** ADR-0041: one `openRepository` per distinct tracked folder, so each shows its own native
- *  Source Control group. A silent, logged no-op when `vscode.git` is unavailable: this only
- *  narrows the native UI, never blocks reading or editing. */
-export async function registerHeldTrackedRepositories(
-  repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
-  setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
-): Promise<void> {
-  try {
-    const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
-    if (!gitExtension) {
-      outputChannel.warn('[extension] vscode.git extension not found — tracked mods will not appear in Source Control');
-      return;
-    }
-    const exports = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
-    const gitApi = exports.getAPI(1);
-
-    const plugins = await repository.getPlugins();
-    const folders = trackedModFoldersOf(plugins);
-    const folderRepositories = await registerTrackedRepositories(
-      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
-    setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories));
-  } catch (err) {
-    outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-/** `Repository.status()`, the same effect the SCM panel's Refresh button has, fired from the
- *  edit rather than waiting on the native watcher. A plugin with no handle is a silent no-op; a
- *  rejected `status()` is logged, never surfaced. */
-export function refreshSourceControlFor(
-  pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, outputChannel: vscode.LogOutputChannel,
-): void {
-  const repo = pluginRepositories?.get(plugin);
-  if (!repo) return;
-  void repo.status().then(undefined, (err: unknown) => {
-    outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${err instanceof Error ? err.message : String(err)}`);
-  });
-}
-
-/** ADR-0046 invariant 12: the plugin watcher's signal drives the one dialog directly — no poll,
- *  no health gate, since `notificationSubscriber` already follows the backend's lifecycle.
- *  Returns the unsubscribe. */
-export function wireExternalChangePending(
-  repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel,
-  notificationSubscriber: NotificationSubscriber, treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
-): () => void {
-  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
-  // here at the boundary so the flat shape stops at the collaborator that needs it.
-  const log = (msg: string) => outputChannel.info(msg);
-  return subscribeExternalChangePending({
-    controller,
-    showDialog: (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
-    showRebaseOffer: (message, ...buttons) => Promise.resolve(vscode.window.showInformationMessage(message, ...buttons)),
-    openMergeEditor: makeMergeEditorOpener(repository, outputChannel),
-    showError: (message) => void vscode.window.showErrorMessage(message),
-    refreshTree: () => treeProvider.refresh(),
-    refreshMatchingPlugins,
-    log,
-  }, notificationSubscriber);
-}
-
-/** Resolved fresh per call rather than bound to one origin: the dialog-driven path has no single
- *  resolved origin in scope, since several repositories can be mid-answer at once. `vscode.open`
- *  is git's own merge-editor gesture, scripted. */
-export function makeMergeEditorOpener(repository: PluginRepository, outputChannel: vscode.LogOutputChannel): OpenMergeEditor {
-  return async (origin, relativePath) => {
-    const plugins = await repository.getPlugins();
-    const anyPluginPath = plugins.find((p) => p.origin === origin)?.path;
-    const modFolder = anyPluginPath ? path.dirname(anyPluginPath) : undefined;
-    if (!modFolder) {
-      outputChannel.error(`[extension] openMergeEditor: could not resolve "${origin}"'s mod folder`);
-      return;
-    }
-    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(modFolder, relativePath)));
-  };
-}
-
-export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, command: string, message: string): void {
-  makeReporter(outputChannel, command).report('error', message);
-}
-
-/** Nothing re-reads `GET /plugins` after a compile: a compiled binary changes only bytes on
- *  disk, which the index's own mirror watch re-reads. */
-export async function compileAndReport(
-  controller: EditingController, diagnostics: vscode.DiagnosticCollection,
-  target: CompileTarget, atRef: string | undefined,
-  repository: PluginRepository,
-): Promise<void> {
-  const result = await controller.compile(target.name, target.origin, atRef);
-  if (!result) return;
-  if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
-
-  publishCompileDiagnostics(diagnostics, target.origin, result);
-
-  const refSuffix = atRef ? ` at "${atRef}"` : '';
-  if (!result.succeeded) {
-    if (result.eslContradiction
-        && await promptEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', repository)) {
-      await compileAndReport(controller, diagnostics, target, atRef, repository);
-      return;
-    }
-    void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
-    return;
-  }
-  void vscode.window.showInformationMessage(
-    result.diagnostics.length > 0
-      ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
-      : `Modbench: Compiled "${target.name}"${refSuffix}.`,
-  );
-}
-
 // Binds `offerEslFlagRemoval` to `vscode.window`; the core stays `vscode`-free and testable.
 async function promptEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string, repository: PluginRepository,
@@ -460,31 +328,6 @@ async function promptEslFlagRemoval(
     message => void vscode.window.showErrorMessage(message),
   );
 }
-
-/** Replaces whatever this plugin's source files held from the last compile — never additive, or
- *  a fixed diagnostic would survive forever. Grouped by file, since a diagnostic names its
- *  record's field, not a line this text format defines. */
-export function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, origin: string, result: CompileResult): void {
-  const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!instanceRoot) return;
-  const modFolder = path.join(instanceRoot, 'mods', origin);
-
-  // Clear every URI this collection holds under this folder before republishing —
-  // DiagnosticCollection has no "clear just this prefix" primitive, so the set is tracked here.
-  for (const [uri] of collection) {
-    if (uri.fsPath.startsWith(modFolder + path.sep)) collection.delete(uri);
-  }
-
-  const byUri = new Map<string, vscode.Diagnostic[]>();
-  for (const d of result.diagnostics) {
-    const fsPath = path.join(modFolder, d.sourceRelativePath);
-    const list = byUri.get(fsPath) ?? [];
-    list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
-    byUri.set(fsPath, list);
-  }
-  for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
-}
-
 
 export const RECORD_PANEL_KEY = '__record_view__';
 // The temp directory every extended-editor tab writes under —

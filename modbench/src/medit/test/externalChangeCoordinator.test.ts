@@ -1,4 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
+
+// `../../plugins/externalChangeGestures` reaches `vscode` directly (wireExternalChangePending,
+// makeMergeEditorOpener) — a bare import needs it resolvable even though this file calls neither.
+vi.mock('vscode', () => ({
+  window: { showWarningMessage: vi.fn(), showInformationMessage: vi.fn(), showErrorMessage: vi.fn() },
+  commands: { executeCommand: vi.fn() },
+  Uri: { file: (p: string) => ({ fsPath: p }) },
+}));
+
 import {
   subscribeExternalChangePending,
   type ExternalChangeCoordinatorDeps,
@@ -22,7 +31,7 @@ function makeDeps(overrides: Partial<ExternalChangeCoordinatorDeps> = {}): Exter
       keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }),
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }),
       rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] }),
-    } as any,
+    },
     showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON),
     showRebaseOffer: vi.fn().mockResolvedValue(REBASE_LATER_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
@@ -108,7 +117,7 @@ describe('subscribeExternalChangePending', () => {
         keepAsMyEdit: vi.fn(),
         absorbUpstreamUpdate: vi.fn().mockResolvedValue(null), // transport failure
         rebaseOntoMain: vi.fn(),
-      } as any,
+      },
     });
     const notificationSubscriber = new FakeNotificationSubscriber();
     subscribeExternalChangePending(deps, notificationSubscriber);
@@ -126,7 +135,7 @@ describe('subscribeExternalChangePending', () => {
         keepAsMyEdit: vi.fn(),
         absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'Fixture.esp could not be parsed.' }),
         rebaseOntoMain: vi.fn(),
-      } as any,
+      },
     });
     const notificationSubscriber = new FakeNotificationSubscriber();
     subscribeExternalChangePending(deps, notificationSubscriber);

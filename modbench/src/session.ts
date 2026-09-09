@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { BackendManager } from './medit/BackendManager';
 import type { SseNotificationSubscriber } from './medit/NotificationSubscriber';
-import type { MinimalRepository } from './medit/editorCommands';
+import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import type { LoadOrderSync } from './loadOrderReconcile';
 import type { NameFilter } from './nameFilter';

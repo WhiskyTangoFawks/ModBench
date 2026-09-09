@@ -1,4 +1,4 @@
-import type { EditingController } from './EditingController';
+import type { MEditClient } from './client';
 import type { ShowExternalChangeDialog } from '../plugins/externalChangeDialog';
 import type { UnansweredExternalChange } from './ApiClient';
 import type { NotificationSubscriber } from './NotificationSubscriber';
@@ -9,7 +9,9 @@ import { handleUnanswered, type ShowRebaseOffer } from '../plugins/externalChang
 export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
 
 export interface ExternalChangeCoordinatorDeps {
-  controller: EditingController;
+  // The three write verbs Keep/Absorb/Rebase dispatch to, narrowed off the port (ADR-0022) —
+  // this module holds no controller.
+  controller: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
   showDialog: ShowExternalChangeDialog;
   showRebaseOffer: ShowRebaseOffer;
   openMergeEditor: OpenMergeEditor;

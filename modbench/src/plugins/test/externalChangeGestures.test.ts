@@ -1,4 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
+
+// `wireExternalChangePending`/`makeMergeEditorOpener` reach `vscode` directly; a bare import of
+// this module needs it resolvable even for tests that never call those two.
+vi.mock('vscode', () => ({
+  window: { showWarningMessage: vi.fn(), showInformationMessage: vi.fn(), showErrorMessage: vi.fn() },
+  commands: { executeCommand: vi.fn() },
+  Uri: { file: (p: string) => ({ fsPath: p }) },
+}));
+
 import { runRebase, rebaseOfferMessage, handleUnanswered } from '../externalChangeGestures';
 import { KEEP_BUTTON, ABSORB_BUTTON } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../medit/ApiClient';

@@ -41,7 +41,7 @@ vi.mock('vscode', () => ({
   Range, Diagnostic, DiagnosticSeverity: { Warning: 1, Error: 0 }, Uri,
 }));
 
-import { registerRecordLifecycleCommands, runCopyRecordCommand, compileAndReport } from '../editorCommands';
+import { registerRecordLifecycleCommands, runCopyRecordCommand } from '../editorCommands';
 
 beforeEach(() => {
   handlers.clear();
@@ -131,19 +131,5 @@ describe('runCopyRecordCommand', () => {
 
     expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom');
     expect(onWritten).not.toHaveBeenCalled();
-  });
-});
-
-// ── compileAndReport ───────────────────────────────────────────────────────
-
-describe('compileAndReport', () => {
-  it('shows the ready-to-show message on a transport-level refusal (WriteRefused), never the typed-refusal wording', async () => {
-    const controller = { compile: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' }) };
-    const diagnostics = { delete: vi.fn(), set: vi.fn(), [Symbol.iterator]: function* () {} } as any;
-
-    await compileAndReport(controller as any, diagnostics, { name: 'MyPatch.esp', origin: 'ModA' }, undefined, {} as any);
-
-    expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" — boom');
-    expect(showInformationMessage).not.toHaveBeenCalled();
   });
 });
