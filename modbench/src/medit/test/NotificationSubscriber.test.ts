@@ -223,6 +223,53 @@ describe('SseNotificationSubscriber', () => {
     subscriber.stop();
   });
 
+  // The rival: a stop()/start() pair that leaves the sleeping loop to wake on its own. The
+  // restart then opens nothing for a whole reconnect delay, and wakes a second loop beside it.
+  it('start() after a stop() taken between attempts opens one stream at once, not a delayed pair', async () => {
+    const openStream = vi.fn().mockResolvedValue(streamResponse([])); // ends at once — straight to the sleep
+    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 2000 });
+
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    subscriber.stop();
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(2));
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(openStream).toHaveBeenCalledTimes(3);
+    subscriber.stop();
+  });
+
+  it('whenConnected() settles only once the stream has answered', async () => {
+    let answer: ((response: Response) => void) | undefined;
+    const openStream = vi.fn().mockImplementation(() => new Promise<Response>((r) => { answer = r; }));
+    const subscriber = new SseNotificationSubscriber({ openStream });
+    let connected = false;
+
+    subscriber.start();
+    void subscriber.whenConnected().then(() => { connected = true; });
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    expect(connected).toBe(false);
+
+    answer!(streamResponse([]));
+    await vi.waitFor(() => expect(connected).toBe(true));
+    subscriber.stop();
+  });
+
+  // A backend that never answers must degrade the load, not stall it: the caller goes on without
+  // progress rather than waiting for a stream it will never get.
+  it('whenConnected() settles when the attempt fails', async () => {
+    const openStream = vi.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 100_000 });
+    let connected = false;
+
+    subscriber.start();
+    void subscriber.whenConnected().then(() => { connected = true; });
+    await vi.waitFor(() => expect(connected).toBe(true));
+
+    subscriber.stop();
+  });
+
   it('stop() aborts the in-flight attempt and stops retrying', async () => {
     let sawSignal: AbortSignal | undefined;
     const openStream = vi.fn().mockImplementation((signal: AbortSignal) => {

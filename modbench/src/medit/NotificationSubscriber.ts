@@ -13,6 +13,10 @@ export type NotificationKind =
 export interface NotificationSubscriber {
   /** Registers `listener` for one kind; returns the unsubscribe function. */
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
+  /** Settles once the transport carries events, or once the attempt to open it failed; never
+   *  rejects. The backend publishes a request's progress the moment that request lands, so a
+   *  caller whose progress rides the stream awaits this first. */
+  whenConnected(): Promise<void>;
 }
 
 // Shared bookkeeping for both adapters below — subscribing and dispatching is identical, only
@@ -25,6 +29,12 @@ class NotificationListenerRegistry implements NotificationSubscriber {
     set.add(listener);
     this.listeners.set(kind, set);
     return () => { set.delete(listener); };
+  }
+
+  /** An adapter with no transport between `emit` and its listeners already carries events; the
+   *  stream adapter below overrides this with its connection's own answer. */
+  whenConnected(): Promise<void> {
+    return Promise.resolve();
   }
 
   protected dispatch(event: NotificationEvent): void {
@@ -87,12 +97,17 @@ function delay(ms: number): Promise<void> {
 
 /** ADR-0046 invariant 12's stream adapter. `start()`/`stop()` are idempotent and follow the
  *  backend's lifecycle from the composition root; a dropped or ended stream reconnects on its
- *  own, on `reconnectDelayMs`, until `stop()` wins the race. */
+ *  own, on `reconnectDelayMs`, until `stop()` ends the loop. */
 export class SseNotificationSubscriber extends NotificationListenerRegistry {
   private readonly log: (msg: string) => void;
   private readonly reconnectDelayMs: number;
   private abortController: AbortController | undefined;
   private stopped = true;
+  // `stopped` cannot end a loop asleep between attempts: a restart clears it again and the
+  // sleeper wakes into a second, parallel loop. A loop whose generation is stale exits instead.
+  private generation = 0;
+  private connected: Promise<void> = Promise.resolve();
+  private markConnected: (() => void) | undefined;
 
   constructor(private readonly deps: SseNotificationSubscriberDeps) {
     super();
@@ -103,12 +118,21 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;
-    void this.runLoop();
+    const generation = ++this.generation;
+    this.connected = new Promise((resolve) => { this.markConnected = resolve; });
+    void this.runLoop(generation);
   }
 
   stop(): void {
     this.stopped = true;
+    this.generation++;
     this.abortController?.abort();
+    // Nothing waits on a stream the session has closed.
+    this.markConnected?.();
+  }
+
+  override whenConnected(): Promise<void> {
+    return this.connected;
   }
 
   // A direct `this.stopped` read narrows across the `await`s below, since TS cannot see stop()
@@ -117,20 +141,23 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     return this.stopped;
   }
 
-  private async runLoop(): Promise<void> {
-    while (!this.isStopped()) {
-      await this.connectOnce();
-      if (this.isStopped()) break;
+  private async runLoop(generation: number): Promise<void> {
+    while (this.generation === generation) {
+      await this.connectOnce(generation);
+      if (this.generation !== generation) break;
       await delay(this.reconnectDelayMs);
     }
   }
 
-  private async connectOnce(): Promise<void> {
+  private async connectOnce(generation: number): Promise<void> {
     const controller = new AbortController();
     this.abortController = controller;
+    // A stale loop must not release the generation that replaced it.
+    const settleConnected = () => { if (this.generation === generation) this.markConnected?.(); };
     try {
       const response = await this.deps.openStream(controller.signal);
       if (!response.ok || !response.body) throw new Error(`notification stream responded ${response.status}`);
+      settleConnected();
       for await (const frame of readFrames(response.body)) {
         const event = parseFrame(frame);
         if (event) this.dispatch(event);
@@ -139,6 +166,10 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     } catch (e) {
       if (this.isStopped()) return;
       this.log(`[notifications] stream dropped: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      // A failed attempt releases the waiting caller too: no stream is a degraded load, not a
+      // stalled one.
+      settleConnected();
     }
   }
 }
