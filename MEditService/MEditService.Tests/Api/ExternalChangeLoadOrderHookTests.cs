@@ -39,7 +39,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
 
         var unanswered = Assert.Single(watcher.Unanswered());
         Assert.Equal(_mod.ModFolder, unanswered.ModFolder);
-        Assert.Equal(IndexedModFixture.PluginName, unanswered.PluginName);
+        Assert.Equal([IndexedModFixture.PluginName], unanswered.Classification.Plugins);
     }
 
     [Fact]

@@ -7,22 +7,22 @@ using MEditService.Core.Records;
 namespace MEditService.Api;
 
 /// <summary>ADR-0046: the plugin watcher's external-change signals become notifications and a
-/// validate. Origin resolution follows <c>GetExternalChangeStatus</c> — the watcher only ever
-/// carries the bare (modFolder, pluginName) identity.</summary>
+/// validate. The watcher carries only the bare mod folder; origin is resolved here.</summary>
 internal sealed class ExternalChangeApplier(IndexProjector index, INotificationPublisher notifications, ILogger logger)
 {
     // Projected per signal rather than held: the load order can be reconciled between two of them.
     private static LoadOrder HeldOrder(IndexProjector index) =>
         index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
 
-    /// <summary>A question was queued: publishes it exactly as <c>GET /plugins/external-changes/status</c>
-    /// would report it.</summary>
+    /// <summary>A mod's question was queued: publishes it for every plugin and tracked file it
+    /// names.</summary>
     internal void ApplyPending(UnansweredExternalChange change)
     {
-        var origin = PluginEndpoints.OriginOfExternalChange(HeldOrder(index), change.ModFolder, change.PluginName);
+        var origin = PluginEndpoints.OriginOfExternalChange(HeldOrder(index), change.ModFolder);
+        var classification = change.Classification;
         notifications.Publish(new ExternalChangePendingNotification(
-            new PluginKey(change.PluginName, origin),
-            change.Classification.MetaChanged, change.Classification.OldVersion, change.Classification.NewVersion));
+            origin, classification.Plugins, classification.TrackedFiles,
+            classification.MetaChanged, classification.OldVersion, classification.NewVersion));
     }
 
     /// <summary>ADR-0046 invariant 6: an OS overflow on the classification watch, the same

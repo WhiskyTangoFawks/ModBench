@@ -1,113 +1,73 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  buttonsInDefaultOrder, messageFor, groupByOrigin, runExternalChangeDialogs, ABSORB_BUTTON, KEEP_BUTTON,
+  buttonsInDefaultOrder, messageFor, runExternalChangeDialogs, ABSORB_BUTTON, KEEP_BUTTON,
 } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../medit/client';
 
 function unanswered(overrides: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
   return {
-    plugin: 'Fixture.esp', origin: 'ModA', metaChanged: false, oldVersion: null, newVersion: null,
+    origin: 'ModA', plugins: ['Fixture.esp'], trackedFiles: [], metaChanged: false, oldVersion: null, newVersion: null,
     ...overrides,
   };
 }
 
-describe('groupByOrigin', () => {
-  it('groups plugins sharing one origin into a single repo group', () => {
-    const groups = groupByOrigin([unanswered({ plugin: 'A.esp', origin: 'ModA' }), unanswered({ plugin: 'B.esp', origin: 'ModA' })]);
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0].origin).toBe('ModA');
-    expect(groups[0].items.map((i) => i.plugin)).toEqual(['A.esp', 'B.esp']);
-  });
-
-  it('keeps two different origins as two groups, in first-seen order', () => {
-    const groups = groupByOrigin([
-      unanswered({ plugin: 'A.esp', origin: 'ModA' }),
-      unanswered({ plugin: 'X.esp', origin: 'ModB' }),
-      unanswered({ plugin: 'B.esp', origin: 'ModA' }),
-    ]);
-
-    expect(groups.map((g) => g.origin)).toEqual(['ModA', 'ModB']);
-    expect(groups[0].items.map((i) => i.plugin)).toEqual(['A.esp', 'B.esp']);
-    expect(groups[1].items.map((i) => i.plugin)).toEqual(['X.esp']);
-  });
-});
-
-// Button ORDER carries the default, one default per
-// REPO (not per plugin) — a test asserts the exact button arrays for both classifier outcomes.
 describe('buttonsInDefaultOrder', () => {
   it('leads with Absorb Upstream Update when the meta tell fired', () => {
-    const group = groupByOrigin([unanswered({ metaChanged: true })])[0];
-    expect(buttonsInDefaultOrder(group)).toEqual([ABSORB_BUTTON, KEEP_BUTTON]);
+    expect(buttonsInDefaultOrder(unanswered({ metaChanged: true }))).toEqual([ABSORB_BUTTON, KEEP_BUTTON]);
   });
 
   it('leads with Keep as My Edit when meta is unchanged', () => {
-    const group = groupByOrigin([unanswered({ metaChanged: false })])[0];
-    expect(buttonsInDefaultOrder(group)).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
+    expect(buttonsInDefaultOrder(unanswered({ metaChanged: false }))).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
   });
 
   it('leads with Keep as My Edit when there is no meta trailer at all (also metaChanged: false on the wire)', () => {
-    const group = groupByOrigin([unanswered({ metaChanged: false, oldVersion: null })])[0];
-    expect(buttonsInDefaultOrder(group)).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
+    expect(buttonsInDefaultOrder(unanswered({ metaChanged: false, oldVersion: null }))).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
   });
 
   it('both buttons are always present, in either order', () => {
     for (const metaChanged of [true, false]) {
-      const group = groupByOrigin([unanswered({ metaChanged })])[0];
-      const buttons = buttonsInDefaultOrder(group);
+      const buttons = buttonsInDefaultOrder(unanswered({ metaChanged }));
       expect(buttons).toContain(ABSORB_BUTTON);
       expect(buttons).toContain(KEEP_BUTTON);
     }
   });
-
-  // Review fix 1: "if per-plugin verdicts could ever disagree on MetaChanged, take Absorb-first
-  // only when the meta changed, else Keep-first" — the disjunction across the group, not a
-  // first-item read.
-  it('leads with Absorb when only one of several plugins in the repo shows the meta tell', () => {
-    const group = groupByOrigin([
-      unanswered({ plugin: 'A.esp', metaChanged: false }),
-      unanswered({ plugin: 'B.esp', metaChanged: true }),
-    ])[0];
-    expect(buttonsInDefaultOrder(group)).toEqual([ABSORB_BUTTON, KEEP_BUTTON]);
-  });
-
-  it('leads with Keep only when every plugin in the repo agrees meta is unchanged', () => {
-    const group = groupByOrigin([
-      unanswered({ plugin: 'A.esp', metaChanged: false }),
-      unanswered({ plugin: 'B.esp', metaChanged: false }),
-    ])[0];
-    expect(buttonsInDefaultOrder(group)).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
-  });
 });
 
 describe('messageFor', () => {
-  it('keeps the pinned single-plugin wording when the repo has exactly one changed plugin', () => {
-    const group = groupByOrigin([unanswered({ plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' })])[0];
-
-    const { message, detail } = messageFor(group);
+  it('keeps the pinned single-plugin wording when the mod has exactly one changed plugin and no tracked file', () => {
+    const { message, detail } = messageFor(
+      unanswered({ plugins: ['Fixture.esp'], origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' }));
 
     expect(message).toBe('Fixture.esp (in ModA) changed outside Modbench.');
     expect(detail).toContain('meta.ini also changed (version 1.0 → 2.0)');
   });
 
-  it('names the repo and lists every changed plugin when the repo has more than one', () => {
-    const group = groupByOrigin([
-      unanswered({ plugin: 'A.esp', origin: 'ModA', metaChanged: false }),
-      unanswered({ plugin: 'B.esp', origin: 'ModA', metaChanged: false }),
-    ])[0];
-
-    const { message, detail } = messageFor(group);
+  it('names the mod and lists every changed plugin when more than one changed', () => {
+    const { message, detail } = messageFor(unanswered({ plugins: ['A.esp', 'B.esp'], origin: 'ModA', metaChanged: false }));
 
     expect(message).toBe('ModA changed outside Modbench.');
     expect(detail).toContain('A.esp, B.esp');
   });
+
+  it('names the changed tracked file when no plugin changed', () => {
+    const { message, detail } = messageFor(unanswered({ plugins: [], trackedFiles: ['texture.dds'], origin: 'ModA' }));
+
+    expect(message).toBe('ModA changed outside Modbench.');
+    expect(detail).toContain('texture.dds');
+  });
+
+  it('lists both plugins and tracked files when both changed', () => {
+    const { detail } = messageFor(
+      unanswered({ plugins: ['Fixture.esp'], trackedFiles: ['texture.dds'], origin: 'ModA' }));
+
+    expect(detail).toContain('Fixture.esp');
+    expect(detail).toContain('texture.dds');
+  });
 });
 
 describe('runExternalChangeDialogs', () => {
-  // Review fix 1: two plugins sharing one origin must produce exactly ONE modal, not two — the
-  // repo, not the plugin, is the dialog's unit.
-  it('shows exactly one modal for two plugins sharing one origin, and answers both the same way', async () => {
-    const items = [unanswered({ plugin: 'A.esp', origin: 'ModA', metaChanged: true }), unanswered({ plugin: 'B.esp', origin: 'ModA', metaChanged: true })];
+  it('shows exactly one modal per notification', async () => {
+    const items = [unanswered({ plugins: ['A.esp', 'B.esp'], origin: 'ModA', metaChanged: true })];
     const show = vi.fn().mockResolvedValue(ABSORB_BUTTON);
 
     const outcomes = await runExternalChangeDialogs(items, show);
@@ -118,15 +78,14 @@ describe('runExternalChangeDialogs', () => {
       { modal: true, detail: expect.stringContaining('A.esp, B.esp') },
       ABSORB_BUTTON, KEEP_BUTTON,
     );
-    expect(outcomes).toEqual([
-      { change: items[0], answer: 'absorb' },
-      { change: items[1], answer: 'absorb' },
-    ]);
+    expect(outcomes).toEqual([{ change: items[0], answer: 'absorb' }]);
   });
 
-  // The converse: two distinct origins still get their own modal each, queued sequentially.
-  it('shows one modal per distinct origin, in default-order buttons, mapping each answer independently', async () => {
-    const items = [unanswered({ plugin: 'A.esp', origin: 'ModA', metaChanged: true }), unanswered({ plugin: 'X.esp', origin: 'ModB', metaChanged: false })];
+  it('shows one modal per distinct notification, in default-order buttons, mapping each answer independently', async () => {
+    const items = [
+      unanswered({ plugins: ['A.esp'], origin: 'ModA', metaChanged: true }),
+      unanswered({ plugins: ['X.esp'], origin: 'ModB', metaChanged: false }),
+    ];
     const show = vi.fn()
       .mockResolvedValueOnce(ABSORB_BUTTON)
       .mockResolvedValueOnce(KEEP_BUTTON);
@@ -148,8 +107,8 @@ describe('runExternalChangeDialogs', () => {
       KEEP_BUTTON, ABSORB_BUTTON);
   });
 
-  it('answers defer on Esc/dismiss (an undefined choice), for every plugin in the repo', async () => {
-    const items = [unanswered({ plugin: 'A.esp' }), unanswered({ plugin: 'B.esp' })];
+  it('answers defer on Esc/dismiss (an undefined choice)', async () => {
+    const items = [unanswered({ origin: 'ModA' }), unanswered({ origin: 'ModB' })];
     const show = vi.fn().mockResolvedValue(undefined);
 
     const outcomes = await runExternalChangeDialogs(items, show);
@@ -160,7 +119,7 @@ describe('runExternalChangeDialogs', () => {
     ]);
   });
 
-  it('shows dialogs sequentially — the second repo is not requested until the first resolves', async () => {
+  it('shows dialogs sequentially — the second mod is not requested until the first resolves', async () => {
     const order: string[] = [];
     let resolveFirst!: (value: string) => void;
     const show = vi.fn()
@@ -173,7 +132,7 @@ describe('runExternalChangeDialogs', () => {
         return Promise.resolve(KEEP_BUTTON);
       });
 
-    const items = [unanswered({ plugin: 'A.esp', origin: 'ModA' }), unanswered({ plugin: 'X.esp', origin: 'ModB' })];
+    const items = [unanswered({ origin: 'ModA' }), unanswered({ origin: 'ModB' })];
     const run = runExternalChangeDialogs(items, show);
 
     await Promise.resolve(); // let the first show() call happen
@@ -185,12 +144,8 @@ describe('runExternalChangeDialogs', () => {
     expect(order).toEqual(['show-1', 'show-2']);
   });
 
-  it('never queues a mega-dialog: exactly one showWarningMessage call per affected repo, regardless of how many plugins changed inside it', async () => {
-    const items = [
-      unanswered({ plugin: 'A.esp', origin: 'ModA' }),
-      unanswered({ plugin: 'B.esp', origin: 'ModA' }),
-      unanswered({ plugin: 'C.esp', origin: 'ModA' }),
-    ];
+  it('never queues a mega-dialog: exactly one showWarningMessage call per notification, regardless of how many plugins changed inside it', async () => {
+    const items = [unanswered({ plugins: ['A.esp', 'B.esp', 'C.esp'], origin: 'ModA' })];
     const show = vi.fn().mockResolvedValue(KEEP_BUTTON);
 
     await runExternalChangeDialogs(items, show);

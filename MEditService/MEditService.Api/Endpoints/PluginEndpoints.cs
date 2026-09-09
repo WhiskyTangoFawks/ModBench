@@ -125,13 +125,6 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(422);
 
-        // Always 200, an empty list when nothing is unanswered; no load order dependency, since
-        // the queue lives on the singleton ModFolderWatcher.
-        app.MapGet("/plugins/external-changes/status", ExternalChangeStatus)
-            .WithName("GetExternalChangeStatus")
-            .WithTags(Tag)
-            .Produces<IReadOnlyList<UnansweredExternalChangeResponse>>();
-
         // Absorb Upstream Update, origin-scoped: the mod is the unit of a baseline, not one plugin
         // in it. Rebases the edit branch onto the new baseline it commits.
         app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)
@@ -323,33 +316,17 @@ public static class PluginEndpoints
             });
     }
 
-    // Best-effort origin: a load order that has reloaded away from a plugin still reports the
-    // question with an empty Origin rather than dropping it, since the question is still real.
-    internal static IResult ExternalChangeStatus(ModFolderWatcher watcher, IndexProjector index)
-    {
-        // Grouped per mod folder, not per plugin: one answer resolves every plugin the mod holds.
-        var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
-        var responses = watcher.Unanswered()
-            .GroupBy(p => p.ModFolder, StringComparer.Ordinal)
-            .Select(group =>
-            {
-                var first = group.First();
-                var origin = OriginOfExternalChange(loadOrder, first.ModFolder, first.PluginName);
-                return new UnansweredExternalChangeResponse(
-                    origin, [.. group.Select(p => p.PluginName)],
-                    group.Any(p => p.Classification.MetaChanged),
-                    first.Classification.OldVersion, first.Classification.NewVersion);
-            })
-            .ToList();
-        return Results.Ok(responses);
-    }
-
-    // Shared with ExternalChangeApplier's own notification and overflow paths, which start from the
-    // same bare (modFolder, pluginName) identity the watcher carries.
+    // Shared with ExternalChangeApplier's own overflow path, which starts from a bare
+    // (modFolder, pluginName) identity.
     internal static string OriginOfExternalChange(LoadOrder loadOrder, string modFolder, string pluginName) =>
         loadOrder.Copies.FirstOrDefault(copy =>
             copy.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
             && ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
+
+    // The mod-level counterpart: a change's own Plugins list can be empty (a tracked-file-only
+    // change), so origin resolves off the mod folder alone.
+    internal static string OriginOfExternalChange(LoadOrder loadOrder, string modFolder) =>
+        loadOrder.Copies.FirstOrDefault(copy => ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
     // Absorb Upstream Update, origin-scoped: every plugin the mod holds is re-parsed together, so
     // the baseline it commits covers the whole mod in one go.
@@ -486,10 +463,6 @@ public record TrackResponse(string Origin);
 // Ref null means CompileSource.WorkingTree (the normal Save & Compile); a name (e.g. "main")
 // means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.
 public record CompileRequest(string Origin, string? Ref);
-
-// One queued external-change question, per mod (ADR-0041 amendment): Plugins names every plugin
-// it covers. MetaChanged/OldVersion/NewVersion are evidence the dialog must show, not hide.
-public record UnansweredExternalChangeResponse(string Origin, IReadOnlyList<string> Plugins, bool MetaChanged, string? OldVersion, string? NewVersion);
 
 // Absorb Upstream Update / Keep as My Edit are origin-scoped — the mod, not one plugin in it, is
 // the unit of a baseline, matching RebaseRequest's own shape.

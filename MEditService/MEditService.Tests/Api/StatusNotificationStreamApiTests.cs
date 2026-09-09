@@ -34,8 +34,8 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("StatusNotifyNpc"), origin: Origin)
             .BuildScattered();
 
-    private Task<HttpResponseMessage> PutLoadOrder(ScatteredFixtureData fx) =>
-        _client.PutAsJsonAsync("/load-order", new
+    private Task<HttpResponseMessage> PutLoadOrder(ScatteredFixtureData fx, HttpClient? client = null) =>
+        (client ?? _client).PutAsJsonAsync("/load-order", new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
@@ -70,13 +70,21 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         }
     }
 
-    private async Task<StreamReader> OpenStreamAsync()
+    private async Task<StreamReader> OpenStreamAsync(HttpClient? client = null)
     {
-        var response = await _client.GetAsync(
+        var response = await (client ?? _client).GetAsync(
             new Uri("/notifications/stream", UriKind.Relative), HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
         var stream = await response.Content.ReadAsStreamAsync();
         return new StreamReader(stream);
+    }
+
+    // A negative assertion: nothing of this kind arrives within `window`, which must exceed the
+    // watcher's quiet window so a wrongly-fired notification has had time to land.
+    private static async Task AssertNoExternalChangeAsync(StreamReader reader, TimeSpan window)
+    {
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => ReadEventsUntilAsync(reader, "external-change-pending", _ => true, window));
     }
 
     [Fact]
@@ -137,7 +145,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
 
         var pending = Assert.Single(events);
-        Assert.Equal(Plugin, pending.GetProperty("plugin").GetString());
+        Assert.Contains(Plugin, pending.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
         Assert.Equal(Origin, pending.GetProperty("origin").GetString());
     }
 
@@ -192,7 +200,218 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         var pending = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
 
         var one = Assert.Single(pending);
-        Assert.Equal(Plugin, one.GetProperty("plugin").GetString());
+        Assert.Contains(Plugin, one.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
         Assert.Equal(Origin, one.GetProperty("origin").GetString());
+    }
+
+    // ── The mod-level classifier: git's view of tracked files, meta.ini the tell. ──
+
+    [Fact]
+    public async Task AChangedAssetUnderEverything_PublishesExternalChangePending_NamingThePath()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
+
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Everything" }))
+            .EnsureSuccessStatusCode();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        using var reader = await OpenStreamAsync();
+
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "changed-by-the-release");
+
+        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+
+        var pending = Assert.Single(events);
+        Assert.Empty(pending.GetProperty("keys").EnumerateArray());
+        Assert.Contains("texture.dds",
+            pending.GetProperty("externalChangeTrackedFiles").EnumerateArray().Select(k => k.GetString()));
+    }
+
+    [Fact]
+    public async Task TheSameAssetChangeUnderEdits_PublishesNothing()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
+
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
+            .EnsureSuccessStatusCode();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        using var reader = await OpenStreamAsync();
+
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "changed-by-the-release");
+
+        await AssertNoExternalChangeAsync(reader, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task AMetaIniVersionEditAlone_PublishesNothing()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n");
+
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
+            .EnsureSuccessStatusCode();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        using var reader = await OpenStreamAsync();
+
+        File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
+
+        await AssertNoExternalChangeAsync(reader, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task AMetaIniVersionEditThenAPluginWrite_PublishesOneWithTheTellAndBothVersions()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
+        var modFolder = Path.GetDirectoryName(pluginPath)!;
+        File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n");
+
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
+            .EnsureSuccessStatusCode();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        using var reader = await OpenStreamAsync();
+
+        File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
+        var changed = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        changed.Npcs.AddNew("ExternallyAddedNpc");
+        changed.WriteToBinary(pluginPath);
+
+        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+
+        var pending = Assert.Single(events);
+        Assert.True(pending.GetProperty("externalChangeMetaChanged").GetBoolean());
+        Assert.Equal("1.0.0", pending.GetProperty("externalChangeOldVersion").GetString());
+        Assert.Equal("2.0.0", pending.GetProperty("externalChangeNewVersion").GetString());
+    }
+
+    // A release-sized burst — many assets plus the plugin — settles as one window and one question.
+    [Fact]
+    public async Task AReleaseThatTouchesManyFilesInOneWindow_PublishesExactlyOneNotification()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
+        var modFolder = Path.GetDirectoryName(pluginPath)!;
+        var assetNames = Enumerable.Range(0, 20).Select(i => $"asset{i:D2}.dds").ToList();
+        foreach (var name in assetNames) File.WriteAllText(Path.Combine(modFolder, name), "original");
+
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Everything" }))
+            .EnsureSuccessStatusCode();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        using var reader = await OpenStreamAsync();
+
+        foreach (var name in assetNames) File.WriteAllText(Path.Combine(modFolder, name), "changed-by-the-release");
+        var changed = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        changed.Npcs.AddNew("ExternallyAddedNpc");
+        changed.WriteToBinary(pluginPath);
+
+        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        Assert.Single(events);
+
+        // No second notification trails the first once the burst finishes settling.
+        await AssertNoExternalChangeAsync(reader, TimeSpan.FromSeconds(2));
+    }
+
+    // "Stop the backend, change an asset, start and load": a fresh process boundary over the same
+    // on-disk mod runs the identical classifier at reconcile time.
+    [Fact]
+    public async Task AnAssetChangedWhileTheBackendWasDown_IsClassifiedAtTheNextLoad()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Everything" }))
+            .EnsureSuccessStatusCode();
+
+        _client.Dispose();
+        _app.Dispose();
+
+        File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "changed-while-medit-was-down");
+
+        using var app2 = new WebApplicationFactory<Program>();
+        using var client2 = app2.CreateClient();
+        using var reader = await OpenStreamAsync(client2);
+
+        (await PutLoadOrder(fx, client2)).EnsureSuccessStatusCode();
+
+        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        var pending = Assert.Single(events);
+        Assert.Contains("texture.dds",
+            pending.GetProperty("externalChangeTrackedFiles").EnumerateArray().Select(k => k.GetString()));
+    }
+
+    [Fact]
+    public async Task AfterAbsorb_ARestartAndLoad_PublishesNothing()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
+            .EnsureSuccessStatusCode();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
+        var changed = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        changed.Npcs.AddNew("ExternallyAddedNpc");
+        changed.WriteToBinary(pluginPath);
+        using (var reader = await OpenStreamAsync())
+        {
+            await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        }
+
+        (await _client.PostAsJsonAsync("/plugins/external-change/absorb", new { origin = Origin }))
+            .EnsureSuccessStatusCode();
+
+        _client.Dispose();
+        _app.Dispose();
+
+        using var app2 = new WebApplicationFactory<Program>();
+        using var client2 = app2.CreateClient();
+        using var reader2 = await OpenStreamAsync(client2);
+
+        (await PutLoadOrder(fx, client2)).EnsureSuccessStatusCode();
+
+        await AssertNoExternalChangeAsync(reader2, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task AfterKeep_ARestartAndLoad_PublishesNothing()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
+            .EnsureSuccessStatusCode();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
+        var changed = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        changed.Npcs.AddNew("ExternallyAddedNpc");
+        changed.WriteToBinary(pluginPath);
+        using (var reader = await OpenStreamAsync())
+        {
+            await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        }
+
+        (await _client.PostAsJsonAsync("/plugins/external-change/keep", new { origin = Origin }))
+            .EnsureSuccessStatusCode();
+
+        _client.Dispose();
+        _app.Dispose();
+
+        using var app2 = new WebApplicationFactory<Program>();
+        using var client2 = app2.CreateClient();
+        using var reader2 = await OpenStreamAsync(client2);
+
+        (await PutLoadOrder(fx, client2)).EnsureSuccessStatusCode();
+
+        await AssertNoExternalChangeAsync(reader2, TimeSpan.FromSeconds(2));
     }
 }

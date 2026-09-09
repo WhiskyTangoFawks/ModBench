@@ -3,7 +3,6 @@ using MEditService.Core.Edits;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Source;
 
@@ -12,25 +11,26 @@ public sealed class ExternalChangeClassifierTests
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-classify-").FullName;
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
+    private static (string PluginName, byte[] ObservedBytes) Plugin(string name, byte[] bytes) => (name, bytes);
+
     // ── Self-echo: proven with a REAL Compile, not a fabricated matching hash. ──
 
     [Fact]
-    public void Classify_ReportsSelfEcho_ForTheBinaryARealCompileJustWrote()
+    public void ClassifyMod_ReportsNothing_ForTheBinaryARealCompileJustWrote()
     {
         var mod = SourceEditFixture.Tracked();
         try
         {
-            var editService = mod.EditHandler;
-            editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
-
+            mod.EditHandler.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
             var compileService = CompileServices.Over(mod.LoadOrder);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 
             var binaryBytes = File.ReadAllBytes(Path.Combine(mod.ModFolder, SourceEditFixture.PluginName));
-            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, SourceEditFixture.PluginName, binaryBytes);
+            var classification = ExternalChangeClassifier.ClassifyMod(
+                mod.ModFolder, [Plugin(SourceEditFixture.PluginName, binaryBytes)]);
 
-            Assert.IsType<ExternalChangeClassification.SelfEcho>(classification);
+            Assert.Null(classification);
         }
         finally
         {
@@ -39,14 +39,17 @@ public sealed class ExternalChangeClassifierTests
     }
 
     [Fact]
-    public void Classify_ReportsExternalChange_ForBytesTheParkedRefDoesNotName()
+    public void ClassifyMod_ReportsTheChangedPlugin_ForBytesTheParkedRefDoesNotName()
     {
         var mod = SourceEditFixture.Tracked();
         try
         {
-            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, SourceEditFixture.PluginName, "not the tracked binary"u8.ToArray());
+            var classification = ExternalChangeClassifier.ClassifyMod(
+                mod.ModFolder, [Plugin(SourceEditFixture.PluginName, "not the tracked binary"u8.ToArray())]);
 
-            Assert.IsType<ExternalChangeClassification.ExternalChange>(classification);
+            var change = Assert.IsType<ExternalChangeClassification.ExternalChange>(classification);
+            Assert.Equal([SourceEditFixture.PluginName], change.Plugins);
+            Assert.Empty(change.TrackedFiles);
         }
         finally
         {
@@ -57,19 +60,16 @@ public sealed class ExternalChangeClassifierTests
     // ── Crash-marker suppression: crash recovery's territory, never the external-change dialog for the same event. ──
 
     [Fact]
-    public void Classify_ReportsCrashRecovery_WhenAJournalMarkerIsUnfinished_EvenWithAHashMismatch()
+    public void ClassifyMod_ReportsCrashRecovery_WhenAJournalMarkerIsUnfinished_EvenWithAHashMismatch()
     {
         var modFolder = NewModFolder();
         try
         {
             Track(modFolder, "Test.esp");
-
-            // A batch that never lands — CompileJournal.RunBatch's own marker stays unlanded because
-            // landed.Count never reaches plugins.Count (root CLAUDE.md: exercise the real seam, not
-            // a hand-written marker file).
             CompileJournal.RunBatch(modFolder, ["Test.esp"], _ => false);
 
-            var classification = ExternalChangeClassifier.Classify(modFolder, "Test.esp", "anything, hash mismatches regardless"u8.ToArray());
+            var classification = ExternalChangeClassifier.ClassifyMod(
+                modFolder, [Plugin("Test.esp", "anything, hash mismatches regardless"u8.ToArray())]);
 
             Assert.IsType<ExternalChangeClassification.CrashRecovery>(classification);
         }
@@ -79,37 +79,10 @@ public sealed class ExternalChangeClassifierTests
         }
     }
 
-    [Fact]
-    public void Classify_ReportsCrashRecovery_EvenWhenTheHashAlsoMatchesTheParkedRef()
-    {
-        var mod = SourceEditFixture.Tracked();
-        try
-        {
-            var editService = mod.EditHandler;
-            editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", Json("0.75"));
-            var compileService = CompileServices.Over(mod.LoadOrder);
-            var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
-            Assert.True(result.Succeeded, result.RefusalReason);
-
-            // A stale marker left by an unrelated interrupted batch in the same repo — the journal is
-            // one marker per .git, not one per plugin.
-            CompileJournal.RunBatch(mod.ModFolder, ["SomeOtherPlugin.esp"], _ => false);
-
-            var binaryBytes = File.ReadAllBytes(Path.Combine(mod.ModFolder, SourceEditFixture.PluginName));
-            var classification = ExternalChangeClassifier.Classify(mod.ModFolder, SourceEditFixture.PluginName, binaryBytes);
-
-            Assert.IsType<ExternalChangeClassification.CrashRecovery>(classification);
-        }
-        finally
-        {
-            mod.Dispose();
-        }
-    }
-
     // ── The meta tell: default-button evidence, never acted on by itself (ADR-0041 amendment). ──
 
     [Fact]
-    public void Classify_ReportsMetaChanged_WhenMetaIniVersionMovedSinceTheBaseline()
+    public void ClassifyMod_ReportsMetaChanged_WhenMetaIniVersionMovedSinceTheBaseline()
     {
         var modFolder = NewModFolder();
         try
@@ -118,7 +91,8 @@ public sealed class ExternalChangeClassifierTests
             Track(modFolder, "Test.esp");
             File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
 
-            var classification = ExternalChangeClassifier.Classify(modFolder, "Test.esp", "an external binary"u8.ToArray());
+            var classification = ExternalChangeClassifier.ClassifyMod(
+                modFolder, [Plugin("Test.esp", "an external binary"u8.ToArray())]);
 
             var change = Assert.IsType<ExternalChangeClassification.ExternalChange>(classification);
             Assert.True(change.MetaChanged);
@@ -131,18 +105,21 @@ public sealed class ExternalChangeClassifierTests
         }
     }
 
+    // A meta.ini edit with no accompanying plugin or tracked-file change raises nothing at all —
+    // the rule's "meta.ini is a tell, never a trigger" half.
     [Fact]
-    public void Classify_ReportsMetaUnchanged_WhenThereIsNoMetaIniAtAll()
+    public void ClassifyMod_ReportsNothing_ForAMetaIniEditAlone()
     {
         var modFolder = NewModFolder();
         try
         {
+            File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n");
             Track(modFolder, "Test.esp");
+            File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=2.0.0\n");
 
-            var classification = ExternalChangeClassifier.Classify(modFolder, "Test.esp", "an external binary"u8.ToArray());
+            var classification = ExternalChangeClassifier.ClassifyMod(modFolder, []);
 
-            var change = Assert.IsType<ExternalChangeClassification.ExternalChange>(classification);
-            Assert.False(change.MetaChanged);
+            Assert.Null(classification);
         }
         finally
         {
@@ -151,12 +128,59 @@ public sealed class ExternalChangeClassifierTests
     }
 
     [Fact]
-    public void Classify_ReturnsNull_ForAnUntrackedFolder()
+    public void ClassifyMod_ReturnsNull_ForAnUntrackedFolder()
     {
         var modFolder = NewModFolder();
         try
         {
-            Assert.Null(ExternalChangeClassifier.Classify(modFolder, "Test.esp", "anything"u8.ToArray()));
+            Assert.Null(ExternalChangeClassifier.ClassifyMod(modFolder, [Plugin("Test.esp", "anything"u8.ToArray())]));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    // ── The tracked-file half: git's own status against the edit branch, outside source/. ──
+
+    [Fact]
+    public void ClassifyMod_ReportsTheChangedPath_ForATrackedAssetGitSeesDiffer_WithNoPluginTouched()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
+            TrackEverything(modFolder, "Test.esp");
+            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "changed-by-the-release");
+
+            var classification = ExternalChangeClassifier.ClassifyMod(modFolder, []);
+
+            var change = Assert.IsType<ExternalChangeClassification.ExternalChange>(classification);
+            Assert.Empty(change.Plugins);
+            Assert.Equal(["texture.dds"], change.TrackedFiles);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ClassifyMod_ReportsBothHalves_WhenAPluginAndATrackedAssetBothChanged()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
+            TrackEverything(modFolder, "Test.esp");
+            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "changed-by-the-release");
+
+            var classification = ExternalChangeClassifier.ClassifyMod(
+                modFolder, [Plugin("Test.esp", "an external binary"u8.ToArray())]);
+
+            var change = Assert.IsType<ExternalChangeClassification.ExternalChange>(classification);
+            Assert.Equal(["Test.esp"], change.Plugins);
+            Assert.Equal(["texture.dds"], change.TrackedFiles);
         }
         finally
         {
@@ -169,5 +193,12 @@ public sealed class ExternalChangeClassifierTests
         var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
         var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), new Dictionary<string, string> { [plugin] = "0000000000" });
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+    }
+
+    private static void TrackEverything(string modFolder, string plugin)
+    {
+        var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+        var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), new Dictionary<string, string> { [plugin] = "0000000000" });
+        SourceRepository.Track(modFolder, SourcePreset.Everything, files, trailers);
     }
 }

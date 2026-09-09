@@ -56,7 +56,7 @@ public sealed class ModFolderWatcherTests
 
             var unanswered = Assert.Single(watcher.Unanswered());
             Assert.Equal(modFolder, unanswered.ModFolder);
-            Assert.Equal("Test.esp", unanswered.PluginName);
+            Assert.Equal(["Test.esp"], unanswered.Classification.Plugins);
         }
         finally
         {

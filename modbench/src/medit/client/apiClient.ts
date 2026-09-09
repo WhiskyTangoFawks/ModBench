@@ -26,12 +26,12 @@ export type TrackStatus = Schemas['TrackProgress'];
 export type CompileResult = Schemas['CompileResult'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
-/** One plugin's queued question, transformed from the `external-change-pending` notification's flat
- *  fields — the notification stays per plugin though `GetExternalChangeStatus` is per mod.
- *  `metaChanged` only informs the dialog's default button; trailers never act (ADR-0041). */
+/** One mod's queued question. `plugins`/`trackedFiles` can each be empty; `metaChanged` only
+ *  informs the dialog's default button, never acts (ADR-0041). */
 export interface UnansweredExternalChange {
-  plugin: string;
   origin: string;
+  plugins: string[];
+  trackedFiles: string[];
   metaChanged: boolean;
   oldVersion: string | null;
   newVersion: string | null;

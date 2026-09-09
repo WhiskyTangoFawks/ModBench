@@ -123,14 +123,23 @@ map built by one token scan of the tree, validated on use rather than by a file 
 container likewise diffs two whole-mod deserializations structurally. Proposed and declined
 twice; this paragraph is the standing answer.
 
-**External change flows through one dialog, and the answer is per mod.** A bridge assembly hosted
-in the backend process (watch / deserialize / compile; knows nothing of load orders or the DB)
-plus the load-time hash check observe a tracked plugin's bytes changing outside Modbench, or a
-tracked file outside `source/` differing from git's own view of the edit branch (Everything only —
-Edits' `.gitignore` makes this empty by construction). Deferral is per mod folder: an unanswered
-mod refuses edits on every plugin it holds, not just the one whose bytes raised the question. One
-dialog asks the only human question, and either answer covers every plugin the mod holds and every
-changed tracked file: upstream update (each plugin re-serialized, plus every changed tracked file's
+**External change is classified per mod, and the answer is per mod.** One `ModFolderWatcher`
+(Bridge) per tracked mod folder routes source paths and git refs as ADR-0046 already states; every
+other path is an external-change candidate, entering the mod's settle window without being
+trusted itself. One settle — or one tracked mod at the load-time check, so an upgrade made while
+mEdit was down is classified at the next load — runs `ExternalChangeClassifier` once against git,
+never against the event list, and yields one classification and one question: *a tracked mod
+changed externally when a plugin's bytes differ from what Modbench last wrote (the parked ref;
+self-echo and an interrupted compile's journal marker route away first), or a file git tracks
+outside `source/` differs from git's own view of the edit branch* (Everything only — Edits'
+`.gitignore` makes the second half empty by construction, so an asset-only release raises there and
+nowhere else). `meta.ini` is a tell, never a trigger: a metadata-only edit opens no question on its
+own, and its hash against the baseline trailer sets the default button and the version evidence
+only once the rule above has already fired for the same mod. Deferral is per mod folder: an
+unanswered mod refuses edits on every plugin it holds, not just the one whose bytes raised the
+question. One dialog asks the only human question, and either answer covers every plugin the mod
+holds and every changed tracked file: upstream update (each plugin re-serialized, plus every
+changed tracked file's
 current bytes or its deletion, committed to `main` as one new baseline, then the edit branch
 rebased onto it in the same gesture — clean replays proceed, conflicts open in VS Code's native
 merge editor) or your own edit (working-tree dirt; a changed tracked file stages as-is, so a plain

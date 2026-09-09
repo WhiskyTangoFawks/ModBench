@@ -316,22 +316,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/external-changes/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetExternalChangeStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/plugins/external-change/absorb": {
         parameters: {
             query?: never;
@@ -852,6 +836,7 @@ export interface components {
             externalChangeMetaChanged?: boolean | null;
             externalChangeOldVersion?: string | null;
             externalChangeNewVersion?: string | null;
+            externalChangeTrackedFiles?: string[] | null;
         };
         PathHop: {
             kind: string;
@@ -1074,13 +1059,6 @@ export interface components {
         };
         TrackResponse: {
             origin: string;
-        };
-        UnansweredExternalChangeResponse: {
-            origin: string;
-            plugins: string[];
-            metaChanged: boolean;
-            oldVersion?: string | null;
-            newVersion?: string | null;
         };
         /** @enum {string} */
         WorkingTreeState: "None" | "Modified" | "Added";
@@ -1946,26 +1924,6 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetExternalChangeStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UnansweredExternalChangeResponse"][];
                 };
             };
         };
