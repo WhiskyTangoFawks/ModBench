@@ -218,9 +218,6 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
     putLoadOrder: async (plugins, dataFolder, signal, onProgress) => {
-      // The PUT starting is the moment the backend stops holding the load order the tree
-      // describes, so the held set restarts from empty and refills as the ticks land (ADR-0035).
-      session.pluginsTree?.applyIndexed([], []);
       const result = await putLoadOrderVia(
         client, plugins, dataFolder, instanceRoot,
         gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
@@ -436,11 +433,11 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
-  const enterEditing = enterEditingAcrossRestarts(
+  const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
     makeEnterEditing(session, instance, client, outputChannel, () => outputChannel.show(true)),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
-  );
+  ));
   own(modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)));
   ownAll(own, registerModListCoreCommands(instanceRoot, modListProvider, instance, outputChannel, updateProfileDescription));
   ownAll(own, registerDeployCommands(instanceRoot, instance, outputChannel, gameDirResolver));

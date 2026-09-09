@@ -42,17 +42,17 @@ export function wireBackendStatus(client: StatusSource, views: BackendStatusView
  *  scratch — the same re-entry path a fresh launch takes, not a bespoke recovery. */
 export function enterEditingAcrossRestarts(
   client: StatusSource, enterEditing: () => Promise<void>, log: (msg: string) => void,
-): () => Promise<void> {
+): { enter: () => Promise<void>; dispose: () => void } {
   // A `disconnected` nobody asked for is the crash; the `attached` after it is the fresh
   // process. Cleared by every deliberate entry, so a relaunch is not also read as a restart.
   let crashed = false;
   const enter = () => { crashed = false; return enterEditing(); };
-  client.onStatusChanged((status) => {
+  const unsubscribe = client.onStatusChanged((status) => {
     if (status === 'disconnected') { crashed = true; return; }
     if (status !== 'attached' || !crashed) return;
     void enter().catch((err: unknown) =>
       log(`reload after backend restart failed: ${err instanceof Error ? err.message : String(err)}`),
     );
   });
-  return enter;
+  return { enter, dispose: unsubscribe };
 }

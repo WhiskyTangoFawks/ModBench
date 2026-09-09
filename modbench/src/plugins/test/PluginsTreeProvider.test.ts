@@ -967,8 +967,18 @@ const B_ROW = () => plugin({ name: 'B.esp', slot: 1, origin: 'SomeMod' });
 // rejection is what a real disconnect looks like from here, indistinguishable from one this
 // provider has simply not synced with yet.
 function makeDisconnectedClient(): InMemoryMEditClient {
-  const client = makeClient();
+  return disconnect(makeClient());
+}
+
+// `makeClient` stubs the record reads with spies, which keep answering through the adapter's own
+// `disconnected()`, so a client modelling a real disconnect refuses those reads too.
+function disconnect(client: InMemoryMEditClient): InMemoryMEditClient {
   client.disconnected();
+  const reads = [
+    'getRecordTypes', 'getRecords', 'getWorldspaces', 'getWorldspaceBlocks',
+    'getCellReferences', 'getContainerChildren', 'getInteriorCells',
+  ] as const;
+  for (const read of reads) vi.mocked(client[read]).mockRejectedValue(new Error('ECONNREFUSED'));
   return client;
 }
 
@@ -1077,6 +1087,20 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     expect((await h.tree.getChildren(rows[0]))[0]).toBeInstanceOf(RecordTypeNode);
     expect(await h.tree.getChildren(rows[1])).toEqual([expect.any(IndexingNode)]);
     expect(callCount(h.client, 'getPlugins')).toBe(0);
+  });
+
+  // ADR-0044: a PUT that never lands tears nothing down, so the row reports the read that failed.
+  // "Still indexing" would promise a completion that is not coming.
+  it('expanding after a load order was held and the client then refuses answers with one error node', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp')]);
+    const [row] = await h.tree.getChildren();
+
+    disconnect(h.client);
+
+    const children = await h.tree.getChildren(row);
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
   });
 
   it('expanding while a fresh load holds nothing yet answers with one node, never an empty list', async () => {
@@ -1492,6 +1516,14 @@ async function rowItem(h: Harness, index = 0): Promise<vscode.TreeItem> {
 
 // ADR-0035: read-only-for-editing is never an icon; it is the absent actions and this note.
 describe('PluginsTreeProvider — read-only tooltip', () => {
+  // Read-only-for-editing is the load order's answer, so a row carries no opinion about it until
+  // one has landed — an absent tooltip means "not asked", never "editable".
+  it('carries no read-only tooltip before a load order exists', async () => {
+    const h = makeTree([A_ROW()]);
+
+    expect((await rowItem(h)).tooltip).toBeUndefined();
+  });
+
   it('tags a read-only plugin tooltip once the load order says so', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isImmutable: true })]);

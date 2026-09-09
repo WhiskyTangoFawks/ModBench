@@ -157,7 +157,7 @@ describe('enterEditingAcrossRestarts', () => {
   it('does not re-enter on the first attach', async () => {
     const client = new InMemoryMEditClient();
     const enterEditing = vi.fn().mockResolvedValue(undefined);
-    const enter = enterEditingAcrossRestarts(client, enterEditing, vi.fn());
+    const { enter } = enterEditingAcrossRestarts(client, enterEditing, vi.fn());
 
     await enter();
     client.setStatus('starting');
@@ -172,7 +172,7 @@ describe('enterEditingAcrossRestarts', () => {
   it('does not re-enter when a deliberate relaunch follows a disconnect', async () => {
     const client = new InMemoryMEditClient();
     const enterEditing = vi.fn().mockResolvedValue(undefined);
-    const enter = enterEditingAcrossRestarts(client, enterEditing, vi.fn());
+    const { enter } = enterEditingAcrossRestarts(client, enterEditing, vi.fn());
 
     client.setStatus('disconnected');
     await enter();
@@ -180,6 +180,19 @@ describe('enterEditingAcrossRestarts', () => {
     await Promise.resolve();
 
     expect(enterEditing).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops re-entering once disposed', async () => {
+    const client = new InMemoryMEditClient();
+    const enterEditing = vi.fn().mockResolvedValue(undefined);
+    const { dispose } = enterEditingAcrossRestarts(client, enterEditing, vi.fn());
+
+    dispose();
+    client.setStatus('disconnected');
+    client.setStatus('attached');
+    await Promise.resolve();
+
+    expect(enterEditing).not.toHaveBeenCalled();
   });
 
   it('reports a re-entry that throws instead of leaving an unhandled rejection', async () => {

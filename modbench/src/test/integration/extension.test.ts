@@ -1010,6 +1010,8 @@ describe('Plugin load-order rows expand into records', () => {
     }
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
     assert.strictEqual(children.length, 1, 'expanding answers exactly one node, never an empty list');
+    assert.strictEqual(nodeKind(children[0]), 'recordType',
+      'the load order an earlier launch left held is what the row expands into');
   });
 
   it('launching mEdit gives a row real children, without reordering the load order', async () => {
@@ -1070,6 +1072,8 @@ describe('Plugin load-order rows expand into records', () => {
     }
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
     assert.strictEqual(children.length, 1, 'expanding after close answers exactly one node, never an empty list');
+    assert.strictEqual(nodeKind(children[0]), 'recordType',
+      'closing takes nothing from the tree, so the row still expands into the held load order');
   });
 });
 
@@ -1305,6 +1309,12 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
     const after = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'a failed reconcile leaves the load order the backend already holds in place, so the rows stay expandable');
+    // ADR-0044: the failed PUT tore nothing down, so the row expands into the records the backend
+    // still holds. "Still indexing" would promise a completion that is not coming.
+    const children = await tree.getChildren(after);
+    assert.strictEqual(children.length, 1, 'expanding after a failed reconcile answers exactly one node');
+    assert.strictEqual(nodeKind(children[0]), 'recordType',
+      'a failed PUT leaves the held load order behind the chevron, never a row stuck on "still indexing"');
   });
 });
 
@@ -1490,18 +1500,24 @@ describe('Progressive load', () => {
   const recordTypesAttempted = (name: string) =>
     requestLog.some((l) => l.startsWith(`GET /plugins/${name}/record-types`));
   const stillIndexing = async (name: string) => nodeKind((await childrenFor(name))[0]) === 'indexing';
-  // Nothing is read before the PUT is logged: until the load starts, the tree still holds the
-  // previous one, and a read against that would answer about a load order already superseded.
   const waitForIndexed = (name: string) => waitFor(`the backend to be asked about ${name} once indexed`, async () => {
-    if (!requestLog.includes('PUT /load-order')) return undefined;
     await childrenFor(name);
     return recordTypesAttempted(name) ? true : undefined;
   });
+  // A load that has begun holds nothing yet, and its first tick is the moment the tree stops
+  // describing whatever load order preceded it. Every assertion about a *this*-load state
+  // starts here.
+  const launchAndAwaitOpeningTick = async (): Promise<{ launch: Promise<void> }> => {
+    const launch = enterEditing();
+    await waitFor('the load\'s opening tick to reach the tree', () => stillIndexing('TestMod.esp'));
+    // Boxed: returning it bare would flatten it and await the load these tests leave in flight.
+    return { launch };
+  };
 
   it('makes a plugin browsable as soon as it is indexed, while a later one is still indexing', async () => {
-    setIndexed(['TestMod.esp']);
-    const launch = enterEditing();
+    const { launch } = await launchAndAwaitOpeningTick();
 
+    setIndexed(['TestMod.esp']);
     await waitForIndexed('TestMod.esp');
 
     // What makes it progressive rather than merely early: a plugin the load has not reached
@@ -1518,8 +1534,8 @@ describe('Progressive load', () => {
 
   // A per-plugin failure surfaces when it occurs, not only at the end of the load.
   it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
+    const { launch } = await launchAndAwaitOpeningTick();
     setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', reason: 'RACE parse' }] });
-    const launch = enterEditing();
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');
@@ -1536,8 +1552,8 @@ describe('Progressive load', () => {
   // Closing mEdit mid-load is a deliberate abandonment: the stream closes with the backend it was
   // opened against. The "no error toast" half lives at the LoadOrderController seam.
   it('closes the notification stream when mEdit is closed mid-load', async () => {
+    const { launch } = await launchAndAwaitOpeningTick();
     setIndexed(['TestMod.esp']);
-    const launch = enterEditing();
     await waitForIndexed('TestMod.esp');
     const connectionsAtLoad = requestLog.filter((l) => l === 'GET /notifications/stream').length;
     assert.ok(connectionsAtLoad > 0, 'the load should have been subscribed before it was abandoned');
@@ -1596,9 +1612,9 @@ describe('Progressive load', () => {
   // opened yet. The backend suppresses them while loading; this asserts the suppression holds
   // end to end and then lifts by itself.
   it('leaves master issues off the rows until the load completes, then decorates them with no user action', async () => {
-    setIndexed(['TestMod.esp', 'MissingMaster.esp']);
-    const launch = enterEditing();
+    const { launch } = await launchAndAwaitOpeningTick();
 
+    setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(

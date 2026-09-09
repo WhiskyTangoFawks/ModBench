@@ -281,8 +281,10 @@ end.
   suppresses them outright while loading (`RecordQueryService.GetPlugins` gates on
   `LoadOrderState.Ready`) and the frontend never asks for them mid-load.
 - **Closing mEdit is a deliberate abandonment, not a failure — at any point in the launch.**
-  The progress subscription is torn down, message/progress clear and every row's content reverts
-  to the error node, and nothing is reported as broken. This
+  The progress subscription is torn down, message and progress clear, and nothing is reported as
+  broken. The rows are left exactly as they are: what a row expands into is the read it makes at
+  that moment, so a backend that has gone shows as the error node without the tree adapting its
+  shape (ADR-0022). This
   holds for the whole launch, not just the load: a close during the backend spawn and mod-tree
   walk must not report "Backend failed to start" for the stop the user just asked for, so the
   cancellation is armed before the launch's first await and checked after each one. Same for a
@@ -297,8 +299,8 @@ end.
   `load-order-status` notification on the SSE stream (ADR-0046 invariant 12) alongside the
   still in-flight `PUT /load-order`, which remains the completion signal. The extension's
   subscription is one call, `EditingController.subscribeStatus`, unsubscribed once the PUT
-  settles; the session-wide stream itself is `start()`ed as soon as the backend is healthy, not
-  on the first reconcile, so this same first `PUT`'s own progress can ride it.
+  settles; the session-wide stream itself is opened by the mEdit client the moment its status
+  reaches attached, not on the first reconcile, so this same first `PUT`'s own progress can ride it.
 - **A progress tick is never the last word.** Ticks carry only the indexed set and the failures;
   the completed load's hand-off (`applyLoadOrderToTree`) always follows the final tick and
   carries read-only state and master issues with it. Were a tick ever last, both decorations
@@ -473,8 +475,10 @@ xEdit's force-deactivate-and-cascade rule. There is no cascade: a plugin whose m
 *its own* missing master is not itself flagged — `masterIssues` only ever describes a plugin's
 own declared masters, never a transitive fact about a master's masters.
 
-**With no backend running, a row carries no master verdict at all.** An absent badge means "not
-asked", not "nothing to flag" — the same reading every other backend-sourced decoration here has.
+**Until a load order has landed, a row carries no master verdict at all.** An absent badge means
+"not asked", not "nothing to flag" — the same reading every other backend-sourced decoration here
+has. A backend that goes takes no badge with it: the badges stand until the next reconcile
+replaces them wholesale, as they do for any other stale scan.
 
 **Neither signal, nor the reconciled decoration, nor the load-failure decoration below, ever
 touches the leading slot.** The checkbox/lock position is reserved for exactly one question —
@@ -542,8 +546,9 @@ vanishing without one) and `profiles/*/plugins.txt` (a reorder or an enable/disa
 Modbench wrote it or MO2/the user did) — plus the checkbox toggle's own explicit ask and the
 profile switch's. No polling. Requests coalesce (a 250 ms debounce covers a drag's write plus its
 watcher event, or two watchers firing for one install), and a request that lands mid-PUT becomes
-exactly one more PUT after it, never a race. The sync drops a request when no backend is running —
-a loadout-only workspace is the ordinary case, not a failure. One PUT is one reconcile
+exactly one more PUT after it, never a race. The sync has no health pre-check: a PUT against a
+backend that is not attached is refused by the transport and reported as a failed reconcile, and
+a failed reconcile tears nothing down. One PUT is one reconcile
 (`createReconcileSequencer`, folded into `loadOrderSync` itself — `src/loadOrderReconcile.ts`):
 snapshot → `EditingController.putLoadOrder` → filter sync → the tree hand-off, the same sequence
 the activation-time launch runs (via `loadOrderSync.flush()`) after the backend comes up.
@@ -798,10 +803,10 @@ overflow, then native **Collapse All** last.
   `ApiClient` — unit-tested without VS Code (Vitest, `npm run test:unit`). New data queries go
   on the `PluginRepository` interface and are implemented in `ApiPluginRepository`.
 - **Tree seam**: `PluginsTreeProvider`'s own `getChildren`/`getTreeItem`/`applyReconciled` —
-  rows off a fixture Instance value, that every row stays collapsible across mEdit start/stop,
+  rows off a fixture Instance value, that every row stays collapsible whatever the client reports,
   a row's content on expand (records, "still indexing", or the error node) in each state, every
-  decoration and its precedence, and the origin join — tested against an in-memory client
-  reporting connected and disconnected (`src/plugins/test/PluginsTreeProvider.test.ts`), alongside
+  decoration and its precedence, and the origin join — tested against an in-memory client whose
+  status the test sets (`src/plugins/test/PluginsTreeProvider.test.ts`), alongside
   the bounded-context boundary itself (`src/test/contextBoundary.test.ts`).
 - **Record semantics and conflict classification** are the backend's responsibility and tested
   there (`MEditService/CLAUDE.md`); this surface consumes representative responses as fixtures.
@@ -826,9 +831,10 @@ overflow, then native **Collapse All** last.
   `modbench/src/modmanager/test/fixtures/`.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the tree renders from
   `plugins.txt` before mEdit has ever launched; checkbox toggle, drag-reorder and the name filter
-  round-trip with and without mEdit running; starting/stopping mEdit changes a row's content on
-  expand between "still indexing"/records and the error node, without disturbing the load order or
-  its collapsibility; navigation opens a record panel; a plugin
+  round-trip whatever the client reports; a client that stops disturbs neither the load order, the
+  rows' collapsibility nor what a row expands into; a reconcile that fails leaves the held load
+  order behind the chevron rather than a row stuck on "still indexing"; navigation opens a record
+  panel; a plugin
   `GET /plugins` reports with no matching records is hidden from the tree entirely,
   restored once a reconcile reports no filter at all rather than staying stuck hidden (the
   "map outlives the filter state" regression) — the pruning
