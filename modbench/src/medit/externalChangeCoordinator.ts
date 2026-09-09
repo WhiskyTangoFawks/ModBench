@@ -13,6 +13,11 @@ export interface ExternalChangeCoordinatorDeps {
   showDialog: ShowExternalChangeDialog;
   showRebaseOffer: ShowRebaseOffer;
   openMergeEditor: OpenMergeEditor;
+  /** ADR-0026: the gesture's own refusal, verbatim — Keep/Absorb/Rebase share this one surface. */
+  showError: (message: string) => void;
+  /** A landed Keep/Absorb/Rebase is a working-tree change (ADR-0035 amending ADR-0018). */
+  refreshTree: () => void;
+  refreshMatchingPlugins: () => void;
   log?: (msg: string) => void;
 }
 

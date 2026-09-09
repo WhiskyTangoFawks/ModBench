@@ -124,6 +124,9 @@ function makeClient({
             : drainedError(422, 'Unprocessable Content'),
         );
       }
+      if (path === '/plugins/track') {
+        return Promise.resolve({ response: { ok: true, status: 200 }, data: { origin: 'ModA' } });
+      }
       return Promise.resolve({ response: { ok: true } });
     }),
     PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
@@ -150,15 +153,15 @@ function makeDeps(overrides: Partial<EditingControllerDeps> = {}): EditingContro
     client: makeClient(),
     repository: makeRepository(),
     notificationSubscriber: new FakeNotificationSubscriber(),
-    refreshTree: vi.fn(),
-    setStatusText: vi.fn(),
-    showWarning: vi.fn(),
-    showError: vi.fn(),
-    setFilterActive: vi.fn(),
-    refreshMatchingPlugins: vi.fn(),
-    notifyConflictsComputed: vi.fn(),
     ...overrides,
   };
+}
+
+// A `WriteRefused` is `{ refused: true, message }` — this narrows a verb's return value to it,
+// failing loudly (not silently passing `undefined`) if the verb answered anything else.
+function asRefused(result: unknown): { refused: true; message: string } {
+  expect(result).toEqual(expect.objectContaining({ refused: true }));
+  return result as { refused: true; message: string };
 }
 
 // ── createPlugin ──────────────────────────────────────────────────────────────
@@ -168,7 +171,7 @@ describe('EditingController.createPlugin', () => {
 
   // The destination is the caller's — Mod Management's QuickPick, not an implicit write into the
   // Data folder — and the created plugin's own name comes back from the response, never assumed.
-  it('POSTs to /plugins/create with the destination and returns the created plugin\'s name', async () => {
+  it('POSTs to /plugins/create with the destination and resolves the wire response', async () => {
     const deps = makeDeps();
     const ctrl = new EditingController(deps);
 
@@ -181,26 +184,14 @@ describe('EditingController.createPlugin', () => {
     expect(result).toEqual({ name: 'test.esp' });
   });
 
-  // The tree must not refresh until the caller's own plugins.txt append has landed: refreshing
-  // here would show a plugin the load order does not name yet.
-  it('never refreshes the tree itself — that is the caller\'s job, after its own plugins.txt append', async () => {
-    const deps = makeDeps();
-    const ctrl = new EditingController(deps);
-
-    await ctrl.createPlugin('MyPatch.esp', '/mods/MyMod', 'MyMod');
-
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-  });
-
-  it('shows error and returns undefined on failure', async () => {
+  it('resolves a WriteRefused carrying the ready-to-show toast on failure', async () => {
     const deps = makeDeps({ client: makeClient({ createPluginOk: false }) });
     const ctrl = new EditingController(deps);
 
-    const result = await ctrl.createPlugin('MyPatch.esp', '/mods/MyMod', 'MyMod');
+    const result = asRefused(await ctrl.createPlugin('MyPatch.esp', '/mods/MyMod', 'MyMod'));
 
-    expect(deps.showError).toHaveBeenCalledOnce();
-    expect(result).toBeUndefined();
-    expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(result.message).toContain('Failed to create plugin');
+    expect(result.message).toContain('Bad Request');
   });
 });
 
@@ -224,9 +215,9 @@ describe('EditingController.rebuildIndex', () => {
     expect(onFailure).not.toHaveBeenCalled();
   });
 
-  // Not EditingController's own showError (a bare toast): the caller's report, e.g. a held-index
-  // 423 routed through makeReporter (modbench/CLAUDE.md).
-  it('reports through the caller-supplied onFailure, not showError, and resolves false', async () => {
+  // Not a bare toast: the caller's own report, e.g. a held-index 423 routed through makeReporter
+  // (modbench/CLAUDE.md) — the shape every other verb in this class now follows too.
+  it('reports through the caller-supplied onFailure, and resolves false', async () => {
     const deps = makeDeps({ client: makeClient({ rebuildIndexOk: false }) });
     const ctrl = new EditingController(deps);
     const onFailure = vi.fn();
@@ -235,7 +226,6 @@ describe('EditingController.rebuildIndex', () => {
 
     expect(result).toBe(false);
     expect(onFailure).toHaveBeenCalledOnce();
-    expect(deps.showError).not.toHaveBeenCalled();
   });
 });
 
@@ -244,35 +234,30 @@ describe('EditingController.rebuildIndex', () => {
 describe('EditingController.copyRecordAsOverride', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the source/destination plugin+origin and refreshes the tree', async () => {
+  it('POSTs the source/destination plugin+origin and resolves the wire response', async () => {
     const deps = makeDeps();
     const controller = new EditingController(deps);
 
-    const ok = await controller.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+    const result = await controller.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
 
-    expect(ok).toBe(true);
+    expect(result).toEqual({ applied: true, formKey: '000801:MyPatch.esp' });
     expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/copy-as-override', {
       params: { path: { formKey: '000801:Fallout4.esm' } },
       body: { sourcePlugin: 'Fallout4.esm', sourceOrigin: 'Data', destinationPlugin: 'MyPatch.esp', destinationOrigin: 'ModA' },
     });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // A copy lands as a working-tree change on the destination plugin's own source — same
-    // reason createRecord/deleteRecord/renumberRecord refresh it.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
-
 });
 
 describe('EditingController.copyRecordAsNewRecord', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the source/destination plugin+origin with a null requestedFormKey, refreshes the tree, and returns the new FormKey', async () => {
+  it('POSTs the source/destination plugin+origin with a null requestedFormKey and resolves the wire response', async () => {
     const deps = makeDeps();
     const controller = new EditingController(deps);
 
-    const newFormKey = await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+    const result = await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
 
-    expect(newFormKey).toBe('000802:MyPatch.esp');
+    expect(result).toEqual({ applied: true, sourceFormKey: '000801:MyPatch.esp', newFormKey: '000802:MyPatch.esp' });
     expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/copy-as-new-record', {
       params: { path: { formKey: '000801:Fallout4.esm' } },
       body: {
@@ -280,9 +265,6 @@ describe('EditingController.copyRecordAsNewRecord', () => {
         requestedFormKey: null,
       },
     });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // Same reason as copyRecordAsOverride above — a copy is a working-tree change too.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('passes an explicit requested FormKey through, xEdit\'s typed-FormID path', async () => {
@@ -299,7 +281,6 @@ describe('EditingController.copyRecordAsNewRecord', () => {
       },
     });
   });
-
 });
 
 // ── setFilter ─────────────────────────────────────────────────────────────────
@@ -307,54 +288,25 @@ describe('EditingController.copyRecordAsNewRecord', () => {
 describe('EditingController.setFilter', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('calls repository.setFilter and sets filter active + refreshes tree on success', async () => {
+  it('calls repository.setFilter and resolves null on success', async () => {
     const repository = makeRepository();
     const deps = makeDeps({ repository });
     const ctrl = new EditingController(deps);
 
-    const ok = await ctrl.setFilter('SELECT form_key FROM "npc_"');
+    const result = await ctrl.setFilter('SELECT form_key FROM "npc_"');
 
-    expect(ok).toBe(true);
+    expect(result).toBeNull();
     expect(repository.setFilter).toHaveBeenCalledWith('SELECT form_key FROM "npc_"');
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.showError).not.toHaveBeenCalled();
   });
 
-  // ADR-0035 amending ADR-0018: a chevron depends on the filter's per-plugin match set, so a new
-  // filter has to trigger a fresh derivation or the chevron keeps stating the wrong thing.
-  it('refreshes the plugin-match set on success', async () => {
-    const deps = makeDeps({ repository: makeRepository() });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.setFilter('SELECT form_key FROM "npc_"');
-
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
-  });
-
-  // The Plugins tree's description names both narrowing axes, so the record filter has to say
-  // *which* filter — raw SQL is unreadable and "a filter is active" answers nothing.
-  it('forwards the filter source label to the readout alongside the SQL', async () => {
-    const deps = makeDeps({ repository: makeRepository() });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.setFilter('SELECT form_key FROM "npc_"', 'npcs.sql');
-
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', 'npcs.sql');
-  });
-
-  it('shows error and returns false when repository returns an error message', async () => {
+  it('resolves the repository\'s own error message, unframed, when repository.setFilter fails', async () => {
     const repository = makeRepository({ setFilterError: 'Filter SQL must return a form_key column' });
     const deps = makeDeps({ repository });
     const ctrl = new EditingController(deps);
 
-    const ok = await ctrl.setFilter('SELECT editor_id FROM "npc_"');
+    const result = await ctrl.setFilter('SELECT editor_id FROM "npc_"');
 
-    expect(ok).toBe(false);
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('form_key'));
-    expect(deps.setFilterActive).not.toHaveBeenCalled();
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
+    expect(result).toBe('Filter SQL must return a form_key column');
   });
 });
 
@@ -363,7 +315,7 @@ describe('EditingController.setFilter', () => {
 describe('EditingController.clearFilter', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('calls repository.clearFilter and sets filter inactive + refreshes tree', async () => {
+  it('calls repository.clearFilter', async () => {
     const repository = makeRepository();
     const deps = makeDeps({ repository });
     const ctrl = new EditingController(deps);
@@ -371,20 +323,6 @@ describe('EditingController.clearFilter', () => {
     await ctrl.clearFilter();
 
     expect(repository.clearFilter).toHaveBeenCalledOnce();
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-  });
-
-  // ADR-0035 amending ADR-0018: a stale
-  // `false` surviving past the filter that produced it would leave a plugin permanently
-  // unexpandable even with nothing filtering it any more.
-  it('refreshes the plugin-match set, so a stale no-match chevron does not survive the filter that produced it', async () => {
-    const deps = makeDeps({ repository: makeRepository() });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.clearFilter();
-
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 });
 
@@ -393,56 +331,34 @@ describe('EditingController.clearFilter', () => {
 describe('EditingController.syncFilterState', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('sets filter active true when a filter is returned', async () => {
+  it('resolves the active filter\'s SQL when one is returned', async () => {
     const repository = makeRepository({ activeFilter: 'SELECT form_key FROM "npc_"' });
     const deps = makeDeps({ repository });
     const ctrl = new EditingController(deps);
 
-    await ctrl.syncFilterState();
-
-    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
+    expect(await ctrl.syncFilterState()).toBe('SELECT form_key FROM "npc_"');
   });
 
-  it('sets filter active false when no filter is returned', async () => {
+  it('resolves null when no filter is active', async () => {
     const repository = makeRepository({ activeFilter: null });
     const deps = makeDeps({ repository });
     const ctrl = new EditingController(deps);
 
-    await ctrl.syncFilterState();
-
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false, undefined, undefined);
+    expect(await ctrl.syncFilterState()).toBeNull();
   });
 
-  it('degrades to inactive and warns, without throwing, when the read fails', async () => {
+  it('resolves a WriteRefused carrying the read failure, without throwing', async () => {
     const repository = makeRepository();
     repository.getActiveFilter = vi.fn().mockRejectedValue(new Error('getActiveFilter failed (500): boom'));
     const deps = makeDeps({ repository });
     const ctrl = new EditingController(deps);
 
-    await expect(ctrl.syncFilterState()).resolves.toBeUndefined();
+    const result = asRefused(await ctrl.syncFilterState());
 
-    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
-    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('filter'));
+    expect(result.message).toContain('Could not read the active filter');
+    expect(result.message).toContain('boom');
   });
 });
-
-// ── saveGroup ─────────────────────────────────────────────────────────────────
-
-// ── revertGroup ───────────────────────────────────────────────────────────────
-
-// ── saveAllGroups ─────────────────────────────────────────────────────────────
-
-// ── saveGroups (multi-select) ──────────────────────────────────────────────────
-
-// ── revertGroups (multi-select) ────────────────────────────────────────────────
-
-// ── partial-save reporting (ADR-0026 integrity tier) ────────────────────────────
-
-// ── revertAllGroups ───────────────────────────────────────────────────────────
-
-// ── deleteRecords ─────────────────────────────────────────────────────────────
-
-// ── createPlaced ───────────────────────────────────────────────────────────────
 
 // ── putLoadOrder ───────────────────────────────────────────────────────
 
@@ -454,7 +370,7 @@ describe('EditingController.putLoadOrder', () => {
     { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm', origin: 'Data', slot: 1, enabled: true, winning: true },
   ];
 
-  it('PUTs the ordered plugin list + dataFolder game directory + MO2 instance root and refreshes', async () => {
+  it('PUTs the ordered plugin list + dataFolder game directory + MO2 instance root', async () => {
     const client = {
       ...makeClient(),
       PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
@@ -472,44 +388,8 @@ describe('EditingController.putLoadOrder', () => {
         body: { plugins, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' },
       }),
     );
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.showError).not.toHaveBeenCalled();
   });
 
-  // ADR-0035: the backend answers the load PUT only after the winner sweep, so reaching this
-  // method is the one reliable point at which conflicts have become computed.
-  it('notifies that conflicts are computed on a successful load', async () => {
-    const client = {
-      ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
-    };
-    const deps = makeDeps({ client });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
-
-    expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
-  });
-
-  it('surfaces skipped-plugin failures as a warning (never silent)', async () => {
-    const client = {
-      ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({
-        response: { ok: true },
-        data: { status: 'reconciled', failures: [{ name: 'Lunar-UniqueCreatures.esp', reason: 'RACE parse' }], crashRepairOffers: [] },
-      }),
-    };
-    const deps = makeDeps({ client });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
-
-    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('Lunar-UniqueCreatures.esp'));
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-  });
-
-  // ADR-0037 AC7: the tree decoration needs the same failures the toast already
-  // consumes — the caller reads them off the return value rather than a second read of state.
   it('resolves with the reconcile failures so the caller can decorate the tree with them', async () => {
     const client = {
       ...makeClient(),
@@ -569,49 +449,7 @@ describe('EditingController.putLoadOrder', () => {
     });
   });
 
-  it('warns when the active profile has zero enabled plugins (never silently empty)', async () => {
-    const client = {
-      ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
-    };
-    const deps = makeDeps({ client });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.putLoadOrder([], '/game/Data', '/instance', 'Fallout4');
-
-    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
-    expect(deps.refreshTree).toHaveBeenCalledOnce();
-  });
-
-  // ADR-0044: every copy is sent, so a non-empty snapshot does not mean the profile has anything
-  // enabled — participation is enabled AND winning AND listed, derived.
-  it('warns when plugins were sent but none of them participate', async () => {
-    const client = {
-      ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
-    };
-    const deps = makeDeps({ client });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.putLoadOrder(plugins.map(p => ({ ...p, enabled: false })), '/game/Data', '/instance', 'Fallout4');
-
-    expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
-  });
-
-  it('does not warn when at least one plugin participates', async () => {
-    const client = {
-      ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
-    };
-    const deps = makeDeps({ client });
-    const ctrl = new EditingController(deps);
-
-    await ctrl.putLoadOrder([{ ...plugins[0], enabled: false }, plugins[1]], '/game/Data', '/instance', 'Fallout4');
-
-    expect(deps.showWarning).not.toHaveBeenCalled();
-  });
-
-  it('shows an error and does not refresh when the load fails', async () => {
+  it('resolves a WriteRefused-shaped failure carrying the ready-to-show toast when the load fails', async () => {
     const client = {
       ...makeClient(),
       PUT: vi.fn().mockResolvedValue(drainedError(400, 'bad dir')),
@@ -619,15 +457,16 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('bad dir'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
+    // The `failed` tag leaves room for the third outcome (ADR-0044): the backend tore nothing
+    // down — it still holds what it held — so the caller leaves the view alone rather than exiting.
+    expect(result).toEqual({ outcome: 'failed', message: expect.stringContaining('bad dir') });
   });
 
   // ADR-0001 point 6: another window holds this instance's index. The backend's 423
   // ProblemDetails carries the sentence for the user, and the load is a plain failure.
-  it('tells the user which cause refused the load when another window holds the instance (423)', async () => {
+  it('carries which cause refused the load when another window holds the instance (423)', async () => {
     const client = {
       ...makeClient(),
       PUT: vi.fn().mockResolvedValue({
@@ -645,32 +484,8 @@ describe('EditingController.putLoadOrder', () => {
 
     const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
-    expect(result).toEqual({ outcome: 'failed' });
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('open in another Modbench window'));
-    expect(deps.showError).not.toHaveBeenCalledWith(expect.stringContaining('"status"'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-  });
-
-  // The caller tells a failed load from one with nothing to report by the return value alone —
-  // `[]` is ambiguous with "loaded, zero failures". A failed PUT really does mean no load
-  // order, not a stale one (ADR-0044).
-  it('reports a failed load as failed, so it is never mistaken for a load with zero failures', async () => {
-    const client = {
-      ...makeClient(),
-      PUT: vi.fn().mockResolvedValue(drainedError(400, 'bad dir')),
-    };
-    const deps = makeDeps({ client });
-    const ctrl = new EditingController(deps);
-
-    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
-
-    // The `failed` tag leaves room for the third outcome.
-    // ADR-0044: the backend tore nothing down — it
-    // still holds what it held — so the caller leaves the view alone rather than exiting.
-    expect(result).toEqual({ outcome: 'failed' });
-    // Nothing settled, so nothing to notify — there is no fresher comparison for an open
-    // panel to refetch.
-    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
+    expect(result).toEqual({ outcome: 'failed', message: expect.stringContaining('open in another Modbench window') });
+    expect((result as { message: string }).message).not.toContain('"status"');
   });
 });
 
@@ -791,14 +606,14 @@ describe('EditingController.putLoadOrder abandonment', () => {
 
   const plugins = [{ name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true }];
 
-  it('does not surface an error when the load is superseded (409), only logs it', async () => {
+  it('only logs, without surfacing an error, when the load is superseded (409)', async () => {
     const client = { ...makeClient(), PUT: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
     const log = vi.fn();
     const deps = makeDeps({ client, log });
 
-    await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+    const result = await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
-    expect(deps.showError).not.toHaveBeenCalled();
+    expect(result).toEqual({ outcome: 'abandoned' });
     expect(log).toHaveBeenCalledWith(expect.stringContaining('superseded'));
   });
 
@@ -811,12 +626,9 @@ describe('EditingController.putLoadOrder abandonment', () => {
     const result = await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(result).toEqual({ outcome: 'abandoned' });
-    // Whatever load superseded this one owns the notification, if any — this one never
-    // reached a settled state of its own to announce.
-    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 
-  it('reports an aborted load as abandoned, and surfaces nothing for it', async () => {
+  it('reports an aborted load as abandoned, and carries no message', async () => {
     const controller = new AbortController();
     const client = {
       ...makeClient(),
@@ -831,8 +643,6 @@ describe('EditingController.putLoadOrder abandonment', () => {
       .putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { signal: controller.signal });
 
     expect(result).toEqual({ outcome: 'abandoned' });
-    expect(deps.showError).not.toHaveBeenCalled();
-    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 
   // The signal is what aborts the request itself rather than waiting for a dead socket — the
@@ -936,22 +746,17 @@ describe('EditingController.implicitMasters', () => {
 describe('EditingController.track', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the origin and preset, and refreshes the tree', async () => {
+  it('POSTs the origin and preset, and resolves the wire response', async () => {
     const deps = makeDeps();
     const controller = new EditingController(deps);
 
-    const ok = await controller.track('ModA', 'Edits');
+    const result = await controller.track('ModA', 'Edits');
 
-    expect(ok).toBe(true);
+    expect(result).toEqual({ origin: 'ModA' });
     expect(deps.client.POST).toHaveBeenCalledWith('/plugins/track', {
       body: { origin: 'ModA', preset: 'Edits' },
     });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // Any record panel already open on this plugin is showing a stale "(untracked)" label until
-    // it refetches — same broadcast the reconcile path uses to keep panels current.
-    expect(deps.notifyConflictsComputed).toHaveBeenCalled();
   });
-
 });
 
 // ── create/delete/renumber record ───────────────────────────────────────────
@@ -959,22 +764,17 @@ describe('EditingController.track', () => {
 describe('EditingController.createRecord', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the plugin/origin/recordType/editorId, refreshes the tree, and returns the new FormKey', async () => {
+  it('POSTs the plugin/origin/recordType/editorId and resolves the wire response', async () => {
     const deps = makeDeps();
     const controller = new EditingController(deps);
 
-    const formKey = await controller.createRecord('MyPatch.esp', 'ModA', 'npc_', 'NewNpc');
+    const result = await controller.createRecord('MyPatch.esp', 'ModA', 'npc_', 'NewNpc');
 
-    expect(formKey).toBe('000801:MyPatch.esp');
+    expect(result).toEqual({ applied: true, formKey: '000801:MyPatch.esp', recordType: 'npc_' });
     expect(deps.client.POST).toHaveBeenCalledWith('/plugins/{plugin}/records', {
       params: { path: { plugin: 'MyPatch.esp' } },
       body: { origin: 'ModA', recordType: 'npc_', editorId: 'NewNpc', formKey: null },
     });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // A create is a working-tree change to a tracked plugin's source — the same re-derive
-    // `hasMatchingRecords` needs (ADR-0035 amending ADR-0018): a new record can start matching
-    // the active filter.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('passes an explicit requested FormKey through, xEdit\'s typed-FormID path', async () => {
@@ -1004,14 +804,11 @@ describe('EditingController.createRecord', () => {
       });
       const deps = makeDeps({ client });
 
-      const result = await new EditingController(deps).renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+      const result = asRefused(await new EditingController(deps).renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA'));
 
-      expect(result).toBeUndefined();
-      expect(deps.showError).toHaveBeenCalledWith(
+      expect(result.message).toBe(
         'mEdit: Could not renumber 000800:MyPatch.esp — another change is still being written. Try again in a moment.',
       );
-      // Nothing was written, so nothing downstream may be re-derived as though it had been.
-      expect(deps.refreshTree).not.toHaveBeenCalled();
     });
 
     // The rival this guards against: keying off the 503 status, or off the detail text, rather
@@ -1022,11 +819,9 @@ describe('EditingController.createRecord', () => {
       client.POST = vi.fn().mockResolvedValue(drainedError(503, 'No load order has been received.'));
       const deps = makeDeps({ client });
 
-      await new EditingController(deps).renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+      const result = asRefused(await new EditingController(deps).renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA'));
 
-      expect(deps.showError).toHaveBeenCalledWith(
-        'mEdit: Could not renumber 000800:MyPatch.esp — No load order has been received.',
-      );
+      expect(result.message).toBe('mEdit: Could not renumber 000800:MyPatch.esp — No load order has been received.');
     });
 
     // The gate-wrapped endpoints share `mutate`, so the branch is stated once and reached by all of
@@ -1039,11 +834,9 @@ describe('EditingController.createRecord', () => {
       });
       const deps = makeDeps({ client });
 
-      await new EditingController(deps).deleteRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
+      const result = asRefused(await new EditingController(deps).deleteRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA'));
 
-      expect(deps.showError).toHaveBeenCalledWith(
-        expect.stringContaining('another change is still being written. Try again in a moment.'),
-      );
+      expect(result.message).toContain('another change is still being written. Try again in a moment.');
     });
   });
 
@@ -1057,16 +850,15 @@ describe('EditingController.createRecord', () => {
       const deps = makeDeps({ client });
       const onEslContradiction = vi.fn();
 
-      const formKey = await new EditingController(deps).createRecord(
+      const result = asRefused(await new EditingController(deps).createRecord(
         'MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction,
-      );
+      ));
 
-      expect(formKey).toBeUndefined();
       expect(onEslContradiction).not.toHaveBeenCalled();
-      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('RecordTypeNotFound'));
+      expect(result.message).toContain('RecordTypeNotFound');
     });
 
-    it('an eslContradiction refusal calls the hook with the refusal detail, skipping the generic toast', async () => {
+    it('an eslContradiction refusal calls the hook with the refusal detail, skipping the generic refusal', async () => {
       const client = makeClient();
       client.POST = vi.fn().mockResolvedValue({
         error: { eslContradiction: true, detail: 'MyPatch.esp has exhausted its ESL FormKey space' },
@@ -1075,16 +867,15 @@ describe('EditingController.createRecord', () => {
       const deps = makeDeps({ client });
       const onEslContradiction = vi.fn().mockResolvedValue(false);
 
-      const formKey = await new EditingController(deps).createRecord(
+      const result = await new EditingController(deps).createRecord(
         'MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction,
       );
 
-      expect(formKey).toBeUndefined();
+      expect(result).toBeUndefined();
       expect(onEslContradiction).toHaveBeenCalledWith('MyPatch.esp has exhausted its ESL FormKey space');
-      expect(deps.showError).not.toHaveBeenCalled();
     });
 
-    it('accepting the hook retries the create once and returns the retry\'s own FormKey', async () => {
+    it('accepting the hook retries the create once and resolves the retry\'s own response', async () => {
       const client = makeClient();
       client.POST = vi.fn()
         .mockResolvedValueOnce({
@@ -1098,13 +889,12 @@ describe('EditingController.createRecord', () => {
       const deps = makeDeps({ client });
       const onEslContradiction = vi.fn().mockResolvedValue(true);
 
-      const formKey = await new EditingController(deps).createRecord(
+      const result = await new EditingController(deps).createRecord(
         'MyPatch.esp', 'ModA', 'npc_', undefined, undefined, onEslContradiction,
       );
 
-      expect(formKey).toBe('001000:MyPatch.esp');
+      expect(result).toEqual({ applied: true, formKey: '001000:MyPatch.esp', recordType: 'npc_' });
       expect(client.POST).toHaveBeenCalledTimes(2);
-      expect(deps.refreshTree).toHaveBeenCalled();
     });
 
     it('copyRecordAsNewRecord gets the identical hook and retry shape', async () => {
@@ -1121,56 +911,47 @@ describe('EditingController.createRecord', () => {
       const deps = makeDeps({ client });
       const onEslContradiction = vi.fn().mockResolvedValue(true);
 
-      const newFormKey = await new EditingController(deps).copyRecordAsNewRecord(
+      const result = await new EditingController(deps).copyRecordAsNewRecord(
         '000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA', undefined, onEslContradiction,
       );
 
-      expect(newFormKey).toBe('001001:MyPatch.esp');
+      expect(result).toEqual({ applied: true, newFormKey: '001001:MyPatch.esp' });
       expect(client.POST).toHaveBeenCalledTimes(2);
     });
   });
-
 });
 
 describe('EditingController.deleteRecord', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the FormKey/plugin/origin and refreshes the tree', async () => {
+  it('POSTs the FormKey/plugin/origin and resolves the wire response', async () => {
     const deps = makeDeps();
     const controller = new EditingController(deps);
 
-    const ok = await controller.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+    const result = await controller.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
 
-    expect(ok).toBe(true);
+    expect(result).toEqual({ applied: true, formKey: '000801:MyPatch.esp' });
     expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/delete', {
       params: { path: { formKey: '000801:MyPatch.esp' } },
       body: { plugin: 'MyPatch.esp', origin: 'ModA' },
     });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // Same reason as createRecord above — a delete is a working-tree change too.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
-
 });
 
 describe('EditingController.renumberRecord', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the FormKey/plugin/origin, refreshes the tree, and returns the new FormKey', async () => {
+  it('POSTs the FormKey/plugin/origin and resolves the wire response', async () => {
     const deps = makeDeps();
     const controller = new EditingController(deps);
 
-    const newFormKey = await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+    const result = await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
 
-    expect(newFormKey).toBe('000802:MyPatch.esp');
+    expect(result).toEqual({ applied: true, oldFormKey: '000801:MyPatch.esp', newFormKey: '000802:MyPatch.esp' });
     expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/renumber', {
       params: { path: { formKey: '000801:MyPatch.esp' } },
       body: { plugin: 'MyPatch.esp', origin: 'ModA', newFormKey: null },
     });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // Same reason as createRecord above — a renumber (delete+create) is a working-tree
-    // change too.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('passes an explicit requested target FormKey through, xEdit\'s typed-FormID path', async () => {
@@ -1184,7 +965,6 @@ describe('EditingController.renumberRecord', () => {
       body: { plugin: 'MyPatch.esp', origin: 'ModA', newFormKey: '000900:MyPatch.esp' },
     });
   });
-
 });
 
 // Track progress rides track-progress notifications alongside the still in-flight track POST,
@@ -1257,7 +1037,7 @@ describe('EditingController.track progress subscription', () => {
 describe('EditingController.absorbUpstreamUpdate', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('POSTs the plugin and origin, and refreshes the tree on success', async () => {
+  it('POSTs the plugin and origin, and resolves the wire response', async () => {
     const client = makeClient();
     client.POST = vi.fn().mockResolvedValue({ response: { ok: true, status: 200 }, data: { succeeded: true, refusalReason: null } });
     const deps = makeDeps({ client });
@@ -1270,14 +1050,11 @@ describe('EditingController.absorbUpstreamUpdate', () => {
       params: { path: { plugin: 'Fixture.esp' } },
       body: { origin: 'ModA' },
     });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // Absorbing a new baseline moves the source under this plugin the same way a track
-    // does — the same re-derive createRecord gives `hasMatchingRecords`, since the plugin's
-    // records (and hence which match the active filter) can change.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
-  it('surfaces a typed refusal to the user and leaves the tree alone', async () => {
+  // A refusal rides a 200 as `succeeded: false` — this is not a WriteRefused; the caller reads
+  // `refusalReason` off the returned value itself (ADR-0026).
+  it('resolves a typed refusal as a real value, not a WriteRefused', async () => {
     const client = makeClient();
     client.POST = vi.fn().mockResolvedValue({
       response: { ok: true, status: 200 },
@@ -1289,16 +1066,13 @@ describe('EditingController.absorbUpstreamUpdate', () => {
     const result = await controller.absorbUpstreamUpdate('Fixture.esp', 'ModA');
 
     expect(result).toEqual({ succeeded: false, refusalReason: 'Fixture.esp could not be parsed from its own binary.' });
-    expect(deps.showError).toHaveBeenCalledOnce();
-    expect(vi.mocked(deps.showError).mock.calls[0][0]).toContain('could not be parsed from its own binary');
-    expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 });
 
 describe('EditingController.keepAsMyEdit', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  it('surfaces a typed collision refusal as a real result, not a thrown error', async () => {
+  it('resolves a typed collision refusal as a real result, not a thrown error', async () => {
     const client = makeClient();
     client.POST = vi.fn().mockResolvedValue({
       response: { ok: true, status: 200 },
@@ -1310,23 +1084,17 @@ describe('EditingController.keepAsMyEdit', () => {
     const result = await controller.keepAsMyEdit('Fixture.esp', 'ModA');
 
     expect(result).toEqual({ succeeded: false, refusalReason: 'Fixture.esp has uncommitted changes on 000800:Fixture.esp.' });
-    // A refused Keep changed nothing — no reason to refresh.
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
-  it('refreshes the tree once a Keep actually lands', async () => {
+  it('resolves the wire response once a Keep actually lands', async () => {
     const client = makeClient();
     client.POST = vi.fn().mockResolvedValue({ response: { ok: true, status: 200 }, data: { succeeded: true, refusalReason: null } });
     const deps = makeDeps({ client });
     const controller = new EditingController(deps);
 
-    await controller.keepAsMyEdit('Fixture.esp', 'ModA');
+    const result = await controller.keepAsMyEdit('Fixture.esp', 'ModA');
 
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // Keeping an external change deserializes into working-tree dirt — same reason as
-    // absorbUpstreamUpdate above.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
+    expect(result).toEqual({ succeeded: true, refusalReason: null });
   });
 });
 
@@ -1346,10 +1114,6 @@ describe('EditingController.rebaseOntoMain / continueRebase', () => {
 
     expect(result).toEqual({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
     expect(client.POST).toHaveBeenCalledWith('/plugins/rebase', { body: { origin: 'ModA' } });
-    expect(deps.refreshTree).toHaveBeenCalled();
-    // A rebase moves the branch, which can change a tracked plugin's compile-freshness
-    // answer — same reason absorbUpstreamUpdate/keepAsMyEdit above refresh it.
-    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('rebaseOntoMain reports a refused outcome (uncommitted dirt), still typed, not thrown', async () => {
@@ -1361,10 +1125,10 @@ describe('EditingController.rebaseOntoMain / continueRebase', () => {
     const deps = makeDeps({ client });
     const controller = new EditingController(deps);
 
-    const result = await controller.rebaseOntoMain('ModA');
+    const result = await controller.rebaseOntoMain('ModA') as { outcome: string; refusalReason: string | null };
 
-    expect(result?.outcome).toBe('Refused');
-    expect(result?.refusalReason).toContain('uncommitted changes');
+    expect(result.outcome).toBe('Refused');
+    expect(result.refusalReason).toContain('uncommitted changes');
   });
 
   it('rebaseOntoMain reports a conflicted outcome naming the paths', async () => {
@@ -1376,10 +1140,10 @@ describe('EditingController.rebaseOntoMain / continueRebase', () => {
     const deps = makeDeps({ client });
     const controller = new EditingController(deps);
 
-    const result = await controller.rebaseOntoMain('ModA');
+    const result = await controller.rebaseOntoMain('ModA') as { outcome: string; conflictedPaths: string[] };
 
-    expect(result?.outcome).toBe('Conflicted');
-    expect(result?.conflictedPaths).toEqual(['source/Fixture.esp/npc_/000800.json']);
+    expect(result.outcome).toBe('Conflicted');
+    expect(result.conflictedPaths).toEqual(['source/Fixture.esp/npc_/000800.json']);
   });
 
   it('continueRebase POSTs to /plugins/rebase/continue', async () => {
@@ -1395,70 +1159,61 @@ describe('EditingController.rebaseOntoMain / continueRebase', () => {
 
     expect(client.POST).toHaveBeenCalledWith('/plugins/rebase/continue', { body: { origin: 'ModA' } });
   });
-
 });
 
 // ── mutation error paths ─────────────────────────────────────────────────────
-// ADR-0026 "explicit action failed": the toast carries the gesture's identity token and the
-// server's text, the method returns its failure value, and nothing is refreshed.
+// ADR-0026 "explicit action failed": the WriteRefused carries the gesture's identity token and
+// the server's text, ready for the caller to show verbatim.
 const mutationErrorCases: Array<{
   name: string;
   run: (c: EditingController) => Promise<unknown>;
-  failure: unknown;
   refusalText: string;
   errorIncludes: string;
 }> = [
-  { name: 'track', run: c => c.track('ModA', 'Edits'), failure: false, refusalText: 'This mod folder is already tracked.', errorIncludes: 'ModA' },
-  { name: 'createRecord', run: c => c.createRecord('MyPatch.esp', 'ModA', 'npc_'), failure: undefined, refusalText: 'Unprocessable Content', errorIncludes: 'MyPatch.esp' },
-  { name: 'deleteRecord', run: c => c.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA'), failure: false, refusalText: 'Not Found', errorIncludes: '000801:MyPatch.esp' },
+  { name: 'track', run: c => c.track('ModA', 'Edits'), refusalText: 'This mod folder is already tracked.', errorIncludes: 'ModA' },
+  { name: 'createRecord', run: c => c.createRecord('MyPatch.esp', 'ModA', 'npc_'), refusalText: 'Unprocessable Content', errorIncludes: 'MyPatch.esp' },
+  { name: 'deleteRecord', run: c => c.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA'), refusalText: 'Not Found', errorIncludes: '000801:MyPatch.esp' },
   // Covers both the untracked-referencer refusal and a partial-cascade I/O failure — both are
   // already-messaged, non-2xx responses by the time they reach renumberRecord, so they are one
   // code path here regardless of which one produced the response.
-  { name: 'renumberRecord', run: c => c.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA'), failure: undefined, refusalText: 'Unprocessable Content', errorIncludes: '000801:MyPatch.esp' },
-  { name: 'copyRecordAsOverride', run: c => c.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA'), failure: false, refusalText: 'Unprocessable Content', errorIncludes: '000801:Fallout4.esm' },
-  { name: 'copyRecordAsNewRecord', run: c => c.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA'), failure: undefined, refusalText: 'Unprocessable Content', errorIncludes: '000801:Fallout4.esm' },
-  { name: 'compile', run: c => c.compile('MyPatch.esp', 'ModA'), failure: null, refusalText: 'Compile failed', errorIncludes: 'MyPatch.esp' },
-  { name: 'absorbUpstreamUpdate', run: c => c.absorbUpstreamUpdate('Fixture.esp', 'ModA'), failure: null, refusalText: 'git unavailable', errorIncludes: 'Fixture.esp' },
-  { name: 'keepAsMyEdit', run: c => c.keepAsMyEdit('Fixture.esp', 'ModA'), failure: null, refusalText: 'git unavailable', errorIncludes: 'Fixture.esp' },
-  { name: 'rebaseOntoMain', run: c => c.rebaseOntoMain('ModA'), failure: null, refusalText: "No loaded plugin has origin 'ModA'.", errorIncludes: 'ModA' },
-  { name: 'continueRebase', run: c => c.continueRebase('ModA'), failure: null, refusalText: "No loaded plugin has origin 'ModA'.", errorIncludes: 'ModA' },
+  { name: 'renumberRecord', run: c => c.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA'), refusalText: 'Unprocessable Content', errorIncludes: '000801:MyPatch.esp' },
+  { name: 'copyRecordAsOverride', run: c => c.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA'), refusalText: 'Unprocessable Content', errorIncludes: '000801:Fallout4.esm' },
+  { name: 'copyRecordAsNewRecord', run: c => c.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA'), refusalText: 'Unprocessable Content', errorIncludes: '000801:Fallout4.esm' },
+  { name: 'compile', run: c => c.compile('MyPatch.esp', 'ModA'), refusalText: 'Compile failed', errorIncludes: 'MyPatch.esp' },
+  { name: 'absorbUpstreamUpdate', run: c => c.absorbUpstreamUpdate('Fixture.esp', 'ModA'), refusalText: 'git unavailable', errorIncludes: 'Fixture.esp' },
+  { name: 'keepAsMyEdit', run: c => c.keepAsMyEdit('Fixture.esp', 'ModA'), refusalText: 'git unavailable', errorIncludes: 'Fixture.esp' },
+  { name: 'rebaseOntoMain', run: c => c.rebaseOntoMain('ModA'), refusalText: "No loaded plugin has origin 'ModA'.", errorIncludes: 'ModA' },
+  { name: 'continueRebase', run: c => c.continueRebase('ModA'), refusalText: "No loaded plugin has origin 'ModA'.", errorIncludes: 'ModA' },
 ];
 
 describe('EditingController mutation error paths', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it.each(mutationErrorCases)(
-    '$name surfaces a non-ok response, returns its failure value, and refreshes nothing',
-    async ({ run, failure, refusalText, errorIncludes }) => {
+    '$name resolves a WriteRefused carrying the identity and the server text on a non-ok response',
+    async ({ run, refusalText, errorIncludes }) => {
       const client = makeClient();
       client.POST = vi.fn().mockResolvedValue(drainedError(422, refusalText));
       const deps = makeDeps({ client });
 
-      const result = await run(new EditingController(deps));
+      const result = asRefused(await run(new EditingController(deps)));
 
-      expect(result).toBe(failure);
-      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining(errorIncludes));
-      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining(refusalText));
-      expect(deps.refreshTree).not.toHaveBeenCalled();
-      expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
+      expect(result.message).toContain(errorIncludes);
+      expect(result.message).toContain(refusalText);
     },
   );
 
   it.each(mutationErrorCases)(
-    '$name surfaces a thrown request the same way',
-    async ({ run, failure, errorIncludes }) => {
+    '$name resolves a WriteRefused the same way for a thrown request',
+    async ({ run, errorIncludes }) => {
       const client = makeClient();
       client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
       const deps = makeDeps({ client });
 
-      const result = await run(new EditingController(deps));
+      const result = asRefused(await run(new EditingController(deps)));
 
-      expect(result).toBe(failure);
-      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining(errorIncludes));
-      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
-      expect(deps.refreshTree).not.toHaveBeenCalled();
-      expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
+      expect(result.message).toContain(errorIncludes);
+      expect(result.message).toContain('socket hang up');
     },
   );
 });
-

@@ -10,9 +10,34 @@ export function registerLoadMoreCommand(treeProvider: PluginTreeProvider): vscod
   return vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node));
 }
 
+export interface FilterCommandDeps {
+  scriptsPath: string;
+  controller: EditingController;
+  treeProvider: PluginTreeProvider;
+  /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
+   *  unexpandable (ADR-0035). */
+  refreshMatchingPlugins: () => void;
+  /** The record filter's single writer — the context key, the code lens's active SQL, and the
+   *  Plugins tree's readout. */
+  setFilterActive: (active: boolean, sql?: string, label?: string) => void;
+}
+
 // The record filter scopes which records a plugin row's children show — a distinct concern from
 // the record-panel and reveal commands, so it is its own registration.
-export function registerFilterCommands(scriptsPath: string, controller: EditingController): vscode.Disposable[] {
+export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposable[] {
+  const { scriptsPath, controller, treeProvider, refreshMatchingPlugins, setFilterActive } = deps;
+
+  const applyFilter = async (sql: string, label?: string): Promise<void> => {
+    const error = await controller.setFilter(sql);
+    if (error) {
+      void vscode.window.showErrorMessage(`mEdit: Filter failed — ${error}`);
+      return;
+    }
+    setFilterActive(true, sql, label);
+    treeProvider.refresh();
+    refreshMatchingPlugins();
+  };
+
   return [
     vscode.commands.registerCommand('modbench.setFilter', async () => {
       const files = fs.existsSync(scriptsPath)
@@ -32,14 +57,19 @@ export function registerFilterCommands(scriptsPath: string, controller: EditingC
       }
       const filePath = path.join(scriptsPath, picked.label);
       const sql = fs.readFileSync(filePath, 'utf8');
-      await controller.setFilter(sql, picked.label);
+      await applyFilter(sql, picked.label);
     }),
     vscode.commands.registerCommand('modbench.setFilterFromDocument', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
       const sql = editor.document.getText();
-      await controller.setFilter(sql, editor.document.isUntitled ? 'document' : path.basename(editor.document.fileName));
+      await applyFilter(sql, editor.document.isUntitled ? 'document' : path.basename(editor.document.fileName));
     }),
-    vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
+    vscode.commands.registerCommand('modbench.clearFilter', async () => {
+      await controller.clearFilter();
+      setFilterActive(false);
+      treeProvider.refresh();
+      refreshMatchingPlugins();
+    }),
   ];
 }

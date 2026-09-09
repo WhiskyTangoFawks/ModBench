@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import { type CompileResult } from './ApiClient';
-import { EditingController } from './EditingController';
+import { EditingController, isRefused } from './EditingController';
 import { PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from '../plugins/PluginTreeProvider';
 import { registerLoadMoreCommand, registerFilterCommands } from '../plugins/recordFilterCommands';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
@@ -48,6 +48,9 @@ export interface EditorCommandDeps {
   // Control status) live on the session object, narrowed to callbacks like mergedTreeSelection.
   refreshMatchingPlugins: () => void;
   refreshSourceControlFor: (plugin: string) => void;
+  // The record filter's single writer — the context key, the code lens's active SQL, and the
+  // Plugins tree's readout.
+  setFilterActive: (active: boolean, sql?: string, label?: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
 // ADR-0041: the single write path. A panel showing this record re-reads on rows-changed from the
@@ -70,7 +73,7 @@ function recordPanelWriteDeps(
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
     context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
-    referencedByTreeView, outputChannel, mergedTreeSelection,
+    referencedByTreeView, outputChannel, mergedTreeSelection, refreshMatchingPlugins, setFilterActive,
   } = deps;
   // One decoration provider per activation: its lookup reads treeProvider's cache live, so it
   // needs no copy of that state.
@@ -113,7 +116,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
     registerLoadMoreCommand(treeProvider),
-    ...registerFilterCommands(scriptsPath, controller),
+    ...registerFilterCommands({ scriptsPath, controller, treeProvider, refreshMatchingPlugins, setFilterActive }),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.showReferencedBy',
@@ -141,8 +144,12 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
  *  are palette-gated. */
 export function registerRecordLifecycleCommands(
   controller: EditingController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+  treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
+  // A create/delete/renumber landed: the same re-derive every write in this file needs
+  // (ADR-0035 amending ADR-0018) — a changed record can start or stop matching the active filter.
+  const onWritten = () => { treeProvider.refresh(); refreshMatchingPlugins(); };
 
   return [
     // xEdit's own "Add": no prompt — a blank record appears immediately and is named afterward
@@ -152,11 +159,14 @@ export function registerRecordLifecycleCommands(
       const origin = await resolveOriginOrReport({ origin: node.origin, pluginName: node.plugin });
       if (!origin) return;
 
-      const formKey = await controller.createRecord(
+      const result = await controller.createRecord(
         node.plugin, origin, node.recordType, undefined, undefined,
         message => promptEslFlagRemoval({ name: node.plugin, origin }, message, 'Create the Record', repository),
       );
-      if (formKey) void vscode.window.showInformationMessage(`Modbench: Added ${formKey}.`);
+      if (!result) return; // the ESL prompt was declined — nothing happened
+      if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+      onWritten();
+      void vscode.window.showInformationMessage(`Modbench: Added ${result.formKey}.`);
     }),
 
     // xEdit's own "Remove": MessageDlg('Are you sure you want to permanently remove <Name>?',
@@ -173,7 +183,10 @@ export function registerRecordLifecycleCommands(
       );
       if (choice !== 'Remove') return;
 
-      await controller.deleteRecord(node.record.formKey, node.record.plugin, origin);
+      const result = await controller.deleteRecord(node.record.formKey, node.record.plugin, origin);
+      if (!result) return;
+      if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+      onWritten();
     }),
 
     // xEdit's own "Change FormID": a native InputBox prefilled with the next-free suggestion, so
@@ -216,8 +229,11 @@ export function registerRecordLifecycleCommands(
         if (choice !== 'Change FormID') return;
       }
 
-      const newFormKey = await controller.renumberRecord(node.record.formKey, node.record.plugin, origin, input || undefined);
-      if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Renumbered to ${newFormKey}.`);
+      const result = await controller.renumberRecord(node.record.formKey, node.record.plugin, origin, input || undefined);
+      if (!result) return;
+      if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+      onWritten();
+      void vscode.window.showInformationMessage(`Modbench: Renumbered to ${result.newFormKey}.`);
     }),
   ];
 }
@@ -278,6 +294,9 @@ export async function runCopyRecordCommand(
   controller: EditingController, repository: PluginRepository,
   resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
   outputChannel: vscode.LogOutputChannel,
+  // A copy lands as a working-tree change on the destination plugin's own source — same reason
+  // record create/delete/renumber re-derive the tree and the filter's matching-plugin set.
+  onWritten: () => void,
 ): Promise<void> {
   const identity = recordCopyIdentity(arg);
   if (!identity) return;
@@ -288,14 +307,20 @@ export async function runCopyRecordCommand(
   if (!destination) return;
 
   if (gesture === 'copy-as-override') {
-    const ok = await controller.copyRecordAsOverride(identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin);
-    if (ok) void vscode.window.showInformationMessage(`Modbench: Copied ${identity.formKey} into ${destination.name}.`);
+    const result = await controller.copyRecordAsOverride(identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin);
+    if (!result) return;
+    if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+    onWritten();
+    void vscode.window.showInformationMessage(`Modbench: Copied ${identity.formKey} into ${destination.name}.`);
   } else {
-    const newFormKey = await controller.copyRecordAsNewRecord(
+    const result = await controller.copyRecordAsNewRecord(
       identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin, undefined,
       message => promptEslFlagRemoval(destination, message, 'Copy the Record', repository),
     );
-    if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Copied as ${newFormKey} into ${destination.name}.`);
+    if (!result) return; // the ESL prompt was declined — nothing happened
+    if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+    onWritten();
+    void vscode.window.showInformationMessage(`Modbench: Copied as ${result.newFormKey} into ${destination.name}.`);
   }
 }
 /** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
@@ -358,7 +383,7 @@ export function refreshSourceControlFor(
  *  Returns the unsubscribe. */
 export function wireExternalChangePending(
   repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel,
-  notificationSubscriber: NotificationSubscriber,
+  notificationSubscriber: NotificationSubscriber, treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
 ): () => void {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.
@@ -368,6 +393,9 @@ export function wireExternalChangePending(
     showDialog: (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
     showRebaseOffer: (message, ...buttons) => Promise.resolve(vscode.window.showInformationMessage(message, ...buttons)),
     openMergeEditor: makeMergeEditorOpener(repository, outputChannel),
+    showError: (message) => void vscode.window.showErrorMessage(message),
+    refreshTree: () => treeProvider.refresh(),
+    refreshMatchingPlugins,
     log,
   }, notificationSubscriber);
 }
@@ -392,9 +420,8 @@ export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel,
   makeReporter(outputChannel, command).report('error', message);
 }
 
-/** `EditingController.compile` already surfaces a transport failure itself (`null`), so this has
- *  nothing to report in that case. Nothing re-reads `GET /plugins` after a compile: a compiled
- *  binary changes only bytes on disk. */
+/** Nothing re-reads `GET /plugins` after a compile: a compiled binary changes only bytes on
+ *  disk, which the index's own mirror watch re-reads. */
 export async function compileAndReport(
   controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
@@ -402,6 +429,7 @@ export async function compileAndReport(
 ): Promise<void> {
   const result = await controller.compile(target.name, target.origin, atRef);
   if (!result) return;
+  if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
 
   publishCompileDiagnostics(diagnostics, target.origin, result);
 
