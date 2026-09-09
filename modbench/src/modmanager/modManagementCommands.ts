@@ -24,6 +24,7 @@ import {
 import { deployMods, purgeMods, type DeploymentCommandResult } from './commands/deployment';
 import { installFromArchive, installFromFolder } from './commands/install';
 import { listProfiles, switchProfile } from './commands/profile';
+import { collidingModName } from './modNameCollision';
 
 // A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
 // contract whether the failure came from a rejected promise or an `{ applied: false }` result.
@@ -77,14 +78,18 @@ export function registerModListCoreCommands(
 }
 export interface ModInstallDeps {
   instanceRoot: string;
+  instance: Pick<Instance, 'value'>;
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>;
-  promptModName: (defaultName: string) => Thenable<string | undefined>;
+  promptModName: (defaultName: string, validate?: (value: string) => string | undefined) => Thenable<string | undefined>;
   warnIfFomod: (name: string, isFomod: boolean) => void;
 }
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
-  const { instanceRoot, runModAction, promptModName, warnIfFomod } = deps;
+  const { instanceRoot, instance, runModAction, promptModName, warnIfFomod } = deps;
+  const validateName = (name: string) => collidingModName(instance, name);
   return [
-      vscode.commands.registerCommand('modbench.modList.installFromArchive', async (archivePath?: string): Promise<boolean> => {
+      vscode.commands.registerCommand('modbench.modList.installFromArchive', async (
+        archivePath?: string, modID?: string, fileID?: string, version?: string,
+      ): Promise<boolean> => {
         let archive = archivePath;
         if (!archive) {
           const picked = await vscode.window.showOpenDialog({
@@ -96,11 +101,11 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         }
         if (!archive) return false;
         const resolvedArchive = archive;
-        const name = await promptModName(path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''));
+        const name = await promptModName(path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''), validateName);
         if (!name) return false;
         let succeeded = false;
         await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
-          const outcome = await installFromArchive(instanceRoot, name, resolvedArchive);
+          const outcome = await installFromArchive(instanceRoot, name, resolvedArchive, { modID, fileID, version });
           if (!outcome.applied) throw new Error(outcome.refusal);
           warnIfFomod(name, outcome.isFomod);
           succeeded = true;
@@ -116,7 +121,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         });
         const folder = picked?.[0]?.fsPath;
         if (!folder) return;
-        const name = await promptModName(path.basename(folder));
+        const name = await promptModName(path.basename(folder), validateName);
         if (!name) return;
         await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
           const outcome = await installFromFolder(instanceRoot, name, folder);

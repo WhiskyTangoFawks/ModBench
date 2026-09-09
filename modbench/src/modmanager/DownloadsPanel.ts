@@ -41,15 +41,16 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
 // `.meta` write is what the file-watcher turns into a Status refresh, so none is issued here.
 async function installArchive(instanceRoot: string, name: string, log: (msg: string) => void): Promise<void> {
   const archivePath = join(instanceRoot, 'downloads', name);
+  const metaPath = `${archivePath}.meta`;
   let installed = false;
   try {
+    const metaText = (await readMetaText(metaPath)) ?? '';
+    const { modID, fileID, version } = parseDownloadMeta(metaText);
     installed = (await vscode.commands.executeCommand<boolean | undefined>(
       'modbench.modList.installFromArchive',
-      archivePath,
+      archivePath, modID, fileID, version,
     )) ?? false;
     if (!installed) return;
-    const metaPath = `${archivePath}.meta`;
-    const metaText = (await readMetaText(metaPath)) ?? '';
     await writeFile(metaPath, setInstalledInText(metaText), 'utf8');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
