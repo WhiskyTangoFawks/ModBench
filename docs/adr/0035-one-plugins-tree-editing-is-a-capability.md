@@ -105,9 +105,14 @@ A row carries the origin of the copy it stands for, and the facts from `GetPlugi
 malformed-plugin scan join on origin plus filename
 ([ADR-0036](0036-plugin-identity-is-origin-plus-filename.md)), falling back to the filename when
 the answer names no matching copy. Load failures are matched by filename alone: `PluginLoadFailure`
-carries no origin. The record browser still speaks none of Mod Management's
-vocabulary — enforced by `src/test/contextBoundary.test.ts`, which reads the source text.
-ADR-0027's conflation objection is met by that structural check, not by assertion.
+carries no origin.
+
+**The boundary is a keying rule, not an ownership split.** Mods, Downloads, Toolbox and the
+Instance value they read key a plugin by filename and origin and never by FormKey, and none of
+them reaches the backend itself — enforced by `src/test/contextBoundary.test.ts`, which walks the
+source tree rather than asserting against a hand-written list of files. The Plugins view is the
+one stated exception: browsing records by FormKey is its whole point. ADR-0027's conflation
+objection is met by that structural check, not by assertion.
 
 ## Consequences
 
