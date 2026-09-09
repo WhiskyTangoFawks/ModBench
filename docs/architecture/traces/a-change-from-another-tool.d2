@@ -1,0 +1,28 @@
+# The invariant both processes share: a change from another tool and a change
+# from Modbench are the same signal, because each read model learns only by watching.
+...@../styles
+direction: down
+tools: "Other tools\nMO2, xEdit, CK, the game, the user" {class: other}
+mo2: "MO2 instance" {class: sor}
+plugin: "Plugin files" {class: sor}
+instance: "Instance" {class: driven}
+views: "every view" {class: driving}
+watcher: "Mod watcher" {class: driving}
+proj: "Projector\nvalidate by hash" {class: driven}
+store: "Store" {class: derived}
+port: "Notification port" {class: core}
+http: "notification stream" {class: driving}
+client: "mEdit client" {class: core}
+
+tools -> mo2: files and lines, at any time {class: outside}
+tools -> plugin: bytes, at any time {class: outside}
+mo2 -> instance: watch, every file and folder {class: signal}
+instance -> views: value {class: loadout}
+plugin -> watcher: bytes {class: signal}
+watcher -> proj: plugin changed {class: signal}
+watcher -> port: external change pending (tracked mod) {class: push}
+proj -> store: rows {class: query}
+store -> port: rows changed {class: push}
+port -> http: publish {class: push}
+http -> client: stream {class: push}
+client -> views: rows changed (push) {class: push}

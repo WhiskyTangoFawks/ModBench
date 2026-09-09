@@ -1,0 +1,27 @@
+# Loadout gesture. Install drops a folder; the Instance's watcher registers it, and the
+# modlist adoption is a command handed the value, the way the plugins reconcile is. mEdit
+# learns of the folder the same way: by watching.
+...@../styles
+direction: down
+downloads: "Downloads view" {class: driving}
+install: "install\nstaging, then one rename into mods/" {class: core}
+meta: "meta.ini\nwrite" {class: core}
+disk: "MO2 instance\nmods/<name>/, meta.ini" {class: sor}
+instance: "Instance" {class: driven}
+views: "every view" {class: driving}
+modlist: "modlist commands\nadopt unlisted folders" {class: core}
+codec: "modlist.txt\nsplice" {class: core}
+watcher: "Mod watcher\nmEdit's own, one per mod" {class: driving}
+proj: "Projector" {class: driven}
+
+downloads -> install: install this {class: loadout}
+install -> meta: the meta it knows {class: loadout}
+meta -> install: bytes {class: loadout}
+install -> disk: one rename, then forget {class: loadout}
+disk -> instance: watch {class: signal}
+instance -> views: value {class: loadout}
+instance -> modlist: "each value, as an argument:\nfolders with no modlist line" {class: loadout}
+modlist -> codec: lines to add {class: loadout}
+codec -> disk: bytes, then forget {class: loadout}
+disk -> watcher: bytes {class: signal}
+watcher -> proj: plugin changed {class: signal}

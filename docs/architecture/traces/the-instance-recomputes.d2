@@ -1,0 +1,27 @@
+# How the Instance is built, whichever gesture or tool changed a file. One watch over
+# the instance directory, debounced; one module per MO2 file parses; one whole value
+# replaces the last, with the next sequence. A parse failure keeps the last value.
+...@../styles
+direction: down
+disk: "MO2 instance\nprofiles/*/modlist.txt, plugins.txt · ModOrganizer.ini · mods/*/meta.ini · mods/ · overwrite/ · downloads/" {class: sor}
+modlist: modlist.txt {class: core}
+pluginstxt: plugins.txt {class: core}
+meta: meta.ini {class: core}
+ini: ModOrganizer.ini {class: core}
+instance: "Instance\none immutable value, replaced whole\nsequence +1 · parse failure keeps the last" {class: driven}
+views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
+client: "mEdit client" {class: core}
+deploy: "deploy" {class: core}
+
+disk -> modlist: bytes {class: loadout}
+disk -> pluginstxt: bytes {class: loadout}
+disk -> meta: bytes {class: loadout}
+disk -> ini: bytes {class: loadout}
+disk -> instance: watch, every file and folder, debounced {class: signal}
+modlist -> instance: parse {class: loadout}
+pluginstxt -> instance: parse {class: loadout}
+meta -> instance: parse {class: loadout}
+ini -> instance: parse {class: loadout}
+instance -> views: value {class: loadout}
+instance -> client: load order snapshot, on change {class: loadout}
+instance -> deploy: winners and the plugin load order {class: deploy}

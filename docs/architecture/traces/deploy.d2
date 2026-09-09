@@ -1,0 +1,17 @@
+# Deploy. Deploy is a module inside Toolbox, a view: it reads one Instance value and
+# writes Game Data/, whose manifest is its hash. The manifest is an Instance input, so
+# deploy state comes back the same way as everything else.
+...@../styles
+direction: down
+instance: "Instance" {class: driven}
+tables: "per-release tables" {class: core}
+toolbox: "Toolbox" {class: driving}
+deploy: "deploy\ninside Toolbox: hardlinks, manifest, first-deploy consent" {class: driving}
+gamedata: "Game Data/\nderived" {class: derived}
+
+instance -> toolbox: one value, with its sequence {class: loadout}
+tables -> toolbox: load-order file destination {class: deploy}
+toolbox -> deploy: "deploy · purge, with the value" {class: deploy}
+deploy -> gamedata: hardlinks · manifest {class: deploy}
+gamedata -> instance: watch, the manifest {class: signal}
+instance -> toolbox: value, deploy state {class: loadout}

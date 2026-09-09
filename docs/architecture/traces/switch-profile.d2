@@ -1,0 +1,21 @@
+# Loadout gesture. The profile is a line in ModOrganizer.ini; the write is forgotten
+# and the watch does the rest, so the new profile's files are read the same way as
+# any other change.
+...@../styles
+direction: down
+toolbox: "Toolbox\nprofile" {class: driving}
+cmd: "instance commands\nswitch profile" {class: core}
+ini: "ModOrganizer.ini\nwrite" {class: core}
+disk: "MO2 instance\nModOrganizer.ini" {class: sor}
+instance: "Instance\nrecompute from the new profile" {class: driven}
+views: "every view" {class: driving}
+client: "mEdit client" {class: core}
+medit: "mEdit\nload order state" {class: driving}
+
+toolbox -> cmd: gesture {class: loadout}
+cmd -> ini: profile name {class: loadout}
+ini -> disk: bytes, then forget {class: loadout}
+disk -> instance: watch {class: signal}
+instance -> views: value {class: loadout}
+instance -> client: load order snapshot {class: loadout}
+client -> medit: load order snapshot {class: loadout}
