@@ -8,9 +8,13 @@ import { dropIndexForMove } from '../modmanager/mo2/pluginsText';
 import type { ImplicitMasterSource } from '../modmanager/commands/plugins';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 import type { LoadFailure } from '../loadOrderReconcile';
-import type { PluginTreeNode, PluginTreeProvider } from './PluginTreeProvider';
+import { ErrorNode, IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
+
+// mEdit is always running (target-architecture.md); reaching this means the tree has nothing
+// held from it at all, which reads to the user the same as a disconnect.
+const NOT_CONNECTED = 'mEdit is not connected.';
 
 // Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
@@ -303,14 +307,15 @@ export class PluginsTreeProvider
   async getChildren(element?: PluginsTreeNode): Promise<PluginsTreeNode[]> {
     if (element === undefined) return this.rows();
     if (!isRow(element)) return this.records?.getChildren(element) ?? [];
-    // ADR-0035: a row expands into records only while a load order holds its file. An empty list
-    // under a chevron would read as "this plugin has no records" (ADR-0026).
-    const file = this.expandableFile(element);
-    if (file === undefined) return [];
+    const file = pluginFileOf(element);
+    if (file === undefined) return []; // EmptyNode: no plugin to expand into
+    // ADR-0035: never an empty list — that would read as "no records" (ADR-0026).
+    if (this.heldFiles === undefined) return [new ErrorNode(NOT_CONNECTED)];
+    if (!this.heldFiles.has(file.toLowerCase())) return [new IndexingNode()];
     // Deliberately not the row's own `origin`: a stated origin means "the copy the load order
     // does not name" downstream, which would make every record row read-only. The backend
     // resolves a load-order filename itself.
-    return this.records?.getPluginChildren(file) ?? [];
+    return this.records?.getPluginChildren(file) ?? [new ErrorNode(NOT_CONNECTED)];
   }
 
   private async rows(): Promise<PluginListNode[]> {
@@ -366,9 +371,9 @@ export class PluginsTreeProvider
 
   getTreeItem(element: PluginsTreeNode): vscode.TreeItem {
     if (!isRow(element)) return this.records?.getTreeItem(element) ?? element;
-    // The chevron *is* the "editing is available now" signal (ADR-0035), decided on every render
-    // rather than baked into the row.
-    element.collapsibleState = this.expandableFile(element) === undefined
+    // ADR-0035: every row is collapsible — mEdit is always running, so there is no absence for a
+    // chevron to encode. `pluginFileOf` is the row's own identity, never a backend fact.
+    element.collapsibleState = pluginFileOf(element) === undefined
       ? vscode.TreeItemCollapsibleState.None
       : vscode.TreeItemCollapsibleState.Collapsed;
     // A row is returned *as* its own TreeItem, so decorating in place would accumulate
@@ -470,15 +475,9 @@ export class PluginsTreeProvider
   // reconcile — or after teardown — cannot resurrect a stale answer.
   private generation = 0;
 
-  /** ADR-0044. Mod Management works with no backend running — the ordinary case, not a failure —
-   *  so the composition root checks this rather than let a doomed PUT surface as an error toast. */
-  hasLoadOrder(): boolean {
-    return this.heldFiles !== undefined;
-  }
-
-  /** A progressive reconcile's tick: chevrons appear as plugins land, failures as they are found.
-   *  It carries no facts — those are whole-load-order derivations a partial tick cannot answer,
-   *  so they clear here and return when `applyReconciled` lands. */
+  /** A progressive reconcile's tick: a row's content resolves as its plugin lands. It carries no
+   *  facts — those are whole-load-order derivations a partial tick cannot answer, so they clear
+   *  here and return when `applyReconciled` lands. */
   applyIndexed(indexedPlugins: string[], failures: LoadFailure[]): void {
     this.generation++;
     this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
@@ -582,12 +581,6 @@ export class PluginsTreeProvider
     } catch (err) {
       this.log('warn', `[PluginsTreeProvider] the malformed-plugin scan could not be read: ${message(err)}`);
     }
-  }
-
-  private expandableFile(row: PluginListNode): string | undefined {
-    if (this.heldFiles === undefined) return undefined;
-    const file = pluginFileOf(row);
-    return file === undefined || !this.heldFiles.has(file.toLowerCase()) ? undefined : file;
   }
 
   // `hasMatchingRecords` only ever answers `false` while a filter is active, so no separate

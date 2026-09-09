@@ -249,11 +249,22 @@ export class ErrorNode extends vscode.TreeItem {
   }
 }
 
+/** Shown under a row the backend has not indexed yet. Distinct from `ErrorNode`: this state
+ *  clears on its own as indexing catches up, an error does not (ADR-0035). */
+export class IndexingNode extends vscode.TreeItem {
+  readonly kind = 'indexing' as const;
+  constructor() {
+    super('Still indexing…', vscode.TreeItemCollapsibleState.None);
+    this.contextValue = 'indexing';
+    this.iconPath = new vscode.ThemeIcon('loading~spin');
+  }
+}
+
 export type PluginTreeNode =
   | RecordTypeNode | RecordNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode
-  | ErrorNode;
+  | ErrorNode | IndexingNode;
 
 // Record types that get their own dedicated node in the worldspace tree, keyed by raw signature —
 // one source of truth, since a set membership check and a separate per-type equality check could

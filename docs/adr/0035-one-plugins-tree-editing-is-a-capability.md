@@ -45,8 +45,12 @@ not a choice a user makes; participation is three choices they already made in M
 ### The tree
 
 - Rows are `plugins.txt`'s lines, in Plugin load order.
-- With no backend the rows are leaves. Starting the backend makes them collapsible — chevrons
-  appear across the tree, which is the whole of the "editing is available now" signal.
+- **mEdit is always running, so the tree has no mode for its absence** (`target-architecture.md`):
+  every row is collapsible from launch, with no chevron gained or lost. Expanding decides content,
+  never shape: the record browser's own error node when the client cannot answer, a "still
+  indexing" node when the backend has not indexed that plugin yet, or its records — never an empty
+  list, which would read as "this plugin has no records" (ADR-0026). No fact from the backend is
+  read to decide whether a row is collapsible.
 - **The leading slot answers exactly one question — "can you change whether this loads?"**: a
   checkbox where you decide, a lock on an implicit master that is forced on, nothing at all on a
   file that is not in the load order. Read-only-for-editing is never an icon; it is conveyed by
@@ -85,7 +89,8 @@ is no drift and no reread verb. VS Code's own file model is the precedent: a cle
 the disk silently.
 
 **Loading is progressive.** A plugin's records are browsable the moment that plugin is indexed,
-not held back until the whole load order settles. Rows gain chevrons as they land.
+not held back until the whole load order settles. A row not yet reached answers "still indexing"
+on expand, never an empty list and never a leaf.
 
 ### View layout
 

@@ -556,6 +556,10 @@ describe('modbench.openEditorBeside', () => {
 // The implicit-master row is a different class with a different contextValue and no `.plugin`
 // field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
+// esbuild bundles the running extension's own `PluginTreeProvider` inline, so a class imported
+// here from source is a distinct constructor — `.kind` is what identifies a node across that
+// boundary, the same discriminant `PluginsTreeProvider.ts` switches on internally.
+const nodeKind = (node: unknown): unknown => (node as { kind?: unknown } | undefined)?.kind;
 
 describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree', () => {
   it('opens a header tab from an ordinary plugin row (PluginsTreeProvider.PluginNode)', async () => {
@@ -785,17 +789,17 @@ describe('Launch mEdit populates the editing plugin tree', () => {
     const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
     assert.ok(!prematurePlugins, 'GET /plugins must not fire before PUT /load-order');
 
-    // The merged Plugins tree is what reflects a successful launch: its TestMod.esp row becomes
-    // expandable only after the load order's own GET /plugins lands, so an expandable row proves
-    // the fetch happened, and happened after load.
+    // TestMod.esp's row expands into real record types only once GET /plugins has landed, so
+    // real children (not an error/indexing placeholder) prove the fetch happened after load.
     const pluginsTreeExport = (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
     assert.ok(pluginsTreeExport, 'activate() should return { pluginsTree } for the merged view');
     const rows = await pluginsTreeExport.getChildren();
     assert.ok(rows.length > 0, 'the merged plugins tree should not be empty after a successful launch');
     const testMod = findRow(rows, 'TestMod.esp');
-    assert.strictEqual(
-      pluginsTreeExport.getTreeItem(testMod).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'TestMod.esp should be expandable once the load order has loaded and GET /plugins has landed',
+    const children = await pluginsTreeExport.getChildren(testMod);
+    assert.deepStrictEqual(
+      children.map((c) => (c as vscode.TreeItem).label), ['Weapon'],
+      'TestMod.esp should expand into its record types once the load order has loaded and GET /plugins has landed',
     );
   });
 });
@@ -906,8 +910,8 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 });
 
 // ── The Plugin load-order rows expand into records ────────────────────────────
-// Chevrons appearing across the tree are the whole "editing is available now" signal (ADR-0035):
-// with no backend the rows are leaves, a load order makes them collapsible, closing puts them back.
+// Rows are collapsible from launch (ADR-0035): mEdit is always running, so a chevron encodes no
+// absence. Launch/close changes a row's content on expand, never its collapsibleState.
 
 interface PluginsTreeLike {
   getChildren(element?: unknown): Promise<unknown[]>;
@@ -986,7 +990,7 @@ describe('Plugin load-order rows expand into records', () => {
     assert.ok(!rows.some((r) => tree.getTreeItem(r).contextValue === 'pluginImplicit'));
   });
 
-  it('renders the load order as leaves with no backend running', async () => {
+  it('renders every row collapsible before mEdit has ever launched, expanding to one error node', async () => {
     const tree = pluginsTree()!;
     const rows = await tree.getChildren();
 
@@ -996,13 +1000,16 @@ describe('Plugin load-order rows expand into records', () => {
     );
     for (const row of rows) {
       assert.strictEqual(
-        tree.getTreeItem(row).collapsibleState, vscode.TreeItemCollapsibleState.None,
-        'with no backend running every row is a leaf',
+        tree.getTreeItem(row).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
+        'rows are collapsible from launch — there is no mode for mEdit not having started yet',
       );
     }
+    const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
+    assert.strictEqual(children.length, 1, 'expanding before mEdit is up answers exactly one node, never an empty list');
+    assert.strictEqual(nodeKind(children[0]), 'error', 'the one node is the record browser\'s own error node');
   });
 
-  it('makes rows collapsible when a mEdit starts, without reordering the load order', async () => {
+  it('launching mEdit gives a row real children, without reordering the load order', async () => {
     const tree = pluginsTree()!;
     const before = await tree.getChildren();
 
@@ -1013,9 +1020,10 @@ describe('Plugin load-order rows expand into records', () => {
       after.map(rowName).filter((n) => n !== undefined), before.map(rowName),
       'launching mEdit must not rebuild or reorder the plugin rows',
     );
-    assert.strictEqual(
-      tree.getTreeItem(findRow(after, 'TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'a row whose plugin is in the load order gains a chevron',
+    const children = await tree.getChildren(findRow(after, 'TestMod.esp'));
+    assert.deepStrictEqual(
+      children.map((c) => (c as vscode.TreeItem).label), ['Weapon'],
+      'a row whose plugin is in the load order now expands into its record types',
     );
   });
 
@@ -1042,7 +1050,7 @@ describe('Plugin load-order rows expand into records', () => {
     assert.deepStrictEqual((await tree.getChildren(other)).map((c) => (c as vscode.TreeItem).label), ['Weapon']);
   });
 
-  it('returns every row to a leaf when the mEdit closes, keeping the load order', async () => {
+  it('keeps every row collapsible when mEdit closes, expanding to one error node, keeping the load order', async () => {
     const tree = pluginsTree()!;
 
     exitEditing();
@@ -1053,8 +1061,11 @@ describe('Plugin load-order rows expand into records', () => {
       'closing mEdit leaves the load order untouched',
     );
     for (const row of rows) {
-      assert.strictEqual(tree.getTreeItem(row).collapsibleState, vscode.TreeItemCollapsibleState.None);
+      assert.strictEqual(tree.getTreeItem(row).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
     }
+    const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
+    assert.strictEqual(children.length, 1, 'expanding after close answers exactly one node, never an empty list');
+    assert.strictEqual(nodeKind(children[0]), 'error', 'the one node is the record browser\'s own error node');
   });
 });
 
@@ -1528,6 +1539,11 @@ describe('Progressive load', () => {
     (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
   let gameDir = '';
 
+  const childrenFor = async (name: string) => {
+    const tree = pluginsTree()!;
+    return tree.getChildren(findRow(await tree.getChildren(), name));
+  };
+
   const itemFor = async (name: string) => {
     const tree = pluginsTree()!;
     return tree.getTreeItem(findRow(await tree.getChildren(), name));
@@ -1575,24 +1591,29 @@ describe('Progressive load', () => {
     exitEditing();
   });
 
-  // Rows gain chevrons as each plugin lands, not all at once at the end.
-  it('makes a plugin expandable as soon as it is indexed, while a later one is still a leaf', async () => {
+  // `record-types` needs the whole PUT settled in this mock, so the attempt itself
+  // (`requestLog`) tells a real ask apart from "still indexing"'s no ask at all.
+  const recordTypesAttempted = (name: string) =>
+    requestLog.some((l) => l.startsWith(`GET /plugins/${name}/record-types`));
+  const stillIndexing = async (name: string) => nodeKind((await childrenFor(name))[0]) === 'indexing';
+  const waitForIndexed = (name: string) => waitFor(`the backend to be asked about ${name} once indexed`, async () => {
+    await childrenFor(name);
+    return recordTypesAttempted(name) ? true : undefined;
+  });
+
+  it('makes a plugin browsable as soon as it is indexed, while a later one is still indexing', async () => {
     setIndexed(['TestMod.esp']);
     const launch = enterEditing();
 
-    await waitFor('TestMod.esp to gain a chevron mid-load', async () =>
-      (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+    await waitForIndexed('TestMod.esp');
 
-    // What makes it progressive rather than merely early: a plugin the load has not reached stays a
-    // leaf. A row that expanded here would fetch records for a plugin that is not queryable yet.
-    assert.strictEqual(
-      (await itemFor('Other.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
-      'Other.esp has not been indexed yet and must not be expandable',
-    );
+    // What makes it progressive rather than merely early: a plugin the load has not reached
+    // answers "still indexing" from client-side state alone, asking the backend nothing.
+    assert.ok(await stillIndexing('Other.esp'), 'Other.esp has not been indexed yet and must answer "still indexing"');
+    assert.ok(!recordTypesAttempted('Other.esp'), 'a plugin the load has not reached must not be asked about at all');
 
     setIndexed(['TestMod.esp', 'Other.esp']);
-    await waitFor('Other.esp to gain a chevron once it lands', async () =>
-      (await itemFor('Other.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+    await waitForIndexed('Other.esp');
 
     releasePutLoadOrder!();
     await launch;
@@ -1615,14 +1636,12 @@ describe('Progressive load', () => {
     await launch;
   });
 
-  // Closing mEdit mid-load is a deliberate abandonment, not a failure: the notification stream
-  // closes, chevrons and message go, and nothing is reported broken. The "no error toast" half
-  // is asserted at the LoadOrderController seam, where the reporter is injectable.
+  // Closing mEdit mid-load is a deliberate abandonment: the stream closes and a row's content
+  // goes with the load order. The "no error toast" half lives at the LoadOrderController seam.
   it('closes the notification stream and clears the view when mEdit is closed mid-load', async () => {
     setIndexed(['TestMod.esp']);
     const launch = enterEditing();
-    await waitFor('the load to be under way, subscribed and rendering', async () =>
-      (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+    await waitForIndexed('TestMod.esp');
     const connectionsAtLoad = requestLog.filter((l) => l === 'GET /notifications/stream').length;
     assert.ok(connectionsAtLoad > 0, 'the load should have been subscribed before it was abandoned');
 
@@ -1637,10 +1656,9 @@ describe('Progressive load', () => {
       requestLog.filter((l) => l === 'GET /notifications/stream').length, connectionsAtLoad,
       'closing mEdit must not reconnect the stream against a dead backend',
     );
-    assert.strictEqual(
-      (await itemFor('TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.None,
-      'the chevrons must go with the load order',
-    );
+    const children = await childrenFor('TestMod.esp');
+    assert.strictEqual(children.length, 1, 'expanding after an abandoned load answers exactly one node, never an empty list');
+    assert.strictEqual(nodeKind(children[0]), 'error', 'a row\'s content goes with the load order, not just its badges');
     assert.strictEqual(
       (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
       undefined,
@@ -1685,8 +1703,7 @@ describe('Progressive load', () => {
     setIndexed(['TestMod.esp', 'MissingMaster.esp']);
     const launch = enterEditing();
 
-    await waitFor('MissingMaster.esp to gain a chevron mid-load', async () =>
-      (await itemFor('MissingMaster.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+    await waitForIndexed('MissingMaster.esp');
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
       !(typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm')),
@@ -1705,11 +1722,12 @@ describe('Progressive load', () => {
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
       `expected the read-only note once the load completed, got: ${String(immutable.tooltip)}`);
-    // Immutable.esm never appears in a progress tick's indexedPlugins, so its chevron can only come
-    // from the completion hand-off's file set, which a hand-off applying only readOnly would drop.
-    assert.strictEqual(
-      immutable.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'Immutable.esm was indexed but never named in a progress tick — its chevron must still come from the completion hand-off',
+    // Immutable.esm never appears in a progress tick's indexedPlugins, so its browsability can
+    // only come from the completion hand-off's file set, which a hand-off applying only readOnly
+    // would drop.
+    assert.ok(
+      !(await stillIndexing('Immutable.esm')),
+      'Immutable.esm was indexed but never named in a progress tick — it must still browse once the completion hand-off lands',
     );
   });
 });
