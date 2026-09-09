@@ -3,11 +3,11 @@ import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
   ContainerChildSummary,
-} from './ApiClient';
-import type { PluginRepository } from './PluginRepository';
-import { recordResourceUri } from './recordResourceUri';
+} from '../medit/ApiClient';
+import type { PluginRepository } from '../medit/PluginRepository';
+import { recordResourceUri } from '../medit/recordResourceUri';
 import { failurePrefixIcon } from '../failurePrefixIcon';
-export { headerFormKeyFor } from './formKeyIdentity';
+export { headerFormKeyFor } from '../medit/formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in
 // one call (measured no meaningful cost even at the realistic worst case; see fetchRecords and

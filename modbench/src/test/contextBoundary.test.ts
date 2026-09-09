@@ -18,7 +18,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   });
 
   it('the child provider imports nothing from Mod Management', () => {
-    expect(importsOf(read('medit/PluginTreeProvider.ts')).filter((s) => s.includes('modmanager'))).toEqual([]);
+    expect(importsOf(read('plugins/PluginTreeProvider.ts')).filter((s) => s.includes('modmanager'))).toEqual([]);
   });
 
   it('the composite imports from neither context', () => {
@@ -89,7 +89,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
 
   it('the child provider contains no mod vocabulary', () => {
     // Word-bounded so `model`, `modbench` and `modified` don't read as the domain term.
-    const offending = [...read('medit/PluginTreeProvider.ts').matchAll(/\b(mods?|modlists?)\b/gi)];
+    const offending = [...read('plugins/PluginTreeProvider.ts').matchAll(/\b(mods?|modlists?)\b/gi)];
     expect(offending.map((m) => m[0])).toEqual([]);
   });
 

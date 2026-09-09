@@ -8,7 +8,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { makeOnRecordEdited } from '../onRecordEdited';
-import type { PluginTreeProvider } from '../PluginTreeProvider';
+import type { PluginTreeProvider } from '../../plugins/PluginTreeProvider';
 import type { RecordDecorationProvider } from '../RecordDecorationProvider';
 
 function fakeTreeProvider(markResult = true): PluginTreeProvider {

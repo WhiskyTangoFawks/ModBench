@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { BackendManager } from './medit/BackendManager';
 import type { SseNotificationSubscriber } from './medit/NotificationSubscriber';
-import type { PluginTreeNode, PluginTreeProvider } from './medit/PluginTreeProvider';
+import type { PluginTreeNode, PluginTreeProvider } from './plugins/PluginTreeProvider';
 import type { MinimalRepository } from './medit/editorCommands';
 import type { PluginListNode } from './modmanager/PluginListProvider';
 import type { PluginsTreeComposite } from './PluginsTreeComposite';

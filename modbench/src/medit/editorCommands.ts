@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
-import * as fs from 'fs';
 import { type CompileResult } from './ApiClient';
 import { EditingController } from './EditingController';
-import { InteriorLoadMoreNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from './PluginTreeProvider';
+import { PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from '../plugins/PluginTreeProvider';
+import { registerLoadMoreCommand, registerFilterCommands } from '../plugins/recordFilterCommands';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { type CompileTarget } from './compileTarget';
@@ -112,7 +112,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
         { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
-    vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node)),
+    registerLoadMoreCommand(treeProvider),
     ...registerFilterCommands(scriptsPath, controller),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
@@ -134,39 +134,6 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
             'error', 'Could not copy to the clipboard.', err instanceof Error ? err.message : String(err));
         }
       }),
-  ];
-}
-// Apart from registerEditorCommands because select/apply/clear the active SQL filter is one
-// concern, distinct from the record-panel and reveal commands.
-export function registerFilterCommands(scriptsPath: string, controller: EditingController): vscode.Disposable[] {
-  return [
-    vscode.commands.registerCommand('modbench.setFilter', async () => {
-      const files = fs.existsSync(scriptsPath)
-        ? fs.readdirSync(scriptsPath).filter(f => f.endsWith('.sql'))
-        : [];
-      const NEW_FILTER_LABEL = '$(add) New filter…';
-      const items: vscode.QuickPickItem[] = [
-        ...files.map(f => ({ label: f, description: scriptsPath })),
-        { label: NEW_FILTER_LABEL },
-      ];
-      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select .sql filter file' });
-      if (!picked) return;
-      if (picked.label === NEW_FILTER_LABEL) {
-        const doc = await vscode.workspace.openTextDocument({ language: 'sql' });
-        await vscode.window.showTextDocument(doc);
-        return;
-      }
-      const filePath = path.join(scriptsPath, picked.label);
-      const sql = fs.readFileSync(filePath, 'utf8');
-      await controller.setFilter(sql, picked.label);
-    }),
-    vscode.commands.registerCommand('modbench.setFilterFromDocument', async () => {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) return;
-      const sql = editor.document.getText();
-      await controller.setFilter(sql, editor.document.isUntitled ? 'document' : path.basename(editor.document.fileName));
-    }),
-    vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
   ];
 }
 /** ADR-0034: xEdit hosts Add/Remove/Change FormID in its tree's context menu, not the grid, and

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { PluginListProvider, PluginListNode } from './modmanager/PluginListProvider';
-import type { PluginTreeNode } from './medit/PluginTreeProvider';
+import type { PluginTreeNode } from './plugins/PluginTreeProvider';
 import { makeReporter } from './reporter';
 
 /** ADR-0026: a failed toggle must surface and resync, never leave the checkbox disagreeing with

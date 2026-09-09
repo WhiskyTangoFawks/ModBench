@@ -14,7 +14,7 @@ import {
 } from '../NotificationSubscriber';
 import { ActiveRecordTracker } from '../ActiveRecordTracker';
 import { makeOnRecordEdited } from '../onRecordEdited';
-import type { PluginTreeProvider } from '../PluginTreeProvider';
+import type { PluginTreeProvider } from '../../plugins/PluginTreeProvider';
 import type { RecordDecorationProvider } from '../RecordDecorationProvider';
 import type { NotificationEvent } from '../ApiClient';
 
