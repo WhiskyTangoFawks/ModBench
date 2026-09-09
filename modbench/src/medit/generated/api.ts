@@ -332,7 +332,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/external-change/absorb": {
+    "/plugins/external-change/absorb": {
         parameters: {
             query?: never;
             header?: never;
@@ -348,7 +348,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/external-change/keep": {
+    "/plugins/external-change/keep": {
         parameters: {
             query?: never;
             header?: never;
@@ -1076,8 +1076,8 @@ export interface components {
             origin: string;
         };
         UnansweredExternalChangeResponse: {
-            plugin: string;
             origin: string;
+            plugins: string[];
             metaChanged: boolean;
             oldVersion?: string | null;
             newVersion?: string | null;
@@ -1974,9 +1974,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                plugin: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
@@ -2027,9 +2025,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                plugin: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
