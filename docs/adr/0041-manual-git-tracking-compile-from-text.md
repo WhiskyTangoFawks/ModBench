@@ -126,11 +126,11 @@ twice; this paragraph is the standing answer.
 **External change flows through one dialog.** A bridge assembly hosted in the backend process
 (watch / deserialize / compile; knows nothing of load orders or the DB) plus the load-time hash
 check observe a tracked binary changing outside Modbench. One dialog asks the only human
-question: upstream update (pristine source committed to `main` as a new baseline, then an
-offered rebase of the edit branch — clean replays proceed, conflicts open in VS Code's native
-merge editor) or your own edit (working-tree dirt; commit or discard as usual). **Refusal
-posture follows git**: an offered rebase over uncommitted dirt refuses, naming the paths;
-commit/stash/discard are the user's gestures.
+question: upstream update (pristine source committed to `main` as a new baseline, then the edit
+branch rebased onto it in the same gesture — clean replays proceed, conflicts open in VS Code's
+native merge editor) or your own edit (working-tree dirt; commit or discard as usual). **Refusal
+posture follows git**: a rebase over uncommitted dirt refuses, naming the paths; commit/stash/discard
+are the user's gestures.
 
 **The native git UI is the review surface.** The extension calls `vscode.git`'s
 `openRepository(uri)` for each tracked mod in the load order (`extensionDependencies:

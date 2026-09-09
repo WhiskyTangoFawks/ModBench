@@ -327,9 +327,15 @@ public sealed partial class SourceRepository
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-absorb-index-{Guid.NewGuid():N}");
         try
         {
+            // Seeded from main's own tree, not empty: restaging is scoped below to just the plugins
+            // this baseline covers, so .gitignore, meta.ini and any other plugin's source subtree in
+            // this mod folder carry over untouched.
+            GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "read-tree", parentSha);
+
             PristineFileWriter.WriteAll(pristineFiles, scratchDir);
 
-            GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "add", "-A");
+            var pluginRoots = trailers.BinarySha256ByPlugin.Keys.Select(plugin => ToGitPath(RootFor(plugin))).ToArray();
+            GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, ["add", "-A", "--", .. pluginRoots]);
             var treeSha = GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "write-tree").Trim();
 
             // commit-tree is plumbing, same posture as ParkCompileSnapshot's own message: no

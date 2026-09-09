@@ -7,9 +7,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>Absorb Upstream Update's handler (ADR-0046 invariant 3): re-serializes the plugin as
-/// Track does, then commits it to main as a new baseline — no per-record diffing; that's the
-/// rebase's job.</summary>
+/// <summary>Absorb Upstream Update's handler: re-serializes the plugin as Track does, commits it to
+/// main as a new baseline, then rebases the edit branch onto it at once.</summary>
 public sealed class AbsorbExternalChangeHandler
 {
     private readonly ILogger<AbsorbExternalChangeHandler> _logger;
@@ -23,6 +22,8 @@ public sealed class AbsorbExternalChangeHandler
         // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
         if (!result.Applied)
             _logger.LogWarning("Refused to absorb {Plugin}: {Reason}", pluginName, result.RefusalReason);
+        else if (result.Rebase is { Outcome: not RebaseOutcome.Clean } rebase)
+            _logger.LogWarning("Absorbed {Plugin}; its rebase {Outcome}: {Reason}", pluginName, rebase.Outcome, rebase.RefusalReason);
         return result;
     }
 
@@ -68,6 +69,7 @@ public sealed class AbsorbExternalChangeHandler
 
         // The question this exit path answers is answered: same-plugin edits are unblocked again.
         ExternalChangeDeferral.Clear(modFolder, pluginName);
-        return AbsorbResult.Success();
+        // A refused or conflicted rebase still leaves this Absorb applied: main already moved.
+        return AbsorbResult.Success(SourceRepository.RebaseEditBranch(modFolder));
     }
 }

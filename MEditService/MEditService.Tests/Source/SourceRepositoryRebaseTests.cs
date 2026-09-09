@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
@@ -34,6 +35,27 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         RunGit("commit", "-q", "-m", message);
     }
 
+    // Bypasses AbsorbExternalChangeHandler deliberately: Absorb now rebases in the same call, and
+    // these tests drive SourceRepository.RebaseEditBranch/ContinueRebase directly, one git state at
+    // a time, so committing the new baseline stays a step of its own.
+    private void CommitUpstreamBinaryAsNewBaseline(IMod externalMod)
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
+        externalMod.WriteToBinary(pluginPath);
+
+        var deepParsed = ModFactory.ImportSetter(
+            new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName), pluginPath),
+            _mod.LoadOrder.GameRelease, LocalizedStrings.ForRead(_mod.ModFolder));
+        var pristineFiles = TrackService
+            .SerializeToPristineFiles(deepParsed, SourceEditFixture.PluginName)
+            .GetAwaiter().GetResult();
+        var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath)));
+        var trailers = new TrackProvenance(
+            null, null, new Dictionary<string, string> { [SourceEditFixture.PluginName] = binarySha256 });
+
+        SourceRepository.CommitPristineToMain(_mod.ModFolder, pristineFiles, trailers);
+    }
+
     private void AbsorbUpstreamHeightMaxChange(float newHeightMax)
     {
         var externalMod = new Fallout4Mod(ModKey.FromFileName(SourceEditFixture.PluginName), Fallout4Release.Fallout4);
@@ -44,9 +66,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         npc.HeightMax = newHeightMax;
         externalMod.Npcs.AddNew("UntouchedNpc");
 
-        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
-        externalMod.WriteToBinary(pluginPath);
-        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        CommitUpstreamBinaryAsNewBaseline(externalMod);
     }
 
     private void AbsorbUpstreamNewRecord()
@@ -59,9 +79,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         externalMod.Npcs.AddNew("UntouchedNpc");
         externalMod.Npcs.AddNew("BrandNewUpstreamNpc");
 
-        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
-        externalMod.WriteToBinary(pluginPath);
-        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+        CommitUpstreamBinaryAsNewBaseline(externalMod);
     }
 
     [Fact]
