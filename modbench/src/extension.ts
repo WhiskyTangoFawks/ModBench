@@ -123,21 +123,14 @@ export function activate(context: vscode.ExtensionContext) {
     repository,
     notificationSubscriber: session.notificationSubscriber,
     log,
-    refreshTree: () => treeProvider.refresh(),
-    setStatusText: (t) => { statusBarItem.text = t; },
-    showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
-    showError: (msg) => { void vscode.window.showErrorMessage(msg); },
-    setFilterActive: session.setFilterActive,
-    refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
-    // Fires on every completed reconcile: tells every open record panel to refetch its
-    // comparison, and (re-)registers every tracked mod's repo with `vscode.git`.
-    notifyConflictsComputed: () => {
-      broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
-      // ADR-0041: the load order just settled — the one reliable point to (re-)register every
-      // tracked mod's repo with vscode.git.
-      void registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; });
-    },
   });
+  // Fires on every completed reconcile and on a landed Track: tells every open record panel to
+  // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
+  // (ADR-0041 — the one reliable point to do so).
+  const notifyConflictsComputed = () => {
+    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+    void registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; });
+  };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
   // safe because VS Code never calls getChildren until createTreeView returns.
@@ -170,19 +163,29 @@ export function activate(context: vscode.ExtensionContext) {
     pluginFacts: repository,
     showCrashRepairOffers,
     loadDiagnostics,
+    setStatusText: (t) => { statusBarItem.text = t; },
+    notifyConflictsComputed,
   });
   context.subscriptions.push(
     toolbox,
-    { dispose: wireExternalChangePending(repository, controller, outputChannel, session.notificationSubscriber) },
+    {
+      dispose: wireExternalChangePending(
+        repository, controller, outputChannel, session.notificationSubscriber, treeProvider,
+        () => { void refreshMatchingPlugins(session); },
+      ),
+    },
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
-    ...registerPluginRowCommands(session, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
+    ...registerPluginRowCommands({
+      session, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed,
+    }),
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, outputChannel,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
+      setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
     }),
   );
 
@@ -203,36 +206,46 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 
+interface PluginRowCommandDeps {
+  session: ExtensionSession;
+  controller: EditingController;
+  repository: ApiPluginRepository;
+  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
+  outputChannel: vscode.LogOutputChannel;
+  compileDiagnostics: vscode.DiagnosticCollection;
+  treeProvider: PluginTreeProvider;
+  notifyConflictsComputed: () => void;
+}
+
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands.
-function registerPluginRowCommands(
-  session: ExtensionSession,
-  controller: EditingController,
-  repository: ApiPluginRepository,
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
-  outputChannel: vscode.LogOutputChannel,
-  compileDiagnostics: vscode.DiagnosticCollection,
-): vscode.Disposable[] {
+function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
+  const { session, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed } = deps;
   // A node's own `origin` when the row carries it (ADR-0036), else `controller.resolveOrigin`;
   // there is no ambient fallback worth a QuickPick, which is why these commands are palette-gated.
   const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
+  const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
+  const onWritten = () => { treeProvider.refresh(); refreshMatchingPluginsFor(); };
   return [
     registerTrackCommand(
-      session, controller, outputChannel,
-      () => registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; }),
+      session, controller, outputChannel, treeProvider,
+      async () => {
+        await registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; });
+        notifyConflictsComputed();
+      },
     ),
     registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCompileAtRefCommand(controller, repository, outputChannel, compileDiagnostics),
-    registerRebaseCommand(controller, repository, outputChannel),
-    ...registerRecordLifecycleCommands(controller, repository, outputChannel),
+    registerRebaseCommand(controller, repository, outputChannel, treeProvider, refreshMatchingPluginsFor),
+    ...registerRecordLifecycleCommands(controller, repository, outputChannel, treeProvider, refreshMatchingPluginsFor),
     // xEdit parity (xeMainForm.pas's CopyInto, reached from both the tree row and the column
     // header): one command per gesture, reached from either entry point. `arg` resolves to the
     // same {formKey, plugin, origin} identity either way.
     vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: RecordNode | ColumnHeaderContext) => {
-      await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport, outputChannel);
+      await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport, outputChannel, onWritten);
     }),
     vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: RecordNode | ColumnHeaderContext) => {
-      await runCopyRecordCommand('copy-as-new', arg, controller, repository, resolveOriginOrReport, outputChannel);
+      await runCopyRecordCommand('copy-as-new', arg, controller, repository, resolveOriginOrReport, outputChannel, onWritten);
     }),
     registerOpenHeaderCommand(),
   ];

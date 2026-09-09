@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { EditingController } from '../medit/EditingController';
-import { headerFormKeyFor } from './PluginTreeProvider';
+import { EditingController, isRefused } from '../medit/EditingController';
+import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
 import { ActiveRecordTracker } from '../medit/ActiveRecordTracker';
 import { resolveCompileTarget } from '../medit/compileTarget';
 import type { PluginRepository } from '../medit/PluginRepository';
@@ -16,7 +16,8 @@ import { say } from '../editingTeardown';
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0041), so this
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
-  session: ExtensionSession, controller: EditingController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
+  session: ExtensionSession, controller: EditingController, outputChannel: vscode.LogOutputChannel,
+  treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
@@ -39,10 +40,13 @@ export function registerTrackCommand(
 
     await withPluginsViewProgress(session, async () => {
       say(session, trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const ok = await controller.track(origin, choice.label as 'Edits' | 'Everything', {
+      const result = await controller.track(origin, choice.label as 'Edits' | 'Everything', {
         onProgress: (status) => say(session, trackProgressMessage(origin, status)),
       });
-      if (!ok) return;
+      if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+      // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
+      // menu entry's opposite. Not the filter-match set: tracking changes no record.
+      treeProvider.refresh();
       void vscode.window.showInformationMessage(`Modbench: Tracked "${origin}".`);
       await onTracked();
     });
@@ -54,6 +58,7 @@ export function registerTrackCommand(
 // this same command both starts a rebase and resumes one left conflicted.
 export function registerRebaseCommand(
   controller: EditingController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+  treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.rebase', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -64,8 +69,13 @@ export function registerRebaseCommand(
       return;
     }
 
-    const result = await runRebase({ controller, openMergeEditor: makeMergeEditorOpener(repository, outputChannel) }, origin);
-    if (!result) return; // transport failure already surfaced by EditingController
+    const result = await runRebase({
+      controller, openMergeEditor: makeMergeEditorOpener(repository, outputChannel),
+      showError: (message) => void vscode.window.showErrorMessage(message),
+      refreshTree: () => treeProvider.refresh(),
+      refreshMatchingPlugins,
+    }, origin);
+    if (!result) return; // transport failure or refusal already surfaced by runRebase
 
     if (result.outcome === 'Refused') {
       void vscode.window.showWarningMessage(`Modbench: ${result.refusalReason ?? 'Rebase refused.'}`);

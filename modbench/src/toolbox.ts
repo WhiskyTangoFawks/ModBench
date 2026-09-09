@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { EditingController, type LoadOrderProgress } from './medit/EditingController';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
+import { reportLoadOrderResult, applyFilterSyncResult } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import type { CrashRepairOffer } from './medit/ApiClient';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
@@ -45,6 +46,12 @@ export interface ToolboxDeps {
   /** The malformed-plugin scan's Problems-panel collection. Held on the session so the teardown
    *  writers can clear both diagnosis surfaces together. */
   loadDiagnostics: vscode.DiagnosticCollection;
+  /** The one status bar item, written from the reconcile's own outcome — never by the
+   *  controller, a lower layer that presents nothing (ADR-0046 invariant 2). */
+  setStatusText: (text: string) => void;
+  /** Fires on every completed reconcile and on a landed Track: every open record panel refetches
+   *  its comparison, and every tracked mod's repo (re-)registers with `vscode.git`. */
+  notifyConflictsComputed: () => void;
 }
 
 /** The Toolbox: the view of the instance, and the MO2 side's composition root. Everything below
@@ -156,15 +163,33 @@ interface ReconcileDeps {
   /** ADR-0044/ADR-0047: the sync reads its snapshot from this, never from a walk of its own. */
   instance: Instance;
   controller: EditingController;
+  /** The record browser a reconciled load order refreshes — a different provider from
+   *  `session.pluginsTree`, which `applyLoadOrderToTree` below owns. */
+  recordBrowser: PluginTreeProvider;
   outputChannel: vscode.LogOutputChannel;
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
+  setStatusText: (text: string) => void;
+  notifyConflictsComputed: () => void;
+}
+
+// Not `makeReporter`: its "Modbench: " prefix would double up on `WriteRefused.message`, which
+// is already the exact toast text (EditingController.ts).
+async function applySyncedFilterState(controller: EditingController, session: ExtensionSession): Promise<void> {
+  const result = await controller.syncFilterState();
+  applyFilterSyncResult(result, {
+    warn: (m) => void vscode.window.showWarningMessage(m),
+    setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
+  });
 }
 
 // ADR-0044: the sync an Instance change and a client connect both feed. 250 ms covers a burst
 // of Instance recomputes landing close together. `resolveGameDirectory`/`buildSnapshot` read one
 // Instance value together (closed over below), never two generations of it.
 function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
-  const { session, instanceRoot, instance, controller, outputChannel, showCrashRepairOffers } = deps;
+  const {
+    session, instanceRoot, instance, controller, recordBrowser, outputChannel, showCrashRepairOffers,
+    setStatusText, notifyConflictsComputed,
+  } = deps;
   let snapshot: ReturnType<typeof loadOrderSnapshotOf>;
   return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
     isReceiving: () => session.backendManager?.isHealthy === true,
@@ -184,13 +209,23 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     makeProgressHandler: () => makeTreeProgressHandler(session),
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
-    putLoadOrder: (plugins, dataFolder, signal, onProgress) =>
-      controller.putLoadOrder(
+    putLoadOrder: async (plugins, dataFolder, signal, onProgress) => {
+      const result = await controller.putLoadOrder(
         plugins, dataFolder, instanceRoot,
         gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
         { onProgress, signal },
-      ),
-    syncFilterState: () => controller.syncFilterState(),
+      );
+      reportLoadOrderResult(plugins, result, {
+        log: (m) => outputChannel.info(`[EditingController] ${m}`),
+        warn: (m) => void vscode.window.showWarningMessage(m),
+        error: (m) => void vscode.window.showErrorMessage(m),
+        setStatusText,
+        refreshTree: () => recordBrowser.refresh(),
+        notifyConflictsComputed,
+      });
+      return result;
+    },
+    syncFilterState: () => applySyncedFilterState(controller, session),
     applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, totalPlugins),
     presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
@@ -303,7 +338,10 @@ interface Mo2Side {
 // Undefined on the two paths with no MO2 instance to read: no workspace folder, and a folder
 // that is not one. Both leave the Toolbox view registered and row-less.
 function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
-  const { outputChannel, session, controller, recordBrowser, pluginFacts, loadDiagnostics, showCrashRepairOffers } = deps;
+  const {
+    outputChannel, session, controller, recordBrowser, pluginFacts, loadDiagnostics, showCrashRepairOffers,
+    setStatusText, notifyConflictsComputed,
+  } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -351,7 +389,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
   // and enterEditing below need the session slot filled first.
   session.loadOrderSync = own(makeLoadOrderSync({
-    session, instanceRoot, instance, controller, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, controller, recordBrowser, outputChannel, showCrashRepairOffers,
+    setStatusText, notifyConflictsComputed,
   }));
   // The backend answers this, never the extension (ADR-0021), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable

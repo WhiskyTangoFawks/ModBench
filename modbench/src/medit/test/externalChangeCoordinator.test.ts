@@ -26,6 +26,9 @@ function makeDeps(overrides: Partial<ExternalChangeCoordinatorDeps> = {}): Exter
     showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON),
     showRebaseOffer: vi.fn().mockResolvedValue(REBASE_LATER_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
+    showError: vi.fn(),
+    refreshTree: vi.fn(),
+    refreshMatchingPlugins: vi.fn(),
     ...overrides,
   };
 }

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { EditingController } from '../medit/EditingController';
+import { isRefused, type EditingController } from '../medit/EditingController';
 import type { Instance } from '../modmanager/instance';
 import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
@@ -92,11 +92,9 @@ export function registerCreatePluginCommand(
     const destination = await pickPluginDestination(mo2.instance, mo2.instanceRoot);
     if (!destination) return; // user cancelled a prompt
 
-    // EditingController.createPlugin already surfaces its own failure (ADR-0026) — nothing more
-    // to do here than stop.
-    const created = await controller.createPlugin(name, destination.path, destination.origin);
-    if (!created) return;
+    const result = await controller.createPlugin(name, destination.path, destination.origin);
+    if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
 
-    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginsTree, created.name, outputChannel);
+    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginsTree, result.name, outputChannel);
   });
 }
