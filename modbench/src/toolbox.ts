@@ -13,11 +13,10 @@ import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
 import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
-import type { Reporter } from './modmanager/deployer';
+import { makeReporter, type Reporter } from './reporter';
 import type { LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
-import { makeReporter } from './reporter';
 import { makeRefreshAll } from './refreshAll';
 import { ToolboxProvider } from './ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';

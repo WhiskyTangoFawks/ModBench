@@ -3,7 +3,6 @@ import * as path from 'path';
 import { isRefused, type MEditClient } from '../medit/client';
 import type { CompileResult } from '../medit/ApiClient';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
-import { ActiveRecordTracker } from '../medit/ActiveRecordTracker';
 import { resolveCompileTarget } from '../medit/compileTarget';
 import { promptEslFlagRemoval } from '../medit/promptEslFlagRemoval';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../medit/trackedRepositories';
@@ -119,7 +118,9 @@ export function registerRebaseCommand(
 // (QuickPick fallback only when neither is in hand).
 export function registerSaveAndCompileCommand(
   client: CompileClient,
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
+  // Editor's own `ActiveRecordTracker`, structural: this module names no Editor type, only
+  // the one reader it needs — the active panel's own FormKey.
+  activeRecordTracker: { current(): string | undefined },
   outputChannel: vscode.LogOutputChannel,
   diagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable {

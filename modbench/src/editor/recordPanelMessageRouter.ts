@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
-import type { Reporter } from '../modmanager/deployer';
-import type { RecordSummary } from './ApiClient';
-import type { PluginRepository } from './PluginRepository';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from '../medit/messages';
+import type { Reporter } from '../reporter';
+import type { RecordSummary } from '../medit/ApiClient';
+import type { MEditClient } from '../medit/client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
-  // The write path's own repository, widened by the FormKey picker's search — one repository
+  // The write path's own port call, widened by the FormKey picker's search — one client
   // serves both, and the per-panel picker bundle below reuses it.
-  repository: Pick<PluginRepository, 'editRecord' | 'searchRecords'>;
+  meditClient: Pick<MEditClient, 'editRecord' | 'searchRecords'>;
   // The leveled 'Modbench' channel the webview has no direct route to — the webview composes the
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
@@ -22,7 +22,7 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
 }
 
 export interface FormKeyPickerDeps {
-  repository: Pick<PluginRepository, 'searchRecords'>;
+  meditClient: Pick<MEditClient, 'searchRecords'>;
   reply: (msg: ExtensionToWebview) => void;
 }
 
@@ -98,7 +98,7 @@ export async function pickFormKeyViaQuickPick(
     if (!query.trim()) { quickPick.items = []; return; }
     quickPick.busy = true;
     try {
-      const { items } = await deps.repository.searchRecords(normalizeFormKeyQuery(query), validTypes);
+      const { items } = await deps.meditClient.searchRecords(normalizeFormKeyQuery(query), validTypes);
       if (mySeq !== seq) return;
       const qpItems = items.map(toFormKeyQuickPickItem);
       quickPick.items = qpItems;

@@ -20,7 +20,7 @@ vi.mock('vscode', () => ({
 import { mkdtemp, rm, stat, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openExtendedFieldEditor, extendedEditorPath, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
+import { openExtendedFieldEditor, extendedEditorPath, type ExtendedFieldEditorDeps } from '../extendedFieldEditor';
 
 function makeFakeDocEvent() {
   const listeners: Array<(doc: { uri: { fsPath: string }; getText: () => string }) => unknown> = [];

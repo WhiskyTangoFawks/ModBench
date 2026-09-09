@@ -1,6 +1,5 @@
 import type * as vscode from 'vscode';
 import type { NotificationEvent } from './ApiClient';
-import type { ActiveRecordTracker } from './ActiveRecordTracker';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
 
 /** The wire's five kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
@@ -186,10 +185,11 @@ export function subscribeTreeToNotifications(
 
 // One FormKey spans its whole override chain, so matching it alone is enough — no plugin/origin
 // check. LOAD_RECORD already re-reads unconditionally, even for an already-shown FormKey.
+// `activeRecordTracker` is structural, Editor's own type unnamed here.
 export function subscribeRecordPanelsToNotifications(
   subscriber: NotificationSubscriber,
   recordPanels: Set<vscode.WebviewPanel>,
-  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
+  activeRecordTracker: { formKeyOf(panel: vscode.WebviewPanel): string | undefined },
 ): () => void {
   return subscriber.subscribe('rows-changed', (event) => {
     for (const panel of recordPanels) {

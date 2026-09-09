@@ -15,7 +15,7 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
-import { recordResourceUri } from '../recordResourceUri';
+import { recordResourceUri } from '../../medit/recordResourceUri';
 
 describe('RecordDecorationProvider', () => {
   const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm');

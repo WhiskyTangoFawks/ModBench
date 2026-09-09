@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { WorkingTreeState } from './ApiClient';
-import { parseRecordResourceUri } from './recordResourceUri';
+import type { WorkingTreeState } from '../medit/ApiClient';
+import { parseRecordResourceUri } from '../medit/recordResourceUri';
 
 /** Record-row M/A badges in git's own vocabulary; no D badge, since a deleted record has no
  *  Effective row. Owns an emitter unlike the stateless providers here: a field edit flips a

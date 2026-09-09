@@ -80,7 +80,7 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   it, the same way it already covers "a record is active but has zero referrers." No fetch is
   attempted until `ActiveRecordTracker` actually reports a FormKey, which cannot happen without a
   load order, so an idle Referenced By panel costs nothing.
-- **Retargeting is driven by `ActiveRecordTracker`** (`src/medit/ActiveRecordTracker.ts`), not by
+- **Retargeting is driven by `ActiveRecordTracker`** (`src/editor/ActiveRecordTracker.ts`), not by
   a command argument. `openRecordPanel` (the record editor's own panel-open/reuse/retarget choke
   point) reports each panel's currently displayed FormKey and which panel is active; the tracker
   fires the *active* panel's FormKey on either change, and `ReferencedByTreeProvider.showFor`
