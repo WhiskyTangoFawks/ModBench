@@ -406,13 +406,41 @@ public sealed partial class SourceRepository
                 "Commit, stash, or discard them first, then try again.");
         }
 
+        // Captured before the autostash round-trip: a successful pop restores content but not
+        // reliably the staged bit, so a path Absorb/Keep staged as its own answer is re-staged below.
+        var stagedBefore = ParseStatus(modFolder).Where(e => e.IndexStatus is not (' ' or '?')).Select(e => e.Path).ToList();
+        var stashCountBefore = StashCount(gitDir, modFolder);
+
         // -c core.editor=true: a clean, non-conflicted rebase never needs a message editor, but this
         // keeps the call non-interactive regardless — nothing here has a terminal to hand one to.
         if (GitCli.TryRun(gitDir, modFolder, out _, "-c", "core.editor=true", "rebase", "--autostash", "refs/heads/main"))
+        {
+            // Exit 0 even when re-applying the autostash itself conflicted: git keeps the stash and
+            // leaves conflict markers rather than losing the change. A new stash entry is the tell.
+            if (StashCount(gitDir, modFolder) > stashCountBefore)
+            {
+                return RebaseResult.Conflicted(
+                    ConflictedPaths(gitDir, modFolder),
+                    "The rebase replayed cleanly, but re-applying its autostashed tracked-file changes " +
+                    "conflicted. Nothing was lost — they are kept in `git stash list` — resolve the " +
+                    "conflict markers, stage them, then run `git stash drop`.");
+            }
+
+            // A path the replay fully resolved (its diff now matches new main, deletion included) is
+            // gone from status entirely — restaging it by name would be an unmatched pathspec.
+            var stillDirty = ParseStatus(modFolder).Select(e => e.Path).ToHashSet(StringComparer.Ordinal);
+            var toRestage = stagedBefore.Where(stillDirty.Contains).ToList();
+            if (toRestage.Count > 0) GitCli.Run(gitDir, modFolder, ["add", "-A", "--", .. toRestage]);
             return RebaseResult.Clean();
+        }
 
         return RebaseResult.Conflicted(ConflictedPaths(gitDir, modFolder));
     }
+
+    private static int StashCount(string gitDir, string workTree) =>
+        GitCli.TryRun(gitDir, workTree, out var stdout, "stash", "list")
+            ? stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length
+            : 0;
 
     private static bool RebaseInProgress(string gitDir) =>
         Directory.Exists(Path.Combine(gitDir, "rebase-merge")) || Directory.Exists(Path.Combine(gitDir, "rebase-apply"));
@@ -682,7 +710,8 @@ public sealed record RebaseResult(RebaseOutcome Outcome, string? RefusalReason, 
 
     public static RebaseResult Refused(string reason) => new(RebaseOutcome.Refused, reason, []);
 
-    public static RebaseResult Conflicted(IReadOnlyList<string> conflictedPaths) => new(RebaseOutcome.Conflicted, null, conflictedPaths);
+    public static RebaseResult Conflicted(IReadOnlyList<string> conflictedPaths, string? refusalReason = null) =>
+        new(RebaseOutcome.Conflicted, refusalReason, conflictedPaths);
 }
 
 /// <summary>The three shapes a rebase attempt can end in — never a fourth, never a thrown exception

@@ -177,4 +177,32 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         Assert.False(ok.Value!.Succeeded);
         Assert.Contains(AssetRelativePath, ok.Value.RefusalReason, StringComparison.Ordinal);
     }
+
+    // The rival this guards: reading git's own 0 exit as Clean even though the autostash's own
+    // reapply conflicted and left the change in the stash — a silent wrong state (ADR-0026).
+    [Fact]
+    public void RebaseEditBranch_WhenReapplyingTheAutostashConflicts_ReportsConflicted_KeepingTheStash()
+    {
+        TrackWithAssets();
+
+        // Main gains a baseline value for the asset, committed by plumbing — the edit branch's own
+        // history and working tree are untouched by this step.
+        File.WriteAllBytes(Path.Combine(_mod.ModFolder, AssetRelativePath), "main-baseline-mesh"u8.ToArray());
+        var trailers = new TrackProvenance(null, null, new Dictionary<string, string>());
+        SourceRepository.CommitPristineToMain(
+            _mod.ModFolder, [], trailers,
+            [new TrackedFileChange(AssetRelativePath, TrackedFileChangeKind.Modified, StagedAlready: false)]);
+
+        // The edit branch separately holds staged dirt on that very same asset, with different bytes.
+        File.WriteAllBytes(Path.Combine(_mod.ModFolder, AssetRelativePath), "staged-conflicting-mesh"u8.ToArray());
+        RunGit("add", "-A", "--", AssetRelativePath);
+        Assert.Empty(RunGit("stash", "list").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+
+        var result = SourceRepository.RebaseEditBranch(_mod.ModFolder);
+
+        Assert.Equal(RebaseOutcome.Conflicted, result.Outcome);
+        Assert.Contains(AssetRelativePath, result.ConflictedPaths);
+        Assert.Contains("stash", result.RefusalReason, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEmpty(RunGit("stash", "list").Split('\n', StringSplitOptions.RemoveEmptyEntries));
+    }
 }
