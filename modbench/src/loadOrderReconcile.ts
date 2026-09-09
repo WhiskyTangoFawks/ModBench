@@ -28,13 +28,6 @@ export interface LoadOrderSync {
    *  sent at all (disposed, or no receiver). */
   flush(): Promise<ReconcileOutcome | undefined>;
   dispose(): void;
-  /** Keyed exactly as last set — callers lowercase before both this and `setMatches`. `undefined`
-   *  reads as "matches" everywhere it's consulted: never fetched, or no filter active. */
-  matches(file: string): boolean | undefined;
-  /** A pure assignment — no normalization, no defaulting, no notification — because every caller
-   *  already computed or decided the map it hands over. `undefined` clears it back to "matches
-   *  everywhere". */
-  setMatches(map: Map<string, boolean> | undefined): void;
   /** Replacing a superseded reconcile's scope never aborts it — the backend answers that one 409.
    *  Call before the reconcile's first await, not just before the PUT: a launch has an earlier
    *  phase that must honour Close mEdit too. */
@@ -59,14 +52,6 @@ function createAbortScope(): { arm: () => { signal: AbortSignal; abandoned: () =
       armed?.abort();
       armed = undefined;
     },
-  };
-}
-
-function createMatchStore(): { matches: (file: string) => boolean | undefined; setMatches: (map: Map<string, boolean> | undefined) => void } {
-  let matchMap: Map<string, boolean> | undefined;
-  return {
-    matches: (file) => matchMap?.get(file),
-    setMatches: (map) => { matchMap = map; },
   };
 }
 
@@ -113,7 +98,6 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
 ): LoadOrderSync {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
-  const { matches, setMatches } = createMatchStore();
   const { arm, abandon } = createAbortScope();
 
   // The reconcile's own sequencing lives in `createReconcileSequencer`; this module coalesces
@@ -158,8 +142,6 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
       if (timer) clearTimeout(timer);
       timer = undefined;
     },
-    matches,
-    setMatches,
     arm,
     abandon,
   };

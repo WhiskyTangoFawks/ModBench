@@ -183,37 +183,6 @@ describe('createLoadOrderSync', () => {
   });
 });
 
-// ADR-0035 amending ADR-0018: this module owns the per-plugin record-filter match map as a pure
-// store — it never decides what matches, only holds what it was told.
-describe('createLoadOrderSync — matches/setMatches', () => {
-  const make = () => createLoadOrderSync(makeSyncDeps());
-
-  it('reads undefined for any file before anything is ever set', () => {
-    const sync = make();
-
-    expect(sync.matches('a.esp')).toBeUndefined();
-  });
-
-  it('setMatches is a pure assignment — matches reads back exactly what was set, nothing transformed', () => {
-    const sync = make();
-
-    sync.setMatches(new Map([['a.esp', true], ['b.esp', false]]));
-
-    expect(sync.matches('a.esp')).toBe(true);
-    expect(sync.matches('b.esp')).toBe(false);
-    expect(sync.matches('c.esp')).toBeUndefined();
-  });
-
-  it('setMatches(undefined) clears it back to "matches everywhere"', () => {
-    const sync = make();
-
-    sync.setMatches(new Map([['a.esp', false]]));
-    sync.setMatches(undefined);
-
-    expect(sync.matches('a.esp')).toBeUndefined();
-  });
-});
-
 // The in-flight reconcile's abort handle and the object's own lifecycle stay independent:
 // cancelling the in-flight reconcile must never disable a later request()/flush() (launch →
 // close → launch).
