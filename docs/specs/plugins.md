@@ -37,10 +37,9 @@ are one tree; this surface is Modbench's answer to the same design
 
 A sidebar `TreeView` (`modbench.pluginListTree`, "Plugins"), stacked below the Mods tree in the
 `modbench` view container, **always visible, unconditionally** — not a switchable tab, no view
-mode, no gate of any kind. **With no backend the rows are leaves** and this surface
-behaves exactly as the Mod-Management Plugin List always has; launching mEdit makes rows
-collapsible, which is the whole of the "editing is available now" signal (see Row children
-below). Reuses the `TreeDragAndDropController` pattern already built for the Mods tree
+mode, no gate of any kind. **mEdit is always running, so every row is collapsible from launch**
+(see Row children below): a chevron encodes no absence, and expanding decides content, never
+shape. Reuses the `TreeDragAndDropController` pattern already built for the Mods tree
 ([mods.md](mods.md) §UI — Mods tree) for reorder.
 
 Freely relocatable by the user (e.g. to the auxiliary bar, to reconstruct MO2's literal
@@ -70,10 +69,10 @@ name filter, and a Reveal-in-Explorer row action. It mirrors MO2's Plugins tab c
 alternate between the two on the same instance. Rows, order and gestures need no backend; the
 implicit-master rows and the master-issue badge come from it (ADR-0021).
 
-Whenever the backend is running, every row also expands into that plugin's records — by
-type, spatially by worldspace and cell — narrowing on two independent axes: the row-level name
-filter above, and a SQL record filter scoped to a row's children. Every path through the
-record-browsing side ends at the [Record editor panel](medit-record-editor.md).
+Every row also expands into that plugin's records — by type, spatially by worldspace and cell —
+narrowing on two independent axes: the row-level name filter above, and a SQL record filter
+scoped to a row's children. Every path through the record-browsing side ends at the
+[Record editor panel](medit-record-editor.md).
 
 The load order is constructed on entry from every line of the active profile's `plugins.txt` —
 disabled entries included, carrying their participation (ADR-0035) — plus vanilla masters;
@@ -234,17 +233,18 @@ there is no separate load-order step.
 
 ### Row children ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
-- **With no backend running every row is a leaf** and nothing on the Mod-Management side of this
-  surface changes. Launching mEdit makes rows collapsible; **chevrons appearing across the
-  tree are the whole "editing is available now" signal** — there is no banner and no mode.
-  Closing mEdit returns every row to a leaf. Neither transition re-reads `plugins.txt`, so
-  the load order, the name filter, row expansion and scroll position all survive it.
+- **Every row is collapsible from launch** (ADR-0035): mEdit is always running, so there is no
+  absence for a chevron to encode, and nothing on the Mod-Management side of this surface changes
+  across launch or close. Neither transition re-reads `plugins.txt`, so the load order, the name
+  filter, row expansion and scroll position all survive it.
 - **Expanding a row browses that plugin's records** — record types, the spatial
   worldspace/interior-cell hierarchy (the interior-cell listing itself still pages), and record
   nodes, every one of a type in a single call (see Record navigation below).
-- **A row expands only if the load order actually holds its plugin.** A row whose plugin is not in
-  the load order stays a leaf rather than opening onto an empty list, which would read as "this
-  plugin has no records" (ADR-0026).
+- **Expanding decides content, never shape.** A row whose plugin the load order does not hold
+  answers one "still indexing" node — or, if the client cannot answer at all, or the load order
+  has already given up on that plugin (see Load-failure decoration below), the record browser's
+  own error node — rather than opening onto an empty list, which would read as "this plugin has
+  no records" (ADR-0026).
 - **Disabled plugins expand and browse like any other.** The load order indexes every `plugins.txt`
   line, enabled or disabled; the `*` prefix is *participation* — whether the plugin competes for
   winner — not whether it is loaded. A disabled plugin can never be the winning record for a
@@ -268,9 +268,9 @@ there is no separate load-order step.
 The load is progressive: rows land as each plugin finishes indexing rather than all at once at the
 end.
 
-- **Rows gain chevrons individually, as each plugin finishes indexing** — not all at once at the
-  end. A plugin the load has not reached yet stays a leaf, so a row never expands onto records
-  that are not queryable yet.
+- **Rows become browsable individually, as each plugin finishes indexing** — not all at once at
+  the end. A plugin the load has not reached yet answers "still indexing" on expand, so a row
+  never opens onto records that are not queryable yet.
 - **The view's own header carries the progress indicator** for the whole operation — backend
   spawn, indexing, and the winner sweep (`withProgress` addressed by view id). Not a
   notification: two indicators for one operation is noise.
@@ -281,8 +281,8 @@ end.
   suppresses them outright while loading (`RecordQueryService.GetPlugins` gates on
   `LoadOrderState.Ready`) and the frontend never asks for them mid-load.
 - **Closing mEdit is a deliberate abandonment, not a failure — at any point in the launch.**
-  The progress subscription is torn down, chevrons/message/progress clear, and nothing is
-  reported as broken. This
+  The progress subscription is torn down, message/progress clear and every row's content reverts
+  to the error node, and nothing is reported as broken. This
   holds for the whole launch, not just the load: a close during the backend spawn and mod-tree
   walk must not report "Backend failed to start" for the stop the user just asked for, so the
   cancellation is armed before the launch's first await and checked after each one. Same for a
@@ -513,7 +513,9 @@ bytes cannot be read at all has no record identity to hang a parse status on —
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeProvider` decorates it with its
 recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;
-the row stays a leaf, since a plugin that never indexed has nothing to expand into. The existing
+the row stays collapsible but answers the error node on expand, carrying the same reason — never
+"still indexing", which would promise a completion a plugin the load order gave up on will never
+reach (ADR-0026). The existing
 reconcile toast (`EditingController.putLoadOrder`, one aggregated warning per load) is
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.
@@ -797,10 +799,11 @@ overflow, then native **Collapse All** last.
   `ApiClient` — unit-tested without VS Code (Vitest, `npm run test:unit`). New data queries go
   on the `PluginRepository` interface and are implemented in `ApiPluginRepository`.
 - **Tree seam**: `PluginsTreeProvider`'s own `getChildren`/`getTreeItem`/`applyReconciled` —
-  rows off a fixture Instance value, chevron transitions on mEdit start/stop, every decoration and
-  its precedence, and the origin join — tested against an in-memory client with no backend and no
-  temporary instance (`src/plugins/test/PluginsTreeProvider.test.ts`), alongside the
-  bounded-context boundary itself (`src/test/contextBoundary.test.ts`).
+  rows off a fixture Instance value, that every row stays collapsible across mEdit start/stop,
+  a row's content on expand (records, "still indexing", or the error node) in each state, every
+  decoration and its precedence, and the origin join — tested against an in-memory client
+  reporting connected and disconnected (`src/plugins/test/PluginsTreeProvider.test.ts`), alongside
+  the bounded-context boundary itself (`src/test/contextBoundary.test.ts`).
 - **Record semantics and conflict classification** are the backend's responsibility and tested
   there (`MEditService/CLAUDE.md`); this surface consumes representative responses as fixtures.
 - **Progressive-load seams.** The subscription itself is `EditingController.putLoadOrder`
@@ -808,7 +811,7 @@ overflow, then native **Collapse All** last.
   so tick reporting and the three outcomes (reconciled / failed / abandoned) are unit-tested with
   a fake client and `FakeNotificationSubscriber` (ADR-0046 invariant 12). The incompleteness
   statement's text is a pure function (`medit/loadOrderProgress.ts`). What only a live window can
-  show — chevrons appearing one plugin at a time, a mid-load failure decoration, master issues
+  show — a row becoming browsable one plugin at a time, a mid-load failure decoration, master issues
   staying off until completion, `TreeView.message` appearing and clearing, and a mid-load close
   tearing down the subscription — is in the integration suite, whose mock backend **holds the
   load POST open** so the assertions land in the window that actually matters.
@@ -823,9 +826,10 @@ overflow, then native **Collapse All** last.
   fixture-in/value-out style; instance fixtures live under
   `modbench/src/modmanager/test/fixtures/`.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the tree renders from
-  `plugins.txt` with no backend running; checkbox toggle, drag-reorder and the name filter round-trip
-  with and without the backend running; starting/stopping the backend puts chevrons on and takes
-  them off without disturbing the load order; navigation opens a record panel; a plugin
+  `plugins.txt` before mEdit has ever launched; checkbox toggle, drag-reorder and the name filter
+  round-trip with and without mEdit running; starting/stopping mEdit changes a row's content on
+  expand between "still indexing"/records and the error node, without disturbing the load order or
+  its collapsibility; navigation opens a record panel; a plugin
   `GET /plugins` reports with no matching records is hidden from the tree entirely,
   restored once a reconcile reports no filter at all rather than staying stuck hidden (the
   "map outlives the filter state" regression) — the pruning
