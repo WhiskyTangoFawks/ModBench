@@ -53,8 +53,12 @@ board: each numbered milestone is an epic in priority order, its issues are the 
 modbench/          VS Code extension (TypeScript) + React webview for the compare grid
   src/modmanager/    Mod Management — pure TS/Node, reads and writes the MO2 instance in place,
                      never calls the backend
-  src/medit/         Record editor — thin client of the backend, rendered inside the shared
-                     Plugins tree (ADR-0035) over a generated typed API
+  src/plugins/       Plugins view — the one tree, rows from the Instance and records from the
+                     mEdit client, and every plugin gesture (ADR-0035)
+  src/editor/        Editor view — the record panel, its message router, the active record and
+                     Referenced By; imports the mEdit client and nothing from the MO2 side
+  src/medit/         The mEdit client — one port over the backend's commands, queries,
+                     notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0046)
 MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
   MEditService.Core/   Mutagen for plugin I/O; DuckDB as an index over per-record JSON documents;
                        the source codec, Track, compile and git layer
