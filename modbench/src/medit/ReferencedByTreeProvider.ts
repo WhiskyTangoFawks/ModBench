@@ -1,8 +1,5 @@
 import * as vscode from 'vscode';
-import type { ApiClient } from './ApiClient';
-import type { components } from './generated/api';
-
-type ReferenceResult = components['schemas']['ReferenceResult'];
+import type { MEditClient, ReferenceResult } from './client';
 
 /** Rows sharing a FormKey collapse into one node, so one referencer reads as one thing rather
  *  than as several. */
@@ -81,7 +78,7 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
   private readonly onCountChanged: (count: number | undefined) => void;
 
   constructor(
-    private readonly client: ApiClient,
+    private readonly client: MEditClient,
     log?: (msg: string) => void,
     // Feeds the view title's "Referenced By (N)" badge (xEdit's `Referenced By (%d)` caption).
     // `undefined` is "no known count" — no active record, or a failed fetch — so neither
@@ -115,19 +112,21 @@ export class ReferencedByTreeProvider implements vscode.TreeDataProvider<Referen
       return [new NoActiveRecordNode()];
     }
     const formKey = this.target;
-    const res = await this.client.GET('/records/{formKey}/references', { params: { path: { formKey } } });
-    if (!res.response.ok || !Array.isArray(res.data)) {
-      this.log(`[ReferencedByTreeProvider] /records/${formKey}/references fetch failed (${res.response.status})`);
+    let references: ReferenceResult[];
+    try {
+      references = await this.client.getReferences(formKey);
+    } catch (e) {
+      this.log(`[ReferencedByTreeProvider] getReferences(${formKey}) failed: ${e instanceof Error ? e.message : String(e)}`);
       this.onCountChanged(undefined);
       return [new ErrorNode()];
     }
-    if (res.data.length === 0) {
+    if (references.length === 0) {
       this.onCountChanged(0);
       return [new EmptyStateNode()];
     }
 
     const groups = new Map<string, ReferenceResult[]>();
-    for (const r of res.data) {
+    for (const r of references) {
       const key = r.formKey;
       const existing = groups.get(key);
       if (existing) existing.push(r);

@@ -11,6 +11,7 @@ import {
   SseNotificationSubscriber, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications,
 } from './medit/NotificationSubscriber';
 import { EditingController } from './medit/EditingController';
+import { HttpMEditClient } from './medit/client';
 import { PluginTreeProvider, type RecordNode } from './plugins/PluginTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { ApiPluginRepository } from './medit/PluginRepository';
@@ -124,6 +125,11 @@ export function activate(context: vscode.ExtensionContext) {
     notificationSubscriber: session.notificationSubscriber,
     log,
   });
+  // The mEdit client (ADR-0022): built once here, composing the five modules above; views not
+  // yet migrated keep receiving those same objects directly.
+  const meditClient = new HttpMEditClient({
+    controller, repository, notificationSubscriber: session.notificationSubscriber, backendManager: session.backendManager,
+  });
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
   // (ADR-0041 — the one reliable point to do so).
@@ -134,7 +140,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
   // safe because VS Code never calls getChildren until createTreeView returns.
-  const referencedByTreeProvider = new ReferencedByTreeProvider(client, log, (count) => {
+  const referencedByTreeProvider = new ReferencedByTreeProvider(meditClient, log, (count) => {
     // The runtime count badge keeps the declared "Plugins - Referenced By" prefix (ADR-0035).
     referencedByTreeView.title = count === undefined ? 'Plugins - Referenced By' : `Plugins - Referenced By (${count})`;
   });
