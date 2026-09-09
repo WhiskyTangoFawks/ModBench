@@ -38,10 +38,11 @@ export interface PluginEntry {
   enabled: boolean;
 }
 
-/** For a manual local install only `installationFile` is typically known; Nexus id and
- *  version arrive with the download flow. */
+/** For a manual local install only `installationFile` is typically known; the rest arrives
+ *  from a Nexus archive's download identity. */
 export interface InstallMeta {
   modid?: string;
   version?: string;
   installationFile?: string;
+  installedFiles?: readonly InstalledFileId[];
 }

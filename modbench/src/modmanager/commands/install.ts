@@ -1,13 +1,12 @@
-// Installing a mod is one rename (ADR-0047 point 6). The folder appears under mods/ complete,
-// meta.ini included, and its modlist.txt line comes from the mods watcher adopting an unlisted
-// folder — never from here.
+// A new target is one rename (ADR-0047 point 6); an existing target is an upgrade, never
+// renamed away, so its identity and every watcher armed on it survive the release.
 
-import { access, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile, cp } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { detectRoot } from '../install/detectRoot';
 import { extractArchive, type Runner } from '../install/extractArchive';
 import type { InstallMeta } from '../model';
-import { writeMetaIni } from '../mo2/metaIni';
+import { setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
 import { readGameName } from '../mo2/modOrganizerIni';
 
 /** `isFomod` reports a scripted installer whose files landed as-is: the caller warns, the
@@ -22,6 +21,10 @@ export interface InstallOptions {
   renameFn?: (from: string, to: string) => Promise<void>;
   /** Extraction runner; defaults to spawning a system 7-Zip. */
   run?: Runner;
+  /** The download's Nexus identity, when installing from one — meta.ini's `installedFiles`
+   *  entry, so the next upgrade over this folder can pre-select with certainty. */
+  modID?: string;
+  fileID?: string;
 }
 
 // Beside mods/ rather than inside it: same volume, so the rename is atomic, and outside every
@@ -29,6 +32,15 @@ export interface InstallOptions {
 const STAGING_PREFIX = '.medit-install-';
 
 const exists = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
+
+async function readTextOrEmpty(path: string): Promise<string> {
+  try {
+    return await readFile(path, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw err;
+  }
+}
 
 // Serialized per instance root: the collision check and the rename must not interleave with
 // another install, or two of the same name both pass the check.
@@ -41,8 +53,45 @@ function withInstallLock<T>(instanceRoot: string, task: () => Promise<T>): Promi
   return next;
 }
 
-// meta.ini is written into the staged tree first, so the folder is never seen without it. A
-// cross-volume staging area is refused rather than copied, which would land the mod in pieces.
+function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommandResult {
+  if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+    return {
+      applied: false,
+      refusal: `Cannot install "${name}": the staging folder and mods/ are on different drives, so the mod folder cannot be moved into place in one step.`,
+    };
+  }
+  return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+}
+
+// meta.ini is written into the staged tree first, so the folder is never seen without it, then
+// the whole tree lands in one rename — the folder appears complete in one filesystem event.
+async function landNewMod(
+  modsDir: string, modDir: string, stagedRoot: string, keys: OwnedMetaKeys,
+  renameFn: (from: string, to: string) => Promise<void>,
+): Promise<void> {
+  await writeFile(join(stagedRoot, 'meta.ini'), writeMetaIni(keys));
+  await mkdir(modsDir, { recursive: true });
+  await renameFn(stagedRoot, modDir);
+}
+
+// Every entry but `.git` is removed, the staged tree's entries move in, and meta.ini is set
+// through the existing-text write, so a foreign key never moves. Nothing past the first removal
+// is rolled back on failure.
+async function landUpgrade(
+  modDir: string, stagedRoot: string, keys: OwnedMetaKeys,
+  renameFn: (from: string, to: string) => Promise<void>,
+): Promise<void> {
+  const oldMetaText = await readTextOrEmpty(join(modDir, 'meta.ini'));
+  for (const entry of await readdir(modDir)) {
+    if (entry === '.git') continue;
+    await rm(join(modDir, entry), { recursive: true, force: true });
+  }
+  for (const entry of await readdir(stagedRoot)) {
+    await renameFn(join(stagedRoot, entry), join(modDir, entry));
+  }
+  await writeFile(join(modDir, 'meta.ini'), setOwnedKeysInText(oldMetaText, keys));
+}
+
 function landStagedMod(
   instanceRoot: string, name: string, stagedRoot: string, meta: InstallMeta, isFomod: boolean,
   renameFn: (from: string, to: string) => Promise<void>,
@@ -50,21 +99,26 @@ function landStagedMod(
   return withInstallLock(instanceRoot, async (): Promise<InstallCommandResult> => {
     const modsDir = join(instanceRoot, 'mods');
     const modDir = join(modsDir, name);
+    const targetExists = await exists(modDir);
     try {
-      if (await exists(modDir)) return { applied: false, refusal: `A mod named "${name}" already exists.` };
       const gameName = readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'));
-      await writeFile(join(stagedRoot, 'meta.ini'), writeMetaIni({ gameName, ...meta }));
-      await mkdir(modsDir, { recursive: true });
-      await renameFn(stagedRoot, modDir);
-      return { applied: true, wrote: true, isFomod };
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+      const keys: OwnedMetaKeys = { gameName, ...meta };
+      if (!targetExists) {
+        await landNewMod(modsDir, modDir, stagedRoot, keys, renameFn);
+        return { applied: true, wrote: true, isFomod };
+      }
+      try {
+        await landUpgrade(modDir, stagedRoot, keys, renameFn);
+      } catch (err) {
         return {
           applied: false,
-          refusal: `Cannot install "${name}": the staging folder and mods/ are on different drives, so the mod folder cannot be moved into place in one step.`,
+          refusal: `Upgrading "${name}" failed partway and was not rolled back: ${
+            err instanceof Error ? err.message : String(err)}`,
         };
       }
-      return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+      return { applied: true, wrote: true, isFomod };
+    } catch (err) {
+      return crossVolumeOrGenericRefusal(err, name);
     }
   });
 }
@@ -78,6 +132,11 @@ async function withStaging<T>(instanceRoot: string, use: (staging: string) => Pr
   }
 }
 
+function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
+  const installedFiles = opts.modID && opts.fileID ? [{ modid: opts.modID, fileid: opts.fileID }] : undefined;
+  return { ...base, modid: opts.modID ?? base.modid, installedFiles };
+}
+
 /** Extracts into staging and moves the detected mod root in. `installationFile` records which
  *  download it came from, which is what marks that download installed. */
 export async function installFromArchive(
@@ -88,7 +147,7 @@ export async function installFromArchive(
       await extractArchive(archivePath, staging, opts.run);
       const { sourceDir, isFomod } = await detectRoot(staging);
       return landStagedMod(
-        instanceRoot, name, sourceDir, { installationFile: basename(archivePath) }, isFomod,
+        instanceRoot, name, sourceDir, metaFor({ installationFile: basename(archivePath) }, opts), isFomod,
         opts.renameFn ?? rename);
     });
   } catch (err) {
@@ -105,7 +164,7 @@ export async function installFromFolder(
     return await withStaging(instanceRoot, async (staging) => {
       const { sourceDir, isFomod } = await detectRoot(folderPath);
       await cp(sourceDir, staging, { recursive: true });
-      return landStagedMod(instanceRoot, name, staging, {}, isFomod, opts.renameFn ?? rename);
+      return landStagedMod(instanceRoot, name, staging, metaFor({}, opts), isFomod, opts.renameFn ?? rename);
     });
   } catch (err) {
     return { applied: false, refusal: err instanceof Error ? err.message : String(err) };

@@ -389,12 +389,25 @@ The extension owns the editing backend process
   Nexus `nxm://` install (a Downloads-tree concern) is planned — see
   [downloads.md](downloads.md).
 - Flow: extract (or copy) into a staging directory beside `mods/` → detect root type (`Data/`
-  subfolder vs `.esp`/meshes at root) and normalise → write `meta.ini` into the staged tree →
-  **rename the staging directory to `mods/<name>/`**, so the folder appears complete in one
-  filesystem event → the user enables and deploys.
-- The installer writes **no `modlist.txt` line**. The `mods/**` watcher registers the new
-  folder as a **disabled** entry, the same path a folder dropped in by MO2 or by hand takes
-  (`modmanager/modsReconcile.ts`), so an install is one signal with one owner.
+  subfolder vs `.esp`/meshes at root) and normalise, then land the staged tree by name.
+- **A new target** (`mods/<name>/` absent) is one rename: meta.ini is written into the staged
+  tree first, then the whole tree lands in one filesystem event, so the folder is never seen
+  half-built. The installer writes **no `modlist.txt` line**. The `mods/**` watcher registers
+  the new folder as a **disabled** entry, the same path a folder dropped in by MO2 or by hand
+  takes (`modmanager/modsReconcile.ts`), so an install is one signal with one owner.
+- **An existing target is an upgrade**, never a refusal: every entry but `.git` is removed,
+  the staged tree's entries move in, and meta.ini is set through its existing-text write —
+  the owned keys and the `installedFiles` entry are replaced, every foreign key and every
+  other section survive untouched. The folder is never renamed away, so its identity, its
+  repository and every watcher armed on it survive the release. The install command takes the
+  target name and the download's identity (mod id, file id, archive filename) as arguments
+  and reads nothing from the Instance; it checks the target for `.git` itself, a disk fact.
+  Refusals (staging failure, cross-volume) can only happen before the first entry is removed;
+  past that point nothing is rolled back, and a failure names the folder and what remains.
+- meta.ini's `[installedFiles]` entry carries the mod id and file id MO2's own format uses, so
+  the next upgrade over the folder can pre-select with certainty.
+- A colliding name is kept out by the name prompt's own input validation, which says the mod
+  exists and points at the Downloads view — install has no "already exists" refusal of its own.
 - Staging shares a volume with `mods/` so the rename is atomic. A cross-volume staging area
   (`EXDEV`) is **refused**, never quietly downgraded to a recursive copy.
 - FOMOD installers are **detected and flagged for manual setup, not executed**.

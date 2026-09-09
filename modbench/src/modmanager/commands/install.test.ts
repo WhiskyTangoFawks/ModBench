@@ -3,11 +3,13 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { installFromArchive, installFromFolder } from './install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../test/corpusFixture';
 import type { Runner } from '../install/extractArchive';
+import { writeMetaIni } from '../mo2/metaIni';
 
 const MOD = 'Freshly Installed Mod';
 
@@ -43,6 +45,41 @@ async function treeOf(dir: string): Promise<string[] | null> {
 }
 
 const COMPLETE = [...PAYLOAD.map((p) => p.split(sep).join('/')), 'meta.ini'].sort();
+
+// A pre-existing target mod: an old plugin, a foreign meta.ini key, and (for the tracked case) a
+// `.git` directory an upgrade must leave byte-identical.
+async function makeExistingMod(root: string, name: string, tracked: boolean): Promise<string> {
+  const modDir = join(root, 'mods', name);
+  await mkdir(modDir, { recursive: true });
+  if (tracked) {
+    await mkdir(join(modDir, '.git'), { recursive: true });
+    await writeFile(join(modDir, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  }
+  await writeFile(join(modDir, 'Stale.esp'), 'stale bytes');
+  // A trailing foreign line: not one of the owned keys `writeMetaIni` renders, so it proves an
+  // upgrade's meta.ini write preserves what it does not own.
+  const meta = writeMetaIni({ gameName: 'Fallout4', modid: '0', version: '1.0.0', installationFile: 'Old-1-0.7z' })
+    + 'category="-1,"\n';
+  await writeFile(join(modDir, 'meta.ini'), meta);
+  return modDir;
+}
+
+function runnerFor(payloadRoot = 'Wrapper'): Runner {
+  return async (_bin, args) => {
+    const dest = args.find((a) => a.startsWith('-o'))!.slice(2);
+    await writePayload(join(dest, payloadRoot));
+  };
+}
+
+// Polls rather than awaiting one event: fs.watch's first callback can be a metadata touch, not
+// the write under test, so a single `once` risks resolving on the wrong event.
+async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > timeoutMs) throw new Error('waitFor: condition never became true');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
 describe('install commands', () => {
   let root: string;
@@ -136,27 +173,67 @@ describe('install commands', () => {
     expect(leftovers).toEqual([]);
   });
 
-  it('refuses a name already taken by a mod folder, touching nothing', async () => {
-    const before = await snapshotTree(root);
+  it('upgrades a tracked target: .git survives byte-identical, the stale file goes, the release lands, meta.ini keeps owned keys, installedFiles and foreign keys', async () => {
+    const name = 'Tracked Target';
+    const modDir = await makeExistingMod(root, name, true);
+    const oldGitHead = await readFile(join(modDir, '.git', 'HEAD'));
+    const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    const outcome = await installFromFolder(root, 'Harder VATS', sourceFolder);
+    const outcome = await installFromArchive(root, name, archive, { run: runnerFor(), modID: '111', fileID: '222' });
 
-    expect(outcome).toMatchObject({ applied: false });
-    expect(outcome.applied === false && outcome.refusal).toMatch(/already exists/);
-    assertOnlyChanged(before, await snapshotTree(root), new Set());
+    expect(outcome).toMatchObject({ applied: true });
+    expect(await readFile(join(modDir, '.git', 'HEAD'))).toEqual(oldGitHead);
+    expect(await treeOf(modDir)).toEqual([...COMPLETE, '.git/HEAD'].sort());
+    const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
+    expect(meta).toContain('gameName=Fallout 4'); // owned key, freshly written
+    expect(meta).toContain('modid=111');
+    expect(meta).toContain('installationFile=Freshly-2-0.7z');
+    expect(meta).toContain('1\\modid=111');
+    expect(meta).toContain('1\\fileid=222');
+    expect(meta).toContain('category="-1,"'); // foreign key, untouched
   });
 
-  // Rival: drop the write lock. Both pass the collision check, and the loser's rename fails
-  // with a raw ENOTEMPTY instead of the name-already-taken refusal.
-  it('serializes two installs of one name — one lands, the other is refused by name', async () => {
+  it('upgrades an untracked target: the folder ends up holding only the release and meta.ini', async () => {
+    const name = 'Untracked Target';
+    const modDir = await makeExistingMod(root, name, false);
+    const archive = join(root, 'downloads', 'Freshly-2-0.7z');
+
+    const outcome = await installFromArchive(root, name, archive, { run: runnerFor() });
+
+    expect(outcome).toMatchObject({ applied: true });
+    expect(await treeOf(modDir)).toEqual(COMPLETE);
+  });
+
+  it('a watcher armed on the target folder before an upgrade still fires for a write after it', async () => {
+    const name = 'Watched Target';
+    const modDir = await makeExistingMod(root, name, true);
+    const archive = join(root, 'downloads', 'Freshly-2-0.7z');
+    let fired = false;
+    const watcher = watch(modDir, () => { fired = true; });
+
+    try {
+      const outcome = await installFromArchive(root, name, archive, { run: runnerFor() });
+      expect(outcome).toMatchObject({ applied: true });
+
+      fired = false;
+      await writeFile(join(modDir, 'after-upgrade.txt'), 'x');
+      await waitFor(() => fired);
+    } finally {
+      watcher.close();
+    }
+  });
+
+  // Rival: drop the write lock. Both pass the exists() check before either has written
+  // anything, and the loser's rename onto the now-populated target fails with a raw ENOTEMPTY
+  // instead of cleanly falling through to the upgrade path.
+  it('serializes two installs of one name — the second lands as an upgrade of the first', async () => {
     const [first, second] = await Promise.all([
       installFromFolder(root, MOD, sourceFolder),
       installFromFolder(root, MOD, sourceFolder),
     ]);
 
-    const refusals = [first, second].filter((o) => !o.applied);
-    expect(refusals).toHaveLength(1);
-    expect(refusals[0].refusal).toMatch(/already exists/);
+    expect(first).toMatchObject({ applied: true });
+    expect(second).toMatchObject({ applied: true });
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
   });
 
