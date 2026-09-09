@@ -14,7 +14,7 @@ import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDi
 import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
 import type { Reporter } from './modmanager/deployer';
 import type { LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
-import { resolvePluginDestination, type PluginDestinationChoice } from './modmanager/pluginDestination';
+import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './modmanager/pluginDestination';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeReporter } from './reporter';
@@ -23,7 +23,7 @@ import { ToolboxProvider } from './ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './modmanager/commands/plugins';
-import { createEmptyMod, reconcileMods } from './modmanager/commands/modlist';
+import { reconcileMods } from './modmanager/commands/modlist';
 import { registerModsReconcile } from './modmanager/modsReconcile';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, clearTreeWhenBackendDies, exitEditing } from './editingTeardown';
@@ -194,38 +194,18 @@ function registerPluginsNameFilter(
   });
 }
 
-// `overwrite/` is listed first so it is the QuickPick's pre-highlighted default — `showQuickPick`
-// has no `activeItem` option, and array order is the only way to pre-highlight — preserving the
-// xEdit-under-MO2 reflex.
 async function pickPluginDestination(
   instance: Instance, instanceRoot: string,
 ): Promise<{ path: string; origin: string } | undefined> {
-  const picked = await vscode.window.showQuickPick(
-    [
-      { label: 'overwrite/', description: "MO2's overwrite folder", choice: { kind: 'overwrite' } as PluginDestinationChoice },
-      { label: 'Existing mod…', choice: { kind: 'existingMod' } as const },
-      { label: 'New mod…', choice: { kind: 'newMod' } as const },
-    ],
-    { placeHolder: 'Where should the new plugin live?' },
-  );
+  const picked = await vscode.window.showQuickPick(PLUGIN_DESTINATION_OPTIONS, {
+    placeHolder: 'Where should the new plugin live?',
+  });
   if (!picked) return undefined;
+  if (picked.choice === 'overwrite') return resolvePluginDestination(instanceRoot, { kind: 'overwrite' });
 
-  if (picked.choice.kind === 'overwrite') return resolvePluginDestination(instanceRoot, picked.choice);
-
-  if (picked.choice.kind === 'existingMod') {
-    const modNames = instance.value.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
-    const modName = await vscode.window.showQuickPick(modNames, { placeHolder: 'Which mod?' });
-    return modName ? resolvePluginDestination(instanceRoot, { kind: 'existingMod', modName }) : undefined;
-  }
-
-  const modName = await vscode.window.showInputBox({ prompt: 'New mod name' });
-  if (!modName) return undefined;
-  // Accepted residue: the mod folder is created before the create POST runs. If that POST
-  // fails, the mod stays there — empty and disabled, same as any fresh install — rather than
-  // being rolled back.
-  const outcome = await createEmptyMod(instanceRoot, instance.value.activeProfile, modName);
-  if (!outcome.applied) throw new Error(outcome.refusal);
-  return resolvePluginDestination(instanceRoot, { kind: 'newMod', modName });
+  const modNames = instance.value.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
+  const modName = await vscode.window.showQuickPick(modNames, { placeHolder: 'Which mod?' });
+  return modName ? resolvePluginDestination(instanceRoot, { kind: 'existingMod', modName }) : undefined;
 }
 
 // ADR-0041: only once Editing's create endpoint has actually succeeded does Mod Management's
@@ -263,14 +243,7 @@ function registerCreatePluginCommand(
     const name = await promptPluginName();
     if (!name) return;
 
-    let destination: { path: string; origin: string } | undefined;
-    try {
-      destination = await pickPluginDestination(mo2.instance, mo2.instanceRoot);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      reporter.report('error', `Could not prepare the destination — ${message}`);
-      return;
-    }
+    const destination = await pickPluginDestination(mo2.instance, mo2.instanceRoot);
     if (!destination) return; // user cancelled a prompt
 
     // EditingController.createPlugin already surfaces its own failure (ADR-0026) — nothing more

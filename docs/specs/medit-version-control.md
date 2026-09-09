@@ -104,12 +104,12 @@ using git.
 
 - **Where**: the Plugins tree's navigation bar (`modbench.newPlugin`) and the command palette.
   Prompts for a name (`.esp`/`.esm`/`.esl`, xEdit's own extensions), then a destination
-  QuickPick: **overwrite/** (default — first in the list, so Enter alone accepts it, preserving
-  the xEdit-under-MO2 reflex), **an existing mod** (searchable — native QuickPick filtering),
-  or **a new mod** (name prompt; creates the mod folder itself via the same install path
-  `modbench.modList.installFromFolder` uses, with an empty source directory — the mod
-  registers in `modlist.txt` and the Mods tree exactly as any other install does, disabled by
-  default until the user enables it, same as every other install).
+  QuickPick offering exactly two choices: **overwrite/** (default — first in the list, so
+  Enter alone accepts it, preserving the xEdit-under-MO2 reflex) or **an existing mod**
+  (searchable — native QuickPick filtering). There is no "new mod" choice here: a plugin
+  author who wants a fresh mod makes one first with the Mods tree's own New Empty Mod…
+  gesture (`modbench.modList.newEmptyMod`, [mods.md](mods.md)), then targets it as an
+  existing mod.
 - **Creation is Editing's job, participation is Mod Management's** (an implication of
   ADR-0035 — the two contexts still never share a payload beyond origin + path,
   ADR-0036). The backend writes the binary, Tracks the destination under the **Edits** preset
@@ -125,12 +125,6 @@ using git.
 - **A created plugin is ordinary working-tree text on its destination mod's edit branch** — no
   Authored mode, no provenance flag. "Authored" is what merging to `main` at will already means
   (ADR-0041); a created plugin arrives no differently than any other tracked edit.
-- **Accepted residue, not rolled back**: the "new mod" destination registers the
-  mod folder in `modlist.txt` (via the ordinary install path) *before* the create call that
-  writes the plugin into it, so a backend failure on that call leaves an empty, disabled, but
-  registered mod behind — visible in the Mods tree, harmless, and the user's own delete undoes
-  it. Deliberate, the same posture the mega-plugin Track cost and every other accepted cost in
-  this spec already takes: named, not engineered around.
 
 ### Track
 
