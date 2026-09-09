@@ -1,7 +1,6 @@
 import type { ExternalChangeDialogAnswer } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
-import type { UnansweredExternalChange, RebaseResult } from '../medit/ApiClient';
-import { isRefused } from '../medit/client';
+import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../medit/client';
 import type { ExternalChangeCoordinatorDeps } from '../medit/externalChangeCoordinator';
 
 /** The rebase offer is a separate, non-modal notification by contract, never folded into the
@@ -36,14 +35,14 @@ function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTre
 }
 
 async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange): Promise<void> {
-  const result = await deps.controller.keepAsMyEdit(item.plugin, item.origin);
+  const result = await deps.client.keepAsMyEdit(item.plugin, item.origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
   // A refused Keep (a same-record collision) changed nothing — no reason to refresh.
   if (result?.succeeded) refreshAfterWrite(deps);
 }
 
 async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange): Promise<void> {
-  const result = await deps.controller.absorbUpstreamUpdate(item.plugin, item.origin);
+  const result = await deps.client.absorbUpstreamUpdate(item.plugin, item.origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
   if (!result?.succeeded) {
     // A refusal rides a 200, which the WriteRefused check above never sees — unsurfaced it
@@ -76,10 +75,10 @@ async function dispatchOne(
 // (a conflicted rebase re-runs this), shared by the manual Rebase gesture and the
 // Absorb-then-offer-rebase follow-on above.
 export async function runRebase(
-  deps: Pick<ExternalChangeCoordinatorDeps, 'controller' | 'openMergeEditor' | 'showError' | 'refreshTree' | 'refreshMatchingPlugins'>,
+  deps: Pick<ExternalChangeCoordinatorDeps, 'client' | 'openMergeEditor' | 'showError' | 'refreshTree' | 'refreshMatchingPlugins'>,
   origin: string,
 ): Promise<RebaseResult | null> {
-  const result = await deps.controller.rebaseOntoMain(origin);
+  const result = await deps.client.rebaseOntoMain(origin);
   if (!result) return null;
   if (isRefused(result)) { deps.showError(result.message); return null; }
   if (result.outcome === 'Conflicted') {

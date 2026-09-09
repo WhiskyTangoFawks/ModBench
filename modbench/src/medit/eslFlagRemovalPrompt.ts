@@ -1,5 +1,5 @@
 import { headerFormKeyFor } from './formKeyIdentity';
-import type { PluginRepository } from './PluginRepository';
+import type { MEditClient } from './client';
 
 /** Deliberately not `CompileTarget`: create and copy-as-new reach this refusal too, so the
  *  shape is not named for one gesture. */
@@ -13,7 +13,7 @@ export interface EslFlagRemovalTarget {
  *  names that gesture in the prompt's words. */
 export async function offerEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string,
-  repository: Pick<PluginRepository, 'editRecord'>,
+  repository: Pick<MEditClient, 'editRecord'>,
   showWarning: (message: string, options: { modal: true }, ...items: string[]) => Thenable<string | undefined>,
   showError: (message: string) => void,
 ): Promise<boolean> {

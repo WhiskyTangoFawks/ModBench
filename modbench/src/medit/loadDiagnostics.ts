@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import type { PluginDiagnosisReport } from './ApiClient';
+import type { PluginDiagnosisReport } from './client';
 
 /** Targets the plugin binary itself — these plugins are pre-Track, so there is no source-tree
  *  file to point at, and one scan answers for the whole load order. Warning severity: a

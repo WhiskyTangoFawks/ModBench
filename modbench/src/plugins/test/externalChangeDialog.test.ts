@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   buttonsInDefaultOrder, messageFor, groupByOrigin, runExternalChangeDialogs, ABSORB_BUTTON, KEEP_BUTTON,
 } from '../externalChangeDialog';
-import type { UnansweredExternalChange } from '../../medit/ApiClient';
+import type { UnansweredExternalChange } from '../../medit/client';
 
 function unanswered(overrides: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
   return {

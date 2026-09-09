@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { isRefused, type MEditClient } from '../medit/client';
-import type { CompileResult } from '../medit/ApiClient';
+import { isRefused, type MEditClient, type CompileResult } from '../medit/client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
 import { resolveCompileTarget } from '../medit/compileTarget';
 import { promptEslFlagRemoval } from '../medit/promptEslFlagRemoval';
+import { resolveOrigin } from '../medit/resolveOrigin';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../medit/trackedRepositories';
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
@@ -18,22 +18,6 @@ import { say } from '../editingTeardown';
 // compiling, and (on an ESL contradiction) editing the header to retry.
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
 
-// The port has no `resolveOrigin` — only `EditingController` does, and this module may not hold
-// the controller. Derived here from `getPlugins()`, the same lookup EditingController.resolveOrigin
-// performs; a transport failure degrades to `undefined` (ADR-0026), logged rather than thrown.
-async function resolveOrigin(
-  client: Pick<MEditClient, 'getPlugins'>, pluginName: string, outputChannel: vscode.LogOutputChannel,
-): Promise<string | undefined> {
-  let plugins;
-  try {
-    plugins = await client.getPlugins();
-  } catch (e) {
-    outputChannel.info(`[pluginRowCommands] resolveOrigin(${pluginName}) failed: ${e instanceof Error ? e.message : String(e)}`);
-    return undefined;
-  }
-  return plugins.find((p) => p.name === pluginName && p.inLoadOrder)?.origin;
-}
-
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0041), so this
 // runs under the Plugins-view progress indicator.
@@ -44,7 +28,7 @@ export function registerTrackCommand(
   return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
-    const origin = await resolveOrigin(client, name, outputChannel);
+    const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
     if (!origin) {
       // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
       makeReporter(outputChannel, 'pluginListTree.track').report('error', `Could not resolve which mod "${name}" belongs to.`);
@@ -86,14 +70,14 @@ export function registerRebaseCommand(
   return vscode.commands.registerCommand('modbench.pluginListTree.rebase', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
-    const origin = await resolveOrigin(client, name, outputChannel);
+    const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
     if (!origin) {
       makeReporter(outputChannel, 'pluginListTree.rebase').report('error', `Could not resolve which mod "${name}" belongs to.`);
       return;
     }
 
     const result = await runRebase({
-      controller: client, openMergeEditor: makeMergeEditorOpener(client, outputChannel),
+      client, openMergeEditor: makeMergeEditorOpener(client, outputChannel),
       showError: (message) => void vscode.window.showErrorMessage(message),
       refreshTree: () => treeProvider.refresh(),
       refreshMatchingPlugins,
@@ -129,7 +113,7 @@ export function registerSaveAndCompileCommand(
       node?.kind === 'plugin' ? node.plugin.name : undefined,
       activeRecordTracker.current(),
       {
-        resolveOrigin: (name) => resolveOrigin(client, name, outputChannel),
+        resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
         getRecordOwner: (formKey) => client.getRecordOwner(formKey),
         onError: (message) => reportCompileTargetError(outputChannel, 'saveAndCompile', message),
         pickPlugin: async () => {
@@ -162,7 +146,7 @@ export function registerCompileAtRefCommand(
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
     const target = await resolveCompileTarget(node.plugin.name, undefined, {
-      resolveOrigin: (name) => resolveOrigin(client, name, outputChannel),
+      resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
       getRecordOwner: () => Promise.resolve(undefined),
       onError: (message) => reportCompileTargetError(outputChannel, 'compileAtMain', message),
       pickPlugin: () => Promise.resolve(undefined),

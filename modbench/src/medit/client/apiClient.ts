@@ -1,5 +1,5 @@
 import createClient from 'openapi-fetch';
-import type { components, paths } from './generated/api';
+import type { components, paths } from '../generated/api';
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 

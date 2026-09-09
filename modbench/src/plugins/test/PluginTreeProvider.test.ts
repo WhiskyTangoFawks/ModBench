@@ -1,7 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { RecordSummary, ContainerChildSummary } from '../../medit/ApiClient';
-import type { RecordPage } from '../../medit/PluginRepository';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient, type RecordSummary, type ContainerChildSummary, type RecordPage } from '../../medit/client';
 import { TreeItem, TreeItemCollapsibleState, EventEmitter, ThemeIcon, ThemeColor, uriFrom } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
@@ -36,24 +34,22 @@ function makeRecord(
   };
 }
 
-// Spied, not answered via setQueryAnswer: a test below re-scripts one method (a rejection, a
-// call sequence) and asserts with .toHaveBeenCalledWith — both need a mock, not a fixed answer.
 function makeClient(overrides: Partial<{
   recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
   records: RecordPage;
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   const recordTypes = overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }];
-  vi.spyOn(client, 'getRecordTypes').mockResolvedValue(recordTypes.map((rt) => ({
+  client.setQueryAnswer('getRecordTypes', recordTypes.map((rt) => ({
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
   })));
-  vi.spyOn(client, 'getRecords').mockResolvedValue(overrides.records ?? { items: [makeRecord(0)], total: 1 });
-  vi.spyOn(client, 'getWorldspaces').mockResolvedValue([]);
-  vi.spyOn(client, 'getWorldspaceBlocks').mockResolvedValue({ blocks: [], topCells: [] });
-  vi.spyOn(client, 'getCellReferences').mockResolvedValue({ persistent: [], temporary: [] });
+  client.setQueryAnswer('getRecords', overrides.records ?? { items: [makeRecord(0)], total: 1 });
+  client.setQueryAnswer('getWorldspaces', []);
+  client.setQueryAnswer('getWorldspaceBlocks', { blocks: [], topCells: [] });
+  client.setQueryAnswer('getCellReferences', { persistent: [], temporary: [] });
   // A Quest/DialogTopic row's own children — empty by default, overridden per-test below.
-  vi.spyOn(client, 'getContainerChildren').mockResolvedValue([]);
-  vi.spyOn(client, 'getInteriorCells').mockResolvedValue({ items: [], total: 0 });
+  client.setQueryAnswer('getContainerChildren', []);
+  client.setQueryAnswer('getInteriorCells', { items: [], total: 0 });
   return client;
 }
 
@@ -122,9 +118,9 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     // One call, offset 0, and a limit far beyond any page size — the whole type
     // requested up front, not paged.
-    expect(repo.getRecords).toHaveBeenCalledTimes(1);
-    expect(repo.getRecords).toHaveBeenCalledWith('Plugin0.esp', 'WEAP', 0, expect.any(Number), undefined);
-    const limitArg = (repo.getRecords as ReturnType<typeof vi.fn>).mock.calls[0][3] as number;
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    expect(repo.calls).toContainEqual({ method: 'getRecords', args: ['Plugin0.esp', 'WEAP', 0, expect.any(Number), undefined] });
+    const limitArg = repo.calls.find(c => c.method === 'getRecords')!.args[3] as number;
     expect(limitArg).toBeGreaterThan(count);
   });
 
@@ -136,7 +132,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     await provider.getChildren(typeNode);
     await provider.getChildren(typeNode);
 
-    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
   });
 
   // fetchRecords maps each row's own hasContainerChildren straight from the single
@@ -180,8 +176,8 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out 
     const children = await provider.getChildren(typeNode);
 
     expect(children).toHaveLength(count);
-    expect(repo.getRecords).toHaveBeenCalledTimes(1);
-    expect(repo.getContainerChildren).not.toHaveBeenCalled();
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
+    expect(repo.calls.some(c => c.method === 'getContainerChildren')).toBe(false);
   });
 });
 
@@ -189,11 +185,10 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode) — no per-row fan-out 
 
 describe('PluginTreeProvider.loadMoreInterior', () => {
   it('renders an ErrorNode alongside the retry affordance when a page fetch fails, preserving already-loaded items', async () => {
-    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }];
+    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }];
     const repo = makeClient();
-    (repo.getInteriorCells as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: firstPage, total: 2 })
-      .mockRejectedValueOnce(new Error('boom'));
+    repo.setQueryAnswerOnce('getInteriorCells', { items: firstPage, total: 2 });
+    repo.setQueryFailureOnce('getInteriorCells', new Error('boom'));
 
     const provider = new PluginTreeProvider(repo);
     const node = new InteriorCellsNode('M.esp');
@@ -211,13 +206,12 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
   });
 
   it('clears the ErrorNode on a successful retry', async () => {
-    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }];
-    const secondPage = [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false }];
+    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }];
+    const secondPage = [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }];
     const repo = makeClient();
-    (repo.getInteriorCells as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: firstPage, total: 2 })
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce({ items: secondPage, total: 2 });
+    repo.setQueryAnswerOnce('getInteriorCells', { items: firstPage, total: 2 });
+    repo.setQueryFailureOnce('getInteriorCells', new Error('boom'));
+    repo.setQueryAnswerOnce('getInteriorCells', { items: secondPage, total: 2 });
 
     const provider = new PluginTreeProvider(repo);
     const node = new InteriorCellsNode('M.esp');
@@ -362,7 +356,7 @@ describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () =>
     const provider = new PluginTreeProvider(repo);
     const [typeNode] = await provider.getPluginChildren('Fallout4.esm', 'ModA') as RecordTypeNode[];
     await provider.getChildren(typeNode); // populates the page cache
-    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
 
     const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
 
@@ -370,11 +364,11 @@ describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () =>
     expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Modified');
     // The rival this guards: a fix that re-fetches (or clears the cache and lets the next redraw
     // re-fetch) instead of patching in place would show a second call here.
-    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
 
     const [rec] = await provider.getChildren(typeNode);
     expect((rec as RecordNode).record.workingTreeState).toBe('Modified');
-    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(1);
   });
 
   it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
@@ -483,11 +477,10 @@ describe('record rows carry their copy identity', () => {
   // a `.git` directory appears or vanishes, so this provider owes only a re-render off its cache.
   it('re-rendering after tracking flips the rows without a repository refetch', async () => {
     const repo = makeClient();
-    const getRecords = vi.spyOn(repo, 'getRecords');
     const provider = new PluginTreeProvider(repo);
     const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
     expect(((await provider.getChildren(typeNode))[0] as RecordNode).contextValue).toBe('recordUntracked');
-    const callsAfterFirstRender = getRecords.mock.calls.length;
+    const callsAfterFirstRender = repo.calls.filter(c => c.method === 'getRecords').length;
 
     const changed = vi.fn();
     provider.onDidChangeTreeData(changed);
@@ -498,7 +491,7 @@ describe('record rows carry their copy identity', () => {
     // And back again, for the untrack direction.
     provider.setTrackedPlugins(new Set());
     expect(((await provider.getChildren(typeNode))[0] as RecordNode).contextValue).toBe('recordUntracked');
-    expect(getRecords.mock.calls.length).toBe(callsAfterFirstRender);
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(callsAfterFirstRender);
   });
 
   it('placed rows follow the same rule: refrImmutable under an immutable plugin, else refr', async () => {
@@ -537,7 +530,7 @@ describe('PluginTreeProvider.refresh', () => {
     provider.refresh();
     await provider.getChildren(typeNode);  // should re-fetch
 
-    expect(repo.getRecords).toHaveBeenCalledTimes(2);
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
   });
 
   it('fires onDidChangeTreeData', () => {
@@ -580,10 +573,10 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
-    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
-      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
-      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }] }] }],
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaceBlocks', {
+      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasParseFailure: false }],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasParseFailure: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
     const [wsRoot] = await provider.getPluginChildren('Plugin0.esp');
@@ -635,11 +628,11 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('surfaces every block-less cell row under a worldspace, not just the first', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1 }] });
-    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
-    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [
-        { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true },
-        { formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false },
+        { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasParseFailure: false },
+        { formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: false },
       ],
       blocks: [],
     });
@@ -656,7 +649,7 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
     const repo = makeClient();
-    (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
+    repo.setQueryAnswer('getCellReferences', {
       persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
@@ -674,8 +667,8 @@ describe('PluginTreeProvider worldspace tree', () => {
 
   it('paginates interior cells with a load-more node', async () => {
     const repo = makeClient();
-    (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
-      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }],
+    repo.setQueryAnswer('getInteriorCells', {
+      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }],
       total: 60,
     });
     const provider = new PluginTreeProvider(repo);
@@ -707,7 +700,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
     // Origin rides along as undefined for an ordinary load-order row — the backend resolves
     // it from the load order, where one filename names one plugin.
-    expect(repo.getRecordTypes).toHaveBeenCalledWith('Plugin0.esp', undefined);
+    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: ['Plugin0.esp', undefined] });
     expect(children.map(c => c.label)).toEqual(['Worldspaces', 'cell - Interior', 'WEAP']);
   });
 
@@ -725,7 +718,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('getPluginChildren: renders an error node when getRecordTypes fails', async () => {
     const repo = makeClient();
-    repo.getRecordTypes = vi.fn().mockRejectedValue(new Error('boom'));
+    repo.setQueryFailure('getRecordTypes', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
 
     const children = await provider.getPluginChildren('Plugin0.esp');
@@ -736,7 +729,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('fetchRecords: renders an error node when getRecords fails', async () => {
     const repo = makeClient();
-    repo.getRecords = vi.fn().mockRejectedValue(new Error('boom'));
+    repo.setQueryFailure('getRecords', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
     const node = new RecordTypeNode('Plugin0.esp', 'WEAP', 5);
 
@@ -748,7 +741,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('fetchWorldspaces: renders an error node when getWorldspaces fails', async () => {
     const repo = makeClient();
-    repo.getWorldspaces = vi.fn().mockRejectedValue(new Error('boom'));
+    repo.setQueryFailure('getWorldspaces', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
     const node = new WorldspacesNode('Plugin0.esp');
 
@@ -760,7 +753,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('fetchWorldspaceChildren: renders an error node when getWorldspaceBlocks fails', async () => {
     const repo = makeClient();
-    repo.getWorldspaceBlocks = vi.fn().mockRejectedValue(new Error('boom'));
+    repo.setQueryFailure('getWorldspaceBlocks', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
     const node = new WorldspaceNode('Plugin0.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false });
 
@@ -772,7 +765,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('fetchCellGroups: renders an error node when getCellReferences fails', async () => {
     const repo = makeClient();
-    repo.getCellReferences = vi.fn().mockRejectedValue(new Error('boom'));
+    repo.setQueryFailure('getCellReferences', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
     const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false });
 
@@ -784,7 +777,7 @@ describe('PluginTreeProvider fetch failures', () => {
 
   it('fetchInteriorCells: renders an error node when getInteriorCells fails', async () => {
     const repo = makeClient();
-    repo.getInteriorCells = vi.fn().mockRejectedValue(new Error('boom'));
+    repo.setQueryFailure('getInteriorCells', new Error('boom'));
     const provider = new PluginTreeProvider(repo);
     const node = new InteriorCellsNode('M.esp');
 
@@ -814,28 +807,28 @@ describe('headerFormKeyFor', () => {
 describe('PluginTreeProvider spatial origin threading', () => {
   it('fetchWorldspaces: asks the repository for the node\'s own copy, and the WorldspaceNodes it builds carry that origin forward', async () => {
     const repo = makeClient();
-    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
+    repo.setQueryAnswer('getWorldspaces', [{ formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }]);
     const provider = new PluginTreeProvider(repo);
     const node = new WorldspacesNode('Shared.esp', 'ModB');
 
     const [wsNode] = await provider.getChildren(node) as WorldspaceNode[];
 
-    expect(repo.getWorldspaces).toHaveBeenCalledWith('Shared.esp', 'ModB');
+    expect(repo.calls).toContainEqual({ method: 'getWorldspaces', args: ['Shared.esp', 'ModB'] });
     expect(wsNode.origin).toBe('ModB');
   });
 
   it('fetchWorldspaceChildren: asks the repository for the node\'s own copy, and its TopCell/Block children carry that origin forward', async () => {
     const repo = makeClient();
-    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
-      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
-      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }] }] }],
+    repo.setQueryAnswer('getWorldspaceBlocks', {
+      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, hasParseFailure: false }],
+      blocks: [{ x: 0, y: 0, hasParseFailure: false, subBlocks: [{ x: 0, y: 0, hasParseFailure: false, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasParseFailure: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
     const node = new WorldspaceNode('Shared.esp', { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: false }, 'ModB');
 
     const [topCellNode, blockNode] = await provider.getChildren(node) as [CellNode, PluginTreeNode];
 
-    expect(repo.getWorldspaceBlocks).toHaveBeenCalledWith('Shared.esp', 'wrld:M.esp', 'ModB');
+    expect(repo.calls).toContainEqual({ method: 'getWorldspaceBlocks', args: ['Shared.esp', 'wrld:M.esp', 'ModB'] });
     expect(topCellNode.origin).toBe('ModB');
 
     const [subBlockNode] = await provider.getChildren(blockNode);
@@ -846,7 +839,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
   it('fetchCellGroups: asks the repository for the node\'s own copy, and its PlacedGroup/Placed children carry that origin forward', async () => {
     const repo = makeClient();
-    (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
+    repo.setQueryAnswer('getCellReferences', {
       persistent: [{ formKey: 'b:M.esp', editorId: 'barrelRef', baseFormKey: null, recordType: 'refr', hasParseFailure: false }],
       temporary: [],
     });
@@ -854,7 +847,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null, hasParseFailure: false }, 'ModB');
 
     const [groupNode] = await provider.getChildren(node) as PlacedGroupNode[];
-    expect(repo.getCellReferences).toHaveBeenCalledWith('Shared.esp', 'c:M.esp', 'ModB');
+    expect(repo.calls).toContainEqual({ method: 'getCellReferences', args: ['Shared.esp', 'c:M.esp', 'ModB'] });
     expect(groupNode.origin).toBe('ModB');
 
     const [placedNode] = await provider.getChildren(groupNode) as PlacedNode[];
@@ -863,8 +856,8 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
   it('fetchInteriorCells: asks the repository for the node\'s own copy, and the CellNodes it builds carry that origin forward', async () => {
     const repo = makeClient();
-    (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
-      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }],
+    repo.setQueryAnswer('getInteriorCells', {
+      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }],
       total: 1,
     });
     const provider = new PluginTreeProvider(repo);
@@ -872,7 +865,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
     const [cellNode] = await provider.getChildren(node) as CellNode[];
 
-    expect(repo.getInteriorCells).toHaveBeenCalledWith('Shared.esp', 0, 50, 'ModB');
+    expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: ['Shared.esp', 0, 50, 'ModB'] });
     expect(cellNode.origin).toBe('ModB');
   });
 
@@ -888,7 +881,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     await provider.getChildren(fromA);
     await provider.getChildren(fromB);
 
-    expect(repo.getCellReferences).toHaveBeenCalledTimes(2);
+    expect(repo.calls.filter(c => c.method === 'getCellReferences')).toHaveLength(2);
   });
 
   it('interiorCache: caches each copy\'s interior-cell page separately, so one copy\'s page is never served for the other', async () => {
@@ -900,14 +893,13 @@ describe('PluginTreeProvider spatial origin threading', () => {
     await provider.getChildren(fromA);
     await provider.getChildren(fromB);
 
-    expect(repo.getInteriorCells).toHaveBeenCalledTimes(2);
+    expect(repo.calls.filter(c => c.method === 'getInteriorCells')).toHaveLength(2);
   });
 
   it('loadMoreInterior: keeps asking the repository for the node\'s own copy on the next page', async () => {
     const repo = makeClient();
-    (repo.getInteriorCells as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }], total: 2 })
-      .mockResolvedValueOnce({ items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false }], total: 2 });
+    repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
+    repo.setQueryAnswerOnce('getInteriorCells', { items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false }], total: 2 });
     const provider = new PluginTreeProvider(repo);
     const node = new InteriorCellsNode('Shared.esp', 'ModB');
     const firstChildren = await provider.getChildren(node);
@@ -915,7 +907,9 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
     await provider.loadMore(loadMoreNode);
 
-    expect(repo.getInteriorCells).toHaveBeenLastCalledWith('Shared.esp', 1, 50, 'ModB');
+    expect(repo.calls.filter(c => c.method === 'getInteriorCells').at(-1)).toEqual({
+      method: 'getInteriorCells', args: ['Shared.esp', 1, 50, 'ModB'],
+    });
   });
 });
 
@@ -928,7 +922,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 
     await provider.getPluginChildren('Shared.esp', 'ModB');
 
-    expect(repo.getRecordTypes).toHaveBeenCalledWith('Shared.esp', 'ModB');
+    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: ['Shared.esp', 'ModB'] });
   });
 
   it('carries that copy through to its record pages', async () => {
@@ -938,7 +932,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     const [typeNode] = await provider.getPluginChildren('Shared.esp', 'ModB') as RecordTypeNode[];
     await provider.getChildren(typeNode);
 
-    expect(repo.getRecords).toHaveBeenCalledWith('Shared.esp', 'WEAP', 0, expect.any(Number), 'ModB');
+    expect(repo.calls).toContainEqual({ method: 'getRecords', args: ['Shared.esp', 'WEAP', 0, expect.any(Number), 'ModB'] });
   });
 
   it('caches each copy separately, so one copy\'s page is never served for the other', async () => {
@@ -951,7 +945,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
     await provider.getChildren(fromB);
 
     // Two fetches, not one served from a shared "Shared.esp::WEAP" cache entry.
-    expect(repo.getRecords).toHaveBeenCalledTimes(2);
+    expect(repo.calls.filter(c => c.method === 'getRecords')).toHaveLength(2);
   });
 
   it('omits origin when the row is an ordinary load-order plugin', async () => {
@@ -962,7 +956,7 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 
     await provider.getPluginChildren('Plugin0.esp');
 
-    expect(repo.getRecordTypes).toHaveBeenCalledWith('Plugin0.esp', undefined);
+    expect(repo.calls).toContainEqual({ method: 'getRecordTypes', args: ['Plugin0.esp', undefined] });
   });
 });
 
@@ -1041,7 +1035,7 @@ describe('RecordNode collapsibility for container types', () => {
 describe('PluginTreeProvider.getChildren(RecordNode) — container children', () => {
   it('a "qust" RecordNode expands via repository.getContainerChildren into ordinary RecordNodes', async () => {
     const repo = makeClient();
-    repo.getContainerChildren = vi.fn().mockResolvedValue([
+    repo.setQueryAnswer('getContainerChildren', [
       makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'),
       makeContainerChild('dlbr1:Fallout4.esm', 'dlbr', 'BranchA'),
     ]);
@@ -1051,7 +1045,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const children = await provider.getChildren(questNode);
 
-    expect(repo.getContainerChildren).toHaveBeenCalledWith('Fallout4.esm', 'qust1:Fallout4.esm', undefined);
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Fallout4.esm', 'qust1:Fallout4.esm', undefined] });
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     expect((children[0] as RecordNode).record.editorId).toBe('TopicA');
@@ -1064,7 +1058,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
   // stay a leaf exactly like a top-level one, or every dial row shows a chevron expanding to nothing.
   it('a returned "dial" child with its own children is itself Collapsed — expandable to its own Responses; one with none stays a leaf', async () => {
     const repo = makeClient();
-    repo.getContainerChildren = vi.fn().mockResolvedValue([
+    repo.setQueryAnswer('getContainerChildren', [
       makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA', true),
       makeContainerChild('dial2:Fallout4.esm', 'dial', 'TopicB', false),
       makeContainerChild('scen1:Fallout4.esm', 'scen', 'SceneA'),
@@ -1085,7 +1079,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
   it('a "dial" RecordNode expands via repository.getContainerChildren into its Responses', async () => {
     const repo = makeClient();
-    repo.getContainerChildren = vi.fn().mockResolvedValue([
+    repo.setQueryAnswer('getContainerChildren', [
       makeContainerChild('info1:Fallout4.esm', 'info'),
     ]);
     const provider = new PluginTreeProvider(repo);
@@ -1094,13 +1088,13 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const children = await provider.getChildren(topicNode);
 
-    expect(repo.getContainerChildren).toHaveBeenCalledWith('Fallout4.esm', 'dial1:Fallout4.esm', undefined);
+    expect(repo.calls).toContainEqual({ method: 'getContainerChildren', args: ['Fallout4.esm', 'dial1:Fallout4.esm', undefined] });
     expect(children).toHaveLength(1);
   });
 
   it('caches on second expand without re-fetching', async () => {
     const repo = makeClient();
-    repo.getContainerChildren = vi.fn().mockResolvedValue([makeContainerChild('dial1:Fallout4.esm', 'dial')]);
+    repo.setQueryAnswer('getContainerChildren', [makeContainerChild('dial1:Fallout4.esm', 'dial')]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
       { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
@@ -1108,16 +1102,15 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     await provider.getChildren(questNode);
     await provider.getChildren(questNode);
 
-    expect(repo.getContainerChildren).toHaveBeenCalledTimes(1);
+    expect(repo.calls.filter(c => c.method === 'getContainerChildren')).toHaveLength(1);
   });
 
   // Two same-filename copies expanding the same Quest FormKey must hit their own cache entry: a
   // key built from formKey alone returns ModA's cached children for ModB's expansion.
   it('origin-keyed caching: two copies of one plugin browse their own children independently', async () => {
     const repo = makeClient();
-    repo.getContainerChildren = vi.fn()
-      .mockResolvedValueOnce([makeContainerChild('dial-a:Shared.esp', 'dial', 'TopicModA')])
-      .mockResolvedValueOnce([makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
+    repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-a:Shared.esp', 'dial', 'TopicModA')]);
+    repo.setQueryAnswerOnce('getContainerChildren', [makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
     const provider = new PluginTreeProvider(repo);
     const questA = new RecordNode(
       { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', false, false, 'qust');
@@ -1127,9 +1120,10 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
     const childrenA = await provider.getChildren(questA) as RecordNode[];
     const childrenB = await provider.getChildren(questB) as RecordNode[];
 
-    expect(repo.getContainerChildren).toHaveBeenCalledTimes(2);
-    expect(repo.getContainerChildren).toHaveBeenNthCalledWith(1, 'Shared.esp', 'qust1:Shared.esp', 'ModA');
-    expect(repo.getContainerChildren).toHaveBeenNthCalledWith(2, 'Shared.esp', 'qust1:Shared.esp', 'ModB');
+    const containerCalls = repo.calls.filter(c => c.method === 'getContainerChildren');
+    expect(containerCalls).toHaveLength(2);
+    expect(containerCalls[0].args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModA']);
+    expect(containerCalls[1].args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModB']);
     expect(childrenA[0].record.editorId).toBe('TopicModA');
     expect(childrenB[0].record.editorId).toBe('TopicModB');
   });
@@ -1169,16 +1163,16 @@ describe('the failure prefix', () => {
 
   it('marks the whole worldspace chain a failure sits under, and nothing beside it', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'wrld', count: 1, hasParseFailure: true }] });
-    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([
+    repo.setQueryAnswer('getWorldspaces', [
       { formKey: 'wrld:M.esp', editorId: 'World', hasParseFailure: true },
       { formKey: 'other:M.esp', editorId: 'Other', hasParseFailure: false },
     ]);
-    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
+    repo.setQueryAnswer('getWorldspaceBlocks', {
       topCells: [],
       blocks: [{ x: 0, y: 0, hasParseFailure: true, subBlocks: [{ x: 0, y: 0, hasParseFailure: true,
         cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 1, cellY: 1, isPersistentWorldspaceCell: false, hasParseFailure: true }] }] }],
     });
-    (repo.getCellReferences as ReturnType<typeof vi.fn>).mockResolvedValue({
+    repo.setQueryAnswer('getCellReferences', {
       persistent: [{ formKey: 'p:M.esp', editorId: 'Ref', baseFormKey: null, recordType: 'refr', hasParseFailure: true }],
       temporary: [],
     });
@@ -1200,7 +1194,7 @@ describe('the failure prefix', () => {
 
   it('marks an interior cell that cannot be read, and its group node', async () => {
     const repo = makeClient({ recordTypes: [{ type: 'cell', count: 2, hasParseFailure: true }] });
-    (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
+    repo.setQueryAnswer('getInteriorCells', {
       items: [
         { formKey: 'bad:M.esp', editorId: 'Bad', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: true },
         { formKey: 'ok:M.esp', editorId: 'Ok', cellX: null, cellY: null, isPersistentWorldspaceCell: false, hasParseFailure: false },
@@ -1222,7 +1216,7 @@ describe('the failure prefix', () => {
       recordTypes: [{ type: 'qust', count: 1 }],
       records: { items: [{ ...makeRecord(0, 'None', true), hasParseFailure: true }], total: 1 },
     });
-    (repo.getContainerChildren as ReturnType<typeof vi.fn>).mockResolvedValue([
+    repo.setQueryAnswer('getContainerChildren', [
       { ...makeRecord(1), recordType: 'info', hasContainerChildren: false,
         parseDiagnosis: 'INFO 12 — unknown: bad', hasParseFailure: true },
     ]);

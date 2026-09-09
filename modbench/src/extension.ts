@@ -3,20 +3,13 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
-import { Agent, fetch as undiciFetch } from 'undici';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
-import { createApiClient, openNotificationStream, type CrashRepairOffer } from './medit/ApiClient';
-import {
-  SseNotificationSubscriber, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications,
-} from './medit/NotificationSubscriber';
-import { EditingController } from './medit/EditingController';
-import { HttpMEditClient, type BackendLifecycleOptions } from './medit/client';
+import { HttpMEditClient, type BackendLifecycleOptions, type CrashRepairOffer } from './medit/client';
+import { subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider } from './editor/ReferencedByTreeProvider';
-import { broadcastToRecordPanels } from './editor/onRecordEdited';
 import { EXTENSION_TO_WEBVIEW } from './medit/messages';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { makeReporter } from './reporter';
@@ -91,9 +84,12 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(loadDiagnostics);
   session.loadDiagnostics = loadDiagnostics;
 
-  const client = createApiClient(port, createUnlimitedFetch());
-  const repository = new ApiPluginRepository(client, log);
-  const treeProvider = new PluginTreeProvider(repository, log);
+  // The mEdit client (ADR-0022): built once here, owning the backend process and every call
+  // across the seam; nothing outside this module constructs the generated client, `openapi-fetch`
+  // or the notification stream.
+  const meditClient = new HttpMEditClient({ backend: backendOptions(port, outputChannel), log });
+  activeClient = meditClient; // deactivate()'s only way to reach it
+  const treeProvider = new PluginTreeProvider(meditClient, log);
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
@@ -102,29 +98,18 @@ export function activate(context: vscode.ExtensionContext) {
 
   // ADR-0046 invariant 12: one subscription for the whole session, opened and closed with the
   // backend by the mEdit client itself.
-  const notificationSubscriber = new SseNotificationSubscriber({
-    openStream: (signal) => openNotificationStream(client, signal),
-    log: (msg) => outputChannel.debug(msg),
-  });
   context.subscriptions.push(
-    { dispose: subscribeTreeToNotifications(notificationSubscriber, treeProvider) },
-    { dispose: subscribeRecordPanelsToNotifications(notificationSubscriber, recordPanels, activeRecordTracker) },
+    { dispose: subscribeTreeToNotifications(meditClient, treeProvider) },
+    { dispose: subscribeRecordPanelsToNotifications(meditClient, recordPanels, activeRecordTracker) },
   );
 
   session.setFilterActive = makeSetFilterActive(session, filterProvider);
 
-  const controller = new EditingController({ client, repository, notificationSubscriber, log });
-  // The mEdit client (ADR-0022): built once here, composing the modules above and owning the
-  // backend process; views not yet migrated keep receiving those same objects directly.
-  const meditClient = new HttpMEditClient({
-    controller, repository, notificationSubscriber, backend: backendOptions(port, outputChannel),
-  });
-  activeClient = meditClient; // deactivate()'s only way to reach it
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
   // (ADR-0041 — the one reliable point to do so).
   const notifyConflictsComputed = () => {
-    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+    for (const panel of recordPanels) void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
     void registerHeldTrackedRepositories(meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; });
   };
   // Retargets on `activeRecordTracker`'s active-record changes rather than an explicit command.
@@ -156,7 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
   const toolbox = createToolbox({
     outputChannel, session, client: meditClient,
     recordBrowser: treeProvider,
-    pluginFacts: repository,
+    pluginFacts: meditClient,
     showCrashRepairOffers,
     loadDiagnostics,
     setStatusText: (t) => { statusBarItem.text = t; },
@@ -166,7 +151,7 @@ export function activate(context: vscode.ExtensionContext) {
     toolbox,
     {
       dispose: wireExternalChangePending(
-        meditClient, outputChannel, notificationSubscriber, treeProvider,
+        meditClient, outputChannel, treeProvider,
         () => { void refreshMatchingPlugins(session); },
       ),
     },
@@ -247,20 +232,6 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
   ];
 }
 
-
-// Undici's default Agent times out a fetch with no response bytes after ~300s; the backend's
-// blocking endpoints legitimately run for minutes, so 0 disables both. Bound per-request:
-// `setGlobalDispatcher` never reaches the extension host's outgoing requests.
-function createUnlimitedFetch(): (input: Request) => Promise<Response> {
-  const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
-  // Handed a global `Request`, undici's own `fetch` coerces it to a URL string and fails, so it is
-  // unpacked — `signal` included, or an abandoned reconcile's abort never reaches the network.
-  return async (input) => {
-    const hasBody = input.method !== 'GET' && input.method !== 'HEAD';
-    const body = hasBody ? await input.clone().arrayBuffer() : undefined;
-    return undiciFetch(input.url, { method: input.method, headers: [...input.headers], body, dispatcher, signal: input.signal });
-  };
-}
 
 function backendOptions(port: number, channel: vscode.LogOutputChannel): BackendLifecycleOptions {
   // Bundled backend binary (see build:backend / .vscodeignore). __dirname is

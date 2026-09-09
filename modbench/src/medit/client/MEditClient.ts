@@ -1,22 +1,81 @@
 import type { components } from '../generated/api';
 import type {
   CompileResult, RebaseResult, CrashRepairOffer, ExternalChangeActionResult, NotificationEvent,
-  TrackStatus, PluginMetadata, PluginDiagnosisReport, WorldspaceSummary, WorldspaceBlocks,
-  CellReferences, ContainerChildSummary,
-} from '../ApiClient';
-import type { WriteRefused, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput } from '../EditingController';
-import type { RecordEditOutcome, RecordPage, CellPage, PluginRecordTypeCount } from '../PluginRepository';
-import type { NotificationKind } from '../NotificationSubscriber';
+  TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue,
+  WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
+  PlacedSummary, ContainerChildSummary, RecordSummary, LoadOrderStatus, UnansweredExternalChange,
+} from './apiClient';
 import type { RecordEditEnvelope } from '../messages';
-
-export type { WriteRefused, LoadOrderOutcome, LoadOrderOptions, LoadOrderPluginInput, NotificationKind, NotificationEvent };
 
 /** The backend process as the extension reports it: starting while it comes up, attached while
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */
 export type BackendStatus = 'starting' | 'attached' | 'disconnected' | 'stopped';
-export { isRefused } from '../EditingController';
 
-// ApiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
+/** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
+ *  `message` is the ready-to-show toast (ADR-0026); a 200 typed refusal lives on the success arm. */
+export interface WriteRefused {
+  readonly refused: true;
+  readonly message: string;
+}
+
+/** `WriteRefused`'s one structural tag — a plain check, not `instanceof`, so a scripted client's
+ *  plain object narrows the same way the real one does. On the port, so narrowing never drags
+ *  the HTTP adapter into a caller's test. */
+export function isRefused(result: unknown): result is WriteRefused {
+  return typeof result === 'object' && result !== null && (result as { refused?: unknown }).refused === true;
+}
+
+/** The wire's five kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
+ *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
+export type NotificationKind =
+  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'external-change-pending';
+
+/** Re-exported under its own name because it is a callback contract, not merely a query return
+ *  type the caller happens to see. */
+export type LoadOrderProgress = LoadOrderStatus;
+
+/** Restated rather than imported from Mod Management's own snapshot type: this module belongs
+ *  to Editing, which imports nothing from Mod Management. `slot` is null when no plugins.txt
+ *  line names this copy. */
+export interface LoadOrderPluginInput {
+  name: string;
+  path: string;
+  origin: string;
+  slot: number | null;
+  enabled: boolean;
+  winning: boolean;
+}
+
+/** A tagged union, not a sentinel value. `abandoned` means the reconcile was superseded or the
+ *  user closed mEdit; `failed`'s `message` is the whole toast the load-order sync shows. */
+export type LoadOrderOutcome =
+  | { outcome: 'reconciled'; failures: components['schemas']['PluginLoadFailure'][]; crashRepairOffers: CrashRepairOffer[] }
+  | { outcome: 'failed'; message: string }
+  | { outcome: 'abandoned' };
+
+/** Deliberately plain stdlib — `AbortSignal`, not a bespoke token — so this interface carries no
+ *  VS Code types and `openapi-fetch` can forward it straight to `fetch`. */
+export interface LoadOrderOptions {
+  /** Called on each `load-order-status` notification while the PUT is in flight. Never called
+   *  after the reconcile settles. */
+  onProgress?: (progress: LoadOrderProgress) => void;
+  /** Trips when the user deliberately abandons this reconcile (closing mEdit). Aborts the PUT
+   *  itself rather than waiting for a dead socket. */
+  signal?: AbortSignal;
+}
+
+/** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
+ *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'`
+ *  and `'WriteGateBusy'` are this side's additions. */
+export type RecordEditOutcome =
+  | { applied: true }
+  | { applied: false; refusal: string; message: string };
+
+export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
+export type CellPage = components['schemas']['CellSummaryPagedResult'];
+
+// apiClient.ts aliases the wire shapes its own module needs; these are the port's own, named
 // here for the same reason (modbench/CLAUDE.md: the generated schema is the frontend type).
 export type PluginCreatedResponse = components['schemas']['PluginCreatedResponse'];
 export type TrackResponse = components['schemas']['TrackResponse'];
@@ -31,7 +90,7 @@ export type ReferenceResult = components['schemas']['ReferenceResult'];
  *  box), hiding whichever adapter is wired in and the process itself. Names nothing HTTP, no
  *  port number, no generated client. */
 export interface MEditClient {
-  // Commands — the controller's verbs by today's names, each answering applied-or-refusal;
+  // Commands — the HTTP adapter's verbs by today's names, each answering applied-or-refusal;
   // `rebuildIndex` is a command too, in its own pre-existing shape.
   createPlugin(name: string, path: string, origin: string): Promise<PluginCreatedResponse | WriteRefused>;
   rebuildIndex(
@@ -60,12 +119,11 @@ export interface MEditClient {
   keepAsMyEdit(plugin: string, origin: string): Promise<ExternalChangeActionResult | WriteRefused | undefined>;
   rebaseOntoMain(origin: string): Promise<RebaseResult | WriteRefused | undefined>;
   continueRebase(origin: string): Promise<RebaseResult | WriteRefused | undefined>;
-  // Today's `PluginRepository.editRecord`, grouped here per the ruling: "edit (today the
-  // repository's)".
+  // Today's field-edit write, grouped here per the ruling: "edit (today the repository's)".
   editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome>;
 
-  // Queries — the repository's read methods, by their current names, plus implicit masters and
-  // the filter facet (set filter, clear filter, active filter).
+  // Queries — the read verbs, by their current names, plus implicit masters and the filter
+  // facet (set filter, clear filter, active filter).
   getPlugins(): Promise<PluginMetadata[]>;
   getDiagnoses(): Promise<PluginDiagnosisReport[]>;
   getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
@@ -88,7 +146,7 @@ export interface MEditClient {
   // Subscribe by kind (ADR-0046 invariant 12) — today's signature, unchanged.
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
 
-  // The load-order snapshot — the controller's own signature and return, unchanged.
+  // The load-order snapshot — today's own signature and return, unchanged.
   putLoadOrder(
     plugins: LoadOrderPluginInput[], gameDirectory: string, instanceRoot: string, gameRelease: string,
     options?: LoadOrderOptions,
@@ -102,4 +160,9 @@ export interface MEditClient {
   stop(): Promise<void>;
 }
 
-export type { CrashRepairOffer };
+export type {
+  CrashRepairOffer, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
+  MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
+  CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult,
+  ExternalChangeActionResult, LoadOrderStatus, UnansweredExternalChange,
+};

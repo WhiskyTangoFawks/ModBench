@@ -19,7 +19,7 @@ import {
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
 } from '../recordPanelMessageRouter';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from '../../medit/messages';
-import type { RecordSummary } from '../../medit/ApiClient';
+import type { RecordSummary } from '../../medit/client';
 import { InMemoryMEditClient } from '../../medit/client';
 
 beforeEach(() => { createQuickPick.mockClear(); showQuickPick.mockClear(); });
@@ -268,12 +268,10 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     expect(fakeReporter.report.mock.calls[0][0]).toBe('warning');
   });
 
-  // The in-memory adapter's own scripting can only answer, not reject, so this one case — a genuine
-  // transport throw — is scripted against a bare stand-in for the port instead.
   it('a transport failure is an error — nothing answered at all', async () => {
-    const throwingClient = { editRecord: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')), searchRecords: vi.fn() };
+    meditClient.setCommandFailure('editRecord', new Error('ECONNREFUSED'));
 
-    await routeRecordPanelMessage(editMessage, makeDeps({ meditClient: throwingClient }));
+    await routeRecordPanelMessage(editMessage, makeDeps());
 
     expect(fakeReporter.report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
     expect(onRecordEdited).not.toHaveBeenCalled();

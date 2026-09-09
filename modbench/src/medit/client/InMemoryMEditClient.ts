@@ -20,6 +20,10 @@ export interface RecordedCall {
   args: unknown[];
 }
 
+// One scripted step, queued per method: resolves an answer or rejects with an error. `query`
+// below drains the queue, in order, before falling back to the fixed script.
+type ScriptedStep<T> = { kind: 'answer'; value: T } | { kind: 'failure'; error: Error };
+
 /** The in-memory adapter (ADR-0022): a test scripts each answer/result by method name, drives
  *  notifications with `emit`, and reads every recorded call back. An unscripted query rejects,
  *  so a forgotten script fails loudly, not silently empty. */
@@ -27,7 +31,10 @@ export class InMemoryMEditClient implements MEditClient {
   readonly calls: RecordedCall[] = [];
 
   private readonly queryAnswers = new Map<QueryMethod, unknown>();
+  private readonly queryFailures = new Map<QueryMethod, Error>();
+  private readonly queryQueues = new Map<QueryMethod, ScriptedStep<unknown>[]>();
   private readonly commandResults = new Map<CommandMethod, unknown>();
+  private readonly commandFailures = new Map<CommandMethod, Error>();
   private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private _status: BackendStatus = 'starting';
@@ -36,8 +43,38 @@ export class InMemoryMEditClient implements MEditClient {
     this.queryAnswers.set(method, answer);
   }
 
+  /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
+   *  of {@link setQueryAnswer}. */
+  setQueryFailure<K extends QueryMethod>(method: K, error: Error): void {
+    this.queryFailures.set(method, error);
+  }
+
+  /** Queues one answer, consumed by the next call to `method` and then discarded — for a test
+   *  re-scripting a call sequence rather than a fixed answer. Drains before the fixed
+   *  answer/failure above are consulted. */
+  setQueryAnswerOnce<K extends QueryMethod>(method: K, answer: Answer<K>): void {
+    this.pushQueryStep(method, { kind: 'answer', value: answer });
+  }
+
+  /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one rejection. */
+  setQueryFailureOnce<K extends QueryMethod>(method: K, error: Error): void {
+    this.pushQueryStep(method, { kind: 'failure', error });
+  }
+
+  private pushQueryStep(method: QueryMethod, step: ScriptedStep<unknown>): void {
+    const queue = this.queryQueues.get(method) ?? [];
+    queue.push(step);
+    this.queryQueues.set(method, queue);
+  }
+
   setCommandResult<K extends CommandMethod>(method: K, result: Answer<K>): void {
     this.commandResults.set(method, result);
+  }
+
+  /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
+   *  of {@link setCommandResult}. */
+  setCommandFailure<K extends CommandMethod>(method: K, error: Error): void {
+    this.commandFailures.set(method, error);
   }
 
   get status(): BackendStatus { return this._status; }
@@ -51,6 +88,8 @@ export class InMemoryMEditClient implements MEditClient {
   // disconnected backend's read side.
   disconnected(): void {
     this.queryAnswers.clear();
+    this.queryFailures.clear();
+    this.queryQueues.clear();
     this.setStatus('disconnected');
   }
 
@@ -80,6 +119,10 @@ export class InMemoryMEditClient implements MEditClient {
 
   private query<T>(method: QueryMethod, args: unknown[]): Promise<T> {
     this.record(method, args);
+    const queue = this.queryQueues.get(method);
+    const step = queue?.shift();
+    if (step) return step.kind === 'answer' ? Promise.resolve(step.value as T) : Promise.reject(step.error);
+    if (this.queryFailures.has(method)) return Promise.reject(this.queryFailures.get(method)!);
     if (!this.queryAnswers.has(method)) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted answer for query "${method}"`));
     }
@@ -88,6 +131,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   private command<T>(method: CommandMethod, args: unknown[]): Promise<T> {
     this.record(method, args);
+    if (this.commandFailures.has(method)) return Promise.reject(this.commandFailures.get(method)!);
     if (!this.commandResults.has(method)) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted result for command "${method}"`));
     }

@@ -1,4 +1,4 @@
-import { createApiClient } from '../../src/medit/ApiClient';
+import { createApiClient } from '../../src/medit/client/apiClient';
 import type { ColumnKey, CompareResult } from './types';
 import { columnKey } from './types';
 // `load` fires compare + plugins + status in parallel: a compare failure fails the whole load

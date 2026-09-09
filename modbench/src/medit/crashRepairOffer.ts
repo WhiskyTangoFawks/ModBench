@@ -1,4 +1,4 @@
-import type { CrashRepairOffer } from './ApiClient';
+import type { CrashRepairOffer } from './client';
 
 /** Working tree first, so VS Code focuses it: an interrupted compile means the user was compiling
  *  their own working tree, so recovering to it matches intent. */

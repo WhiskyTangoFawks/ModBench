@@ -1,5 +1,5 @@
-import type { LoadOrderOutcome, LoadOrderPluginInput, WriteRefused } from './EditingController';
-import { isRefused } from './EditingController';
+import type { LoadOrderOutcome, LoadOrderPluginInput, WriteRefused } from './client';
+import { isRefused } from './client';
 import { reportSkippedPlugins } from './pluginFailures';
 
 /** Each callback is exactly one ADR-0026 surface — `warn`/`error` toast, `log` writes the

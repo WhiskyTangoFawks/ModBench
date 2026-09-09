@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from '../medit/messages';
 import type { Reporter } from '../reporter';
-import type { RecordSummary } from '../medit/ApiClient';
-import type { MEditClient } from '../medit/client';
+import type { RecordSummary, MEditClient } from '../medit/client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
 
 export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {

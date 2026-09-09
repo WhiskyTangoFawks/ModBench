@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
-import type { MasterIssue, PluginDiagnosisReport, PluginMetadata } from '../medit/ApiClient';
-import type { MEditClient } from '../medit/client';
+import type { MasterIssue, PluginDiagnosisReport, PluginMetadata, MEditClient } from '../medit/client';
 import type { Instance, InstanceValue } from '../modmanager/instance';
 import type { PluginEntry } from '../modmanager/model';
 import type { Reporter } from '../reporter';

@@ -1,26 +1,9 @@
-import type * as vscode from 'vscode';
-import type { NotificationEvent } from './ApiClient';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
+import type { NotificationEvent } from './apiClient';
+import type { NotificationKind } from './MEditClient';
 
-/** The wire's five kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
- *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
-export type NotificationKind =
-  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'external-change-pending';
-
-/** ADR-0046 invariant 12: the extension's one subscribe interface, transport behind an adapter.
- *  `SseNotificationSubscriber` and `FakeNotificationSubscriber` are its two adapters. */
-export interface NotificationSubscriber {
-  /** Registers `listener` for one kind; returns the unsubscribe function. */
-  subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
-  /** Settles once the transport carries events, or once the attempt to open it failed; never
-   *  rejects. The backend publishes a request's progress the moment that request lands, so a
-   *  caller whose progress rides the stream awaits this first. */
-  whenConnected(): Promise<void>;
-}
-
-// Shared bookkeeping for both adapters below — subscribing and dispatching is identical, only
-// where events come from differs.
-class NotificationListenerRegistry implements NotificationSubscriber {
+// Subscribing and dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
+// default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
+class NotificationListenerRegistry {
   private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
 
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
@@ -30,22 +13,12 @@ class NotificationListenerRegistry implements NotificationSubscriber {
     return () => { set.delete(listener); };
   }
 
-  /** An adapter with no transport between `emit` and its listeners already carries events; the
-   *  stream adapter below overrides this with its connection's own answer. */
   whenConnected(): Promise<void> {
     return Promise.resolve();
   }
 
   protected dispatch(event: NotificationEvent): void {
     for (const listener of this.listeners.get(event.kind as NotificationKind) ?? []) listener(event);
-  }
-}
-
-/** The test double ADR-0046 invariant 12 names as the subscribe interface's second adapter: no
- *  stream, no timers — a unit test drives it with `emit`. */
-export class FakeNotificationSubscriber extends NotificationListenerRegistry {
-  emit(event: NotificationEvent): void {
-    this.dispatch(event);
   }
 }
 
@@ -130,6 +103,9 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     this.markConnected?.();
   }
 
+  /** Settles once the stream carries events, or once the attempt to open it failed; never
+   *  rejects. The backend publishes a request's progress the moment that request lands, so a
+   *  caller whose progress rides the stream awaits this first. */
   override whenConnected(): Promise<void> {
     return this.connected;
   }
@@ -171,32 +147,4 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
       settleConnected();
     }
   }
-}
-
-// Any reconcile-free record change is reason enough for a whole refresh() — the tree has no
-// per-row identity to check against the event (ADR-0046 invariant 5).
-export function subscribeTreeToNotifications(
-  subscriber: NotificationSubscriber, tree: { refresh(): void },
-): () => void {
-  const unsubscribeRows = subscriber.subscribe('rows-changed', () => tree.refresh());
-  const unsubscribePlugin = subscriber.subscribe('plugin-changed', () => tree.refresh());
-  return () => { unsubscribeRows(); unsubscribePlugin(); };
-}
-
-// One FormKey spans its whole override chain, so matching it alone is enough — no plugin/origin
-// check. LOAD_RECORD already re-reads unconditionally, even for an already-shown FormKey.
-// `activeRecordTracker` is structural, Editor's own type unnamed here.
-export function subscribeRecordPanelsToNotifications(
-  subscriber: NotificationSubscriber,
-  recordPanels: Set<vscode.WebviewPanel>,
-  activeRecordTracker: { formKeyOf(panel: vscode.WebviewPanel): string | undefined },
-): () => void {
-  return subscriber.subscribe('rows-changed', (event) => {
-    for (const panel of recordPanels) {
-      const formKey = activeRecordTracker.formKeyOf(panel);
-      if (formKey && event.keys.includes(formKey)) {
-        void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
-      }
-    }
-  });
 }

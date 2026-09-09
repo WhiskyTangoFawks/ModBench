@@ -1,8 +1,6 @@
-import type * as vscode from 'vscode';
 import type { RecordDecorationProvider } from './RecordDecorationProvider';
 import { recordResourceUri } from '../medit/recordResourceUri';
-import type { ExtensionToWebview } from '../medit/messages';
-import type { WorkingTreeState } from '../medit/ApiClient';
+import type { WorkingTreeState } from '../medit/client';
 
 /** Editor's own view of whatever tree needs to hear about a landed edit — a structural shape,
  *  not `PluginTreeProvider` itself: Editor names no Plugins-view type, and the real tree
@@ -11,11 +9,6 @@ export interface RecordTreeSync {
   refresh(): void;
   workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): WorkingTreeState | undefined;
   markWorkingTreeState(plugin: string, origin: string | undefined, formKey: string, state: WorkingTreeState): boolean;
-}
-
-/** Broadcasts one message to every open record panel (`'modbench'` viewType). */
-export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, msg: ExtensionToWebview): void {
-  for (const panel of recordPanels) void panel.webview.postMessage(msg);
 }
 
 /** Scoped, not `refresh()`: patches the cached record and refreshes only its decoration.

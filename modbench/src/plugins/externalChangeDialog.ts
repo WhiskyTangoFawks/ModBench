@@ -1,4 +1,4 @@
-import type { UnansweredExternalChange } from '../medit/ApiClient';
+import type { UnansweredExternalChange } from '../medit/client';
 
 /** Pinned UX contract: the two buttons, native cancel (Esc) always a third, unnamed option. */
 export const ABSORB_BUTTON = 'Absorb Upstream Update';
