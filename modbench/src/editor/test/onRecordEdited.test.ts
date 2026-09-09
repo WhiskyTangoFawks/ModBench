@@ -7,12 +7,15 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { makeOnRecordEdited } from '../onRecordEdited';
-import type { PluginTreeProvider } from '../../plugins/PluginTreeProvider';
+import { makeOnRecordEdited, type RecordTreeSync } from '../onRecordEdited';
 import type { RecordDecorationProvider } from '../RecordDecorationProvider';
 
-function fakeTreeProvider(markResult = true): PluginTreeProvider {
-  return { markWorkingTreeState: vi.fn().mockReturnValue(markResult) } as unknown as PluginTreeProvider;
+function fakeTreeProvider(markResult = true): RecordTreeSync {
+  return {
+    markWorkingTreeState: vi.fn().mockReturnValue(markResult),
+    refresh: vi.fn(),
+    workingTreeStateOf: vi.fn(),
+  };
 }
 
 function fakeDecorationProvider(): RecordDecorationProvider {

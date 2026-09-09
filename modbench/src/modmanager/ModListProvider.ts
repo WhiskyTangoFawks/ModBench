@@ -6,7 +6,7 @@ import type { ModStatus, ModStatusResult } from './statusChecker';
 // Pure drop-index reconciliation, shared with PluginsTreeProvider. A neutral
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
-import type { Reporter } from './deployer';
+import type { Reporter } from '../reporter';
 import type { Instance, InstanceValue } from './instance';
 import {
   moveModToSeparator as moveModToSeparatorCommand,

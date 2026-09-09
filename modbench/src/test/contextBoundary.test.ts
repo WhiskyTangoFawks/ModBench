@@ -30,6 +30,8 @@ function tsFiles(dir: string): string[] {
 
 const EDITING_DIR = 'medit';
 const PLUGINS_VIEW_DIR = 'plugins';
+const EDITOR_DIR = 'editor';
+const MOD_MANAGEMENT_DIR = 'modmanager';
 const GENERATED_DIR = 'generated';
 
 // Wires every context together (CONTEXT.md calls the Toolbox also the extension's composition
@@ -63,6 +65,7 @@ function isExcluded(relativePath: string): boolean {
   if (segments.includes(GENERATED_DIR)) return true; // mirrors the backend's schema, not a decision
   if (segments[0] === PLUGINS_VIEW_DIR) return true; // a record browser by design
   if (segments[0] === EDITING_DIR) return true; // Editing's own context, not the MO2 side this rule binds
+  if (segments[0] === EDITOR_DIR) return true; // Editor's own context — record vocabulary by design, same as Plugins
   if (COMPOSITION_ROOT.includes(relativePath)) return true; // each entry's own reason is stated above
   if (isTestSupport(relativePath)) return true; // prose and corpus, not a decision
   return false;
@@ -92,9 +95,12 @@ function findOffenders(root: string): Offense[] {
     if (isExcluded(relPath)) continue;
     const text = readFileSync(path, 'utf8');
     const imports = importsOf(text);
-    // Both contexts a MO2-side file must never reach into: Editing's client, and the Plugins
-    // view's record browser, which carries record types and FormKeys just as directly.
-    const crossContext = [...importsFromDir(imports, EDITING_DIR), ...importsFromDir(imports, PLUGINS_VIEW_DIR)];
+    // Every context a MO2-side file must never reach into: Editing's client, the Plugins view's
+    // record browser, and Editor — all carry record types and FormKeys just as directly.
+    const crossContext = [
+      ...importsFromDir(imports, EDITING_DIR), ...importsFromDir(imports, PLUGINS_VIEW_DIR),
+      ...importsFromDir(imports, EDITOR_DIR),
+    ];
     const vocab = domainVocabIn(text);
     if (crossContext.length > 0 || vocab.length > 0) offenses.push({ path: relPath, crossContext, vocab });
   }
@@ -121,6 +127,10 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
   it('the Plugins view is skipped by a stated exclusion', () => {
     expect(isExcluded(join('plugins', 'PluginsTreeProvider.ts'))).toBe(true);
     expect(isExcluded(join('plugins', 'PluginTreeProvider.ts'))).toBe(true);
+  });
+
+  it('the editor folder is skipped by a stated exclusion, the same as Plugins', () => {
+    expect(isExcluded(join('editor', 'recordPanelHost.ts'))).toBe(true);
   });
 
   it('the generated API client is excluded because it mirrors the backend schema', () => {
@@ -219,6 +229,27 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
       });
     });
+
+    // Editor carries the same FormKey vocabulary and the same client the medit/ check already
+    // guards against — a MO2-shaped file reaching it is exactly the violation this rule exists for.
+    it('an Editor-folder import planted in a Mods-shaped file is caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'modmanager'), { recursive: true });
+        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+      });
+    });
+
+    it('the same Editor-folder import inside Editor\'s own directory is not caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'modmanager'), { recursive: true });
+        mkdirSync(join(root, 'editor'), { recursive: true });
+        const planted = "import { ActiveRecordTracker } from './ActiveRecordTracker';\n";
+        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        writeFileSync(join(root, 'editor', 'recordPanelHost.ts'), planted);
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+      });
+    });
   });
 
   it('does not flag the built-in Record<K, V> utility type', () => {
@@ -281,11 +312,99 @@ describe('composition-root modules import from neither context', () => {
   });
 });
 
-describe('Editing does not import Mod Management\'s vocabulary', () => {
-  // editorCommands.ts gets the import-only tier rather than the "no vocabulary in its own text"
-  // bar: it carries user-facing strings that legitimately name the other context's term for the
-  // user, who thinks in MO2's vocabulary.
-  it('editorCommands.ts imports nothing from Mod Management', () => {
-    expect(importsOf(read('medit/editorCommands.ts')).filter((s) => s.includes('modmanager'))).toEqual([]);
+// A path segment against every file under `sourceDir`, never a substring — the same rule
+// `importsFromDir` states for the MO2-side scan above.
+function crossFolderOffenders(root: string, sourceDir: string, forbiddenDirs: string[]): { path: string; imports: string[] }[] {
+  const base = join(root, sourceDir);
+  let files: string[];
+  try {
+    files = tsFiles(base);
+  } catch {
+    return []; // sourceDir absent from this planted tree
+  }
+  const offenses: { path: string; imports: string[] }[] = [];
+  for (const path of files) {
+    const relPath = relative(root, path);
+    if (isTestSupport(relPath)) continue;
+    const imports = importsOf(readFileSync(path, 'utf8'));
+    const forbidden = forbiddenDirs.flatMap((dir) => importsFromDir(imports, dir));
+    if (forbidden.length > 0) offenses.push({ path: relPath, imports: forbidden });
+  }
+  return offenses;
+}
+
+// The record lifecycle commands carry user-facing strings that legitimately name Mod
+// Management's term for the user ("mod"), so recordLifecycleCommands.ts gets the import-only
+// tier rather than a "no vocabulary in its own text" bar.
+describe('Editor and the Plugins view import from neither each other', () => {
+  it('nothing under Editor imports from the Plugins view or from Mod Management', () => {
+    expect(crossFolderOffenders(SRC, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR])).toEqual([]);
+  });
+
+  it('nothing under the Plugins view imports from Editor', () => {
+    expect(crossFolderOffenders(SRC, PLUGINS_VIEW_DIR, [EDITOR_DIR])).toEqual([]);
+  });
+
+  describe('a plant in each direction is caught, and the same plant inside its own side is not', () => {
+    function withPlantedTree(run: (root: string) => void): void {
+      const root = mkdtempSync(join(tmpdir(), 'medit-editor-plugins-boundary-'));
+      try {
+        run(root);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+
+    it('a Plugins-view import planted in an Editor-shaped file is caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'editor'), { recursive: true });
+        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import type { RecordNode } from '../plugins/PluginTreeProvider';\n");
+        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR]).map((o) => o.path))
+          .toEqual([join('editor', 'someCommand.ts')]);
+      });
+    });
+
+    it('a Mod-Management import planted in an Editor-shaped file is caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'editor'), { recursive: true });
+        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import { Instance } from '../modmanager/instance';\n");
+        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR]).map((o) => o.path))
+          .toEqual([join('editor', 'someCommand.ts')]);
+      });
+    });
+
+    it('an Editor import planted in a Plugins-shaped file is caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'plugins'), { recursive: true });
+        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        expect(crossFolderOffenders(root, PLUGINS_VIEW_DIR, [EDITOR_DIR]).map((o) => o.path))
+          .toEqual([join('plugins', 'SomeProvider.ts')]);
+      });
+    });
+
+    it('the same Editor import, planted inside Editor\'s own directory, is not caught by the Plugins-side check', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'plugins'), { recursive: true });
+        mkdirSync(join(root, 'editor'), { recursive: true });
+        writeFileSync(join(root, 'plugins', 'SomeProvider.ts'), "import { ActiveRecordTracker } from '../editor/ActiveRecordTracker';\n");
+        writeFileSync(join(root, 'editor', 'ActiveRecordTracker.ts'), 'export class ActiveRecordTracker {}\n');
+        expect(crossFolderOffenders(root, PLUGINS_VIEW_DIR, [EDITOR_DIR]).map((o) => o.path))
+          .toEqual([join('plugins', 'SomeProvider.ts')]);
+      });
+    });
+
+    // The rival this guards: matching a directory name as a substring rather than a path segment
+    // would also flag an Editor-shaped module that merely imports from something named similarly.
+    it('an Editor-side module importing from a differently-named sibling is not caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'editor'), { recursive: true });
+        writeFileSync(join(root, 'editor', 'someCommand.ts'), "import { makeReporter } from '../reporter';\n");
+        expect(crossFolderOffenders(root, EDITOR_DIR, [PLUGINS_VIEW_DIR, MOD_MANAGEMENT_DIR])).toEqual([]);
+      });
+    });
+  });
+
+  it('recordLifecycleCommands.ts imports nothing from Mod Management', () => {
+    expect(importsOf(read('editor/recordLifecycleCommands.ts')).filter((s) => s.includes('modmanager'))).toEqual([]);
   });
 });

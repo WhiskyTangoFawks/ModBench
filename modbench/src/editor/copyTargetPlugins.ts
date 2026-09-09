@@ -1,4 +1,4 @@
-import type { PluginMetadata } from './ApiClient';
+import type { PluginMetadata } from '../medit/ApiClient';
 
 // 'copy-as-override' excludes every plugin that already carries the record (xEdit's CopyInto
 // module filter): offering one would silently replace that override's content. 'copy-as-new'

@@ -12,10 +12,8 @@ import {
   FakeNotificationSubscriber, SseNotificationSubscriber,
   subscribeTreeToNotifications, subscribeRecordPanelsToNotifications,
 } from '../NotificationSubscriber';
-import { ActiveRecordTracker } from '../ActiveRecordTracker';
-import { makeOnRecordEdited } from '../onRecordEdited';
-import type { PluginTreeProvider } from '../../plugins/PluginTreeProvider';
-import type { RecordDecorationProvider } from '../RecordDecorationProvider';
+import { makeOnRecordEdited, type RecordTreeSync } from '../../editor/onRecordEdited';
+import type { RecordDecorationProvider } from '../../editor/RecordDecorationProvider';
 import type { NotificationEvent } from '../ApiClient';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -30,13 +28,23 @@ function fakePanel(): { webview: { postMessage: ReturnType<typeof vi.fn> } } {
   return { webview: { postMessage: vi.fn() } };
 }
 
+// A bare stand-in for Editor's `ActiveRecordTracker` — this suite pins `NotificationSubscriber`'s
+// own exports, which take the tracker structurally (just `formKeyOf`).
+function fakeActiveRecordTracker() {
+  const formKeys = new Map<unknown, string>();
+  return {
+    setFormKey(panel: unknown, formKey: string) { formKeys.set(panel, formKey); },
+    formKeyOf(panel: unknown) { return formKeys.get(panel); },
+  };
+}
+
 describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming the panel\'s own FormKey re-reads that one panel', () => {
     const notifications = new FakeNotificationSubscriber();
     const panel = fakePanel();
     const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
-    const tracker = new ActiveRecordTracker<import('vscode').WebviewPanel>();
-    tracker.setFormKey(panel as unknown as import('vscode').WebviewPanel, '000001:Test.esp');
+    const tracker = fakeActiveRecordTracker();
+    tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(notifications, recordPanels, tracker);
 
     notifications.emit(rowsChanged(['000001:Test.esp']));
@@ -48,8 +56,8 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const notifications = new FakeNotificationSubscriber();
     const panel = fakePanel();
     const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
-    const tracker = new ActiveRecordTracker<import('vscode').WebviewPanel>();
-    tracker.setFormKey(panel as unknown as import('vscode').WebviewPanel, '000001:Test.esp');
+    const tracker = fakeActiveRecordTracker();
+    tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(notifications, recordPanels, tracker);
 
     notifications.emit(rowsChanged(['000002:Other.esp']));
@@ -61,8 +69,8 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const notifications = new FakeNotificationSubscriber();
     const panel = fakePanel();
     const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
-    const tracker = new ActiveRecordTracker<import('vscode').WebviewPanel>();
-    tracker.setFormKey(panel as unknown as import('vscode').WebviewPanel, '000001:Test.esp');
+    const tracker = fakeActiveRecordTracker();
+    tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(notifications, recordPanels, tracker);
 
     notifications.emit(pluginChanged());
@@ -74,8 +82,8 @@ describe('subscribeRecordPanelsToNotifications', () => {
     const notifications = new FakeNotificationSubscriber();
     const panel = fakePanel();
     const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
-    const tracker = new ActiveRecordTracker<import('vscode').WebviewPanel>();
-    tracker.setFormKey(panel as unknown as import('vscode').WebviewPanel, '000001:Test.esp');
+    const tracker = fakeActiveRecordTracker();
+    tracker.setFormKey(panel, '000001:Test.esp');
     const unsubscribe = subscribeRecordPanelsToNotifications(notifications, recordPanels, tracker);
 
     unsubscribe();
@@ -92,13 +100,13 @@ describe('a write and the stream, together (ADR-0046 invariant 5)', () => {
     const notifications = new FakeNotificationSubscriber();
     const panel = fakePanel();
     const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
-    const tracker = new ActiveRecordTracker<import('vscode').WebviewPanel>();
-    tracker.setFormKey(panel as unknown as import('vscode').WebviewPanel, '000001:Test.esp');
+    const tracker = fakeActiveRecordTracker();
+    tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(notifications, recordPanels, tracker);
 
-    const treeProvider = { markWorkingTreeState: vi.fn().mockReturnValue(false) } as unknown as PluginTreeProvider;
+    const treeSync: RecordTreeSync = { refresh: vi.fn(), workingTreeStateOf: vi.fn(), markWorkingTreeState: vi.fn().mockReturnValue(false) };
     const decorationProvider = { refresh: vi.fn() } as unknown as RecordDecorationProvider;
-    const onRecordEdited = makeOnRecordEdited(treeProvider, decorationProvider, vi.fn(), vi.fn());
+    const onRecordEdited = makeOnRecordEdited(treeSync, decorationProvider, vi.fn(), vi.fn());
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'ModA');
     expect(panel.webview.postMessage).not.toHaveBeenCalled();

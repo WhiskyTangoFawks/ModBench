@@ -12,16 +12,15 @@ import {
 } from './medit/NotificationSubscriber';
 import { EditingController } from './medit/EditingController';
 import { HttpMEditClient, type BackendLifecycleOptions } from './medit/client';
-import { PluginTreeProvider, type RecordNode } from './plugins/PluginTreeProvider';
-import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
+import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { ApiPluginRepository } from './medit/PluginRepository';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
-import { ReferencedByTreeProvider } from './medit/ReferencedByTreeProvider';
-import { broadcastToRecordPanels } from './medit/onRecordEdited';
-import { EXTENSION_TO_WEBVIEW, type ColumnHeaderContext } from './medit/messages';
+import { ReferencedByTreeProvider } from './editor/ReferencedByTreeProvider';
+import { broadcastToRecordPanels } from './editor/onRecordEdited';
+import { EXTENSION_TO_WEBVIEW } from './medit/messages';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { makeReporter } from './reporter';
-import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand } from './medit/editorCommands';
+import { registerEditorCommands, ActiveRecordTracker } from './editor';
 import { exitEditing, refreshMatchingPlugins } from './editingTeardown';
 import { createToolbox } from './toolbox';
 import type { ExtensionSession } from './session';
@@ -30,6 +29,7 @@ import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
+import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
 import { wireExternalChangePending } from './plugins/externalChangeWiring';
 
 
@@ -174,14 +174,21 @@ export function activate(context: vscode.ExtensionContext) {
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands({
-      session, client: meditClient, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed,
+      session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed,
+    }),
+    // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
+    // lives under plugins/), so it is wired here rather than inside Editor's own registration.
+    registerLoadMoreCommand(treeProvider),
+    ...registerFilterCommands({
+      scriptsPath, client: meditClient, treeProvider,
+      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
+      setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, meditClient, repository, scriptsPath, referencedByTreeView, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, referencedByTreeView, outputChannel,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
-      setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
     }),
   );
 
@@ -213,8 +220,6 @@ export function activate(context: vscode.ExtensionContext) {
 interface PluginRowCommandDeps {
   session: ExtensionSession;
   client: HttpMEditClient;
-  controller: EditingController;
-  repository: ApiPluginRepository;
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   outputChannel: vscode.LogOutputChannel;
   compileDiagnostics: vscode.DiagnosticCollection;
@@ -223,14 +228,10 @@ interface PluginRowCommandDeps {
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
-// editor's own commands.
+// editor's own commands (create/delete/renumber/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed } = deps;
-  // A node's own `origin` when the row carries it (ADR-0036), else `controller.resolveOrigin`;
-  // there is no ambient fallback worth a QuickPick, which is why these commands are palette-gated.
-  const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
+  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
-  const onWritten = () => { treeProvider.refresh(); refreshMatchingPluginsFor(); };
   return [
     registerTrackCommand(
       session, client, outputChannel, treeProvider,
@@ -242,16 +243,6 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
     registerSaveAndCompileCommand(client, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCompileAtRefCommand(client, outputChannel, compileDiagnostics),
     registerRebaseCommand(client, outputChannel, treeProvider, refreshMatchingPluginsFor),
-    ...registerRecordLifecycleCommands(controller, repository, outputChannel, treeProvider, refreshMatchingPluginsFor),
-    // xEdit parity (xeMainForm.pas's CopyInto, reached from both the tree row and the column
-    // header): one command per gesture, reached from either entry point. `arg` resolves to the
-    // same {formKey, plugin, origin} identity either way.
-    vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: RecordNode | ColumnHeaderContext) => {
-      await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport, outputChannel, onWritten);
-    }),
-    vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: RecordNode | ColumnHeaderContext) => {
-      await runCopyRecordCommand('copy-as-new', arg, controller, repository, resolveOriginOrReport, outputChannel, onWritten);
-    }),
     registerOpenHeaderCommand(),
   ];
 }

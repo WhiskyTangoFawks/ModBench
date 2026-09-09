@@ -12,8 +12,8 @@ import {
   NoActiveRecordNode,
   referencedByCopyText,
 } from '../ReferencedByTreeProvider';
-import { InMemoryMEditClient } from '../client';
-import type { ReferenceResult } from '../client';
+import { InMemoryMEditClient } from '../../medit/client';
+import type { ReferenceResult } from '../../medit/client';
 
 function reference(overrides: Partial<ReferenceResult> & { formKey: string }): ReferenceResult {
   return { plugin: 'Fallout4.esm', fieldPath: 'DefaultOutfit', recordType: 'NPC_', editorId: null, origin: 'Fallout4.esm', ...overrides };

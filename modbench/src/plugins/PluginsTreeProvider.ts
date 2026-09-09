@@ -4,7 +4,7 @@ import type { MasterIssue, PluginDiagnosisReport, PluginMetadata } from '../medi
 import type { MEditClient } from '../medit/client';
 import type { Instance, InstanceValue } from '../modmanager/instance';
 import type { PluginEntry } from '../modmanager/model';
-import type { Reporter } from '../modmanager/deployer';
+import type { Reporter } from '../reporter';
 import { dropIndexForMove } from '../modmanager/mo2/pluginsText';
 import type { ImplicitMasterSource } from '../modmanager/commands/plugins';
 import { failurePrefixIcon } from '../failurePrefixIcon';

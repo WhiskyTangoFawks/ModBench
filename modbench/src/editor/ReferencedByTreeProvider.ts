@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { MEditClient, ReferenceResult } from './client';
+import type { MEditClient, ReferenceResult } from '../medit/client';
 
 /** Rows sharing a FormKey collapse into one node, so one referencer reads as one thing rather
  *  than as several. */

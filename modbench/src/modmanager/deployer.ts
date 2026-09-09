@@ -6,12 +6,7 @@ import { copyFile, link, mkdir, readFile, readdir, rename, rm, rmdir, stat, writ
 import { dirname, join, relative, sep } from 'node:path';
 import type { GameDirectory } from './gameDirectory';
 import { foldPath, type FileWinners } from './fileConflictIndex';
-
-/** ADR-0026 surfacing: injected so business logic stays free of vscode types. */
-export type Severity = 'error' | 'warning';
-export interface Reporter {
-  report(severity: Severity, message: string, detail?: string): void;
-}
+import type { Reporter } from '../reporter';
 
 /** A load-order file (plugins.txt/loadorder.txt) copied to where the game reads it. */
 export interface LoadOrderDeployment {

@@ -2,7 +2,8 @@
 // Winners come from the Instance, not a fresh walk, so deploy can't disagree with the trees.
 
 import { join } from 'node:path';
-import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from '../deployer';
+import { deploy, isDeployed, purge, type LoadOrderDeployment } from '../deployer';
+import type { Reporter } from '../../reporter';
 import type { FileWinners } from '../fileConflictIndex';
 import type { GameDirectory } from '../gameDirectory';
 
