@@ -241,9 +241,10 @@ there is no separate load-order step.
   worldspace/interior-cell hierarchy (the interior-cell listing itself still pages), and record
   nodes, every one of a type in a single call (see Record navigation below).
 - **Expanding decides content, never shape.** A row whose plugin the load order does not hold
-  answers one "still indexing" node (or, if the client cannot answer at all, the record browser's
-  own error node) rather than opening onto an empty list, which would read as "this plugin has no
-  records" (ADR-0026).
+  answers one "still indexing" node — or, if the client cannot answer at all, or the load order
+  has already given up on that plugin (see Load-failure decoration below), the record browser's
+  own error node — rather than opening onto an empty list, which would read as "this plugin has
+  no records" (ADR-0026).
 - **Disabled plugins expand and browse like any other.** The load order indexes every `plugins.txt`
   line, enabled or disabled; the `*` prefix is *participation* — whether the plugin competes for
   winner — not whether it is loaded. A disabled plugin can never be the winning record for a
@@ -512,8 +513,9 @@ bytes cannot be read at all has no record identity to hang a parse status on —
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeProvider` decorates it with its
 recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;
-the row stays collapsible but answers "still indexing" on expand, since a plugin that never
-indexed has nothing to expand into. The existing
+the row stays collapsible but answers the error node on expand, carrying the same reason — never
+"still indexing", which would promise a completion a plugin the load order gave up on will never
+reach (ADR-0026). The existing
 reconcile toast (`EditingController.putLoadOrder`, one aggregated warning per load) is
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.

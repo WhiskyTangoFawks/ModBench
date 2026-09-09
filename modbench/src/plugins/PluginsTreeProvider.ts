@@ -15,6 +15,7 @@ const DND_MIME = 'application/vnd.medit.pluginlist-node';
 // mEdit is always running (target-architecture.md); reaching this means the tree has nothing
 // held from it at all, which reads to the user the same as a disconnect.
 const NOT_CONNECTED = 'mEdit is not connected.';
+const notConnected = (): [ErrorNode] => [new ErrorNode(NOT_CONNECTED)];
 
 // Hoisted out of the constructor so an omitted dependency is not a fresh closure per instance.
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
@@ -310,12 +311,17 @@ export class PluginsTreeProvider
     const file = pluginFileOf(element);
     if (file === undefined) return []; // EmptyNode: no plugin to expand into
     // ADR-0035: never an empty list — that would read as "no records" (ADR-0026).
-    if (this.heldFiles === undefined) return [new ErrorNode(NOT_CONNECTED)];
-    if (!this.heldFiles.has(file.toLowerCase())) return [new IndexingNode()];
+    if (this.heldFiles === undefined) return notConnected();
+    if (!this.heldFiles.has(file.toLowerCase())) {
+      // A plugin the load order gave up on will never be reached by a later tick — saying
+      // "still indexing" would promise a completion that is not coming (ADR-0026).
+      const failure = this.loadFailures.get(file.toLowerCase());
+      return [failure !== undefined ? new ErrorNode(failure) : new IndexingNode()];
+    }
     // Deliberately not the row's own `origin`: a stated origin means "the copy the load order
     // does not name" downstream, which would make every record row read-only. The backend
     // resolves a load-order filename itself.
-    return this.records?.getPluginChildren(file) ?? [new ErrorNode(NOT_CONNECTED)];
+    return this.records?.getPluginChildren(file) ?? notConnected();
   }
 
   private async rows(): Promise<PluginListNode[]> {

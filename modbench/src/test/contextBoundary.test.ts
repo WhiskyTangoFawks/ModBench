@@ -43,7 +43,12 @@ const SHARED_ACTIVATION_STATE = ['session.ts'];
 // tripping the blunt medit-path check as a false positive.
 const MEDIT_PATH_FALSE_POSITIVE = ['workspaceConfig.ts'];
 
-const COMPOSITION_ROOT = [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE];
+// Wires a TreeView checkbox event to the Plugins view's own Mod-Management API
+// (`setPluginEnabled`/`invalidate`) — composition-root glue carrying no record vocabulary.
+const CHECKBOX_HANDLER_WIRING = ['pluginCheckboxHandler.ts'];
+
+const COMPOSITION_ROOT =
+  [...WIRES_EVERY_CONTEXT, ...SHARED_ACTIVATION_STATE, ...MEDIT_PATH_FALSE_POSITIVE, ...CHECKBOX_HANDLER_WIRING];
 
 // Test names, descriptions and fixtures are prose and corpus data, never a decision.
 function isTestSupport(relativePath: string): boolean {
@@ -68,7 +73,13 @@ function domainVocabIn(text: string): string[] {
   return [...code.matchAll(/\b(records?|formkeys?|recordtypes?|editorids?)\b(?!\s*<)/gi)].map((m) => m[0]);
 }
 
-interface Offense { path: string; medit: string[]; vocab: string[] }
+interface Offense { path: string; crossContext: string[]; vocab: string[] }
+
+// A path segment, never a substring: `mo2/pluginsText` must not match `plugins` the way a blunt
+// `.includes()` would.
+function importsFromDir(imports: string[], dir: string): string[] {
+  return imports.filter((s) => s.split('/').includes(dir));
+}
 
 // Shared by the production assertion and the self-tests below, so a broken traversal — the wrong
 // root, a directory silently skipped — fails both the same way, not just the regexes.
@@ -78,9 +89,12 @@ function findOffenders(root: string): Offense[] {
     const relPath = relative(root, path);
     if (isExcluded(relPath)) continue;
     const text = readFileSync(path, 'utf8');
-    const medit = importsOf(text).filter((s) => s.includes(EDITING_DIR));
+    const imports = importsOf(text);
+    // Both contexts a MO2-side file must never reach into: Editing's client, and the Plugins
+    // view's record browser, which carries record types and FormKeys just as directly.
+    const crossContext = [...importsFromDir(imports, EDITING_DIR), ...importsFromDir(imports, PLUGINS_VIEW_DIR)];
     const vocab = domainVocabIn(text);
-    if (medit.length > 0 || vocab.length > 0) offenses.push({ path: relPath, medit, vocab });
+    if (crossContext.length > 0 || vocab.length > 0) offenses.push({ path: relPath, crossContext, vocab });
   }
   return offenses;
 }
@@ -111,8 +125,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(EDITING_DIR, GENERATED_DIR, 'api.ts'))).toBe(true);
   });
 
-  it('the composition-root allowlist is exactly these four files', () => {
-    expect(COMPOSITION_ROOT.sort()).toEqual(['extension.ts', 'session.ts', 'toolbox.ts', 'workspaceConfig.ts']);
+  it('the composition-root allowlist is exactly these five files', () => {
+    expect(COMPOSITION_ROOT.sort()).toEqual(
+      ['extension.ts', 'pluginCheckboxHandler.ts', 'session.ts', 'toolbox.ts', 'workspaceConfig.ts']);
   });
 
   // Each plant runs through the one shared findOffenders(), over a real temporary tree rather
@@ -140,6 +155,27 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
         mkdirSync(join(root, 'modmanager'), { recursive: true });
         writeFileSync(join(root, 'modmanager', 'DownloadsProvider.ts'), "import { ApiPluginRepository } from '../medit/PluginRepository';\n");
         expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'DownloadsProvider.ts')]);
+      });
+    });
+
+    // The hole this closes: a Plugins-view import drags record types and the record browser into
+    // the MO2 side exactly as a medit/ import would, and `.includes('medit')` alone never sees it.
+    it('a Plugins-view import planted in a MO2-shaped file is caught', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'modmanager'), { recursive: true });
+        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { ErrorNode } from '../plugins/PluginTreeProvider';\n");
+        expect(findOffenders(root).map((o) => o.path)).toEqual([join('modmanager', 'ModListProvider.ts')]);
+      });
+    });
+
+    // The rival this guards: matching `plugins` as a substring rather than a path segment would
+    // also flag a genuinely MO2-side module whose name merely contains the word.
+    it('an MO2-side module named pluginsText is not caught by the Plugins-view check', () => {
+      withPlantedTree((root) => {
+        mkdirSync(join(root, 'modmanager', 'mo2'), { recursive: true });
+        writeFileSync(join(root, 'modmanager', 'mo2', 'pluginsText.ts'), 'export const x = 1;\n');
+        writeFileSync(join(root, 'modmanager', 'ModListProvider.ts'), "import { parsePlugins } from './mo2/pluginsText';\n");
+        expect(findOffenders(root)).toEqual([]);
       });
     });
 

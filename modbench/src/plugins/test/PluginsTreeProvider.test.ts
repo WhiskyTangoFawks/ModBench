@@ -1707,16 +1707,17 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
     expect(item.tooltip).toContain('FormatException: bad subrecord at offset 12');
   });
 
-  // The row stays put — plugins.txt lists it, and stays collapsible — but it never got indexed,
-  // so expanding it answers "still indexing", the same as any other row the load order never
-  // reported, rather than an empty list.
-  it('never abandons the row: it stays collapsible, but expands to "still indexing" — it was never indexed', async () => {
+  // A plugin the load order gave up on is never reached by a later tick, so "still indexing"
+  // would promise a completion that never comes (ADR-0026) — it answers the error node instead.
+  it('never abandons the row: it stays collapsible, but expands to the error node — it will never be indexed', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+    const children = await h.tree.getChildren(row);
+    expect(children).toEqual([expect.any(ErrorNode)]);
+    expect((children[0] as vscode.TreeItem).tooltip).toBe('Malformed record');
   });
 
   it('matches the plugin key case-insensitively', async () => {

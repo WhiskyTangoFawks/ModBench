@@ -47,10 +47,10 @@ not a choice a user makes; participation is three choices they already made in M
 - Rows are `plugins.txt`'s lines, in Plugin load order.
 - **mEdit is always running, so the tree has no mode for its absence** (`target-architecture.md`):
   every row is collapsible from launch, with no chevron gained or lost. Expanding decides content,
-  never shape: the record browser's own error node when the client cannot answer, a "still
-  indexing" node when the backend has not indexed that plugin yet, or its records — never an empty
-  list, which would read as "this plugin has no records" (ADR-0026). No fact from the backend is
-  read to decide whether a row is collapsible.
+  never shape: the record browser's own error node when the client cannot answer or the load order
+  has given up on that plugin, a "still indexing" node when it genuinely has not been reached yet,
+  or its records — never an empty list, which would read as "this plugin has no records"
+  (ADR-0026). No fact from the backend is read to decide whether a row is collapsible.
 - **The leading slot answers exactly one question — "can you change whether this loads?"**: a
   checkbox where you decide, a lock on an implicit master that is forced on, nothing at all on a
   file that is not in the load order. Read-only-for-editing is never an icon; it is conveyed by
