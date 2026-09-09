@@ -73,27 +73,42 @@ describe('clearTreeWhenBackendDies', () => {
 });
 
 describe('refreshMatchingPlugins', () => {
+  const channel = () => ({ error: vi.fn() });
+
   it('re-derives the match map, lowercased, from the tree own re-read', async () => {
     const session = makeSession([
       { name: 'Alpha.esp', hasMatchingRecords: true },
       { name: 'Beta.esp', hasMatchingRecords: false },
     ]);
+    const ch = channel();
 
-    await refreshMatchingPlugins(session);
+    await refreshMatchingPlugins(session, ch);
 
     expect(session.pluginsTree.refreshFacts).toHaveBeenCalled();
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(
       new Map([['alpha.esp', true], ['beta.esp', false]]),
     );
+    expect(ch.error).not.toHaveBeenCalled();
   });
 
   it('a failed read degrades to "no data" — matches everywhere — rather than freezing stale matches', async () => {
     const session = makeSession();
     session.pluginsTree.refreshFacts.mockResolvedValue(undefined);
+    const ch = channel();
 
-    await refreshMatchingPlugins(session);
+    await refreshMatchingPlugins(session, ch);
 
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
+    // ADR-0026: the read failed, so it reads as an error, not as a routine info line.
+    expect(ch.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('a workspace with no tree is not a failure, and reports none', async () => {
+    const ch = channel();
+
+    await refreshMatchingPlugins({}, ch);
+
+    expect(ch.error).not.toHaveBeenCalled();
   });
 });
 

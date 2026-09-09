@@ -128,7 +128,7 @@ export function activate(context: vscode.ExtensionContext) {
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive: session.setFilterActive,
-    refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
+    refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, outputChannel); },
     // Fires on every completed reconcile: tells every open record panel to refetch its
     // comparison, and (re-)registers every tracked mod's repo with `vscode.git`.
     notifyConflictsComputed: () => {
@@ -181,7 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, outputChannel,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
-      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
+      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, outputChannel); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
     }),
   );

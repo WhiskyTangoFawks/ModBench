@@ -101,10 +101,11 @@ every plugin-keyed fact and, through the record browser it delegates to, for a r
 (record types, records, conflicts, spatial navigation). There is no composite and no rule
 splitting ownership of one tree between two contexts.
 
-Plugin identity across the seam is origin plus filename
-([ADR-0036](0036-plugin-identity-is-origin-plus-filename.md)): a row carries the origin of the
-copy it stands for, every fact joins on it, and a row the client's answer names no matching copy
-for falls back to the filename alone. The record browser still speaks none of Mod Management's
+A row carries the origin of the copy it stands for, and the facts from `GetPlugins()` and the
+malformed-plugin scan join on origin plus filename
+([ADR-0036](0036-plugin-identity-is-origin-plus-filename.md)), falling back to the filename when
+the answer names no matching copy. Load failures are matched by filename alone: `PluginLoadFailure`
+carries no origin. The record browser still speaks none of Mod Management's
 vocabulary — enforced by `src/test/contextBoundary.test.ts`, which reads the source text.
 ADR-0027's conflation objection is met by that structural check, not by assertion.
 
