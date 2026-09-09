@@ -180,7 +180,7 @@ public sealed class CreateRecordHandlerTests
     public void CreateRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
         using var mod = SourceEditFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(mod.ModFolder, "unanswered");
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "New");
 

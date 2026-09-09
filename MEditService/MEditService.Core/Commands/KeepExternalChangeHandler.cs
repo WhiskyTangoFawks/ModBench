@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -13,9 +14,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>Keep as My Edit's handler (ADR-0046 invariant 3): the binary lands as working-tree dirt
-/// on the records it touched. Dirt that disagrees with the incoming value refuses the whole
-/// gesture.</summary>
+/// <summary>Keep as My Edit's handler (ADR-0046 invariant 3): every plugin's binary lands as
+/// working-tree dirt, and every changed tracked file stages as-is. A collision on either
+/// refuses the whole mod.</summary>
 public sealed class KeepExternalChangeHandler
 {
     private readonly WriteTargets _targets;
@@ -27,24 +28,85 @@ public sealed class KeepExternalChangeHandler
         WriteTargets targets, SchemaReflector reflector, ILogger<KeepExternalChangeHandler> logger) =>
         (_targets, _reflector, _logger) = (targets, reflector, logger);
 
-    public ExternalChangeLandResult Keep(string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease)
+    public ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredCopy> plugins, GameRelease gameRelease)
     {
         var repository = SourceRepository.Open(modFolder, gameRelease)
             ?? throw new InvalidOperationException($"'{modFolder}' is not tracked, so it has no source to land on.");
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var schemas = _reflector.GetSchemas(gameRelease);
-        var pluginName = plugin.Name;
 
-        // Keyed by the record, not its path: an external EditorID change moves a record's file.
-        // First document wins a FormKey two claim — Compile refuses such a tree; refusing Keep over
-        // it too would help nobody.
+        var touchedByPlugin = new Dictionary<string, List<TouchedRecord>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var plugin in plugins)
+            touchedByPlugin[plugin.Name] = TouchedRecordsFor(repository, new PluginKey(plugin.Name, plugin.Origin), plugin.Path, gameRelease, codec, schemas);
+
+        var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
+        var stagedAlready = trackedFileChanges.Where(c => c.StagedAlready).ToList();
+
+        var colliding = touchedByPlugin.Values.SelectMany(t => t)
+            .Where(t => !string.Equals(t.CurrentText, t.BaselineText, StringComparison.Ordinal)
+                     && !string.Equals(t.CurrentText, t.IncomingText, StringComparison.Ordinal))
+            .ToList();
+        if (colliding.Count > 0 || stagedAlready.Count > 0)
+        {
+            return ExternalChangeLandResult.Refused(CollisionMessage(modFolder, colliding, stagedAlready));
+        }
+
+        var landed = new List<string>();
+        foreach (var plugin in plugins)
+        {
+            var pluginKey = new PluginKey(plugin.Name, plugin.Origin);
+            foreach (var t in touchedByPlugin[plugin.Name])
+            {
+                repository.Put(pluginKey, new SourceDocument(t.FormKey, t.At.RecordType, t.At.EditorId, t.IncomingText));
+
+                // A flat record's leaf name carries its EditorID, so an external rename moves its file
+                // and leaves no duplicate behind; a container's directory keeps the name the tree gave it.
+                if (t.Renameable) _targets.RenameTo(repository, pluginKey, t.At, t.IncomingEditorId);
+
+                landed.Add(t.FormKey);
+            }
+
+            // The working tree now corresponds to this binary — atRef: null snapshots it as it stands,
+            // as Save & Compile parks.
+            var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(plugin.Path)));
+            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef: null, binarySha256);
+        }
+
+        // Index matches the working tree for every changed tracked file, so the same bytes cannot
+        // re-raise the question next load.
+        SourceRepository.StageTrackedFileChanges(modFolder, trackedFileChanges);
+        ExternalChangeDeferral.Clear(modFolder);
+
+        return ExternalChangeLandResult.Success(landed);
+    }
+
+    private static string CollisionMessage(string modFolder, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
+    {
+        var parts = new List<string>();
+        if (colliding.Count > 0)
+            parts.Add($"record(s) the external change also touched — {string.Join(", ", colliding.Select(c => c.FormKey))}");
+        if (stagedAlready.Count > 0)
+            parts.Add($"tracked file(s) already dirty in the index — {string.Join(", ", stagedAlready.Select(c => c.RelativePath))}");
+
+        return $"{Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar))} has uncommitted working-tree changes on " +
+            $"{string.Join(" and ", parts)}. Commit or revert them, then answer the external-change question again.";
+    }
+
+    // Keyed by the record, not its path: an external EditorID change moves a record's file. First
+    // document wins a FormKey two claim — Compile refuses such a tree; refusing Keep over it too
+    // would help nobody.
+    private List<TouchedRecord> TouchedRecordsFor(
+        SourceRepository repository, PluginKey plugin, string pluginPath, GameRelease gameRelease,
+        RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        var pluginName = plugin.Name;
         var baselineByFormKey = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var document in repository.ReadAll(plugin, SourceRepository.LastCompileRef(pluginName)))
             baselineByFormKey.TryAdd(document.FormKey, document.Body);
 
         // Keep only runs against a tracked plugin, so the mod-folder-only ForRead overload applies.
         var deepParsed = ModFactory.ImportSetter(
-            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, LocalizedStrings.ForRead(modFolder));
+            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, LocalizedStrings.ForRead(repository.ModFolder));
         var touched = new List<TouchedRecord>();
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
@@ -97,34 +159,7 @@ public sealed class KeepExternalChangeHandler
                 baselineText));
         }
 
-        var colliding = touched
-            .Where(t => !string.Equals(t.CurrentText, t.BaselineText, StringComparison.Ordinal)
-                     && !string.Equals(t.CurrentText, t.IncomingText, StringComparison.Ordinal))
-            .ToList();
-        if (colliding.Count > 0)
-        {
-            return ExternalChangeLandResult.Refused(
-                $"{pluginName} has uncommitted working-tree changes on record(s) the external change also " +
-                $"touched — {string.Join(", ", colliding.Select(c => c.FormKey))}. Commit or revert them, then " +
-                "answer the external-change question again.");
-        }
-
-        foreach (var t in touched)
-        {
-            repository.Put(plugin, new SourceDocument(t.FormKey, t.At.RecordType, t.At.EditorId, t.IncomingText));
-
-            // A flat record's leaf name carries its EditorID, so an external rename moves its file and
-            // leaves no duplicate behind; a container's directory keeps the name the tree gave it.
-            if (t.Renameable) _targets.RenameTo(repository, plugin, t.At, t.IncomingEditorId);
-        }
-
-        // The working tree now corresponds to this binary — atRef: null snapshots it as it stands, as
-        // Save & Compile parks.
-        var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath)));
-        SourceRepository.ParkCompileSnapshot(modFolder, pluginName, atRef: null, binarySha256);
-        ExternalChangeDeferral.Clear(modFolder, pluginName);
-
-        return ExternalChangeLandResult.Success([.. touched.Select(t => t.FormKey)]);
+        return touched;
     }
 
     // At is where the tree holds the record now; IncomingEditorId is what the binary calls it, which

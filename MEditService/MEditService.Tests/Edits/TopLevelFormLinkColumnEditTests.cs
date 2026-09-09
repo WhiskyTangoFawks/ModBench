@@ -85,7 +85,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     [Fact]
     public void EditField_TopLevelFormLinkColumn_Refuses_WhileExternalChangeDeferralIsUnanswered()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
 
         var result = Service().Set(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json($"\"{_mod.Race}\""));
 

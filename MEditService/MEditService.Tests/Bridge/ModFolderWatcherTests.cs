@@ -73,12 +73,12 @@ public sealed class ModFolderWatcherTests
             var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
             using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
             watcher.Watch(modFolder, "Test.esp", pluginPath);
-            Assert.Null(ExternalChangeDeferral.Unanswered(modFolder, "Test.esp"));
+            Assert.Null(ExternalChangeDeferral.Unanswered(modFolder));
 
             File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
             WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
 
-            var question = ExternalChangeDeferral.Unanswered(modFolder, "Test.esp");
+            var question = ExternalChangeDeferral.Unanswered(modFolder);
             Assert.NotNull(question);
             Assert.Contains("Test.esp", question, StringComparison.Ordinal);
         }

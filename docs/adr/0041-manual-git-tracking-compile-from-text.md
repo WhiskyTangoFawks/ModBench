@@ -123,14 +123,21 @@ map built by one token scan of the tree, validated on use rather than by a file 
 container likewise diffs two whole-mod deserializations structurally. Proposed and declined
 twice; this paragraph is the standing answer.
 
-**External change flows through one dialog.** A bridge assembly hosted in the backend process
-(watch / deserialize / compile; knows nothing of load orders or the DB) plus the load-time hash
-check observe a tracked binary changing outside Modbench. One dialog asks the only human
-question: upstream update (pristine source committed to `main` as a new baseline, then the edit
-branch rebased onto it in the same gesture — clean replays proceed, conflicts open in VS Code's
-native merge editor) or your own edit (working-tree dirt; commit or discard as usual). **Refusal
-posture follows git**: a rebase over uncommitted dirt refuses, naming the paths; commit/stash/discard
-are the user's gestures.
+**External change flows through one dialog, and the answer is per mod.** A bridge assembly hosted
+in the backend process (watch / deserialize / compile; knows nothing of load orders or the DB)
+plus the load-time hash check observe a tracked plugin's bytes changing outside Modbench, or a
+tracked file outside `source/` differing from git's own view of the edit branch (Everything only —
+Edits' `.gitignore` makes this empty by construction). Deferral is per mod folder: an unanswered
+mod refuses edits on every plugin it holds, not just the one whose bytes raised the question. One
+dialog asks the only human question, and either answer covers every plugin the mod holds and every
+changed tracked file: upstream update (each plugin re-serialized, plus every changed tracked file's
+current bytes or its deletion, committed to `main` as one new baseline, then the edit branch
+rebased onto it in the same gesture — clean replays proceed, conflicts open in VS Code's native
+merge editor) or your own edit (working-tree dirt; a changed tracked file stages as-is, so a plain
+`git status` cannot re-raise the same bytes). **Refusal posture follows git**: a rebase over
+uncommitted dirt in the source tree refuses, naming the paths — a tracked file outside it rides
+`--autostash`, since an answer already staged or matched it; Keep refuses over a tracked file
+already staged from an earlier, unresolved answer, naming the path.
 
 **The native git UI is the review surface.** The extension calls `vscode.git`'s
 `openRepository(uri)` for each tracked mod in the load order (`extensionDependencies:

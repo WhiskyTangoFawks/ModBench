@@ -132,9 +132,9 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<UnansweredExternalChangeResponse>>();
 
-        // Absorb Upstream Update, which rebases the edit branch onto the new baseline it commits.
-        // 200 either way — a refusal is the same typed-result posture Compile already established.
-        app.MapPost("/plugins/{plugin}/external-change/absorb", AbsorbExternalChange)
+        // Absorb Upstream Update, origin-scoped: the mod is the unit of a baseline, not one plugin
+        // in it. Rebases the edit branch onto the new baseline it commits.
+        app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)
             .WithName("AbsorbExternalChange")
             .WithTags(Tag)
             .Produces<ExternalChangeActionResponse>()
@@ -142,9 +142,9 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Keep as My Edit. Same-record collision is ExternalChangeActionResponse.Succeeded ==
-        // false with RefusalReason naming the records — never an HTTP error.
-        app.MapPost("/plugins/{plugin}/external-change/keep", KeepExternalChange)
+        // Keep as My Edit, origin-scoped. A collision (a record or an already-staged tracked file)
+        // is ExternalChangeActionResponse.Succeeded == false naming it — never an HTTP error.
+        app.MapPost("/plugins/external-change/keep", KeepExternalChange)
             .WithName("KeepExternalChange")
             .WithTags(Tag)
             .Produces<ExternalChangeActionResponse>()
@@ -327,12 +327,19 @@ public static class PluginEndpoints
     // question with an empty Origin rather than dropping it, since the question is still real.
     internal static IResult ExternalChangeStatus(ModFolderWatcher watcher, IndexProjector index)
     {
-        // Projected once, not per question: the whole list is answered against one value.
+        // Grouped per mod folder, not per plugin: one answer resolves every plugin the mod holds.
         var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
-        var responses = watcher.Unanswered().Select(p =>
-            new UnansweredExternalChangeResponse(
-                p.PluginName, OriginOfExternalChange(loadOrder, p.ModFolder, p.PluginName),
-                p.Classification.MetaChanged, p.Classification.OldVersion, p.Classification.NewVersion))
+        var responses = watcher.Unanswered()
+            .GroupBy(p => p.ModFolder, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var first = group.First();
+                var origin = OriginOfExternalChange(loadOrder, first.ModFolder, first.PluginName);
+                return new UnansweredExternalChangeResponse(
+                    origin, [.. group.Select(p => p.PluginName)],
+                    group.Any(p => p.Classification.MetaChanged),
+                    first.Classification.OldVersion, first.Classification.NewVersion);
+            })
             .ToList();
         return Results.Ok(responses);
     }
@@ -344,75 +351,86 @@ public static class PluginEndpoints
             copy.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
             && ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
-    // Absorb Upstream Update. The plugin name and origin resolve the target the same way
-    // Compile does; GameRelease comes off the loaded load order, never guessed.
+    // Absorb Upstream Update, origin-scoped: every plugin the mod holds is re-parsed together, so
+    // the baseline it commits covers the whole mod in one go.
     internal static IResult AbsorbExternalChange(
-        string plugin, ExternalChangeActionRequest req, IndexProjector index, AbsorbExternalChangeHandler handler,
+        ExternalChangeActionRequest req, IndexProjector index, AbsorbExternalChangeHandler handler,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var decoded = Uri.UnescapeDataString(plugin);
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (matched, loadOrder) = ResolveAnyPhysicalCopy(index, req.Origin, decoded, logger);
-        var modFolder = matched is null ? null : ModFolders.TrackedOf(loadOrder, new PluginKey(matched.Name, matched.Origin));
+        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(index, req.Origin, logger);
         if (modFolder is null)
-            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the load order.", statusCode: 503);
-        var pluginPath = matched!.Path;
+            return Results.Problem($"'{req.Origin}' is not a tracked mod in the load order.", statusCode: 503);
 
         try
         {
-            var result = handler.Absorb(modFolder, decoded, pluginPath, loadOrder);
+            var result = handler.Absorb(modFolder, plugins, loadOrder);
             if (result.Applied)
             {
-                watcher.MarkAnswered(modFolder, decoded);
-                watcher.Watch(modFolder, decoded, pluginPath);
+                watcher.MarkAnswered(modFolder);
+                foreach (var plugin in plugins) watcher.Watch(modFolder, plugin.Name, plugin.Path);
             }
             var rebase = result.Rebase is { } r ? new RebaseResponse(r.Outcome, r.RefusalReason, r.ConflictedPaths) : null;
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason, rebase));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Could not absorb upstream update for {Plugin}", decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not absorb upstream update for {decoded}: {ex.Message}");
+            logger.LogError(ex, "Could not absorb upstream update for {Origin}", req.Origin);
+            return WriteEndpointMapping.WriteFailure($"Could not absorb upstream update for {req.Origin}: {ex.Message}");
         }
     }
 
-    // Keep as My Edit. A same-record collision is a typed refusal (ExternalChangeLandResult.
-    // Applied == false), not an exception — it travels straight through as a 200, same posture as
-    // Compile's own refusal.
+    // Keep as My Edit, origin-scoped. A collision (a record or an already-staged tracked file) is a
+    // typed refusal, not an exception — it travels through as a 200, same posture as Compile's own.
     internal static IResult KeepExternalChange(
-        string plugin, ExternalChangeActionRequest req, IndexProjector index, KeepExternalChangeHandler handler,
+        ExternalChangeActionRequest req, IndexProjector index, KeepExternalChangeHandler handler,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var decoded = Uri.UnescapeDataString(plugin);
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (matched, loadOrder) = ResolveAnyPhysicalCopy(index, req.Origin, decoded, logger);
-        var modFolder = matched is null ? null : ModFolders.TrackedOf(loadOrder, new PluginKey(matched.Name, matched.Origin));
+        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(index, req.Origin, logger);
         if (modFolder is null)
-            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the load order.", statusCode: 503);
-        var pluginPath = matched!.Path;
+            return Results.Problem($"'{req.Origin}' is not a tracked mod in the load order.", statusCode: 503);
 
         try
         {
-            var result = handler.Keep(
-                modFolder, WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), pluginPath, loadOrder.GameRelease);
+            var result = handler.Keep(modFolder, plugins, loadOrder.GameRelease);
             if (result.Applied)
             {
-                watcher.MarkAnswered(modFolder, decoded);
-                watcher.Watch(modFolder, decoded, pluginPath);
+                watcher.MarkAnswered(modFolder);
+                foreach (var plugin in plugins) watcher.Watch(modFolder, plugin.Name, plugin.Path);
             }
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Could not keep external change for {Plugin}", decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not keep external change for {decoded}: {ex.Message}");
+            logger.LogError(ex, "Could not keep external change for {Origin}", req.Origin);
+            return WriteEndpointMapping.WriteFailure($"Could not keep external change for {req.Origin}: {ex.Message}");
         }
+    }
+
+    // Every plugin the origin's mod folder holds; null ModFolder means untracked or unknown, the
+    // caller's single refusal path for both.
+    private static (IReadOnlyList<RegisteredCopy> Plugins, LoadOrder LoadOrder, string? ModFolder) ResolveTrackedMod(
+        IndexProjector index, string origin, ILogger logger)
+    {
+        var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
+        var plugins = ModFolders.PluginsOfOrigin(loadOrder, origin);
+        if (plugins.Count == 0)
+        {
+            logger.LogWarning("No loaded plugin has origin {Origin}", origin);
+            return ([], loadOrder, null);
+        }
+
+        var modFolder = ModFolders.Of(plugins[0].Origin, plugins[0].Path);
+        return modFolder is null || !SourceRepository.IsTracked(modFolder)
+            ? (plugins, loadOrder, null)
+            : (plugins, loadOrder, modFolder);
     }
 
     // The manual rebase, origin-scoped — the repo is the unit of baselines and rebase, not
@@ -448,22 +466,6 @@ public static class PluginEndpoints
         return Results.Ok(new RebaseResponse(result.Outcome, result.RefusalReason, result.ConflictedPaths));
     }
 
-    // Deliberately not PluginOriginResolver, which filters to load-order members: a copy shadowed
-    // by a higher-priority mod of the same filename still has its question to answer.
-    private static (RegisteredCopy? Plugin, LoadOrder LoadOrder) ResolveAnyPhysicalCopy(
-        IndexProjector index, string origin, string pluginName, ILogger logger)
-    {
-        var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
-        var plugin = loadOrder.Copies.FirstOrDefault(p =>
-            p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)
-            && p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase));
-        if (plugin == null)
-        {
-            logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
-            return (null, LoadOrder.Empty);
-        }
-        return (plugin, loadOrder);
-    }
 }
 
 // Path/Origin are the destination Mod Management's QuickPick resolved (an existing mod, a
@@ -485,13 +487,12 @@ public record TrackResponse(string Origin);
 // means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.
 public record CompileRequest(string Origin, string? Ref);
 
-// One queued external-change question, as the dialog needs it — MetaChanged/OldVersion/
-// NewVersion are evidence the dialog must show, not hide, and MetaChanged alone (never acted on
-// server-side) is what the extension uses to pick the default button.
-public record UnansweredExternalChangeResponse(string Plugin, string Origin, bool MetaChanged, string? OldVersion, string? NewVersion);
+// One queued external-change question, per mod (ADR-0041 amendment): Plugins names every plugin
+// it covers. MetaChanged/OldVersion/NewVersion are evidence the dialog must show, not hide.
+public record UnansweredExternalChangeResponse(string Origin, IReadOnlyList<string> Plugins, bool MetaChanged, string? OldVersion, string? NewVersion);
 
-// Absorb Upstream Update / Keep as My Edit both take just an origin — the plugin name already
-// rides the route, matching CompileRequest's own shape.
+// Absorb Upstream Update / Keep as My Edit are origin-scoped — the mod, not one plugin in it, is
+// the unit of a baseline, matching RebaseRequest's own shape.
 public record ExternalChangeActionRequest(string Origin);
 
 // Rebase is set only by Absorb, which rebases the edit branch onto the new baseline it just

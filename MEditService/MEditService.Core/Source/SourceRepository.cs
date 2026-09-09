@@ -311,15 +311,16 @@ public sealed partial class SourceRepository
         return GitCli.Run(gitDir, workTree, "rev-parse", $"{stashSha.Trim()}^{{tree}}").Trim();
     }
 
-    /// <summary>Absorb's git mechanics: commits the baseline to main by plumbing with no checkout, so the
-    /// edit branch's working tree, index and HEAD stay untouched. Every parked ref named is advanced
-    /// too.</summary>
+    /// <summary>Absorb's git mechanics: commits to main by plumbing, edit branch untouched.
+    /// <paramref name="trackedFileChanges"/> ride along; a deleted one stages as removed.</summary>
     public static void CommitPristineToMain(
-        string modFolder, IReadOnlyList<PristineFile> pristineFiles, TrackProvenance trailers)
+        string modFolder, IReadOnlyList<PristineFile> pristineFiles, TrackProvenance trailers,
+        IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
     {
         GitCli.EnsureOnPath();
         var gitDir = Path.Combine(modFolder, ".git");
         var parentSha = GitCli.Run(gitDir, modFolder, "rev-parse", "refs/heads/main").Trim();
+        var changes = trackedFileChanges ?? [];
 
         // A scratch work tree and index: add/write-tree need some, and the edit branch's real ones may hold
         // the user's own staged dirt.
@@ -334,8 +335,19 @@ public sealed partial class SourceRepository
 
             PristineFileWriter.WriteAll(pristineFiles, scratchDir);
 
+            // A changed file's current bytes ride in; a deleted one is never copied here, so the
+            // `add -A` pathspec below finds it missing and stages the removal.
+            foreach (var change in changes)
+            {
+                if (change.Kind != TrackedFileChangeKind.Modified) continue;
+                var to = Path.Combine(scratchDir, change.RelativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                File.Copy(Path.Combine(modFolder, change.RelativePath), to, overwrite: true);
+            }
+
             var pluginRoots = trailers.BinarySha256ByPlugin.Keys.Select(plugin => ToGitPath(RootFor(plugin))).ToArray();
-            GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, ["add", "-A", "--", .. pluginRoots]);
+            var trackedPaths = changes.Select(c => ToGitPath(c.RelativePath)).ToArray();
+            GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, ["add", "-A", "--", .. pluginRoots, .. trackedPaths]);
             var treeSha = GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "write-tree").Trim();
 
             // commit-tree is plumbing, same posture as ParkCompileSnapshot's own message: no
@@ -354,6 +366,16 @@ public sealed partial class SourceRepository
         }
     }
 
+    /// <summary>Stages every changed tracked file on the real repo — index matches working tree —
+    /// so the same bytes cannot re-raise the question once answered (ADR-0041 amendment).</summary>
+    internal static void StageTrackedFileChanges(string modFolder, IReadOnlyList<TrackedFileChange> changes)
+    {
+        if (changes.Count == 0) return;
+        var gitDir = Path.Combine(modFolder, ".git");
+        var paths = changes.Select(c => ToGitPath(c.RelativePath)).ToArray();
+        GitCli.Run(gitDir, modFolder, ["add", "-A", "--", .. paths]);
+    }
+
     // The same "Key: Value" shape CommitWithTrailers produces via `git commit --trailer` (porcelain),
     // hand-written here because commit-tree (plumbing) has no --trailer flag of its own.
     private static string FormatTrailers(TrackProvenance trailers)
@@ -366,8 +388,8 @@ public sealed partial class SourceRepository
         return string.Join('\n', lines);
     }
 
-    /// <summary>The edit branch replayed onto main's new tip. Refuses over working-tree dirt (ADR-0041).
-    /// Mid-rebase, the staged resolutions are the answer, not dirt, so this delegates to
+    /// <summary>The edit branch replayed onto main's new tip. Refuses over dirt in the source tree;
+    /// a tracked file outside it rides `--autostash` (ADR-0041 amendment). Mid-rebase delegates to
     /// <see cref="ContinueRebase"/>.</summary>
     public static RebaseResult RebaseEditBranch(string modFolder)
     {
@@ -375,7 +397,8 @@ public sealed partial class SourceRepository
         if (RebaseInProgress(gitDir))
             return ContinueRebase(modFolder);
 
-        var dirty = WorkingTreeStatus(modFolder);
+        var sourcePrefix = ToGitPath(RootFolderName) + "/";
+        var dirty = WorkingTreeStatus(modFolder).Where(p => p.StartsWith(sourcePrefix, StringComparison.Ordinal)).ToList();
         if (dirty.Count > 0)
         {
             return RebaseResult.Refused(
@@ -385,7 +408,7 @@ public sealed partial class SourceRepository
 
         // -c core.editor=true: a clean, non-conflicted rebase never needs a message editor, but this
         // keeps the call non-interactive regardless — nothing here has a terminal to hand one to.
-        if (GitCli.TryRun(gitDir, modFolder, out _, "-c", "core.editor=true", "rebase", "refs/heads/main"))
+        if (GitCli.TryRun(gitDir, modFolder, out _, "-c", "core.editor=true", "rebase", "--autostash", "refs/heads/main"))
             return RebaseResult.Clean();
 
         return RebaseResult.Conflicted(ConflictedPaths(gitDir, modFolder));
@@ -412,17 +435,37 @@ public sealed partial class SourceRepository
             ? stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList()
             : [];
 
-    /// <summary>Every path git status considers dirty, staged or not: the refuse-over-dirt checks need
-    /// "any uncommitted change here", which an index-only compare would miss. Empty when untracked
-    /// or clean.</summary>
-    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder)
+    /// <summary>Every path git status considers dirty, staged or not. Empty when untracked or
+    /// clean.</summary>
+    internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder) =>
+        [.. ParseStatus(modFolder).Select(e => e.Path)];
+
+    /// <summary>"Changed tracked files" (ADR-0041 amendment): git status against the edit branch,
+    /// restricted to paths outside the source root. Empty under Edits by construction; lists
+    /// assets under Everything.</summary>
+    public static IReadOnlyList<TrackedFileChange> ChangedTrackedFilesOutsideSource(string modFolder)
+    {
+        var sourcePrefix = ToGitPath(RootFolderName) + "/";
+        return [.. ParseStatus(modFolder)
+            .Where(e => !e.Path.StartsWith(sourcePrefix, StringComparison.Ordinal))
+            .Select(e => new TrackedFileChange(
+                e.Path,
+                e.IndexStatus == 'D' || e.WorktreeStatus == 'D' ? TrackedFileChangeKind.Deleted : TrackedFileChangeKind.Modified,
+                e.IndexStatus is not (' ' or '?')))];
+    }
+
+    // A rename/copy's old path rides a second NUL-terminated token with no code of its own — dropped
+    // below rather than misread as an unrelated entry.
+    private readonly record struct StatusEntry(string Path, char IndexStatus, char WorktreeStatus);
+
+    private static List<StatusEntry> ParseStatus(string modFolder)
     {
         if (!IsTracked(modFolder)) return [];
 
         var gitDir = Path.Combine(modFolder, ".git");
         if (!GitCli.TryRun(gitDir, modFolder, out var stdout, "status", "--porcelain=v1", "-z")) return [];
 
-        var paths = new List<string>();
+        var entries = new List<StatusEntry>();
         var tokens = stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries);
         var i = 0;
         while (i < tokens.Length)
@@ -430,13 +473,10 @@ public sealed partial class SourceRepository
             var entry = tokens[i];
             i++;
             if (entry.Length < 4) continue;
-            paths.Add(entry[3..]);
-            // A rename/copy status ("R "/"C ") carries the old path as a second, separately
-            // NUL-terminated token with no "XY " prefix of its own — skip it rather than misreading
-            // it as an unrelated status line.
+            entries.Add(new StatusEntry(entry[3..], entry[0], entry[1]));
             if (entry[0] is 'R' or 'C') i++;
         }
-        return paths;
+        return entries;
     }
 
     /// <summary>The Binary-SHA256 trailer off the plugin's last-compile ref. Two shapes: the shared
@@ -618,6 +658,17 @@ public sealed record SourceDocument(string FormKey, string RecordType, string? E
 /// <summary>The provenance main's tip carries right now, the read counterpart of
 /// <see cref="TrackProvenance"/>. All optional.</summary>
 public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
+
+/// <summary>One tracked file outside the source root that git status finds dirty — the asset half of
+/// an external change (ADR-0041 amendment). <see cref="StagedAlready"/> is Keep's own collision
+/// signal: a path a prior answer already staged.</summary>
+public sealed record TrackedFileChange(string RelativePath, TrackedFileChangeKind Kind, bool StagedAlready);
+
+public enum TrackedFileChangeKind
+{
+    Modified,
+    Deleted,
+}
 
 /// <summary>A rebase attempt's outcome. <see cref="ConflictedPaths"/> is the extension's cue to open
 /// each path in the native merge editor; the refusal reason is set only when refused.</summary>

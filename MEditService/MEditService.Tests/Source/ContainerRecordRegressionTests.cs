@@ -186,7 +186,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var beforeMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
         TestEditService.AbsorbHandler().Absorb(
-            _fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, LoadOrder.From(_fixture.Index.LoadOrder!));
+            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), LoadOrder.From(_fixture.Index.LoadOrder!));
 
         var afterMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);
@@ -207,7 +207,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
+            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -226,7 +226,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
+            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -249,7 +249,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         });
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
+            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
@@ -271,7 +271,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
 
         var result = TestEditService.KeepHandler().Keep(
-            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
+            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.False(result.Applied);
         Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -298,7 +298,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var handler = TestEditService.KeepHandler(
             b => b.SetMinimumLevel(LogLevel.Trace).AddProvider(new CollectingLoggerProvider(entries)));
 
-        var result = handler.Keep(_fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4);
+        var result = handler.Keep(_fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);

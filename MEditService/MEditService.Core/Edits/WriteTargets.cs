@@ -137,7 +137,7 @@ internal sealed class WriteTargets(
         (modFolder, repository) = (folder, opened);
 
         // Checked before anything else, so the source file is never reached.
-        return ExternalChangeDeferral.Unanswered(folder, plugin.Name) is { } question
+        return ExternalChangeDeferral.Unanswered(folder) is { } question
             ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
             : null;
     }

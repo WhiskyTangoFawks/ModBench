@@ -63,7 +63,7 @@ describe('subscribeExternalChangePending', () => {
     client.emit(pendingEvent());
     await flush();
 
-    expect(client.calls).toContainEqual({ method: 'keepAsMyEdit', args: ['Fixture.esp', 'ModA'] });
+    expect(client.calls).toContainEqual({ method: 'keepAsMyEdit', args: ['ModA'] });
     expect(client.calls.map((c) => c.method)).not.toContain('absorbUpstreamUpdate');
   });
 
@@ -75,7 +75,7 @@ describe('subscribeExternalChangePending', () => {
     client.emit(pendingEvent());
     await flush();
 
-    expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['Fixture.esp', 'ModA'] });
+    expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['ModA'] });
     expect(deps.showError).not.toHaveBeenCalled();
     expect(deps.openMergeEditor).not.toHaveBeenCalled();
   });

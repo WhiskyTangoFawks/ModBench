@@ -51,7 +51,7 @@ public sealed class AbsorbRebaseTests : IDisposable
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
         var result = PluginEndpoints.AbsorbExternalChange(
-            IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
             _mod.Index, TestEditService.AbsorbHandler(), watcher, loggerFactory);
         return Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
     }

@@ -22,8 +22,7 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     [Fact]
     public void EditField_Refuses_WhileAnExternalChangeQuestionIsUnansweredForThePlugin()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName,
-            "Fixture.esp (in FixtureMod) changed outside Modbench.");
+        ExternalChangeDeferral.Set(_mod.ModFolder, "Fixture.esp (in FixtureMod) changed outside Modbench.");
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
@@ -36,7 +35,7 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     public void EditField_Refuses_BeforeTouchingTheSourceFile()
     {
         var before = File.ReadAllText(_mod.NpcSourceFile);
-        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
@@ -48,7 +47,7 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     public void EditField_Refuses_BeforeTheDocumentTheRepositoryServesChanges()
     {
         var before = _mod.Document(_mod.Npc.ToString())!.Body;
-        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
@@ -58,18 +57,21 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     [Fact]
     public void EditField_SucceedsAgain_OnceTheDeferralIsCleared()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
-        ExternalChangeDeferral.Clear(_mod.ModFolder, SourceEditFixture.PluginName);
+        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
+        ExternalChangeDeferral.Clear(_mod.ModFolder);
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
     }
 
+    // The rival this guards: scoping the marker per plugin again, which would let a second plugin's
+    // own deferral leave this one editable — ADR-0041 amendment makes the mod folder the one key.
     [Fact]
-    public void EditField_OnADifferentPlugin_IsUnaffectedByAnotherPluginsDeferral()
+    public void EditField_InADifferentMod_IsUnaffectedByThatModsDeferral()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, "SomeOtherPlugin.esp", "unanswered");
+        using var otherMod = SourceEditFixture.Tracked();
+        ExternalChangeDeferral.Set(otherMod.ModFolder, "unanswered");
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 

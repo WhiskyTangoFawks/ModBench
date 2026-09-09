@@ -145,11 +145,19 @@ public sealed class ModFolderWatcher : IDisposable
         lock (_gate) return [.. _unanswered.Values];
     }
 
-    /// <summary>Drops a plugin's queued question once answered, so a stale question never re-surfaces
-    /// after being resolved through another path such as the load-time check.</summary>
-    public void MarkAnswered(string modFolder, string pluginName)
+    /// <summary>Drops every plugin's queued question for this mod folder once any one of them is
+    /// answered — the deferral is per mod (ADR-0041 amendment), so one answer resolves them all.</summary>
+    public void MarkAnswered(string modFolder)
     {
-        lock (_gate) _unanswered.Remove(Key(modFolder, pluginName));
+        lock (_gate)
+        {
+            foreach (var key in _unanswered
+                .Where(kv => kv.Value.ModFolder.Equals(modFolder, StringComparison.Ordinal))
+                .Select(kv => kv.Key).ToList())
+            {
+                _unanswered.Remove(key);
+            }
+        }
     }
 
     /// <summary>Both triggers — the live watch and the load-time check — get
@@ -160,7 +168,7 @@ public sealed class ModFolderWatcher : IDisposable
         UnansweredExternalChange change;
         lock (_gate)
         {
-            ExternalChangeDeferral.Set(modFolder, pluginName,
+            ExternalChangeDeferral.Set(modFolder,
                 $"{pluginName} (in {Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar))}) changed outside " +
                 "Modbench and is awaiting an answer — Absorb Upstream Update or Keep as My Edit.");
             change = new UnansweredExternalChange(modFolder, pluginName, classification);

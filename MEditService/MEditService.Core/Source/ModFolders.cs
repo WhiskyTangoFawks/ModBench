@@ -31,6 +31,11 @@ public static class ModFolders
             ? Of(copy.Origin, copy.Path)
             : null;
 
+    /// <summary>Every plugin the mod holds, for a gesture the mod is the unit of — Absorb and
+    /// Keep.</summary>
+    public static IReadOnlyList<RegisteredCopy> PluginsOfOrigin(LoadOrder loadOrder, string origin) =>
+        [.. loadOrder.Copies.Where(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))];
+
     /// <summary>"Editing requires tracking; viewing never does" (ADR-0041).</summary>
     public static bool IsEditable(string origin, string pluginPath) =>
         Of(origin, pluginPath) is { } modFolder && SourceRepository.IsTracked(modFolder);

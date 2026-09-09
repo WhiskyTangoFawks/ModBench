@@ -220,6 +220,11 @@ public sealed class ContainerModFixture : IDisposable
 
     public string SourceRoot => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName));
 
+    /// <summary>The mod-level Absorb/Keep gestures take a plugin list, not one plugin — this
+    /// fixture's own single plugin, wrapped.</summary>
+    public static IReadOnlyList<RegisteredCopy> PluginCopies(string pluginPath) =>
+        [new RegisteredCopy(PluginName, ModFolderOrigin, pluginPath, 0, true, true)];
+
     // Any document: a container's RecordData.json, a flat record's own file, or the file that inlines
     // an embedded child.
     public string SourceFileContaining(string editorId) =>

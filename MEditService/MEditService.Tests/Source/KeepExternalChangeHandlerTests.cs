@@ -35,7 +35,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([_mod.Npc.ToString()], result.LandedFormKeys);
@@ -64,8 +64,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         File.Delete(impostor);
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
     }
@@ -85,8 +84,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         mod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         mod.WriteToBinary(PluginPath);
 
-        var result = _mod.KeepHandler.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         var npcsDirectory = Path.Combine(
@@ -101,7 +99,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        _mod.KeepHandler.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var binarySha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(PluginPath)));
@@ -111,12 +109,12 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
     [Fact]
     public void Keep_ClearsAnyUnansweredDeferral()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, SourceEditFixture.PluginName, "unanswered");
+        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
         WriteExternalBinaryChange(0.9f);
 
-        _mod.KeepHandler.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
 
-        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, SourceEditFixture.PluginName));
+        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
     }
 
     [Fact]
@@ -129,7 +127,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
 
         Assert.False(result.Applied);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -158,8 +156,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         firstMod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         firstMod.WriteToBinary(PluginPath);
 
-        var firstLand = _mod.KeepHandler.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        var firstLand = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
         Assert.True(firstLand.Applied, firstLand.RefusalReason);
         var otherNpcPathBeforeDelete = SourceDocumentPath.Of(
             _mod.ModFolder, SourceEditFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
@@ -179,8 +176,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         secondMod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         secondMod.WriteToBinary(PluginPath);
 
-        var secondLand = _mod.KeepHandler.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        var secondLand = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
         Assert.True(secondLand.Applied, secondLand.RefusalReason);
 
         // Exactly one file for UntouchedNpc, at the same path it already had, with its content
@@ -209,8 +205,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         fallout4Mod.Npcs.Add(new Npc(mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = SourceEditFixture.OtherNpcEditorId });
         fallout4Mod.WriteToBinary(pluginPath);
 
-        var result = mod.KeepHandler.Keep(
-            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4);
+        var result = mod.KeepHandler.Keep(mod.ModFolder, mod.PluginCopies(pluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([mod.Npc.ToString()], result.LandedFormKeys);
@@ -229,7 +224,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4);
+        var result = _mod.KeepHandler.Keep(_mod.ModFolder, _mod.PluginCopies(PluginPath), GameRelease.Fallout4);
 
         Assert.True(result.Applied, result.RefusalReason);
     }

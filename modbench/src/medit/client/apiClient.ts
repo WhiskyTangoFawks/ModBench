@@ -26,10 +26,16 @@ export type TrackStatus = Schemas['TrackProgress'];
 export type CompileResult = Schemas['CompileResult'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
-/** One `external-change-pending` notification's shape, reused for the `UnansweredExternalChangeResponse`
- *  wire type it mirrors field-for-field. `metaChanged` only informs the dialog's default button —
- *  trailers never act (ADR-0041); `oldVersion`/`newVersion` must be shown, not hidden. */
-export type UnansweredExternalChange = Schemas['UnansweredExternalChangeResponse'];
+/** One plugin's queued question, transformed from the `external-change-pending` notification's flat
+ *  fields — the notification stays per plugin though `GetExternalChangeStatus` is per mod.
+ *  `metaChanged` only informs the dialog's default button; trailers never act (ADR-0041). */
+export interface UnansweredExternalChange {
+  plugin: string;
+  origin: string;
+  metaChanged: boolean;
+  oldVersion: string | null;
+  newVersion: string | null;
+}
 
 /** Rides `PUT /load-order`'s own response: either reason can newly arise only from a compile this
  *  process drives, or from a restart, and every reconcile observes both (ADR-0026). */
