@@ -513,9 +513,10 @@ export class PluginsTreeProvider
   }
 
   /** Re-reads the facts alone, leaving the held load order as it is — what a record edit or a
-   *  filter change makes stale. `undefined` when the read failed. */
+   *  filter change makes stale. `undefined` when the read failed. Bumps its own generation so a
+   *  later refresh always wins. */
   async refreshFacts(): Promise<PluginMatch[] | undefined> {
-    const generation = this.generation;
+    const generation = ++this.generation;
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
     this.applyPluginFacts(plugins);

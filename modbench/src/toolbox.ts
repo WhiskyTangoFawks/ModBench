@@ -223,10 +223,6 @@ async function applyLoadOrderToTree(
   outputChannel.info(
     `[toolbox] applying reconciled load order to tree: ${held.length} in the load order, ${failures.length} failed, of ${totalPlugins} copies`,
   );
-  // Derived from the same read the tree just applied, so the two can never describe different
-  // reconciles.
-  session.loadOrderSync?.setMatches(
-    new Map(held.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
 }
 
 // Each tick's `totalPlugins` is the backend's count, implicit masters included — a larger number

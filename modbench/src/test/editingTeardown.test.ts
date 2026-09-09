@@ -1,13 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { exitEditing, clearTreeWhenBackendDies, refreshMatchingPlugins, say } from '../editingTeardown';
 
-// The three writers that clear loadOrderSync's record-filter match map — exitEditing, the
-// backend-death listener, and refreshMatchingPlugins' failure path — have no other unit seam:
-// dropping any of the writes leaves the integration suite green.
-
 function makeSession(facts: { name: string; hasMatchingRecords: boolean }[] = []) {
   return {
-    loadOrderSync: { abandon: vi.fn(), setMatches: vi.fn() },
+    loadOrderSync: { abandon: vi.fn() },
     pluginsTree: { clear: vi.fn(), refreshFacts: vi.fn().mockResolvedValue(facts) },
     pluginsTreeView: { message: 'loading…' as string | undefined },
     pluginsNameFilter: { refresh: vi.fn() },
@@ -21,7 +17,7 @@ function makeSession(facts: { name: string; hasMatchingRecords: boolean }[] = []
 describe('exitEditing', () => {
   // The tree's own `clear()` is what takes the chevrons, every badge, and the record rows'
   // immutable and tracked sets; this asserts the writers only this module owns.
-  it('clears every statement about the departing backend: match map, tree, message, filter UI', () => {
+  it('clears every statement about the departing backend: tree, message, filter UI', () => {
     const session = makeSession();
 
     exitEditing(session);
@@ -30,7 +26,6 @@ describe('exitEditing', () => {
     expect(session.pluginsTree.clear).toHaveBeenCalled();
     expect(session.pluginsTreeView.message).toBeUndefined();
     expect(session.setFilterActive).toHaveBeenCalledWith(false);
-    expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.backendManager.stop).toHaveBeenCalled();
     expect(session.loadDiagnostics.clear).toHaveBeenCalled();
   });
@@ -50,13 +45,12 @@ describe('clearTreeWhenBackendDies', () => {
     return { session, tree, statusListener };
   }
 
-  it('an unhealthy status clears the tree, the match map and the diagnoses together', () => {
+  it('an unhealthy status clears the tree and the diagnoses together', () => {
     const { session, tree, statusListener } = wire(false);
 
     statusListener();
 
     expect(tree.clear).toHaveBeenCalled();
-    expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.loadDiagnostics.clear).toHaveBeenCalled();
     expect(session.notificationSubscriber.stop).toHaveBeenCalled();
   });
@@ -67,13 +61,12 @@ describe('clearTreeWhenBackendDies', () => {
     statusListener();
 
     expect(tree.clear).not.toHaveBeenCalled();
-    expect(session.loadOrderSync.setMatches).not.toHaveBeenCalled();
     expect(session.notificationSubscriber.stop).not.toHaveBeenCalled();
   });
 });
 
 describe('refreshMatchingPlugins', () => {
-  it('re-derives the match map, lowercased, from the tree own re-read', async () => {
+  it('re-reads the tree\'s own plugin facts', async () => {
     const session = makeSession([
       { name: 'Alpha.esp', hasMatchingRecords: true },
       { name: 'Beta.esp', hasMatchingRecords: false },
@@ -82,28 +75,11 @@ describe('refreshMatchingPlugins', () => {
     await refreshMatchingPlugins(session);
 
     expect(session.pluginsTree.refreshFacts).toHaveBeenCalled();
-    expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(
-      new Map([['alpha.esp', true], ['beta.esp', false]]),
-    );
   });
 
-  it('a failed read degrades to "no data" — matches everywhere — rather than freezing stale matches', async () => {
-    const session = makeSession();
-    session.pluginsTree.refreshFacts.mockResolvedValue(undefined);
-
-    await refreshMatchingPlugins(session);
-
-    expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
-  });
-
-  // A missing tree is no load order to describe, so nothing is read and nothing is written.
-  it('a workspace with no tree reads nothing and writes no match map', async () => {
-    const session = makeSession();
-    const bare = { loadOrderSync: session.loadOrderSync };
-
-    await refreshMatchingPlugins(bare);
-
-    expect(session.loadOrderSync.setMatches).not.toHaveBeenCalled();
+  // A missing tree is no load order to describe, so nothing is read.
+  it('a workspace with no tree reads nothing', async () => {
+    await expect(refreshMatchingPlugins({})).resolves.toBeUndefined();
   });
 });
 

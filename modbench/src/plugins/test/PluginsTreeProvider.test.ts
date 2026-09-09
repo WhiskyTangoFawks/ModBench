@@ -1233,6 +1233,43 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
+
+  // A row a filter hid must not stay hidden once clear() has thrown away the filter that hid it.
+  it('restores a filter-hidden row once the mEdit closes, not left hidden', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
+    expect(await h.tree.getChildren()).toEqual([]);
+
+    h.tree.clear();
+
+    const rows = await h.tree.getChildren();
+    expect(rows).toHaveLength(1);
+    expect(h.tree.getTreeItem(rows[0]).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+  });
+
+  // A stale answer must lose to a newer request sharing its in-flight window.
+  it('a filter set while the client is answering, then cleared, leaves no stale hidden row', async () => {
+    const h = makeTree([A_ROW()]);
+    await reconcile(h, [held('A.esp')]);
+    expect(await h.tree.getChildren()).toHaveLength(1);
+
+    let resolveSlow!: (plugins: PluginMetadata[]) => void;
+    const slow = new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; });
+    let calls = 0;
+    h.client.getPlugins = vi.fn(() => (++calls === 1 ? slow : Promise.resolve([held('A.esp')])));
+
+    // Setting the filter starts a fact re-read the backend is slow to answer.
+    const filterSet = h.tree.refreshFacts();
+    // The filter clears before that answer lands: a second re-read starts and resolves first.
+    await h.tree.refreshFacts();
+    expect(await h.tree.getChildren()).toHaveLength(1);
+
+    // The slow, now-stale "filtered" answer lands last.
+    resolveSlow([held('A.esp', { hasMatchingRecords: false })]);
+    await filterSet;
+
+    expect(await h.tree.getChildren()).toHaveLength(1);
+  });
 });
 
 // ── children ─────────────────────────────────────────────────────────────────

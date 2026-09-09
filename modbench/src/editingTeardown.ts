@@ -3,7 +3,7 @@ import type { MarkdownString } from 'vscode';
 /** Stated structurally so this file imports from neither bounded context and needs no VS Code
  *  harness to test; the real `ExtensionSession` satisfies it by shape. */
 export interface TeardownSession {
-  loadOrderSync?: { abandon(): void; setMatches(map: Map<string, boolean> | undefined): void };
+  loadOrderSync?: { abandon(): void };
   pluginsTree?: {
     clear(): void;
     refreshFacts(): Promise<{ name: string; hasMatchingRecords: boolean }[] | undefined>;
@@ -46,9 +46,6 @@ export function exitEditing(session: TeardownSession): void {
   // And so does the record filter's whole UI state, through the same single writer every other
   // record-filter change goes through, so `modbench.filterActive` has exactly one writer.
   session.setFilterActive?.(false);
-  // And so does the match set it drove (ADR-0035) — a statement about which held plugins' records
-  // matched, same reasoning as the chevrons just above.
-  session.loadOrderSync?.setMatches(undefined);
   // The Problems entries are statements about a live backend's scan, same as the tree badge
   // `clear()` just cleared.
   session.loadDiagnostics?.clear();
@@ -67,10 +64,7 @@ export function clearTreeWhenBackendDies(
   session.backendManager?.on('status', () => {
     if (session.backendManager?.isHealthy) return;
     tree.clear();
-    // A statement about which plugins the dead backend's records matched must not seed the next
-    // one.
-    session.loadOrderSync?.setMatches(undefined);
-    // And neither must its diagnoses.
+    // Its diagnoses go with it too.
     session.loadDiagnostics?.clear();
     // The subscription is against this dead backend specifically — closing it here covers both
     // a crash and exitEditing's own stop(), which lands here too.
@@ -78,14 +72,10 @@ export function clearTreeWhenBackendDies(
   });
 }
 
-/** Re-reads the tree's own plugin facts, so a row reads the filter active now. The match map is
- *  derived from that same read; `undefined` — the read failed — degrades to "matches
- *  everywhere". */
+/** Re-reads the tree's own plugin facts, so a row reads the filter active now — including the
+ *  record filter's `hasMatchingRecords`, which the tree applies to itself from this same read. */
 export async function refreshMatchingPlugins(session: TeardownSession): Promise<void> {
   const tree = session.pluginsTree;
   if (!tree) return; // no tree means no load order to describe, not a failure
-  const plugins = await tree.refreshFacts();
-  // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
-  session.loadOrderSync?.setMatches(
-    plugins && new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
+  await tree.refreshFacts();
 }

@@ -190,16 +190,15 @@ export function activate(context: vscode.ExtensionContext) {
 
   wireAutoLaunch(session, context, outputChannel, toolbox.enterEditing);
 
-  // Exposed for integration tests — unused in production. The match map has no other externally
-  // observable surface, and a backend going unhealthy needs the real BackendManager.stop().
-  // `instance`: lets a test await past a sequence instead of sleeping.
+  // Exposed for integration tests — unused in production. `backendManager`: a test drives an
+  // unhealthy transition directly, outside exitEditing. `instance`: lets a test await past a
+  // sequence instead of sleeping.
   return {
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
     pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session),
-    loadOrderSync: session.loadOrderSync, backendManager: session.backendManager,
-    instance: toolbox.instance,
+    backendManager: session.backendManager, instance: toolbox.instance,
   };
 }
 

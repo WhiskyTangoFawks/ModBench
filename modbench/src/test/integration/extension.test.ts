@@ -1307,27 +1307,20 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
   });
 });
 
-// ADR-0035 amending ADR-0018: the match map answers for the active filter only, so three
-// writers reset it to undefined rather than answer for a filter or load order that has gone:
-// refreshMatchingPlugins's failure path, exitEditing, and clearTreeWhenBackendDies.
-describe('matchingPlugins resets to undefined once it cannot answer for the active filter or load order', () => {
+// ADR-0035 §Filters: a live record filter is a fact about a live backend, so a crash must
+// forget it too — proving `clearTreeWhenBackendDies`'s own `backendManager.on('status', …)`
+// registration actually fires, not just its extracted logic in isolation.
+describe('a backend that goes unhealthy outside exitEditing forgets an active record filter', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const loadOrderSyncOf = () =>
-    (ext?.exports as { loadOrderSync?: { matches: (file: string) => boolean | undefined } } | undefined)?.loadOrderSync;
-  interface BackendManagerLike {
-    stop(): Promise<void>;
-    listeners(event: string): ((...args: unknown[]) => void)[];
-    removeAllListeners(event: string): void;
-    on(event: string, listener: (...args: unknown[]) => void): void;
-  }
+  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
   const backendManagerOf = () =>
-    (ext?.exports as { backendManager?: BackendManagerLike } | undefined)?.backendManager;
+    (ext?.exports as { backendManager?: { stop(): Promise<void> } } | undefined)?.backendManager;
   let gameDir = '';
 
   before(() => {
     if (!root) return;
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-matching-plugins-'));
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-backend-death-filter-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     fs.writeFileSync(path.join(gameDir, 'Data', 'TestMod.esp'), '');
   });
@@ -1337,8 +1330,6 @@ describe('matchingPlugins resets to undefined once it cannot answer for the acti
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  // Each test starts from "a record filter has already ruled TestMod.esp out", set directly rather
-  // than through a setFilter round trip: which filter produced the map cannot matter to what clears it.
   beforeEach(async () => {
     if (!root) return;
     resetMockBackend();
@@ -1347,8 +1338,9 @@ describe('matchingPlugins resets to undefined once it cannot answer for the acti
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
     await enterEditing();
-    await waitFor('the activation reconcile to record TestMod.esp as filtered out',
-      () => (loadOrderSyncOf()?.matches('testmod.esp') === false ? true : undefined));
+    const tree = pluginsTree()!;
+    await waitFor('the activation reconcile to filter TestMod.esp out',
+      async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? undefined : true));
   });
 
   afterEach(async () => {
@@ -1360,37 +1352,14 @@ describe('matchingPlugins resets to undefined once it cannot answer for the acti
     resetMockBackend();
   });
 
-  it('exitEditing clears the match map, not just the tree', () => {
-    // exitEditing's stop() also fires clearTreeWhenBackendDies's 'status' listener, a second writer
-    // of the same map — detached here so this test proves exitEditing's own write, restored after.
-    const bm = backendManagerOf();
-    const statusListeners = bm?.listeners('status') ?? [];
-    bm?.removeAllListeners('status');
-    try {
-      exitEditing();
-      assert.strictEqual(loadOrderSyncOf()?.matches('testmod.esp'), undefined,
-        'closing mEdit must forget which plugins an old record filter matched, not leave a stale answer for the next session');
-    } finally {
-      for (const listener of statusListeners) bm?.on('status', listener);
-    }
-  });
+  it('a backend that goes unhealthy outside exitEditing restores the row a record filter hid', async () => {
+    const tree = pluginsTree()!;
 
-  it('a failed refresh after clearing the filter drops the stale match rather than keeping it', async () => {
-    getPluginsShouldFail = true;
-    try {
-      await vscode.commands.executeCommand('modbench.clearFilter');
-      const cleared = await waitFor('refreshMatchingPlugins\'s failed GET /plugins to clear the stale match',
-        () => (loadOrderSyncOf()?.matches('testmod.esp') === undefined ? true : undefined));
-      assert.strictEqual(cleared, true);
-    } finally {
-      getPluginsShouldFail = false;
-    }
-  });
-
-  it('a backend that goes unhealthy outside exitEditing still clears the match map', async () => {
     await backendManagerOf()?.stop();
-    assert.strictEqual(loadOrderSyncOf()?.matches('testmod.esp'), undefined,
-      'a dead backend must forget which plugins an old record filter matched, the same as an explicit Close mEdit');
+
+    const restored = await waitFor('clearTreeWhenBackendDies to restore the filtered-out row',
+      async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? true : undefined));
+    assert.strictEqual(restored, true);
   });
 });
 
