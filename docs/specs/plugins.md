@@ -753,9 +753,9 @@ overflow, then native **Collapse All** last.
   this install loads with no `plugins.txt` line, in load order: the release's implicit masters
   present in that folder, then its Creation Club catalog. `HeldPlugins.ForcedNames`, the same
   list a `PUT /load-order` prepends, answered with no load order held. `gameRelease` is Mutagen's
-  own name, translated from `ModOrganizer.ini`'s `gameName` by `mo2/gameRelease.ts` — the two
-  vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no release is one of the
-  unknowables above.
+  own name, translated from `ModOrganizer.ini`'s `gameName` by `mo2/gamePaths.ts`'s
+  `gameReleaseForGame` — the two vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no
+  release is one of the unknowables above.
 - **Load-order-derived master classification** (ADR-0037): `MasterResolution.Classify`
   (`MEditService.Core/Queries/`), a pure function over data the load order already has
   (`LoadOrder.Plugins`, `LoadOrder.Failures`) — no Mutagen re-read. Consulted once per

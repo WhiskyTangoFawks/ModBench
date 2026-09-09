@@ -35,7 +35,7 @@
         "modbench.game.dataFolderPath": {
           "type": "string",
           "default": "",
-          "description": "Override: absolute path to the Fallout 4 Data folder. Leave blank for auto-detect."
+          "description": "Override: absolute path to the game's Data folder. Leave blank for auto-detect."
         },
         "modbench.game.pluginsTxtPath": {
           "type": "string",

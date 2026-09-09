@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { detectWinePrefix } from './medit/GamePathDetector';
 import { EditingController, type LoadOrderProgress } from './medit/EditingController';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
 import { PluginTreeNode, PluginTreeProvider } from './medit/PluginTreeProvider';
@@ -12,7 +11,7 @@ import { PluginListProvider, pluginFileOf, type PluginListNode, type PluginListS
 import { PluginsTreeComposite, type PluginFacts } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
-import { gameReleaseForGame } from './modmanager/mo2/gameRelease';
+import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
 import type { Reporter } from './modmanager/deployer';
 import type { LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
 import { resolvePluginDestination, type PluginDestinationChoice } from './modmanager/pluginDestination';
@@ -30,7 +29,7 @@ import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, clearTreeWhenBackendDies, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
-import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
+import { meditConfig, makeDetectPaths, makeDetectWinePrefix, setMo2InstanceContext } from './workspaceConfig';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 
 // Which plugin files Editing's load order names — the backend's own list, not the snapshot we
@@ -328,8 +327,14 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     },
     buildSnapshot: () => Promise.resolve(snapshot?.plugins ?? []),
     makeProgressHandler: () => makeTreeProgressHandler(session),
+    // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
+    // backend then rejects it visibly instead of quietly answering about the wrong game.
     putLoadOrder: (plugins, dataFolder, signal, onProgress) =>
-      controller.putLoadOrder(plugins, dataFolder, instanceRoot, undefined, { onProgress, signal }),
+      controller.putLoadOrder(
+        plugins, dataFolder, instanceRoot,
+        gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
+        { onProgress, signal },
+      ),
     syncFilterState: () => controller.syncFilterState(),
     applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, heldPluginFiles, failures, outputChannel, totalPlugins),
     presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
@@ -498,7 +503,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // Memoised, and invalidated only when modbench.mods.gameDirectory changes, so no consumer can
   // disagree about which folder is current. Deliberately not an activation-scoped Promise
   // resolved once.
-  const detectPaths = makeDetectPaths();
+  const detectPaths = makeDetectPaths(instanceRoot);
+  const detectWinePrefix = makeDetectWinePrefix(instanceRoot);
   const gameDirResolver = own(createGameDirectoryResolver(
     instanceRoot, meditConfig, detectPaths, detectWinePrefix, vscode.workspace.onDidChangeConfiguration));
   // Never rejects: a null resolution and a misconfigured setting both fold to undefined, so the
@@ -594,6 +600,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     rebuildIndex: () => controller.rebuildIndex(
       instanceRoot,
       (message, detail) => makeReporter(outputChannel, 'refresh').report('error', message, detail),
+      gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
     ),
     sendLoadOrder: () => session.loadOrderSync!.flush(),
     // The Mods tree renders the Instance's value now (ADR-0047): force a real re-read of disk,

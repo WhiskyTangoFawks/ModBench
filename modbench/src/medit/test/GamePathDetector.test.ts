@@ -3,9 +3,16 @@ import * as fs from 'node:fs/promises';
 
 vi.mock('node:fs/promises');
 
-import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseLibraryFoldersVdf, parseRegQuerySteamPath } from '../GamePathDetector';
+import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseLibraryFoldersVdf, parseRegQuerySteamPath, type GameAutodetect } from '../GamePathDetector';
 
+// A fixture, not a platform lock (CLAUDE.md): the real facts come from gamePaths.ts and
+// loadOrderDestination.ts; this module takes them as data and names no game itself.
 const FO4_APP_ID = '377160';
+const FO4: GameAutodetect = {
+  steamAppId: FO4_APP_ID,
+  steamFolderName: 'Fallout 4',
+  loadOrderAppDataFolder: 'Fallout4',
+};
 
 const VDF_WITH_FO4 = `
 "libraryfolders"
@@ -37,17 +44,17 @@ const VDF_WITHOUT_FO4 = `
 `;
 
 describe('parseLibraryFoldersVdf', () => {
-  it('returns library path when FO4 AppID present', () => {
-    const result = parseLibraryFoldersVdf(VDF_WITH_FO4);
+  it('returns library path when the app id is present', () => {
+    const result = parseLibraryFoldersVdf(VDF_WITH_FO4, FO4_APP_ID);
     expect(result).toBe('/mnt/games/steam');
   });
 
-  it('returns null when FO4 AppID absent', () => {
-    const result = parseLibraryFoldersVdf(VDF_WITHOUT_FO4);
+  it('returns null when the app id is absent', () => {
+    const result = parseLibraryFoldersVdf(VDF_WITHOUT_FO4, FO4_APP_ID);
     expect(result).toBeNull();
   });
 
-  it('handles multiple libraries and returns the one containing FO4', () => {
+  it('handles multiple libraries and returns the one containing the app id', () => {
     const vdf = `
 "libraryfolders"
 {
@@ -69,7 +76,7 @@ describe('parseLibraryFoldersVdf', () => {
   }
 }
 `;
-    expect(parseLibraryFoldersVdf(vdf)).toBe('/mnt/games/steam');
+    expect(parseLibraryFoldersVdf(vdf, FO4_APP_ID)).toBe('/mnt/games/steam');
   });
 });
 
@@ -78,11 +85,11 @@ describe('detectGamePaths (Linux)', () => {
     vi.resetAllMocks();
   });
 
-  it('returns correct paths when FO4 library found', async () => {
+  it('returns correct paths when the library is found', async () => {
     vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
-    const result = await detectGamePaths('linux');
+    const result = await detectGamePaths('linux', FO4);
 
     expect(result).not.toBeNull();
     expect(result!.dataFolder).toBe('/mnt/games/steam/steamapps/common/Fallout 4/Data');
@@ -90,10 +97,10 @@ describe('detectGamePaths (Linux)', () => {
     expect(result!.pluginsTxt).toContain('/mnt/games/steam/steamapps/compatdata');
   });
 
-  it('returns null when VDF cannot be read', async () => {
+  it('returns null when the VDF cannot be read', async () => {
     vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
 
-    const result = await detectGamePaths('linux');
+    const result = await detectGamePaths('linux', FO4);
     expect(result).toBeNull();
   });
 });
@@ -105,10 +112,10 @@ describe('detectWinePrefix', () => {
     vi.resetAllMocks();
   });
 
-  it('returns the compatdata pfx root when the FO4 library is found', async () => {
+  it('returns the compatdata pfx root when the library is found', async () => {
     vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
 
-    const result = await detectWinePrefix();
+    const result = await detectWinePrefix(FO4_APP_ID);
 
     expect(result).toBe('/mnt/games/steam/steamapps/compatdata/377160/pfx');
   });
@@ -116,15 +123,15 @@ describe('detectWinePrefix', () => {
   it('returns null when the VDF cannot be read', async () => {
     vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
 
-    const result = await detectWinePrefix();
+    const result = await detectWinePrefix(FO4_APP_ID);
 
     expect(result).toBeNull();
   });
 
-  it('returns null when the VDF has no FO4 library', async () => {
+  it('returns null when the VDF has no matching library', async () => {
     vi.mocked(fs.readFile).mockResolvedValue(VDF_WITHOUT_FO4);
 
-    const result = await detectWinePrefix();
+    const result = await detectWinePrefix(FO4_APP_ID);
 
     expect(result).toBeNull();
   });
@@ -160,7 +167,7 @@ describe('detectWindowsGamePaths', () => {
           '    SteamPath    REG_SZ    C:/Program Files (x86)/Steam\r\n',
       );
 
-    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local');
+    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local', FO4);
 
     expect(result).toEqual({
       dataFolder: 'C:/Program Files (x86)/Steam/steamapps/common/Fallout 4/Data',
@@ -172,7 +179,7 @@ describe('detectWindowsGamePaths', () => {
     const runRegQuery = () =>
       Promise.resolve('ERROR: The system was unable to find the specified registry key or value.\r\n');
 
-    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local');
+    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local', FO4);
 
     expect(result).toBeNull();
   });
@@ -180,7 +187,7 @@ describe('detectWindowsGamePaths', () => {
   it('returns null when the registry query itself fails (no reg.exe, no Steam)', async () => {
     const runRegQuery = () => Promise.reject(new Error('ENOENT: reg'));
 
-    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local');
+    const result = await detectWindowsGamePaths(runRegQuery, 'C:/Users/Wayne/AppData/Local', FO4);
 
     expect(result).toBeNull();
   });
