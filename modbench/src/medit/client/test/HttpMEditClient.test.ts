@@ -16,14 +16,30 @@ function neverFetch(): (input: Request) => Promise<Response> {
   return () => new Promise<Response>(() => {});
 }
 
-function makeClient(fetch: (input: Request) => Promise<Response>, health: 'up' | 'down' = 'up') {
+function makeClient(fetch: (input: Request) => Promise<Response>, health: 'up' | 'down' = 'up', timeoutMs?: number) {
   vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
     const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
     if (health === 'up') cb(Object.assign(new EventEmitter(), { statusCode: 200 }));
     else process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
     return req as any;
   });
-  return new HttpMEditClient({ backend: { port: 5172, pollIntervalMs: 5, pollTimeoutMs: 20 }, fetch });
+  return new HttpMEditClient({ backend: { port: 5172, pollIntervalMs: 5, pollTimeoutMs: 20 }, fetch, timeoutMs });
+}
+
+// A stream response that stays open (a reader on it never settles) — for the notification
+// stream endpoint, whose connection this suite cares about, never its frames.
+function openStreamResponse(): Response {
+  return new Response(new ReadableStream({ start: () => {} }), { status: 200 });
+}
+
+// Dispatches by URL substring — for a test that scripts both the notification stream and one
+// API call through the same injected `fetch`.
+function routedFetch(routes: [match: string, handle: (req: Request) => Promise<Response>][]) {
+  return vi.fn((req: Request) => {
+    const route = routes.find(([match]) => req.url.includes(match));
+    if (!route) return Promise.reject(new Error(`unrouted fetch: ${req.method} ${req.url}`));
+    return route[1](req);
+  });
 }
 
 describe('HttpMEditClient — the process is the client\'s own', () => {
@@ -226,5 +242,158 @@ describe('HttpMEditClient — the not-OK response text', () => {
     );
 
     expect(outcome).toEqual({ applied: false, refusal: 'Unknown', message: 'No load order has been received.' });
+  });
+});
+
+// putLoadOrder's own transport: the wire shape, the wait for the stream, the tick subscription's
+// lifetime, and the two outcomes ('abandoned') that are not WriteRefused-shaped failures.
+describe('HttpMEditClient — putLoadOrder', () => {
+  const plugins = [
+    { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true },
+  ];
+  const reconciledBody = { status: 'reconciled', failures: [], crashRepairOffers: [] };
+
+  it('PUTs the ordered plugin list, game directory and instance root', async () => {
+    let putBody: unknown;
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order', async (req) => { putBody = await req.clone().json(); return jsonResponse(200, reconciledBody); }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    await client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+
+    expect(putBody).toEqual({ plugins, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
+  });
+
+  // The backend publishes its first tick as the PUT lands, so a PUT that outran the stream
+  // would lose every tick published before it connects.
+  it('holds the PUT until the notification stream has connected', async () => {
+    let resolveStream!: (r: Response) => void;
+    const streamPromise = new Promise<Response>((r) => { resolveStream = r; });
+    const putFetch = vi.fn(() => Promise.resolve(jsonResponse(200, reconciledBody)));
+    const fetch = routedFetch([['/notifications/stream', () => streamPromise], ['/load-order', putFetch]]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(putFetch).not.toHaveBeenCalled();
+
+    resolveStream(openStreamResponse());
+    await vi.waitFor(() => expect(putFetch).toHaveBeenCalledTimes(1));
+    await load;
+  });
+
+  it('subscribes to load-order-status while the PUT is in flight, and unsubscribes once it settles', async () => {
+    let pushFrame!: (chunk: Uint8Array) => void;
+    const stream = new ReadableStream<Uint8Array>({ start: (c) => { pushFrame = (chunk) => c.enqueue(chunk); } });
+    let resolvePut!: (r: Response) => void;
+    const putPromise = new Promise<Response>((r) => { resolvePut = r; });
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(new Response(stream, { status: 200 }))],
+      ['/load-order', () => putPromise],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+
+    const onProgress = vi.fn();
+    const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
+    const tick = {
+      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
+      loadOrderStatus: { totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: false, failures: [] },
+    };
+    pushFrame(new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`));
+    await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
+
+    resolvePut(jsonResponse(200, reconciledBody));
+    await load;
+
+    pushFrame(new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(onProgress).toHaveBeenCalledTimes(1); // still 1 — the settled PUT's subscription is gone
+  });
+
+  // The rival this guards: checking `!response.ok` before 409 would read a superseded snapshot
+  // as a plain failure, and the caller would act on a load order a newer snapshot now owns.
+  it('reports a superseded load (409) as abandoned, not a failure', async () => {
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order', () => Promise.resolve(jsonResponse(409, { detail: 'superseded' }))],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    const result = await client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+
+    expect(result).toEqual({ outcome: 'abandoned' });
+  });
+
+  it('reports a deliberately aborted PUT as abandoned, not a failure', async () => {
+    const controller = new AbortController();
+    const fetch = routedFetch([
+      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/load-order', () => {
+        controller.abort();
+        return Promise.reject(new DOMException('This operation was aborted', 'AbortError'));
+      }],
+    ]);
+    const client = makeClient(fetch);
+    await client.start();
+
+    const result = await client.putLoadOrder(
+      plugins, '/game/Data', '/instance', 'Fallout4', { signal: controller.signal },
+    );
+
+    expect(result).toEqual({ outcome: 'abandoned' });
+  });
+});
+
+describe('HttpMEditClient — implicitMasters', () => {
+  it('answers the names the backend reports', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, ['Fallout4.esm', 'ccTest.esl'])));
+    const client = makeClient(fetch);
+
+    await expect(client.implicitMasters('/game/Data', 'Fallout4')).resolves.toEqual(['Fallout4.esm', 'ccTest.esl']);
+  });
+
+  // The rival this guards: degrading to [] on a refusal would read as "no implicit masters" —
+  // indistinguishable from a genuine empty answer, and the reconcile writes on the difference.
+  it('answers undefined, never an empty list, when the backend refuses', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(400, { detail: 'Game directory not found' })));
+    const client = makeClient(fetch);
+
+    await expect(client.implicitMasters('/no/such/Data', 'Fallout4')).resolves.toBeUndefined();
+  });
+
+  it('answers undefined, never an empty list, when the backend is unreachable', async () => {
+    const fetch = vi.fn(() => Promise.reject(new Error('fetch failed')));
+    const client = makeClient(fetch);
+
+    await expect(client.implicitMasters('/game/Data', 'Fallout4')).resolves.toBeUndefined();
+  });
+});
+
+// withTimeout: the race every spatial/record read verb shares. getRecordTypes stands in for all six.
+describe('HttpMEditClient — read timeout', () => {
+  it('rejects a hung read after the configured timeout, aborting the request', async () => {
+    let sawSignal: AbortSignal | undefined;
+    const fetch = vi.fn((req: Request) => {
+      sawSignal = req.signal;
+      return new Promise<Response>(() => {}); // never resolves
+    });
+    const client = makeClient(fetch, 'up', 20);
+
+    await expect(client.getRecordTypes('MyPatch.esp')).rejects.toThrow(/timed out after 20ms/);
+    expect(sawSignal?.aborted).toBe(true);
+  });
+
+  it('does not time out a read that answers before the deadline', async () => {
+    const fetch = vi.fn(() => Promise.resolve(jsonResponse(200, [])));
+    const client = makeClient(fetch, 'up', 20);
+
+    await expect(client.getRecordTypes('MyPatch.esp')).resolves.toEqual([]);
   });
 });

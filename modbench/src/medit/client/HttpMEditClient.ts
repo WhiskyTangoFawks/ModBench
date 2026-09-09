@@ -221,11 +221,14 @@ export class HttpMEditClient implements MEditClient {
     // The POST stays blocking, so progress rides the track-progress notification alongside it.
     const unsubscribe = this.subscribeStatus('track-progress', (event) => event.trackProgress ?? undefined, options.onProgress);
     try {
-      return await this.mutate<TrackResponse>({
+      const result = await this.mutate<TrackResponse>({
         op: `track(${origin})`,
         failMsg: `mEdit: Could not track "${origin}"`,
         post: () => this.apiClient.POST('/plugins/track', { body: { origin, preset } }),
-      }) as TrackResponse | WriteRefused;
+      });
+      // track wires no `onEslContradiction`, `mutate`'s one other source of `undefined` — so this
+      // arm is unreachable on this endpoint's own wire contract (a 2xx always carries a body).
+      return result ?? { refused: true, message: `mEdit: Could not track "${origin}" — the backend answered with no data.` };
     } finally {
       unsubscribe();
     }

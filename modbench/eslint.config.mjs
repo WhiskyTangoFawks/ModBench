@@ -36,6 +36,15 @@ export default tseslint.config(
         },
     },
 
+    // ADR-0012: the mEdit client takes no VS Code types, so chat tool handlers (and its own
+    // in-memory adapter) can call it directly without pulling in the extension host.
+    {
+        files: ['src/medit/client/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { paths: [{ name: 'vscode', message: 'The mEdit client takes no VS Code types (ADR-0012).' }] }],
+        },
+    },
+
     // Extension source (tsconfig.json)
     {
         files: ['src/**/*.ts'],

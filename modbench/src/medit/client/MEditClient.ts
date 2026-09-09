@@ -34,8 +34,9 @@ export type NotificationKind =
  *  type the caller happens to see. */
 export type LoadOrderProgress = LoadOrderStatus;
 
-/** Restated rather than imported: this module belongs to Editing, which imports nothing from the
- *  other context. `slot` is null when no plugins.txt line names this copy. */
+/** Restated rather than imported from Mod Management's own snapshot type: this module belongs
+ *  to Editing, which imports nothing from Mod Management. `slot` is null when no plugins.txt
+ *  line names this copy. */
 export interface LoadOrderPluginInput {
   name: string;
   path: string;

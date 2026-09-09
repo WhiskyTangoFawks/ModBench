@@ -151,7 +151,7 @@ export function activate(context: vscode.ExtensionContext) {
     toolbox,
     {
       dispose: wireExternalChangePending(
-        meditClient, outputChannel, meditClient, treeProvider,
+        meditClient, outputChannel, treeProvider,
         () => { void refreshMatchingPlugins(session); },
       ),
     },

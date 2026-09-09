@@ -77,7 +77,7 @@ export function registerRebaseCommand(
     }
 
     const result = await runRebase({
-      controller: client, openMergeEditor: makeMergeEditorOpener(client, outputChannel),
+      client, openMergeEditor: makeMergeEditorOpener(client, outputChannel),
       showError: (message) => void vscode.window.showErrorMessage(message),
       refreshTree: () => treeProvider.refresh(),
       refreshMatchingPlugins,

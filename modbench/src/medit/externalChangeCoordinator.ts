@@ -7,9 +7,8 @@ import { handleUnanswered, type ShowRebaseOffer } from '../plugins/externalChang
 export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
 
 export interface ExternalChangeCoordinatorDeps {
-  // The three write verbs Keep/Absorb/Rebase dispatch to, narrowed off the port (ADR-0022) —
-  // this module holds no controller.
-  controller: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
+  // The three write verbs Keep/Absorb/Rebase dispatch to, narrowed off the port (ADR-0022).
+  client: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
   showDialog: ShowExternalChangeDialog;
   showRebaseOffer: ShowRebaseOffer;
   openMergeEditor: OpenMergeEditor;

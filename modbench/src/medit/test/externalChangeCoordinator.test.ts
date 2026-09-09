@@ -19,10 +19,10 @@ function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationE
 // before this runs; a call the test never scripted rejects loudly (InMemoryMEditClient's own
 // contract), so a forgotten script fails the test rather than silently no-oping.
 function makeDeps(
-  client: InMemoryMEditClient, overrides: Partial<Omit<ExternalChangeCoordinatorDeps, 'controller'>> = {},
+  client: InMemoryMEditClient, overrides: Partial<Omit<ExternalChangeCoordinatorDeps, 'client'>> = {},
 ): ExternalChangeCoordinatorDeps {
   return {
-    controller: client,
+    client,
     showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON),
     showRebaseOffer: vi.fn().mockResolvedValue(REBASE_LATER_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
@@ -132,7 +132,7 @@ describe('subscribeExternalChangePending', () => {
     client.emit(pendingEvent());
     await flush();
 
-    // The controller has already surfaced the reason; nothing landed, so there is no new baseline
+    // The client has already surfaced the reason; nothing landed, so there is no new baseline
     // to rebase onto.
     expect(deps.showRebaseOffer).not.toHaveBeenCalled();
   });

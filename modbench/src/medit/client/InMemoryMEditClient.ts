@@ -88,6 +88,7 @@ export class InMemoryMEditClient implements MEditClient {
   // disconnected backend's read side.
   disconnected(): void {
     this.queryAnswers.clear();
+    this.queryFailures.clear();
     this.queryQueues.clear();
     this.setStatus('disconnected');
   }

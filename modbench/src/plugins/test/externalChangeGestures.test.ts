@@ -3,9 +3,9 @@ import { runRebase, rebaseOfferMessage, handleUnanswered } from '../externalChan
 import { KEEP_BUTTON, ABSORB_BUTTON } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../medit/client';
 
-function makeRebaseDeps(controller: unknown) {
+function makeRebaseDeps(client: unknown) {
   return {
-    controller,
+    client,
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
     refreshTree: vi.fn(),
@@ -21,8 +21,8 @@ describe('rebaseOfferMessage', () => {
 
 describe('runRebase', () => {
   it('opens the native merge editor on every conflicted path', async () => {
-    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/A.esp/x.json', 'source/A.esp/y.json'] }) };
-    const deps = makeRebaseDeps(controller);
+    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/A.esp/x.json', 'source/A.esp/y.json'] }) };
+    const deps = makeRebaseDeps(client);
 
     const result = await runRebase(deps, 'ModA');
 
@@ -33,8 +33,8 @@ describe('runRebase', () => {
   });
 
   it('opens nothing on a clean rebase', async () => {
-    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] }) };
-    const deps = makeRebaseDeps(controller);
+    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] }) };
+    const deps = makeRebaseDeps(client);
 
     await runRebase(deps, 'ModA');
 
@@ -44,8 +44,8 @@ describe('runRebase', () => {
   // Refresh happens either way — a `Conflicted` outcome leaves the repo mid-rebase, which the
   // panel must still reflect.
   it('refreshes the tree and matching-plugin set on both a clean and a conflicted outcome', async () => {
-    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['a.json'] }) };
-    const deps = makeRebaseDeps(controller);
+    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['a.json'] }) };
+    const deps = makeRebaseDeps(client);
 
     await runRebase(deps, 'ModA');
 
@@ -54,8 +54,8 @@ describe('runRebase', () => {
   });
 
   it('shows the ready-to-show message and refreshes nothing when the backend refuses the rebase outright', async () => {
-    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not rebase "ModA" — boom' }) };
-    const deps = makeRebaseDeps(controller);
+    const client = { rebaseOntoMain: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not rebase "ModA" — boom' }) };
+    const deps = makeRebaseDeps(client);
 
     const result = await runRebase(deps, 'ModA');
 
@@ -69,9 +69,9 @@ function unanswered(over: Partial<UnansweredExternalChange> = {}): UnansweredExt
   return { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: false, oldVersion: null, newVersion: null, ...over };
 }
 
-function makeDispatchDeps(controller: unknown, showDialogChoice: string | undefined) {
+function makeDispatchDeps(client: unknown, showDialogChoice: string | undefined) {
   return {
-    controller,
+    client,
     showDialog: vi.fn().mockResolvedValue(showDialogChoice),
     showRebaseOffer: vi.fn().mockResolvedValue(undefined),
     openMergeEditor: vi.fn(),
@@ -83,12 +83,12 @@ function makeDispatchDeps(controller: unknown, showDialogChoice: string | undefi
 
 describe('handleUnanswered', () => {
   it('a landed Keep refreshes the tree and the matching-plugin set', async () => {
-    const controller = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
-    const deps = makeDispatchDeps(controller, KEEP_BUTTON);
+    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
+    const deps = makeDispatchDeps(client, KEEP_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(controller.keepAsMyEdit).toHaveBeenCalledWith('Fixture.esp', 'ModA');
+    expect(client.keepAsMyEdit).toHaveBeenCalledWith('Fixture.esp', 'ModA');
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
@@ -96,8 +96,8 @@ describe('handleUnanswered', () => {
   // The rival: a refused Keep (a same-record collision) still refreshing would show the user a
   // tree that changed when nothing actually landed.
   it('a refused Keep does not refresh', async () => {
-    const controller = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'collision' }) };
-    const deps = makeDispatchDeps(controller, KEEP_BUTTON);
+    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'collision' }) };
+    const deps = makeDispatchDeps(client, KEEP_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -105,8 +105,8 @@ describe('handleUnanswered', () => {
   });
 
   it('a WriteRefused Keep shows the ready-to-show message', async () => {
-    const controller = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not keep "Fixture.esp" as your own edit — boom' }) };
-    const deps = makeDispatchDeps(controller, KEEP_BUTTON);
+    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not keep "Fixture.esp" as your own edit — boom' }) };
+    const deps = makeDispatchDeps(client, KEEP_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -115,11 +115,11 @@ describe('handleUnanswered', () => {
   });
 
   it('a landed Absorb refreshes and offers the rebase', async () => {
-    const controller = {
+    const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }),
       rebaseOntoMain: vi.fn(),
     };
-    const deps = makeDispatchDeps(controller, ABSORB_BUTTON);
+    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -130,10 +130,10 @@ describe('handleUnanswered', () => {
   // A typed refusal (e.g. "could not be parsed") rides a 200 as `succeeded: false` — this is
   // exactly the case `WriteRefused` never sees, so it must still be surfaced here.
   it('a typed Absorb refusal shows its own message and never offers the rebase', async () => {
-    const controller = {
+    const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'could not be parsed' }),
     };
-    const deps = makeDispatchDeps(controller, ABSORB_BUTTON);
+    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -145,12 +145,12 @@ describe('handleUnanswered', () => {
   });
 
   it('declining the dialog (defer) calls neither verb', async () => {
-    const controller = { keepAsMyEdit: vi.fn(), absorbUpstreamUpdate: vi.fn() };
-    const deps = makeDispatchDeps(controller, undefined);
+    const client = { keepAsMyEdit: vi.fn(), absorbUpstreamUpdate: vi.fn() };
+    const deps = makeDispatchDeps(client, undefined);
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(controller.keepAsMyEdit).not.toHaveBeenCalled();
-    expect(controller.absorbUpstreamUpdate).not.toHaveBeenCalled();
+    expect(client.keepAsMyEdit).not.toHaveBeenCalled();
+    expect(client.absorbUpstreamUpdate).not.toHaveBeenCalled();
   });
 });

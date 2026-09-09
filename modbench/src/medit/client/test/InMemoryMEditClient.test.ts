@@ -34,6 +34,64 @@ describe('InMemoryMEditClient — unscripted queries reject', () => {
   });
 });
 
+describe('InMemoryMEditClient — a scripted query failure', () => {
+  it('rejects every call with the scripted error until re-scripted', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+
+    await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
+    await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
+
+    client.setQueryAnswer('getPlugins', []);
+    // A fixed failure reads before a fixed answer in `query()`'s own order, so this still
+    // rejects — an answer alone does not clear a standing failure.
+    await expect(client.getPlugins()).rejects.toThrow('ECONNREFUSED');
+  });
+});
+
+describe('InMemoryMEditClient — a queued once-form script', () => {
+  it('setQueryAnswerOnce answers the next call, then falls back to the fixed answer', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', []);
+    client.setQueryAnswerOnce('getPlugins', [{ name: 'A.esp' } as never]);
+
+    await expect(client.getPlugins()).resolves.toEqual([{ name: 'A.esp' }]);
+    await expect(client.getPlugins()).resolves.toEqual([]);
+  });
+
+  it('setQueryFailureOnce rejects the next call, then falls back to the fixed answer', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', []);
+    client.setQueryFailureOnce('getPlugins', new Error('boom'));
+
+    await expect(client.getPlugins()).rejects.toThrow('boom');
+    await expect(client.getPlugins()).resolves.toEqual([]);
+  });
+
+  it('drains a mixed sequence in the order scripted — answer, then failure, then answer', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswerOnce('getPlugins', [{ name: 'first' } as never]);
+    client.setQueryFailureOnce('getPlugins', new Error('mid-sequence failure'));
+    client.setQueryAnswerOnce('getPlugins', [{ name: 'retry' } as never]);
+
+    await expect(client.getPlugins()).resolves.toEqual([{ name: 'first' }]);
+    await expect(client.getPlugins()).rejects.toThrow('mid-sequence failure');
+    await expect(client.getPlugins()).resolves.toEqual([{ name: 'retry' }]);
+  });
+});
+
+describe('InMemoryMEditClient — a scripted command failure', () => {
+  it('rejects every call with the scripted error until re-scripted', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandFailure('compile', new Error('write gate busy'));
+
+    await expect(client.compile('MyMod.esp', 'MyMod', 'HEAD')).rejects.toThrow('write gate busy');
+
+    client.setCommandResult('compile', undefined);
+    await expect(client.compile('MyMod.esp', 'MyMod', 'HEAD')).rejects.toThrow('write gate busy');
+  });
+});
+
 describe('InMemoryMEditClient — a disconnected script', () => {
   it('is one call: status goes disconnected and every query rejects', async () => {
     const client = new InMemoryMEditClient();
@@ -45,6 +103,17 @@ describe('InMemoryMEditClient — a disconnected script', () => {
     expect(client.status).toBe('disconnected');
     await expect(client.getPlugins()).rejects.toThrow();
     await expect(client.getDiagnoses()).rejects.toThrow();
+  });
+
+  // The rival this guards: clearing only fixed answers leaves a scripted failure standing, so a
+  // disconnected read rejects with that stale reason instead of the adapter's own generic one.
+  it('clears a scripted failure too, not just a fixed answer', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryFailure('getPlugins', new Error('ECONNREFUSED'));
+
+    client.disconnected();
+
+    await expect(client.getPlugins()).rejects.toThrow(/no scripted answer for query "getPlugins"/);
   });
 });
 

@@ -1,18 +1,9 @@
 import type { NotificationEvent } from './apiClient';
 import type { NotificationKind } from './MEditClient';
 
-/** ADR-0046 invariant 12: the adapter's own subscribe surface, transport hidden behind it. */
-export interface NotificationSubscriber {
-  /** Registers `listener` for one kind; returns the unsubscribe function. */
-  subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
-  /** Settles once the transport carries events, or once the attempt to open it failed; never
-   *  rejects. The backend publishes a request's progress the moment that request lands, so a
-   *  caller whose progress rides the stream awaits this first. */
-  whenConnected(): Promise<void>;
-}
-
-// Subscribing and dispatching, shared by every kind of stream this adapter could open.
-class NotificationListenerRegistry implements NotificationSubscriber {
+// Subscribing and dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
+// default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
+class NotificationListenerRegistry {
   private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
 
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
@@ -22,8 +13,6 @@ class NotificationListenerRegistry implements NotificationSubscriber {
     return () => { set.delete(listener); };
   }
 
-  /** An adapter with no transport between `emit` and its listeners already carries events; the
-   *  stream adapter below overrides this with its connection's own answer. */
   whenConnected(): Promise<void> {
     return Promise.resolve();
   }
@@ -114,6 +103,9 @@ export class SseNotificationSubscriber extends NotificationListenerRegistry {
     this.markConnected?.();
   }
 
+  /** Settles once the stream carries events, or once the attempt to open it failed; never
+   *  rejects. The backend publishes a request's progress the moment that request lands, so a
+   *  caller whose progress rides the stream awaits this first. */
   override whenConnected(): Promise<void> {
     return this.connected;
   }

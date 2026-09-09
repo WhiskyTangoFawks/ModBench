@@ -155,10 +155,22 @@ describe('the HTTP adapter is the one seam that speaks to the backend', () => {
   });
 });
 
-// The proof-of-done's third clause: the in-memory adapter is the only fake in editing tests.
+// The proof-of-done's third clause: the in-memory adapter is the only fake in editing tests —
+// walked into test folders too, exactly where a rival fake would live.
 describe('the port has exactly two adapters', () => {
   function classesImplementing(text: string): boolean {
     return /\bimplements MEditClient\b/.test(text);
+  }
+
+  // This file's own source quotes the pattern it looks for (the regex above, the fixtures
+  // below) — its own unavoidable false positive, allowlisted by name, not by folder.
+  const SELF = join('test', 'clientSeamBoundary.test.ts');
+
+  function classDeclarers(root: string): string[] {
+    return tsFiles(root)
+      .map((path) => relative(root, path))
+      .filter((relPath) => !isClientFolder(relPath) && relPath !== SELF)
+      .filter((relPath) => classesImplementing(readFileSync(join(root, relPath), 'utf8')));
   }
 
   it('walks a real body of files', () => {
@@ -166,11 +178,7 @@ describe('the port has exactly two adapters', () => {
   });
 
   it('nothing outside medit/client declares a class implementing MEditClient', () => {
-    const offenders = tsFiles(SRC)
-      .map((path) => ({ path, relPath: relative(SRC, path) }))
-      .filter(({ relPath }) => !isClientFolder(relPath) && !isTestSupport(relPath))
-      .filter(({ path }) => classesImplementing(readFileSync(path, 'utf8')));
-    expect(offenders.map((o) => o.relPath)).toEqual([]);
+    expect(classDeclarers(SRC)).toEqual([]);
   });
 
   it('medit/client itself declares exactly HttpMEditClient and InMemoryMEditClient', () => {
@@ -180,16 +188,13 @@ describe('the port has exactly two adapters', () => {
     expect(declarers.sort()).toEqual(['HttpMEditClient.ts', 'InMemoryMEditClient.ts']);
   });
 
-  it('a planted third adapter is caught', () => {
+  // Planted inside a test folder, not production code: proves the walk now reaches there too.
+  it('a planted third adapter, inside a test folder, is caught', () => {
     const root = mkdtempSync(join(tmpdir(), 'medit-client-second-adapter-'));
     try {
-      mkdirSync(join(root, 'plugins'), { recursive: true });
-      writeFileSync(join(root, 'plugins', 'FakeClient.ts'), 'export class FakeClient implements MEditClient {}\n');
-      const offenders = tsFiles(root)
-        .map((path) => relative(root, path))
-        .filter((relPath) => !isClientFolder(relPath))
-        .filter((relPath) => classesImplementing(readFileSync(join(root, relPath), 'utf8')));
-      expect(offenders).toEqual([join('plugins', 'FakeClient.ts')]);
+      mkdirSync(join(root, 'plugins', 'test'), { recursive: true });
+      writeFileSync(join(root, 'plugins', 'test', 'FakeClient.ts'), 'export class FakeClient implements MEditClient {}\n');
+      expect(classDeclarers(root)).toEqual([join('plugins', 'test', 'FakeClient.ts')]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
