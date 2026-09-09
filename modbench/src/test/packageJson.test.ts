@@ -424,7 +424,7 @@ describe('package.json record-row context menu — renumber gated to native trac
 });
 
 // Origin drift is absorbed automatically by the reconcile verb (ADR-0044) — there is nothing for
-// a plugin row to be, or offer, beyond the two contextValues `PluginListProvider` itself produces
+// a plugin row to be, or offer, beyond the two contextValues `PluginsTreeProvider` itself produces
 // (`plugin`, `pluginImplicit`); there is no manual re-read gesture.
 describe('package.json plugin-row context menu', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];

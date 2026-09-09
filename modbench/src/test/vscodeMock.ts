@@ -44,7 +44,7 @@ export class MarkdownString {
 
 export const uriFile = (p: string) => ({ fsPath: p, toString: () => `file://${p}` });
 
-// PluginListProvider.test.ts's resourceUri assertion (`toEqual({ fsPath })`) fails against the
+// PluginsTreeProvider.test.ts's resourceUri assertion (`toEqual({ fsPath })`) fails against the
 // richer `uriFile` above: `toEqual` does not ignore an extra defined `toString`. Real drift, so
 // both shapes stay.
 export const uriFilePlain = (p: string) => ({ fsPath: p });

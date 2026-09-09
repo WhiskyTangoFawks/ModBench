@@ -8,12 +8,11 @@ surfaces ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)).
 load order, checkbox — operating on physical plugin files (`.esm`/`.esp`/`.esl`) and
 `plugins.txt`, never on records or FormKeys. The Editing context owns a row's children — record
 types, records, the spatial worldspace/cell hierarchy — whenever the backend is running.
-Neither side imports the other's vocabulary
-([CONTEXT-MAP.md](../../CONTEXT-MAP.md), each context's own `CONTEXT.md`); the join is a thin
-composite at the composition root (`PluginsTreeComposite`, `modbench/src/toolbox.ts`), not a
-change to either provider. This structural split is what answers ADR-0027's
-objection to merging these views: the merge is not a conflation of contexts, it is a shared row
-with an owner per axis.
+One provider serves the tree (`plugins/PluginsTreeProvider.ts`): it builds the rows from the
+Instance and delegates a row's children to the record browser, which speaks none of Mod
+Management's vocabulary ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), each context's own
+`CONTEXT.md`). That structural check is what answers ADR-0027's objection to merging these views:
+the merge is not a conflation of contexts.
 
 **Vocabulary note:** "load order" is ambiguous across Modbench's two contexts and this spec
 uses the disambiguated terms throughout — see [CONTEXT-MAP.md](../../CONTEXT-MAP.md) and each
@@ -223,8 +222,8 @@ there is no separate load-order step.
   the Downloads tree's hidden-row dimming), it stays undraggable, and the tooltip uses MO2's own
   wording ("This plugin can't be disabled or moved (enforced by the game)."), not invented copy.
 - **Read-only-for-editing** (Editing's "Immutable plugin", `PluginMetadata.isImmutable`) is decided
-  and rendered by `PluginsTreeComposite` — the one place already allowed to know both bounded
-  contexts — once a load order reports it, as a tooltip appended to whatever tooltip the row already
+  and rendered by `PluginsTreeProvider` — the one owner of the tree — once a load order reports
+  it, as a tooltip appended to whatever tooltip the row already
   carries (e.g. the missing-master badge below). It is never a `contextValue` of its own: the five
   plugin-row commands (Reveal in Explorer, Track…, Save & Compile, Save & Compile from main…,
   Rebase onto Updated Baseline — see Record navigation below) gate on the existing `plugin`
@@ -253,16 +252,16 @@ there is no separate load-order step.
 - **Every physical plugin copy is registered, not only the load order's picks** (ADR-0044). A
   copy losing the Mod override order, and a file no `plugins.txt` line names, arrive in the same
   snapshot as the winners and are held beside them — non-participating and read-only, but **not
-  displayed**: `PluginListProvider` reads only `plugins.txt`'s own line set for rows, and a
+  displayed**: `PluginsTreeProvider` reads only `plugins.txt`'s own line set for rows, and a
   plugin more than one enabled mod provides renders exactly like any other row. How a losing or
   unlisted copy surfaces — per-reason show/hide toggles, dimming, origin labelling — is an open
   UX design; an always-on Stack node and file-override badge were reviewed live and rejected
   (ADR-0035).
-- **The seam is a thin composite at the composition root** (`PluginsTreeComposite`), not a change
-  to either provider: Mod Management owns the rows, the record browser owns the children, and
-  neither imports the other's vocabulary — enforced by `src/test/contextBoundary.test.ts`, not by
-  review. A drop onto a child row is refused rather than treated as "past the last row", which
-  would silently move the dragged plugins to the end of the load order.
+- **One provider owns the tree** (`plugins/PluginsTreeProvider.ts`): rows from the Instance,
+  children delegated to the record browser, which imports nothing from Mod Management — enforced
+  by `src/test/contextBoundary.test.ts`, not by review. A drop onto a child row is refused rather
+  than treated as "past the last row", which would silently move the dragged plugins to the end
+  of the load order.
 
 ### Progressive load ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
@@ -312,7 +311,7 @@ end.
 
 - **Plugin nodes** (`contextValue: "plugin"`, or `"pluginImplicit"` for an implicitly-loaded
   vanilla/DLC master not named in `plugins.txt` — see Row model above; read-only-for-editing is a
-  tooltip `PluginsTreeComposite` appends, never a third `contextValue`, per Row model above).
+  tooltip `PluginsTreeProvider` appends, never a third `contextValue`, per Row model above).
   **Clicking/selecting the row opens its header record** — author, masters, flags — as a
   single-column record panel, retargeting the singleton editor panel
   (the plain-`modbench.openEditor`
@@ -320,7 +319,7 @@ end.
   `TryViewOrCompareSelectedRecords` (`xeMainForm.pas`) show a selected file node's File Header in
   the view pane as a side effect of selection alone, with no separate affordance — so there is no
   "Open Header" button here either — `PluginNode` and
-  `ImplicitMasterNode` (`modmanager/PluginListProvider.ts`) each wire their own `.command` to the
+  `ImplicitMasterNode` (`plugins/PluginsTreeProvider.ts`) each wire their own `.command` to the
   `modbench.openHeader` bridge command, so the gesture is
   reachable identically from both plugin-bearing row kinds. A plugin's context menu exposes
   Reveal in Explorer, Track… (untracked plugins), and — on editable plugins only — Save &
@@ -512,7 +511,7 @@ normally. The record editor's read-only handling of a parse-failed record is spe
 skipped so the rest of the load order still loads (`LoadOrder.Failures`) — a whole file whose
 bytes cannot be read at all has no record identity to hang a parse status on — but its row is
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
-managed to index, so the row was already there. `PluginsTreeComposite` decorates it with its
+managed to index, so the row was already there. `PluginsTreeProvider` decorates it with its
 recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;
 the row stays a leaf, since a plugin that never indexed has nothing to expand into. The existing
 reconcile toast (`EditingController.putLoadOrder`, one aggregated warning per load) is
@@ -534,7 +533,7 @@ that moves which copy wins is just the `winning` flag moving on two rows the bac
 
 **How a change reaches the backend.** Every trigger calls `loadOrderSync.request()`
 (`src/loadOrderReconcile.ts`, a composition-root joiner that imports from neither context — the
-pattern `PluginsTreeComposite` and `nameFilter` already use, enforced by
+pattern `nameFilter` already uses, enforced by
 `src/test/contextBoundary.test.ts`): Mod Management's own watchers — `profiles/*/modlist.txt`
 (rewritten by install, uninstall and reprioritise alike), `mods/**` (a folder appearing or
 vanishing without one) and `profiles/*/plugins.txt` (a reorder or an enable/disable, whether
@@ -710,9 +709,8 @@ overflow, then native **Collapse All** last.
   commands (`moveModToSeparator`, `reorderSeparatorBlock`).
 - **Current mutation path**: reorder, enable and disable all still apply immediately and
   unprompted via the surgical splice write above — a direct `plugins.txt` edit, nothing else.
-  `PluginListProvider` makes no backend call to do this itself (root `CLAUDE.md`: Mod Management
-  never calls the C# backend); the composition root (`toolbox.ts`) is what bridges a mutation to
-  the running load order, per the next bullet.
+  The write itself is a `plugins.txt` edit and nothing else; the load order reaches the backend
+  through `loadOrderSync`, per the next bullet.
 - **Checkbox toggles and drag reorders are live (ADR-0044).** Both write `plugins.txt` and
   then become the next snapshot (`loadOrderSync.request()` — the toggle asks explicitly, the
   plugins.txt watcher covers both); the backend moves the affected registrations SQL-only — no
@@ -761,21 +759,16 @@ overflow, then native **Collapse All** last.
   (`LoadOrder.Plugins`, `LoadOrder.Failures`) — no Mutagen re-read. Consulted once per
   `GET /plugins` call and reported on `PluginResponse.MasterIssues`; distinguishes `DirectlyMissing`
   from `Unloadable` and never cascades (only a plugin's own `Masters` list is consulted).
-- **`PluginListProvider`** (`TreeDataProvider`, `modmanager/`): rows only, a
-  `TreeDragAndDropController` reusing the Mods tree's established controller shape, and the row
-  side of the Filter `InputBox` — none of this layer holds record-browsing logic. Exposes
-  the implicit-master rows the backend named, and holds no master verdict of its own.
-- **`PluginTreeProvider`** (`medit/`): a row's children — record types, records, spatial
-  hierarchy — unchanged in ownership by the merge; its `getPluginChildren(name)` is the public
-  entry point a row built elsewhere (by `PluginListProvider`) expands into, and it is unit-tested
-  without VS Code (`PluginRepository`, not `ApiClient`).
-- **`PluginsTreeComposite`** (`modbench/src/`, composition root): joins the two above and does
-  nothing else. Imports from neither bounded context; its whole knowledge of both domains is
-  `pluginFileOf`, the boundary object `CONTEXT-MAP.md` already names. Enforced by
-  `src/test/contextBoundary.test.ts`, not by review. `setLoadOrder` also carries
-  `readOnlyFiles`, `masterIssues` and `loadFailures` — one hand-off, not several, since all of it
-  comes off the same load order and changes together; the composite decorates icon/description/
-  tooltip only, never the leading slot.
+- **`PluginsTreeProvider`** (`TreeDataProvider`, `plugins/`): the whole tree. Rows come from the
+  Instance value, with a `TreeDragAndDropController` reusing the Mods tree's established
+  controller shape and the row side of the Filter `InputBox`; every plugin-keyed fact comes from
+  `GET /plugins` and `GET /plugins/diagnoses`, read once per reconcile and held, so `getTreeItem`
+  never awaits. It decorates icon/description/tooltip only, never the leading slot, and holds no
+  master verdict of its own. `applyReconciled` is the completed reconcile's one hand-off.
+- **`PluginTreeProvider`** (`plugins/`): a row's children — record types, records, spatial
+  hierarchy. Its `getPluginChildren(name)` is the entry point a load-order row expands into, and
+  it is unit-tested without VS Code (`PluginRepository`, not `ApiClient`). It imports nothing from
+  Mod Management, enforced by `src/test/contextBoundary.test.ts`.
 
 ## Testing Decisions
 
@@ -795,18 +788,19 @@ overflow, then native **Collapse All** last.
 - **Load-order-derived master classification unit tests** (`MEditService.Tests/Query/MasterResolutionTests.cs`):
   master absent from both the loaded and failed sets → `DirectlyMissing`; master present in the
   failed set → `Unloadable`; master successfully loaded → no issue; a plugin whose master's own
-  master is missing is not itself flagged (no cascade). The composite's rendering of this, and
-  its load-failure decoration, are covered by
-  `src/test/PluginsTreeComposite.test.ts` and `src/test/integration/extension.test.ts` — including
-  a case where the wire response omits `masterIssues` entirely, asserting the row renders
-  undecorated rather than throwing.
+  master is missing is not itself flagged (no cascade). The tree's rendering of this, and its
+  load-failure decoration, are covered by
+  `src/plugins/test/PluginsTreeProvider.test.ts` and `src/test/integration/extension.test.ts` —
+  including a case where the wire response omits `masterIssues` entirely, asserting the row
+  renders undecorated rather than throwing.
 - **Record-browsing unit seam**: `PluginTreeProvider` takes a `PluginRepository`, not an
   `ApiClient` — unit-tested without VS Code (Vitest, `npm run test:unit`). New data queries go
   on the `PluginRepository` interface and are implemented in `ApiPluginRepository`.
-- **Composite seam**: `PluginsTreeComposite`'s own `getChildren`/`getTreeItem`/`setLoadOrder` —
-  chevron transitions on mEdit start/stop, expansion gated on load order membership — tested
-  against fake row/child providers (`src/test/PluginsTreeComposite.test.ts`), and the bounded-
-  context boundary itself (`src/test/contextBoundary.test.ts`).
+- **Tree seam**: `PluginsTreeProvider`'s own `getChildren`/`getTreeItem`/`applyReconciled` —
+  rows off a fixture Instance value, chevron transitions on mEdit start/stop, every decoration and
+  its precedence, and the origin join — tested against an in-memory client with no backend and no
+  temporary instance (`src/plugins/test/PluginsTreeProvider.test.ts`), alongside the
+  bounded-context boundary itself (`src/test/contextBoundary.test.ts`).
 - **Record semantics and conflict classification** are the backend's responsibility and tested
   there (`MEditService/CLAUDE.md`); this surface consumes representative responses as fixtures.
 - **Progressive-load seams.** The subscription itself is `EditingController.putLoadOrder`

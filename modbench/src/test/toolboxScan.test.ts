@@ -63,8 +63,7 @@ describe('the retired names are gone from the extension source', () => {
 const DISPOSABLE_PRODUCERS = [
   'Instance',
   'ModListProvider',
-  'PluginListProvider',
-  'PluginsTreeComposite',
+  'PluginsTreeProvider',
   'createGameDirectoryResolver',
   'createTreeView',
   'makeLoadOrderSync',

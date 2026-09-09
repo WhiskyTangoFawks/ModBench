@@ -85,7 +85,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode>,
   private readonly instanceSubscription: vscode.Disposable;
   // Resolves once the Instance lands its first recompute. `sequence === 0` means "not read
   // yet", never "genuinely empty" — lets `getChildren()` await it instead of showing no rows
-  // before the Instance has read once (mirrors PluginListProvider's `firstValue`).
+  // before the Instance has read once (mirrors PluginsTreeProvider's `firstValue`).
   private readonly firstValue: Promise<void>;
   private resolveFirstValue: (() => void) | undefined;
 

@@ -22,7 +22,7 @@ import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { makeReporter } from './reporter';
 import { registerEditorCommands, registerRecordLifecycleCommands, makeResolveOriginOrReport, runCopyRecordCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePending } from './medit/editorCommands';
 import { exitEditing, refreshMatchingPlugins } from './editingTeardown';
-import { createToolbox, type HeldPluginFiles } from './toolbox';
+import { createToolbox } from './toolbox';
 import type { ExtensionSession } from './session';
 import { meditConfig } from './workspaceConfig';
 import {
@@ -30,25 +30,6 @@ import {
   registerOpenHeaderCommand,
 } from './plugins/pluginRowCommands';
 
-
-function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<HeldPluginFiles> {
-  return async () => {
-    const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
-    return {
-      files: new Set(plugins.map((p) => p.name)),
-      readOnly: new Set(plugins.filter((p) => p.isImmutable).map((p) => p.name)),
-      // ADR-0037: `masterIssues` is a required, non-nullable array on the wire, so it is read
-      // straight through — a `??` default here would compensate for nothing the backend can do.
-      facts: new Map(plugins.map((p) => [p.name, {
-        readOnly: p.isImmutable,
-        masterIssues: p.masterIssues,
-        parseFailure: p.hasParseFailure,
-      }] as const)),
-      matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
-      tracked: new Set(plugins.filter((p) => p.isTracked).map((p) => p.name)),
-    };
-  };
-}
 
 
 // The single writer for all three surfaces the record filter drives, so `modbench.filterActive`
@@ -113,7 +94,6 @@ export function activate(context: vscode.ExtensionContext) {
   const client = createApiClient(port, createUnlimitedFetch());
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
-  session.recordBrowserProvider = treeProvider;
   const openPanels = new Map<string, vscode.WebviewPanel>();
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
@@ -148,7 +128,7 @@ export function activate(context: vscode.ExtensionContext) {
     showWarning: (msg) => { void vscode.window.showWarningMessage(msg); },
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive: session.setFilterActive,
-    refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, repository, outputChannel); },
+    refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
     // Fires on every completed reconcile: tells every open record panel to refetch its
     // comparison, and (re-)registers every tracked mod's repo with `vscode.git`.
     notifyConflictsComputed: () => {
@@ -187,10 +167,9 @@ export function activate(context: vscode.ExtensionContext) {
   const toolbox = createToolbox({
     outputChannel, session, controller,
     recordBrowser: treeProvider,
-    heldPluginFiles: heldPluginFilesFrom(repository),
+    pluginFacts: repository,
     showCrashRepairOffers,
     loadDiagnostics,
-    getDiagnoses: () => repository.getDiagnoses(),
   });
   context.subscriptions.push(
     toolbox,
@@ -202,7 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, outputChannel,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
-      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, repository, outputChannel); },
+      refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
     }),
   );
@@ -216,7 +195,7 @@ export function activate(context: vscode.ExtensionContext) {
   // `instance`: lets a test await past a sequence instead of sleeping.
   return {
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
-    pluginListProvider: toolbox.pluginListProvider, pluginsTree: session.pluginsTree,
+    pluginsTree: toolbox.pluginsTree,
     pluginListView: session.pluginsTreeView, treeProvider,
     outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session),
     loadOrderSync: session.loadOrderSync, backendManager: session.backendManager,

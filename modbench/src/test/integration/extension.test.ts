@@ -555,10 +555,10 @@ describe('modbench.openEditorBeside', () => {
 // ── modbench.openHeader reachable from every plugin-bearing row ─────────────────
 // The implicit-master row is a different class with a different contextValue and no `.plugin`
 // field, so the handler's node-shape handling, not package.json's `when`, keeps it working.
-import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../modmanager/PluginListProvider';
+import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../plugins/PluginsTreeProvider';
 
 describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree', () => {
-  it('opens a header tab from an ordinary plugin row (PluginListProvider.PluginNode)', async () => {
+  it('opens a header tab from an ordinary plugin row (PluginsTreeProvider.PluginNode)', async () => {
     const node = new PluginListPluginNode({ name: 'TestMod.esp', path: '/data/TestMod.esp', enabled: true } as any);
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await new Promise(r => setTimeout(r, 300));
@@ -566,7 +566,7 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
     assert.ok(tabs.some(t => t.label === 'TestMod.esp'), 'expected a header tab titled after the plugin');
   });
 
-  it('opens a header tab from an implicit-master row (PluginListProvider.ImplicitMasterNode)', async () => {
+  it('opens a header tab from an implicit-master row (PluginsTreeProvider.ImplicitMasterNode)', async () => {
     const node = new ImplicitMasterNode('Fallout4.esm');
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await new Promise(r => setTimeout(r, 300));
@@ -805,7 +805,7 @@ describe('Launch mEdit populates the editing plugin tree', () => {
 // round trip, and its write path stays reachable while the backend runs.
 
 interface PluginListNodeLike { plugin?: { name?: string; enabled?: boolean } }
-interface PluginListProviderLike {
+interface PluginsTreeProviderLike {
   setFilter(text: string): void;
   setPluginEnabled(name: string, enabled: boolean): Promise<void>;
   handleDrop(target: unknown, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void>;
@@ -817,7 +817,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginListProvider = () =>
-    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -841,8 +841,8 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('exposes the live PluginListProvider from activate()', () => {
-    assert.ok(pluginListProvider(), 'activate() should return { pluginListProvider } for the open workspace');
+  it('exposes the live PluginsTreeProvider from activate()', () => {
+    assert.ok(pluginListProvider(), 'activate() should return { pluginsTree } for the open workspace');
   });
 
   it('keeps the Plugin load order filter applied across a Launch mEdit / Close mEdit round trip (AC5)', async () => {
@@ -887,7 +887,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 
     await enterEditing();
 
-    // Same mime type PluginListProvider.ts's private DND_MIME constant uses — pinned here since
+    // Same mime type PluginsTreeProvider.ts's private DND_MIME constant uses — pinned here since
     // it isn't exported; handleDrag/handleDrop only round-trip through it, never inspect it.
     const dataTransfer = new vscode.DataTransfer();
     dataTransfer.set('application/vnd.medit.pluginlist-node', new vscode.DataTransferItem({ names: ['TestMod.esp'] }));
@@ -928,7 +928,7 @@ describe('Plugin load-order rows expand into records', () => {
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
   const pluginListProviderOf = () =>
-    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -1065,7 +1065,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
   const pluginListProviderOf = () =>
-    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -1127,7 +1127,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
   const pluginListProviderOf = () =>
-    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -1193,7 +1193,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
   const pluginListProviderOf = () =>
-    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
   let gameDir = '';
   let pluginsTxtTrailer = '';
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
@@ -1556,7 +1556,7 @@ describe('Progressive load', () => {
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
   const pluginListProviderOf = () =>
-    (ext?.exports as { pluginListProvider?: PluginListProviderLike } | undefined)?.pluginListProvider;
+    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
   let gameDir = '';
 
   const itemFor = async (name: string) => {

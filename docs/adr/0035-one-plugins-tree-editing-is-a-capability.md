@@ -67,7 +67,7 @@ filter prunes records and record types, and the tree **hides a plugin the active
 matches nothing of** — a visible-but-permanently-inert row was never the load order serving a
 purpose; clearing the filter restores every row immediately, in load order. The backend never
 prunes a plugin row itself: `GetPlugins()` returns every plugin with `HasMatchingRecords` as an
-additive fact, and `PluginsTreeComposite` omits the row. xEdit's `mniNavFilterApplySelected` has
+additive fact, and the tree's own provider omits the row. xEdit's `mniNavFilterApplySelected` has
 no Modbench equivalent by decision, not by omission — shipped as "Filter to Selected Plugins",
 rejected by the maintainer on sight, and removed.
 
@@ -95,11 +95,18 @@ say that a view is a sub-functionality of another.
 
 ### The bounded-context boundary
 
-The merged provider is a thin composite at the composition root. **Mod Management owns the rows**
-(identity, order, checkbox, origin); **`PluginRepository` owns the children** (record types,
-records, conflicts, spatial navigation). Neither imports the other's vocabulary, and the composite
-is not a third module that knows both — enforced by `src/test/contextBoundary.test.ts`.
-ADR-0027's conflation objection is met structurally, not by assertion.
+**One provider owns the tree**, and it lives in the Plugins view's own folder. It reads two
+things: the Instance for the rows (identity, order, checkbox, origin) and the mEdit client for
+every plugin-keyed fact and, through the record browser it delegates to, for a row's children
+(record types, records, conflicts, spatial navigation). There is no composite and no rule
+splitting ownership of one tree between two contexts.
+
+Plugin identity across the seam is origin plus filename
+([ADR-0036](0036-plugin-identity-is-origin-plus-filename.md)): a row carries the origin of the
+copy it stands for, every fact joins on it, and a row the client's answer names no matching copy
+for falls back to the filename alone. The record browser still speaks none of Mod Management's
+vocabulary — enforced by `src/test/contextBoundary.test.ts`, which reads the source text.
+ADR-0027's conflation objection is met by that structural check, not by assertion.
 
 ## Consequences
 

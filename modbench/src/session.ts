@@ -1,10 +1,8 @@
 import * as vscode from 'vscode';
 import type { BackendManager } from './medit/BackendManager';
 import type { SseNotificationSubscriber } from './medit/NotificationSubscriber';
-import type { PluginTreeNode, PluginTreeProvider } from './plugins/PluginTreeProvider';
 import type { MinimalRepository } from './medit/editorCommands';
-import type { PluginListNode } from './modmanager/PluginListProvider';
-import type { PluginsTreeComposite } from './PluginsTreeComposite';
+import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import type { LoadOrderSync } from './loadOrderReconcile';
 import type { NameFilter } from './nameFilter';
 import { say } from './editingTeardown';
@@ -18,12 +16,12 @@ export type Own = <T extends vscode.Disposable>(disposable: T) => T;
 // field; every reader treats "not yet built" and "no live workspace" alike.
 export interface ExtensionSession {
   backendManager?: BackendManager;
-  pluginsTree?: PluginsTreeComposite<PluginListNode, PluginTreeNode>;
+  pluginsTree?: PluginsTreeProvider;
   /** ADR-0044: the one path by which the Plugin load order reaches Editing. */
   loadOrderSync?: LoadOrderSync;
   /** The same view, as a `TreeView` — carries the load's own progress and incompleteness
    *  statement (`TreeView.message`, via `say`). */
-  pluginsTreeView?: vscode.TreeView<PluginListNode | PluginTreeNode>;
+  pluginsTreeView?: vscode.TreeView<PluginsTreeNode>;
   /** The same view's name filter — a second, independent narrowing axis from the record filter,
    *  which has to be able to add itself to this view's readout. */
   pluginsNameFilter?: NameFilter;
@@ -31,15 +29,9 @@ export interface ExtensionSession {
    *  successful field edit can prompt that repository's `status()` and make the Source Control
    *  panel pick up the working-tree change without a manual Refresh. */
   pluginRepositories?: Map<string, MinimalRepository>;
-  /** The record browser behind the merged tree's children — mEdit starting/stopping is what
-   *  tells its record rows which plugins are immutable (Remove hidden via `contextValue`). */
-  recordBrowserProvider?: PluginTreeProvider;
   /** The record filter's single writer: the context key its Clear action is gated on, the code
    *  lens's active SQL, and the readout. */
   setFilterActive?: (active: boolean, sql?: string, label?: string) => void;
-  /** Fetch the session-load malformed-plugin scan and publish it — Problems panel and tree
-   *  decoration. */
-  refreshDiagnoses?: () => void;
   /** Held on the session so the teardown writers can clear it alongside the tree badge. */
   loadDiagnostics?: vscode.DiagnosticCollection;
   /** ADR-0046 invariant 12's stream adapter — started on every successful reconcile, stopped by

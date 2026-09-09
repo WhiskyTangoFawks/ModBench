@@ -121,7 +121,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   *are* the proof set the table is built from; a hit there is a test failure, not a
   diagnosis.
 - **Row decoration**: a plugin carrying a Kind B diagnosis gets a plugin-row decoration
-  through the existing load-order-derived decoration mechanism (`PluginsTreeComposite`'s own
+  through the existing load-order-derived decoration mechanism (`PluginsTreeProvider`'s own
   `TreeItem` description/tooltip, the same one ADR-0037's master/load-failure decorations use;
   badge-priority rule in [plugins.md](plugins.md)) — no new
   mechanism. Later, in the Diagnostics & code actions milestone, the diagnosis is a

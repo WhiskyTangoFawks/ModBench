@@ -12,7 +12,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { onPluginCheckboxChanged } from '../pluginCheckboxHandler';
-import type { PluginListNode } from '../modmanager/PluginListProvider';
+import type { PluginListNode } from '../plugins/PluginsTreeProvider';
 
 beforeEach(() => { showErrorMessage.mockClear(); showWarningMessage.mockClear(); });
 

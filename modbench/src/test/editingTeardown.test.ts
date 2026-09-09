@@ -2,16 +2,15 @@ import { describe, it, expect, vi } from 'vitest';
 import { exitEditing, clearTreeWhenBackendDies, refreshMatchingPlugins, say } from '../editingTeardown';
 
 // The three writers that clear loadOrderSync's record-filter match map — exitEditing, the
-// backend-death listener, and refreshMatchingPlugins' error path — have no other unit seam:
+// backend-death listener, and refreshMatchingPlugins' failure path — have no other unit seam:
 // dropping any of the writes leaves the integration suite green.
 
-function makeSession() {
+function makeSession(facts: { name: string; hasMatchingRecords: boolean }[] = []) {
   return {
     loadOrderSync: { abandon: vi.fn(), setMatches: vi.fn() },
-    pluginsTree: { setLoadOrder: vi.fn(), refreshDecorations: vi.fn() },
+    pluginsTree: { clear: vi.fn(), refreshFacts: vi.fn().mockResolvedValue(facts) },
     pluginsTreeView: { message: 'loading…' as string | undefined },
     pluginsNameFilter: { refresh: vi.fn() },
-    recordBrowserProvider: { setImmutablePlugins: vi.fn(), setTrackedPlugins: vi.fn() },
     backendManager: { isHealthy: false, on: vi.fn(), stop: vi.fn().mockResolvedValue(undefined) },
     setFilterActive: vi.fn(),
     loadDiagnostics: { clear: vi.fn() },
@@ -20,20 +19,18 @@ function makeSession() {
 }
 
 describe('exitEditing', () => {
-  it('clears every statement about the departing backend: match map, chevrons, message, filter UI, immutable and tracked sets', () => {
+  // The tree's own `clear()` is what takes the chevrons, every badge, and the record rows'
+  // immutable and tracked sets; this asserts the writers only this module owns.
+  it('clears every statement about the departing backend: match map, tree, message, filter UI', () => {
     const session = makeSession();
 
     exitEditing(session);
 
     expect(session.loadOrderSync.abandon).toHaveBeenCalled();
-    expect(session.pluginsTree.setLoadOrder).toHaveBeenCalledWith(undefined);
+    expect(session.pluginsTree.clear).toHaveBeenCalled();
     expect(session.pluginsTreeView.message).toBeUndefined();
     expect(session.setFilterActive).toHaveBeenCalledWith(false);
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
-    expect(session.recordBrowserProvider.setImmutablePlugins).toHaveBeenCalledWith([]);
-    // The tracked set is the same class of statement about a live backend as the immutable
-    // one — left behind, it would keep offering Change FormID on rows nothing backs.
-    expect(session.recordBrowserProvider.setTrackedPlugins).toHaveBeenCalledWith([]);
     expect(session.backendManager.stop).toHaveBeenCalled();
     expect(session.loadDiagnostics.clear).toHaveBeenCalled();
   });
@@ -47,70 +44,56 @@ describe('clearTreeWhenBackendDies', () => {
   function wire(isHealthy: boolean) {
     const session = makeSession();
     session.backendManager.isHealthy = isHealthy;
-    const composite = { setLoadOrder: vi.fn() };
-    const recordBrowser = { setImmutablePlugins: vi.fn(), setTrackedPlugins: vi.fn() };
-    clearTreeWhenBackendDies(session, composite, recordBrowser);
+    const tree = { clear: vi.fn() };
+    clearTreeWhenBackendDies(session, tree);
     const statusListener = session.backendManager.on.mock.calls[0][1] as () => void;
-    return { session, composite, recordBrowser, statusListener };
+    return { session, tree, statusListener };
   }
 
-  it('an unhealthy status clears the chevrons, the immutable and tracked sets, and the match map together', () => {
-    const { session, composite, recordBrowser, statusListener } = wire(false);
+  it('an unhealthy status clears the tree, the match map and the diagnoses together', () => {
+    const { session, tree, statusListener } = wire(false);
 
     statusListener();
 
-    expect(composite.setLoadOrder).toHaveBeenCalledWith(undefined);
-    expect(recordBrowser.setImmutablePlugins).toHaveBeenCalledWith([]);
-    expect(recordBrowser.setTrackedPlugins).toHaveBeenCalledWith([]);
+    expect(tree.clear).toHaveBeenCalled();
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
     expect(session.loadDiagnostics.clear).toHaveBeenCalled();
     expect(session.notificationSubscriber.stop).toHaveBeenCalled();
   });
 
   it('a healthy status clears nothing', () => {
-    const { session, composite, recordBrowser, statusListener } = wire(true);
+    const { session, tree, statusListener } = wire(true);
 
     statusListener();
 
-    expect(composite.setLoadOrder).not.toHaveBeenCalled();
-    expect(recordBrowser.setImmutablePlugins).not.toHaveBeenCalled();
-    expect(recordBrowser.setTrackedPlugins).not.toHaveBeenCalled();
+    expect(tree.clear).not.toHaveBeenCalled();
     expect(session.loadOrderSync.setMatches).not.toHaveBeenCalled();
     expect(session.notificationSubscriber.stop).not.toHaveBeenCalled();
   });
 });
 
 describe('refreshMatchingPlugins', () => {
-  const channel = () => ({ error: vi.fn() });
+  it('re-derives the match map, lowercased, from the tree own re-read', async () => {
+    const session = makeSession([
+      { name: 'Alpha.esp', hasMatchingRecords: true },
+      { name: 'Beta.esp', hasMatchingRecords: false },
+    ]);
 
-  it('re-derives the match map (lowercased, load-order copies only) and re-renders', async () => {
-    const session = makeSession();
-    const repository = {
-      getPlugins: vi.fn().mockResolvedValue([
-        { name: 'Alpha.esp', inLoadOrder: true, hasMatchingRecords: true },
-        { name: 'Shadowed.esp', inLoadOrder: false, hasMatchingRecords: true },
-        { name: 'Beta.esp', inLoadOrder: true, hasMatchingRecords: false },
-      ]),
-    };
+    await refreshMatchingPlugins(session);
 
-    await refreshMatchingPlugins(session, repository, channel());
-
+    expect(session.pluginsTree.refreshFacts).toHaveBeenCalled();
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(
       new Map([['alpha.esp', true], ['beta.esp', false]]),
     );
-    expect(session.pluginsTree.refreshDecorations).toHaveBeenCalled();
   });
 
   it('a failed read degrades to "no data" — matches everywhere — rather than freezing stale matches', async () => {
     const session = makeSession();
-    const repository = { getPlugins: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) };
-    const ch = channel();
+    session.pluginsTree.refreshFacts.mockResolvedValue(undefined);
 
-    await refreshMatchingPlugins(session, repository, ch);
+    await refreshMatchingPlugins(session);
 
     expect(session.loadOrderSync.setMatches).toHaveBeenCalledWith(undefined);
-    expect(ch.error).toHaveBeenCalledWith(expect.stringContaining('ECONNREFUSED'));
-    expect(session.pluginsTree.refreshDecorations).toHaveBeenCalled();
   });
 });
 
