@@ -717,6 +717,28 @@ describe('EditingController.putLoadOrder progress subscription', () => {
     await load;
   });
 
+  // The rival: PUT as soon as the listener is registered. The backend publishes its first tick as
+  // the PUT lands, so a PUT that outran the stream loses every tick published before it connects.
+  it('holds the load PUT until the notification stream is carrying events', async () => {
+    const { PUT, finish } = heldLoad();
+    let connect!: () => void;
+    const subscriber = new FakeNotificationSubscriber();
+    const notificationSubscriber = {
+      subscribe: subscriber.subscribe.bind(subscriber),
+      whenConnected: () => new Promise<void>((resolve) => { connect = resolve; }),
+    };
+    const ctrl = new EditingController(makeDeps({ client: { ...makeClient(), PUT }, notificationSubscriber }));
+
+    const load = ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress: vi.fn() });
+    await Promise.resolve();
+    expect(PUT).not.toHaveBeenCalled();
+
+    connect();
+    await vi.waitFor(() => expect(PUT).toHaveBeenCalledTimes(1));
+    finish();
+    await load;
+  });
+
   it('unsubscribes once the load PUT settles, so a finished load reports no further progress', async () => {
     const { PUT, finish } = heldLoad();
     const notificationSubscriber = new FakeNotificationSubscriber();

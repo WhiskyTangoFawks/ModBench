@@ -128,6 +128,9 @@ export class EditingController {
       'load-order-status', (event) => (event.loadOrderStatus ? toLoadOrderStatus(event.loadOrderStatus) : undefined),
       options.onProgress,
     );
+    // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
+    // loses every tick published before it connects — and with them the progressive chevrons.
+    await this.deps.notificationSubscriber.whenConnected();
     let result;
     try {
       result = await this.deps.client.PUT('/load-order', {
