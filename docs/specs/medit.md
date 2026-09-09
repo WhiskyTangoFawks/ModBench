@@ -145,7 +145,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   the grid as `cellStates` — the frontend maps states to color, it does not derive them. Its
   visual encoding is specified in [medit-record-editor.md](medit-record-editor.md).
 - Behind the client, all backend HTTP calls go through the generated `openapi-fetch` client
-  (`ApiClient`) — never raw `fetch()` (`modbench/CLAUDE.md`).
+  (`medit/client/apiClient.ts`) — never raw `fetch()`; a source scan enforces it.
 - Errors surface on [ADR-0026](../adr/0026-error-surfacing-policy.md)'s severity tiers via an
   injected reporter, never raw `vscode.window.*` below the gesture that asked.
 
