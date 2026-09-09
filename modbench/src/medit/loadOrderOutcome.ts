@@ -46,8 +46,8 @@ export function reportLoadOrderResult(
   deps.notifyConflictsComputed();
 }
 
-/** What `syncFilterState` needs reported once it resolves — a read failure degrades to inactive
- *  and warns (never throws); otherwise the readout just states what the backend holds. */
+/** What a synced filter read needs reported once it resolves — a read failure degrades to
+ *  inactive and warns (never throws); otherwise the readout just states what the backend holds. */
 export function applyFilterSyncResult(
   result: string | null | WriteRefused,
   deps: { warn: (msg: string) => void; setFilterActive: (active: boolean, sql?: string, label?: string) => void },
@@ -58,4 +58,21 @@ export function applyFilterSyncResult(
     return;
   }
   deps.setFilterActive(result !== null, result ?? undefined, undefined);
+}
+
+/** `getActiveFilter` is a plain port query with no `WriteRefused` wrapping of its own — this is
+ *  that wrapping (ADR-0026: a read failure both logs and warns, never throws out of the sync). */
+export async function syncActiveFilter(
+  getActiveFilter: () => Promise<string | null>,
+  deps: { log: (msg: string) => void; warn: (msg: string) => void; setFilterActive: (active: boolean, sql?: string, label?: string) => void },
+): Promise<void> {
+  let result: string | null | WriteRefused;
+  try {
+    result = await getActiveFilter();
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    deps.log(`syncing the active filter failed: ${detail}`);
+    result = { refused: true, message: `mEdit: Could not read the active filter — treating the filter as inactive. ${detail}` };
+  }
+  applyFilterSyncResult(result, deps);
 }

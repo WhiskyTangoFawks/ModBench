@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
-import { EditingController, type LoadOrderProgress } from './medit/EditingController';
+import type { MEditClient } from './medit/client';
+import { implicitMastersFrom, rebuildIndexVia, putLoadOrderVia } from './toolboxClientCalls';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
-import { reportLoadOrderResult, applyFilterSyncResult } from './medit/loadOrderOutcome';
+import { reportLoadOrderResult, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import type { CrashRepairOffer } from './medit/ApiClient';
+import type { CrashRepairOffer, LoadOrderStatus as LoadOrderProgress } from './medit/ApiClient';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
@@ -32,10 +33,15 @@ import { meditConfig, makeDetectPaths, makeDetectWinePrefix, setMo2InstanceConte
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 
+// The five port members every gesture and the reconcile in this file call — narrowed off
+// `MEditClient` (ADR-0022), never the controller or the repository.
+export type ToolboxClient = Pick<MEditClient,
+  'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'>;
+
 export interface ToolboxDeps {
   outputChannel: vscode.LogOutputChannel;
   session: ExtensionSession;
-  controller: EditingController;
+  client: ToolboxClient;
   /** The record browser the Plugins tree's rows expand into. Built by the editing side, which
    *  owns the single instance every record surface reads through. */
   recordBrowser: PluginTreeProvider;
@@ -162,7 +168,7 @@ interface ReconcileDeps {
   instanceRoot: string;
   /** ADR-0044/ADR-0047: the sync reads its snapshot from this, never from a walk of its own. */
   instance: Instance;
-  controller: EditingController;
+  client: ToolboxClient;
   /** The record browser a reconciled load order refreshes — a different provider from
    *  `session.pluginsTree`, which `applyLoadOrderToTree` below owns. */
   recordBrowser: PluginTreeProvider;
@@ -172,11 +178,13 @@ interface ReconcileDeps {
   notifyConflictsComputed: () => void;
 }
 
-// Not `makeReporter`: its "Modbench: " prefix would double up on `WriteRefused.message`, which
-// is already the exact toast text (EditingController.ts).
-async function applySyncedFilterState(controller: EditingController, session: ExtensionSession): Promise<void> {
-  const result = await controller.syncFilterState();
-  applyFilterSyncResult(result, {
+// Not `makeReporter`: its "Modbench: " prefix would double up on the message `syncActiveFilter`
+// already builds.
+function applySyncedFilterState(
+  client: Pick<MEditClient, 'getActiveFilter'>, session: ExtensionSession, outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
+  return syncActiveFilter(() => client.getActiveFilter(), {
+    log: (m) => outputChannel.info(`[toolbox] ${m}`),
     warn: (m) => void vscode.window.showWarningMessage(m),
     setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
   });
@@ -187,7 +195,7 @@ async function applySyncedFilterState(controller: EditingController, session: Ex
 // Instance value together (closed over below), never two generations of it.
 function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
   const {
-    session, instanceRoot, instance, controller, recordBrowser, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, client, recordBrowser, outputChannel, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
   } = deps;
   let snapshot: ReturnType<typeof loadOrderSnapshotOf>;
@@ -210,13 +218,13 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
     putLoadOrder: async (plugins, dataFolder, signal, onProgress) => {
-      const result = await controller.putLoadOrder(
-        plugins, dataFolder, instanceRoot,
+      const result = await putLoadOrderVia(
+        client, plugins, dataFolder, instanceRoot,
         gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
         { onProgress, signal },
       );
       reportLoadOrderResult(plugins, result, {
-        log: (m) => outputChannel.info(`[EditingController] ${m}`),
+        log: (m) => outputChannel.info(`[toolbox] ${m}`),
         warn: (m) => void vscode.window.showWarningMessage(m),
         error: (m) => void vscode.window.showErrorMessage(m),
         setStatusText,
@@ -225,7 +233,7 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
       });
       return result;
     },
-    syncFilterState: () => applySyncedFilterState(controller, session),
+    syncFilterState: () => applySyncedFilterState(client, session, outputChannel),
     applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, totalPlugins),
     presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
@@ -339,7 +347,7 @@ interface Mo2Side {
 // that is not one. Both leave the Toolbox view registered and row-less.
 function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   const {
-    outputChannel, session, controller, recordBrowser, pluginFacts, loadDiagnostics, showCrashRepairOffers,
+    outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
@@ -389,18 +397,14 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
   // and enterEditing below need the session slot filled first.
   session.loadOrderSync = own(makeLoadOrderSync({
-    session, instanceRoot, instance, controller, recordBrowser, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, client, recordBrowser, outputChannel, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
   }));
   // The backend answers this, never the extension (ADR-0021), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.
-  const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> => {
-    const release = gameReleaseForGame(gameName);
-    return folder === undefined || release === undefined
-      ? Promise.resolve(undefined)
-      : controller.implicitMasters(folder, release);
-  };
+  const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> =>
+    implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
   const runPluginsReconcile = async (profile: string, folder: string | undefined, gameName: string) => {
@@ -459,8 +463,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0046: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
   // a rebuild failure is reported through makeReporter, never a bare toast (modbench/CLAUDE.md).
   const refreshAll = makeRefreshAll({
-    rebuildIndex: () => controller.rebuildIndex(
-      instanceRoot,
+    rebuildIndex: () => rebuildIndexVia(
+      client, instanceRoot,
       (message, detail) => makeReporter(outputChannel, 'refresh').report('error', message, detail),
       gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
     ),
@@ -482,7 +486,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 };
 
 export function createToolbox(deps: ToolboxDeps): Toolbox {
-  const { outputChannel, controller } = deps;
+  const { outputChannel, client } = deps;
   const owned: vscode.Disposable[] = [];
   const own: Own = (disposable) => {
     owned.push(disposable);
@@ -504,7 +508,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     await mo2?.refreshAll();
     provider.refresh();
   }));
-  own(registerCreatePluginCommand(controller, mo2, outputChannel));
+  own(registerCreatePluginCommand(client, mo2, outputChannel));
 
   return {
     modListProvider: mo2?.modListProvider,

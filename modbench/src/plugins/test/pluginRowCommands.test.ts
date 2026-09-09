@@ -35,7 +35,10 @@ vi.mock('vscode', () => ({
   TreeItem, ThemeIcon, EventEmitter, TreeItemCollapsibleState,
 }));
 
-import { registerTrackCommand, registerRebaseCommand } from '../pluginRowCommands';
+import {
+  registerTrackCommand, registerRebaseCommand, compileAndReport, registerSaveAndCompileCommand, registerCompileAtRefCommand,
+} from '../pluginRowCommands';
+import { InMemoryMEditClient } from '../../medit/client';
 import type { PluginListNode } from '../PluginsTreeProvider';
 
 beforeEach(() => {
@@ -51,23 +54,31 @@ function pluginNode(name = 'MyMod.esp'): PluginListNode {
   return { kind: 'plugin', plugin: { name } } as any;
 }
 
+function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
+  const client = new InMemoryMEditClient();
+  client.setQueryAnswer('getPlugins', [{ name, origin, inLoadOrder: true } as any]);
+  return client;
+}
+
 // ── registerTrackCommand ──────────────────────────────────────────────────
 
 describe('registerTrackCommand', () => {
-  function invokeTrack(controller: any, treeProvider: any, onTracked = vi.fn().mockResolvedValue(undefined)) {
+  function invokeTrack(client: InMemoryMEditClient, treeProvider: any, onTracked = vi.fn().mockResolvedValue(undefined)) {
     const session = { pluginsTreeView: undefined, pluginsNameFilter: undefined } as any;
-    registerTrackCommand(session, controller, fakeOutputChannel(), treeProvider, onTracked);
+    registerTrackCommand(session, client, fakeOutputChannel(), treeProvider, onTracked);
     return { handler: handlers.get('modbench.pluginListTree.track')!, onTracked };
   }
 
   it('refreshes the tree and shows the tracked toast on a landed track', async () => {
-    const controller = { resolveOrigin: vi.fn().mockResolvedValue('ModA'), track: vi.fn().mockResolvedValue({ origin: 'ModA' }) };
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('track', { origin: 'ModA' });
     const treeProvider = { refresh: vi.fn() };
     showQuickPick.mockResolvedValue({ label: 'Edits' });
-    const { handler, onTracked } = invokeTrack(controller, treeProvider);
+    const { handler, onTracked } = invokeTrack(client, treeProvider);
 
     await handler(pluginNode());
 
+    expect(client.calls).toContainEqual({ method: 'track', args: ['ModA', 'Edits', expect.anything()] });
     expect(treeProvider.refresh).toHaveBeenCalledOnce();
     expect(showInformationMessage).toHaveBeenCalledWith('Modbench: Tracked "ModA".');
     expect(onTracked).toHaveBeenCalledOnce();
@@ -76,13 +87,11 @@ describe('registerTrackCommand', () => {
   // The rival: showing the toast and refreshing on a refusal too would tell the user a track
   // landed when the backend actually said "already tracked."
   it('shows the ready-to-show message and refreshes nothing when the backend refuses the track', async () => {
-    const controller = {
-      resolveOrigin: vi.fn().mockResolvedValue('ModA'),
-      track: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not track "ModA" — already tracked' }),
-    };
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('track', { refused: true, message: 'mEdit: Could not track "ModA" — already tracked' } as any);
     const treeProvider = { refresh: vi.fn() };
     showQuickPick.mockResolvedValue({ label: 'Edits' });
-    const { handler, onTracked } = invokeTrack(controller, treeProvider);
+    const { handler, onTracked } = invokeTrack(client, treeProvider);
 
     await handler(pluginNode());
 
@@ -95,38 +104,89 @@ describe('registerTrackCommand', () => {
 // ── registerRebaseCommand ──────────────────────────────────────────────────
 
 describe('registerRebaseCommand', () => {
-  function invokeRebase(controller: any) {
+  function invokeRebase(client: InMemoryMEditClient) {
     const treeProvider = { refresh: vi.fn() } as any;
     const refreshMatchingPlugins = vi.fn();
-    registerRebaseCommand(controller, { getPlugins: vi.fn().mockResolvedValue([]) } as any, fakeOutputChannel(), treeProvider, refreshMatchingPlugins);
+    registerRebaseCommand(client, fakeOutputChannel(), treeProvider, refreshMatchingPlugins);
     return { handler: handlers.get('modbench.pluginListTree.rebase')!, treeProvider, refreshMatchingPlugins };
   }
 
   it('shows the clean-rebase toast and refreshes on a landed rebase', async () => {
-    const controller = {
-      resolveOrigin: vi.fn().mockResolvedValue('ModA'),
-      rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] }),
-    };
-    const { handler, treeProvider, refreshMatchingPlugins } = invokeRebase(controller);
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] } as any);
+    const { handler, treeProvider, refreshMatchingPlugins } = invokeRebase(client);
 
     await handler(pluginNode());
 
+    expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
     expect(showInformationMessage).toHaveBeenCalledWith('Modbench: Rebased "ModA" onto the updated baseline.');
     expect(treeProvider.refresh).toHaveBeenCalledOnce();
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
   it('shows the ready-to-show message and refreshes nothing when the backend refuses the rebase outright', async () => {
-    const controller = {
-      resolveOrigin: vi.fn().mockResolvedValue('ModA'),
-      rebaseOntoMain: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not rebase "ModA" — boom' }),
-    };
-    const { handler, treeProvider, refreshMatchingPlugins } = invokeRebase(controller);
+    const client = clientWithOrigin('MyMod.esp', 'ModA');
+    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'mEdit: Could not rebase "ModA" — boom' } as any);
+    const { handler, treeProvider, refreshMatchingPlugins } = invokeRebase(client);
 
     await handler(pluginNode());
 
     expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not rebase "ModA" — boom');
     expect(treeProvider.refresh).not.toHaveBeenCalled();
     expect(refreshMatchingPlugins).not.toHaveBeenCalled();
+  });
+});
+
+// ── compileAndReport ───────────────────────────────────────────────────────
+
+describe('compileAndReport', () => {
+  it('shows the ready-to-show message on a transport-level refusal (WriteRefused), never the typed-refusal wording', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' } as any);
+    const diagnostics = { delete: vi.fn(), set: vi.fn(), [Symbol.iterator]: function* () {} } as any;
+
+    await compileAndReport(client, diagnostics, { name: 'MyPatch.esp', origin: 'ModA' }, undefined);
+
+    expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
+    expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" — boom');
+    expect(showInformationMessage).not.toHaveBeenCalled();
+  });
+});
+
+function fakeDiagnostics() {
+  return { delete: vi.fn(), set: vi.fn(), [Symbol.iterator]: function* () {} } as any;
+}
+
+// ── registerSaveAndCompileCommand ─────────────────────────────────────────
+
+describe('registerSaveAndCompileCommand', () => {
+  it('drives a tree-row compile through the registered command, recording the compile call and surfacing the refusal', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' } as any);
+    const activeRecordTracker = { current: () => undefined } as any;
+    const diagnostics = fakeDiagnostics();
+    registerSaveAndCompileCommand(client, activeRecordTracker, fakeOutputChannel(), diagnostics);
+
+    await handlers.get('modbench.saveAndCompile')!({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+
+    expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
+    expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" — boom');
+  });
+});
+
+// ── registerCompileAtRefCommand ───────────────────────────────────────────
+
+describe('registerCompileAtRefCommand', () => {
+  it('drives a compile-at-main through the registered command, recording the compile call at "main" and surfacing the refusal', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom' } as any);
+    const diagnostics = fakeDiagnostics();
+    showWarningMessage.mockResolvedValue('Compile at main');
+    registerCompileAtRefCommand(client, fakeOutputChannel(), diagnostics);
+
+    await handlers.get('modbench.pluginListTree.compileAtMain')!({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+
+    expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', 'main'] });
+    expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" at "main" — boom');
   });
 });

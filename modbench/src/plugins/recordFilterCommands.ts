@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { EditingController } from '../medit/EditingController';
+import type { MEditClient } from '../medit/client';
 import type { InteriorLoadMoreNode, PluginTreeProvider } from './PluginTreeProvider';
 
 // The row's own load-more gesture: a partial record page grew a synthetic "load more" leaf, and
@@ -12,7 +12,7 @@ export function registerLoadMoreCommand(treeProvider: PluginTreeProvider): vscod
 
 export interface FilterCommandDeps {
   scriptsPath: string;
-  controller: EditingController;
+  client: Pick<MEditClient, 'setFilter' | 'clearFilter'>;
   treeProvider: PluginTreeProvider;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  unexpandable (ADR-0035). */
@@ -25,7 +25,7 @@ export interface FilterCommandDeps {
 // The record filter scopes which records a plugin row's children show — a distinct concern from
 // the record-panel and reveal commands, so it is its own registration.
 export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposable[] {
-  const { scriptsPath, controller, treeProvider, refreshMatchingPlugins, setFilterActive } = deps;
+  const { scriptsPath, client, treeProvider, refreshMatchingPlugins, setFilterActive } = deps;
 
   // Symmetric on purpose (ADR-0035): a set and a clear both re-derive the same two things.
   const refreshAfterFilterChange = (): void => {
@@ -34,7 +34,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   };
 
   const applyFilter = async (sql: string, label?: string): Promise<void> => {
-    const error = await controller.setFilter(sql);
+    const error = await client.setFilter(sql);
     if (error) {
       void vscode.window.showErrorMessage(`mEdit: Filter failed — ${error}`);
       return;
@@ -71,7 +71,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
       await applyFilter(sql, editor.document.isUntitled ? 'document' : path.basename(editor.document.fileName));
     }),
     vscode.commands.registerCommand('modbench.clearFilter', async () => {
-      await controller.clearFilter();
+      await client.clearFilter();
       setFilterActive(false);
       refreshAfterFilterChange();
     }),

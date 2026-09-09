@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type EditingController } from '../medit/EditingController';
+import { isRefused, type MEditClient } from '../medit/client';
 import type { Instance } from '../modmanager/instance';
 import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
@@ -75,7 +75,7 @@ async function appendCreatedPluginToLoadOrder(
 }
 
 export function registerCreatePluginCommand(
-  controller: EditingController,
+  client: Pick<MEditClient, 'createPlugin'>,
   mo2: { instance: Instance; instanceRoot: string; pluginsTree: PluginsTreeProvider } | undefined,
   outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
@@ -92,7 +92,7 @@ export function registerCreatePluginCommand(
     const destination = await pickPluginDestination(mo2.instance, mo2.instanceRoot);
     if (!destination) return; // user cancelled a prompt
 
-    const result = await controller.createPlugin(name, destination.path, destination.origin);
+    const result = await client.createPlugin(name, destination.path, destination.origin);
     if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
 
     await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginsTree, result.name, outputChannel);

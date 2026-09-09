@@ -326,40 +326,6 @@ describe('EditingController.clearFilter', () => {
   });
 });
 
-// ── syncFilterState ───────────────────────────────────────────────────────────
-
-describe('EditingController.syncFilterState', () => {
-  beforeEach(() => vi.resetAllMocks());
-
-  it('resolves the active filter\'s SQL when one is returned', async () => {
-    const repository = makeRepository({ activeFilter: 'SELECT form_key FROM "npc_"' });
-    const deps = makeDeps({ repository });
-    const ctrl = new EditingController(deps);
-
-    expect(await ctrl.syncFilterState()).toBe('SELECT form_key FROM "npc_"');
-  });
-
-  it('resolves null when no filter is active', async () => {
-    const repository = makeRepository({ activeFilter: null });
-    const deps = makeDeps({ repository });
-    const ctrl = new EditingController(deps);
-
-    expect(await ctrl.syncFilterState()).toBeNull();
-  });
-
-  it('resolves a WriteRefused carrying the read failure, without throwing', async () => {
-    const repository = makeRepository();
-    repository.getActiveFilter = vi.fn().mockRejectedValue(new Error('getActiveFilter failed (500): boom'));
-    const deps = makeDeps({ repository });
-    const ctrl = new EditingController(deps);
-
-    const result = asRefused(await ctrl.syncFilterState());
-
-    expect(result.message).toContain('Could not read the active filter');
-    expect(result.message).toContain('boom');
-  });
-});
-
 // ── putLoadOrder ───────────────────────────────────────────────────────
 
 describe('EditingController.putLoadOrder', () => {

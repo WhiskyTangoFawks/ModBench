@@ -27,6 +27,7 @@ vi.mock('../../modmanager/commands/plugins', () => ({ appendPlugin: vi.fn() }));
 
 import { registerCreatePluginCommand } from '../pluginListCommands';
 import { appendPlugin } from '../../modmanager/commands/plugins';
+import { InMemoryMEditClient } from '../../medit/client';
 
 beforeEach(() => {
   handlers.clear();
@@ -46,20 +47,22 @@ function makeMo2() {
 }
 
 describe('registerCreatePluginCommand', () => {
-  function invoke(controller: any, mo2: any) {
-    registerCreatePluginCommand(controller, mo2, fakeOutputChannel());
+  function invoke(client: InMemoryMEditClient, mo2: any) {
+    registerCreatePluginCommand(client, mo2, fakeOutputChannel());
     return handlers.get('modbench.newPlugin')!;
   }
 
   it('appends the created plugin to the load order and shows the created toast', async () => {
-    const controller = { createPlugin: vi.fn().mockResolvedValue({ name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null }) };
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null });
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ choice: 'overwrite' });
     vi.mocked(appendPlugin).mockResolvedValue({ applied: true } as any);
 
-    await invoke(controller, mo2)();
+    await invoke(client, mo2)();
 
+    expect(client.calls).toContainEqual({ method: 'createPlugin', args: ['MyPatch.esp', '/instance/overwrite', 'overwrite'] });
     expect(appendPlugin).toHaveBeenCalledWith('/instance', undefined, 'MyPatch.esp');
     expect(showInformationMessage).toHaveBeenCalledWith('Modbench: Created "MyPatch.esp".');
   });
@@ -67,12 +70,13 @@ describe('registerCreatePluginCommand', () => {
   // The rival: showing the created toast (or appending to the load order) on a refusal too would
   // add a plugins.txt line for a file the backend never actually wrote.
   it('shows the ready-to-show message and never appends to the load order when the backend refuses', async () => {
-    const controller = { createPlugin: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Failed to create plugin — Bad Request' }) };
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('createPlugin', { refused: true, message: 'mEdit: Failed to create plugin — Bad Request' });
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ choice: 'overwrite' });
 
-    await invoke(controller, mo2)();
+    await invoke(client, mo2)();
 
     expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Failed to create plugin — Bad Request');
     expect(appendPlugin).not.toHaveBeenCalled();

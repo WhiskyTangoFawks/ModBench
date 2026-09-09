@@ -28,6 +28,7 @@ vi.mock('vscode', () => ({
 vi.mock('fs', () => ({ existsSync: vi.fn().mockReturnValue(false), readdirSync: vi.fn(), readFileSync: vi.fn() }));
 
 import { registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
+import { InMemoryMEditClient } from '../../medit/client';
 
 beforeEach(() => {
   handlers.clear();
@@ -35,10 +36,10 @@ beforeEach(() => {
   activeTextEditor.value = undefined;
 });
 
-function makeDeps(controller: any): FilterCommandDeps & { treeProvider: { refresh: ReturnType<typeof vi.fn> } } {
+function makeDeps(client: InMemoryMEditClient): FilterCommandDeps & { treeProvider: { refresh: ReturnType<typeof vi.fn> } } {
   return {
     scriptsPath: '/scripts',
-    controller,
+    client,
     treeProvider: { refresh: vi.fn() } as any,
     refreshMatchingPlugins: vi.fn(),
     setFilterActive: vi.fn(),
@@ -46,19 +47,21 @@ function makeDeps(controller: any): FilterCommandDeps & { treeProvider: { refres
 }
 
 describe('setFilterFromDocument', () => {
-  function invoke(controller: any) {
-    const deps = makeDeps(controller);
+  function invoke(client: InMemoryMEditClient) {
+    const deps = makeDeps(client);
     registerFilterCommands(deps);
     return { handler: handlers.get('modbench.setFilterFromDocument')!, deps };
   }
 
   it('sets the filter active, refreshes the tree, and refreshes the matching-plugin set on success', async () => {
-    const controller = { setFilter: vi.fn().mockResolvedValue(null) };
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('setFilter', null);
     activeTextEditor.value = { document: { getText: () => 'SELECT form_key FROM "npc_"', isUntitled: true } };
-    const { handler, deps } = invoke(controller);
+    const { handler, deps } = invoke(client);
 
     await handler();
 
+    expect(client.calls).toContainEqual({ method: 'setFilter', args: ['SELECT form_key FROM "npc_"'] });
     expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', 'document');
     expect(deps.treeProvider.refresh).toHaveBeenCalledOnce();
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
@@ -67,9 +70,10 @@ describe('setFilterFromDocument', () => {
   // The rival: setting the filter active (or refreshing) on a failed setFilter too would leave
   // the readout claiming a filter is applied that the backend never actually accepted.
   it('shows the framed error and touches nothing else when setFilter fails', async () => {
-    const controller = { setFilter: vi.fn().mockResolvedValue('Filter SQL must return a form_key column') };
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('setFilter', 'Filter SQL must return a form_key column');
     activeTextEditor.value = { document: { getText: () => 'SELECT editor_id FROM "npc_"', isUntitled: true } };
-    const { handler, deps } = invoke(controller);
+    const { handler, deps } = invoke(client);
 
     await handler();
 
@@ -84,13 +88,14 @@ describe('clearFilter', () => {
   // "Symmetric on purpose" (ADR-0035): a clear refreshes exactly as a set does, or a stale
   // no-match chevron survives the filter that produced it.
   it('sets the filter inactive, refreshes the tree, and refreshes the matching-plugin set — same as a set', async () => {
-    const controller = { clearFilter: vi.fn().mockResolvedValue(undefined) };
-    const deps = makeDeps(controller);
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('clearFilter', undefined);
+    const deps = makeDeps(client);
     registerFilterCommands(deps);
 
     await handlers.get('modbench.clearFilter')!();
 
-    expect(controller.clearFilter).toHaveBeenCalledOnce();
+    expect(client.calls).toContainEqual({ method: 'clearFilter', args: [] });
     expect(deps.setFilterActive).toHaveBeenCalledWith(false);
     expect(deps.treeProvider.refresh).toHaveBeenCalledOnce();
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();

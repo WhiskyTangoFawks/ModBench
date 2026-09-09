@@ -32,8 +32,10 @@ const EDITING_DIR = 'medit';
 const PLUGINS_VIEW_DIR = 'plugins';
 const GENERATED_DIR = 'generated';
 
-// Wires every context together (CONTEXT.md calls the Toolbox also the extension's composition root).
-const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'extension.ts'];
+// Wires every context together (CONTEXT.md calls the Toolbox also the extension's composition
+// root). `toolboxClientCalls.ts` is toolbox.ts's own port calls, pulled out for testability —
+// same rule.
+const WIRES_EVERY_CONTEXT = ['toolbox.ts', 'toolboxClientCalls.ts', 'extension.ts'];
 
 // Activation-scoped shared state: holds type-only handles into both contexts so other
 // composition-root code can read them, but does not itself wire anything together.
@@ -125,9 +127,9 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
     expect(isExcluded(join(EDITING_DIR, GENERATED_DIR, 'api.ts'))).toBe(true);
   });
 
-  it('the composition-root allowlist is exactly these five files', () => {
+  it('the composition-root allowlist is exactly these six files', () => {
     expect(COMPOSITION_ROOT.sort()).toEqual(
-      ['extension.ts', 'pluginCheckboxHandler.ts', 'session.ts', 'toolbox.ts', 'workspaceConfig.ts']);
+      ['extension.ts', 'pluginCheckboxHandler.ts', 'session.ts', 'toolbox.ts', 'toolboxClientCalls.ts', 'workspaceConfig.ts']);
   });
 
   // Each plant runs through the one shared findOffenders(), over a real temporary tree rather
