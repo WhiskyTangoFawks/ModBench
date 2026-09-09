@@ -415,7 +415,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   a scripted `Pick<Instance, 'value'>` and the mocked `vscode.window.showQuickPick` (never real
   VS Code UI): the pick's rows, their order and the file-id match's active-row placement;
   choosing a candidate or "Install as a new mod…" carries the right target into the install
-  command; Esc calls the install command with nothing; a download with no mod id, or one an
+  command; Esc never calls the install command at all; a download with no mod id, or one an
   installed mod does not share, never shows the pick.
 - **`upgradeCandidates.test.ts`** (Vitest, no `vscode`): `selectUpgradeCandidates` as a pure
   function over fixture `InstanceValue`/download shapes — one candidate with a file-id match,
