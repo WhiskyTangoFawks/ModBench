@@ -516,7 +516,7 @@ recorded failure reason ("Failed to load: `{reason}`") the same way it decorates
 the row stays collapsible but answers the error node on expand, carrying the same reason — never
 "still indexing", which would promise a completion a plugin the load order gave up on will never
 reach (ADR-0026). The existing
-reconcile toast (`EditingController.putLoadOrder`, one aggregated warning per load) is
+reconcile toast (the load-order outcome module's `reportLoadOrderResult`, one aggregated warning per load) is
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.
 
