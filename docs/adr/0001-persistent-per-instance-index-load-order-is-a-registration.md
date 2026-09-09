@@ -113,7 +113,7 @@ index itself outliving the process.
    in place, and a codec or reflector version change invalidates the whole file. Registrations are
    **not** cleared on open (ADR-0044): they are the last known load order,
    and the first reconcile from Mod Management corrects them. At runtime,
-   `ExternalChangeWatcher` watches every indexed binary, the
+   `ModFolderWatcher` watches every indexed binary, the
    game's `Data/` included: a debounced change re-hashes and re-indexes through `ReindexPlugin`.
    This is root CLAUDE.md's never-assume-exclusive-ownership rule applied to the index: MO2,
    xEdit, Steam and the user all write these files, and the index detects it rather than trusts

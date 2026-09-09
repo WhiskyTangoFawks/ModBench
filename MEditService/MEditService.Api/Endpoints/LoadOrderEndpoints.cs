@@ -133,7 +133,7 @@ public static class LoadOrderEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    internal static IResult PutLoadOrder(LoadOrderRequest req, IndexProjector index, LoadOrderHolder holder, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
+    internal static IResult PutLoadOrder(LoadOrderRequest req, IndexProjector index, LoadOrderHolder holder, ModFolderWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))

@@ -22,7 +22,7 @@ public sealed class SourceChangeApplierWriteGateTests
         // projected, which is the whole of what this asserts.
         using var index = new IndexProjector(new RefusingIndexFactory());
         var sourceChanges = new SourceChangeApplier(
-            index, gate, new SourceChangeWatcher(), new InMemoryNotificationPublisher(),
+            index, gate, new ModFolderWatcher(), new InMemoryNotificationPublisher(),
             new CollectingLogger(entries));
 
         using var held = new ManualResetEventSlim();
