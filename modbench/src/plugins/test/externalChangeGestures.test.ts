@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runRebase, rebaseOfferMessage, handleUnanswered } from '../externalChangeGestures';
+import { runRebase, handleUnanswered } from '../externalChangeGestures';
 import { KEEP_BUTTON, ABSORB_BUTTON } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../medit/client';
 
@@ -12,12 +12,6 @@ function makeRebaseDeps(client: unknown) {
     refreshMatchingPlugins: vi.fn(),
   } as any;
 }
-
-describe('rebaseOfferMessage', () => {
-  it('names the edit branch and the origin', () => {
-    expect(rebaseOfferMessage('ModA')).toBe('main moved ahead of "edit" in ModA.');
-  });
-});
 
 describe('runRebase', () => {
   it('opens the native merge editor on every conflicted path', async () => {
@@ -73,8 +67,7 @@ function makeDispatchDeps(client: unknown, showDialogChoice: string | undefined)
   return {
     client,
     showDialog: vi.fn().mockResolvedValue(showDialogChoice),
-    showRebaseOffer: vi.fn().mockResolvedValue(undefined),
-    openMergeEditor: vi.fn(),
+    openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
@@ -114,22 +107,58 @@ describe('handleUnanswered', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
-  it('a landed Absorb refreshes and offers the rebase', async () => {
+  it('a landed Absorb with a clean rebase refreshes silently', async () => {
     const client = {
-      absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }),
-      rebaseOntoMain: vi.fn(),
+      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
+        succeeded: true, refusalReason: null, rebase: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
+      }),
     };
     const deps = makeDispatchDeps(client, ABSORB_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
     expect(deps.refreshTree).toHaveBeenCalledOnce();
-    expect(deps.showRebaseOffer).toHaveBeenCalledOnce();
+    expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.openMergeEditor).not.toHaveBeenCalled();
+  });
+
+  // The rebase runs server-side inside Absorb; a refusal there (uncommitted dirt) is this
+  // ready-to-show reason, the same surface every other gesture's refusal shows through.
+  it('a landed Absorb with a refused rebase shows the reason naming the paths', async () => {
+    const client = {
+      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
+        succeeded: true, refusalReason: null,
+        rebase: { outcome: 'Refused', refusalReason: 'Cannot rebase: uncommitted changes in source/A.esp/x.json.', conflictedPaths: [] },
+      }),
+    };
+    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
+
+    await handleUnanswered(deps, [unanswered()]);
+
+    expect(deps.showError).toHaveBeenCalledWith('Cannot rebase: uncommitted changes in source/A.esp/x.json.');
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
+  });
+
+  it('a landed Absorb with a conflicted rebase opens the merge editor on every conflicted path', async () => {
+    const client = {
+      absorbUpstreamUpdate: vi.fn().mockResolvedValue({
+        succeeded: true, refusalReason: null,
+        rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/A.esp/x.json', 'source/A.esp/y.json'] },
+      }),
+    };
+    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
+
+    await handleUnanswered(deps, [unanswered()]);
+
+    expect(deps.openMergeEditor).toHaveBeenCalledTimes(2);
+    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/x.json');
+    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/A.esp/y.json');
+    expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
   // A typed refusal (e.g. "could not be parsed") rides a 200 as `succeeded: false` — this is
   // exactly the case `WriteRefused` never sees, so it must still be surfaced here.
-  it('a typed Absorb refusal shows its own message and never offers the rebase', async () => {
+  it('a typed Absorb refusal shows its own message', async () => {
     const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'could not be parsed' }),
     };
@@ -140,7 +169,6 @@ describe('handleUnanswered', () => {
     expect(deps.showError).toHaveBeenCalledWith(
       'mEdit: Could not absorb the upstream update for "Fixture.esp" — could not be parsed',
     );
-    expect(deps.showRebaseOffer).not.toHaveBeenCalled();
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 

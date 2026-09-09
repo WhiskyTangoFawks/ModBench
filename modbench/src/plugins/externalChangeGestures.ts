@@ -3,28 +3,13 @@ import { runExternalChangeDialogs } from './externalChangeDialog';
 import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../medit/client';
 import type { ExternalChangeCoordinatorDeps } from '../medit/externalChangeCoordinator';
 
-/** The rebase offer is a separate, non-modal notification by contract, never folded into the
- *  external-change dialog itself. */
-export const REBASE_NOW_BUTTON = 'Rebase Now';
-export const REBASE_LATER_BUTTON = 'Later';
-
-// Fixed by CONTEXT.md's "Edit branch", never derived per repository.
-const EDIT_BRANCH_NAME = 'edit';
-
-export function rebaseOfferMessage(origin: string): string {
-  return `main moved ahead of "${EDIT_BRANCH_NAME}" in ${origin}.`;
-}
-
-/** Non-modal by construction: no `{ modal: true }` option is offered. */
-export type ShowRebaseOffer = (message: string, ...buttons: string[]) => Thenable<string | undefined> | Promise<string | undefined>;
-
 // The coordinator decides *when* to call this; this decides what each dialog answer does —
 // Absorb Upstream Update or Keep as My Edit.
 export async function handleUnanswered(deps: ExternalChangeCoordinatorDeps, unanswered: UnansweredExternalChange[]): Promise<void> {
   const outcomes = await runExternalChangeDialogs(unanswered, deps.showDialog);
   for (const { change: item, answer } of outcomes) {
     // Sequential, deliberately: two dispatches for one repository (two plugins in the same folder
-    // can both be queued) must not overlap a rebase offer against an absorb still in flight.
+    // can both be queued) must not overlap.
     await dispatchOne(deps, item, answer);
   }
 }
@@ -41,6 +26,18 @@ async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, item: Unanswere
   if (result?.succeeded) refreshAfterWrite(deps);
 }
 
+// Absorb's own rebase, run server-side in the same call: clean is silent, a refusal shows the
+// ready-to-show reason (which names the dirty paths), a conflict opens the merge editor exactly
+// as the manual rebase command does.
+async function applyRebaseOutcome(
+  deps: Pick<ExternalChangeCoordinatorDeps, 'openMergeEditor' | 'showError'>, origin: string, rebase: RebaseResult,
+): Promise<void> {
+  if (rebase.outcome === 'Refused') { deps.showError(rebase.refusalReason ?? 'Rebase refused.'); return; }
+  if (rebase.outcome === 'Conflicted') {
+    for (const path of rebase.conflictedPaths) await deps.openMergeEditor(origin, path);
+  }
+}
+
 async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange): Promise<void> {
   const result = await deps.client.absorbUpstreamUpdate(item.plugin, item.origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
@@ -53,12 +50,8 @@ async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, item: Unanswe
     }
     return;
   }
+  if (result.rebase) await applyRebaseOutcome(deps, item.origin, result.rebase);
   refreshAfterWrite(deps);
-
-  const choice = await deps.showRebaseOffer(rebaseOfferMessage(item.origin), REBASE_NOW_BUTTON, REBASE_LATER_BUTTON);
-  if (choice !== REBASE_NOW_BUTTON) return; // 'Later' — the branch stays honestly behind main.
-
-  await runRebase(deps, item.origin);
 }
 
 async function dispatchOne(
@@ -71,9 +64,8 @@ async function dispatchOne(
   return dispatchAbsorb(deps, item);
 }
 
-// Origin-scoped: the repo, not any one plugin, is the unit of baselines and rebase. Resumption-aware
-// (a conflicted rebase re-runs this), shared by the manual Rebase gesture and the
-// Absorb-then-offer-rebase follow-on above.
+// The manual, re-runnable rebase gesture, origin-scoped: the repo, not any one plugin, is the unit
+// of baselines and rebase. Resumption-aware — a conflicted rebase re-runs this.
 export async function runRebase(
   deps: Pick<ExternalChangeCoordinatorDeps, 'client' | 'openMergeEditor' | 'showError' | 'refreshTree' | 'refreshMatchingPlugins'>,
   origin: string,

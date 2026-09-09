@@ -4,7 +4,6 @@ import {
   type ExternalChangeCoordinatorDeps,
 } from '../externalChangeCoordinator';
 import { ABSORB_BUTTON, KEEP_BUTTON } from '../../plugins/externalChangeDialog';
-import { rebaseOfferMessage, REBASE_NOW_BUTTON, REBASE_LATER_BUTTON } from '../../plugins/externalChangeGestures';
 import { InMemoryMEditClient, type NotificationEvent } from '../client';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -24,7 +23,6 @@ function makeDeps(
   return {
     client,
     showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON),
-    showRebaseOffer: vi.fn().mockResolvedValue(REBASE_LATER_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
     refreshTree: vi.fn(),
@@ -36,8 +34,9 @@ function makeDeps(
 function clientScriptedForKeepAndAbsorb(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setCommandResult('keepAsMyEdit', { succeeded: true, refusalReason: null });
-  client.setCommandResult('absorbUpstreamUpdate', { succeeded: true, refusalReason: null });
-  client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
+  client.setCommandResult('absorbUpstreamUpdate', {
+    succeeded: true, refusalReason: null, rebase: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
+  });
   return client;
 }
 
@@ -68,34 +67,35 @@ describe('subscribeExternalChangePending', () => {
     expect(client.calls.map((c) => c.method)).not.toContain('absorbUpstreamUpdate');
   });
 
-  it('dispatches Absorb, then offers the rebase — Later does not rebase', async () => {
+  it('dispatches Absorb; a clean rebase is silent', async () => {
     const client = clientScriptedForKeepAndAbsorb();
-    const deps = makeDeps(client, {
-      showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
-      showRebaseOffer: vi.fn().mockResolvedValue(REBASE_LATER_BUTTON),
-    });
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
     subscribeExternalChangePending(deps, client);
 
     client.emit(pendingEvent());
     await flush();
 
     expect(client.calls).toContainEqual({ method: 'absorbUpstreamUpdate', args: ['Fixture.esp', 'ModA'] });
-    expect(deps.showRebaseOffer).toHaveBeenCalledWith(rebaseOfferMessage('ModA'), REBASE_NOW_BUTTON, REBASE_LATER_BUTTON);
-    expect(client.calls.map((c) => c.method)).not.toContain('rebaseOntoMain');
+    expect(deps.showError).not.toHaveBeenCalled();
+    expect(deps.openMergeEditor).not.toHaveBeenCalled();
   });
 
-  it('Rebase Now runs the rebase', async () => {
-    const client = clientScriptedForKeepAndAbsorb();
-    const deps = makeDeps(client, {
-      showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
-      showRebaseOffer: vi.fn().mockResolvedValue(REBASE_NOW_BUTTON),
+  // Absorb's own rebase runs server-side; a conflict is the extension's cue to open the native
+  // merge editor, same as the manual rebase command.
+  it('dispatches Absorb; a conflicted rebase opens the merge editor on every path', async () => {
+    const client = new InMemoryMEditClient();
+    client.setCommandResult('keepAsMyEdit', { succeeded: true, refusalReason: null });
+    client.setCommandResult('absorbUpstreamUpdate', {
+      succeeded: true, refusalReason: null,
+      rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] },
     });
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
     subscribeExternalChangePending(deps, client);
 
     client.emit(pendingEvent());
     await flush();
 
-    expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
+    expect(deps.openMergeEditor).toHaveBeenCalledWith('ModA', 'source/Fixture.esp/x.json');
   });
 
   it('a deferred (Esc) answer calls neither absorb nor keep', async () => {
@@ -111,7 +111,7 @@ describe('subscribeExternalChangePending', () => {
     expect(client.calls.filter((c) => c.method !== 'subscribe')).toEqual([]);
   });
 
-  it('a failed Absorb never offers the rebase', async () => {
+  it('a failed Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('absorbUpstreamUpdate', undefined); // transport failure
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
@@ -120,10 +120,10 @@ describe('subscribeExternalChangePending', () => {
     client.emit(pendingEvent());
     await flush();
 
-    expect(deps.showRebaseOffer).not.toHaveBeenCalled();
+    expect(deps.openMergeEditor).not.toHaveBeenCalled();
   });
 
-  it('a refused Absorb never offers the rebase', async () => {
+  it('a refused Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('absorbUpstreamUpdate', { succeeded: false, refusalReason: 'Fixture.esp could not be parsed.' });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
@@ -134,7 +134,7 @@ describe('subscribeExternalChangePending', () => {
 
     // The client has already surfaced the reason; nothing landed, so there is no new baseline
     // to rebase onto.
-    expect(deps.showRebaseOffer).not.toHaveBeenCalled();
+    expect(deps.openMergeEditor).not.toHaveBeenCalled();
   });
 
   it('a rejected dispatch logs rather than throwing', async () => {

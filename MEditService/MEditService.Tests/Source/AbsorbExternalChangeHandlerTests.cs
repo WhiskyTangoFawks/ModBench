@@ -41,20 +41,24 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         Assert.Contains("\"HeightMax\": 0.9", newBaseline, StringComparison.Ordinal);
     }
 
+    // Absorb rebases the edit branch onto its new baseline in the same call; over a clean branch
+    // that never diverged, the rebase is a fast-forward, so HEAD lands exactly on main's new tip.
     [Fact]
-    public void Absorb_TouchesNeitherTheEditBranchsWorkingTreeNorItsHead()
+    public void Absorb_FastForwardsTheCleanEditBranchOntoTheNewBaseline()
     {
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
-        var branchBefore = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim();
-        var headBefore = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim();
         var dirtBefore = _mod.GitStatus();
-
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
-        _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
 
-        Assert.Equal(branchBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
-        Assert.Equal(headBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
+        var result = _mod.AbsorbHandler.Absorb(_mod.ModFolder, SourceEditFixture.PluginName, pluginPath, _mod.LoadOrder);
+
+        Assert.True(result.Applied, result.RefusalReason);
+        Assert.Equal(RebaseOutcome.Clean, result.Rebase?.Outcome);
+        var mainSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
+        Assert.Equal("edit", GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
+        Assert.Equal(mainSha, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
+        // Only the ignored plugin binary shows, same as before Absorb ran — nothing git tracks is dirty.
         Assert.Equal(dirtBefore, _mod.GitStatus());
     }
 

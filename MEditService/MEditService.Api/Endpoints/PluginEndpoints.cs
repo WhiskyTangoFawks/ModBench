@@ -132,9 +132,8 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<UnansweredExternalChangeResponse>>();
 
-        // Absorb Upstream Update. 200 either way — a refusal here is the same typed-result
-        // posture Compile already established, not an HTTP error a client has to distinguish from a
-        // transport failure.
+        // Absorb Upstream Update, which rebases the edit branch onto the new baseline it commits.
+        // 200 either way — a refusal is the same typed-result posture Compile already established.
         app.MapPost("/plugins/{plugin}/external-change/absorb", AbsorbExternalChange)
             .WithName("AbsorbExternalChange")
             .WithTags(Tag)
@@ -153,9 +152,9 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // The offered rebase, and its re-runnable form (Modbench: Rebase onto Updated
-        // Baseline). Origin-scoped, not plugin-scoped — the repo is the unit of baselines and
-        // rebase, and a mod folder can hold more than one plugin.
+        // The manual rebase (Modbench: Rebase onto Updated Baseline), for re-running after Absorb's
+        // own rebase refused or conflicted. Origin-scoped — the repo, not any one plugin, is the
+        // unit of baselines and rebase.
         app.MapPost("/plugins/rebase", Rebase)
             .WithName("RebaseEditBranch")
             .WithTags(Tag)
@@ -370,7 +369,8 @@ public static class PluginEndpoints
                 watcher.MarkAnswered(modFolder, decoded);
                 watcher.Watch(modFolder, decoded, pluginPath);
             }
-            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
+            var rebase = result.Rebase is { } r ? new RebaseResponse(r.Outcome, r.RefusalReason, r.ConflictedPaths) : null;
+            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason, rebase));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -415,7 +415,7 @@ public static class PluginEndpoints
         }
     }
 
-    // The offered rebase, origin-scoped — the repo is the unit of baselines and rebase, not
+    // The manual rebase, origin-scoped — the repo is the unit of baselines and rebase, not
     // any one plugin inside it.
     internal static IResult Rebase(RebaseRequest req, RebaseEditBranchHandler handler, ILoggerFactory loggerFactory)
     {
@@ -494,7 +494,9 @@ public record UnansweredExternalChangeResponse(string Plugin, string Origin, boo
 // rides the route, matching CompileRequest's own shape.
 public record ExternalChangeActionRequest(string Origin);
 
-public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason);
+// Rebase is set only by Absorb, which rebases the edit branch onto the new baseline it just
+// committed; Keep never rebases, so its response always carries a null Rebase.
+public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason, RebaseResponse? Rebase = null);
 
 // Origin-scoped — the repo is the unit of baselines and rebase.
 public record RebaseRequest(string Origin);
