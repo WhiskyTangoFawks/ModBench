@@ -27,6 +27,9 @@ export interface DownloadRow {
   hidden: boolean;
   /** Nexus mod id; MO2 writes `0` for none, which reads as absent here. */
   modID?: string;
+  /** Nexus file id; MO2 writes `0` for none, which reads as absent here — the
+   *  upgrade pick's precise match, sharper than modID's mod-level one. */
+  fileID?: string;
   version?: string;
   /** The mod's own name, distinct from the file's `displayName`. */
   modName?: string;
@@ -59,6 +62,7 @@ export function parseDownloadMeta(
   status: DownloadStatus;
   hidden: boolean;
   modID?: string;
+  fileID?: string;
   name?: string;
   version?: string;
   modName?: string;
@@ -75,12 +79,14 @@ export function parseDownloadMeta(
   if (values.get('uninstalled') === 'true') status = 'Uninstalled';
   else if (values.get('installed') === 'true') status = 'Installed';
   const modID = values.get('modID');
+  const fileID = values.get('fileID');
   // `removed` is HIDDEN — a separate key/axis from the `uninstalled` Status above.
   const hidden = values.get('removed') === 'true';
   return {
     status,
     hidden,
     modID: modID && modID !== '0' ? modID : undefined,
+    fileID: fileID && fileID !== '0' ? fileID : undefined,
     name: values.get('name'),
     version: values.get('version'),
     modName: values.get('modName'),
@@ -148,7 +154,7 @@ export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
   const rows = entries
     .filter((e) => !e.name.endsWith('.meta'))
     .map((e) => {
-      const { status, hidden, modID, name, version, modName, gameName, author } = parseDownloadMeta(
+      const { status, hidden, modID, fileID, name, version, modName, gameName, author } = parseDownloadMeta(
         e.metaText ?? '',
       );
       // Mirrors MO2's displayNameByInfo (downloadmanager.cpp:1410): `.meta` name
@@ -164,6 +170,7 @@ export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
         hasMeta: e.metaText !== undefined,
         hidden,
         modID,
+        fileID,
         version,
         modName,
         gameName,

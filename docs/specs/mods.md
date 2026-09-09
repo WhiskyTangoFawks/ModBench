@@ -259,8 +259,9 @@ the configured game directory's `Data/`.
   between them and the files.
 - **MO2 layout** (first-class): read/written in place — `mods/<name>/`, the
   active profile's `modlist.txt` (`+`/`-` prefixes, top of file = winning end, bottom = losing end) and
-  `plugins.txt`, and per-mod `meta.ini` (Nexus id/version). Separators, categories, and
-  metadata survive verbatim.
+  `plugins.txt`, and per-mod `meta.ini` (Nexus id/version, and the `installedFiles` mod-id/file-id
+  pairs in MO2's own array form). Separators, categories, and metadata survive verbatim: a write
+  of the keys Modbench owns leaves every other key and section byte for byte.
 - **Native adapter** (first-class): for fresh setups; writes MO2-format instances so they
   also open in MO2. No separate format.
 - **Vortex adapter** (deferred): a read-only snapshot via `vortex.deployment.json`. No
