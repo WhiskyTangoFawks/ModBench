@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 import type { MasterIssue, PluginDiagnosisReport, PluginMetadata } from '../medit/ApiClient';
+import type { MEditClient } from '../medit/client';
 import type { Instance, InstanceValue } from '../modmanager/instance';
 import type { PluginEntry } from '../modmanager/model';
 import type { Reporter } from '../modmanager/deployer';
@@ -28,12 +29,9 @@ export interface PluginListSource {
   reorderPlugins(pluginNames: string[], toIndex: number): Promise<void>;
 }
 
-/** The mEdit reads every plugin-keyed fact comes from — `PluginRepository` by shape. Pulled once
- *  per reconcile, never per rendered row. */
-export interface PluginFactsClient {
-  getPlugins(): Promise<PluginMetadata[]>;
-  getDiagnoses(): Promise<PluginDiagnosisReport[]>;
-}
+/** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
+ *  calls. Pulled once per reconcile, never per rendered row. */
+export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses'>;
 
 /** The record browser a row's children are delegated to (ADR-0035). `PluginTreeProvider`
  *  satisfies it. */
