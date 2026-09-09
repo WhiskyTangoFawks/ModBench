@@ -678,6 +678,46 @@ describe('Instance — per-mod status and the overwrite count', () => {
   });
 });
 
+describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
+  it('carries a download row\'s fileID from its sidecar and a mod\'s installedFiles pairs from meta.ini', async () => {
+    const { root, instance } = await minimalInstance();
+    await mkdir(join(root, 'downloads'), { recursive: true });
+    await writeFile(join(root, 'downloads', 'Consumer-1-2-3.7z'), 'archive bytes');
+    await writeFile(
+      join(root, 'downloads', 'Consumer-1-2-3.7z.meta'),
+      '[General]\r\nmodID=1000\r\nfileID=2000\r\ninstalled=true\r\n',
+    );
+    await writeFile(
+      join(root, 'mods', 'Consumer', 'meta.ini'),
+      '[General]\r\ngameName=Fallout4\r\nmodid=1000\r\n[installedFiles]\r\n1\\modid=1000\r\n1\\fileid=2000\r\nsize=1\r\n',
+    );
+
+    await instance.refresh();
+
+    const download = instance.value.downloads.find((d) => d.name === 'Consumer-1-2-3.7z');
+    expect(download?.fileID).toBe('2000');
+
+    const mod = instance.value.mods.find((m) => m.name === 'Consumer');
+    expect(mod).toMatchObject({ installedFiles: [{ modid: '1000', fileid: '2000' }] });
+  });
+
+  it('carries no fileID on a download row whose sidecar has none, and no installedFiles on a mod with no meta.ini section', async () => {
+    const { root, instance } = await minimalInstance();
+    await mkdir(join(root, 'downloads'), { recursive: true });
+    await writeFile(join(root, 'downloads', 'Plain-1.7z'), 'archive bytes');
+    await writeFile(join(root, 'downloads', 'Plain-1.7z.meta'), '[General]\r\nmodID=1000\r\n');
+    await writeFile(join(root, 'mods', 'Consumer', 'meta.ini'), '[General]\r\ngameName=Fallout4\r\n');
+
+    await instance.refresh();
+
+    const download = instance.value.downloads.find((d) => d.name === 'Plain-1.7z');
+    expect(download?.fileID).toBeUndefined();
+
+    const mod = instance.value.mods.find((m) => m.name === 'Consumer');
+    expect(mod).toMatchObject({ installedFiles: undefined });
+  });
+});
+
 // ADR-0044: the snapshot the sync PUTs, read straight from the value rather than a fresh walk.
 describe('loadOrderSnapshotOf', () => {
   const GAME_DIRECTORY = { root: '/game', dataFolder: '/game/Data' };

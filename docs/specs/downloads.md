@@ -170,6 +170,8 @@ bookkeeping.
   - neither flag → **Downloaded**
 - A download with **no `.meta` sidecar** (e.g. a manually-dropped file) is a valid row:
   Status **Downloaded**, with Nexus/meta actions gated off (below).
+- **Nexus identity is read from the `.meta`**: `modID` and `fileID`, each absent when missing
+  or `0`. The file id is what an upgrade pre-selects by; a filename is never consulted.
 
 ### Row rendering
 
