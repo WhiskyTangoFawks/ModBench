@@ -5,24 +5,19 @@ import type { CompileResult } from '../medit/ApiClient';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
 import { ActiveRecordTracker } from '../medit/ActiveRecordTracker';
 import { resolveCompileTarget } from '../medit/compileTarget';
-import { offerEslFlagRemoval, type EslFlagRemovalTarget } from '../medit/eslFlagRemovalPrompt';
+import { promptEslFlagRemoval } from '../medit/promptEslFlagRemoval';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../medit/trackedRepositories';
-import { makeMergeEditorOpener, runRebase } from './externalChangeGestures';
+import { runRebase } from './externalChangeGestures';
+import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from '../medit/trackProgress';
 import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
 import { makeReporter } from '../reporter';
 import { withPluginsViewProgress, type ExtensionSession } from '../session';
 import { say } from '../editingTeardown';
 
-// `offerEslFlagRemoval` (medit/eslFlagRemovalPrompt.ts) takes the full `PluginRepository` shape;
-// this Pick mirrors it member-for-member off the port instead, so Save & Compile and Compile at
-// Ref can satisfy that call without this module importing the repository interface.
-type CompileClient = Pick<MEditClient,
-  | 'getPlugins' | 'getDiagnoses' | 'getRecordTypes' | 'getRecords' | 'searchRecords'
-  | 'getRecordOwner' | 'getRecordOverridePlugins' | 'peekNextFreeFormKey' | 'getReferences'
-  | 'setFilter' | 'clearFilter' | 'getActiveFilter' | 'editRecord'
-  | 'getWorldspaces' | 'getWorldspaceBlocks' | 'getCellReferences' | 'getInteriorCells' | 'getContainerChildren'
-  | 'compile'>;
+// Everything Save & Compile and Compile at Ref call: resolving an origin and a record's owner,
+// compiling, and (on an ESL contradiction) editing the header to retry.
+type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
 
 // The port has no `resolveOrigin` — only `EditingController` does, and this module may not hold
 // the controller. Derived here from `getPlugins()`, the same lookup EditingController.resolveOrigin
@@ -34,7 +29,7 @@ async function resolveOrigin(
   try {
     plugins = await client.getPlugins();
   } catch (e) {
-    outputChannel.info(`[extension] resolveOrigin(${pluginName}) failed: ${e instanceof Error ? e.message : String(e)}`);
+    outputChannel.info(`[pluginRowCommands] resolveOrigin(${pluginName}) failed: ${e instanceof Error ? e.message : String(e)}`);
     return undefined;
   }
   return plugins.find((p) => p.name === pluginName && p.inLoadOrder)?.origin;
@@ -198,17 +193,6 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
       formKey: headerFormKeyFor(pluginName), label: pluginName,
     });
   });
-}
-
-// Binds `offerEslFlagRemoval` to `vscode.window`; the core stays `vscode`-free and testable.
-async function promptEslFlagRemoval(
-  target: EslFlagRemovalTarget, refusalReason: string, verb: string, client: CompileClient,
-): Promise<boolean> {
-  return offerEslFlagRemoval(
-    target, refusalReason, verb, client,
-    (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
-    message => void vscode.window.showErrorMessage(message),
-  );
 }
 
 export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, command: string, message: string): void {

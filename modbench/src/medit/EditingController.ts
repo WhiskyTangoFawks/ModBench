@@ -225,21 +225,6 @@ export class EditingController {
     await this.deps.repository.clearFilter();
   }
 
-  /** A `WriteRefused` — distinct from `null` ("no active filter") — means the read itself
-   *  failed; its `message` is the whole toast the caller shows. */
-  async syncFilterState(): Promise<string | null | WriteRefused> {
-    try {
-      return await this.deps.repository.getActiveFilter();
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] syncFilterState failed: ${detail}`);
-      return {
-        refused: true,
-        message: `mEdit: Could not read the active filter — treating the filter as inactive. ${detail}`,
-      };
-    }
-  }
-
   /** The origin the load order names for this plugin. A transport failure degrades to
    *  `undefined` (ADR-0026); without the catch, a call before the backend runs surfaces VS Code's
    *  raw "fetch failed" toast. */

@@ -13,7 +13,7 @@ export interface EslFlagRemovalTarget {
  *  names that gesture in the prompt's words. */
 export async function offerEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string,
-  repository: PluginRepository,
+  repository: Pick<PluginRepository, 'editRecord'>,
   showWarning: (message: string, options: { modal: true }, ...items: string[]) => Thenable<string | undefined>,
   showError: (message: string) => void,
 ): Promise<boolean> {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { reportLoadOrderResult, applyFilterSyncResult } from '../loadOrderOutcome';
+import { reportLoadOrderResult, applyFilterSyncResult, syncActiveFilter } from '../loadOrderOutcome';
 import type { components } from '../generated/api';
 
 function makeDeps() {
@@ -158,6 +158,33 @@ describe('applyFilterSyncResult', () => {
 
     applyFilterSyncResult({ refused: true, message: 'mEdit: Could not read the active filter — treating the filter as inactive. boom' }, deps);
 
+    expect(deps.warn).toHaveBeenCalledWith('mEdit: Could not read the active filter — treating the filter as inactive. boom');
+    expect(deps.setFilterActive).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('syncActiveFilter', () => {
+  function makeSyncDeps() {
+    return { log: vi.fn(), warn: vi.fn(), setFilterActive: vi.fn() };
+  }
+
+  it('sets the filter active with what the read returned', async () => {
+    const deps = makeSyncDeps();
+
+    await syncActiveFilter(() => Promise.resolve('SELECT form_key FROM "npc_"'), deps);
+
+    expect(deps.setFilterActive).toHaveBeenCalledWith(true, 'SELECT form_key FROM "npc_"', undefined);
+    expect(deps.log).not.toHaveBeenCalled();
+  });
+
+  // ADR-0026: an unsurfaced read failure is a notify-and-log tier — both the toast and the
+  // channel line, never one without the other.
+  it('logs and warns a read failure, and sets the filter inactive', async () => {
+    const deps = makeSyncDeps();
+
+    await syncActiveFilter(() => Promise.reject(new Error('boom')), deps);
+
+    expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('boom'));
     expect(deps.warn).toHaveBeenCalledWith('mEdit: Could not read the active filter — treating the filter as inactive. boom');
     expect(deps.setFilterActive).toHaveBeenCalledWith(false);
   });

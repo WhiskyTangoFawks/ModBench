@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
-import type { MEditClient, WriteRefused } from './medit/client';
+import type { MEditClient } from './medit/client';
+import { implicitMastersFrom, rebuildIndexVia, putLoadOrderVia } from './toolboxClientCalls';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
-import { reportLoadOrderResult, applyFilterSyncResult } from './medit/loadOrderOutcome';
+import { reportLoadOrderResult, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import type { CrashRepairOffer, LoadOrderStatus as LoadOrderProgress } from './medit/ApiClient';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
@@ -177,17 +178,13 @@ interface ReconcileDeps {
   notifyConflictsComputed: () => void;
 }
 
-// Not `makeReporter`: its "Modbench: " prefix would double up on the message below. The port's
-// `getActiveFilter` is a plain query, so the try/catch replicates EditingController's own.
-async function applySyncedFilterState(client: Pick<MEditClient, 'getActiveFilter'>, session: ExtensionSession): Promise<void> {
-  let result: string | null | WriteRefused;
-  try {
-    result = await client.getActiveFilter();
-  } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    result = { refused: true, message: `mEdit: Could not read the active filter — treating the filter as inactive. ${detail}` };
-  }
-  applyFilterSyncResult(result, {
+// Not `makeReporter`: its "Modbench: " prefix would double up on the message `syncActiveFilter`
+// already builds.
+function applySyncedFilterState(
+  client: Pick<MEditClient, 'getActiveFilter'>, session: ExtensionSession, outputChannel: vscode.LogOutputChannel,
+): Promise<void> {
+  return syncActiveFilter(() => client.getActiveFilter(), {
+    log: (m) => outputChannel.info(`[toolbox] ${m}`),
     warn: (m) => void vscode.window.showWarningMessage(m),
     setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
   });
@@ -221,13 +218,13 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
     putLoadOrder: async (plugins, dataFolder, signal, onProgress) => {
-      const result = await client.putLoadOrder(
-        plugins, dataFolder, instanceRoot,
+      const result = await putLoadOrderVia(
+        client, plugins, dataFolder, instanceRoot,
         gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
         { onProgress, signal },
       );
       reportLoadOrderResult(plugins, result, {
-        log: (m) => outputChannel.info(`[EditingController] ${m}`),
+        log: (m) => outputChannel.info(`[toolbox] ${m}`),
         warn: (m) => void vscode.window.showWarningMessage(m),
         error: (m) => void vscode.window.showErrorMessage(m),
         setStatusText,
@@ -236,7 +233,7 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
       });
       return result;
     },
-    syncFilterState: () => applySyncedFilterState(client, session),
+    syncFilterState: () => applySyncedFilterState(client, session, outputChannel),
     applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, totalPlugins),
     presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
@@ -406,12 +403,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // The backend answers this, never the extension (ADR-0021), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.
-  const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> => {
-    const release = gameReleaseForGame(gameName);
-    return folder === undefined || release === undefined
-      ? Promise.resolve(undefined)
-      : client.implicitMasters(folder, release);
-  };
+  const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> =>
+    implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
   const runPluginsReconcile = async (profile: string, folder: string | undefined, gameName: string) => {
@@ -470,8 +463,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0046: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
   // a rebuild failure is reported through makeReporter, never a bare toast (modbench/CLAUDE.md).
   const refreshAll = makeRefreshAll({
-    rebuildIndex: () => client.rebuildIndex(
-      instanceRoot,
+    rebuildIndex: () => rebuildIndexVia(
+      client, instanceRoot,
       (message, detail) => makeReporter(outputChannel, 'refresh').report('error', message, detail),
       gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
     ),

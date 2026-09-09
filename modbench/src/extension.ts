@@ -30,7 +30,7 @@ import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
-import { wireExternalChangePending } from './plugins/externalChangeGestures';
+import { wireExternalChangePending } from './plugins/externalChangeWiring';
 
 
 
@@ -188,7 +188,7 @@ export function activate(context: vscode.ExtensionContext) {
       session, client: meditClient, controller, repository, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed,
     }),
     ...registerEditorCommands({
-      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, outputChannel,
+      context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, meditClient, repository, scriptsPath, referencedByTreeView, outputChannel,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),

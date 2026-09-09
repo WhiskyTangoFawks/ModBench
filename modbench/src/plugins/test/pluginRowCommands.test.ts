@@ -35,7 +35,9 @@ vi.mock('vscode', () => ({
   TreeItem, ThemeIcon, EventEmitter, TreeItemCollapsibleState,
 }));
 
-import { registerTrackCommand, registerRebaseCommand, compileAndReport } from '../pluginRowCommands';
+import {
+  registerTrackCommand, registerRebaseCommand, compileAndReport, registerSaveAndCompileCommand, registerCompileAtRefCommand,
+} from '../pluginRowCommands';
 import { InMemoryMEditClient } from '../../medit/client';
 import type { PluginListNode } from '../PluginsTreeProvider';
 
@@ -148,5 +150,43 @@ describe('compileAndReport', () => {
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
     expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" — boom');
     expect(showInformationMessage).not.toHaveBeenCalled();
+  });
+});
+
+function fakeDiagnostics() {
+  return { delete: vi.fn(), set: vi.fn(), [Symbol.iterator]: function* () {} } as any;
+}
+
+// ── registerSaveAndCompileCommand ─────────────────────────────────────────
+
+describe('registerSaveAndCompileCommand', () => {
+  it('drives a tree-row compile through the registered command, recording the compile call and surfacing the refusal', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' } as any);
+    const activeRecordTracker = { current: () => undefined } as any;
+    const diagnostics = fakeDiagnostics();
+    registerSaveAndCompileCommand(client, activeRecordTracker, fakeOutputChannel(), diagnostics);
+
+    await handlers.get('modbench.saveAndCompile')!({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+
+    expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
+    expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" — boom');
+  });
+});
+
+// ── registerCompileAtRefCommand ───────────────────────────────────────────
+
+describe('registerCompileAtRefCommand', () => {
+  it('drives a compile-at-main through the registered command, recording the compile call at "main" and surfacing the refusal', async () => {
+    const client = clientWithOrigin('MyPatch.esp', 'ModA');
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom' } as any);
+    const diagnostics = fakeDiagnostics();
+    showWarningMessage.mockResolvedValue('Compile at main');
+    registerCompileAtRefCommand(client, fakeOutputChannel(), diagnostics);
+
+    await handlers.get('modbench.pluginListTree.compileAtMain')!({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+
+    expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', 'main'] });
+    expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" at "main" — boom');
   });
 });

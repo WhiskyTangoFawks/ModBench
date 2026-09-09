@@ -4,9 +4,10 @@ import * as os from 'os';
 import { EditingController, isRefused } from './EditingController';
 import { PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode } from '../plugins/PluginTreeProvider';
 import { registerLoadMoreCommand, registerFilterCommands } from '../plugins/recordFilterCommands';
+import type { MEditClient } from './client';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
-import { offerEslFlagRemoval, type EslFlagRemovalTarget } from './eslFlagRemovalPrompt';
+import { promptEslFlagRemoval } from './promptEslFlagRemoval';
 import { ApiPluginRepository, type PluginRepository } from './PluginRepository';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ColumnHeaderContext } from './messages';
@@ -29,8 +30,10 @@ export interface EditorCommandDeps {
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   port: number;
   treeProvider: PluginTreeProvider;
-  controller: EditingController;
   repository: ApiPluginRepository;
+  // The record filter is a plugin gesture: it calls the port directly, never through
+  // `controller`, even though `controller` would structurally satisfy the same Pick.
+  meditClient: Pick<MEditClient, 'setFilter' | 'clearFilter'>;
   scriptsPath: string;
   // The Referenced By view itself — needed for its Copy command's selection
   // fallback (`.selection`). The provider is not threaded here: nothing in this file retargets
@@ -67,7 +70,7 @@ function recordPanelWriteDeps(
 
 export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
-    context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
+    context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, meditClient, scriptsPath,
     referencedByTreeView, outputChannel, mergedTreeSelection, refreshMatchingPlugins, setFilterActive,
   } = deps;
   // One decoration provider per activation: its lookup reads treeProvider's cache live, so it
@@ -111,7 +114,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
     registerLoadMoreCommand(treeProvider),
-    ...registerFilterCommands({ scriptsPath, client: controller, treeProvider, refreshMatchingPlugins, setFilterActive }),
+    ...registerFilterCommands({ scriptsPath, client: meditClient, treeProvider, refreshMatchingPlugins, setFilterActive }),
     // Retargets nothing — the view follows activeRecordTracker on its own.
     // Kept as a Command Palette reveal-this-view convenience; no menu invokes this.
     vscode.commands.registerCommand('modbench.showReferencedBy',
@@ -317,16 +320,6 @@ export async function runCopyRecordCommand(
     onWritten();
     void vscode.window.showInformationMessage(`Modbench: Copied as ${result.newFormKey} into ${destination.name}.`);
   }
-}
-// Binds `offerEslFlagRemoval` to `vscode.window`; the core stays `vscode`-free and testable.
-async function promptEslFlagRemoval(
-  target: EslFlagRemovalTarget, refusalReason: string, verb: string, repository: PluginRepository,
-): Promise<boolean> {
-  return offerEslFlagRemoval(
-    target, refusalReason, verb, repository,
-    (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
-    message => void vscode.window.showErrorMessage(message),
-  );
 }
 
 export const RECORD_PANEL_KEY = '__record_view__';

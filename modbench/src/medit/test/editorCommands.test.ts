@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
 const {
   handlers, registerCommand, showWarningMessage, showErrorMessage, showInformationMessage, showInputBox, showQuickPick, workspaceFolders,
+  registerFileDecorationProvider,
   TreeItem, ThemeIcon, EventEmitter, Range, Diagnostic, Uri,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
@@ -27,6 +28,7 @@ const {
     showInputBox: vi.fn(),
     showQuickPick: vi.fn(),
     workspaceFolders: { value: undefined as { uri: { fsPath: string } }[] | undefined },
+    registerFileDecorationProvider: vi.fn(() => ({ dispose: vi.fn() })),
     TreeItem, ThemeIcon, EventEmitter, Range, Diagnostic, Uri,
   };
 });
@@ -35,13 +37,16 @@ vi.mock('vscode', () => ({
   commands: { registerCommand, executeCommand: vi.fn() },
   window: {
     showWarningMessage, showErrorMessage, showInformationMessage, showInputBox, showQuickPick,
+    registerFileDecorationProvider,
   },
   workspace: { get workspaceFolders() { return workspaceFolders.value; } },
   TreeItem, ThemeIcon, EventEmitter, TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
   Range, Diagnostic, DiagnosticSeverity: { Warning: 1, Error: 0 }, Uri,
 }));
 
-import { registerRecordLifecycleCommands, runCopyRecordCommand } from '../editorCommands';
+import { registerRecordLifecycleCommands, runCopyRecordCommand, registerEditorCommands, type EditorCommandDeps } from '../editorCommands';
+import { ActiveRecordTracker } from '../ActiveRecordTracker';
+import { InMemoryMEditClient } from '../client';
 
 beforeEach(() => {
   handlers.clear();
@@ -131,5 +136,41 @@ describe('runCopyRecordCommand', () => {
 
     expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom');
     expect(onWritten).not.toHaveBeenCalled();
+  });
+});
+
+// ── registerEditorCommands: the record filter's wiring ────────────────────
+// The filter must call the port, never `controller` — a wrong wiring would still typecheck, so
+// this drives the registered command through a distinct `meditClient`.
+describe('registerEditorCommands — the record filter wiring', () => {
+  function invoke(meditClient: InMemoryMEditClient) {
+    const deps: EditorCommandDeps = {
+      context: {} as any,
+      openPanels: new Map(),
+      recordPanels: new Set(),
+      activeRecordTracker: new ActiveRecordTracker(),
+      port: 0,
+      treeProvider: { workingTreeStateOf: vi.fn(), refresh: vi.fn() } as any,
+      repository: {} as any,
+      meditClient,
+      scriptsPath: '/scripts',
+      referencedByTreeView: { selection: [] } as any,
+      mergedTreeSelection: () => [],
+      refreshMatchingPlugins: vi.fn(),
+      refreshSourceControlFor: vi.fn(),
+      setFilterActive: vi.fn(),
+      outputChannel: fakeOutputChannel(),
+    };
+    registerEditorCommands(deps);
+  }
+
+  it('modbench.clearFilter calls the meditClient, not the controller', async () => {
+    const meditClient = new InMemoryMEditClient();
+    meditClient.setQueryAnswer('clearFilter', undefined);
+    invoke(meditClient);
+
+    await handlers.get('modbench.clearFilter')!();
+
+    expect(meditClient.calls).toContainEqual({ method: 'clearFilter', args: [] });
   });
 });
