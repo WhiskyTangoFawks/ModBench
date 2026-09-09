@@ -216,6 +216,15 @@ export function isTestSupport(path: string): boolean {
 
 const SRC = join(__dirname, '..');
 
+// Covered: static and dynamic imports, `require`, destructuring, renaming, alias chains,
+// computed access, and reporting an acquisition whose value the scan cannot follow.
+
+// Not covered: indirection through a callback parameter in a separate statement, or through an
+// object property. A static scan is evadable with enough indirection, by construction.
+
+// This catches a reintroduced header read — someone imports `open` and calls it — rather than
+// deliberate obfuscation, which is a code-review question.
+
 describe('the extension opens no plugin file for reading', () => {
   it('covers the whole extension source tree', () => {
     expect(tsFiles(SRC).length).toBeGreaterThan(100);
