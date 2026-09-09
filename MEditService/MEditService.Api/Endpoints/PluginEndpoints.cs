@@ -126,7 +126,7 @@ public static class PluginEndpoints
             .ProducesProblem(422);
 
         // Always 200, an empty list when nothing is unanswered; no load order dependency, since
-        // the queue lives on the singleton ExternalChangeWatcher.
+        // the queue lives on the singleton ModFolderWatcher.
         app.MapGet("/plugins/external-changes/status", ExternalChangeStatus)
             .WithName("GetExternalChangeStatus")
             .WithTags(Tag)
@@ -326,7 +326,7 @@ public static class PluginEndpoints
 
     // Best-effort origin: a load order that has reloaded away from a plugin still reports the
     // question with an empty Origin rather than dropping it, since the question is still real.
-    internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, IndexProjector index)
+    internal static IResult ExternalChangeStatus(ModFolderWatcher watcher, IndexProjector index)
     {
         // Projected once, not per question: the whole list is answered against one value.
         var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
@@ -349,7 +349,7 @@ public static class PluginEndpoints
     // Compile does; GameRelease comes off the loaded load order, never guessed.
     internal static IResult AbsorbExternalChange(
         string plugin, ExternalChangeActionRequest req, IndexProjector index, AbsorbExternalChangeHandler handler,
-        ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
+        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
@@ -384,7 +384,7 @@ public static class PluginEndpoints
     // Compile's own refusal.
     internal static IResult KeepExternalChange(
         string plugin, ExternalChangeActionRequest req, IndexProjector index, KeepExternalChangeHandler handler,
-        ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
+        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);

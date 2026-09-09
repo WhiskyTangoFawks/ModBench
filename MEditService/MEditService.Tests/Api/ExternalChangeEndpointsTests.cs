@@ -45,7 +45,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     [Fact]
     public void ExternalChangeStatus_ReportsAWatcherQueuedQuestion_WithItsOriginResolved()
     {
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
         watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(true, "1.0", "2.0"));
 
@@ -64,7 +64,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     public void AbsorbExternalChange_AbsorbsAndClearsTheUnansweredQuestion()
     {
         WriteExternalBinaryChange(0.9f);
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
         watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(false, null, null));
         var (loggerFactory, _) = CapturingLoggerFactory();
@@ -87,7 +87,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.AbsorbExternalChange(
             IndexedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
-            _mod.Index, TestEditService.AbsorbHandler(), new ExternalChangeWatcher(), loggerFactory);
+            _mod.Index, TestEditService.AbsorbHandler(), new ModFolderWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);
@@ -100,7 +100,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     {
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
-        var watcher = new ExternalChangeWatcher();
+        var watcher = new ModFolderWatcher();
         watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(false, null, null));
         var (loggerFactory, _) = CapturingLoggerFactory();
@@ -128,7 +128,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.KeepExternalChange(
             IndexedModFixture.PluginName, new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
-            _mod.Index, TestEditService.KeepHandler(), new ExternalChangeWatcher(), loggerFactory);
+            _mod.Index, TestEditService.KeepHandler(), new ModFolderWatcher(), loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.False(ok.Value!.Succeeded);

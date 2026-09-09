@@ -30,7 +30,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
     /// <summary>What the recorder held once Track and the watch window behind it had settled.</summary>
     public IReadOnlyList<Notification> AfterTrack { get; }
 
-    private readonly SourceChangeWatcher _watcher;
+    private readonly ModFolderWatcher _watcher;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-watch-game-").FullName;
 
     public SourceWatchRealDataFixture()
@@ -45,7 +45,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
-        _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(150));
+        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(150));
         var sourceChanges = new SourceChangeApplier(Index, Index.WriteGate, _watcher, Notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
         Index.LoadOrderChanged = sourceChanges.RefreshWatches;

@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Core.Queries;
+using MEditService.Core.Source;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -137,5 +139,60 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         var pending = Assert.Single(events);
         Assert.Equal(Plugin, pending.GetProperty("plugin").GetString());
         Assert.Equal(Origin, pending.GetProperty("origin").GetString());
+    }
+
+    // ADR-0046: one watcher per mod routes all three signals — a hand edit under source, a commit
+    // moving HEAD, and a plugin overwrite — to the seams they reach today, in one pass over the
+    // same temporary tracked mod.
+    [Fact]
+    public async Task AHandEditThenACommitThenAPluginOverwrite_EachReachTheSameSeam()
+    {
+        using var fx = BuildOneModOnePlugin();
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
+            .EnsureSuccessStatusCode();
+        // Re-registers the plugin watcher now that the origin is tracked (ExternalChangeLoadOrderHook
+        // runs on every PUT /load-order).
+        (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
+
+        var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
+        var modFolder = Path.GetDirectoryName(pluginPath)!;
+        var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
+        var formKey = records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
+        var sourceFile = Directory
+            .EnumerateFiles(Path.Combine(modFolder, "source", Plugin), "*.json", SearchOption.AllDirectories)
+            .Single(f => !Path.GetFileName(f).StartsWith("RecordData", StringComparison.Ordinal)
+                         && !Path.GetFileName(f).StartsWith("GroupRecordData", StringComparison.Ordinal));
+
+        using var reader = await OpenStreamAsync();
+
+        // A hand edit under the source folder refreshes the Index by key, as it does today.
+        var text = File.ReadAllText(sourceFile);
+        File.WriteAllText(sourceFile, text.Replace("StatusNotifyNpc", "HandEditedNpc", StringComparison.Ordinal));
+        var handEdits = await ReadEventsUntilAsync(
+            reader, "rows-changed",
+            e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey),
+            TimeSpan.FromSeconds(10));
+        Assert.Contains(handEdits, e => e.GetProperty("plugin").GetString() == Plugin);
+
+        // A commit that moves HEAD refreshes the committed view whole, as it does today: a fresh
+        // projection lands, provable through the same sequence-await the extension itself polls.
+        var beforeCommit = await _client.GetFromJsonAsync<long>("/load-order/sequence");
+        var gitDir = Path.Combine(modFolder, ".git");
+        GitCli.Run(gitDir, modFolder, "add", "-A");
+        GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", "hand edit committed outside Modbench");
+        var afterCommit = await _client.GetFromJsonAsync<SequenceAwaitResponse>(
+            $"/load-order/sequence/await?atLeast={beforeCommit + 1}&timeoutMs=10000");
+        Assert.True(afterCommit!.Reached, "the commit's ref move never landed a fresh projection");
+
+        // A plugin overwrite reaches the classifier's external-change route, as it does today.
+        var changedPlugin = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
+        changedPlugin.Npcs.AddNew("ExternallyAddedNpc");
+        changedPlugin.WriteToBinary(pluginPath);
+        var pending = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+
+        var one = Assert.Single(pending);
+        Assert.Equal(Plugin, one.GetProperty("plugin").GetString());
+        Assert.Equal(Origin, one.GetProperty("origin").GetString());
     }
 }

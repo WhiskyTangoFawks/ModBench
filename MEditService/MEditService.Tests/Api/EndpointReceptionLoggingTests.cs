@@ -39,7 +39,7 @@ public sealed class EndpointReceptionLoggingTests
             var req = new LoadOrderRequest([], tempDir, tempDir, "Fallout4");
 
             using var index = new IndexProjector(new RefusingIndexFactory());
-            LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ExternalChangeWatcher(), loggerFactory);
+            LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ModFolderWatcher(), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
         }
@@ -60,7 +60,7 @@ public sealed class EndpointReceptionLoggingTests
         using var index = new IndexProjector(factory);
         var req = new LoadOrderRequest([], "Z:\\does-not-exist", "Z:\\does-not-exist", "Fallout4");
 
-        var result = LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ExternalChangeWatcher(), loggerFactory);
+        var result = LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ModFolderWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

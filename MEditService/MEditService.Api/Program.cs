@@ -95,12 +95,9 @@ try
     builder.Services.AddCommandHandlers();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // The bridge's own live-watch lifecycle and unanswered-question queue — one instance for the
-    // whole process, so the reconcile-time check (PUT /load-order) and the live watcher share it.
-    builder.Services.AddSingleton<ExternalChangeWatcher>();
-    // ADR-0046 invariant 4: the Source watcher, a process singleton for the same reason — the watch
-    // set is re-decided per reconcile, and by Track.
-    builder.Services.AddSingleton<SourceChangeWatcher>();
+    // ADR-0046: one recursive watcher per mod folder in the load order, a process singleton so the
+    // reconcile-time check (PUT /load-order), Track and the live watch all share it.
+    builder.Services.AddSingleton<ModFolderWatcher>();
 
     var app = builder.Build();
 
@@ -108,32 +105,29 @@ try
     // re-subscribing would stack a handler per reconcile. Which plugins are watched is re-decided
     // per reconcile instead.
     var index = app.Services.GetRequiredService<IndexProjector>();
-    var externalChangeWatcher = app.Services.GetRequiredService<ExternalChangeWatcher>();
+    var watcher = app.Services.GetRequiredService<ModFolderWatcher>();
     var binaryChanges = new BinaryChangeApplier(
         index,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(BinaryChangeApplier)));
-    externalChangeWatcher.IndexedBinaryChanged = binaryChanges.Apply;
-    externalChangeWatcher.IndexedWatchOverflowed = binaryChanges.ApplyOverflow;
+    watcher.IndexedBinaryChanged = binaryChanges.Apply;
+    watcher.IndexedWatchOverflowed = binaryChanges.ApplyOverflow;
 
-    // ADR-0046: the plugin watcher's own external-change signals, subscribed once for the same
-    // reason.
+    // ADR-0046: the mod watcher's own external-change signals, subscribed once for the same reason.
     var externalChanges = new ExternalChangeApplier(
         index,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ExternalChangeApplier)));
-    externalChangeWatcher.ExternalChangeReported = externalChanges.ApplyPending;
-    externalChangeWatcher.WatchOverflowed = externalChanges.ApplyOverflow;
+    watcher.ExternalChangeReported = externalChanges.ApplyPending;
+    watcher.WatchOverflowed = externalChanges.ApplyOverflow;
 
-    // ADR-0046: the Source watcher's other half, subscribed once for the same reason. The Index
-    // announces each reconcile and Track the repository it has created, so a watch starts with no
-    // restart.
-    var sourceWatcher = app.Services.GetRequiredService<SourceChangeWatcher>();
+    // ADR-0046: the same watcher's source-routing half. The Index announces each reconcile and
+    // Track the repository it has created, so a watch starts with no restart.
     var sourceChanges = new SourceChangeApplier(
-        index, app.Services.GetRequiredService<IndexWriteGate>(), sourceWatcher,
+        index, app.Services.GetRequiredService<IndexWriteGate>(), watcher,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceChangeApplier)));
-    sourceWatcher.SourceChanged = sourceChanges.Apply;
+    watcher.SourceChanged = sourceChanges.Apply;
     index.LoadOrderChanged = sourceChanges.RefreshWatches;
     app.Services.GetRequiredService<TrackService>().RepositoryCreated = sourceChanges.WatchTracking;
 

@@ -11,7 +11,7 @@ namespace MEditService.Api;
 internal static class ExternalChangeLoadOrderHook
 {
     internal static IReadOnlyList<CrashRepairOffer> RunAfterReconcile(
-        IndexProjector index, ExternalChangeWatcher watcher, ILogger logger)
+        IndexProjector index, ModFolderWatcher watcher, ILogger logger)
     {
         // A watch must never outlive the load order that asked for it, or a plugin the
         // load order does not hold would keep re-indexing itself into it.

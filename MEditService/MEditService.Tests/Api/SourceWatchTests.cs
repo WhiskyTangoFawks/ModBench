@@ -22,12 +22,12 @@ public sealed class SourceWatchTests : IDisposable
 {
     private readonly InMemoryNotificationPublisher _notifications = new();
     private readonly IndexedModFixture _mod;
-    private readonly SourceChangeWatcher _watcher;
+    private readonly ModFolderWatcher _watcher;
 
     public SourceWatchTests()
     {
         _mod = IndexedModFixture.Tracked(_notifications);
-        _watcher = new SourceChangeWatcher(TimeSpan.FromMilliseconds(100));
+        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         var sourceChanges = new SourceChangeApplier(_mod.Index, _mod.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
         _mod.Index.LoadOrderChanged = sourceChanges.RefreshWatches;

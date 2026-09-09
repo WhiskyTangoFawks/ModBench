@@ -11,7 +11,8 @@ public sealed class SourcePathLiteralScanTests
     // The layout tokens, as C# string literals. A glob like "*.json" is a search filter rather than a
     // layout token and does not match: the needle carries the opening quote.
     private static readonly string[] Literals =
-        ["\"source\"", "\"RecordData.json\"", "\"GroupRecordData.json\"", "\".json\""];
+        ["\"source\"", "\"RecordData.json\"", "\"GroupRecordData.json\"", "\".json\"",
+         "\".git\"", "\"HEAD\"", "\"packed-refs\""];
 
     private static readonly string[] ScannedRoots =
         ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
