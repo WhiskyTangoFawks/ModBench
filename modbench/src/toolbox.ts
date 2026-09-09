@@ -424,7 +424,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
       makeReporter(outputChannel, logLabel).report('error', failMessage, err instanceof Error ? err.message : String(err));
     }
   };
-  const promptModName = (defaultName: string) => vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName });
+  const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>
+    vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName, validateInput });
   const warnIfFomod = (name: string, isFomod: boolean) => {
     if (isFomod)
       void vscode.window.showWarningMessage(
@@ -441,7 +442,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   ownAll(own, registerModListCoreCommands(instanceRoot, modListProvider, instance, outputChannel, updateProfileDescription));
   ownAll(own, registerDeployCommands(instanceRoot, instance, outputChannel, gameDirResolver));
   own(registerLaunchCommand(outputChannel));
-  ownAll(own, registerModInstallCommands({ instanceRoot, runModAction, promptModName, warnIfFomod }));
+  ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
   ownAll(own, registerModContextCommands(instanceRoot, instance, outputChannel, runModAction));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));

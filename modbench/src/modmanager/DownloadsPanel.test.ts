@@ -106,7 +106,21 @@ describe('registerDownloadsSingleRowCommands', () => {
     invoke('modbench.downloads.install', node('foo.7z'));
 
     await vi.waitFor(() => {
-      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
+      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, undefined, undefined, undefined);
+    });
+  });
+
+  it('carries the sidecar\'s modID, fileID and version into the install command', async () => {
+    const root = await makeInstanceRoot();
+    const archive = await writeArchive(root, 'foo.7z');
+    await writeMeta(root, 'foo.7z', '[General]\r\nmodID=123\r\nfileID=456\r\nversion=2.0\r\n');
+    executeCommand.mockResolvedValueOnce(true);
+
+    registerDownloadsSingleRowCommands(root, vi.fn());
+    invoke('modbench.downloads.install', node('foo.7z'));
+
+    await vi.waitFor(() => {
+      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, '123', '456', '2.0');
     });
   });
 
@@ -127,7 +141,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     invoke('modbench.downloads.install', node('foo.7z'), [node('foo.7z'), node('other.7z')]);
 
     await vi.waitFor(() => {
-      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
+      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, undefined, undefined, undefined);
     });
     expect(executeCommand).toHaveBeenCalledTimes(1);
   });
@@ -144,7 +158,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     await vi.waitFor(async () => {
       expect(await readFile(meta, 'utf8')).toContain('installed=true');
     });
-    expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive);
+    expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, undefined, undefined, undefined);
   });
 
   it('install: when the install command reports cancellation, leaves the .meta untouched', async () => {
