@@ -199,11 +199,12 @@ function createMockBackend(): http.Server {
           res.end(JSON.stringify({ error: 'simulated load failure' }));
           return;
         }
+        // The real load publishes its progress from the moment it starts, which is why the
+        // extension subscribes before the PUT.
+        pushLoadOrderStatus();
+
         // The real load blocks for the whole indexing run. Held open so a test can observe
         // the tree mid-load; answered immediately otherwise, as most suites expect.
-        // The real load publishes its progress from the moment it starts, which is why the
-        // extension subscribes before the PUT; the tree's held set follows those ticks.
-        pushLoadOrderStatus();
         const answer = () => {
           loadOrderHeld = true;
           res.writeHead(200, { 'Content-Type': 'application/json' });
