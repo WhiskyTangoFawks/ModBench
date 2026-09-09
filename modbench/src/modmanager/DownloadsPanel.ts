@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry, type DownloadSortColumn } from './mo2/downloads';
 import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
-import { nexusSlugForGame } from './mo2/nexusSlug';
+import { nexusSlugForGame } from './mo2/gamePaths';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.

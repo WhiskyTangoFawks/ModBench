@@ -8,7 +8,7 @@ import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommand
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import type { Instance } from './instance';
-import { nexusSlugForGame } from './mo2/nexusSlug';
+import { nexusSlugForGame } from './mo2/gamePaths';
 import type { Own } from '../session';
 import { makeReporter } from '../reporter';
 import { registerNameFilter } from '../nameFilter';
@@ -342,7 +342,7 @@ export function registerDeployCommands(
   outputChannel: vscode.LogOutputChannel,
   gameDirResolver: GameDirectoryResolver,
 ): vscode.Disposable[] {
-  const detectPaths = makeDetectPaths();
+  const detectPaths = makeDetectPaths(instanceRoot);
   const reporter = makeReporter(outputChannel, 'deploy');
 
   const loadOrderTarget = async (): Promise<string | undefined> =>

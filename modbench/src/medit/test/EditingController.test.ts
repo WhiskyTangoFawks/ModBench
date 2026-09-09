@@ -214,7 +214,7 @@ describe('EditingController.rebuildIndex', () => {
     const ctrl = new EditingController(deps);
     const onFailure = vi.fn();
 
-    const result = await ctrl.rebuildIndex('/mo2/instance', onFailure);
+    const result = await ctrl.rebuildIndex('/mo2/instance', onFailure, 'Fallout4');
 
     expect(deps.client.POST).toHaveBeenCalledWith(
       '/index/rebuild',
@@ -231,7 +231,7 @@ describe('EditingController.rebuildIndex', () => {
     const ctrl = new EditingController(deps);
     const onFailure = vi.fn();
 
-    const result = await ctrl.rebuildIndex('/mo2/instance', onFailure);
+    const result = await ctrl.rebuildIndex('/mo2/instance', onFailure, 'Fallout4');
 
     expect(result).toBe(false);
     expect(onFailure).toHaveBeenCalledOnce();
@@ -462,7 +462,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.client.PUT).toHaveBeenCalledWith(
       '/load-order',
@@ -486,7 +486,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
   });
@@ -502,7 +502,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('Lunar-UniqueCreatures.esp'));
     expect(deps.refreshTree).toHaveBeenCalledOnce();
@@ -521,7 +521,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     // A tagged outcome, not a bare array — three outcomes (loaded / failed / abandoned)
     // need three answers, and a second sentinel would be one every call site has to remember.
@@ -538,7 +538,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     // Still distinguishable from a failed load — by the outcome tag rather than by
     // `[]` versus `undefined`.
@@ -561,7 +561,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(result).toEqual({
       outcome: 'reconciled', failures: [],
@@ -577,7 +577,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder([], '/game/Data', '/instance');
+    await ctrl.putLoadOrder([], '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
     expect(deps.refreshTree).toHaveBeenCalledOnce();
@@ -593,7 +593,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder(plugins.map(p => ({ ...p, enabled: false })), '/game/Data', '/instance');
+    await ctrl.putLoadOrder(plugins.map(p => ({ ...p, enabled: false })), '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
   });
@@ -606,7 +606,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder([{ ...plugins[0], enabled: false }, plugins[1]], '/game/Data', '/instance');
+    await ctrl.putLoadOrder([{ ...plugins[0], enabled: false }, plugins[1]], '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.showWarning).not.toHaveBeenCalled();
   });
@@ -619,7 +619,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('bad dir'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
@@ -643,7 +643,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(result).toEqual({ outcome: 'failed' });
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('open in another Modbench window'));
@@ -662,7 +662,7 @@ describe('EditingController.putLoadOrder', () => {
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
 
-    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     // The `failed` tag leaves room for the third outcome.
     // ADR-0044: the backend tore nothing down — it
@@ -774,7 +774,7 @@ describe('EditingController.putLoadOrder abandonment', () => {
     const log = vi.fn();
     const deps = makeDeps({ client, log });
 
-    await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance');
+    await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(deps.showError).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith(expect.stringContaining('superseded'));
@@ -786,7 +786,7 @@ describe('EditingController.putLoadOrder abandonment', () => {
     const client = { ...makeClient(), PUT: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
     const deps = makeDeps({ client });
 
-    const result = await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance');
+    const result = await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
 
     expect(result).toEqual({ outcome: 'abandoned' });
     // Whatever load superseded this one owns the notification, if any — this one never

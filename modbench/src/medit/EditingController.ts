@@ -98,7 +98,7 @@ export class EditingController {
   async rebuildIndex(
     instanceRoot: string,
     onFailure: (message: string, detail: string) => void,
-    gameRelease = 'Fallout4',
+    gameRelease: string,
   ): Promise<boolean> {
     const { error, response } = await this.deps.client.POST('/index/rebuild', {
       body: { instanceRoot, gameRelease },
@@ -119,7 +119,7 @@ export class EditingController {
     plugins: LoadOrderPluginInput[],
     gameDirectory: string,
     instanceRoot: string,
-    gameRelease = 'Fallout4',
+    gameRelease: string,
     options: LoadOrderOptions = {},
   ): Promise<LoadOrderOutcome> {
     // The PUT stays blocking and the generated openapi-fetch client has no streaming path, so
