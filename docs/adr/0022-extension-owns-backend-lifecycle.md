@@ -17,8 +17,11 @@ level.
 
 ## Consequences
 
-- `BackendManager` owns spawn/teardown: attach if a healthy backend is already listening, else
-  spawn the bundled binary; crash-restart; poll `GET /health`.
+- The mEdit client owns the lifecycle: attach if a healthy backend is already listening, else
+  spawn the bundled binary; restart on a crash; stop with the extension. The backend runs for the
+  extension's whole lifetime, so no view has a mode for its absence — a disconnect is a status the
+  client reports and the views surface as an error (target-architecture.md). Nothing outside the
+  client names the process, the port or the health check.
 - The backend's load order source is the `PUT /load-order` snapshot (ADR-0044): every physical
   plugin copy in the instance, each plugin's winning physical path resolved by Mod Management's
   `FileConflictIndex`. This is also the foundation for loading an arbitrary overriding-plugin set.

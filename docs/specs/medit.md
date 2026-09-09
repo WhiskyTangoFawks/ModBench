@@ -111,6 +111,10 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   **Disconnected** (`$(error) mEdit: Disconnected — start MEditService and reload`),
   **Stopped** (`$(circle-slash) mEdit: Stopped`), and, once the load order is ready, **Ready**
   (`$(check) mEdit: Ready ({N} plugin copies)`). No game name is shown in any state.
+- The first four come from the mEdit client's own status, read through its status-changed event
+  (ADR-0022); Ready comes from the load-order-status stream, written by the reconcile's outcome.
+  A disconnect is reported, never adapted to: the Plugins rows stay and expand into an error
+  node, and the crash-repair offer arrives with the next reconcile.
 - The item carries **no command** — clicking it does nothing. The backend starts with the
   extension; there is no start gesture anywhere, the status bar included.
 
@@ -124,23 +128,26 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
   active record if a panel is open, else global).
 - A new end-to-end command is three touch points, or it is half-wired: backend endpoint →
-  `/regenerate-api` → frontend (`PluginRepository`/`EditingController`) → `package.json`
-  commands/menus + `extension.ts` registration.
+  `/regenerate-api` → the mEdit client (`medit/client/`) → `package.json` commands/menus +
+  `extension.ts` registration.
 
 ### Architecture / seams
 
-- **The backend is the seam for record data and mutations**: the frontend talks to it only
-  through the generated API client; the compare grid, conflict states, references, and all
-  mutations are behaviors of endpoints owned by `MEditService/`. The frontend holds rendering
-  logic, not record semantics.
+- **The mEdit client (`medit/client/`) is the seam every view crosses** (ADR-0022): its port
+  answers the commands, the queries, the subscription and the backend's status, and it hides the
+  generated API client, the transport and the backend process alike. A view takes the narrowest
+  `Pick` of that port it needs, never a transport object.
+- **The backend owns record data and mutations**: the compare grid, conflict states, references,
+  and all mutations are behaviors of endpoints owned by `MEditService/`. The frontend holds
+  rendering logic, not record semantics.
 - **Conflict classification** (the two-axis ConflictAll/ConflictThis model,
   [ADR-0016](../adr/0016-two-axis-conflict-model.md)) is computed backend-side and consumed by
   the grid as `cellStates` — the frontend maps states to color, it does not derive them. Its
   visual encoding is specified in [medit-record-editor.md](medit-record-editor.md).
-- All backend HTTP calls go through the generated `openapi-fetch` client (`ApiClient`) — never
-  raw `fetch()` (`modbench/CLAUDE.md`).
+- Behind the client, all backend HTTP calls go through the generated `openapi-fetch` client
+  (`ApiClient`) — never raw `fetch()` (`modbench/CLAUDE.md`).
 - Errors surface on [ADR-0026](../adr/0026-error-surfacing-policy.md)'s severity tiers via an
-  injected reporter, never raw `vscode.window.*` in controllers or repositories.
+  injected reporter, never raw `vscode.window.*` below the gesture that asked.
 
 ## Testing Decisions
 
@@ -171,6 +178,6 @@ Per-surface testing decisions live in the surface specs. Shared:
   surfaces ([mods.md](mods.md), [downloads.md](downloads.md)) and the Plugin load order half of
   the merged Plugins tree ([plugins.md](plugins.md)) all run without it — a row is a leaf until a
   load order exists, per ADR-0035. The backend lifecycle (spawn at activation, teardown on
-  workspace close, restart on crash) is owned by the extension per
-  [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and specified from the Mod-Management
-  side in [mods.md](mods.md).
+  workspace close, restart on crash) lives inside the mEdit client per
+  [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and is specified from the
+  Mod-Management side in [mods.md](mods.md).

@@ -5,7 +5,6 @@ import {
 
 function makeSyncDeps(over: Partial<LoadOrderSyncDeps> = {}): LoadOrderSyncDeps {
   return {
-    isReceiving: () => true,
     debounceMs: 100,
     log: vi.fn(),
     withProgress: (work: () => Promise<void>) => work(),
@@ -47,16 +46,6 @@ describe('createLoadOrderSync', () => {
     await vi.advanceTimersByTimeAsync(100);
 
     expect(putLoadOrder).toHaveBeenCalledTimes(1);
-  });
-
-  it('drops a request silently when nothing is receiving — a workspace with no backend is the ordinary case', async () => {
-    const { sync, putLoadOrder, log } = make({ isReceiving: () => false });
-
-    sync.request();
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(putLoadOrder).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith(expect.stringContaining('no receiver'));
   });
 
   it('a request that lands mid-send becomes exactly one more send after it, never a concurrent one', async () => {

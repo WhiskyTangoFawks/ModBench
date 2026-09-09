@@ -115,7 +115,7 @@ let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 // blocks for the whole indexing run, and the progressive-load assertions are about that window.
 let releasePutLoadOrder: (() => void) | null = null;
 let holdPutLoadOrder = false;
-// `BackendManager.start()` gates on GET /health, so holding it parks a launch in its first
+// The client's `start()` gates on GET /health, so holding it parks a launch in its first
 // phase — the window a mid-load close also has to survive. One-shot: releasing clears the hold.
 let releaseHealth: (() => void) | null = null;
 let holdHealth = false;
@@ -282,7 +282,7 @@ before(async function () {
   this.timeout(15000);
 
   // The mock backend must be up before the extension activates so
-  // BackendManager's first poll succeeds.
+  // the client's first health poll succeeds.
   mockBackend = createMockBackend();
   await new Promise<void>(r => mockBackend.listen(TEST_PORT, '127.0.0.1', () => r()));
 
@@ -295,7 +295,7 @@ before(async function () {
     await new Promise(r => setTimeout(r, 100));
   }
 
-  // Give BackendManager time to poll and reach 'attached' (polls every 500 ms).
+  // Give the client time to poll and reach 'attached' (polls every 500 ms).
   await new Promise(r => setTimeout(r, 2000));
 });
 
@@ -1318,15 +1318,15 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
   });
 });
 
-// ADR-0035 §Filters: a live record filter is a fact about a live backend, so a crash must
-// forget it too — proving `clearTreeWhenBackendDies`'s own `backendManager.on('status', …)`
-// registration actually fires, not just its extracted logic in isolation.
-describe('a backend that goes unhealthy outside exitEditing forgets an active record filter', () => {
+// ADR-0022: mEdit runs for the extension's whole lifetime, so a status change is news the views
+// report — none of them has a shape to revert to. Driven through the real status transition, not
+// its extracted wiring in isolation.
+describe('a client that reports stopped outside exitEditing leaves the Plugins tree\'s shape alone', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const backendManagerOf = () =>
-    (ext?.exports as { backendManager?: { stop(): Promise<void> } } | undefined)?.backendManager;
+  const clientOf = () =>
+    (ext?.exports as { client?: { stop(): Promise<void>; status: string } } | undefined)?.client;
   let gameDir = '';
 
   before(() => {
@@ -1363,127 +1363,29 @@ describe('a backend that goes unhealthy outside exitEditing forgets an active re
     resetMockBackend();
   });
 
-  it('a backend that goes unhealthy outside exitEditing restores the row a record filter hid', async () => {
+  it('the row a record filter hid stays hidden', async () => {
     const tree = pluginsTree()!;
 
-    await backendManagerOf()?.stop();
+    await clientOf()?.stop();
+    await new Promise((r) => setTimeout(r, 200)); // let the status listener's refresh land
 
-    const restored = await waitFor('clearTreeWhenBackendDies to restore the filtered-out row',
-      async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? true : undefined));
-    assert.strictEqual(restored, true);
-  });
-});
-
-// The record filter is a fact about the load order, so it cannot outlive one — a readout
-// describing a load order that is gone. The name filter survives a close: its rows remain.
-describe('The record-filter readout does not outlive its load order', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const description = () =>
-    (ext?.exports as { pluginListView?: { description?: string } } | undefined)?.pluginListView?.description;
-  let gameDir = '';
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-readout-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+    assert.ok(!(await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp'),
+      'a stopped client is not a reason to un-narrow a view the user narrowed');
   });
 
-  after(async () => {
-    if (!root) return;
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '');
-    fs.rmSync(gameDir, { recursive: true, force: true });
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    resetMockBackend();
-  });
+  // The chevrons are the discriminator: a tree that cleared itself answers "mEdit is not
+  // connected" for every row, whatever the row's own content would have been.
+  it('a row still in the tree expands into its records, not a not-connected node', async () => {
+    const tree = pluginsTree()!;
+    const row = findRow(await tree.getChildren(), 'Fallout4.esm');
 
-  it('an explicit Close mEdit takes the record filter out of the description', async () => {
-    await enterEditing();
-    // Applied from an open document — the one record-filter entry point a test can drive; the
-    // other opens a quick pick over the scripts folder.
-    const doc = await vscode.workspace.openTextDocument({ language: 'sql', content: 'SELECT form_key FROM "npc_"' });
-    await vscode.window.showTextDocument(doc);
-    await vscode.commands.executeCommand('modbench.setFilterFromDocument');
-    assert.ok(description()?.includes('records:'),
-      `sanity: the description must name the record filter before Close mEdit, or clearing it proves nothing (was: ${description() ?? 'unset'})`);
+    await clientOf()?.stop();
+    await new Promise((r) => setTimeout(r, 200));
 
-    exitEditing();
-
-    assert.ok(!(description() ?? '').includes('records:'),
-      'a load order that does not exist must not leave the view still claiming a record filter');
-  });
-});
-
-// Close mEdit must clear the readout, the context key the Clear action is gated on, and the code
-// lens's notion of which SQL is active; all go through the filter's single writer.
-
-// The context key is unreadable from a test, but the code lens is a genuinely registered
-// provider, so proving it clears proves that single writer ran.
-describe('Close mEdit clears the record filter\'s code lens too, not just the readout', () => {
-  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  // FilterCodeLensProvider renders lenses only for documents inside scriptsPath, resolved once
-  // at activate() and not reconfigurable. The file goes in an mkdtempSync'd subdirectory so a
-  // leak reads as this test's own; a subdirectory still matches the prefix gate.
-  const scriptsDir = path.join(os.homedir(), '.medit', 'scripts');
-  const sql = 'SELECT form_key FROM "npc_"';
-  let gameDir = '';
-  let scriptsSubdir = '';
-  let scriptsFile = '';
-
-  const codeLensCommandFor = async (uri: vscode.Uri): Promise<string | undefined> => {
-    const lenses = await vscode.commands.executeCommand<vscode.CodeLens[] | undefined>('vscode.executeCodeLensProvider', uri);
-    return lenses?.at(0)?.command?.command;
-  };
-
-  before(async () => {
-    if (!root) return;
-    resetMockBackend();
-    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-exit-filter-lens-'));
-    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    for (const name of ['TestMod.esp']) fs.writeFileSync(path.join(gameDir, 'Data', name), '');
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
-    fs.mkdirSync(scriptsDir, { recursive: true });
-    scriptsSubdir = fs.mkdtempSync(path.join(scriptsDir, '__test-354-'));
-    scriptsFile = path.join(scriptsSubdir, 'filter-lens.sql');
-    fs.writeFileSync(scriptsFile, sql);
-  });
-
-  after(async () => {
-    if (!root) return;
-    await vscode.workspace.getConfiguration('modbench').update(
-      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(pluginsTxtPath, '');
-    fs.rmSync(gameDir, { recursive: true, force: true });
-    // Tolerate the directory already being gone; a cleanup failure here must never mask the
-    // test's own assertion result.
-    try { fs.rmSync(scriptsSubdir, { recursive: true, force: true }); } catch { /* best-effort */ }
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    resetMockBackend();
-  });
-
-  it('an explicit Close mEdit clears the code lens the same way it clears the readout', async () => {
-    await enterEditing();
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(scriptsFile));
-    await vscode.window.showTextDocument(doc);
-    await vscode.commands.executeCommand('modbench.setFilterFromDocument');
-
-    assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.clearFilter',
-      'sanity: the code lens must report the filter active before Close mEdit, or clearing it proves nothing');
-
-    exitEditing();
-
-    assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.setFilterFromDocument',
-      'a load order that does not exist must not leave the code lens still claiming its SQL is active');
+    const children = await tree.getChildren(row);
+    assert.ok(children.length > 0, 'the row must still expand into something');
+    assert.ok(!children.some((c) => tree.getTreeItem(c).label === 'mEdit is not connected.'),
+      'the tree kept its load order, so the row expands into records');
   });
 });
 

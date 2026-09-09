@@ -1,40 +1,42 @@
 import type { EditingController } from '../EditingController';
 import type { PluginRepository } from '../PluginRepository';
 import type { NotificationSubscriber } from '../NotificationSubscriber';
-import type { BackendManager } from '../BackendManager';
+import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
 import type { MEditClient, NotificationKind, NotificationEvent, BackendStatus } from './MEditClient';
 
 export interface HttpMEditClientDeps {
   controller: EditingController;
   repository: PluginRepository;
-  notificationSubscriber: NotificationSubscriber;
-  backendManager: BackendManager;
+  /** The stream this client opens and closes with the backend — `SseNotificationSubscriber` in
+   *  production. */
+  notificationSubscriber: NotificationSubscriber & { start(): void; stop(): void };
+  /** The process this client is the front of; nothing outside this module configures it. */
+  backend: BackendLifecycleOptions;
 }
 
-/** Thin composition over the five modules: every method forwards to `EditingController`,
- *  `PluginRepository`, `NotificationSubscriber` or `BackendManager` unchanged. */
+/** Composition over the modules behind the seam: every method forwards to `EditingController`,
+ *  `PluginRepository` or `NotificationSubscriber`, and the process is this client's own. */
 export class HttpMEditClient implements MEditClient {
-  // BackendManager only pushes 'status' events, never offers a read of the current value, so
-  // this caches the latest one for `status`/`onStatusChanged`.
-  private currentStatus: BackendStatus = 'starting';
-  private readonly statusListeners = new Set<(status: BackendStatus) => void>();
+  private readonly lifecycle: BackendLifecycle;
 
   constructor(private readonly deps: HttpMEditClientDeps) {
-    deps.backendManager.on('status', (status: BackendStatus) => {
-      this.currentStatus = status;
-      for (const listener of this.statusListeners) listener(status);
+    this.lifecycle = new BackendLifecycle(deps.backend);
+    // ADR-0046 invariant 12: the stream is open exactly while the backend is attached, so no
+    // module outside this one starts or stops it.
+    this.lifecycle.onStatusChanged((status) => {
+      if (status === 'attached') deps.notificationSubscriber.start();
+      else deps.notificationSubscriber.stop();
     });
   }
 
-  get status(): BackendStatus { return this.currentStatus; }
+  get status(): BackendStatus { return this.lifecycle.status; }
 
   onStatusChanged(listener: (status: BackendStatus) => void): () => void {
-    this.statusListeners.add(listener);
-    return () => { this.statusListeners.delete(listener); };
+    return this.lifecycle.onStatusChanged(listener);
   }
 
-  start(): Promise<void> { return this.deps.backendManager.start(); }
-  stop(): Promise<void> { return this.deps.backendManager.stop(); }
+  start(): Promise<void> { return this.lifecycle.start(); }
+  stop(): Promise<void> { return this.lifecycle.stop(); }
 
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void {
     return this.deps.notificationSubscriber.subscribe(kind, listener);

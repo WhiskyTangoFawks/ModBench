@@ -5,19 +5,10 @@ import type { MarkdownString } from 'vscode';
 export interface TeardownSession {
   loadOrderSync?: { abandon(): void };
   pluginsTree?: {
-    clear(): void;
     refreshFacts(): Promise<{ name: string; hasMatchingRecords: boolean }[] | undefined>;
   };
   pluginsTreeView?: { message?: string | MarkdownString };
   pluginsNameFilter?: { refresh(): void };
-  backendManager?: { isHealthy: boolean; on(event: 'status', cb: () => void): void; stop(): Promise<void> };
-  setFilterActive?: (active: boolean) => void;
-  /** Cleared by both teardown writers below so the two diagnosis surfaces — Problems entries and
-   *  the tree badge — can never disagree about a dead session. */
-  loadDiagnostics?: { clear(): void };
-  /** ADR-0046 invariant 12: the subscription follows the backend's own lifecycle. `stop()` is
-   *  idempotent. */
-  notificationSubscriber?: { stop(): void };
 }
 
 /** `TreeView.message` is the native surface for a view-scoped statement about its own contents,
@@ -30,46 +21,15 @@ export function say(session: TeardownSession, message: string | undefined): void
   if (message === undefined) session.pluginsNameFilter?.refresh();
 }
 
-/** There is no view mode to switch back to: the Toolbox, Mods, Plugins and Downloads views are
- *  never hidden, and Referenced By governs its own visibility. */
-export function exitEditing(session: TeardownSession): void {
+/** Takes the backend down. Nothing else: mEdit runs for the extension's whole lifetime, so no
+ *  view has a shape to revert to and a disconnect is a status they surface (ADR-0022). */
+export function exitEditing(session: TeardownSession, client: { stop(): Promise<void> }): void {
   // Abandon any reconcile still in flight *first*: it aborts the PUT, so the reconcile returns
   // 'abandoned' rather than reporting a killed backend to the user as a network failure.
   session.loadOrderSync?.abandon();
-  // The chevrons go with the backend. Cleared before it stops, so no row can be expanded
-  // into a backend that is on its way down. Every badge and the record rows' immutable and
-  // tracked sets go with them.
-  session.pluginsTree?.clear();
-  // So does anything the reconcile was saying about itself: a statement about a load order that
-  // is not held is the same class of silent-wrong-state as a stale chevron.
-  say(session, undefined);
-  // And so does the record filter's whole UI state, through the same single writer every other
-  // record-filter change goes through, so `modbench.filterActive` has exactly one writer.
-  session.setFilterActive?.(false);
-  // The Problems entries are statements about a live backend's scan, same as the tree badge
-  // `clear()` just cleared.
-  session.loadDiagnostics?.clear();
   // stop()'s body runs to completion whether or not the returned promise is awaited, so
-  // fire-and-forget still defers emitStatus('stopped') correctly.
-  void session.backendManager?.stop();
-}
-
-/** A backend that dies takes the load order with it, and `exitEditing` is not on that path — a
- *  crash reaches us only as a status change. Otherwise rows keep chevrons that fetch against a
- *  backend that is gone. */
-export function clearTreeWhenBackendDies(
-  session: TeardownSession,
-  tree: { clear(): void },
-): void {
-  session.backendManager?.on('status', () => {
-    if (session.backendManager?.isHealthy) return;
-    tree.clear();
-    // Its diagnoses go with it too.
-    session.loadDiagnostics?.clear();
-    // The subscription is against this dead backend specifically — closing it here covers both
-    // a crash and exitEditing's own stop(), which lands here too.
-    session.notificationSubscriber?.stop();
-  });
+  // fire-and-forget still defers the 'stopped' status correctly.
+  void client.stop();
 }
 
 /** Re-reads the tree's own plugin facts, so a row reads the filter active now — including the

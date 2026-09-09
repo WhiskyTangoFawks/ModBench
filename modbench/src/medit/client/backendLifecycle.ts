@@ -1,15 +1,7 @@
-import { EventEmitter } from 'node:events';
 import * as http from 'node:http';
 import * as readline from 'node:readline';
-import type { BackendStream } from './backendLog';
-
-export type BackendStatus = 'starting' | 'attached' | 'disconnected' | 'stopped';
-
-export interface StatusBarAdapter {
-  setText(text: string): void;
-  show(): void;
-  dispose(): void;
-}
+import type { BackendStream } from '../backendLog';
+import type { BackendStatus } from './MEditClient';
 
 /** Minimal view of a spawned backend process — injectable so spawn/teardown is
  *  unit-testable without a real child process. */
@@ -25,9 +17,8 @@ export interface BackendProcess {
 
 export type SpawnFn = (executablePath: string, args: string[]) => BackendProcess;
 
-export interface BackendManagerOptions {
+export interface BackendLifecycleOptions {
   port: number;
-  statusBar: StatusBarAdapter;
   pollIntervalMs?: number;
   pollTimeoutMs?: number;
   log?: (msg: string) => void;
@@ -46,9 +37,10 @@ export interface BackendManagerOptions {
   stopGracePeriodMs?: number;
 }
 
-export class BackendManager extends EventEmitter {
+/** The backend process, as the HTTP adapter's own internals (ADR-0022). The only module that
+ *  names a process, a port, a health poll or a spawn. */
+export class BackendLifecycle {
   private readonly port: number;
-  private readonly statusBar: StatusBarAdapter;
   private readonly pollIntervalMs: number;
   private readonly pollTimeoutMs: number;
   private readonly stopGracePeriodMs: number;
@@ -58,7 +50,8 @@ export class BackendManager extends EventEmitter {
   private readonly executablePath?: string;
   private readonly serilogLevelArgs?: () => string[];
 
-  private _isHealthy = false;
+  private _status: BackendStatus = 'starting';
+  private readonly listeners = new Set<(status: BackendStatus) => void>();
   private child?: BackendProcess;
   // True between start() and stop(); an exit while true is a crash → restart.
   private expectedAlive = false;
@@ -70,10 +63,8 @@ export class BackendManager extends EventEmitter {
   private restartAttempts = 0;
   private static readonly MAX_RESTARTS = 3;
 
-  constructor(opts: BackendManagerOptions) {
-    super();
+  constructor(opts: BackendLifecycleOptions) {
     this.port = opts.port;
-    this.statusBar = opts.statusBar;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.pollTimeoutMs = opts.pollTimeoutMs ?? 30_000;
     this.stopGracePeriodMs = opts.stopGracePeriodMs ?? 5_000;
@@ -82,12 +73,14 @@ export class BackendManager extends EventEmitter {
     this.spawnFn = opts.spawn;
     this.executablePath = opts.executablePath;
     this.serilogLevelArgs = opts.serilogLevelArgs;
-
-    this.statusBar.setText('$(loading~spin) mEdit: Connecting…');
-    this.statusBar.show();
   }
 
-  get isHealthy(): boolean { return this._isHealthy; }
+  get status(): BackendStatus { return this._status; }
+
+  onStatusChanged(listener: (status: BackendStatus) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  }
 
   /** Attaches to an already-healthy backend (a dev-launched one) rather than spawning.
    *  Idempotent: concurrent calls share one in-flight start, so no double-spawn. */
@@ -102,27 +95,26 @@ export class BackendManager extends EventEmitter {
 
     if (await this.checkHealth()) {
       if (gen !== this.generation) return; // stopped mid-check — don't attach
-      this._isHealthy = true;
       this.restartAttempts = 0;
-      this.emitStatus('attached');
+      this.setStatus('attached');
       return;
     }
     if (gen !== this.generation) return;
 
     if (this.spawnFn && this.executablePath && !this.child) {
-      this.emitStatus('starting');
+      this.setStatus('starting');
       const child = this.spawnFn(this.executablePath, [
         '--urls', `http://localhost:${this.port}`,
         ...(this.serilogLevelArgs?.() ?? []),
       ]);
       this.child = child;
-      child.on('error', (err) => this.log(`[BackendManager] spawn error: ${err.message}`));
+      child.on('error', (err) => this.log(`[backend] spawn error: ${err.message}`));
       child.on('exit', (code) => this.handleExit(code));
       this.forwardOutput(child);
     }
 
     await this.connect(gen);
-    if (this._isHealthy) this.restartAttempts = 0;
+    if (this._status === 'attached') this.restartAttempts = 0;
   }
 
   // Subscribed unconditionally: a piped stream nobody reads fills its OS buffer and then blocks
@@ -136,23 +128,19 @@ export class BackendManager extends EventEmitter {
     }
   }
 
-  /** `isHealthy` and the `child` handle clear immediately, so nothing dispatches new work to a
-   *  backend already condemned; only the *status* report waits for the process to be gone. */
+  /** The `child` handle clears immediately, so nothing dispatches new work to a backend already
+   *  condemned; only the *status* report waits for the process to be gone. */
   async stop(): Promise<void> {
     this.expectedAlive = false;
     this.generation++; // cancels an in-flight doStart()/connect()
     this.restartAttempts = 0;
-    const wasRunning = this.child !== undefined || this._isHealthy;
+    const wasRunning = this.child !== undefined || this._status === 'attached';
     const child = this.child;
     this.child = undefined;
-    this._isHealthy = false;
     if (child) {
       await this.killAndConfirmExit(child);
     }
-    // Emitted rather than written straight to the status bar, so the Launch/Close mEdit toggle
-    // sees a deliberate stop. Deferred until the child has actually exited, so this never claims
-    // "stopped" against a live process.
-    if (wasRunning) this.emitStatus('stopped');
+    if (wasRunning) this.setStatus('stopped');
   }
 
   // A backend mid a long synchronous request won't notice SIGTERM, so this escalates to SIGKILL
@@ -161,8 +149,7 @@ export class BackendManager extends EventEmitter {
   private killAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
       // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined —
-      // safe even if 'exit' fired synchronously from kill() (the BackendProcess interface itself
-      // doesn't rule that out, though real Node child processes never do).
+      // safe even if 'exit' fired synchronously from kill().
       const escalateTimer: { current?: ReturnType<typeof setTimeout> } = {};
       const onExit = () => {
         clearTimeout(escalateTimer.current);
@@ -171,7 +158,7 @@ export class BackendManager extends EventEmitter {
       child.on('exit', onExit);
       child.kill('SIGTERM');
       escalateTimer.current = setTimeout(() => {
-        this.log(`[BackendManager] backend did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
+        this.log(`[backend] did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
         child.kill('SIGKILL');
       }, this.stopGracePeriodMs);
     });
@@ -179,21 +166,19 @@ export class BackendManager extends EventEmitter {
 
   private handleExit(code: number | null): void {
     this.child = undefined;
-    this._isHealthy = false;
     if (!this.expectedAlive) return; // stop() already handled it
-    if (this.restartAttempts >= BackendManager.MAX_RESTARTS) {
-      this.log(`[BackendManager] backend crashed ${this.restartAttempts}× — giving up`);
-      this.emitStatus('disconnected');
+    // The process is gone now; the restart below is an attempt, not a guarantee.
+    this.setStatus('disconnected');
+    if (this.restartAttempts >= BackendLifecycle.MAX_RESTARTS) {
+      this.log(`[backend] backend crashed ${this.restartAttempts}× — giving up`);
       return;
     }
     this.restartAttempts++;
-    this.log(`[BackendManager] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendManager.MAX_RESTARTS}`);
-    void this.start().then(() => {
-      if (this._isHealthy) this.emit('restarted');
-    });
+    this.log(`[backend] backend exited unexpectedly (code ${code}); restart ${this.restartAttempts}/${BackendLifecycle.MAX_RESTARTS}`);
+    void this.start();
   }
 
-  connect(gen = this.generation): Promise<void> {
+  private connect(gen: number): Promise<void> {
     return new Promise((resolve) => {
       const deadline = Date.now() + this.pollTimeoutMs;
 
@@ -202,16 +187,14 @@ export class BackendManager extends EventEmitter {
         const healthy = await this.checkHealth();
         if (gen !== this.generation) { resolve(); return; }
         if (healthy) {
-          this._isHealthy = true;
-          this.emitStatus('attached');
+          this.setStatus('attached');
           resolve();
           return;
         }
 
         if (Date.now() >= deadline) {
-          this._isHealthy = false;
-          this.log(`[BackendManager] Timed out waiting for backend on port ${this.port}`);
-          this.emitStatus('disconnected');
+          this.log(`[backend] Timed out waiting for backend on port ${this.port}`);
+          this.setStatus('disconnected');
           resolve();
           return;
         }
@@ -223,30 +206,17 @@ export class BackendManager extends EventEmitter {
     });
   }
 
-  /** Awaits the confirmed-exit teardown, so a reload cannot construct a replacement manager —
-   *  which would hold no reference to this child — before the old child is gone. */
-  async dispose(): Promise<void> {
-    await this.stop();
-    this.statusBar.dispose();
-  }
-
   private checkHealth(): Promise<boolean> {
     return new Promise((resolve) => {
       const req = http.get(`http://localhost:${this.port}/health`, (res) => {
         resolve(res.statusCode === 200);
       });
-      req.on('error', (err) => { this.log(`[BackendManager] Health check error: ${err.message}`); resolve(false); });
+      req.on('error', (err) => { this.log(`[backend] Health check error: ${err.message}`); resolve(false); });
     });
   }
 
-  private emitStatus(status: BackendStatus): void {
-    const labels: Record<BackendStatus, string> = {
-      starting:     '$(loading~spin) mEdit: Connecting…',
-      attached:     '$(plug) mEdit: Attached',
-      disconnected: '$(error) mEdit: Disconnected — start MEditService and reload',
-      stopped:      '$(circle-slash) mEdit: Stopped',
-    };
-    this.statusBar.setText(labels[status]);
-    this.emit('status', status);
+  private setStatus(status: BackendStatus): void {
+    this._status = status;
+    for (const listener of this.listeners) listener(status);
   }
 }

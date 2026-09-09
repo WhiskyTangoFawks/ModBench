@@ -4,14 +4,14 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 import { Agent, fetch as undiciFetch } from 'undici';
-import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
+import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
 import { createApiClient, openNotificationStream, type CrashRepairOffer } from './medit/ApiClient';
 import {
   SseNotificationSubscriber, subscribeTreeToNotifications, subscribeRecordPanelsToNotifications,
 } from './medit/NotificationSubscriber';
 import { EditingController } from './medit/EditingController';
-import { HttpMEditClient } from './medit/client';
+import { HttpMEditClient, type BackendLifecycleOptions } from './medit/client';
 import { PluginTreeProvider, type RecordNode } from './plugins/PluginTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { ApiPluginRepository } from './medit/PluginRepository';
@@ -50,29 +50,28 @@ function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCo
 // that lifecycle stopped being a user decision (ADR-0022). A config change is the only gesture
 // that can mean "try again".
 function wireAutoLaunch(
-  session: ExtensionSession, context: vscode.ExtensionContext, outputChannel: vscode.LogOutputChannel,
-  enterEditing: (() => Promise<void>) | undefined,
+  session: ExtensionSession, client: HttpMEditClient, context: vscode.ExtensionContext,
+  outputChannel: vscode.LogOutputChannel, enterEditing: (() => Promise<void>) | undefined,
 ): void {
   const reporter = makeReporter(outputChannel, 'launch');
   const launch = async () => {
     try {
       await enterEditing?.();
     } catch (err) {
-      exitEditing(session); // reset the view and tear down any half-started backend
+      exitEditing(session, client); // tear down any half-started backend
       reporter.report('error', 'Failed to launch mEdit.', err instanceof Error ? err.message : String(err));
     }
   };
   void launch();
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('modbench.mods.gameDirectory') && !session.backendManager?.isHealthy) void launch();
+      if (e.affectsConfiguration('modbench.mods.gameDirectory') && client.status !== 'attached') void launch();
     }),
   );
 }
 
 export function activate(context: vscode.ExtensionContext) {
   const session: ExtensionSession = {};
-  activeSession = session; // deactivate()'s only way to reach it
   const port: number = meditConfig().get('backendPort') ?? 5172;
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
@@ -91,7 +90,6 @@ export function activate(context: vscode.ExtensionContext) {
   const loadDiagnostics = vscode.languages.createDiagnosticCollection('modbench-diagnosis');
   context.subscriptions.push(loadDiagnostics);
   session.loadDiagnostics = loadDiagnostics;
-  session.backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
   const client = createApiClient(port, createUnlimitedFetch());
   const repository = new ApiPluginRepository(client, log);
@@ -102,35 +100,26 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(meditConfig());
 
-  // ADR-0046 invariant 12: one subscription for the whole session, `stop()`ped by
-  // editingTeardown wherever the backend goes unhealthy.
-  session.notificationSubscriber = new SseNotificationSubscriber({
+  // ADR-0046 invariant 12: one subscription for the whole session, opened and closed with the
+  // backend by the mEdit client itself.
+  const notificationSubscriber = new SseNotificationSubscriber({
     openStream: (signal) => openNotificationStream(client, signal),
     log: (msg) => outputChannel.debug(msg),
   });
-  // `start()`ed as soon as the backend is healthy — before the first PUT, so its own progress
-  // rides the stream too — not on the first successful reconcile.
-  session.backendManager.on('status', () => {
-    if (session.backendManager?.isHealthy) session.notificationSubscriber?.start();
-  });
   context.subscriptions.push(
-    { dispose: subscribeTreeToNotifications(session.notificationSubscriber, treeProvider) },
-    { dispose: subscribeRecordPanelsToNotifications(session.notificationSubscriber, recordPanels, activeRecordTracker) },
+    { dispose: subscribeTreeToNotifications(notificationSubscriber, treeProvider) },
+    { dispose: subscribeRecordPanelsToNotifications(notificationSubscriber, recordPanels, activeRecordTracker) },
   );
 
   session.setFilterActive = makeSetFilterActive(session, filterProvider);
 
-  const controller = new EditingController({
-    client,
-    repository,
-    notificationSubscriber: session.notificationSubscriber,
-    log,
-  });
-  // The mEdit client (ADR-0022): built once here, composing the five modules above; views not
-  // yet migrated keep receiving those same objects directly.
+  const controller = new EditingController({ client, repository, notificationSubscriber, log });
+  // The mEdit client (ADR-0022): built once here, composing the modules above and owning the
+  // backend process; views not yet migrated keep receiving those same objects directly.
   const meditClient = new HttpMEditClient({
-    controller, repository, notificationSubscriber: session.notificationSubscriber, backendManager: session.backendManager,
+    controller, repository, notificationSubscriber, backend: backendOptions(port, outputChannel),
   });
+  activeClient = meditClient; // deactivate()'s only way to reach it
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
   // (ADR-0041 — the one reliable point to do so).
@@ -177,7 +166,7 @@ export function activate(context: vscode.ExtensionContext) {
     toolbox,
     {
       dispose: wireExternalChangePending(
-        meditClient, outputChannel, session.notificationSubscriber, treeProvider,
+        meditClient, outputChannel, notificationSubscriber, treeProvider,
         () => { void refreshMatchingPlugins(session); },
       ),
     },
@@ -196,19 +185,27 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  statusBarItem.text = '$(plug) mEdit';
+  statusBarItem.text = backendStatusText(meditClient.status);
+  statusBarItem.show();
+  context.subscriptions.push({
+    dispose: wireBackendStatus(meditClient, {
+      setStatusText: (t) => { statusBarItem.text = t; },
+      abandonReconcile: () => session.loadOrderSync?.abandon(),
+      refreshTree: () => { void refreshMatchingPlugins(session); },
+    }),
+  });
 
-  wireAutoLaunch(session, context, outputChannel, toolbox.enterEditing);
+  wireAutoLaunch(session, meditClient, context, outputChannel, toolbox.enterEditing);
 
-  // Exposed for integration tests — unused in production. `backendManager`: a test drives an
-  // unhealthy transition directly, outside exitEditing. `instance`: lets a test await past a
-  // sequence instead of sleeping.
+  // Exposed for integration tests — unused in production. `client`: a test drives a status
+  // transition directly, outside exitEditing. `instance`: lets a test await past a sequence
+  // instead of sleeping.
   return {
     modListProvider: toolbox.modListProvider, downloadsProvider: toolbox.downloadsProvider,
     pluginsTree: toolbox.pluginsTree,
     pluginListView: session.pluginsTreeView, treeProvider,
-    outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session),
-    backendManager: session.backendManager, instance: toolbox.instance,
+    outputChannel, enterEditing: toolbox.enterEditing, exitEditing: () => exitEditing(session, meditClient),
+    client: meditClient, instance: toolbox.instance,
   };
 }
 
@@ -274,11 +271,11 @@ function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   };
 }
 
-function createBackendManager(port: number, channel: vscode.LogOutputChannel, statusBarItem: vscode.StatusBarItem): BackendManager {
+function backendOptions(port: number, channel: vscode.LogOutputChannel): BackendLifecycleOptions {
   // Bundled backend binary (see build:backend / .vscodeignore). __dirname is
   // out/ at runtime; the published self-contained executable lives in backend/.
   const backendExe = process.platform === 'win32' ? 'MEditService.Api.exe' : 'MEditService.Api';
-  return new BackendManager({
+  return {
     port,
     log: (msg) => channel.info(msg),
     // Pipe the backend's Serilog console output into the same channel, at its own level. Only
@@ -290,12 +287,7 @@ function createBackendManager(port: number, channel: vscode.LogOutputChannel, st
     serilogLevelArgs: () => backendLogLevelArgs(channel.logLevel),
     executablePath: path.join(__dirname, '..', 'backend', backendExe),
     spawn: (exe, args) => cp.spawn(exe, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'] }),
-    statusBar: {
-      setText: (t) => { statusBarItem.text = t; },
-      show: () => statusBarItem.show(),
-      dispose: () => statusBarItem.dispose(),
-    },
-  });
+  };
 }
 
 function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string; filterProvider: FilterCodeLensProvider } {
@@ -308,13 +300,13 @@ function setupScripts(cfg: vscode.WorkspaceConfiguration): { scriptsPath: string
 }
 
 
-// VS Code's own `deactivate()` takes no arguments, so it has no way to receive `activate()`'s
-// session object directly — this module-level reference exists solely to bridge that gap.
-let activeSession: ExtensionSession | undefined;
+// VS Code's own `deactivate()` takes no arguments, so it has no way to receive what `activate()`
+// built — this module-level reference exists solely to bridge that gap.
+let activeClient: HttpMEditClient | undefined;
 
-// Async so VS Code awaits confirmed-dead-child teardown (BackendManager.dispose() → stop())
-// before the extension host finishes tearing down — otherwise a reload's replacement
-// BackendManager instance is structurally unable to ever clean up this instance's spawned child.
+// Async so VS Code awaits confirmed-dead-child teardown before the extension host finishes
+// tearing down — otherwise a reload's replacement client is structurally unable to ever clean up
+// this instance's spawned child.
 export async function deactivate(): Promise<void> {
-  await activeSession?.backendManager?.dispose();
+  await activeClient?.stop();
 }

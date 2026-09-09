@@ -738,7 +738,6 @@ describe('wireLoadOrderSyncToInstance', () => {
       const instance = fakeInstance();
       const putLoadOrder = vi.fn().mockResolvedValue({ outcome: 'reconciled', failures: [], crashRepairOffers: [] });
       const sync = createLoadOrderSync({
-        isReceiving: () => true,
         debounceMs: 100,
         log: vi.fn(),
         withProgress: (work: () => Promise<void>) => work(),

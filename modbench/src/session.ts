@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import type { BackendManager } from './medit/BackendManager';
-import type { SseNotificationSubscriber } from './medit/NotificationSubscriber';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
 import type { LoadOrderSync } from './loadOrderReconcile';
@@ -15,7 +13,6 @@ export type Own = <T extends vscode.Disposable>(disposable: T) => T;
 // one object rather than nine module-level singletons. `undefined` until the wiring reaches the
 // field; every reader treats "not yet built" and "no live workspace" alike.
 export interface ExtensionSession {
-  backendManager?: BackendManager;
   pluginsTree?: PluginsTreeProvider;
   /** ADR-0044: the one path by which the Plugin load order reaches Editing. */
   loadOrderSync?: LoadOrderSync;
@@ -32,11 +29,8 @@ export interface ExtensionSession {
   /** The record filter's single writer: the context key its Clear action is gated on, the code
    *  lens's active SQL, and the readout. */
   setFilterActive?: (active: boolean, sql?: string, label?: string) => void;
-  /** Held on the session so the teardown writers can clear it alongside the tree badge. */
+  /** The malformed-plugin scan's Problems entries, replaced wholesale by each reconcile. */
   loadDiagnostics?: vscode.DiagnosticCollection;
-  /** ADR-0046 invariant 12's stream adapter — started on every successful reconcile, stopped by
-   *  `clearTreeWhenBackendDies` (editingTeardown.ts) wherever the backend goes unhealthy. */
-  notificationSubscriber?: SseNotificationSubscriber;
 }
 
 // ADR-0035: one progress indicator, in the view whose contents are loading — not a per-command

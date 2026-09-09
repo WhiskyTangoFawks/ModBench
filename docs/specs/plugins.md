@@ -609,13 +609,11 @@ overflow, then native **Collapse All** last.
   say which is which — `$(search)` narrows by name, `$(filter)` narrows by condition. Slot 1
   swaps to `$(clear-all)` while a name filter is active, gated on
   `modbench.pluginListTree.filterActive`.
-- **Slot 2 — record filter and its Clear** — the SQL record filter described above; a no-op
-  with no backend running (there is nothing to filter yet). Its own gate is
-  `modbench.filterActive` — a separate key from slot 1's, because the two axes are cleared
-  independently. **Closing mEdit clears the whole of the record filter's state** — gate,
-  code lens and readout — through the one writer every in-load order filter change already
-  goes through, so the Clear action cannot outlive the load order that gave it something to
-  clear.
+- **Slot 2 — record filter and its Clear** — the SQL record filter described above. Its own gate
+  is `modbench.filterActive` — a separate key from slot 1's, because the two axes are cleared
+  independently. Gate, code lens and readout are written from one place, so the three can never
+  disagree; a backend that goes away clears none of them, because the view keeps its shape and
+  reports the disconnect rather than narrowing or widening itself (ADR-0022).
 - **Both axes read out in the view description** when both are active — `"arm" · records:
   cells.sql`. The record filter is named by its **source** (the `.sql` filename, or `document`
   when applied from an open editor; `SQL` when a load-order sync reports a filter this
@@ -720,8 +718,9 @@ overflow, then native **Collapse All** last.
   index's `Index` call count by zero) — and re-sweeps winners once. Winner status and any open
   record editor both reflect the change via the same `notifyConflictsComputed`
   broadcast every completed reconcile fires; the view-header progress indicator
-  (`withPluginsViewProgress`) is the only feedback — no modal, no notification. With no backend
-  running the sync drops the request and no network call is made — the ordinary case is unaffected.
+  (`withPluginsViewProgress`) is the only feedback — no modal, no notification. The sync has no
+  health pre-check: a PUT against a backend that is not attached is refused by the transport and
+  reported as a failed reconcile, which tears nothing down.
 
 ### Entry point
 

@@ -6,4 +6,5 @@ export type {
 } from './MEditClient';
 export { isRefused } from './MEditClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
+export type { BackendLifecycleOptions } from './backendLifecycle';
 export { InMemoryMEditClient, type RecordedCall } from './InMemoryMEditClient';
