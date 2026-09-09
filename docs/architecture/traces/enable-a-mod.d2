@@ -1,0 +1,20 @@
+# Loadout gesture, Modbench only. The command writes and forgets; the watch
+# closes the loop, so this is the same path a change from MO2 takes.
+...@../styles
+direction: down
+mods: "Mods view" {class: driving}
+cmd: "modlist commands\nenable" {class: core}
+codec: "modlist.txt\nsplice" {class: core}
+disk: "MO2 instance\nprofiles/<profile>/modlist.txt" {class: sor}
+instance: "Instance\nrecompute, next sequence" {class: driven}
+views: "every view" {class: driving}
+client: "mEdit client" {class: core}
+medit: "mEdit\nload order state" {class: driving}
+
+mods -> cmd: gesture {class: loadout}
+cmd -> codec: line to flip {class: loadout}
+codec -> disk: bytes, then forget {class: loadout}
+disk -> instance: watch {class: signal}
+instance -> views: value {class: loadout}
+instance -> client: "load order snapshot,\non change and on connect" {class: loadout}
+client -> medit: load order snapshot {class: loadout}

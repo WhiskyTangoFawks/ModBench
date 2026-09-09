@@ -11,50 +11,9 @@ an implementing agent can answer structural questions from the document rather t
 maintainer. Vocabulary is the industry's: ports and adapters for the shape, command query
 responsibility segregation for the two sides.
 
-The full data-flow view, every arrow labelled with what moves and which way, is
-[docs/architecture/target-architecture.drawio](../architecture/target-architecture.drawio),
-read with [target-architecture.md](../architecture/target-architecture.md); the sketch below is
-its module skeleton.
-
-```mermaid
-flowchart TB
-  subgraph L1["Front end"]
-    FE[VS Code extension]
-  end
-  subgraph L2["API — driving adapters"]
-    Http[HTTP endpoints and the notification stream]
-    Watch[Plugin and Source watchers]
-  end
-  subgraph L3["Core"]
-    Cmd["Commands — one handler per gesture"]
-    Qry["Queries"]
-    subgraph K["Shared kernel"]
-      LoadOrder["Load order"]
-      Codec["Codec + schema"]
-    end
-  end
-  subgraph L4["Access — driven adapters"]
-    subgraph IndexM["Index"]
-      Proj["Projector"]
-      Store[("Store")]
-    end
-    SrcA["Source repository"]
-    PlgA["Plugin adapter"]
-  end
-  subgraph L5["Data — systems of record"]
-    Source[(Source tree in git)]
-    Plugin[(Plugin files)]
-  end
-  FE --> Http --> Cmd
-  Http --> Qry
-  Watch -. signals .-> Proj
-  Cmd -- documents --> SrcA --> Source
-  Cmd -- bytes --> PlgA --> Plugin
-  SrcA -- documents --> Proj
-  PlgA -- bytes --> Proj
-  Proj -- rows --> Store -- rows --> Qry
-  Store -. rows changed .-> Http
-```
+The picture is [docs/architecture/](../architecture/target-architecture.md): a zoom-out of the
+modules in their layers beside Modbench's, a data-flow view with every arrow, and one trace per
+gesture family. Read [target-architecture.md](../architecture/target-architecture.md) first.
 
 ## Strategic invariants
 

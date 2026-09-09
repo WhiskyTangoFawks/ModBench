@@ -1,0 +1,23 @@
+# Track and absorb, green. Track reads the plugin's bytes into documents, all of
+# them, once. Absorb is the same move, chosen when a tracked plugin changes on disk
+# (a-tracked-mod-changes-on-disk).
+...@../styles
+direction: down
+plugins: "Plugins view" {class: driving}
+client: "mEdit client" {class: core}
+http: "HTTP endpoints" {class: driving}
+cmd: "Commands\nplugin: track, absorb" {class: core}
+plgadapter: "Plugin adapter\nMutagen read" {class: driven}
+plugin: "Plugin files" {class: sor}
+srcrepo: "Source repository" {class: driven}
+source: "Source tree in git" {class: sor}
+proj: "Projector" {class: driven}
+
+plugins -> client: track · absorb {class: edit}
+client -> http: envelope {class: edit}
+http -> cmd: envelope {class: edit}
+plugin -> plgadapter: bytes {class: track}
+plgadapter -> cmd: bytes {class: track}
+cmd -> srcrepo: all documents {class: track}
+srcrepo -> source: documents {class: track}
+source -> proj: source changed, then documents (tracked) {class: signal}

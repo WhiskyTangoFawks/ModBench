@@ -1,0 +1,16 @@
+# Query, purple. A question and its answer are two arrows. Queries read only the Store.
+...@../styles
+direction: up
+views: "Plugins view · Editor" {class: driving}
+client: "mEdit client" {class: core}
+http: "HTTP endpoints" {class: driving}
+qry: "Queries\ncompare, references, children, filter" {class: core}
+store: "Store\nDuckDB" {class: derived}
+
+views -> client: question {class: query}
+client -> http: question {class: query}
+http -> qry: question {class: query}
+qry -> http: "answer: diff nodes, rows" {class: query}
+http -> client: answer {class: query}
+client -> views: records, cells, plugin-keyed status {class: query}
+store -> qry: rows {class: query}

@@ -1,0 +1,24 @@
+# Compile and keep, orange. Compile writes the source tree's documents back as
+# bytes. Keep is the same write, chosen over absorb when a tracked plugin changed.
+...@../styles
+direction: down
+plugins: "Plugins view" {class: driving}
+client: "mEdit client" {class: core}
+http: "HTTP endpoints" {class: driving}
+cmd: "Commands\nplugin: compile, keep" {class: core}
+srcrepo: "Source repository" {class: driven}
+source: "Source tree in git" {class: sor}
+plgadapter: "Plugin adapter\nMutagen write" {class: driven}
+plugin: "Plugin files" {class: sor}
+watcher: "Mod watcher" {class: driving}
+proj: "Projector\nvalidate by hash" {class: driven}
+
+plugins -> client: compile · keep {class: edit}
+client -> http: envelope {class: edit}
+http -> cmd: envelope {class: edit}
+source -> srcrepo: documents {class: compile}
+srcrepo -> cmd: documents {class: compile}
+cmd -> plgadapter: bytes {class: compile}
+plgadapter -> plugin: bytes {class: compile}
+plugin -> watcher: bytes {class: signal}
+watcher -> proj: plugin changed {class: signal}
