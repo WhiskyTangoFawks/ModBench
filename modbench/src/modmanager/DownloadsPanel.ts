@@ -6,6 +6,8 @@ import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
 import { nexusSlugForGame } from './mo2/gamePaths';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
+import type { Instance } from './instance';
+import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.
 async function readMetaText(path: string): Promise<string | undefined> {
@@ -37,18 +39,55 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
   );
 }
 
+interface UpgradePickItem extends vscode.QuickPickItem {
+  /** The chosen mod's own folder name — install's target, bypassing its name prompt. Absent
+   *  for the trailing "Install as a new mod…" row, which runs today's flow unchanged. */
+  target: string | undefined;
+}
+
+// The file-id match, if one exists, is first in `candidates` (selectUpgradeCandidates' own
+// order), which is what makes it VS Code's default-highlighted row — no explicit activeItem.
+function upgradePickItems(candidates: readonly UpgradeCandidate[]): UpgradePickItem[] {
+  return [
+    ...candidates.map((c) => ({
+      label: c.version ? `${c.modName} (v${c.version})` : c.modName,
+      description: c.fileIdMatch ? 'File ID match' : undefined,
+      target: c.modName,
+    })),
+    { label: 'Install as a new mod…', target: undefined },
+  ];
+}
+
+// Esc leaves `target` unresolved, which the caller reads as "install nothing" — never "install
+// as a new mod", which is its own explicit row.
+async function pickUpgradeTarget(name: string, candidates: readonly UpgradeCandidate[]): Promise<{ target: string | undefined } | undefined> {
+  const picked = await vscode.window.showQuickPick(upgradePickItems(candidates), {
+    placeHolder: `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`,
+  });
+  return picked && { target: picked.target };
+}
+
 // Pre-supplying the archive path keeps the install command's file-picker from appearing. The
 // `.meta` write is what the file-watcher turns into a Status refresh, so none is issued here.
-async function installArchive(instanceRoot: string, name: string, log: (msg: string) => void): Promise<void> {
+async function installArchive(
+  instanceRoot: string, name: string, instance: Pick<Instance, 'value'>, log: (msg: string) => void,
+): Promise<void> {
   const archivePath = join(instanceRoot, 'downloads', name);
   const metaPath = `${archivePath}.meta`;
   let installed = false;
   try {
     const metaText = (await readMetaText(metaPath)) ?? '';
     const { modID, fileID, version } = parseDownloadMeta(metaText);
+    const candidates = selectUpgradeCandidates(instance.value, { modID, fileID });
+    let target: string | undefined;
+    if (candidates.length > 0) {
+      const choice = await pickUpgradeTarget(name, candidates);
+      if (!choice) return; // Esc: install nothing
+      target = choice.target;
+    }
     installed = (await vscode.commands.executeCommand<boolean | undefined>(
       'modbench.modList.installFromArchive',
-      archivePath, modID, fileID, version,
+      archivePath, modID, fileID, version, target,
     )) ?? false;
     if (!installed) return;
     await writeFile(metaPath, setInstalledInText(metaText), 'utf8');
@@ -158,10 +197,12 @@ async function setArchiveHidden(instanceRoot: string, name: string, hidden: bool
 /** Clicked row only, ignoring the rest of any multi-selection: MO2 does not batch Install
  *  either, and batching the navigational actions is "open five browser tabs". VS Code's
  *  `(clickedItem, selectedItems[])` selection argument is unused here. */
-export function registerDownloadsSingleRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
+export function registerDownloadsSingleRowCommands(
+  instanceRoot: string, instance: Pick<Instance, 'value'>, log: (msg: string) => void,
+): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(instanceRoot, node.row.name, log);
+      if (node?.row.name) void installArchive(instanceRoot, node.row.name, instance, log);
     }),
     vscode.commands.registerCommand('modbench.downloads.visitNexus', (node?: DownloadNode) => {
       const name = node?.row.name;

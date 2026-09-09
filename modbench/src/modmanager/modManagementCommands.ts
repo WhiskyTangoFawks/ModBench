@@ -88,7 +88,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   const validateName = (name: string) => collidingModName(instance, name);
   return [
       vscode.commands.registerCommand('modbench.modList.installFromArchive', async (
-        archivePath?: string, modID?: string, fileID?: string, version?: string,
+        archivePath?: string, modID?: string, fileID?: string, version?: string, target?: string,
       ): Promise<boolean> => {
         let archive = archivePath;
         if (!archive) {
@@ -101,7 +101,10 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         }
         if (!archive) return false;
         const resolvedArchive = archive;
-        const name = await promptModName(path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''), validateName);
+        // A caller-supplied target is an upgrade already chosen (the Downloads pick): the name
+        // prompt, and its collision refusal that exists only to redirect fresh installs there,
+        // never run.
+        const name = target ?? await promptModName(path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''), validateName);
         if (!name) return false;
         let succeeded = false;
         await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
@@ -336,7 +339,7 @@ export function registerDownloadsView(
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, log),
+    ...registerDownloadsSingleRowCommands(instanceRoot, instance, log),
     ...registerDownloadsMultiRowCommands(instanceRoot, log),
   ]) own(disposable);
   return downloadsProvider;
