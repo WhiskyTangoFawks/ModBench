@@ -103,8 +103,8 @@ interface PluginListDeps {
 // every badge from the facts the provider pulls itself.
 function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   const { own, session, outputChannel, reporter, instanceRoot, dataFolder, implicitMasters, instance } = deps;
-  // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`.
-  const log = (msg: string) => outputChannel.info(msg);
+  // The tree states its own severity (ADR-0026); this routes it to the matching channel level.
+  const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source = pluginListSource(instanceRoot, instance);
   const pluginsTree = own(new PluginsTreeProvider({
     instance, source, log, reporter, dataFolder, implicitMasters,

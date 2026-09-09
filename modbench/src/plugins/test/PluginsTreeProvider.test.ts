@@ -133,6 +133,7 @@ class FakeClient implements PluginFactsClient {
   getPluginsCalls = 0;
   getDiagnosesCalls = 0;
   failGetPlugins = false;
+  failGetDiagnoses = false;
   constructor(
     public plugins: PluginMetadata[] = [],
     public diagnoses: PluginDiagnosisReport[] = [],
@@ -145,7 +146,9 @@ class FakeClient implements PluginFactsClient {
   }
   getDiagnoses(): Promise<PluginDiagnosisReport[]> {
     this.getDiagnosesCalls++;
-    return Promise.resolve(this.diagnoses);
+    return this.failGetDiagnoses
+      ? Promise.reject(new Error('GET /plugins/diagnoses failed (503)'))
+      : Promise.resolve(this.diagnoses);
   }
 }
 
@@ -191,6 +194,7 @@ interface Harness {
   repository: PluginRepository;
   instance: FakeInstance;
   source: FakeSource;
+  logged: { level: string; msg: string }[];
 }
 
 function makeTree(
@@ -210,13 +214,15 @@ function makeTree(
   const client = extra.client ?? new FakeClient();
   const repository = extra.repository ?? makeRepository();
   const records = new PluginTreeProvider(repository);
+  const logged: { level: string; msg: string }[] = [];
   const tree = new PluginsTreeProvider({
     instance, source, client, records,
+    log: (level, msg) => logged.push({ level, msg }),
     publishDiagnoses: extra.publishDiagnoses,
     dataFolder: extra.dataFolder,
     implicitMasters: extra.implicitMasters,
   });
-  return { tree, client, records, repository, instance, source };
+  return { tree, client, records, repository, instance, source, logged };
 }
 
 // A reconcile is what fills the tree's facts; every decoration test drives it rather than
@@ -1906,6 +1912,32 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     await h.tree.refreshFacts();
 
     expect(h.client.getPluginsCalls).toBe(2);
+  });
+
+  // ADR-0026: a failed read is an error and a failed background scan is a warning, so the two
+  // cannot arrive at the same channel level.
+  it('reports a failed plugin read at error, naming the reason once', async () => {
+    const h = makeTree([A_ROW()]);
+    h.client.failGetPlugins = true;
+
+    await h.tree.applyReconciled([]);
+
+    const failures = h.logged.filter((l) => l.msg.includes('plugin list failed'));
+    expect(failures).toHaveLength(1);
+    expect(failures[0].level).toBe('error');
+    expect(failures[0].msg).toContain('GET /plugins failed (503)');
+  });
+
+  it('reports a failed malformed-plugin scan at warn, below the read that succeeded', async () => {
+    const h = makeTree([A_ROW()]);
+    h.client.failGetDiagnoses = true;
+
+    await reconcile(h, [held('A.esp')]);
+
+    const scan = h.logged.filter((l) => l.msg.includes('malformed-plugin scan'));
+    expect(scan).toHaveLength(1);
+    expect(scan[0].level).toBe('warn');
+    expect(h.logged.some((l) => l.level === 'error')).toBe(false);
   });
 
   // A slow read answering after teardown would resurrect chevrons on a dead backend.

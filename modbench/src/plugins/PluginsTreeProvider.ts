@@ -58,7 +58,9 @@ export interface PluginsTreeProviderOptions {
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
    *  this provider has no business knowing. */
   publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
-  log?: (msg: string) => void;
+  /** ADR-0026: this provider states the severity, so a background blip and a failed read do not
+   *  land on the same channel level. */
+  log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporter?: Reporter;
   dataFolder?: () => Promise<string | undefined>;
   /** The rows the game forces on, which only the backend can name (ADR-0021). `undefined` — it
@@ -197,7 +199,7 @@ export class PluginsTreeProvider
   readonly onDidChangeParticipation = this._onDidChangeParticipation.event;
 
   private readonly source: PluginListSource;
-  private readonly log: (msg: string) => void;
+  private readonly log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly dataFolder: () => Promise<string | undefined>;
   private readonly implicitMasters: ImplicitMasterSource;
@@ -542,7 +544,7 @@ export class PluginsTreeProvider
     try {
       return (await this.client.getPlugins()).filter((p) => p.inLoadOrder);
     } catch (err) {
-      this.log(`[PluginsTreeProvider] reading the backend's plugin list failed: ${message(err)}`);
+      this.log('error', `[PluginsTreeProvider] reading the backend's plugin list failed: ${message(err)}`);
       // Briefly over-showing rows beats freezing every one behind a stale filter answer.
       this.matches = undefined;
       this._onDidChangeTreeData.fire(undefined);
@@ -577,7 +579,7 @@ export class PluginsTreeProvider
       this.diagnoses = diagnoses;
       this._onDidChangeTreeData.fire(undefined);
     } catch (err) {
-      this.log(`[PluginsTreeProvider] the malformed-plugin scan could not be read: ${message(err)}`);
+      this.log('warn', `[PluginsTreeProvider] the malformed-plugin scan could not be read: ${message(err)}`);
     }
   }
 
@@ -635,7 +637,7 @@ export class PluginsTreeProvider
     } catch (e) {
       // ADR-0026: an explicit user action failed — notify + log, then resync the
       // moved rows against disk so the tree never shows a phantom reorder.
-      this.log(`[PluginsTreeProvider] reorderPlugins failed: ${message(e)}`);
+      this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${message(e)}`);
       this.reporter?.report('error', 'Failed to reorder plugins.', message(e));
     }
     this.invalidate();

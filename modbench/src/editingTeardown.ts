@@ -81,14 +81,10 @@ export function clearTreeWhenBackendDies(
 /** Re-reads the tree's own plugin facts, so a row reads the filter active now. The match map is
  *  derived from that same read; `undefined` — the read failed — degrades to "matches
  *  everywhere". */
-export async function refreshMatchingPlugins(
-  session: TeardownSession, channel: { error(msg: string): void },
-): Promise<void> {
+export async function refreshMatchingPlugins(session: TeardownSession): Promise<void> {
   const tree = session.pluginsTree;
   if (!tree) return; // no tree means no load order to describe, not a failure
   const plugins = await tree.refreshFacts();
-  // ADR-0026: a failed read is an error, and the tree's own log port carries no severity.
-  if (plugins === undefined) channel.error("[extension] refreshing the record filter's plugin matches failed");
   // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
   session.loadOrderSync?.setMatches(
     plugins && new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
