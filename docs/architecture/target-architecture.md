@@ -20,8 +20,8 @@ for Modbench; this file says how to read the pictures.
   view: the same boxes, imported from the zoom-out, with every arrow drawn, coloured by gesture
   family and unlabelled. It shows the topology; the trace of the same colour carries the labels.
 - [traces/](traces/) holds one diagram per gesture family, and two that cross families end to end,
-  a tracked mod changing on disk and upgrading a mod, because #813 defines them as one story: the path one gesture takes end to end,
-  in its colour, with the watch that closes the loop. An arrow points the way data moves and is
+  a tracked mod changing on disk and upgrading a mod, each of which is one story: the path one
+  gesture takes end to end, in its colour, with the watch that closes the loop. An arrow points the way data moves and is
   labelled with what moves, never with the call, so a request and its reply are two arrows.
 - [styles.d2](styles.d2) is the shared vocabulary. A box class says what a module is: driving,
   core, driven, a system of record, derived. An arrow class says which gesture family the payload
@@ -45,9 +45,8 @@ a value a command needs, the folders to adopt or the plugins to reconcile, arriv
 argument. Deploy is a module inside Toolbox and reads one value with its sequence. The Instance is derived from disk and nothing else; it
 recomputes whole, keeps its last value on a parse failure, and validates on activation and
 Refresh through the same path ([the-instance-recomputes](traces/the-instance-recomputes.d2)).
-Outside three per-release tables, game paths, implicit master names and the load-order file
-destination, no Modbench file names a game; a source scan holds it. Mods, Downloads and Toolbox
-never see a record.
+Outside two per-release tables, game paths and the load-order file destination, no Modbench file
+names a game; a source scan holds it. Mods, Downloads and Toolbox never see a record.
 
 ## What is left out
 
