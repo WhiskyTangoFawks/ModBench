@@ -218,6 +218,9 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
     putLoadOrder: async (plugins, dataFolder, signal, onProgress) => {
+      // The PUT starting is the moment the backend stops holding the load order the tree
+      // describes, so the held set restarts from empty and refills as the ticks land (ADR-0035).
+      session.pluginsTree?.applyIndexed([], []);
       const result = await putLoadOrderVia(
         client, plugins, dataFolder, instanceRoot,
         gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,

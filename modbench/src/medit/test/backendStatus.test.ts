@@ -18,7 +18,7 @@ describe('backendStatusText', () => {
 });
 
 describe('wireBackendStatus', () => {
-  it('writes the status bar and refreshes the tree on every change', () => {
+  it('writes the status bar on every change', () => {
     const client = new InMemoryMEditClient();
     const views = makeViews();
     wireBackendStatus(client, views);
@@ -26,6 +26,17 @@ describe('wireBackendStatus', () => {
     client.setStatus('attached');
 
     expect(views.setStatusText).toHaveBeenCalledWith('$(plug) mEdit: Attached');
+  });
+
+  // The badges the tree holds describe a backend that is gone, so it re-reads; the read fails,
+  // its rows stay, and they expand into the error node.
+  it('refreshes the tree when the backend goes', () => {
+    const client = new InMemoryMEditClient();
+    const views = makeViews();
+    wireBackendStatus(client, views);
+
+    client.setStatus('disconnected');
+
     expect(views.refreshTree).toHaveBeenCalled();
   });
 
@@ -59,9 +70,12 @@ describe('wireBackendStatus', () => {
     client.setStatus('starting');
 
     expect(views.abandonReconcile).not.toHaveBeenCalled();
+    expect(views.refreshTree).not.toHaveBeenCalled();
   });
 
-  it('an attached backend abandons nothing', () => {
+  // The reconcile that follows an attach is what hands the tree its load order; reading the
+  // plugin list before that PUT asks a backend that holds none.
+  it('an attached backend is left to the reconcile', () => {
     const client = new InMemoryMEditClient();
     const views = makeViews();
     wireBackendStatus(client, views);
@@ -69,6 +83,7 @@ describe('wireBackendStatus', () => {
     client.setStatus('attached');
 
     expect(views.abandonReconcile).not.toHaveBeenCalled();
+    expect(views.refreshTree).not.toHaveBeenCalled();
   });
 
   it('stops reporting once unsubscribed', () => {

@@ -201,6 +201,9 @@ function createMockBackend(): http.Server {
         }
         // The real load blocks for the whole indexing run. Held open so a test can observe
         // the tree mid-load; answered immediately otherwise, as most suites expect.
+        // The real load publishes its progress from the moment it starts, which is why the
+        // extension subscribes before the PUT; the tree's held set follows those ticks.
+        pushLoadOrderStatus();
         const answer = () => {
           loadOrderHeld = true;
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -990,7 +993,7 @@ describe('Plugin load-order rows expand into records', () => {
     assert.ok(!rows.some((r) => tree.getTreeItem(r).contextValue === 'pluginImplicit'));
   });
 
-  it('renders every row collapsible before mEdit has ever launched, expanding to one error node', async () => {
+  it('renders every row collapsible, whether or not mEdit has launched', async () => {
     const tree = pluginsTree()!;
     const rows = await tree.getChildren();
 
@@ -1005,8 +1008,7 @@ describe('Plugin load-order rows expand into records', () => {
       );
     }
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
-    assert.strictEqual(children.length, 1, 'expanding before mEdit is up answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'error', 'the one node is the record browser\'s own error node');
+    assert.strictEqual(children.length, 1, 'expanding answers exactly one node, never an empty list');
   });
 
   it('launching mEdit gives a row real children, without reordering the load order', async () => {
@@ -1050,7 +1052,9 @@ describe('Plugin load-order rows expand into records', () => {
     assert.deepStrictEqual((await tree.getChildren(other)).map((c) => (c as vscode.TreeItem).label), ['Weapon']);
   });
 
-  it('keeps every row collapsible when mEdit closes, expanding to one error node, keeping the load order', async () => {
+  // ADR-0022: the view has no shape to revert to, so a backend that goes takes nothing with it —
+  // the row's own content is what reports the absence, on the expand that asks for it.
+  it('keeps every row and its chevron when mEdit closes', async () => {
     const tree = pluginsTree()!;
 
     exitEditing();
@@ -1065,7 +1069,6 @@ describe('Plugin load-order rows expand into records', () => {
     }
     const children = await tree.getChildren(findRow(rows, 'TestMod.esp'));
     assert.strictEqual(children.length, 1, 'expanding after close answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'error', 'the one node is the record browser\'s own error node');
   });
 });
 
@@ -1105,12 +1108,6 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     fs.rmSync(gameDir, { recursive: true, force: true });
   });
 
-  it('carries no read-only tooltip before a load order exists', async () => {
-    const tree = pluginsTree()!;
-    const row = findRow(await tree.getChildren(), 'Immutable.esm');
-    assert.strictEqual(tree.getTreeItem(row).tooltip, undefined);
-  });
-
   it('gains a read-only tooltip once the load order reports it immutable', async () => {
     await enterEditing();
     const tree = pluginsTree()!;
@@ -1119,14 +1116,6 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     const tooltip = tree.getTreeItem(row).tooltip;
 
     assert.ok(typeof tooltip === 'string' && tooltip.includes('read-only'), `expected a read-only tooltip, got: ${String(tooltip)}`);
-  });
-
-  it('loses the tooltip again once the mEdit closes', async () => {
-    exitEditing();
-    const tree = pluginsTree()!;
-    const row = findRow(await tree.getChildren(), 'Immutable.esm');
-
-    assert.strictEqual(tree.getTreeItem(row).tooltip, undefined);
   });
 });
 
@@ -1373,11 +1362,13 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
       'a stopped client is not a reason to un-narrow a view the user narrowed');
   });
 
-  // The chevrons are the discriminator: a tree that cleared itself answers "mEdit is not
+  // The expand is the discriminator: a tree that forgot its load order answers "mEdit is not
   // connected" for every row, whatever the row's own content would have been.
-  it('a row still in the tree expands into its records, not a not-connected node', async () => {
+  it('a row still in the tree keeps the load order behind its chevron', async () => {
+    mockPluginsOverride = null; // this one is about the rows the filter left alone
     const tree = pluginsTree()!;
-    const row = findRow(await tree.getChildren(), 'Fallout4.esm');
+    await enterEditing();
+    const row = findRow(await tree.getChildren(), 'TestMod.esp');
 
     await clientOf()?.stop();
     await new Promise((r) => setTimeout(r, 200));
@@ -1498,7 +1489,10 @@ describe('Progressive load', () => {
   const recordTypesAttempted = (name: string) =>
     requestLog.some((l) => l.startsWith(`GET /plugins/${name}/record-types`));
   const stillIndexing = async (name: string) => nodeKind((await childrenFor(name))[0]) === 'indexing';
+  // Nothing is read before the PUT is logged: until the load starts, the tree still holds the
+  // previous one, and a read against that would answer about a load order already superseded.
   const waitForIndexed = (name: string) => waitFor(`the backend to be asked about ${name} once indexed`, async () => {
+    if (!requestLog.includes('PUT /load-order')) return undefined;
     await childrenFor(name);
     return recordTypesAttempted(name) ? true : undefined;
   });
@@ -1538,9 +1532,9 @@ describe('Progressive load', () => {
     await launch;
   });
 
-  // Closing mEdit mid-load is a deliberate abandonment: the stream closes and a row's content
-  // goes with the load order. The "no error toast" half lives at the LoadOrderController seam.
-  it('closes the notification stream and clears the view when mEdit is closed mid-load', async () => {
+  // Closing mEdit mid-load is a deliberate abandonment: the stream closes with the backend it was
+  // opened against. The "no error toast" half lives at the LoadOrderController seam.
+  it('closes the notification stream when mEdit is closed mid-load', async () => {
     setIndexed(['TestMod.esp']);
     const launch = enterEditing();
     await waitForIndexed('TestMod.esp');
@@ -1560,7 +1554,6 @@ describe('Progressive load', () => {
     );
     const children = await childrenFor('TestMod.esp');
     assert.strictEqual(children.length, 1, 'expanding after an abandoned load answers exactly one node, never an empty list');
-    assert.strictEqual(nodeKind(children[0]), 'error', 'a row\'s content goes with the load order, not just its badges');
     assert.strictEqual(
       (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
       undefined,

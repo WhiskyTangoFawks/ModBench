@@ -1003,12 +1003,12 @@ describe('PluginsTreeProvider — rows are always collapsible', () => {
     expect(h.tree.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
-  it('stays collapsible once mEdit closes', async () => {
+  it('stays collapsible while a fresh load holds nothing yet', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.clear();
+    h.tree.applyIndexed([], []);
 
     expect(h.tree.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
@@ -1079,14 +1079,14 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     expect(callCount(h.client, 'getPlugins')).toBe(0);
   });
 
-  it('expanding after mEdit closes answers with one error node, never an empty list', async () => {
+  it('expanding while a fresh load holds nothing yet answers with one node, never an empty list', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    h.tree.clear();
+    h.tree.applyIndexed([], []);
 
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(ErrorNode)]);
+    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
   });
 
   it('the empty-state row has no children', async () => {
@@ -1122,27 +1122,14 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
     expect(fired.length).toBeGreaterThan(0);
   });
 
-  it('keeps the load order rows intact once mEdit closes', async () => {
+  it('keeps the load order rows intact when a fresh load starts', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp'), held('B.esp')]);
     const before = await h.tree.getChildren();
 
-    h.tree.clear();
+    h.tree.applyIndexed([], []);
 
     expect(await h.tree.getChildren()).toEqual(before);
-  });
-
-  // Both statements are about a live backend, so both go with it: a tracked set outliving one
-  // would keep offering Change FormID on rows nothing backs.
-  it('clears the record rows immutable and tracked sets', () => {
-    const h = makeTree([A_ROW()]);
-    const immutable = vi.spyOn(h.records, 'setImmutablePlugins');
-    const tracked = vi.spyOn(h.records, 'setTrackedPlugins');
-
-    h.tree.clear();
-
-    expect(immutable).toHaveBeenCalledWith([]);
-    expect(tracked).toHaveBeenCalledWith([]);
   });
 
   it('pushes the immutable and tracked sets from the reconcile own read', async () => {
@@ -1317,13 +1304,13 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     expect(await h.tree.getChildren()).toHaveLength(1);
   });
 
-  // A row a filter hid must not stay hidden once clear() has thrown away the filter that hid it.
-  it('restores a filter-hidden row once the mEdit closes, not left hidden', async () => {
+  // A row a filter hid must not stay hidden once a fresh load has thrown away the match that hid it.
+  it('restores a filter-hidden row when a fresh load starts, not left hidden', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false })]);
     expect(await h.tree.getChildren()).toEqual([]);
 
-    h.tree.clear();
+    h.tree.applyIndexed([], []);
 
     const rows = await h.tree.getChildren();
     expect(rows).toHaveLength(1);
@@ -1526,14 +1513,14 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     expect((await rowItem(h)).tooltip).toBeUndefined();
   });
 
-  it('clears on mEdit close along with everything else', async () => {
+  it('goes when a fresh load starts, along with every other fact', async () => {
     // A row is its own TreeItem, so decorating mutates the one object the tree reuses across
     // renders — reading the tooltip while still read-only is what catches accumulate-not-reset.
     const h = makeTree([A_ROW()]);
     await reconcile(h, [held('A.esp', { isImmutable: true })]);
     expect((await rowItem(h)).tooltip).toContain('read-only');
 
-    h.tree.clear();
+    h.tree.applyIndexed([], []);
 
     expect((await rowItem(h)).tooltip).toBeUndefined();
   });
@@ -2064,15 +2051,15 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     expect(h.logged.some((l) => l.level === 'error')).toBe(false);
   });
 
-  // A slow read answering after teardown would resurrect a held load order on a dead backend.
-  it('drops a reconcile answer that lands after the tree was cleared', async () => {
+  // A slow read answering after a newer load started would resurrect the load order it replaced.
+  it('drops a reconcile answer that lands after a fresh load started', async () => {
     const h = makeTree([A_ROW()]);
     h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
     const landing = h.tree.applyReconciled([]);
-    h.tree.clear();
+    h.tree.applyIndexed([], []);
 
     expect(await landing).toBeUndefined();
     const [row] = await h.tree.getChildren();
-    expect(await h.tree.getChildren(row)).toEqual([expect.any(ErrorNode)]);
+    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
   });
 });

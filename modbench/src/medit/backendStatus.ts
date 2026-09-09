@@ -30,9 +30,10 @@ export interface BackendStatusViews {
 export function wireBackendStatus(client: StatusSource, views: BackendStatusViews): () => void {
   return client.onStatusChanged((status) => {
     views.setStatusText(backendStatusText(status));
-    // Not 'starting': a launch arms its reconcile before it asks the client to start, and that
-    // arming must survive the backend coming up.
-    if (status === 'disconnected' || status === 'stopped') views.abandonReconcile();
+    // A backend on its way up owns the views itself: the launch armed its reconcile before
+    // asking the client to start, and the reconcile is what hands the tree its load order.
+    if (status === 'starting' || status === 'attached') return;
+    views.abandonReconcile();
     views.refreshTree();
   });
 }

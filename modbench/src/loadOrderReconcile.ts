@@ -27,7 +27,7 @@ export interface LoadOrderSync {
   dispose(): void;
   /** Replacing a superseded reconcile's scope never aborts it — the backend answers that one 409.
    *  Call before the reconcile's first await, not just before the PUT: a launch has an earlier
-   *  phase that must honour a backend going away too. */
+   *  phase that must honour a departing backend. */
   arm(): { signal: AbortSignal; abandoned: () => boolean };
   /** Cancel whatever reconcile is armed without touching future `request()`/`flush()` calls; a
    *  later relaunch still finds this object able to serve them. */
