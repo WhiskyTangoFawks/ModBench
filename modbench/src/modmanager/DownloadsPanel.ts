@@ -45,10 +45,10 @@ async function installArchive(instanceRoot: string, name: string, log: (msg: str
   let installed = false;
   try {
     const metaText = (await readMetaText(metaPath)) ?? '';
-    const { modID, fileID } = parseDownloadMeta(metaText);
+    const { modID, fileID, version } = parseDownloadMeta(metaText);
     installed = (await vscode.commands.executeCommand<boolean | undefined>(
       'modbench.modList.installFromArchive',
-      archivePath, modID, fileID,
+      archivePath, modID, fileID, version,
     )) ?? false;
     if (!installed) return;
     await writeFile(metaPath, setInstalledInText(metaText), 'utf8');

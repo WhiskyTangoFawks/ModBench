@@ -88,7 +88,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   const validateName = (name: string) => collidingModName(instance, name);
   return [
       vscode.commands.registerCommand('modbench.modList.installFromArchive', async (
-        archivePath?: string, modID?: string, fileID?: string,
+        archivePath?: string, modID?: string, fileID?: string, version?: string,
       ): Promise<boolean> => {
         let archive = archivePath;
         if (!archive) {
@@ -105,7 +105,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         if (!name) return false;
         let succeeded = false;
         await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
-          const outcome = await installFromArchive(instanceRoot, name, resolvedArchive, { modID, fileID });
+          const outcome = await installFromArchive(instanceRoot, name, resolvedArchive, { modID, fileID, version });
           if (!outcome.applied) throw new Error(outcome.refusal);
           warnIfFomod(name, outcome.isFomod);
           succeeded = true;

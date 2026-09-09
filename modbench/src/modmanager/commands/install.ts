@@ -6,7 +6,7 @@ import { basename, join } from 'node:path';
 import { detectRoot } from '../install/detectRoot';
 import { extractArchive, type Runner } from '../install/extractArchive';
 import type { InstallMeta } from '../model';
-import { setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
+import { parseMetaIni, setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
 import { readGameName } from '../mo2/modOrganizerIni';
 
 /** `isFomod` reports a scripted installer whose files landed as-is: the caller warns, the
@@ -25,6 +25,7 @@ export interface InstallOptions {
    *  entry, so the next upgrade over this folder can pre-select with certainty. */
   modID?: string;
   fileID?: string;
+  version?: string;
 }
 
 // Beside mods/ rather than inside it: same volume, so the rename is atomic, and outside every
@@ -74,14 +75,28 @@ async function landNewMod(
   await renameFn(stagedRoot, modDir);
 }
 
+// An owned key the identity does not supply falls back to the old meta.ini's own value: the
+// merge with what was already there is this caller's job, not `setOwnedKeysInText`'s.
+function keysForUpgrade(gameName: string, meta: InstallMeta, oldMetaText: string): OwnedMetaKeys {
+  const old = parseMetaIni(oldMetaText);
+  return {
+    gameName,
+    modid: meta.modid ?? old.nexusId,
+    version: meta.version ?? old.version,
+    installationFile: meta.installationFile ?? old.archiveFilename,
+    installedFiles: meta.installedFiles ?? old.installedFiles,
+  };
+}
+
 // Every entry but `.git` is removed, the staged tree's entries move in, and meta.ini is set
 // through the existing-text write, so a foreign key never moves. Nothing past the first removal
 // is rolled back on failure.
 async function landUpgrade(
-  modDir: string, stagedRoot: string, keys: OwnedMetaKeys,
+  modDir: string, stagedRoot: string, gameName: string, meta: InstallMeta,
   renameFn: (from: string, to: string) => Promise<void>,
 ): Promise<void> {
   const oldMetaText = await readTextOrEmpty(join(modDir, 'meta.ini'));
+  const keys = keysForUpgrade(gameName, meta, oldMetaText);
   for (const entry of await readdir(modDir)) {
     if (entry === '.git') continue;
     await rm(join(modDir, entry), { recursive: true, force: true });
@@ -102,13 +117,12 @@ function landStagedMod(
     const targetExists = await exists(modDir);
     try {
       const gameName = readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'));
-      const keys: OwnedMetaKeys = { gameName, ...meta };
       if (!targetExists) {
-        await landNewMod(modsDir, modDir, stagedRoot, keys, renameFn);
+        await landNewMod(modsDir, modDir, stagedRoot, { gameName, ...meta }, renameFn);
         return { applied: true, wrote: true, isFomod };
       }
       try {
-        await landUpgrade(modDir, stagedRoot, keys, renameFn);
+        await landUpgrade(modDir, stagedRoot, gameName, meta, renameFn);
       } catch (err) {
         return {
           applied: false,
@@ -134,7 +148,7 @@ async function withStaging<T>(instanceRoot: string, use: (staging: string) => Pr
 
 function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
   const installedFiles = opts.modID && opts.fileID ? [{ modid: opts.modID, fileid: opts.fileID }] : undefined;
-  return { ...base, modid: opts.modID ?? base.modid, installedFiles };
+  return { ...base, modid: opts.modID ?? base.modid, version: opts.version ?? base.version, installedFiles };
 }
 
 /** Extracts into staging and moves the detected mod root in. `installationFile` records which

@@ -147,6 +147,15 @@ describe('install commands', () => {
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
   });
 
+  it('a new install writes the sidecar\'s version, same as it writes modid and installedFiles', async () => {
+    const archive = join(root, 'downloads', 'Freshly-1-0.7z');
+
+    await installFromArchive(root, MOD, archive, { run: runnerFor(), modID: '111', fileID: '222', version: '3.0.0' });
+
+    const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
+    expect(meta).toContain('version=3.0.0');
+  });
+
   // Rival: catch EXDEV and fall back to a recursive copy. The mod folder would then exist, and
   // the applied assertion and the absence assertion both fail.
   it('refuses a cross-volume staging area instead of copying', async () => {
@@ -202,6 +211,31 @@ describe('install commands', () => {
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toEqual(COMPLETE);
+  });
+
+  it('an upgrade with a sidecar version rewrites meta.ini\'s version', async () => {
+    const name = 'Versioned Target'; // makeExistingMod's meta.ini starts at version=1.0.0
+    const modDir = await makeExistingMod(root, name, false);
+    const archive = join(root, 'downloads', 'Freshly-2-0.7z');
+
+    await installFromArchive(root, name, archive, { run: runnerFor(), version: '2.0.0' });
+
+    const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
+    expect(meta).toContain('version=2.0.0');
+    expect(meta).not.toContain('version=1.0.0');
+  });
+
+  // Rival: pass the identity's meta straight through without merging against the old text. The
+  // version key is owned, so `undefined` there would clear it instead of leaving it as found.
+  it('an upgrade with no sidecar version preserves whatever version the old meta.ini had', async () => {
+    const name = 'Unversioned Upgrade'; // makeExistingMod's meta.ini starts at version=1.0.0
+    const modDir = await makeExistingMod(root, name, false);
+    const archive = join(root, 'downloads', 'Freshly-2-0.7z');
+
+    await installFromArchive(root, name, archive, { run: runnerFor() });
+
+    const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
+    expect(meta).toContain('version=1.0.0');
   });
 
   it('a watcher armed on the target folder before an upgrade still fires for a write after it', async () => {

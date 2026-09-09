@@ -397,15 +397,20 @@ The extension owns the editing backend process
   takes (`modmanager/modsReconcile.ts`), so an install is one signal with one owner.
 - **An existing target is an upgrade**, never a refusal: every entry but `.git` is removed,
   the staged tree's entries move in, and meta.ini is set through its existing-text write —
-  the owned keys and the `installedFiles` entry are replaced, every foreign key and every
-  other section survive untouched. The folder is never renamed away, so its identity, its
-  repository and every watcher armed on it survive the release. The install command takes the
-  target name and the download's identity (mod id, file id, archive filename) as arguments
-  and reads nothing from the Instance; it checks the target for `.git` itself, a disk fact.
-  Refusals (staging failure, cross-volume) can only happen before the first entry is removed;
-  past that point nothing is rolled back, and a failure names the folder and what remains.
+  every foreign key and every other section survive untouched. Each owned key (game name, mod
+  id, version, installation file, `installedFiles`) the download's identity supplies replaces
+  the old one; one it does not supply falls back to whatever the old meta.ini already had
+  rather than being cleared, so an upgrade with an unknown version never blanks a known one.
+  The folder is never renamed away, so its identity, its repository and every watcher armed on
+  it survive the release. The install command takes the target name and the download's
+  identity (mod id, file id, version, archive filename) as arguments and reads nothing from
+  the Instance; it checks the target for `.git` itself, a disk fact. Refusals (staging
+  failure, cross-volume) can only happen before the first entry is removed; past that point
+  nothing is rolled back, and a failure names the folder and what remains.
 - meta.ini's `[installedFiles]` entry carries the mod id and file id MO2's own format uses, so
-  the next upgrade over the folder can pre-select with certainty.
+  the next upgrade over the folder can pre-select with certainty. The same identity's version,
+  when known, becomes meta.ini's `version` key on both a new install and an upgrade — the tell
+  the mEdit half of this PRD reads to pre-select the absorb dialog's default.
 - A colliding name is kept out by the name prompt's own input validation, which says the mod
   exists and points at the Downloads view — install has no "already exists" refusal of its own.
 - Staging shares a volume with `mods/` so the rename is atomic. A cross-volume staging area
