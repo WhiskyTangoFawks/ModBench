@@ -67,9 +67,11 @@ either side's local optimum.
 
 7. **A kernel per file.** Each MO2 file's byte format lives in exactly one module under
    `modmanager/mo2/`, and nothing else in `src/` names a format literal — an AST scan
-   (`formatLiteralScan.test.ts`) is the gate. The Instance parses through those modules and reuses
-   the winner and participation rules the file conflict index and the load order snapshot already
-   implement; it re-derives nothing.
+   (`formatLiteralScan.test.ts`) is the gate. A kernel module imports only `node:` builtins and
+   other kernel modules, so the kernel could compile as its own project — `kernelImportScan.test.ts`
+   is the gate. The Instance parses through those modules and reuses the winner and participation
+   rules the file conflict index and the load order snapshot already implement; it re-derives
+   nothing.
 
 ## Consequences
 

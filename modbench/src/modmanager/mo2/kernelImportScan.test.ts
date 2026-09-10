@@ -1,7 +1,9 @@
 // ADR-0047 §7: each MO2 file's format lives in its own kernel module under mo2/, self-contained
 // enough that a kernel project could compile alone.
 import { describe, it, expect } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import ts from 'typescript';
 
@@ -57,12 +59,17 @@ describe('mo2 kernel imports nothing outside mo2/', () => {
     expect(offenders).toEqual({});
   });
 
-  // Rival this catches: a kernel module reaching to `../model` (or any other sibling context)
-  // for a type instead of owning it beside the codec that produces it.
-  it('flags an import planted upward out of mo2/', () => {
-    const planted = "import type { ModlistEntry } from '../model';\n";
-    expect(importSpecifiers(planted, join(KERNEL_DIR, 'planted.ts')).filter(
-      (s) => !isAllowedSpecifier(s, join(KERNEL_DIR, 'planted.ts')),
-    )).toEqual(['../model']);
+  // Rival this catches: a kernel module reaching to `../model` for a type instead of owning
+  // it beside the codec that produces it. Calls `disallowedSpecifiers` on a real file, so
+  // gutting that function cannot leave this test passing.
+  it('flags an import planted upward out of mo2/', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'medit-kernel-import-scan-'));
+    try {
+      const planted = join(dir, 'planted.ts');
+      await writeFile(planted, "import type { ModlistEntry } from '../model';\n");
+      expect(disallowedSpecifiers(planted)).toEqual(['../model']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
