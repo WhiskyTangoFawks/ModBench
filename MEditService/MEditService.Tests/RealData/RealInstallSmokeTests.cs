@@ -25,17 +25,7 @@ public sealed class RealInstallSmokeTests
     // assembly is not referenced is not offered, not loaded and not counted.
     private static readonly SchemaReflector SchemaReflector = new SchemaReflector();
 
-    // Skipped, not passed, without MEDIT_SMOKE=1, so runs report honestly rather than a green no-op.
-    private sealed class SmokeFactAttribute : FactAttribute
-    {
-        public SmokeFactAttribute()
-        {
-            if (Environment.GetEnvironmentVariable("MEDIT_SMOKE") != "1")
-                Skip = "Set MEDIT_SMOKE=1 to run the real-install smoke test.";
-        }
-    }
-
-    [SmokeFact]
+    [SmokeFact("run the real-install smoke test")]
     public async Task DiscoveredInstalls_LoadAndIndex()
     {
         var locator = new GameLocator();
