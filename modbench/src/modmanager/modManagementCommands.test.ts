@@ -39,26 +39,45 @@ function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   };
 }
 
-describe('registerModInstallCommands: installFromArchive target', () => {
+describe('registerModInstallCommands: the install target', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('a supplied target bypasses the name prompt and upgrades that mod', async () => {
+  it('an upgrade choice bypasses the name prompt and installs as an upgrade of that mod', async () => {
     const promptModName = vi.fn();
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
     registerModInstallCommands(deps({ promptModName }));
     const succeeded = await invoke(
-      'modbench.modList.installFromArchive', '/archive/foo.7z', '111', '222', '3.0', 'Existing Mod',
+      'modbench.modList.installFromArchive', '/archive/foo.7z', '111', '222', '3.0',
+      { kind: 'upgrade', name: 'Existing Mod' },
     );
 
     expect(promptModName).not.toHaveBeenCalled();
     expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', 'Existing Mod', '/archive/foo.7z', { modID: '111', fileID: '222', version: '3.0' },
+      '/instance', { kind: 'upgrade', name: 'Existing Mod' }, '/archive/foo.7z',
+      { modID: '111', fileID: '222', version: '3.0' },
     );
     expect(succeeded).toBe(true);
   });
 
-  it('no target reaches the name prompt — today\'s new-mod flow', async () => {
+  it('a new-mod choice reaches the name prompt and installs as a new mod', async () => {
+    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+
+    registerModInstallCommands(deps({ promptModName }));
+    const succeeded = await invoke('modbench.modList.installFromArchive', '/archive/foo.7z', undefined, undefined, undefined, { kind: 'new' });
+
+    expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
+    expect(installFromArchive).toHaveBeenCalledWith(
+      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
+      { modID: undefined, fileID: undefined, version: undefined },
+    );
+    expect(succeeded).toBe(true);
+  });
+
+  // Rival: default the absent choice to an upgrade of the prompted name. The Mods-view entry
+  // would then adopt any folder that happens to share the name, and this fails.
+  it('the Mods-view entry, invoked with no choice, installs as a new mod', async () => {
     const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
     installFromArchive.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
 
@@ -67,12 +86,13 @@ describe('registerModInstallCommands: installFromArchive target', () => {
 
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
-      '/instance', 'New Mod', '/archive/foo.7z', { modID: undefined, fileID: undefined, version: undefined },
+      '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
+      { modID: undefined, fileID: undefined, version: undefined },
     );
     expect(succeeded).toBe(true);
   });
 
-  it('no target and a cancelled prompt installs nothing', async () => {
+  it('no choice and a cancelled prompt installs nothing', async () => {
     const promptModName = vi.fn().mockResolvedValueOnce(undefined);
 
     registerModInstallCommands(deps({ promptModName }));
@@ -80,5 +100,19 @@ describe('registerModInstallCommands: installFromArchive target', () => {
 
     expect(installFromArchive).not.toHaveBeenCalled();
     expect(succeeded).toBe(false);
+  });
+
+  it('the Mods-view folder entry installs as a new mod under the prompted name', async () => {
+    const promptModName = vi.fn().mockResolvedValueOnce('New Mod');
+    showOpenDialog.mockResolvedValueOnce([{ fsPath: '/somewhere/Loose Files' }]);
+    installFromFolder.mockResolvedValueOnce({ applied: true, wrote: true, isFomod: false });
+
+    registerModInstallCommands(deps({ promptModName }));
+    await invoke('modbench.modList.installFromFolder');
+
+    expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
+    expect(installFromFolder).toHaveBeenCalledWith(
+      '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files',
+    );
   });
 });
