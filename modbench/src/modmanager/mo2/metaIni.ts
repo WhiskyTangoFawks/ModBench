@@ -1,8 +1,14 @@
 // meta.ini is QSettings::IniFormat. `[installedFiles]` is a QSettings array whose key
 // order is not guaranteed, so it's read scoped to the section and keyed by index.
 
-import type { InstalledFileId } from '../model';
 import { detectEol, lineRanges } from './lineScan';
+
+/** One meta.ini `[installedFiles]` entry — a Nexus mod/file id pair MO2 recorded as
+ *  installed. Field names match the array's own (lowercase) keys. */
+export interface InstalledFileId {
+  modid: string;
+  fileid: string;
+}
 
 export interface ModMeta {
   version?: string;
