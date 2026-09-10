@@ -1,0 +1,6 @@
+is_global = true
+
+# .editorconfig sections do not reach a source generator's output, and the Mutagen serialization
+# generator emits the codec's own serializers. RS0030 is off by default here and raised to error by
+# the .editorconfig section beside this file, which every hand-written file matches.
+dotnet_diagnostic.RS0030.severity = none
