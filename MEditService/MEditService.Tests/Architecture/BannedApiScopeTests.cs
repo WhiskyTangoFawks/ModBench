@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
@@ -30,13 +31,29 @@ public sealed class BannedApiScopeTests
     [Fact]
     public void RS0030_IsAnErrorEverywhere_AndOffOnlyInTheFoldersTheTransitionNames()
     {
-        var severities = SeverityBySection(
+        var declarations = SeverityDeclarations(
             File.ReadAllLines(Path.Combine(ArchitectureTests.SolutionDirectory(), ".editorconfig")));
 
-        Assert.Equal("error", severities.GetValueOrDefault("*.cs"));
+        // Later sections win, so the order is the rule: everything after the error section narrows it.
+        Assert.Equal(("*.cs", "error"), declarations[0]);
+        Assert.All(declarations.Skip(1), d => Assert.Equal("none", d.Severity));
         Assert.Equal(
             ExemptSections,
-            severities.Where(s => s.Value == "none").Select(s => s.Key).Order(StringComparer.Ordinal).ToList());
+            declarations.Skip(1).Select(d => d.Section).Order(StringComparer.Ordinal).ToList());
+    }
+
+    [Fact]
+    public void TheAnalyzerAndItsSymbolList_AreWiredOnce_ForEveryProject()
+    {
+        var props = XDocument.Load(
+            Path.Combine(ArchitectureTests.SolutionDirectory(), "Directory.Build.props"));
+
+        Assert.Contains(
+            props.Descendants("PackageReference"),
+            e => (string?)e.Attribute("Include") == "Microsoft.CodeAnalysis.BannedApiAnalyzers");
+        Assert.Contains(
+            props.Descendants("AdditionalFiles"),
+            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.txt", StringComparison.Ordinal) == true);
     }
 
     [Fact]
@@ -52,16 +69,16 @@ public sealed class BannedApiScopeTests
             line, StringComparison.Ordinal));
     }
 
-    private static Dictionary<string, string> SeverityBySection(IEnumerable<string> lines)
+    private static List<(string Section, string Severity)> SeverityDeclarations(IEnumerable<string> lines)
     {
-        var severities = new Dictionary<string, string>(StringComparer.Ordinal);
+        var declarations = new List<(string, string)>();
         var section = "";
         foreach (var line in lines.Select(l => l.Trim()))
         {
             if (line.StartsWith('[') && line.EndsWith(']')) section = line[1..^1];
             else if (line.StartsWith("dotnet_diagnostic.RS0030.severity", StringComparison.Ordinal))
-                severities[section] = line.Split('=')[1].Trim();
+                declarations.Add((section, line.Split('=')[1].Trim()));
         }
-        return severities;
+        return declarations;
     }
 }

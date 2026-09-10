@@ -15,4 +15,19 @@ internal static class SourceTree
 
     internal static IReadOnlyList<string> ReadAllowlist(string path) =>
         [.. File.ReadAllLines(path).Select(line => line.Trim()).Where(line => line.Length > 0 && !line.StartsWith('#'))];
+
+    // A scan site carries no line number, so two sites can be the same text in the same file: an
+    // allowlist line covers one of them rather than all.
+    internal static List<string> NotCoveredBy(IEnumerable<string> lines, IEnumerable<string> cover)
+    {
+        var available = cover.GroupBy(l => l, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var uncovered = new List<string>();
+        foreach (var line in lines)
+        {
+            if (available.TryGetValue(line, out var count) && count > 0) available[line] = count - 1;
+            else uncovered.Add(line);
+        }
+        return uncovered;
+    }
 }

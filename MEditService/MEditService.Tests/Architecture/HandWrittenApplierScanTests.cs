@@ -82,8 +82,8 @@ public sealed class HandWrittenApplierScanTests
     private static void AssertSitesMatchAllowlist(
         IReadOnlyList<string> sites, IReadOnlyList<string> allowlist, string allowlistPath)
     {
-        var unallowed = NotCoveredBy(sites, allowlist);
-        var unmatched = NotCoveredBy(allowlist, sites);
+        var unallowed = SourceTree.NotCoveredBy(sites, allowlist);
+        var unmatched = SourceTree.NotCoveredBy(allowlist, sites);
 
         Assert.True(
             unallowed.Count == 0 && unmatched.Count == 0,
@@ -107,21 +107,6 @@ public sealed class HandWrittenApplierScanTests
     private static bool IsApplierSite(string line) =>
         Needles.Any(needle => line.Contains(needle, StringComparison.Ordinal))
         || Construction.Matches(line).Any(m => MutagenTypeNames.Contains(m.Groups[1].Value.Split('.')[^1]));
-
-    // A site carries no line number: that would fail the gate for any unrelated edit above one.
-    // Two sites can therefore be the same text in the same file.
-    private static List<string> NotCoveredBy(IEnumerable<string> lines, IEnumerable<string> cover)
-    {
-        var available = cover.GroupBy(l => l, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        var uncovered = new List<string>();
-        foreach (var line in lines)
-        {
-            if (available.TryGetValue(line, out var count) && count > 0) available[line] = count - 1;
-            else uncovered.Add(line);
-        }
-        return uncovered;
-    }
 
     private static IReadOnlySet<string> MutagenAndNoggogTypeNames()
     {

@@ -88,8 +88,8 @@ public sealed class GameNamespaceScanTests
     private static void AssertSitesMatchAllowlist(
         IReadOnlyList<string> sites, IReadOnlyList<string> allowlist, string allowlistPath)
     {
-        var unallowed = NotCoveredBy(sites, allowlist);
-        var unmatched = NotCoveredBy(allowlist, sites);
+        var unallowed = SourceTree.NotCoveredBy(sites, allowlist);
+        var unmatched = SourceTree.NotCoveredBy(allowlist, sites);
 
         Assert.True(
             unallowed.Count == 0 && unmatched.Count == 0,
@@ -101,20 +101,6 @@ public sealed class GameNamespaceScanTests
             + $"\nAllowlist lines matching no site ({unmatched.Count}) — delete them; the shrinking of this list "
             + "is what the work is measured by:\n"
             + string.Join("\n", unmatched));
-    }
-
-    // Two sites can be the same text in the same file, so a line covers one site rather than all.
-    private static List<string> NotCoveredBy(IEnumerable<string> lines, IEnumerable<string> cover)
-    {
-        var available = cover.GroupBy(l => l, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
-        var uncovered = new List<string>();
-        foreach (var line in lines)
-        {
-            if (available.TryGetValue(line, out var count) && count > 0) available[line] = count - 1;
-            else uncovered.Add(line);
-        }
-        return uncovered;
     }
 
     // A site carries no line number: that would fail the gate for any unrelated edit above one.
