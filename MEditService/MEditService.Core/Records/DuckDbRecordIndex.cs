@@ -439,7 +439,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (unit is { } resolved)
         {
             var ownerBytes = File.Exists(resolved.FullPath) ? File.ReadAllBytes(resolved.FullPath) : null;
-            workingTreeText = SourceRepository.RecordBodyFromOwnerBytes(ownerBytes, resolved, formKey, _release, _codec);
+            workingTreeText = SourceRepository.RecordBodyFromOwnerBytes(ownerBytes, resolved, formKey, _release);
         }
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
@@ -541,7 +541,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // For an embedded child the HEAD text is the owner's document; a null means the owner's HEAD copy
         // does not carry this child, which leaves the committed baseline alone (fail closed).
         var headText = unit.IsEmbedded
-            ? SourceRepository.RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, formKey, _release, _codec)
+            ? SourceRepository.RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, formKey, _release)
             : headOwnerText;
         if (headText is not { } resolvedHeadText) return;
         if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;
