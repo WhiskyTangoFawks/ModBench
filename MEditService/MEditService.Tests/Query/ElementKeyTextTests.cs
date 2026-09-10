@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using MEditService.Core.Schema;
 
 namespace MEditService.Tests.Query;
 

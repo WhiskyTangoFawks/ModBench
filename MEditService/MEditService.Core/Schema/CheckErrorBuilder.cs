@@ -1,9 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 
-namespace MEditService.Core.Queries;
+namespace MEditService.Core.Schema;
 
 /// <summary>Null when clean. Only the engine-hardcoded-range exemption (ObjectID &lt; $800) is
 /// TES5Edit's read (wbImplementation.pas); the resolved/wrong-type/unresolved split is mEdit's own.</summary>
@@ -22,7 +21,7 @@ public static class CheckErrorBuilder
             {
                 // A record the caller cannot speak for is left unchecked: "unresolved" would be a
                 // claim it has no basis for. The global lookup speaks for every record and passes null.
-                if (raw is not null && raw != "Null" && answersFor?.Invoke(raw) == false) return;
+                if (raw is not null && raw != "Null" && answersFor is { } answers && !answers(raw)) return;
                 var err = CheckScalar(raw, allowsNull, validTypes, resolve, release);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
             },

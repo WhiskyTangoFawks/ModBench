@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;

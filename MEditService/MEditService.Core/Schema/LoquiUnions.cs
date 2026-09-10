@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 using Loqui;
-using MEditService.Core.Queries;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Schema;
