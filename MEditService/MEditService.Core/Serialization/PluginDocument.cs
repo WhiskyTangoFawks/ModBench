@@ -6,6 +6,10 @@ namespace MEditService.Core.Serialization;
 public readonly record struct CellStructure(
     string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior);
 
+/// <summary>One placed record a cell's GRUP holds, and which of its two groups (ADR-0023). The
+/// parentage no placed record's own document carries.</summary>
+public readonly record struct PlacedInCell(string FormKey, string PlacementGroup);
+
 /// <summary>One record as the text its source file holds (ADR-0041), under the schema table name
 /// the index keys it by. A diagnosis makes the text an identity-only stub (ADR-0032 rule 5).</summary>
 public sealed record PluginDocument(
@@ -13,7 +17,8 @@ public sealed record PluginDocument(
     string FormKey,
     string Text,
     string? ParseDiagnosis = null,
-    CellStructure? Cell = null);
+    CellStructure? Cell = null,
+    IReadOnlyList<PlacedInCell>? Contents = null);
 
 /// <summary>A record type whose enumeration could not be finished, so the plugin's rows for it are
 /// whatever was reachable before the throw.</summary>

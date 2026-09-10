@@ -152,9 +152,27 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         var formKey = SourceRepository.FormKeyDeclaredIn(text, relativePath, _headerRelativePath, _pluginFileName)
             ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
 
-        yield return new PluginDocument(recordType, formKey, text, null, cell);
+        yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
         foreach (var child in Embedded(recordType, formKey, text)) yield return child;
     }
+
+    // ADR-0023: what a cell's two placement groups hold. Read off its own document, since the tree
+    // files a placed record inside its cell rather than beside it.
+    private IReadOnlyList<PlacedInCell>? ContentsOf(string recordType, string text)
+    {
+        if (!_containers.IsCell(recordType)) return null;
+
+        var containerType = _containers.ContainerTypeOf(recordType);
+        using var document = JsonDocument.Parse(text);
+        return [.. _containers.ChildrenOf(recordType, document.RootElement)
+            .Where(c => PlacementGroups.Contains((containerType, c.SlotName)))
+            .Select(c => new PlacedInCell(c.FormKey, c.SlotName.ToLowerInvariant()))];
+    }
+
+    // The two slots the placement table covers, named here rather than reached for through Records:
+    // the tree reader is upstream of the index, not a caller of it.
+    private static readonly HashSet<(string ParentType, string Slot)> PlacementGroups =
+        [("Cell", "Persistent"), ("Cell", "Temporary")];
 
     private const string MutagenObjectTypeMember = "MutagenObjectType";
 
@@ -163,7 +181,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     internal IEnumerable<PluginDocument> Expand(string recordType, string formKey, string text)
     {
         var table = _containers.RecordTypeNamed(recordType) ?? recordType;
-        yield return new PluginDocument(table, formKey, text);
+        yield return new PluginDocument(table, formKey, text, null, null, ContentsOf(table, text));
         foreach (var child in Embedded(table, formKey, text)) yield return child;
     }
 
@@ -186,7 +204,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
                 ? new CellStructure(ownerFormKey, null, null, null, null, IsInterior: false)
                 : (CellStructure?)null;
 
-            yield return new PluginDocument(child.RecordType, child.FormKey, text, null, cell);
+            yield return new PluginDocument(
+                child.RecordType, child.FormKey, text, null, cell, ContentsOf(child.RecordType, text));
             foreach (var deeper in Embedded(child.RecordType, child.FormKey, text)) yield return deeper;
         }
     }

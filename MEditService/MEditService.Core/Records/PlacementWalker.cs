@@ -21,12 +21,12 @@ internal static class PlacementWalker
 
     private const string PositionMember = "Position";
 
-    /// <summary>The grid is null only where the document carries no grid at all, which is a
-    /// worldspace's top cell; a grid the codec wrote empty is the origin, not an absence.</summary>
+    /// <summary>A null document is a cell whose text the codec could not produce: its place in the
+    /// world is still known, its grid is not.</summary>
     internal static CellLocationRow CellLocation(
-        string cellFormKey, JsonElement cellDocument, CellStructure structure)
+        string cellFormKey, JsonElement? cellDocument, CellStructure structure)
     {
-        var (gridX, gridY) = Grid(cellDocument);
+        var (gridX, gridY) = cellDocument is { } document ? Grid(document) : (null, null);
 
         return new CellLocationRow(
             cellFormKey, structure.ParentWorldspace,
@@ -34,19 +34,21 @@ internal static class PlacementWalker
             gridX, gridY, structure.IsInterior);
     }
 
-    /// <summary>A placed record's position is a non-nullable vector, so a document omitting it places
-    /// the record at the origin rather than nowhere.</summary>
+    /// <summary>The parentage is the caller's, the position the document's. A document that spells no
+    /// position states none, so the row's coordinates are null rather than the origin.</summary>
     internal static PlacementRow Placement(
-        string placedFormKey, JsonElement placedDocument, string parentCellFormKey, string placementGroup)
+        string placedFormKey, JsonElement? placedDocument, string parentCellFormKey, string placementGroup)
     {
-        var position = Components(placedDocument, PositionMember);
+        var position = placedDocument is { } document ? Components(document, PositionMember) : null;
         return position is { Length: >= 3 }
             ? new PlacementRow(
                 placedFormKey, parentCellFormKey, placementGroup,
                 Float(position[0]), Float(position[1]), Float(position[2]))
-            : new PlacementRow(placedFormKey, parentCellFormKey, placementGroup, 0f, 0f, 0f);
+            : new PlacementRow(placedFormKey, parentCellFormKey, placementGroup, null, null, null);
     }
 
+    // A cell's grid is a member that may be unset, so its absence is an absence; the point inside a
+    // grid the document does carry is the origin the codec omits.
     private static (int? X, int? Y) Grid(JsonElement cellDocument)
     {
         if (DocumentNodes.At(cellDocument, RecordTypeDispatch.CellGridMember) is null) return (null, null);

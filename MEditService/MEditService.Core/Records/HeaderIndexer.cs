@@ -26,8 +26,6 @@ internal static class HeaderIndexer
         row.AppendNullValue();    // editor_id: headers have no EditorID concept
         row.AppendValue(SourceRef.Committed);
         row.AppendValue(header.Text);
-        // Hashed from the document's own bytes, never a string round trip, so the hash is defined by
-        // what the source file holds.
         row.AppendValue(GitBlobHash.Of(body));
         row.AppendNullValue();    // parse_diagnosis: the header is written from what already parsed
         row.EndRow();

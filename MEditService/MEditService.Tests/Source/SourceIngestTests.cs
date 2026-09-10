@@ -243,6 +243,22 @@ public sealed class SourceIngestTests
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
     }
 
+    // Never-assume-exclusive-ownership: a file another tool leaves half-written declares no FormKey,
+    // and a record going missing from the read model without a word is the hazard.
+    [Fact]
+    public void ADirtyFileThatDeclaresNoFormKey_DegradesToTheBinary_AndSaysSoInTheFailures()
+    {
+        using var mod = IndexedModFixture.Tracked();
+
+        File.WriteAllText(mod.NpcSourceFile, """{"EditorID": "HalfWritten"}""");
+
+        using var reloaded = Reload(mod);
+
+        var failure = Assert.Single(reloaded.Status.Failures);
+        Assert.Equal(IndexedModFixture.PluginName, failure.Name);
+        Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void APartialReconcileThenBinaryFallback_LeavesExactlyOneRowAtHead_NotTwo()
     {

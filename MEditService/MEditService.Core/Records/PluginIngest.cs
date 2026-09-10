@@ -229,20 +229,25 @@ internal sealed class PluginIngest
 
     private PreparedRecord PrepareRecord(PluginDocument document, RecordTableSchema schema)
     {
-        // Hashed from the document's own bytes rather than a string, so the hash is defined by what
-        // the source file would contain.
         var body = Encoding.UTF8.GetBytes(document.Text);
         using var parsed = JsonDocument.Parse(body);
         var root = parsed.RootElement;
         var editorId = DocumentNodes.At(root, "EditorID")?.GetString();
 
-        // A stub carries identity and nothing else, so the walks below would answer over a graph the
-        // codec never read.
-        if (document.ParseDiagnosis is { } diagnosis)
+        // ADR-0023: where a cell sits and what it holds come from the GRUP hierarchy, so a cell whose
+        // document the codec refused still lists, still holds its contents, and only loses its grid.
+        JsonElement? carried = document.ParseDiagnosis is null ? root : null;
+        var placements = Placements(document, carried);
+        CellLocationRow? cellLocation = document.Cell is { } structure
+            ? PlacementWalker.CellLocation(document.FormKey, carried, structure)
+            : null;
+
+        // The graph the codec never read answers nothing about references or containment.
+        if (document.ParseDiagnosis is not null)
         {
             return new PreparedRecord(
-                document.RecordType, document.FormKey, body, GitBlobHash.Of(body), [], [], [], null,
-                editorId, diagnosis);
+                document.RecordType, document.FormKey, body, GitBlobHash.Of(body), [], [],
+                placements, cellLocation, editorId, document.ParseDiagnosis);
         }
 
         // References are read off the document, never a live object: the document is the model, and
@@ -250,33 +255,38 @@ internal sealed class PluginIngest
         var refs = Rows(FormReferences.Collect(root, schema), document.FormKey, editorId, document.RecordType);
 
         var childRows = new List<ContainerChildRow>();
-        var placements = new List<PlacementRow>();
         var containerType = _containers.ContainerTypeOf(document.RecordType);
         foreach (var child in _containers.ChildrenOf(document.RecordType, root))
         {
-            if (!CoveredByPlacementTables.Contains((containerType, child.SlotName)))
-            {
-                childRows.Add(new ContainerChildRow(
-                    child.FormKey, document.FormKey, document.RecordType, child.SlotName, child.SlotIndex));
-                continue;
-            }
+            // What placement and cell_location already carry stays out of container_child.
+            if (CoveredByPlacementTables.Contains((containerType, child.SlotName))) continue;
 
-            // A cell the document door placed in the world; a container's other covered slot is the
-            // worldspace's top cell, which carries its own cell_location row as a record of its own.
-            if (document.Cell is not null)
-            {
-                placements.Add(PlacementWalker.Placement(
-                    child.FormKey, child.Node, document.FormKey, child.SlotName.ToLowerInvariant()));
-            }
+            childRows.Add(new ContainerChildRow(
+                child.FormKey, document.FormKey, document.RecordType, child.SlotName, child.SlotIndex));
         }
-
-        CellLocationRow? cellLocation = document.Cell is { } structure
-            ? PlacementWalker.CellLocation(document.FormKey, root, structure)
-            : null;
 
         return new PreparedRecord(
             document.RecordType, document.FormKey, body, GitBlobHash.Of(body), refs, childRows,
             placements, cellLocation, editorId, ParseDiagnosis: null);
+    }
+
+    // One row per placed record the cell's groups hold, parentage from beside the document and
+    // position from the child node the document carries — null where it carries none.
+    private List<PlacementRow> Placements(PluginDocument document, JsonElement? root)
+    {
+        if (document.Contents is not { Count: > 0 } contents) return [];
+
+        var nodes = root is { } carried
+            ? _containers.ChildrenOf(document.RecordType, carried)
+                .GroupBy(c => c.FormKey, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().Node, StringComparer.Ordinal)
+            : [];
+
+        return [.. contents.Select(placed => PlacementWalker.Placement(
+            placed.FormKey,
+            nodes.TryGetValue(placed.FormKey, out var node) ? node : null,
+            document.FormKey,
+            placed.PlacementGroup))];
     }
 
     private static void AppendPrepared(

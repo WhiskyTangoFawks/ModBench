@@ -89,20 +89,7 @@ public sealed class PluginDocumentReadTests
     [Fact]
     public void OpenDocuments_GivesACellTheBlockCoordinatesItsGrupHierarchyPutsItAt()
     {
-        var extCellFormKey = string.Empty;
-        using var data = new PluginFixtureBuilder("documents-cell")
-            .WithPlugin(PluginName, mod =>
-            {
-                var worldspace = mod.Worldspaces.AddNew("DocumentWorld");
-                var cell = new Cell(mod) { EditorID = "DocumentCell" };
-                extCellFormKey = cell.FormKey.ToString();
-                var subBlock = new WorldspaceSubBlock { BlockNumberX = 1, BlockNumberY = 2 };
-                subBlock.Items.Add(cell);
-                var block = new WorldspaceBlock { BlockNumberX = 3, BlockNumberY = 4 };
-                block.Items.Add(subBlock);
-                worldspace.SubCells.Add(block);
-            })
-            .Build();
+        using var data = CellFixture("documents-cell", out var extCellFormKey);
         var path = Path.Combine(data.DataFolder, PluginName);
 
         using var documents = Adapter.OpenDocuments(
@@ -110,5 +97,44 @@ public sealed class PluginDocumentReadTests
         var cell = documents.Records.Single(d => d.RecordType == "cell" && d.FormKey == extCellFormKey);
 
         Assert.Equal(new CellStructure("000800:Documents.esp", 3, 4, 1, 2, IsInterior: false), cell.Cell);
+    }
+
+    // ADR-0023: the two placement groups are the GRUP's answer, not the codec's, so they travel
+    // beside a cell's document rather than only inside it.
+    [Fact]
+    public void OpenDocuments_GivesACellTheRefsItsGrupGroupsHold()
+    {
+        using var data = CellFixture("documents-contents", out var extCellFormKey);
+        var path = Path.Combine(data.DataFolder, PluginName);
+
+        using var documents = Adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
+        var cell = documents.Records.Single(d => d.RecordType == "cell" && d.FormKey == extCellFormKey);
+
+        Assert.Equal(
+            [("000802:Documents.esp", "persistent"), ("000803:Documents.esp", "temporary")],
+            cell.Contents!.Select(c => (c.FormKey, c.PlacementGroup)).ToList());
+    }
+
+    private static PluginFixtureData CellFixture(string prefix, out string extCellFormKey)
+    {
+        var formKey = string.Empty;
+        var data = new PluginFixtureBuilder(prefix)
+            .WithPlugin(PluginName, mod =>
+            {
+                var worldspace = mod.Worldspaces.AddNew("DocumentWorld");
+                var cell = new Cell(mod) { EditorID = "DocumentCell" };
+                formKey = cell.FormKey.ToString();
+                cell.Persistent.Add(new PlacedObject(mod) { EditorID = "kept" });
+                cell.Temporary.Add(new PlacedArrow(mod) { EditorID = "arrow" });
+                var subBlock = new WorldspaceSubBlock { BlockNumberX = 1, BlockNumberY = 2 };
+                subBlock.Items.Add(cell);
+                var block = new WorldspaceBlock { BlockNumberX = 3, BlockNumberY = 4 };
+                block.Items.Add(subBlock);
+                worldspace.SubCells.Add(block);
+            })
+            .Build();
+        extCellFormKey = formKey;
+        return data;
     }
 }

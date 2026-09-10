@@ -139,7 +139,10 @@ internal static class SourceIngest
             }
 
             // Identity from the document, not the path: an EditorID may contain " - " (SourceRecordIdentity).
-            if (SourceRepository.FormKeyDeclaredBy(fullPath, modFolder, key.Name) is not { } formKey) continue;
+            // Null covers an unreadable file as well as one declaring nothing, and a file that races
+            // this read is exactly what must degrade visibly rather than go missing.
+            var formKey = SourceRepository.FormKeyDeclaredBy(fullPath, modFolder, key.Name)
+                ?? throw new UnreadableSourceDocumentException(fullPath, "it declares no FormKey");
 
             if (headText == null)
             {
