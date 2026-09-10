@@ -1,6 +1,7 @@
 using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Notifications;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;

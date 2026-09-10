@@ -1,5 +1,6 @@
 using System.Globalization;
 using DuckDB.NET.Data;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;

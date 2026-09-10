@@ -1,3 +1,5 @@
+using MEditService.Core.Plugins;
+
 namespace MEditService.Core.Records;
 
 /// <summary>What one plugin's validate found (ADR-0046 invariant 6). <c>NeedsRebuild</c> means the

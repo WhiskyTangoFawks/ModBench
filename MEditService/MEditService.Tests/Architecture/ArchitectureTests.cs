@@ -145,7 +145,7 @@ public sealed class ArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["MEditService.Core/Records/Registration.cs"], spellings);
+        Assert.Equal(["MEditService.Core/Plugins/Registration.cs"], spellings);
     }
 
     // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning
