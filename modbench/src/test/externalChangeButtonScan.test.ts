@@ -1,7 +1,7 @@
 // The external-change dialog's two current strings are the only ones the extension may name —
 // a retired string never survives under a new name or a stray test fixture.
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname } from 'node:path';
@@ -25,24 +25,39 @@ function retiredStringsIn(text: string): string[] {
   return RETIRED_STRINGS.filter((s) => text.includes(s));
 }
 
+// Shared by the production assertion and the rival test below, so a broken walk — a wrong root, a
+// silently-excluded directory — fails both the same way, not just the matcher.
+function findOffenders(root: string): Record<string, string[]> {
+  const offenders: Record<string, string[]> = {};
+  for (const path of tsFiles(root).filter((p) => !p.endsWith(SELF))) {
+    const hits = retiredStringsIn(readFileSync(path, 'utf8'));
+    if (hits.length > 0) offenders[path] = hits;
+  }
+  return offenders;
+}
+
 describe('the two new external-change button strings are the only ones in the extension', () => {
-  it('no source or test file names a retired button string', () => {
+  it('covers the whole extension source tree', () => {
     const root = join(__dirname, '..'); // src/
-    const offenders: Record<string, string[]> = {};
-    for (const path of tsFiles(root).filter((p) => !p.endsWith(SELF))) {
-      const hits = retiredStringsIn(readFileSync(path, 'utf8'));
-      if (hits.length > 0) offenders[path] = hits;
-    }
-    expect(offenders).toEqual({});
+    expect(tsFiles(root).filter((p) => !p.endsWith(SELF)).length).toBeGreaterThan(100);
   });
 
-  // Proves the matcher alone; the walk over src/ is exercised by the test above.
-  it('finds a retired string in a comment, a fixture, or a doc-in-code string', async () => {
+  it('no source or test file names a retired button string', () => {
+    const root = join(__dirname, '..'); // src/
+    expect(findOffenders(root)).toEqual({});
+  });
+
+  // Rival: the traversal itself breaks (wrong root, an excluded directory) rather than the
+  // matcher — this runs the real walk over a real file, not a hand-built string.
+  it('the tree walk itself catches a retired string planted in a comment, a fixture, or a doc-in-code string', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-external-change-button-scan-'));
     try {
-      const planted = join(dir, 'someFixture.ts');
-      await writeFile(planted, "export const oldButton = 'Absorb Upstream Update';\n");
-      expect(retiredStringsIn(readFileSync(planted, 'utf8'))).toEqual(['Absorb Upstream Update']);
+      await mkdir(join(dir, 'nested'));
+      await writeFile(join(dir, 'topLevel.ts'), "export const label = 'unrelated';\n");
+      await writeFile(join(dir, 'nested', 'someFixture.ts'), "export const oldButton = 'Absorb Upstream Update';\n");
+      const offenders = findOffenders(dir);
+      expect(Object.keys(offenders)).toEqual([join(dir, 'nested', 'someFixture.ts')]);
+      expect(offenders[join(dir, 'nested', 'someFixture.ts')]).toEqual(['Absorb Upstream Update']);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
