@@ -48,14 +48,14 @@ describe('toLoadOrderStatus', () => {
       totalPlugins: 3,
       indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'TestMod.esp', origin: 'ModA' }],
       conflictsComputed: false,
-      failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
+      failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
 
     expect(status).toEqual({
       totalPlugins: 3,
       indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
       conflictsComputed: false,
-      failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
+      failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
   });
 });

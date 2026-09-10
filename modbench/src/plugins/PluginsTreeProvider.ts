@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
-import type { MasterIssue, PluginDiagnosisReport, PluginMetadata, MEditClient } from '../medit/client';
+import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../medit/client';
 import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from '../modmanager/instance';
 import type { PluginEntry } from '../modmanager/model';
 import type { Reporter } from '../reporter';
 import { dropIndexForMove } from '../modmanager/mo2/pluginsText';
 import type { ImplicitMasterSource } from '../modmanager/commands/plugins';
 import { failurePrefixIcon } from '../failurePrefixIcon';
-import type { LoadFailure } from '../loadOrderReconcile';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../errorNode';
 
@@ -307,7 +306,7 @@ export class PluginsTreeProvider
     if (!this.heldFiles.has(file.toLowerCase())) {
       // A plugin the load order gave up on will never be reached by a later tick — saying
       // "still indexing" would promise a completion that is not coming (ADR-0026).
-      const failure = this.loadFailures.get(file.toLowerCase());
+      const failure = this.loadFailureOf(element);
       return [failure !== undefined ? new ErrorNode(failure) : new IndexingNode()];
     }
     // Deliberately not the row's own `origin`: a stated origin means "the copy the load order
@@ -411,37 +410,35 @@ export class PluginsTreeProvider
 
   // First match wins: load failure, master issues, parse failure, then diagnoses. The lookups
   // guard a plugin the last load order never mentioned, not the wire.
-  private applyBackendDecoration(item: vscode.TreeItem, file: string, origin: string | undefined): void {
-    if (this.applyErrorDecoration(item, file, origin)) return;
+  private applyBackendDecoration(row: PluginListNode, file: string, origin: string | undefined): void {
+    if (this.applyErrorDecoration(row, file, origin)) return;
     // Warning tier, below the three error decorations — a Malformed plugin still loads and
     // plays; the badge says "look", not "broken".
     const texts = this.diagnoses?.get(file, origin) ?? [];
-    if (texts.length > 0) this.applyDiagnosisDecoration(item, texts);
+    if (texts.length > 0) this.applyDiagnosisDecoration(row, texts);
   }
 
   // The three error tiers, in order; answers whether one of them claimed the row.
-  private applyErrorDecoration(item: vscode.TreeItem, file: string, origin: string | undefined): boolean {
-    // Name-only, because `PluginLoadFailure` carries no origin — and the top tier, so it is
-    // consulted first and from its own index.
-    const failure = this.loadFailures.get(file.toLowerCase());
+  private applyErrorDecoration(row: PluginListNode, file: string, origin: string | undefined): boolean {
+    const failure = this.loadFailureOf(row);
     if (failure !== undefined) {
-      item.iconPath = failurePrefixIcon();
-      item.description = '✗ Failed to load';
-      appendNote(item, `Failed to load: ${failure}`);
+      row.iconPath = failurePrefixIcon();
+      row.description = '✗ Failed to load';
+      appendNote(row, `Failed to load: ${failure}`);
       return true;
     }
     const facts = this.facts?.get(file, origin);
     const issues = facts?.masterIssues ?? [];
     if (issues.length > 0) {
-      this.applyMasterIssueDecoration(item, issues);
+      this.applyMasterIssueDecoration(row, issues);
       return true;
     }
     if (facts?.parseFailure !== true) return false;
     // The same prefix the record and record-type nodes carry: the backend answers "holds an
     // unreadable record" per plugin, so nothing here walks children.
-    item.iconPath = failurePrefixIcon();
-    item.description = '✗ Unreadable records';
-    appendNote(item, 'This plugin holds a record that could not be read into its document.');
+    row.iconPath = failurePrefixIcon();
+    row.description = '✗ Unreadable records';
+    appendNote(row, 'This plugin holds a record that could not be read into its document.');
     return true;
   }
 
@@ -469,7 +466,7 @@ export class PluginsTreeProvider
   private facts?: ByPluginCopy<PluginFacts>;
   private matches?: ByPluginCopy<boolean>;
   private diagnoses?: ByPluginCopy<string[]>;
-  private loadFailures = new Map<string, string>();
+  private loadFailures = new ByPluginCopy<string>();
   // Bumped by every write to the held load order, so a slow read answering after a newer
   // reconcile — or after teardown — cannot resurrect a stale answer.
   private generation = 0;
@@ -477,7 +474,7 @@ export class PluginsTreeProvider
   /** A progressive reconcile's tick: a row's content resolves as its plugin lands. It carries no
    *  facts — those are whole-load-order derivations a partial tick cannot answer, so they clear
    *  here and return when `applyReconciled` lands. */
-  applyIndexed(indexedPlugins: string[], failures: LoadFailure[]): void {
+  applyIndexed(indexedPlugins: string[], failures: PluginLoadFailure[]): void {
     this.generation++;
     this.heldFiles = new Set(indexedPlugins.map((n) => n.toLowerCase()));
     this.loadFailures = indexLoadFailures(failures);
@@ -490,7 +487,7 @@ export class PluginsTreeProvider
   /** The completed reconcile's whole hand-off, in one read: which files the backend holds, and
    *  every fact it answers about each copy. Returns what the record filter matched;
    *  `undefined` when the read failed. */
-  async applyReconciled(failures: LoadFailure[]): Promise<PluginMatch[] | undefined> {
+  async applyReconciled(failures: PluginLoadFailure[]): Promise<PluginMatch[] | undefined> {
     const generation = ++this.generation;
     const plugins = await this.readPlugins();
     if (plugins === undefined || generation !== this.generation) return undefined;
@@ -576,6 +573,14 @@ export class PluginsTreeProvider
     return this.matches?.get(file, this.joinOrigin(file, row)) === false;
   }
 
+  // The facts describe held copies only, and the failed copy is not one, so this joins on the
+  // row's own origin rather than through `joinOrigin`.
+  private loadFailureOf(row: PluginListNode): string | undefined {
+    const file = pluginFileOf(row);
+    if (file === undefined) return undefined;
+    return this.loadFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
+  }
+
   // ADR-0036 keys every fact by origin. An implicit master has no mod origin to key on, so a row
   // the client's answer names no copy for falls back to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
@@ -643,8 +648,10 @@ function appendNote(item: vscode.TreeItem, note: string): void {
   item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
 }
 
-function indexLoadFailures(failures: LoadFailure[]): Map<string, string> {
-  return new Map(failures.map((f) => [(f.name ?? '?').toLowerCase(), f.reason ?? 'Unknown error'] as const));
+function indexLoadFailures(failures: PluginLoadFailure[]): ByPluginCopy<string> {
+  const byCopy = new ByPluginCopy<string>();
+  for (const f of failures) byCopy.set(f.name, f.origin, f.reason);
+  return byCopy;
 }
 
 function message(err: unknown): string {

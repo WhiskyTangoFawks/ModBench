@@ -1,7 +1,7 @@
 // The port module directly, not the barrel (./client): the webview also imports this file
 // (RecordPanel.tsx), and the barrel's HttpMEditClient pulls in `undici`, whose Response type
 // conflicts with the webview's own DOM-lib Response.
-import type { LoadOrderProgress } from './client/MEditClient';
+import type { LoadOrderProgress, PluginLoadFailure } from './client/MEditClient';
 
 /** An unmarked cell does not merely omit a badge, it paints a verdict. Gated on
  *  `conflictsComputed` alone: the sweep is whole-set, so a changed load order leaves stale
@@ -16,7 +16,7 @@ export function recordPanelIncompleteMessage(conflictsComputed: boolean): string
  *  completed reconcile's hand-off always follows the final tick — otherwise read-only state and
  *  master issues would vanish from a fully reconciled tree. */
 export function makeReconcileProgressHandler(deps: {
-  applyLoadOrder: (indexedPlugins: string[], failures: { name: string; reason: string }[]) => void;
+  applyLoadOrder: (indexedPlugins: string[], failures: PluginLoadFailure[]) => void;
 }): (status: LoadOrderProgress) => void {
   let lastLanded = '';
   return (status) => {

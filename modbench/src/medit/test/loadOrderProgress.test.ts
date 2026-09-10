@@ -69,9 +69,9 @@ describe('makeReconcileProgressHandler', () => {
     const { applyLoadOrder, onProgress } = handler();
 
     onProgress(status({ indexedPlugins: ['A.esp'] }));
-    onProgress(status({ indexedPlugins: ['A.esp'], failures: [{ name: 'B.esp', reason: 'RACE parse' }] }));
+    onProgress(status({ indexedPlugins: ['A.esp'], failures: [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }] }));
 
     expect(applyLoadOrder).toHaveBeenCalledTimes(2);
-    expect(applyLoadOrder).toHaveBeenLastCalledWith(['A.esp'], [{ name: 'B.esp', reason: 'RACE parse' }]);
+    expect(applyLoadOrder).toHaveBeenLastCalledWith(['A.esp'], [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }]);
   });
 });

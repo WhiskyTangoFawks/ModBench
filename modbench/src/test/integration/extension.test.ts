@@ -106,7 +106,7 @@ type MockLoadOrderStatus = {
   totalPlugins: number;
   indexedPlugins: { name: string; origin: string }[];
   conflictsComputed: boolean;
-  failures: { name: string; reason: string }[];
+  failures: { name: string; origin: string; reason: string }[];
 };
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [] };
@@ -1535,7 +1535,7 @@ describe('Progressive load', () => {
   // A per-plugin failure surfaces when it occurs, not only at the end of the load.
   it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
     const { launch } = await launchAndAwaitOpeningTick();
-    setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', reason: 'RACE parse' }] });
+    setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', origin: 'Data', reason: 'RACE parse' }] });
 
     const item = await waitFor('Other.esp to be decorated with its load failure mid-load', async () => {
       const candidate = await itemFor('Other.esp');

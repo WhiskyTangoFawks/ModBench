@@ -516,7 +516,9 @@ skipped so the rest of the load order still loads (`LoadOrder.Failures`) — a w
 bytes cannot be read at all has no record identity to hang a parse status on — but its row is
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeProvider` decorates it with its
-recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;
+recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue,
+joined on the copy the failure names (ADR-0036), so a losing copy that failed leaves the winning
+copy's row clean and reaches the user only through the reconcile toast, since it has no row;
 the row stays collapsible but answers the error node on expand, carrying the same reason — never
 "still indexing", which would promise a completion a plugin the load order gave up on will never
 reach (ADR-0026). The existing

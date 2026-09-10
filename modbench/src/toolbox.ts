@@ -4,7 +4,7 @@ import { implicitMastersFrom, rebuildIndexVia, putLoadOrderVia } from './toolbox
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
 import { reportLoadOrderResult, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import type { CrashRepairOffer, LoadOrderStatus as LoadOrderProgress } from './medit/client';
+import type { CrashRepairOffer, LoadOrderStatus as LoadOrderProgress, PluginLoadFailure } from './medit/client';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
 import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
@@ -199,7 +199,7 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
     setStatusText, notifyConflictsComputed,
   } = deps;
   let snapshot: ReturnType<typeof loadOrderSnapshotOf>;
-  return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
+  return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer, PluginLoadFailure>({
     debounceMs: 250,
     log: (msg) => outputChannel.debug(msg),
     withProgress: (work) => withPluginsViewProgress(session, work),
@@ -243,7 +243,7 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
 // ride along rather than being re-derived.
 async function applyLoadOrderToTree(
   session: ExtensionSession,
-  failures: { name?: string | null; reason?: string | null }[],
+  failures: PluginLoadFailure[],
   outputChannel: vscode.LogOutputChannel,
   // Carried in only to be logged next to what reached the tree. Deliberately not `plugins.length`
   // from the caller's snapshot: that omits the implicit masters the backend prepends, so every

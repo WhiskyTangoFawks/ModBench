@@ -3,7 +3,7 @@ import type {
   CompileResult, RebaseResult, CrashRepairOffer, ExternalChangeActionResult, NotificationEvent,
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
-  PlacedSummary, ContainerChildSummary, RecordSummary, LoadOrderStatus, UnansweredExternalChange,
+  PlacedSummary, ContainerChildSummary, RecordSummary, LoadOrderStatus, UnansweredExternalChange, PluginLoadFailure,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../messages';
 
@@ -49,7 +49,7 @@ export interface LoadOrderPluginInput {
 /** A tagged union, not a sentinel value. `abandoned` means the reconcile was superseded or the
  *  user closed mEdit; `failed`'s `message` is the whole toast the load-order sync shows. */
 export type LoadOrderOutcome =
-  | { outcome: 'reconciled'; failures: components['schemas']['PluginLoadFailure'][]; crashRepairOffers: CrashRepairOffer[] }
+  | { outcome: 'reconciled'; failures: PluginLoadFailure[]; crashRepairOffers: CrashRepairOffer[] }
   | { outcome: 'failed'; message: string }
   | { outcome: 'abandoned' };
 
@@ -165,5 +165,5 @@ export type {
   CrashRepairOffer, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult,
-  ExternalChangeActionResult, LoadOrderStatus, UnansweredExternalChange,
+  ExternalChangeActionResult, LoadOrderStatus, UnansweredExternalChange, PluginLoadFailure,
 };

@@ -46,7 +46,7 @@ public record PluginMetadata(
 /// <summary>A copy that could not be opened is a row in an error state (ADR-0044): the rest of the
 /// load order is unaffected, and the reason is reported here rather than as a failed
 /// reconcile.</summary>
-public record PluginLoadFailure(string Name, string Reason)
+public record PluginLoadFailure(string Name, string Origin, string Reason)
 {
     /// <summary>Mutagen wraps a parse error naming the record, subrecord and offset several levels
     /// down the <see cref="Exception.InnerException"/> chain, so a bare message discards exactly
