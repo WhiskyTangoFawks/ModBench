@@ -17,26 +17,33 @@ internal sealed class RecordTypeDispatch
     // picks a directory for one. Valued by group folder because reflection cannot supply Cell's. A
     // quest is flat: every child slot is embedded.
     private static readonly Dictionary<string, string> DirectoryPerRecordFolders =
-        new(StringComparer.Ordinal) { ["Cell"] = "Cells", ["Worldspace"] = "Worldspaces" };
+        new(StringComparer.Ordinal)
+        {
+            [NestedDirectoryPerRecordType] = "Cells",
+            [WorldspaceTypeName] = "Worldspaces",
+        };
 
     private readonly IReadOnlyDictionary<string, Type?> _byName;
     private readonly IReadOnlySet<Type> _ambiguous;
     private readonly IReadOnlyDictionary<Type, string> _folderByType;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _typesByFolder;
     private readonly IReadOnlyDictionary<string, string> _directoryPerRecordTypeByFolder;
+    private readonly IReadOnlyList<Type> _exteriorCellBlockLevels;
 
     private RecordTypeDispatch(
         IReadOnlyDictionary<string, Type?> byName,
         IReadOnlySet<Type> ambiguous,
         IReadOnlyDictionary<Type, string> folderByType,
         IReadOnlyDictionary<string, IReadOnlyList<string>> typesByFolder,
-        IReadOnlyDictionary<string, string> directoryPerRecordTypeByFolder)
+        IReadOnlyDictionary<string, string> directoryPerRecordTypeByFolder,
+        IReadOnlyList<Type> exteriorCellBlockLevels)
     {
         _byName = byName;
         _ambiguous = ambiguous;
         _folderByType = folderByType;
         _typesByFolder = typesByFolder;
         _directoryPerRecordTypeByFolder = directoryPerRecordTypeByFolder;
+        _exteriorCellBlockLevels = exteriorCellBlockLevels;
     }
 
     internal static RecordTypeDispatch For(GameRelease release) =>
@@ -97,6 +104,8 @@ internal sealed class RecordTypeDispatch
 
     private const string NestedDirectoryPerRecordType = "Cell";
 
+    private const string WorldspaceTypeName = "Worldspace";
+
     /// <summary>The one placement key not simply the folder it sits in: a block level's directory is
     /// named after coordinates. Here because this layer owns game-specific naming; static because
     /// every Bethesda game spells it the same.</summary>
@@ -104,6 +113,21 @@ internal sealed class RecordTypeDispatch
 
     /// <summary>Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
     internal static string BlockChildMember => "SubBlocks";
+
+    /// <summary>The coordinates a block level carries. Static for the same reason as
+    /// <see cref="SubBlockChildMember"/>.</summary>
+    internal static string BlockNumberXMember => "BlockNumberX";
+
+    /// <summary>Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
+    internal static string BlockNumberYMember => "BlockNumberY";
+
+    /// <summary>A cell's position in its worldspace's grid, which a bare minted ancestor holds none
+    /// of. Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
+    internal static string CellGridMember => "Grid";
+
+    /// <summary>The block levels a worldspace nests its exterior cells under, outermost first: the
+    /// container types a spatial mint places blank documents for.</summary>
+    internal IReadOnlyList<Type> ExteriorCellBlockLevels => _exteriorCellBlockLevels;
 
     /// <summary>Null when the folder maps to more than one concrete type (an ambiguous group such as
     /// Globals), so the document self-describes rather than a wrong type being assumed, and for a
@@ -191,11 +215,35 @@ internal sealed class RecordTypeDispatch
             ambiguous,
             folderByType,
             typesByFolder.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value),
-            directoryPerRecordTypeByFolder);
+            directoryPerRecordTypeByFolder,
+            BlockLevelsUnder(byName.GetValueOrDefault(WorldspaceTypeName)));
     }
 
     private static bool IsAmbiguous(Type concrete, HashSet<Type> abstractElements) =>
         abstractElements.Any(a => a.IsAssignableFrom(concrete));
+
+    // A block level is the list element type carrying block coordinates. Found by that shape, not by
+    // member name: a worldspace and a block spell the member holding their blocks differently.
+    private static List<Type> BlockLevelsUnder(Type? container)
+    {
+        var levels = new List<Type>();
+        for (var level = BlockLevelIn(container); level != null; level = BlockLevelIn(level))
+        {
+            levels.Add(level);
+        }
+        return levels;
+    }
+
+    private static Type? BlockLevelIn(Type? container) =>
+        container?.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => ListElementType(p.PropertyType))
+            .FirstOrDefault(element => element?.GetProperty(BlockNumberXMember) != null);
+
+    private static Type? ListElementType(Type propertyType) =>
+        propertyType.GetInterfaces()
+            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            .Select(i => i.GetGenericArguments()[0])
+            .FirstOrDefault();
 
     // Null for a property that is not a group of major records: a mod's Cells is a list group of
     // CellBlock, which is not one.

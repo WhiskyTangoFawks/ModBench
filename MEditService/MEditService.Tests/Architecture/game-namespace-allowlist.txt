@@ -1,10 +1,6 @@
 # Game-concrete Mutagen names outside the codec (Serialization, Schema) and the Plugin adapter
 # (Plugins). Each line goes with the ticket that moves its site behind one of those two; the
 # shrinking of this list is what the work is measured by.
-MEditService.Core/Edits/SpatialContainerMint.cs: Fallout4Mod syntheticMod, string destinationModFolder, string destinationPluginName,
-MEditService.Core/Edits/SpatialContainerMint.cs: internal static Fallout4Mod BuildSyntheticWorldspaceMod(
-MEditService.Core/Edits/SpatialContainerMint.cs: using Mutagen.Bethesda.Fallout4;
-MEditService.Core/Edits/SpatialContainerMint.cs: var mod = new Fallout4Mod(ModKey.FromFileName(destinationPlugin.Name), release.ToFallout4Release());
 MEditService.Core/Records/HeaderDocument.cs: using Mutagen.Bethesda.Fallout4;
 MEditService.Core/Records/HeaderDocument.cs: var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());
 MEditService.Core/Records/HeaderDocument.cs: var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());

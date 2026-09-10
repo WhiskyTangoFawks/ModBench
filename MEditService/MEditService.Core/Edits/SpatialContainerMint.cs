@@ -1,118 +1,100 @@
-using MEditService.Core.Plugins;
+using System.Text.Json.Nodes;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>Mints a WRLD/CELL directory without a path grammar (ADR-0041 declined one): a synthetic
-/// one-subtree mod goes through the whole-mod serializer Track uses, and is FO4-typed because that
-/// door is.</summary>
+/// <summary>Mints a WRLD/CELL directory without a path grammar (ADR-0041 declined one): the codec
+/// mints each level's document and the repository says where it goes.</summary>
 internal static class SpatialContainerMint
 {
-    /// <summary>Only wires the block/sub-block nesting between two already-constructed records, copying
-    /// coordinates from <paramref name="cellLocation"/> and the grid from <paramref name="sourceCell"/>
-    /// rather than deriving either.</summary>
-    internal static Fallout4Mod BuildSyntheticWorldspaceMod(
-        PluginKey destinationPlugin, IMajorRecord worldspaceAncestor, CellPlacement cellLocation, IMajorRecord cell,
-        IMajorRecord sourceCell, GameRelease release)
+    /// <summary>Places <paramref name="cell"/> and its bare worldspace ancestor at
+    /// <paramref name="location"/>'s block levels, folding a scratch subtree in so an existing
+    /// worldspace is merged into rather than overwritten.</summary>
+    internal static void Mint(
+        RecordTextCodec codec,
+        RecordCopy.Destination destination,
+        GameRelease release,
+        CellPlacement location,
+        IMajorRecord worldspaceAncestor,
+        string worldspaceRecordType,
+        IMajorRecord cell,
+        string cellRecordType,
+        IMajorRecord sourceCell,
+        string? existingWorldspaceDirectory)
     {
-        if (worldspaceAncestor is not Worldspace worldspace)
+        var levels = RecordTypeDispatch.For(release).ExteriorCellBlockLevels;
+        if (levels.Count != BlockLevels)
         {
-            throw new ArgumentException(
-                $"{worldspaceAncestor.GetType()} is not a Worldspace — the whole-mod door this mints through is FO4-only.",
-                nameof(worldspaceAncestor));
-        }
-        if (cell is not Cell fo4Cell)
-        {
-            throw new ArgumentException(
-                $"{cell.GetType()} is not a Cell — the whole-mod door this mints through is FO4-only.",
-                nameof(cell));
-        }
-        if (sourceCell is not Cell sourceFo4Cell)
-        {
-            throw new ArgumentException(
-                $"{sourceCell.GetType()} is not a Cell — the whole-mod door this mints through is FO4-only.",
-                nameof(sourceCell));
+            throw new NotSupportedException(
+                $"{release} nests an exterior cell under {levels.Count} block levels, and the source " +
+                $"tree's layout has exactly {BlockLevels}.");
         }
 
-        fo4Cell.Grid = sourceFo4Cell.Grid;
+        var subtree = SourceRepository.ExteriorCellSubtreeFor(
+            destination.Plugin.Name, worldspaceRecordType, worldspaceAncestor.FormKey.ToString(),
+            worldspaceAncestor.EditorID, cell.FormKey.ToString(), cell.EditorID, location, release);
 
-        var subBlock = new WorldspaceSubBlock
-        {
-            BlockNumberX = (short)(cellLocation.SubX ?? 0),
-            BlockNumberY = (short)(cellLocation.SubY ?? 0),
-        };
-        subBlock.Items.Add(fo4Cell);
-
-        var block = new WorldspaceBlock
-        {
-            BlockNumberX = (short)(cellLocation.BlockX ?? 0),
-            BlockNumberY = (short)(cellLocation.BlockY ?? 0),
-        };
-        block.Items.Add(subBlock);
-
-        worldspace.SubCells.Add(block);
-
-        var mod = new Fallout4Mod(ModKey.FromFileName(destinationPlugin.Name), release.ToFallout4Release());
-        mod.Worldspaces.Add(worldspace);
-        return mod;
-    }
-
-    /// <summary>Read back off the tree the serializer wrote, never re-serialized, so the index row is
-    /// byte-identical to the file it describes.</summary>
-    internal readonly record struct SpatialMintResult(byte[] WorldspaceBody, byte[] CellBody);
-
-    /// <summary>Folds the synthetic mod's <c>Worldspaces</c> subtree into the destination, never its
-    /// default header. An existing worldspace override is merged one level down, minus the
-    /// scratch worldspace's document, which must never overwrite the real one.</summary>
-    internal static async Task<SpatialMintResult> MintAsync(
-        Fallout4Mod syntheticMod, string destinationModFolder, string destinationPluginName,
-        string? existingWorldspaceDirectory = null)
-    {
-        var scratchDir = Directory.CreateTempSubdirectory("medit-spatial-mint-").FullName;
+        var scratch = Directory.CreateTempSubdirectory("medit-spatial-mint-").FullName;
         try
         {
-            await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                syntheticMod, scratchDir, InlineWorkDropoff.Instance, CancellationToken.None);
-
-            const string worldspacesFolder = "Worldspaces";
-            const string recordDataFileName = SourceRepository.RecordDataFileName;
-            var scratchWorldspaces = Path.Combine(scratchDir, worldspacesFolder);
-
-            // Exactly one Worldspace and one Cell: the Cell's file is the other RecordData.json beneath
-            // the WRLD's (placed refs serialize inline, per CellEmbedCustomization).
-            var worldspaceOwnDir = Directory.EnumerateDirectories(scratchWorldspaces).Single();
-            var worldspaceHeaderFile = Path.Combine(worldspaceOwnDir, recordDataFileName);
-            var cellFile = Directory.EnumerateFiles(scratchWorldspaces, recordDataFileName, SearchOption.AllDirectories)
-                .Single(f => !string.Equals(f, worldspaceHeaderFile, StringComparison.Ordinal));
-
-            var result = new SpatialMintResult(
-                await File.ReadAllBytesAsync(worldspaceHeaderFile), await File.ReadAllBytesAsync(cellFile));
+            Place(scratch, subtree.WorldspaceDocument, codec.SerializeToText(worldspaceAncestor, release));
+            Place(scratch, subtree.BlockGroupDocument,
+                RecordTextCodec.BlankDocument(levels[0], release, BlockNumbers(location.BlockX, location.BlockY)));
+            Place(scratch, subtree.SubBlockGroupDocument,
+                RecordTextCodec.BlankDocument(levels[1], release, BlockNumbers(location.SubX, location.SubY)));
+            Place(scratch, subtree.CellDocument, CellDocumentWithGrid(codec, release, cell, cellRecordType, sourceCell));
 
             if (existingWorldspaceDirectory != null)
             {
                 // The merge walks directories only, so the scratch worldspace's own document never
                 // overwrites the real one.
-                MergeIntoExistingWorldspace(worldspaceOwnDir, existingWorldspaceDirectory);
+                MergeIntoExistingWorldspace(
+                    Path.Combine(scratch, subtree.WorldspaceDirectory), existingWorldspaceDirectory);
             }
             else
             {
-                var destinationWorldspaces = Path.Combine(
-                    destinationModFolder, SourceRepository.RootFor(destinationPluginName), worldspacesFolder);
-                SourceTreeMerge.MergeAdditively(scratchWorldspaces, destinationWorldspaces);
+                SourceTreeMerge.MergeAdditively(
+                    Path.Combine(scratch, subtree.GroupDirectory),
+                    Path.Combine(destination.ModFolder, subtree.GroupDirectory));
             }
-
-            return result;
         }
         finally
         {
-            Directory.Delete(scratchDir, recursive: true);
+            Directory.Delete(scratch, recursive: true);
         }
+    }
+
+    private const int BlockLevels = 2;
+
+    private static void Place(string modFolder, SourcePlacement placement, string document) =>
+        SourceRepository.WriteAt(modFolder, placement, path =>
+        {
+            SourceRepository.WriteTextAtomic(path, document);
+            return document;
+        });
+
+    private static JsonObject BlockNumbers(int? x, int? y) => new()
+    {
+        [RecordTypeDispatch.BlockNumberXMember] = x ?? 0,
+        [RecordTypeDispatch.BlockNumberYMember] = y ?? 0,
+    };
+
+    // A bare ancestor carries no grid of its own; the source cell's document does, so the grid rides
+    // along as a member and the codec respells the result.
+    private static string CellDocumentWithGrid(
+        RecordTextCodec codec, GameRelease release, IMajorRecord cell, string cellRecordType, IMajorRecord sourceCell)
+    {
+        var document = codec.SerializeToText(cell, release);
+        var grid = JsonNode.Parse(codec.SerializeToText(sourceCell, release))!
+            .AsObject()[RecordTypeDispatch.CellGridMember];
+        if (grid == null) return document;
+
+        var withGrid = JsonNode.Parse(document)!.AsObject();
+        withGrid[RecordTypeDispatch.CellGridMember] = grid.DeepClone();
+        return codec.RoundTrip(withGrid.ToJsonString(), release, cellRecordType);
     }
 
     // Descends by matching name to the first level with no match, so the pass is idempotent against a
