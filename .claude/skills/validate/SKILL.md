@@ -31,14 +31,17 @@ Classify changed files → run matching gate (never review non-compiling code):
 (`.vale.ini`); Vale over those plus `.sh`/`.yml`/`.json`/`.csproj`/`.props` as raw text, which
 reaches string literals but carries only the History and Ticket rules (`.vale-raw.ini`);
 `comment-shape.py` for the doc-comment shape checks on `.cs`/`.ts`/`.tsx`; and the discipline's own
-tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`.
+tests (`.claude/hooks/test_*.py`). The pinned binary comes from `install-vale.sh`. The gate
+runner's own tests (`.claude/skills/validate/test_*.py`) run beside it on every invocation.
 
 `--api-drift` boots a fresh backend and fails if `modbench/src/medit/generated/api.ts`
 has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can
 silently invalidate it, so it rides along with `--backend`, not `--frontend`.
 
-Run gate commands with `run_in_background: true` and wait for the completion notice: the backend
-gates queue on a machine-wide flock, so a run can outlast a foreground command's 10-minute cap.
+The backend gates queue on a machine-wide flock, so a run can outlast a foreground command's
+10-minute cap, and a subagent that ends its turn to wait has reported instead. Run
+`run-gates.sh <flags> --detach`, then `run-gates.sh --wait` in the foreground until it prints the
+verdict. Exit 3 means call it again.
 
 Fix all failures, rerun.
 

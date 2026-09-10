@@ -2,11 +2,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Monitor",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/gate-timeout.py\""
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/wait-discipline.py\""
           }
         ]
       },
