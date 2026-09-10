@@ -205,8 +205,6 @@ public sealed class CopyRecordAsOverrideHandler
             "container document in the source plugin carries this record.");
     }
 
-    // The one place a plain Copy as Override deserializes at all; every other type's own-fields copy
-    // is the verbatim bytes.
     private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release) =>
         ContainerDocumentEdits.WithoutChildren(_codec, body, release, recordType);
 }

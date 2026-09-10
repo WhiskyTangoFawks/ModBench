@@ -72,7 +72,7 @@ internal sealed class CopySource(
         var owner = File.ReadAllBytes(unit.FullPath);
         using var document = JsonDocument.Parse(owner);
         return _containers.Value.ContainmentOf(
-            _containers.Value.TableOf(unit.OwnerRecordType ?? string.Empty, owner),
+            _containers.Value.TypeNameOf(unit.OwnerRecordType ?? string.Empty, owner),
             document.RootElement,
             identity.FormKey);
     }

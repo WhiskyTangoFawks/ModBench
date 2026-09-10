@@ -87,7 +87,7 @@ internal sealed class ReferencerScan(
 
             // A path-ambiguous group's document names its own class rather than the schema's table,
             // so the document itself says which table it is in.
-            var schemaType = containers.TableOf(document.RecordType, Encoding.UTF8.GetBytes(document.Body));
+            var schemaType = containers.TypeNameOf(document.RecordType, Encoding.UTF8.GetBytes(document.Body));
 
             // A type no schema names is one the collector cannot be run over, so the document travels
             // on for the remap-completeness guard to refuse rather than being passed over.
