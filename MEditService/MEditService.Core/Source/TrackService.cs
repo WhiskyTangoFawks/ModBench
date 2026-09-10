@@ -61,8 +61,15 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         if (plugins.Count == 0)
             return TrackResult.Refused(TrackRefusal.NoPluginWithOrigin, $"No loaded plugin has origin '{origin}' to track.");
 
-        var modFolder = Path.GetDirectoryName(plugins[0].Path)
-            ?? throw new InvalidOperationException($"Plugin path '{plugins[0].Path}' has no containing folder.");
+        // ModFolders is the one rule for a plugin's mod folder: null for the game's own Data
+        // directory (PluginOrigin.DataDirectory), where Track must not git-init.
+        if (ModFolders.OfOrigin(loadOrder, origin) is not { } modFolder)
+        {
+            return TrackResult.Refused(
+                TrackRefusal.DataDirectoryOrigin,
+                $"{plugins[0].Name} is a base-game plugin loaded from the game's own Data folder, " +
+                "and the game's own plugins cannot be tracked in place. Author a patch plugin and track that instead.");
+        }
 
         // Both checks are cheap and both make the whole parse loop pointless if they fail, so they run first.
         if (SourceRepository.IsTracked(modFolder))
@@ -319,6 +326,9 @@ public enum TrackRefusal
 
     /// <summary>The mod folder already holds a repository, whose history a re-Track would discard.</summary>
     AlreadyTracked,
+
+    /// <summary>The origin is the game's own Data directory; the way out is a patch plugin (ADR-0041).</summary>
+    DataDirectoryOrigin,
 
     /// <summary>ADR-0042 decision 2's gate: the plugin does not survive its own source, or cannot be
     /// deep-parsed at all. A data problem in the plugin, not a state conflict.</summary>

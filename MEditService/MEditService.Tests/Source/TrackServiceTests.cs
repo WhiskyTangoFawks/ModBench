@@ -272,6 +272,39 @@ public sealed class TrackServiceTests
         }
     }
 
+    // The only copy under this origin resolves to the game's own Data directory (PluginOrigin.
+    // DataDirectory), which ModFolders.Of returns null for — Track must refuse rather than
+    // Path.GetDirectoryName'ing its way to a repository inside Data.
+    [Fact]
+    public async Task TrackAsync_WithOnlyADataOriginCopy_RefusesWithoutInitializingARepository()
+    {
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-dataorigin-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(gameDir, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            mod.WriteToBinary(pluginPath);
+
+            var loadOrder = new LoadOrder(gameDir, null, GameRelease.Fallout4,
+            [
+                new RegisteredCopy("Fixture.esp", PluginOrigin.DataDirectory, pluginPath, 0, Enabled: true, Winning: true),
+            ]);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var result = await service.TrackAsync(
+                loadOrder, HeldIn(loadOrder), PluginOrigin.DataDirectory, SourcePreset.Edits);
+
+            Assert.False(result.Applied);
+            Assert.Equal(TrackRefusal.DataDirectoryOrigin, result.Refusal);
+            Assert.Empty(Directory.EnumerateDirectories(gameDir, ".git", SearchOption.AllDirectories));
+        }
+        finally
+        {
+            SafeDelete(gameDir);
+        }
+    }
+
     // Serializing's granularity is per-plugin, so a genuine 0 < done < total tick needs two plugins
     // under one origin: the observation point falls between the first plugin's door call and the
     // second's.
