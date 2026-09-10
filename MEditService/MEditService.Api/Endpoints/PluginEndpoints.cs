@@ -346,10 +346,7 @@ public static class PluginEndpoints
         {
             var result = handler.Absorb(modFolder, plugins, loadOrder);
             if (result.Applied)
-            {
-                watcher.MarkAnswered(modFolder);
                 foreach (var plugin in plugins) watcher.Watch(modFolder, plugin.Name, plugin.Path);
-            }
             var rebase = result.Rebase is { } r ? new RebaseResponse(r.Outcome, r.RefusalReason, r.ConflictedPaths) : null;
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason, rebase));
         }
@@ -378,10 +375,7 @@ public static class PluginEndpoints
         {
             var result = handler.Keep(modFolder, plugins, loadOrder.GameRelease);
             if (result.Applied)
-            {
-                watcher.MarkAnswered(modFolder);
                 foreach (var plugin in plugins) watcher.Watch(modFolder, plugin.Name, plugin.Path);
-            }
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

@@ -80,7 +80,7 @@ public sealed class DeleteRecordHandlerTests
     public void DeleteRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
         using var mod = SourceEditFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, "unanswered");
+        mod.RaiseExternalChange();
 
         var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, mod.Npc.ToString());
 

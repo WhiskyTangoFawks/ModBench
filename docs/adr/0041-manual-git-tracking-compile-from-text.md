@@ -135,9 +135,16 @@ outside `source/` differs from git's own view of the edit branch* (Everything on
 `.gitignore` makes the second half empty by construction, so an asset-only release raises there and
 nowhere else). `meta.ini` is a tell, never a trigger: a metadata-only edit opens no question on its
 own, and its hash against the baseline trailer sets the default button and the version evidence
-only once the rule above has already fired for the same mod. Deferral is per mod folder: an
-unanswered mod refuses edits on every plugin it holds, not just the one whose bytes raised the
-question. One dialog asks the only human question, and either answer covers every plugin the mod
+only once the rule above has already fired for the same mod. Deferral is per mod folder and covers
+every write: an unanswered mod refuses the record gestures and Save & Compile on every plugin it
+holds, not just the one whose bytes raised the question — a compile would overwrite the bytes the
+question is about and silently end it. The classifier is the authority on whether a question is
+open, and the marker file in the mod's `.git` only caches its last verdict, so the gate on every
+write, each settle and each load-time check classify again before refusing and drop the marker on a
+verdict of nothing: bytes restored by hand, a re-Track or a superseding settle end the question
+without an answer, and a marker never keeps a mod read-only over a change that is gone (root
+`CLAUDE.md`'s rule on disk-derived state). The watcher's queue of questions reads the same marker
+as its authority. One dialog asks the only human question, and either answer covers every plugin the mod
 holds and every changed tracked file: upstream update (each plugin re-serialized, plus every
 changed tracked file's
 current bytes or its deletion, committed to `main` as one new baseline, then the edit branch

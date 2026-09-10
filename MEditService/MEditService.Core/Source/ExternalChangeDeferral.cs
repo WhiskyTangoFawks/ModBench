@@ -1,8 +1,8 @@
 namespace MEditService.Core.Source;
 
-/// <summary>Until an external-change question is answered, the whole mod is refused for editing —
-/// every plugin it holds, not just the one that raised the question (ADR-0041 amendment). Same
-/// marker-file idiom as <see cref="CompileJournal"/>.</summary>
+/// <summary>An unanswered external-change question refuses every write to the mod, compile included
+/// (ADR-0041 amendment). The marker caches the classifier's verdict, which alone decides: a present
+/// marker is classified again, and nothing found clears it.</summary>
 public static class ExternalChangeDeferral
 {
     private const string MarkerFileName = "MEDIT_EXTERNAL_CHANGE";
@@ -23,16 +23,17 @@ public static class ExternalChangeDeferral
         File.Move(tempPath, path, overwrite: true);
     }
 
-    /// <summary>Answering for the mod clears every plugin it holds at once — there is no per-plugin
-    /// marker left to re-raise.</summary>
+    /// <summary>Answering for the mod clears every plugin it holds at once. Also the write gate's, a
+    /// settle's and a load's call on a verdict of nothing: the marker never outlives the change it
+    /// names.</summary>
     public static void Clear(string modFolder)
     {
         var path = MarkerPath(modFolder);
         if (File.Exists(path)) File.Delete(path);
     }
 
-    /// <summary>The unanswered question's message, or null — never a throw for an untracked folder or a
-    /// missing marker.</summary>
+    /// <summary>The question's message as last raised, or null — never a throw for an untracked folder
+    /// or a missing marker. Non-null is a reason to classify, not yet a reason to refuse.</summary>
     public static string? Unanswered(string modFolder)
     {
         var path = MarkerPath(modFolder);

@@ -107,7 +107,7 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Keep_ClearsAnyUnansweredDeferral()
+    public void Keep_ClearsTheModsUnansweredDeferral()
     {
         ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
         WriteExternalBinaryChange(0.9f);

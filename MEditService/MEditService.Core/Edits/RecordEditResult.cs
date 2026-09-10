@@ -1,9 +1,11 @@
+using System.Text.Json.Serialization;
 using MEditService.Core.Records;
 
 namespace MEditService.Core.Edits;
 
 /// <summary>Why an edit was refused, typed rather than a string to match on (ADR-0026). Each value
 /// names a different way out, which is what the message has to say.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RecordEditRefusal
 {
     None,
@@ -26,7 +28,7 @@ public enum RecordEditRefusal
     /// <summary>Blocked at edit time rather than reported afterwards: always a data error.</summary>
     InvalidFormLink,
 
-    /// <summary>Refused per plugin until the Absorb/Keep dialog is answered; the way out is answering it.</summary>
+    /// <summary>Refused per mod, compile included, until the Absorb/Keep dialog is answered; the way out is answering it.</summary>
     ExternalChangeUnanswered,
 
     /// <summary>Create: no schema table of that name, or the header, which cannot be created this way.</summary>
