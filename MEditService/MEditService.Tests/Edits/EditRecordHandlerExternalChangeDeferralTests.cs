@@ -29,6 +29,9 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
         Assert.Contains("changed outside Modbench", result.Message, StringComparison.Ordinal);
+        // The dialog's own two current actions.
+        Assert.Contains("Commit to main as new baseline", result.Message, StringComparison.Ordinal);
+        Assert.Contains("Apply to working tree on edit", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]

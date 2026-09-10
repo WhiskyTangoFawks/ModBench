@@ -14,7 +14,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>Keep as My Edit's handler (ADR-0046 invariant 3): every plugin's binary lands as
+/// <summary>Keep's handler (ADR-0046 invariant 3): every plugin's binary lands as
 /// working-tree dirt, and every changed tracked file stages as-is. A collision on either
 /// refuses the whole mod.</summary>
 public sealed class KeepExternalChangeHandler
