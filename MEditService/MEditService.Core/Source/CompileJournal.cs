@@ -3,8 +3,8 @@ using System.Text.Json;
 namespace MEditService.Core.Source;
 
 /// <summary>Journals a compile batch so a crash cannot leave it silently half-done; a single plugin's
-/// binary write is already atomic. A marker file inside <c>.git</c>, one per repo — a batch can
-/// span mod folders.</summary>
+/// binary write is already atomic. A marker file inside <c>.git</c>, one per repo — a batch is one
+/// mod folder.</summary>
 public static class CompileJournal
 {
     private const string MarkerFileName = "MEDIT_COMPILE_JOURNAL";

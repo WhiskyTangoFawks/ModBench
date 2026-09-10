@@ -780,7 +780,7 @@ describe('ModListProvider', () => {
   });
 
   // Badges come straight off `instance.value.modStatuses` — a fixture map, no disk and no
-  // temporary instance, per this ticket.
+  // temporary instance.
   describe('status badges (from the Instance value)', () => {
     const conflictStatuses = (): Map<string, ModStatusResult> => new Map([
       ['ModA', { status: { kind: 'conflicts', count: 1 }, conflictLines: ['textures/shared/foo.dds → winner: ModB'] }],
@@ -887,7 +887,7 @@ describe('ModListProvider', () => {
   });
 
   // A pinned Overwrite leaf, last row of the tree, outside separator grouping. The count is a
-  // plain field of the Instance value now — no disk, no temporary instance.
+  // plain field of the Instance value — no disk, no temporary instance.
   describe('Overwrite row', () => {
     const entries = (): ModlistEntry[] => [mod('Alpha'), sep('Group A'), mod('Beta')];
 

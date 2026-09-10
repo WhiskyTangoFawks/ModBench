@@ -11,8 +11,7 @@ function isInsideGitDir(fsPath: string): boolean {
 }
 
 /** An archive extraction or a purge fires a burst of fs events; one re-scan per burst is enough.
- *  A caller with its own coalescing passes 0 rather than stack a second wait, which measured
- *  ~450ms of latency against ~250ms. */
+ *  A caller with its own coalescing passes 0 rather than stack a second wait on top of its own. */
 export function createDebouncedFsWatcher(
   instanceRoot: string, glob: string, onChange: () => void, debounceMs: number = DEBOUNCE_MS,
 ): vscode.Disposable {

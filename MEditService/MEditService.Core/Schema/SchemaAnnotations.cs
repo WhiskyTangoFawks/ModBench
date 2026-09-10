@@ -330,7 +330,7 @@ internal sealed record SchemaAnnotations(
         {
             var declaring = typesByName[entry.TypeName]
                 .FirstOrDefault(t => t.GetProperty(entry.MemberName) != null);
-            if (declaring == null) continue;   // already reported by UnresolvedMembers above
+            if (declaring == null) continue;
 
             var enumType = Nullable.GetUnderlyingType(declaring.GetProperty(entry.MemberName)!.PropertyType)
                 ?? declaring.GetProperty(entry.MemberName)!.PropertyType;
@@ -364,7 +364,7 @@ internal sealed record SchemaAnnotations(
         foreach (var (entry, keyMembers) in KeyedArrays)
         {
             var declaring = typesByName[entry.TypeName].FirstOrDefault(t => t.GetProperty(entry.MemberName) != null);
-            if (declaring == null) continue;   // already reported by UnresolvedMembers above
+            if (declaring == null) continue;
 
             var label = $"{nameof(KeyedArrays)}: {entry.TypeName}.{entry.MemberName}";
             if (!ReflectedTypes.IsListType(declaring.GetProperty(entry.MemberName)!.PropertyType, out var elementType))
@@ -434,7 +434,7 @@ internal sealed record SchemaAnnotations(
     {
         foreach (var (entry, labels) in EnumMemberLabels)
         {
-            if (Property(typesByName, entry) is not { } prop) continue;   // already reported by UnresolvedMembers
+            if (Property(typesByName, entry) is not { } prop) continue;
 
             var label = $"{nameof(EnumMemberLabels)}: {entry.TypeName}.{entry.MemberName}";
             var core = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;

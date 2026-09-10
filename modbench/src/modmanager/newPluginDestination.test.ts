@@ -1,6 +1,6 @@
-// New Plugin's two remaining destinations, composed the way toolbox.ts's registered command
-// does: resolvePluginDestination picks the path, the backend lands the bytes there (simulated
-// here), then appendPlugin adds the plugins.txt line.
+// New Plugin's two remaining destinations, composed the way pluginListCommands.ts's registered
+// command does: resolvePluginDestination picks the path, the backend lands the bytes there
+// (simulated here), then appendPlugin adds the plugins.txt line.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

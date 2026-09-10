@@ -97,7 +97,6 @@ internal sealed class SourceTransaction
 
     private sealed record EntryMove(string ModFolder, string From, string To) : Operation(ModFolder);
 
-    // Deepest first, as LevelsMintedBy names them.
     private sealed record MintedDirectories(string ModFolder, IReadOnlyList<string> Levels) : Operation(ModFolder);
 
     private readonly List<Operation> _log = [];

@@ -24,7 +24,7 @@ internal static class HeaderIndexer
         row.AppendValue(plugin);
         row.AppendValue(origin);
         row.AppendValue(PluginHeader.RecordType);
-        row.AppendNullValue();    // editor_id: headers have no EditorID concept
+        row.AppendNullValue();
         row.AppendValue(SourceRef.Committed);
         row.AppendValue(Encoding.UTF8.GetString(body));
         // Hashed from the document's own bytes, never a string round trip, so the hash is defined by

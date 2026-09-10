@@ -29,7 +29,7 @@ public sealed class SourceValidateRealDataTests(SourceParityFixture fixture, ITe
     }
 
     // The all-plugins call, over an instance holding a real plugin: it has to finish and say how many
-    // rows it changed, which is the number the Loadout header's refresh will show.
+    // rows it changed.
     [Fact]
     public void ReconcilingEveryPlugin_CompletesAndReportsHowManyRowsChanged()
     {

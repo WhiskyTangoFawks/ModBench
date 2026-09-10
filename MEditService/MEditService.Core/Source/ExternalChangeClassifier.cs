@@ -2,9 +2,9 @@ using System.Security.Cryptography;
 
 namespace MEditService.Core.Source;
 
-/// <summary>Shared by the live watcher and the load-time hash check: a mod changed externally when a
-/// plugin's bytes differ from Modbench's own write, or a tracked file differs from source
-/// control's view.</summary>
+/// <summary>Shared by the live watcher, the load-time hash check and the write gate: a mod changed
+/// externally when a plugin's bytes differ from Modbench's own write, or a tracked file differs
+/// from source control.</summary>
 public static class ExternalChangeClassifier
 {
     /// <summary>Null for an untracked mod folder, and null when neither half of the rule found

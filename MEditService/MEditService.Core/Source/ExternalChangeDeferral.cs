@@ -14,10 +14,9 @@ public static class ExternalChangeDeferral
     public static void Set(string modFolder, string question)
     {
         var gitDir = Path.Combine(modFolder, ".git");
-        if (!Directory.Exists(gitDir)) return; // repo vanished since Set was called — nothing to persist to.
+        if (!Directory.Exists(gitDir)) return; // repo vanished before this write reached it — nothing to persist to.
 
         var path = MarkerPath(modFolder);
-        // Same write-then-rename discipline as CompileJournal's own marker.
         var tempPath = path + ".tmp";
         File.WriteAllText(tempPath, question);
         File.Move(tempPath, path, overwrite: true);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // onPluginCheckboxChanged is extracted from registerPluginListView so a unit test can reach it,
-// the same way modManagementCommands.test.ts reaches onModCheckboxChanged.
+// the same way modCheckboxHandler.test.ts reaches onModCheckboxChanged.
 const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),

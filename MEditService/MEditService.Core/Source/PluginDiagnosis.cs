@@ -56,8 +56,8 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         return new PluginDiagnosis(DescribeRecord(deepestRecord), UnknownClass, TailFor(rawMessage), message);
     }
 
-    /// <summary>The catch-filter test for the one Kind A write shape: every other write failure must
-    /// propagate untouched, never falling back to a silent <c>NoCheck</c>.</summary>
+    /// <summary>The catch-filter test for the one Kind A write shape: every other write failure
+    /// propagates untouched.</summary>
     public static bool HasUnmappableFormID(Exception ex) => FindDeepest<UnmappableFormIDException>(ex) != null;
 
     // Every branch, not a linear InnerException walk: that only reaches InnerExceptions[0] and would miss

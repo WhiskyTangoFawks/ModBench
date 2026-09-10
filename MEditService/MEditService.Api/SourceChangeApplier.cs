@@ -31,8 +31,8 @@ internal sealed class SourceChangeApplier(
         }
     }
 
-    /// <summary>Track's own start: every loaded copy in the folder being tracked is watched from
-    /// before the tree is written, so Track's burst is projected like any other.</summary>
+    /// <summary>Track's own start: every loaded copy in the folder being tracked is watched only
+    /// after the tree is written and committed, so Track's burst is projected like any other.</summary>
     internal void WatchTracking(string modFolder, string origin)
     {
         if (index.LoadOrder is not { } loadOrder) return;

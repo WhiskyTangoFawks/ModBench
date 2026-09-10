@@ -436,7 +436,7 @@ public static class PluginEndpoints
 public record CreatePluginRequest(string Name, string Path, string Origin);
 
 // What the create gesture wrote and registered, not a plugin row: masters, flags and record count
-// are the Index's to state, and it has not seen this copy yet. Slot is null off a bare load order.
+// are the Index's to state, and it has not seen this copy yet. Slot is 0 off a bare load order.
 public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot);
 
 // Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — no Plugin/Path

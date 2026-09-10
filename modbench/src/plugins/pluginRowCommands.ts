@@ -222,7 +222,7 @@ export function publishCompileDiagnostics(collection: vscode.DiagnosticCollectio
   const modFolder = path.join(instanceRoot, 'mods', origin);
 
   // Clear every URI this collection holds under this folder before republishing —
-  // DiagnosticCollection has no "clear just this prefix" primitive, so the set is tracked here.
+  // DiagnosticCollection has no "clear just this prefix" primitive, so this walks every entry it holds.
   for (const [uri] of collection) {
     if (uri.fsPath.startsWith(modFolder + path.sep)) collection.delete(uri);
   }

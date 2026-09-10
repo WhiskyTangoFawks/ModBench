@@ -104,8 +104,8 @@ describe('computeModStatuses', () => {
 });
 
 describe('computeModStatuses — non-ENOENT stat failures propagate', () => {
-  // modFolderExists's own contract: "false on ENOENT. Other stat errors
-  // propagate." A permission-denied mod folder (real: a restrictively-mounted
+  // modFolderExists's own contract: "ENOENT reads as absent; any other stat error
+  // propagates." A permission-denied mod folder (real: a restrictively-mounted
   // or externally-managed mods/ subtree) must reject, not silently degrade to
   // missingMod like ENOENT does.
   it('rejects rather than degrading to missingMod on a non-ENOENT stat error', async () => {

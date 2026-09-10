@@ -251,7 +251,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(calledFsPath(showTextDocument)).toBe(meta);
   });
 
-  // runRowAction's catch -> log + error-notification path is shared by both nav actions
+  // runRowAction's catch -> log + error-notification path is shared by all three nav actions
   // (visitNexus/openFile/openMeta) — proving it once here (via openFile) covers all of them;
   // no need to duplicate per action.
   it('nav actions: on failure, logs and surfaces an error notification naming the action and row', async () => {

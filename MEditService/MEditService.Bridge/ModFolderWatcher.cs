@@ -233,7 +233,7 @@ public sealed class ModFolderWatcher : IDisposable
             }
             else if (Under(mod.Git.GitDirectory, fullPath))
             {
-                return; // anything else under .git is not this watcher's business
+                return;
             }
             else if (SourcePluginFor(mod, fullPath) is { } sourcePlugin)
             {

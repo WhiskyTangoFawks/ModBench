@@ -10,7 +10,7 @@ namespace MEditService.Core.Source;
 
 /// <summary>The file holding a record: found on disk for a container or embedded child, computed for
 /// a flat record. A null <see cref="SourceUnit.OwnerRecordType"/> means the document names its own
-/// type (ADR-0041's path-ambiguous groups).</summary>
+/// type.</summary>
 internal readonly record struct SourceUnit(
     string FullPath, string RelativePath, string OwnerFormKey, string? OwnerRecordType, bool IsEmbedded)
 {
@@ -43,7 +43,6 @@ public sealed partial class SourceRepository
     /// it.</summary>
     internal SourceUnit? Locate(PluginKey plugin, RecordIdentity identity)
     {
-        // The header's unit is the fixed root RecordData.json: nothing to compute, scan or embed.
         if (identity.RecordType == PluginHeader.RecordType)
         {
             var headerPath = Path.Combine(

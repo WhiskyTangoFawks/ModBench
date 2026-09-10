@@ -1,4 +1,4 @@
-// extension.ts's `invalidateMods` closure must call `instance.refresh()` before
+// toolbox.ts's `invalidateMods` closure must call `instance.refresh()` before
 // `modListProvider.invalidate()`, like its `invalidatePlugins`/`invalidateDownloads` siblings.
 // Reproduced against a real Instance and ModListProvider, so a regression is caught without the
 // full VS Code extension host.
