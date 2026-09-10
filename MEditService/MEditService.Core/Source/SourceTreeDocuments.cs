@@ -35,16 +35,23 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             SourceRepository.RootFor(pluginFileName), SourceRepository.RecordDataFileName);
     }
 
-    /// <summary>Throws when the tree holds no root document: a plugin tree without one describes no
-    /// plugin, and serving the binary instead would be a silent lie.</summary>
-    public PluginDocument Header => new(
-        PluginHeader.RecordType,
-        PluginHeader.FormKeyFor(ModKey.FromFileName(_pluginFileName)),
-        Read(Path.Combine(_modFolder, _headerRelativePath))
-            ?? throw new FileNotFoundException(
-                $"'{_pluginFileName}' is tracked but its source tree holds no root " +
-                $"{SourceRepository.RecordDataFileName}, so it describes no plugin.",
-                Path.Combine(_modFolder, _headerRelativePath)));
+    /// <summary>Throws when the tree holds no readable root document: serving the binary instead of
+    /// a tree that describes no plugin would be a silent lie.</summary>
+    public PluginDocument Header
+    {
+        get
+        {
+            var path = Path.Combine(_modFolder, _headerRelativePath);
+            var text = Read(path)
+                ?? throw new FileNotFoundException(
+                    $"'{_pluginFileName}' is tracked but its source tree holds no root " +
+                    $"{SourceRepository.RecordDataFileName}, so it describes no plugin.", path);
+
+            using var _ = JsonDocument.Parse(text);
+            return new PluginDocument(
+                PluginHeader.RecordType, PluginHeader.FormKeyFor(ModKey.FromFileName(_pluginFileName)), text);
+        }
+    }
 
     /// <summary>Always empty: a tree is read file by file, so no enumeration spans a whole record
     /// type to fail partway.</summary>
@@ -130,15 +137,21 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         if (relativePath.Equals(_headerRelativePath, StringComparison.Ordinal)) yield break;
         if (Read(file) is not { } text) yield break;
 
-        var recordType = SourceRepository.RecordTypeOf(relativePath, _release)
-            ?? _containers.RecordTypeNamed(SourceRepository.RootStringIn(text, MutagenObjectTypeMember));
-        if (recordType == null) yield break;
-
-        if (SourceRepository.FormKeyDeclaredIn(text, relativePath, _headerRelativePath, _pluginFileName)
-            is not { } formKey)
+        // A file the tree files as a record but nothing here can read is a record that would go
+        // missing from the read model. The caller degrades to the binary and says so, which is
+        // visible; dropping it here would not be.
+        using (var document = JsonDocument.Parse(text))
         {
-            yield break;
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+                throw new UnreadableSourceDocumentException(file, "its root is not an object");
         }
+
+        var recordType = SourceRepository.RecordTypeOf(relativePath, _release)
+            ?? _containers.RecordTypeNamed(SourceRepository.RootStringIn(text, MutagenObjectTypeMember))
+            ?? throw new UnreadableSourceDocumentException(file, "neither its path nor its text names a record type");
+
+        var formKey = SourceRepository.FormKeyDeclaredIn(text, relativePath, _headerRelativePath, _pluginFileName)
+            ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
 
         yield return new PluginDocument(recordType, formKey, text, null, cell);
         foreach (var child in Embedded(recordType, formKey, text)) yield return child;
@@ -206,5 +219,28 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         {
             return null;
         }
+    }
+}
+
+/// <summary>A file a plugin's source tree files as a record that this reader cannot turn into a
+/// document. Never swallowed: the caller degrades to the binary and records the reason.</summary>
+public sealed class UnreadableSourceDocumentException : InvalidOperationException
+{
+    public UnreadableSourceDocumentException() : base("A source document could not be read.")
+    {
+    }
+
+    public UnreadableSourceDocumentException(string message) : base(message)
+    {
+    }
+
+    public UnreadableSourceDocumentException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    internal UnreadableSourceDocumentException(string filePath, string because)
+        : base($"'{filePath}' is filed as a record in this plugin's source tree, but {because}.")
+    {
     }
 }

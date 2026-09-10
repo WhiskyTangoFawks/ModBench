@@ -128,8 +128,13 @@ internal static class SourceIngest
             {
                 // Deleted in the working tree: gone at Effective, but it must keep answering at Head so the user
                 // can see, diff or revert it (ADR-0041).
-                if (headText != null && SourceRepository.RootStringIn(headText, FormKeyMember) is { } goneFormKey)
+                if (headText != null)
+                {
+                    var goneFormKey = SourceRepository.RootStringIn(headText, FormKeyMember)
+                        ?? throw new UnreadableSourceDocumentException(
+                            fullPath, "the text HEAD committed for it declares no FormKey");
                     deletedInWorkingTree.Add((goneFormKey, identity.RecordType, headText));
+                }
                 continue;
             }
 

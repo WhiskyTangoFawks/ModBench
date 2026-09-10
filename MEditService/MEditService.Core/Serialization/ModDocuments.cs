@@ -14,17 +14,17 @@ namespace MEditService.Core.Serialization;
 
 /// <summary>A live mod read as the documents its source tree would hold (ADR-0041). The one place a
 /// getter becomes text, so every caller downstream of it holds documents.</summary>
-public static class ModDocuments
+internal static class ModDocuments
 {
     /// <summary><paramref name="open"/> is disposed with the result, so a caller that opened the
     /// plugin hands ownership over rather than outliving the read.</summary>
-    public static IPluginDocuments Of(
+    internal static IPluginDocuments Of(
         IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
         new MutagenModDocuments(mod, schemas, open);
 
     /// <summary>Every cell in the mod and where the GRUP hierarchy puts it (ADR-0023), for a caller
     /// asking about placement without reading a document.</summary>
-    public static IReadOnlyDictionary<string, CellStructure> CellStructuresOf(IModGetter mod) =>
+    internal static IReadOnlyDictionary<string, CellStructure> CellStructuresOf(IModGetter mod) =>
         MutagenModDocuments.CellStructures(mod);
 }
 
