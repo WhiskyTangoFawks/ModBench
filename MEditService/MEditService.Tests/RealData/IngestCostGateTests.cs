@@ -47,10 +47,10 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             $"(this run's binary first-index: {binaryFirstIndexMs} ms).");
     }
 
-    // Quotes the codec path's cost over this machine's full vanilla masters. Never gated: no
-    // committed fixture backs a fixed ceiling here.
+    // Quotes the codec path's cost beside a fresh instance's binary first index, both over this
+    // machine's full vanilla masters. Never gated: no committed fixture backs a fixed ceiling here.
     [SmokeFact]
-    public void CodecPath_FullVanillaMasters_QuotesTimeUngated()
+    public void FullVanillaMasters_QuotesBinaryAndCodecTimeUngated()
     {
         var locator = new GameLocator();
         if (!locator.TryGetDataDirectory(GameRelease.Fallout4, out var dataDir))
@@ -63,11 +63,12 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
         Assert.NotEmpty(masterNames);
 
         var reflector = SharedSchemaReflector.Instance;
+        var ddl = new TableDdlBuilder(reflector);
         var schemas = reflector.GetSchemas(GameRelease.Fallout4);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
 
-        var totalMs = 0L;
-        var totalRecords = 0;
+        var codecMs = 0L;
+        var codecRecords = 0;
         foreach (var name in masterNames)
         {
             var path = Path.Combine(dataDir.Path, name);
@@ -77,12 +78,32 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             var sw = Stopwatch.StartNew();
             var records = SerializeEveryRecord(schemas, codec, overlay);
             sw.Stop();
-            totalMs += sw.ElapsedMilliseconds;
-            totalRecords += records;
+            codecMs += sw.ElapsedMilliseconds;
+            codecRecords += records;
         }
 
+        var binaryMs = Time(() => RunBinaryFirstIndexOverMasters(reflector, ddl, dataDir.Path, masterNames));
+
         output.WriteLine(
-            $"codec path over {masterNames.Count} full vanilla master(s), {totalRecords} records: {totalMs} ms (ungated).");
+            $"binary first-index over {masterNames.Count} full vanilla master(s): {binaryMs} ms; " +
+            $"codec path over the same masters, {codecRecords} records: {codecMs} ms (both ungated).");
+    }
+
+    // One fresh DuckDB index, every master indexed into it in load-order slots.
+    private static void RunBinaryFirstIndexOverMasters(
+        SchemaReflector reflector, TableDdlBuilder ddl, string dataFolderPath, IReadOnlyList<string> masterNames)
+    {
+        using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        for (var slot = 0; slot < masterNames.Count; slot++)
+        {
+            var name = masterNames[slot];
+            var path = Path.Combine(dataFolderPath, name);
+            using var overlay = ModFactory.ImportGetter(
+                new ModPath(ModKey.FromFileName(name), path), GameRelease.Fallout4,
+                LocalizedStrings.ForRead(modFolder: null, dataFolderPath));
+            repo.Index(overlay, Registration.Participating(slot), new PluginKey(name, "Data"));
+        }
     }
 
     private static long Time(Action action)
