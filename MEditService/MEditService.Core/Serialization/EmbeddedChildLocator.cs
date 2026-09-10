@@ -15,8 +15,8 @@ internal readonly record struct EmbeddedChildSpan(
     string SlotName,
     string? EditorId);
 
-/// <summary>Finding a child inside its owner's document, keyed on the schema's slot facts and
-/// reading nothing back as a live object. The one locator: a splice and a document read both ask
+/// <summary>The byte span a child occupies in its owner's document, keyed on the schema's slot
+/// facts and reading nothing back as a live object. The splice and the document reads ask
 /// here.</summary>
 internal static class EmbeddedChildLocator
 {
