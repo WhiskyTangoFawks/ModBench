@@ -125,7 +125,7 @@ public static class PluginEndpoints
             .ProducesProblem(404)
             .ProducesProblem(422);
 
-        // Absorb Upstream Update, origin-scoped: the mod is the unit of a baseline, not one plugin
+        // Absorb, origin-scoped: the mod is the unit of a baseline, not one plugin
         // in it. Rebases the edit branch onto the new baseline it commits.
         app.MapPost("/plugins/external-change/absorb", AbsorbExternalChange)
             .WithName("AbsorbExternalChange")
@@ -135,7 +135,7 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Keep as My Edit, origin-scoped. A collision (a record or an already-staged tracked file)
+        // Keep, origin-scoped. A collision (a record or an already-staged tracked file)
         // is ExternalChangeActionResponse.Succeeded == false naming it — never an HTTP error.
         app.MapPost("/plugins/external-change/keep", KeepExternalChange)
             .WithName("KeepExternalChange")
@@ -328,7 +328,7 @@ public static class PluginEndpoints
     internal static string OriginOfExternalChange(LoadOrder loadOrder, string modFolder) =>
         loadOrder.Copies.FirstOrDefault(copy => ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
-    // Absorb Upstream Update, origin-scoped: every plugin the mod holds is re-parsed together, so
+    // Absorb, origin-scoped: every plugin the mod holds is re-parsed together, so
     // the baseline it commits covers the whole mod in one go.
     internal static IResult AbsorbExternalChange(
         ExternalChangeActionRequest req, IndexProjector index, AbsorbExternalChangeHandler handler,
@@ -357,7 +357,7 @@ public static class PluginEndpoints
         }
     }
 
-    // Keep as My Edit, origin-scoped. A collision (a record or an already-staged tracked file) is a
+    // Keep, origin-scoped. A collision (a record or an already-staged tracked file) is a
     // typed refusal, not an exception — it travels through as a 200, same posture as Compile's own.
     internal static IResult KeepExternalChange(
         ExternalChangeActionRequest req, IndexProjector index, KeepExternalChangeHandler handler,
@@ -458,7 +458,7 @@ public record TrackResponse(string Origin);
 // means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.
 public record CompileRequest(string Origin, string? Ref);
 
-// Absorb Upstream Update / Keep as My Edit are origin-scoped — the mod, not one plugin in it, is
+// Absorb / Keep are origin-scoped — the mod, not one plugin in it, is
 // the unit of a baseline, matching RebaseRequest's own shape.
 public record ExternalChangeActionRequest(string Origin);
 

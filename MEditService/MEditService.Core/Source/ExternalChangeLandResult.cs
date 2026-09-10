@@ -1,6 +1,6 @@
 namespace MEditService.Core.Source;
 
-/// <summary>Keep as My Edit's outcome — a typed refusal (naming the colliding records), never a
+/// <summary>Keep's outcome — a typed refusal (naming the colliding records), never a
 /// partial apply: either every touched record lands, or none of them do.</summary>
 public sealed record ExternalChangeLandResult(bool Applied, string? RefusalReason, IReadOnlyList<string> LandedFormKeys)
 {

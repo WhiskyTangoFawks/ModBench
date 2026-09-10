@@ -163,7 +163,8 @@ public sealed class ModFolderWatcher : IDisposable
             var changed = named.Count > 0 ? string.Join(", ", named) : modName;
             ExternalChangeDeferral.Set(modFolder,
                 $"{changed} (in {modName}) changed outside Modbench and is awaiting an answer — " +
-                "Absorb Upstream Update or Keep as My Edit.");
+                "Commit to main as new baseline, or Apply to working tree on edit; the question is " +
+                "asked again on the next change or load.");
             change = new UnansweredExternalChange(modFolder, classification);
             _unanswered[modFolder] = change;
         }
