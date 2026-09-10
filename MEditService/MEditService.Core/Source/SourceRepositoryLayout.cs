@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
@@ -107,6 +108,51 @@ public sealed partial class SourceRepository
         return new SourcePlacement(Path.Combine(
             [RootFor(pluginFileName), groupFolder, .. blockPath ?? [], leaf, RecordDataFileName]));
     }
+
+    /// <summary>Where an exterior cell's subtree lands, each path relative to the mod folder: the
+    /// worldspace's own document, the two block levels' group documents, and the cell's document
+    /// beneath them.</summary>
+    internal readonly record struct ExteriorCellSubtree(
+        string GroupDirectory,
+        string WorldspaceDirectory,
+        SourcePlacement WorldspaceDocument,
+        SourcePlacement BlockGroupDocument,
+        SourcePlacement SubBlockGroupDocument,
+        SourcePlacement CellDocument);
+
+    /// <summary>The one cell whose directory sits inside another record's rather than in its own
+    /// group folder, under the two block levels <paramref name="location"/> numbers.</summary>
+    internal static ExteriorCellSubtree ExteriorCellSubtreeFor(
+        string pluginFileName,
+        string worldspaceRecordType,
+        string worldspaceFormKey,
+        string? worldspaceEditorId,
+        string cellFormKey,
+        string? cellEditorId,
+        CellPlacement location,
+        GameRelease gameRelease)
+    {
+        var worldspaceDocument = PlacementFor(
+            pluginFileName, worldspaceRecordType, worldspaceFormKey, worldspaceEditorId, gameRelease);
+        var worldspaceDirectory = Path.GetDirectoryName(worldspaceDocument.RelativePath)!;
+        var block = Path.Combine(worldspaceDirectory, BlockLevelName(location.BlockX, location.BlockY));
+        var subBlock = Path.Combine(block, BlockLevelName(location.SubX, location.SubY));
+        var cellDirectory = Path.Combine(
+            subBlock, LeafNameFor(FormKey.Factory(cellFormKey), cellEditorId, isDirectory: true));
+
+        return new ExteriorCellSubtree(
+            Path.GetDirectoryName(worldspaceDirectory)!,
+            worldspaceDirectory,
+            worldspaceDocument,
+            new SourcePlacement(Path.Combine(block, GroupRecordDataFileName)),
+            new SourcePlacement(Path.Combine(subBlock, GroupRecordDataFileName)),
+            new SourcePlacement(Path.Combine(cellDirectory, RecordDataFileName)));
+    }
+
+    // "<x>, <y>", the whole-mod door's own name for a block level's directory, and the spelling
+    // Coordinates reads the numbers back out of. A missing number is the zero the door writes.
+    private static string BlockLevelName(int? x, int? y) =>
+        string.Create(CultureInfo.InvariantCulture, $"{x ?? 0}, {y ?? 0}");
 
     /// <summary><c>[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;</c>, with <c>.json</c> for a flat
     /// file and without for a container's directory — the reason an EditorID edit is a rename.</summary>

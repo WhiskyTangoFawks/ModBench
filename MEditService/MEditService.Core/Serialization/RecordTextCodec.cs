@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO.Abstractions;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
@@ -98,7 +99,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // Buffered rather than streamed: Newtonsoft's JsonTextWriter has no public NewLine to pin (it
     // reads its private inner TextWriter's), so newline normalization has to happen after the fact.
     private static async Task<byte[]> SerializeCoreAsync(
-        IMajorRecordGetter record, GameRelease gameRelease, string directory, CancellationToken cancel)
+        object record, GameRelease gameRelease, string directory, CancellationToken cancel)
     {
         using var buffer = new MemoryStream();
         var streamPackage = new StreamPackage(buffer, directory);
@@ -164,6 +165,17 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     /// <summary>The empty document of a major record: the identity the codec requires first.</summary>
     public const string EmptyMajorRecord = "{\"FormKey\":\"Null\"}";
+
+    /// <summary>The document of an empty instance of <paramref name="loquiType"/> carrying
+    /// <paramref name="identity"/> alone, so a caller places a container level rather than
+    /// constructing one. A minted document fed back as the identity is its round trip.</summary>
+    public static string BlankDocument(Type loquiType, GameRelease gameRelease, JsonObject identity)
+    {
+        var instance = DeserializeTextAsync(loquiType, identity.ToJsonString(), gameRelease).GetAwaiter().GetResult();
+        var bytes = SerializeCoreAsync(instance, gameRelease, directory: string.Empty, CancellationToken.None)
+            .GetAwaiter().GetResult();
+        return Encoding.UTF8.GetString(bytes);
+    }
 
     /// <summary>The instance the codec builds for <paramref name="json"/> read as a Loqui class,
     /// which is how a fact about the class is asked of the codec rather than of reflection.</summary>
