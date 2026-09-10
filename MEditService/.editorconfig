@@ -78,7 +78,8 @@ dotnet_remove_unnecessary_suppression_exclusions = none
 
 # CA1848: LoggerMessage source generators — too much boilerplate for this project's structured logging pattern
 dotnet_diagnostic.CA1848.severity = none
-# S2139: log + rethrow is the deliberate pattern in this codebase (see CLAUDE.md logging conventions)
+# S2139: a catch block here logs the local context (which plugin, which path) that the exception
+# itself does not carry, then rethrows so the boundary handler still turns it into a response.
 dotnet_diagnostic.S2139.severity = none
 
 # Complexity / maintainability rules — kept at `suggestion` (info). They never surface in normal build

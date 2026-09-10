@@ -19,15 +19,22 @@ public sealed class BridgeKnowsNothingOfLoadOrdersTests
             $"Bridge source file(s) reference a forbidden namespace: {string.Join(", ", offenders)}");
     }
 
+    // Zero offenders and zero files walked read the same: a BridgeSourceDirectory that resolved to
+    // an empty or vanished folder would still pass the assertion above.
+    [Fact]
+    public void TheScan_WalksAtLeastOneBridgeSourceFile()
+    {
+        var walked = SourceFiles(BridgeSourceDirectory()).Count;
+
+        Assert.True(walked >= 1, $"The bridge scan walked {walked} files under {BridgeSourceDirectory()}.");
+    }
+
     // Internal so a rival can be applied to and removed from a file copy without touching git state.
     internal static List<string> ScanBridgeSources(string bridgeSourceDirectory)
     {
         var offenders = new List<string>();
-        foreach (var file in Directory.EnumerateFiles(bridgeSourceDirectory, "*.cs", SearchOption.AllDirectories))
+        foreach (var file in SourceFiles(bridgeSourceDirectory))
         {
-            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
-            if (file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)) continue;
-
             var text = File.ReadAllText(file);
             foreach (var ns in ForbiddenNamespaces)
             {
@@ -37,6 +44,31 @@ public sealed class BridgeKnowsNothingOfLoadOrdersTests
         }
         return offenders;
     }
+
+    // Proves the walk through the same matcher the assertion above calls: a planted reference to a
+    // forbidden namespace, under a nested subdirectory, is caught.
+    [Fact]
+    public void TheScan_FindsAPlantedForbiddenNamespaceReference()
+    {
+        var root = Directory.CreateTempSubdirectory("medit-bridge-scan-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "Nested"));
+            File.WriteAllText(Path.Combine(root, "Nested", "Planted.cs"), "using MEditService.Core.Plugins;\n");
+            File.WriteAllText(Path.Combine(root, "Clean.cs"), "using MEditService.Core.Source;\n");
+
+            Assert.Equal(["Planted.cs references MEditService.Core.Plugins"], ScanBridgeSources(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static List<string> SourceFiles(string bridgeSourceDirectory) =>
+        [.. Directory.EnumerateFiles(bridgeSourceDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))];
 
     internal static string BridgeSourceDirectory()
     {

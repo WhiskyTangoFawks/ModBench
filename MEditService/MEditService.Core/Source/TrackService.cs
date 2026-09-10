@@ -18,8 +18,8 @@ namespace MEditService.Core.Source;
 /// commits. A designated door (ADR-0041).</summary>
 public sealed class TrackService(ILogger<TrackService> logger, INotificationPublisher? notifications = null)
 {
-    // Read concurrently by GET /plugins/track/status while a POST is in flight. Snapshots are replaced
-    // wholesale, never mutated, so Volatile.Read/Write suffices and no lock is needed.
+    // Read concurrently while a track is in flight. Snapshots are replaced wholesale, never
+    // mutated, so Volatile.Read/Write suffices and no lock is needed.
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
     // ADR-0046: null in every test that does not care, and nothing is published when it is.

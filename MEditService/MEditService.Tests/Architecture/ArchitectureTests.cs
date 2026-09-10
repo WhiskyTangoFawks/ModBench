@@ -70,6 +70,37 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "mtime read in:\n" + string.Join("\n", offenders));
     }
 
+    // Zero offenders and zero files walked read the same: a Projects typo that scans nothing
+    // would still pass the assertion above.
+    [Fact]
+    public void DiskDerivedState_TheScanWalksMoreThanOneHundredFiles()
+    {
+        var root = SolutionDirectory();
+        var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
+        Assert.True(walked > 100, $"The mtime scan walked only {walked} files under {string.Join(", ", Projects)}.");
+    }
+
+    // The same Offenders() the assertion above calls, with its own needle: proves a planted mtime
+    // read is caught rather than the needle itself having gone stale.
+    [Fact]
+    public void DiskDerivedState_TheScanCatchesAPlantedLastWriteTimeRead()
+    {
+        var root = Directory.CreateTempSubdirectory("medit-mtime-scan-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "P"));
+            File.WriteAllText(Path.Combine(root, "P", "Planted.cs"), "var t = info.LastWriteTime;");
+
+            var offenders = Offenders(root, ["P"], "LastWriteTime", allowedFiles: []);
+
+            Assert.Equal([Path.Combine("P", "Planted.cs")], offenders);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     // ADR-0044: PUT /load-order is the only arrival; a second caller makes the Index's Status lie,
     // and a second writer makes the shared kernel's load order disagree with the index.
     [Fact]
@@ -173,16 +204,55 @@ public sealed class ArchitectureTests
         Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
     }
 
-    // ADR-0008: PluginWriter backs the binary up first; the create gesture writes only a brand-new
-    // file and TrackService only a scratch copy, so neither has anything to back up.
+    // The create gesture writes only a brand-new file and TrackService only a scratch copy, so
+    // neither has an existing binary to back up.
+    private static readonly string[] PluginBinaryWriters = ["PluginWriter.cs", "CreatePluginHandler.cs", "TrackService.cs"];
+
+    // ADR-0008: PluginWriter backs the binary up first.
     [Fact]
     public void ExistingPluginBinary_IsWrittenOnlyByPluginWriter()
     {
-        string[] allowed = ["PluginWriter.cs", "CreatePluginHandler.cs", "TrackService.cs"];
-        var offenders = Offenders(SolutionDirectory(), Projects, "WriteToBinary(", allowed)
-            .Concat(Offenders(SolutionDirectory(), Projects, "BeginWrite", allowed))
+        var offenders = Offenders(SolutionDirectory(), Projects, "WriteToBinary(", PluginBinaryWriters)
+            .Concat(Offenders(SolutionDirectory(), Projects, "BeginWrite", PluginBinaryWriters))
             .ToList();
         Assert.True(offenders.Count == 0, "Plugin binary written outside PluginWriter in:\n" + string.Join("\n", offenders));
+    }
+
+    // Zero offenders and zero files walked read the same: a Projects typo that scans nothing
+    // would still pass the assertion above.
+    [Fact]
+    public void ExistingPluginBinary_TheScanWalksMoreThanOneHundredFiles()
+    {
+        var root = SolutionDirectory();
+        var walked = Projects.SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p))).Count();
+        Assert.True(walked > 100, $"The plugin-binary-write scan walked only {walked} files under {string.Join(", ", Projects)}.");
+    }
+
+    // The same Offenders() the assertion above calls, with its own two needles: proves a planted
+    // write outside PluginBinaryWriters is caught under either spelling.
+    [Fact]
+    public void ExistingPluginBinary_TheScanCatchesAPlantedBinaryWriteOutsideAnAllowedFile()
+    {
+        var root = Directory.CreateTempSubdirectory("medit-plugin-binary-scan-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "P"));
+            File.WriteAllText(Path.Combine(root, "P", "WriteToBinary.cs"), "plugin.WriteToBinary(path);");
+            File.WriteAllText(Path.Combine(root, "P", "BeginWrite.cs"), "recompiled.BeginWrite.ToPath(path);");
+            File.WriteAllText(Path.Combine(root, "P", "PluginWriter.cs"), "plugin.WriteToBinary(path);");
+
+            var offenders = Offenders(root, ["P"], "WriteToBinary(", PluginBinaryWriters)
+                .Concat(Offenders(root, ["P"], "BeginWrite", PluginBinaryWriters))
+                .ToList();
+
+            Assert.Equal(
+                [Path.Combine("P", "BeginWrite.cs"), Path.Combine("P", "WriteToBinary.cs")],
+                offenders.Order(StringComparer.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     // The repo is public: a plugin lands in TestData only by a deliberate edit to the allowlist.
@@ -197,7 +267,7 @@ public sealed class ArchitectureTests
         Assert.Equal(allowed.Order(), present.Order());
     }
 
-    private static readonly string[] Projects = ["MEditService.Core", "MEditService.Api"];
+    private static readonly string[] Projects = ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
 
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);

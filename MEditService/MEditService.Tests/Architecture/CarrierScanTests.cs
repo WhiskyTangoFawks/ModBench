@@ -37,6 +37,18 @@ public sealed class CarrierScanTests
             AllowlistPath);
     }
 
+    // An empty allowlist and zero references found are the same string: this is what tells them
+    // apart, so a ScannedRoots typo that scans nothing cannot pass by matching nothing.
+    [Fact]
+    public void TheScan_WalksMoreThanOneHundredProductionFiles()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        var walked = ScannedFiles(root, ScannedRoots).Count();
+
+        Assert.True(walked > 100, $"The carrier scan walked only {walked} files under {string.Join(", ", ScannedRoots)}.");
+    }
+
     [Fact]
     public void TheDocs_NeverMentionFolderSplitOrTheCarrierInProse()
     {
@@ -108,11 +120,13 @@ public sealed class CarrierScanTests
     // A count, not a line number: a reference is the unit of work, and a line number would fail the
     // gate for any unrelated edit above one.
     private static List<string> Counts(string root, string[] scannedRoots) =>
-        [.. scannedRoots
-            .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
+        [.. ScannedFiles(root, scannedRoots)
             .SelectMany(file => References(File.ReadAllText(file))
                 .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Symbol}: {r.Count}"))
             .Order(StringComparer.Ordinal)];
+
+    private static IEnumerable<string> ScannedFiles(string root, string[] scannedRoots) =>
+        scannedRoots.SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)));
 
     private static IEnumerable<(string Symbol, int Count)> References(string text) =>
         Symbols
