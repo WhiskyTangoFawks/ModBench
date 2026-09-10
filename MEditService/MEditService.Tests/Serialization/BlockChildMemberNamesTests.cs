@@ -40,4 +40,17 @@ public sealed class BlockChildMemberNamesTests
     [Fact]
     public void CellGridMember_NamesARealMemberOfACell() =>
         Assert.NotNull(typeof(Cell).GetProperty(RecordTypeDispatch.CellGridMember));
+
+    // A block level whose own list element is itself. Mutagen's shape nests two levels and stops, so
+    // only a synthetic type reaches the walk's own bound.
+    private sealed class SelfNestingBlock
+    {
+        public List<SelfNestingBlock> Items { get; } = [];
+
+        public short BlockNumberX { get; set; }
+    }
+
+    [Fact]
+    public void BlockLevelsUnder_ABlockShapeThatNestsItself_YieldsThatLevelOnceAndStops() =>
+        Assert.Equal([typeof(SelfNestingBlock)], RecordTypeDispatch.BlockLevelsUnder(typeof(SelfNestingBlock)));
 }

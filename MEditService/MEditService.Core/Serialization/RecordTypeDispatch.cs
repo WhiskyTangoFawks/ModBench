@@ -224,10 +224,13 @@ internal sealed class RecordTypeDispatch
 
     // A block level is the list element type carrying block coordinates. Found by that shape, not by
     // member name: a worldspace and a block spell the member holding their blocks differently.
-    private static List<Type> BlockLevelsUnder(Type? container)
+    internal static List<Type> BlockLevelsUnder(Type? container)
     {
         var levels = new List<Type>();
-        for (var level = BlockLevelIn(container); level != null; level = BlockLevelIn(level))
+        // Stops at a level already walked, so a shape that nests itself ends the walk short of the
+        // caller's count check rather than descending forever.
+        var walked = new HashSet<Type>();
+        for (var level = BlockLevelIn(container); level != null && walked.Add(level); level = BlockLevelIn(level))
         {
             levels.Add(level);
         }

@@ -6,8 +6,8 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>Mints a WRLD/CELL directory without a path grammar (ADR-0041 declined one): the codec
-/// mints each level's document and the repository says where it goes.</summary>
+/// <summary>Mints a WRLD/CELL directory: the codec mints each level's document and the repository
+/// says where it goes, so nothing here spells a type or a path.</summary>
 internal static class SpatialContainerMint
 {
     /// <summary>Places <paramref name="cell"/> and its bare worldspace ancestor at
