@@ -11,7 +11,6 @@ public sealed class BannedApiScopeTests
     private static readonly string[] ExemptSections =
     [
         "MEditService.Core/Commands/**.cs",
-        "MEditService.Core/Edits/**.cs",
         "MEditService.Core/PluginAdapter/**.cs",
         "MEditService.Core/Schema/**.cs",
         "MEditService.Core/Serialization/**.cs",

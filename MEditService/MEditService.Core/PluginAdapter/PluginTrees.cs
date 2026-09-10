@@ -1,8 +1,10 @@
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Analysis;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
@@ -102,5 +104,59 @@ internal static class PluginTrees
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }
 
+    /// <summary>The tree at <paramref name="treeRoot"/> read into the mod it compiles to, held here
+    /// so the compile itself holds documents (ADR-0032 rule 2).</summary>
+    internal static async Task<CompiledTree> ReadTreeAsync(
+        string treeRoot, RecordTextCodec codec, GameRelease gameRelease, CancellationToken cancel = default) =>
+        new(await DeserializeTree(treeRoot, cancel), codec, gameRelease);
+
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
+}
+
+/// <summary>One compile's source tree as the mod it becomes: the only box that mod lives in, which
+/// answers the compile in header facts, FormKeys and documents.</summary>
+internal sealed class CompiledTree(IMod mod, RecordTextCodec codec, GameRelease gameRelease)
+{
+    private readonly Lazy<IReadOnlyList<FormKey>> _formKeys =
+        new(() => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
+
+    /// <summary>The plugin the tree describes, which is whose records count as native.</summary>
+    internal ModKey ModKey => mod.ModKey;
+
+    /// <summary>The removable ESL header flag, as opposed to light by <c>.esl</c> extension.</summary>
+    internal bool IsSmallMaster => mod.IsSmallMaster;
+
+    internal bool IsLight(string fileName) => PluginFlagPredicates.IsLight(mod, fileName);
+
+    /// <summary>The local FormID range an ESL-addressable plugin may use, or null when the header
+    /// declares none.</summary>
+    internal (uint Min, uint Max)? SmallMasterRange =>
+        RecordCompactionCompatibilityDetection.GetSmallMasterRange(mod) is { } range
+            ? (range.Min, range.Max)
+            : null;
+
+    /// <summary>Every record the tree holds, in the order the mod enumerates them.</summary>
+    internal IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
+
+    /// <summary>Each record as its own document, under the schema table it belongs to. A record no
+    /// table claims has no document, so nothing is derived from it.</summary>
+    internal IEnumerable<PluginDocument> Documents(IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        foreach (var record in mod.EnumerateMajorRecords())
+        {
+            var recordType = RecordTableName.Of(record, schemas);
+            if (!schemas.ContainsKey(recordType)) continue;
+            yield return new PluginDocument(recordType, record.FormKey.ToString(), codec.SerializeToText(record, gameRelease));
+        }
+    }
+
+    /// <summary>What the current codec would write for this mod, which is what the round-trip gate
+    /// compares the tree against.</summary>
+    internal Task<IReadOnlyList<PristineFile>> SerializeToPristineFilesAsync(string pluginName) =>
+        PluginTrees.SerializeToPristineFiles(mod, pluginName);
+
+    /// <summary>The mod handed straight to the write, through the backup-and-rename discipline
+    /// every plugin replacement shares (ADR-0008).</summary>
+    internal Task<string> SaveThroughAsync(PluginWriter writer, string pluginPath, IReadOnlyList<string> loadOrder) =>
+        writer.SaveFromModAsync(mod, pluginPath, loadOrder);
 }

@@ -2,7 +2,6 @@ using System.Text.Json.Nodes;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
@@ -18,11 +17,9 @@ internal static class SpatialContainerMint
         RecordCopy.Destination destination,
         GameRelease release,
         CellPlacement location,
-        IMajorRecord worldspaceAncestor,
-        string worldspaceRecordType,
-        IMajorRecord cell,
-        string cellRecordType,
-        IMajorRecord sourceCell,
+        SourceDocument worldspaceAncestor,
+        SourceDocument cell,
+        string sourceCellText,
         string? existingWorldspaceDirectory)
     {
         var levels = RecordTypeDispatch.For(release).ExteriorCellBlockLevels;
@@ -34,18 +31,18 @@ internal static class SpatialContainerMint
         }
 
         var subtree = SourceRepository.ExteriorCellSubtreeFor(
-            destination.Plugin.Name, worldspaceRecordType, worldspaceAncestor.FormKey.ToString(),
-            worldspaceAncestor.EditorID, cell.FormKey.ToString(), cell.EditorID, location, release);
+            destination.Plugin.Name, worldspaceAncestor.RecordType, worldspaceAncestor.FormKey,
+            worldspaceAncestor.EditorId, cell.FormKey, cell.EditorId, location, release);
 
         var scratch = Directory.CreateTempSubdirectory("medit-spatial-mint-").FullName;
         try
         {
-            Place(scratch, subtree.WorldspaceDocument, codec.SerializeToText(worldspaceAncestor, release));
+            Place(scratch, subtree.WorldspaceDocument, worldspaceAncestor.Body);
             Place(scratch, subtree.BlockGroupDocument,
                 RecordTextCodec.BlankDocument(levels[0], release, BlockNumbers(location.BlockX, location.BlockY)));
             Place(scratch, subtree.SubBlockGroupDocument,
                 RecordTextCodec.BlankDocument(levels[1], release, BlockNumbers(location.SubX, location.SubY)));
-            Place(scratch, subtree.CellDocument, CellDocumentWithGrid(codec, release, cell, cellRecordType, sourceCell));
+            Place(scratch, subtree.CellDocument, CellDocumentWithGrid(codec, release, cell, sourceCellText));
 
             if (existingWorldspaceDirectory != null)
             {
@@ -85,16 +82,14 @@ internal static class SpatialContainerMint
     // A bare ancestor carries no grid of its own; the source cell's document does, so the grid rides
     // along as a member and the codec respells the result.
     private static string CellDocumentWithGrid(
-        RecordTextCodec codec, GameRelease release, IMajorRecord cell, string cellRecordType, IMajorRecord sourceCell)
+        RecordTextCodec codec, GameRelease release, SourceDocument cell, string sourceCellText)
     {
-        var document = codec.SerializeToText(cell, release);
-        var grid = JsonNode.Parse(codec.SerializeToText(sourceCell, release))!
-            .AsObject()[RecordTypeDispatch.CellGridMember];
-        if (grid == null) return document;
+        var grid = JsonNode.Parse(sourceCellText)!.AsObject()[RecordTypeDispatch.CellGridMember];
+        if (grid == null) return cell.Body;
 
-        var withGrid = JsonNode.Parse(document)!.AsObject();
+        var withGrid = JsonNode.Parse(cell.Body)!.AsObject();
         withGrid[RecordTypeDispatch.CellGridMember] = grid.DeepClone();
-        return codec.RoundTrip(withGrid.ToJsonString(), release, cellRecordType);
+        return codec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType);
     }
 
     // Descends by matching name to the first level with no match, so the pass is idempotent against a

@@ -24,6 +24,27 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         return ModDocuments.Of(loaded.Getter, schemas, loaded);
     }
 
+    public IPluginRecordLookup OpenRecordLookup(
+        ModPath modPath,
+        GameRelease gameRelease,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        var loaded = OpenForRead(modPath, gameRelease);
+        return ModDocuments.LookupOf(loaded.Getter, schemas, loaded);
+    }
+
+    public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease)
+    {
+        using var loaded = OpenForRead(modPath, gameRelease);
+        return OpenedPlugins.FormIdsIn(loaded.Getter, modPath.ModKey.FileName.String);
+    }
+
+    public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself)
+    {
+        using var loaded = OpenForRead(modPath, gameRelease);
+        return OpenedPlugins.LinksTo(loaded.Getter, modPath.ModKey.FileName.String, target, itself);
+    }
+
     public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 

@@ -84,11 +84,16 @@ public sealed class SpatialContainerMintTests
         var sourceCell = (Cell)MajorRecordInstantiator.Activator(cell.FormKey, Release, typeof(Cell));
         sourceCell.Grid = new CellGrid { Point = new P2Int(200, -199) };
 
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         SpatialContainerMint.Mint(
-            new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
+            codec,
             new RecordCopy.Destination(
                 SourceRepository.Over(modFolder, Release), new PluginKey(DestinationPluginName, "DestinationMod"), modFolder),
-            Release, Location, worldspace, "wrld", cell, "cell", sourceCell, existingWorldspaceDirectory);
+            Release, Location,
+            new SourceDocument(WorldspaceFormKey, "wrld", worldspace.EditorID, codec.SerializeToText(worldspace, Release)),
+            new SourceDocument(CellFormKey, "cell", cell.EditorID, codec.SerializeToText(cell, Release)),
+            codec.SerializeToText(sourceCell, Release),
+            existingWorldspaceDirectory);
     }
 
     private static string WorldspacesIn(string modFolder) =>

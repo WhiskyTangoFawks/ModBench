@@ -13,7 +13,7 @@ internal sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionar
     internal readonly record struct ChildDocument(
         string SlotName, int SlotIndex, string FormKey, string RecordType, JsonElement Node);
 
-    private const string FormKeyMember = "FormKey";
+    private const string FormKeyMember = RecordMembers.FormKey;
 
     private readonly RecordTypeDispatch _dispatch = RecordTypeDispatch.For(release);
 
@@ -95,6 +95,50 @@ internal sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionar
         _slots.ElementTypeOf(owner.Name, slotName) is { } element ? _dispatch.ConcreteFor(element) : null;
 
     private string TableFor(Type? concrete) => RecordTableName.Of(concrete, schemas);
+
+    /// <summary>The schema table a document belongs to: the one its path names, else the one its
+    /// <c>MutagenObjectType</c> declares. Empty when neither answers.</summary>
+    internal string TableOf(string pathRecordType, byte[] bytes) =>
+        schemas.ContainsKey(pathRecordType)
+            ? pathRecordType
+            : RecordTypeNamed(EmbeddedChildLocator.RootDiscriminator(bytes) ?? pathRecordType) ?? string.Empty;
+
+    /// <summary>Every child a document carries inline, at any depth: a worldspace's own document
+    /// holds its top cell, which holds its placed references.</summary>
+    internal IEnumerable<ChildDocument> EmbeddedDescendantsOf(string ownerRecordType, JsonElement ownerRoot)
+    {
+        var ownerType = ContainerTypeOf(ownerRecordType);
+        foreach (var child in ChildrenOf(ownerRecordType, ownerRoot))
+        {
+            if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName)) continue;
+            yield return child;
+            foreach (var deeper in EmbeddedDescendantsOf(child.RecordType, child.Node)) yield return deeper;
+        }
+    }
+
+    /// <summary>The direct container of <paramref name="formKey"/> inside
+    /// <paramref name="ownerRoot"/>, and its slot. A worldspace's top cell holds its placed
+    /// references, so the container may itself be embedded.</summary>
+    internal DocumentContainment? ContainmentOf(string ownerRecordType, JsonElement ownerRoot, string formKey)
+    {
+        if (ownerRoot.ValueKind != JsonValueKind.Object
+            || !ownerRoot.TryGetProperty(FormKeyMember, out var ownKey)
+            || ownKey.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        var ownerType = ContainerTypeOf(ownerRecordType);
+        foreach (var child in ChildrenOf(ownerRecordType, ownerRoot))
+        {
+            if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal))
+                return new DocumentContainment(ownKey.GetString()!, ownerRecordType, child.SlotName);
+
+            if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName)) continue;
+            if (ContainmentOf(child.RecordType, child.Node, formKey) is { } deeper) return deeper;
+        }
+        return null;
+    }
 
     /// <summary>The type and name of the child <paramref name="formKey"/> names anywhere inside
     /// <paramref name="ownerBytes"/>; null when no embedded slot of the owner carries it.</summary>

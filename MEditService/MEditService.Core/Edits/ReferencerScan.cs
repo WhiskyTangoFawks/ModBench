@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
@@ -7,7 +8,6 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
@@ -15,8 +15,7 @@ namespace MEditService.Core.Edits;
 /// invariant 7): a tracked copy answers from its working tree through the collector, an untracked
 /// one from its binary's own links.</summary>
 internal sealed class ReferencerScan(
-    LoadOrder loadOrder, IPluginAdapter importer, RecordTextCodec codec, SchemaReflector schemaReflector,
-    ILogger logger)
+    LoadOrder loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector, ILogger logger)
 {
     /// <summary>One tracked document that links the target: the record at its root, its schema table,
     /// and the embedded children inside it holding a link of their own. A null
@@ -36,6 +35,7 @@ internal sealed class ReferencerScan(
 
         var release = loadOrder.GameRelease;
         var schemas = schemaReflector.GetSchemas(release);
+        var containers = new ContainerDocuments(release, schemas);
 
         foreach (var copy in loadOrder.Participating)
         {
@@ -45,7 +45,7 @@ internal sealed class ReferencerScan(
             if (ModFolders.TrackedOf(loadOrder, plugin) is { } modFolder
                 && SourceRepository.Open(modFolder, release) is { } repository)
             {
-                tracked.AddRange(InTree(repository, plugin, target, itself, schemas, release));
+                tracked.AddRange(InTree(repository, plugin, target, itself, schemas, containers));
             }
             else if (LinksTheTarget(copy, target, itself, release))
             {
@@ -58,7 +58,7 @@ internal sealed class ReferencerScan(
 
     private IEnumerable<Referencing> InTree(
         SourceRepository repository, PluginKey plugin, FormKey target, FormKey? itself,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, ContainerDocuments containers)
     {
         var spelled = target.ToString();
         foreach (var document in repository.ReadAll(plugin))
@@ -70,7 +70,7 @@ internal sealed class ReferencerScan(
             // The header names plugins rather than records, and has no schema to walk it with.
             if (document.RecordType == PluginHeader.RecordType) continue;
 
-            if (Decide(repository, plugin, document, target, itself, schemas, release) is { } referencing)
+            if (Decide(repository, plugin, document, target, itself, schemas, containers) is { } referencing)
                 yield return referencing;
         }
     }
@@ -79,21 +79,23 @@ internal sealed class ReferencerScan(
     // written, so one that throws yields a document no schema names, which the caller refuses on.
     private Referencing? Decide(
         SourceRepository repository, PluginKey plugin, SourceDocument document, FormKey target, FormKey? itself,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, ContainerDocuments containers)
     {
         try
         {
+            using var parsed = JsonDocument.Parse(document.Body);
+
             // A path-ambiguous group's document names its own class rather than the schema's table,
-            // so the record itself says which table it is in.
-            var root = SchemaTypeOf(document, schemas, release, out var schemaType);
+            // so the document itself says which table it is in.
+            var schemaType = containers.TableOf(document.RecordType, Encoding.UTF8.GetBytes(document.Body));
 
             // A type no schema names is one the collector cannot be run over, so the document travels
             // on for the remap-completeness guard to refuse rather than being passed over.
             var atRoot = !Is(document.FormKey, itself)
                          && (!schemas.TryGetValue(schemaType, out var schema)
-                             || Links(document.Body, schema, target));
+                             || Links(parsed.RootElement, schema, target));
 
-            var embedded = EmbeddedLinkers(document, root, target, itself, schemas, release);
+            var embedded = EmbeddedLinkers(containers, schemaType, parsed.RootElement, target, itself, schemas);
             return atRoot || embedded.Count > 0
                 ? new Referencing(plugin, repository, document, schemaType, embedded)
                 : null;
@@ -109,80 +111,37 @@ internal sealed class ReferencerScan(
         }
     }
 
-
-    // Non-null is the record the answer came from, so a container's walk below reads it rather than
-    // parsing the same text twice.
-    private IMajorRecord? SchemaTypeOf(
-        SourceDocument document, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release,
-        out string schemaType)
-    {
-        if (schemas.ContainsKey(document.RecordType))
-        {
-            schemaType = document.RecordType;
-            return null;
-        }
-
-        var root = codec.Deserialize(document.Body, release, document.RecordType);
-        schemaType = RecordTableName.Of(root, schemas);
-        return root;
-    }
-
     // A container's children serialize inline, and the owner's own schema walk never reaches them.
     // Each is asked of its own schema, as ingest asks it.
-    private List<string> EmbeddedLinkers(
-        SourceDocument document, IMajorRecord? parsed, FormKey target, FormKey? itself,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+    private static List<string> EmbeddedLinkers(
+        ContainerDocuments containers, string ownerRecordType, JsonElement root, FormKey target, FormKey? itself,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var linkers = new List<string>();
-        if (!ContainerChildFields.HasChildFields(document.RecordType, release)) return linkers;
-
-        var root = parsed ?? codec.Deserialize(document.Body, release, document.RecordType);
-        foreach (var child in EmbeddedDescendants(root))
+        foreach (var child in containers.EmbeddedDescendantsOf(ownerRecordType, root))
         {
             if (Is(child.FormKey, itself)) continue;
-            if (!schemas.TryGetValue(RecordTableName.Of(child, schemas), out var childSchema)) continue;
-
-            var body = codec.SerializeToText(child, release);
-            if (Links(body, childSchema, target)) linkers.Add(child.FormKey.ToString());
+            if (!schemas.TryGetValue(child.RecordType, out var childSchema)) continue;
+            if (Links(child.Node, childSchema, target)) linkers.Add(child.FormKey);
         }
         return linkers;
     }
 
-    // Every child the document itself carries, at any depth: a worldspace inlines its top cell, which
-    // inlines its placed references.
-    private static IEnumerable<IMajorRecordGetter> EmbeddedDescendants(IMajorRecordGetter record)
-    {
-        var parentType = ContainerChildFields.NormalizedTypeName(record.GetType());
-        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(record))
-        {
-            if (!ContainerChildFields.EmbeddedSlots.Contains((parentType, slotName))) continue;
-            yield return child;
-            foreach (var deeper in EmbeddedDescendants(child)) yield return deeper;
-        }
-    }
-
     // By parsed FormKey, never by text: a document something else edited may spell the same key in a
     // different case, and a string comparison reads that as a different record.
-    private static bool Links(string body, RecordTableSchema schema, FormKey target)
-    {
-        using var document = JsonDocument.Parse(body);
-        return FormReferences.Collect(document.RootElement, schema)
-            .Any(reference => Is(reference.TargetFormKey, target));
-    }
+    private static bool Links(JsonElement root, RecordTableSchema schema, FormKey target) =>
+        FormReferences.Collect(root, schema).Any(reference => Is(reference.TargetFormKey, target));
 
     private static bool Is(string spelled, FormKey? other) =>
         other is { } key && FormKey.TryFactory(spelled, out var parsed) && parsed == key;
 
-    private static bool Is(FormKey formKey, FormKey? other) => other is { } key && formKey == key;
-
-    // An untracked copy is refused rather than rewritten, so only the yes-or-no matters: Mutagen's own
-    // walk answers it without serializing a record.
+    // An untracked copy is refused rather than rewritten, so only the yes-or-no matters: the adapter's
+    // own walk answers it without a document for any record.
     private bool LinksTheTarget(RegisteredCopy copy, FormKey target, FormKey? itself, GameRelease release)
     {
-        ILoadedMod opened;
         try
         {
-            opened = importer.Open(copy, release);
+            return adapter.LinksTo(copy, release, target, itself);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -193,23 +152,5 @@ internal sealed class ReferencerScan(
                 copy.Name, copy.Origin, target);
             return false;
         }
-
-        using var _ = opened;
-
-        // A FormID indexes this copy's own master list, so a copy that does not master the target's
-        // plugin cannot express a link to it — the header answers before the walk starts.
-        if (!Masters(opened.Getter, copy).Contains(target.ModKey.FileName.String)) return false;
-
-        foreach (var record in opened.Getter.EnumerateMajorRecords())
-        {
-            if (Is(record.FormKey, itself)) continue;
-            if (record.EnumerateFormLinks().Any(link => link.FormKey == target)) return true;
-        }
-        return false;
     }
-
-    // The copy itself counts: a plugin's own records are addressable without a master entry.
-    private static HashSet<string> Masters(IModGetter mod, RegisteredCopy copy) =>
-        new(mod.MasterReferences.Select(r => r.Master.FileName.String).Append(copy.Name),
-            StringComparer.OrdinalIgnoreCase);
 }

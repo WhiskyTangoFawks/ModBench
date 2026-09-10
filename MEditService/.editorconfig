@@ -417,11 +417,8 @@ dotnet_diagnostic.RS0030.severity = none
 [MEditService.Tests.ProcessEnvironment/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
-# Transitional: each of these two still holds live objects, and the slice that empties one
-# deletes its section here.
+# Transitional: this one still holds live objects, and the slice that empties it deletes its
+# section here.
 [MEditService.Core/Commands/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Core/Edits/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 

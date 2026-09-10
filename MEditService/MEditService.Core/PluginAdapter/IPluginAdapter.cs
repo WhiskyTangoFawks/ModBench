@@ -12,8 +12,12 @@ public interface ILoadedMod : IDisposable
     IModGetter Getter { get; }
 }
 
-/// <summary>Bytes to a live Mutagen mod and back, in four verbs (ADR-0032 rule 2). The game release
-/// is a parameter of every one of them, so no caller names a game to open or write a plugin.</summary>
+/// <summary>The FormIDs a plugin's own binary already holds: its header document, and the keys
+/// native to it, which is what an allocator may not draw again.</summary>
+public readonly record struct PluginFormIds(string HeaderText, IReadOnlySet<string> Native);
+
+/// <summary>Bytes to a live Mutagen mod and back (ADR-0032 rule 2). The game release is a parameter
+/// of every verb, so no caller names a game to open or write a plugin.</summary>
 public interface IPluginAdapter
 {
     /// <summary>An overlay for reading. <paramref name="strings"/> is optional only for callers with
@@ -28,6 +32,22 @@ public interface IPluginAdapter
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null);
+
+    /// <summary>The same plugin for a caller asking about a handful of records by key rather than
+    /// streaming all of them. Owns the open until the result is disposed.</summary>
+    IPluginRecordLookup OpenRecordLookup(
+        ModPath modPath,
+        GameRelease gameRelease,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas);
+
+    /// <summary>What a plugin's own binary says about the FormIDs it holds: its header as a document
+    /// (ADR-0041), and every FormKey native to it. No record becomes a document.</summary>
+    PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease);
+
+    /// <summary>Whether any record in the plugin links <paramref name="target"/>,
+    /// <paramref name="itself"/> aside. The master list answers first: a plugin that does not master
+    /// the target's origin cannot express a link to it.</summary>
+    bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself);
 
     /// <summary>A deep parse the caller may mutate, for the gestures that re-serialize or re-write a
     /// plugin. Same <paramref name="strings"/> rule as <see cref="OpenForRead"/>.</summary>
