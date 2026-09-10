@@ -392,29 +392,37 @@ The extension owns the editing backend process
   [downloads.md](downloads.md).
 - Flow: extract (or copy) into a staging directory beside `mods/` → detect root type (`Data/`
   subfolder vs `.esp`/meshes at root) and normalise, then land the staged tree by name.
-- **A new target** (`mods/<name>/` absent) is one rename: meta.ini is written into the staged
-  tree first, then the whole tree lands in one filesystem event, so the folder is never seen
+- **The caller states which install this is**, and the folder on disk never decides it: the
+  install command's target argument is either a new mod with a name or an upgrade of a named
+  installed mod. A new mod whose folder is already under `mods/` is **refused**, naming the mod
+  and pointing at the Downloads view's upgrade; an upgrade whose folder is not there is refused
+  too, because MO2, xEdit or the user can have moved it since the choice was made. Neither
+  refusal writes anything.
+- **A new mod** is one rename: meta.ini is written into the staged tree first, then the whole
+  tree lands in one filesystem event, so the folder is never seen
   half-built. The installer writes **no `modlist.txt` line**. The `mods/**` watcher registers
   the new folder as a **disabled** entry, the same path a folder dropped in by MO2 or by hand
   takes (`modmanager/modsReconcile.ts`), so an install is one signal with one owner.
-- **An existing target is an upgrade**, never a refusal: every entry but `.git` is removed,
+- **An upgrade** replaces the folder in place: every entry but `.git` is removed,
   the staged tree's entries move in, and meta.ini is set through its existing-text write —
   every foreign key and every other section survive untouched. Each owned key (game name, mod
   id, version, installation file, `installedFiles`) the download's identity supplies replaces
   the old one; one it does not supply falls back to whatever the old meta.ini already had
   rather than being cleared, so an upgrade with an unknown version never blanks a known one.
   The folder is never renamed away, so its identity, its repository and every watcher armed on
-  it survive the release. The install command takes the target name and the download's
-  identity (mod id, file id, version, archive filename) as arguments and reads nothing from
-  the Instance; it checks the target for `.git` itself, a disk fact. Refusals (staging
-  failure, cross-volume) can only happen before the first entry is removed; past that point
-  nothing is rolled back, and a failure names the folder and what remains.
+  it survive the release. The install command takes the target and the download's identity
+  (mod id, file id, version, archive filename) as arguments and reads nothing from
+  the Instance; it checks the target for `.git` itself, a disk fact. Refusals (collision,
+  missing folder, staging failure, cross-volume) can only happen before the first entry is
+  removed; past that point nothing is rolled back, and a failure names the folder and what
+  remains.
 - meta.ini's `[installedFiles]` entry carries the mod id and file id MO2's own format uses, so
   the next upgrade over the folder can pre-select with certainty. The same identity's version,
   when known, becomes meta.ini's `version` key on both a new install and an upgrade — the tell
   the mEdit half of this PRD reads to pre-select the absorb dialog's default.
-- A colliding name is kept out by the name prompt's own input validation, which says the mod
-  exists and points at the Downloads view — install has no "already exists" refusal of its own.
+- A colliding name is caught twice, in the same words: the name prompt's input validation
+  rejects a name the modlist already carries, and install itself refuses a new mod whose folder
+  is on disk — which is what covers a folder no modlist line mentions.
 - Staging shares a volume with `mods/` so the rename is atomic. A cross-volume staging area
   (`EXDEV`) is **refused**, never quietly downgraded to a recursive copy.
 - FOMOD installers are **detected and flagged for manual setup, not executed**.

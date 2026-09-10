@@ -5,6 +5,7 @@ import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEn
 import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
 import { nexusSlugForGame } from './mo2/gamePaths';
+import type { InstallChoice } from './commands/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { Instance } from './instance';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
@@ -40,9 +41,9 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
 }
 
 interface UpgradePickItem extends vscode.QuickPickItem {
-  /** The chosen mod's own folder name — install's target, bypassing its name prompt. Absent
-   *  for the trailing "Install as a new mod…" row, which runs today's flow unchanged. */
-  target: string | undefined;
+  /** What install is told this is: an upgrade naming the chosen mod's own folder, or the
+   *  trailing "Install as a new mod…" row's new mod, which the name prompt then names. */
+  choice: InstallChoice;
 }
 
 // The file-id match, if one exists, is first in `candidates` (selectUpgradeCandidates' own
@@ -52,19 +53,19 @@ function upgradePickItems(candidates: readonly UpgradeCandidate[]): UpgradePickI
     ...candidates.map((c) => ({
       label: c.version ? `${c.modName} (v${c.version})` : c.modName,
       description: c.fileIdMatch ? 'File ID match' : undefined,
-      target: c.modName,
+      choice: { kind: 'upgrade' as const, name: c.modName },
     })),
-    { label: 'Install as a new mod…', target: undefined },
+    { label: 'Install as a new mod…', choice: { kind: 'new' as const } },
   ];
 }
 
-// Esc leaves `target` unresolved, which the caller reads as "install nothing" — never "install
-// as a new mod", which is its own explicit row.
-async function pickUpgradeTarget(name: string, candidates: readonly UpgradeCandidate[]): Promise<{ target: string | undefined } | undefined> {
+// Esc yields no choice at all, which the caller reads as "install nothing" — never "install as
+// a new mod", which is its own explicit row.
+async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandidate[]): Promise<InstallChoice | undefined> {
   const picked = await vscode.window.showQuickPick(upgradePickItems(candidates), {
     placeHolder: `"${name}" upgrades an installed mod — choose which one, or install it as a new mod`,
   });
-  return picked && { target: picked.target };
+  return picked?.choice;
 }
 
 // Pre-supplying the archive path keeps the install command's file-picker from appearing. The
@@ -79,15 +80,15 @@ async function installArchive(
     const metaText = (await readMetaText(metaPath)) ?? '';
     const { modID, fileID, version } = parseDownloadMeta(metaText);
     const candidates = selectUpgradeCandidates(instance.value, { modID, fileID });
-    let target: string | undefined;
+    let choice: InstallChoice = { kind: 'new' };
     if (candidates.length > 0) {
-      const choice = await pickUpgradeTarget(name, candidates);
-      if (!choice) return; // Esc: install nothing
-      target = choice.target;
+      const picked = await pickUpgradeChoice(name, candidates);
+      if (!picked) return; // Esc: install nothing
+      choice = picked;
     }
     installed = (await vscode.commands.executeCommand<boolean | undefined>(
       'modbench.modList.installFromArchive',
-      archivePath, modID, fileID, version, target,
+      archivePath, modID, fileID, version, choice,
     )) ?? false;
     if (!installed) return;
     await writeFile(metaPath, setInstalledInText(metaText), 'utf8');
