@@ -19,7 +19,7 @@ export default tseslint.config(
         },
     },
 
-    // Mod Management never calls the backend (src/modmanager/CONTEXT.md).
+    // Mod Management never calls the backend (CONTEXT-MAP.md).
     {
         files: ['src/modmanager/**/*.ts'],
         rules: {
