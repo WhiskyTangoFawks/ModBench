@@ -220,8 +220,9 @@ public sealed class ModFolderWatcher : IDisposable
         return mod;
     }
 
-    // Called under _gate. A ref move, a document under a registered plugin's source root, or a
-    // load-order plugin's own binary; everything else is dropped (a future ticket classifies it).
+    // Called under _gate. A ref move, a document under a registered plugin's source root, a
+    // load-order plugin's own binary, or any other path, which makes the mod a candidate for the
+    // classifier when it settles.
     private void Observe(ModEntry mod, string fullPath)
     {
         lock (_gate)
