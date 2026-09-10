@@ -215,11 +215,9 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
             ?? throw new InvalidOperationException(
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own placement named it.");
 
-        var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
-            destination.Plugin, worldspaceAncestor, placement, cellRecord, source.Record(sourceCell), release);
-        SpatialContainerMint.MintAsync(
-                syntheticMod, destination.ModFolder, destination.Plugin.Name, existingWorldspaceDirectory)
-            .GetAwaiter().GetResult();
+        SpatialContainerMint.Mint(
+            codec, destination, release, placement, worldspaceAncestor, sourceWorldspace.RecordType,
+            cellRecord, sourceCell.RecordType, source.Record(sourceCell), existingWorldspaceDirectory);
 
         return RecordEditResult.Success();
     }
