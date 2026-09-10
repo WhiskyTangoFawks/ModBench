@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;

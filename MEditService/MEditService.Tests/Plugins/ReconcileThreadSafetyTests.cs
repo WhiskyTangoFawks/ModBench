@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -17,7 +18,7 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(factory);
+        return new IndexProjector(MutagenPluginAdapter.Instance, factory);
     }
 
     private IndexProjector MakeLoadedManager()

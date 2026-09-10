@@ -1,1 +1,0 @@
-MEditService.Core/Edits/PluginWriter.cs: writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(

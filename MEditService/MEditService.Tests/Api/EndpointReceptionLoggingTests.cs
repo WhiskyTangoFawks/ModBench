@@ -1,6 +1,7 @@
 using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -39,7 +40,7 @@ public sealed class EndpointReceptionLoggingTests
         {
             var req = new LoadOrderRequest([], tempDir, tempDir, "Fallout4");
 
-            using var index = new IndexProjector(new RefusingIndexFactory());
+            using var index = new IndexProjector(MutagenPluginAdapter.Instance, new RefusingIndexFactory());
             LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ModFolderWatcher(), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
@@ -58,7 +59,7 @@ public sealed class EndpointReceptionLoggingTests
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var factory = new RefusingIndexFactory();
-        using var index = new IndexProjector(factory);
+        using var index = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         var req = new LoadOrderRequest([], "Z:\\does-not-exist", "Z:\\does-not-exist", "Fallout4");
 
         var result = LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ModFolderWatcher(), loggerFactory);

@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -35,7 +36,7 @@ public sealed class LoadOrderLocalizedTests
             File.WriteAllBytes(Path.Combine(data.DataFolder, "UnrelatedMod - Main.ba2"), []);
 
             var reflector = SharedSchemaReflector.Instance;
-            using var manager = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             // Asserted directly, not just implied by GetDocument coming back null below: a

@@ -21,7 +21,7 @@ public sealed class GameNamespaceScanTests
     [
         "MEditService.Core/Serialization",
         "MEditService.Core/Schema",
-        "MEditService.Core/Plugins",
+        "MEditService.Core/PluginAdapter",
     ];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/game-namespace-allowlist.txt";

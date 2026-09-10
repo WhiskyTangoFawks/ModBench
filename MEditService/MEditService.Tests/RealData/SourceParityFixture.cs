@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -38,6 +39,7 @@ public sealed class SourceParityFixture : IDisposable
     private IndexProjector NewLoadOrder(string pluginPath)
     {
         var index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         index.Reconcile(
             _gameDirectory,

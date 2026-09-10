@@ -1,5 +1,6 @@
 using DuckDB.NET.Data;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -17,7 +18,7 @@ public sealed class ReconcileScatteredTests
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(factory);
+        return new IndexProjector(MutagenPluginAdapter.Instance, factory);
     }
 
     [Fact]
@@ -92,7 +93,7 @@ public sealed class ReconcileScatteredTests
         var reflector = SharedSchemaReflector.Instance;
         var innerFactory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var factory = new ThrowingOnIndexRepositoryFactory(innerFactory, "Bad.esp");
-        using var manager = new IndexProjector(factory);
+        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
 
         manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 

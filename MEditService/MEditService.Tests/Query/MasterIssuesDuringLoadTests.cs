@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -32,7 +33,7 @@ public sealed class MasterIssuesDuringLoadTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
-        using var manager = new IndexProjector(gate);
+        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, gate);
         var svc = new RecordQueryService(
             manager, reflector, new ConflictClassifier());
 
@@ -65,6 +66,7 @@ public sealed class MasterIssuesDuringLoadTests
             .Build();
         var reflector = SharedSchemaReflector.Instance;
         using var manager = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(

@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -33,6 +34,7 @@ public sealed class ReconcileLoggingTests
         using var _ = loggerFactory;
         var reflector = SharedSchemaReflector.Instance;
         using var index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), loggerFactory.CreateLogger<IndexProjector>());
 
         index.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);

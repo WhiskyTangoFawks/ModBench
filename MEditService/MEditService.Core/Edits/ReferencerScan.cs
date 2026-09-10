@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -14,7 +15,7 @@ namespace MEditService.Core.Edits;
 /// invariant 7): a tracked copy answers from its working tree through the collector, an untracked
 /// one from its binary's own links.</summary>
 internal sealed class ReferencerScan(
-    LoadOrder loadOrder, IModImporter importer, RecordTextCodec codec, SchemaReflector schemaReflector,
+    LoadOrder loadOrder, IPluginAdapter importer, RecordTextCodec codec, SchemaReflector schemaReflector,
     ILogger logger)
 {
     /// <summary>One tracked document that links the target: the record at its root, its schema table,

@@ -1,6 +1,6 @@
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Plugins;
+namespace MEditService.Core.PluginAdapter;
 
 /// <summary>The header flag is authoritative and the extension only a secondary path, as in
 /// Mutagen's own <c>IModFlagsGetter</c>: the common light plugin is a header-flagged esp, and an

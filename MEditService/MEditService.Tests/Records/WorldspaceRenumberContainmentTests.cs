@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -52,6 +53,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         _extCellFormKey = extCell.FormKey.ToString();
 
         _index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         _index.Reconcile(
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
@@ -130,6 +132,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             .OrderBy(c => c.FormKey).ToList();
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             _gameDirectory,

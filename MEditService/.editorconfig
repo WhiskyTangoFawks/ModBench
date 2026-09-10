@@ -407,7 +407,7 @@ dotnet_diagnostic.RS0030.severity = none
 dotnet_diagnostic.RS0030.severity = none
 
 # The Plugin adapter — bytes to a Mutagen mod and back.
-[MEditService.Core/Plugins/**.cs]
+[MEditService.Core/PluginAdapter/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
 # Permanent: the fixture builder constructs plugins with live objects by design.

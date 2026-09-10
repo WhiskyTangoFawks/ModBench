@@ -1,5 +1,6 @@
 using MEditService.Api;
 using MEditService.Bridge;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -20,7 +21,7 @@ public sealed class SourceChangeApplierWriteGateTests
         var entries = new List<LogEntry>();
         // The Index is never reached: the gate refuses before the first plugin in the batch is
         // projected, which is the whole of what this asserts.
-        using var index = new IndexProjector(new RefusingIndexFactory());
+        using var index = new IndexProjector(MutagenPluginAdapter.Instance, new RefusingIndexFactory());
         var sourceChanges = new SourceChangeApplier(
             index, gate, new ModFolderWatcher(), new InMemoryNotificationPublisher(),
             new CollectingLogger(entries));

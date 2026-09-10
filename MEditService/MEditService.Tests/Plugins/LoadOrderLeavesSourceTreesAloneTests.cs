@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -35,7 +36,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
 
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(factory);
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
             IndexProjector index = manager;
 
             index.Reconcile(

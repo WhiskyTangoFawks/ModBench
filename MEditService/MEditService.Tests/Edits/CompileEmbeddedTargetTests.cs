@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
@@ -136,7 +137,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         var repository = SourceRepository.Open(_targetFolder, GameRelease.Fallout4)!;
 
         Assert.True(repository.CarriesEmbedded(target, _embeddedTarget.ToString()));
-        using var resolver = new FormLinkResolver(_loadOrder, new DefaultModImporter(), SharedSchemaReflector.Instance);
+        using var resolver = new FormLinkResolver(_loadOrder, new MutagenPluginAdapter(), SharedSchemaReflector.Instance);
         Assert.Equal(new RecordLookupEntry("refr", "EmbeddedRef"), resolver.Resolve(_embeddedTarget.ToString()));
     }
 }

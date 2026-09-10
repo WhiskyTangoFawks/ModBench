@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
