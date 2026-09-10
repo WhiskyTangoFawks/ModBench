@@ -2,8 +2,15 @@
 // meaning, and the bottom of the file is winning-most. Mutations splice the raw
 // string, so EOLs, BOM and unmodelled lines survive untouched.
 
-import type { PluginEntry } from '../model';
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
+
+/** A single plugins.txt line (a plugin file), in Plugin load order. The `*`
+ *  prefix (MO2's enabled marker) is modelled as `enabled`; the marker itself is
+ *  never surfaced in `name`. Distinct from a Mod: plugins.txt has no separators. */
+export interface PluginEntry {
+  name: string;
+  enabled: boolean;
+}
 
 // MO2 never writes padded lines, but a hand-edited plugins.txt can, so reads trim.
 // Writes cannot use this: it collapses away the marker's real byte offset.

@@ -2,8 +2,30 @@
 // suffix marks a separator, and `*` (DLC/CC) and `#` lines are never surfaced.
 // The top of the file is the winning end. Mutations splice the raw string.
 
-import type { ModlistEntry } from '../model';
+import type { InstalledFileId } from './metaIni';
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
+
+export interface Mod {
+  kind: 'mod';
+  name: string;
+  enabled: boolean;
+  /** From mods/<name>/meta.ini; undefined when absent or empty. */
+  version?: string;
+  nexusId?: string;
+  archiveFilename?: string;
+  /** meta.ini's `[installedFiles]` array, in index order; undefined when the
+   *  section is absent — the upgrade pick's exact-file match. */
+  installedFiles?: readonly InstalledFileId[];
+}
+
+export interface Separator {
+  kind: 'separator';
+  /** Display name, with the trailing `_separator` marker stripped. */
+  name: string;
+  enabled: boolean;
+}
+
+export type ModlistEntry = Mod | Separator;
 
 const SEPARATOR_SUFFIX = '_separator';
 
