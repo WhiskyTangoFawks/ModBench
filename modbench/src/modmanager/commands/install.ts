@@ -1,13 +1,26 @@
-// A new target is one rename (ADR-0047 point 6); an existing target is an upgrade, never
-// renamed away, so its identity and every watcher armed on it survive the release.
+// A new target is one rename (ADR-0047 point 6); an upgrade is never renamed away, so its
+// identity and every watcher armed on it survive the release.
 
 import { access, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile, cp } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { detectRoot } from '../install/detectRoot';
 import { extractArchive, type Runner } from '../install/extractArchive';
 import type { InstallMeta } from '../model';
+import { modNameCollisionRefusal } from '../modNameCollision';
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
 import { readGameName } from '../mo2/modOrganizerIni';
+
+/** Which install this is, settled by the caller: the folder on disk is checked against this
+ *  claim, never consulted to decide it. */
+export type InstallTarget =
+  | { kind: 'new'; name: string }
+  | { kind: 'upgrade'; name: string };
+
+/** The same choice before a new mod has a name — what the Downloads pick yields, which the
+ *  install command's name prompt completes. */
+export type InstallChoice =
+  | { kind: 'new' }
+  | { kind: 'upgrade'; name: string };
 
 /** `isFomod` reports a scripted installer whose files landed as-is: the caller warns, the
  *  install still stands. */
@@ -107,17 +120,29 @@ async function landUpgrade(
   await writeFile(join(modDir, 'meta.ini'), setOwnedKeysInText(oldMetaText, keys));
 }
 
+// The folder can appear or vanish between the caller's decision and this check — MO2, xEdit or
+// the user own it too — so a claim that disagrees with disk is refused, never reinterpreted.
+function mismatchRefusal(target: InstallTarget, targetExists: boolean): string | undefined {
+  if (target.kind === 'new' && targetExists) return modNameCollisionRefusal(target.name);
+  if (target.kind === 'upgrade' && !targetExists) {
+    return `Cannot upgrade "${target.name}": there is no folder by that name under mods/.`;
+  }
+  return undefined;
+}
+
 function landStagedMod(
-  instanceRoot: string, name: string, stagedRoot: string, meta: InstallMeta, isFomod: boolean,
+  instanceRoot: string, target: InstallTarget, stagedRoot: string, meta: InstallMeta, isFomod: boolean,
   renameFn: (from: string, to: string) => Promise<void>,
 ): Promise<InstallCommandResult> {
+  const { name } = target;
   return withInstallLock(instanceRoot, async (): Promise<InstallCommandResult> => {
     const modsDir = join(instanceRoot, 'mods');
     const modDir = join(modsDir, name);
-    const targetExists = await exists(modDir);
+    const refusal = mismatchRefusal(target, await exists(modDir));
+    if (refusal) return { applied: false, refusal };
     try {
       const gameName = readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'));
-      if (!targetExists) {
+      if (target.kind === 'new') {
         await landNewMod(modsDir, modDir, stagedRoot, { gameName, ...meta }, renameFn);
         return { applied: true, wrote: true, isFomod };
       }
@@ -154,14 +179,14 @@ function metaFor(base: InstallMeta, opts: InstallOptions): InstallMeta {
 /** Extracts into staging and moves the detected mod root in. `installationFile` records which
  *  download it came from, which is what marks that download installed. */
 export async function installFromArchive(
-  instanceRoot: string, name: string, archivePath: string, opts: InstallOptions = {},
+  instanceRoot: string, target: InstallTarget, archivePath: string, opts: InstallOptions = {},
 ): Promise<InstallCommandResult> {
   try {
     return await withStaging(instanceRoot, async (staging) => {
       await extractArchive(archivePath, staging, opts.run);
       const { sourceDir, isFomod } = await detectRoot(staging);
       return landStagedMod(
-        instanceRoot, name, sourceDir, metaFor({ installationFile: basename(archivePath) }, opts), isFomod,
+        instanceRoot, target, sourceDir, metaFor({ installationFile: basename(archivePath) }, opts), isFomod,
         opts.renameFn ?? rename);
     });
   } catch (err) {
@@ -172,13 +197,13 @@ export async function installFromArchive(
 /** Copies the folder into staging first: the source belongs to the user, so it is never the
  *  thing renamed away. */
 export async function installFromFolder(
-  instanceRoot: string, name: string, folderPath: string, opts: InstallOptions = {},
+  instanceRoot: string, target: InstallTarget, folderPath: string, opts: InstallOptions = {},
 ): Promise<InstallCommandResult> {
   try {
     return await withStaging(instanceRoot, async (staging) => {
       const { sourceDir, isFomod } = await detectRoot(folderPath);
       await cp(sourceDir, staging, { recursive: true });
-      return landStagedMod(instanceRoot, name, staging, metaFor({}, opts), isFomod, opts.renameFn ?? rename);
+      return landStagedMod(instanceRoot, target, staging, metaFor({}, opts), isFomod, opts.renameFn ?? rename);
     });
   } catch (err) {
     return { applied: false, refusal: err instanceof Error ? err.message : String(err) };

@@ -48,7 +48,7 @@ describe('registerModsReconcile', () => {
   // Rival: drop the watcher, or its registration half. Nothing else writes the line, so the
   // install stays unlisted forever.
   it('registers the folder an install dropped in, off the mods/ event alone', async () => {
-    const outcome = await installFromFolder(root, MOD, sourceFolder);
+    const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder);
     expect(outcome).toMatchObject({ applied: true });
     expect(await modlistText(root)).not.toContain(MOD); // the installer wrote no line
 

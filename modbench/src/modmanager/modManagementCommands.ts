@@ -22,7 +22,7 @@ import {
   uninstallMod,
 } from './commands/modlist';
 import { deployMods, purgeMods, type DeploymentCommandResult } from './commands/deployment';
-import { installFromArchive, installFromFolder } from './commands/install';
+import { installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from './commands/install';
 import { listProfiles, switchProfile } from './commands/profile';
 import { collidingModName } from './modNameCollision';
 
@@ -86,9 +86,17 @@ export interface ModInstallDeps {
 export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposable[] {
   const { instanceRoot, instance, runModAction, promptModName, warnIfFomod } = deps;
   const validateName = (name: string) => collidingModName(instance, name);
+  // An upgrade arrives already confirmed from the Downloads pick, so only a new mod reaches
+  // the name prompt.
+  const resolveTarget = async (choice: InstallChoice, defaultName: string): Promise<InstallTarget | undefined> => {
+    if (choice.kind === 'upgrade') return choice;
+    const name = await promptModName(defaultName, validateName);
+    return name ? { kind: 'new', name } : undefined;
+  };
   return [
       vscode.commands.registerCommand('modbench.modList.installFromArchive', async (
-        archivePath?: string, modID?: string, fileID?: string, version?: string, target?: string,
+        archivePath?: string, modID?: string, fileID?: string, version?: string,
+        choice: InstallChoice = { kind: 'new' },
       ): Promise<boolean> => {
         let archive = archivePath;
         if (!archive) {
@@ -101,16 +109,13 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         }
         if (!archive) return false;
         const resolvedArchive = archive;
-        // A caller-supplied target is an upgrade already chosen (the Downloads pick): the name
-        // prompt, and its collision refusal that exists only to redirect fresh installs there,
-        // never run.
-        const name = target ?? await promptModName(path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''), validateName);
-        if (!name) return false;
+        const target = await resolveTarget(choice, path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''));
+        if (!target) return false;
         let succeeded = false;
-        await runModAction('installFromArchive', `Failed to install "${name}".`, async () => {
-          const outcome = await installFromArchive(instanceRoot, name, resolvedArchive, { modID, fileID, version });
+        await runModAction('installFromArchive', `Failed to install "${target.name}".`, async () => {
+          const outcome = await installFromArchive(instanceRoot, target, resolvedArchive, { modID, fileID, version });
           if (!outcome.applied) throw new Error(outcome.refusal);
-          warnIfFomod(name, outcome.isFomod);
+          warnIfFomod(target.name, outcome.isFomod);
           succeeded = true;
         });
         return succeeded;
@@ -124,12 +129,12 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         });
         const folder = picked?.[0]?.fsPath;
         if (!folder) return;
-        const name = await promptModName(path.basename(folder), validateName);
-        if (!name) return;
-        await runModAction('installFromFolder', `Failed to install "${name}".`, async () => {
-          const outcome = await installFromFolder(instanceRoot, name, folder);
+        const target = await resolveTarget({ kind: 'new' }, path.basename(folder));
+        if (!target) return;
+        await runModAction('installFromFolder', `Failed to install "${target.name}".`, async () => {
+          const outcome = await installFromFolder(instanceRoot, target, folder);
           if (!outcome.applied) throw new Error(outcome.refusal);
-          warnIfFomod(name, outcome.isFomod);
+          warnIfFomod(target.name, outcome.isFomod);
         });
       }),
   ];
