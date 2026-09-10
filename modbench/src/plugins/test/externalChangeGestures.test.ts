@@ -121,6 +121,17 @@ describe('handleUnanswered', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
+  // A collision rides a 200 as `succeeded: false` — `WriteRefused` above never sees this case.
+  it('a typed Keep refusal shows its own message', async () => {
+    const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'x' }) };
+    const deps = makeDispatchDeps(client, APPLY_BUTTON);
+
+    await handleUnanswered(deps, [unanswered()]);
+
+    expect(deps.showError).toHaveBeenCalledWith('Could not keep "ModA" as your own edit — x');
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
   it('a landed Absorb with a clean rebase refreshes silently', async () => {
     const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({
@@ -181,7 +192,7 @@ describe('handleUnanswered', () => {
     await handleUnanswered(deps, [unanswered()]);
 
     expect(deps.showError).toHaveBeenCalledWith(
-      'mEdit: Could not absorb the upstream update for "ModA" — could not be parsed',
+      'Could not absorb the upstream update for "ModA" — could not be parsed',
     );
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });

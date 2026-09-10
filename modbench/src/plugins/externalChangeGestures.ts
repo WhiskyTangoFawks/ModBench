@@ -22,12 +22,25 @@ function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTre
   deps.refreshMatchingPlugins();
 }
 
+// A typed refusal rides a 200 (`succeeded: false`), which each dispatcher's own WriteRefused
+// check never sees — unsurfaced it leaves the mod unchanged and still read-only with nothing
+// saying why (ADR-0026).
+function reportTypedRefusal(
+  deps: Pick<ExternalChangeCoordinatorDeps, 'log' | 'showError'>,
+  callName: string, origin: string, summary: string, refusalReason: string | null | undefined,
+): void {
+  deps.log?.(`[externalChangeGestures] ${callName}(${origin}) refused: ${refusalReason ?? ''}`);
+  deps.showError(`${summary} — ${refusalReason ?? ''}`);
+}
+
 async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {
   const result = await deps.client.keepAsMyEdit(origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
-  // A refused Keep (a same-record or already-staged-tracked-file collision) changed nothing —
-  // no reason to refresh.
-  if (result?.succeeded) refreshAfterWrite(deps);
+  if (!result?.succeeded) {
+    if (result) reportTypedRefusal(deps, 'keepAsMyEdit', origin, `Could not keep "${origin}" as your own edit`, result.refusalReason);
+    return;
+  }
+  refreshAfterWrite(deps);
 }
 
 // Absorb's own rebase, run server-side in the same call: clean is silent, a refusal shows the
@@ -46,12 +59,7 @@ async function dispatchAbsorb(deps: ExternalChangeCoordinatorDeps, origin: strin
   const result = await deps.client.absorbUpstreamUpdate(origin);
   if (result && isRefused(result)) { deps.showError(result.message); return; }
   if (!result?.succeeded) {
-    // A refusal rides a 200, which the WriteRefused check above never sees — unsurfaced it
-    // leaves the mod unabsorbed and still read-only with nothing saying why (ADR-0026).
-    if (result) {
-      deps.log?.(`[externalChangeGestures] absorbUpstreamUpdate(${origin}) refused: ${result.refusalReason ?? ''}`);
-      deps.showError(`mEdit: Could not absorb the upstream update for "${origin}" — ${result.refusalReason ?? ''}`);
-    }
+    if (result) reportTypedRefusal(deps, 'absorbUpstreamUpdate', origin, `Could not absorb the upstream update for "${origin}"`, result.refusalReason);
     return;
   }
   if (result.rebase) await applyRebaseOutcome(deps, origin, result.rebase);
