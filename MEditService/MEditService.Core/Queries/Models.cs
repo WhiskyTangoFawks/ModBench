@@ -1,10 +1,7 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
-using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Source;
 
 namespace MEditService.Core.Queries;
 
@@ -172,84 +169,6 @@ public record CompareResult(
 // the failure prefix from the page it has instead of walking children.
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure);
 
-public record FilterRequest(string Sql);
-public record FilterResponse(string? Sql);
-
-/// <summary>ADR-0046: the answer to "did the projection reach at least N?" — Sequence is the value
-/// observed at the moment of that answer, not necessarily equal to the awaited bound.</summary>
-public record SequenceAwaitResponse(bool Reached, long Sequence);
-
-// CrashRepairOffers: tracked plugins found stale/missing against Modbench's own record, surfaced
-// the same structured way Failures is (ADR-0026), never a second endpoint or poller: either
-// condition can only appear through a compile this process drives or a restart.
-public record LoadOrderResponse(
-    string Status, IReadOnlyList<PluginLoadFailure> Failures, IReadOnlyList<CrashRepairOffer> CrashRepairOffers);
-// ADR-0044: Mod Management's snapshot. InstanceRoot (ADR-0001) must be the MO2 instance rather
-// than anything wider, because Origin is a mod folder name unique only within one.
-public record LoadOrderRequest(
-    IReadOnlyList<LoadOrderPlugin> Plugins, string GameDirectory, string InstanceRoot, string GameRelease = "Fallout4");
-// Slot is null when no plugins.txt line names it. Enabled and Winning are nullable only so an
-// omitted field is detectable: a plain bool would bind a missing property to false, quietly
-// making every copy non-participating.
-public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
-
-// ADR-0046: the Refresh rebuild's own request — same instance-keying reasoning as LoadOrderRequest.
-public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
-
 // Origin (ADR-0036): additive alongside Plugin; without it two same-filename sources referencing
 // the same target are indistinguishable.
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);
-
-public record HealthResponse(string Status);
-
-// ADR-0041: one edit on one plugin's copy, as the one envelope (ADR-0032). Value is a raw
-// JsonElement: a value is whatever its schema says, so typing it here would re-declare the
-// schema on the wire.
-public record RecordEditRequest(
-    string Plugin,
-    string Origin,
-    string Op,
-    IReadOnlyList<PathHop> Path,
-    JsonElement? Value = null);
-
-/// <summary>The success shape for an applied edit. A refusal is ProblemDetails carrying refusal
-/// and path extensions instead, so an HTTP client's ordinary success check is also the correct
-/// check (ADR-0026).</summary>
-public record RecordEditResponse(bool Applied, string FormKey, string Path);
-
-// The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
-// identity, refusals as ProblemDetails carrying the same `refusal` extension) Edit already
-// established.
-
-/// <summary><see cref="FormKey"/> null means auto-allocate the next free local FormID (both-refs
-/// collision-safe); non-null is xEdit's typed-FormID path.</summary>
-public record RecordCreateRequest(string Origin, string RecordType, string? EditorId, string? FormKey);
-
-public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
-
-public record RecordDeleteRequest(string Plugin, string Origin);
-
-public record RecordDeleteResponse(bool Applied, string FormKey);
-
-/// <summary><see cref="NewFormKey"/> null means auto-allocate; non-null is xEdit's typed-FormID
-/// renumber path.</summary>
-public record RecordRenumberRequest(string Plugin, string Origin, string? NewFormKey);
-
-public record RecordRenumberResponse(bool Applied, string OldFormKey, string NewFormKey);
-
-/// <summary>The Renumber gesture's FormID input box's suggested default (<c>PeekNextFreeFormKeyHandler.PeekNextFreeFormKey</c>).</summary>
-public record NextFreeFormKeyResponse(string FormKey);
-
-// ADR-0041: xEdit's "Copy as Override Into…" / "Copy as New Record Into…". The route's {formKey}
-// names the record copied; both plugins travel as ADR-0036 compound identities.
-
-public record RecordCopyAsOverrideRequest(string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin);
-
-public record RecordCopyAsOverrideResponse(bool Applied, string FormKey);
-
-/// <summary><see cref="RequestedFormKey"/> null means auto-allocate the next free local FormID
-/// (both-refs collision-safe); non-null is xEdit's typed-FormID path.</summary>
-public record RecordCopyAsNewRecordRequest(
-    string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin, string? RequestedFormKey);
-
-public record RecordCopyAsNewRecordResponse(bool Applied, string SourceFormKey, string NewFormKey);
