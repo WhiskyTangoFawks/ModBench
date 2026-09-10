@@ -1,3 +1,4 @@
+using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -46,6 +47,36 @@ internal static class ContainerDocumentEdits
         ContainerChildFields.TransplantChildSlots(found.Child, replacement);
         ContainerChildFields.ReplaceInSlot(found.Parent, found.SlotName, found.SlotIndex, replacement);
         return codec.SerializeToText(owner, release);
+    }
+
+    /// <summary>The document at <paramref name="destinationPath"/> with its own fields replaced by
+    /// <paramref name="replacementText"/>'s, keeping the children it already carries. Read from the
+    /// path, so a container whose children are files of their own arrives whole.</summary>
+    internal static NamedDocument WithOwnFieldsReplaced(
+        RecordTextCodec codec, string destinationPath, string? destinationRecordType,
+        string replacementText, string? replacementRecordType, GameRelease release)
+    {
+        var replacement = codec.Deserialize(replacementText, release, replacementRecordType);
+        ContainerChildFields.ClearAllChildSlots(replacement);
+
+        var destination = codec.DeserializeAsync(destinationPath, release, destinationRecordType)
+            .GetAwaiter().GetResult();
+        ContainerChildFields.TransplantChildSlots(destination, replacement);
+
+        return new NamedDocument(codec.SerializeToText(replacement, release), replacement.EditorID);
+    }
+
+    /// <summary>The child <paramref name="formKey"/> names inside <paramref name="ownerText"/>, as
+    /// its own document under the schema table it belongs to. Null when the text carries no such
+    /// child.</summary>
+    internal static (string RecordType, string Text)? EmbeddedChildIn(
+        RecordTextCodec codec, string ownerText, GameRelease release, string? ownerRecordType,
+        string formKey, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        var owner = codec.Deserialize(ownerText, release, ownerRecordType);
+        return ContainerChildFields.FindEmbeddedChild(owner, formKey) is { } found
+            ? (RecordTableName.Of(found.Child, schemas), codec.SerializeToText(found.Child, release))
+            : null;
     }
 
     private static IMajorRecordGetter? ContainerIn(IMajorRecord owner, string containerFormKey) =>

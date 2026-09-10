@@ -60,6 +60,14 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     public IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
 
+    public async Task CreateAndWriteAsync(
+        ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster)
+    {
+        var plugin = CreateEmpty(modKey, gameRelease);
+        if (smallMaster) plugin.IsSmallMaster = true;
+        await WriteAsync(plugin, destinationPath);
+    }
+
     public async Task WriteAsync(
         IMod plugin,
         string destinationPath,

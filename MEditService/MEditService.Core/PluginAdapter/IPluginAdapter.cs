@@ -57,6 +57,11 @@ public interface IPluginAdapter
     /// header.</summary>
     IMod CreateEmpty(ModKey modKey, GameRelease gameRelease);
 
+    /// <summary>A brand-new plugin at <paramref name="destinationPath"/>, header and nothing else,
+    /// so no caller holds the empty mod between making it and laying it down.
+    /// <paramref name="smallMaster"/> adds the removable ESL header flag.</summary>
+    Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster);
+
     /// <summary>Bytes at <paramref name="destinationPath"/>, with neither backup nor rename — what
     /// <see cref="PluginWriter"/> adds to replace a plugin in place (ADR-0008). Null takes Mutagen's
     /// own master order (ADR-0038) and strings folder.</summary>

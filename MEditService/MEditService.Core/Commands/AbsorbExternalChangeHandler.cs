@@ -3,8 +3,6 @@ using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
@@ -39,13 +37,13 @@ public sealed class AbsorbExternalChangeHandler
         {
             // A fresh deep parse of the binary now on disk, never a cached load-order view — that stale
             // view is what this method reacts to. Absorb only runs against a tracked plugin, so the
-            // mod-folder-only ForRead overload applies.
-            IMod deepParsed;
+            // mod-folder-only strings overload applies.
             try
             {
-                deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
-                    new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
-                    PluginStrings.In(modFolder));
+                allPristineFiles.AddRange(
+                    PluginTrees.ReadPristineFilesAsync(
+                        plugin.Name, plugin.Path, loadOrder.GameRelease, PluginStrings.In(modFolder))
+                        .GetAwaiter().GetResult());
             }
             catch (Exception ex)
             {
@@ -55,8 +53,6 @@ public sealed class AbsorbExternalChangeHandler
                     $"{plugin.Name} could not be parsed from its own binary: {PluginDiagnosis.FromParseException(ex).Describe()}");
             }
 
-            allPristineFiles.AddRange(
-                PluginTrees.SerializeToPristineFiles(deepParsed, plugin.Name).GetAwaiter().GetResult());
             binarySha256ByPlugin[plugin.Name] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(plugin.Path)));
         }
 

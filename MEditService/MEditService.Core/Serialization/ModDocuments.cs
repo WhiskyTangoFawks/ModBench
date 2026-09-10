@@ -27,6 +27,22 @@ internal static class ModDocuments
     internal static IPluginRecordLookup LookupOf(
         IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
         new ModRecordLookup(mod, schemas, open);
+
+    /// <summary>Every record the mod holds as its own document, under the identity a source tree
+    /// files it by. Enumerated as the mod enumerates, so a record no schema table names still
+    /// arrives.</summary>
+    internal static IEnumerable<(RecordIdentity Identity, string Text)> IdentifiedRecordsOf(
+        IModGetter mod, RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        foreach (var record in mod.EnumerateMajorRecords())
+        {
+            yield return (
+                new RecordIdentity(
+                    record.FormKey.ToString(), RecordTableName.Of(record, schemas), record.EditorID),
+                Encoding.UTF8.GetString(
+                    codec.SerializeToBytesAsync(record, mod.GameRelease).GetAwaiter().GetResult()));
+        }
+    }
 }
 
 // Large enough to keep eight cores busy on cheap records; small enough that a batch of the largest

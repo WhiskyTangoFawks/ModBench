@@ -270,9 +270,10 @@ public sealed class ArchitectureTests
     [Fact]
     public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToBackUp()
     {
-        // PluginWriter backs the existing binary up first. The create gesture writes a brand-new
-        // file and PluginTrees a scratch copy, so neither has an existing binary to back up.
-        string[] writers = ["PluginWriter.cs", "CreatePluginHandler.cs", "PluginTrees.cs"];
+        // PluginWriter backs the existing binary up first, and PluginTrees writes a scratch copy.
+        // The create gesture's whole write is the adapter's own create verb, which is why no handler
+        // is named here.
+        string[] writers = ["PluginWriter.cs", "PluginTrees.cs"];
 
         // Both needles: ".WriteAsync(" alone is an HTTP response or an output stream, and
         // "PluginAdapter" is the stem of the namespace, the interface and the implementation alike,
@@ -283,8 +284,8 @@ public sealed class ArchitectureTests
         var offenders = Unallowed(writes, writers).ToList();
         Assert.True(offenders.Count == 0,
             "ADR-0008: a plugin binary is backed up before it is written, and the adapter's write verb makes "
-            + "no backup. Only PluginWriter (which backs up first) and the create and Track gestures (which "
-            + "write a file with no existing binary) may call it. It is called in:\n" + string.Join("\n", offenders));
+            + "no backup. Only PluginWriter (which backs up first) and PluginTrees (which writes a scratch "
+            + "copy) may call it. It is called in:\n" + string.Join("\n", offenders));
 
         var dead = DeadAllowances(writers, writes).ToList();
         Assert.True(dead.Count == 0,

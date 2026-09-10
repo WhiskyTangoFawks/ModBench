@@ -395,7 +395,7 @@ dotnet_naming_style.s_camelcase.capitalization = camel_case
 
 # ADR-0032 rule 2: a live Mutagen object reaches nothing but the codec and the Plugin adapter.
 # RS0030 reads BannedSymbols.txt beside this file, and the sections below are the whole exemption
-# list, pinned by BannedApiScopeTests and shrinking to codec, adapter and tests.
+# list — codec, adapter and tests — pinned by BannedApiScopeTests.
 [*.cs]
 dotnet_diagnostic.RS0030.severity = error
 
@@ -415,10 +415,5 @@ dotnet_diagnostic.RS0030.severity = none
 dotnet_diagnostic.RS0030.severity = none
 
 [MEditService.Tests.ProcessEnvironment/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-# Transitional: this one still holds live objects, and the slice that empties it deletes its
-# section here.
-[MEditService.Core/Commands/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
