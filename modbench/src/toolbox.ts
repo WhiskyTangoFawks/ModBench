@@ -24,7 +24,7 @@ import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './modmanager/commands/plugins';
 import { reconcileMods } from './modmanager/commands/modlist';
-import { registerModsReconcile } from './modmanager/modsReconcile';
+import { registerModsReconcile } from './modmanager/modsReconcileTrigger';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
@@ -446,9 +446,9 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   ownAll(own, registerModContextCommands(instanceRoot, instance, outputChannel, runModAction));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
-  ownAll(own, registerOverwriteView(instanceRoot, modListProvider, outputChannel));
+  ownAll(own, registerOverwriteView(instanceRoot, outputChannel));
   own(registerModsReconcile(
-    instanceRoot, () => reconcileMods(instanceRoot, instance.value.activeProfile),
+    instance, (profile) => reconcileMods(instanceRoot, profile),
     () => modListProvider.invalidate(), outputChannel));
   own(registerPluginsReconcile(instance, runPluginsReconcile));
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, outputChannel);

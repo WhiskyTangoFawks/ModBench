@@ -400,9 +400,10 @@ The extension owns the editing backend process
   refusal writes anything.
 - **A new mod** is one rename: meta.ini is written into the staged tree first, then the whole
   tree lands in one filesystem event, so the folder is never seen
-  half-built. The installer writes **no `modlist.txt` line**. The `mods/**` watcher registers
-  the new folder as a **disabled** entry, the same path a folder dropped in by MO2 or by hand
-  takes (`modmanager/modsReconcile.ts`), so an install is one signal with one owner.
+  half-built. The installer writes **no `modlist.txt` line**. The Instance's recompute off
+  `mods/**` lands a value the mods reconcile (`modmanager/modsReconcileTrigger.ts`) reads,
+  registering the new folder as a **disabled** entry — the same path a folder dropped in by MO2
+  or by hand takes — so an install is one signal with one owner.
 - **An upgrade** replaces the folder in place: every entry but `.git` is removed,
   the staged tree's entries move in, and meta.ini is set through its existing-text write —
   every foreign key and every other section survive untouched. Each owned key (game name, mod
@@ -615,11 +616,12 @@ folder so the user can reassign or discard those files without leaving Modbench.
   `modlist.txt` entry — so it never enables/disables, reorders, moves to a separator, or
   uninstalls like a mod.
 - **Visibility**: shown **only when the folder holds ≥1 file** (counted recursively; empty
-  subdirectories don't count). Driven **live** by a filesystem watcher on `overwrite/`
-  (`createFileSystemWatcher`) — the row appears the instant purge deposits files and
-  disappears the instant they're cleared, with **no manual refresh** in the workflow (the
-  Mods tree's existing general Refresh remains only as the universal safety net for
-  filesystems with unreliable watch events). Purge therefore needs no explicit refresh call.
+  subdirectories don't count), read from the Instance's `overwriteFileCount` field (ADR-0047).
+  Driven **live** by the Instance's own watcher on `overwrite/` — the row appears the instant
+  purge deposits files and disappears the instant they're cleared, with **no manual refresh**
+  in the workflow (the Mods tree's existing general Refresh remains only as the universal
+  safety net for filesystems with unreliable watch events). Purge therefore needs no explicit
+  refresh call.
 - **Differentiation**: label `Overwrite`, its text tinted **reddish** via a
   `FileDecorationProvider` keyed on the row's `resourceUri` (`gitDecoration.deletedResourceForeground`
   — theme-adaptive for light/dark; `list.errorForeground` is the fallback if it reads too
