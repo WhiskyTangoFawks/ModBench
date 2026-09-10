@@ -333,6 +333,11 @@ public sealed partial class SourceRepository
         return owners;
     }
 
+    // This, ReadOwn below and IdentityOf's child search are the three sites still reading a document
+    // back as a graph; all three answer identity, never a write (debt #859).
+    private IMajorRecord ReadOwner(SourceUnit unit) =>
+        Codec.DeserializeAsync(unit.FullPath, _release, unit.OwnerRecordType).GetAwaiter().GetResult();
+
     // The document's own record, read with no type hint: a path-ambiguous document declares its type.
     private IMajorRecordGetter ReadOwn(string documentPath) =>
         Codec.DeserializeAsync(documentPath, _release, recordType: null).GetAwaiter().GetResult();

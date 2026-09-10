@@ -74,9 +74,9 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>The record's own text out of the bytes <paramref name="unit"/>'s file holds: itself for
-    /// a flat record, or re-extracted for an embedded child.</summary>
+    /// a flat record, or spliced back out of its owner's text for an embedded child.</summary>
     internal static string? RecordBodyFromOwnerBytes(
-        byte[]? ownerBytes, SourceUnit unit, string formKey, GameRelease release, RecordTextCodec codec)
+        byte[]? ownerBytes, SourceUnit unit, string formKey, GameRelease release)
     {
         if (ownerBytes == null) return null;
 
@@ -86,12 +86,17 @@ public sealed partial class SourceRepository
 
         if (!unit.IsEmbedded) return Encoding.UTF8.GetString(ownerBytes);
 
-        var owner = codec.DeserializeFromBytesAsync(ownerBytes, release, unit.OwnerRecordType).GetAwaiter().GetResult();
-        if (ContainerChildFields.FindEmbeddedChild(owner, formKey) is not { } found) return null;
-
-        var childBytes = codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult();
-        return Encoding.UTF8.GetString(childBytes);
+        return EmbeddedChildIn(ownerBytes, unit, formKey, release) is { } span
+            ? EmbeddedChildSplice.Extract(ownerBytes, span, release)
+            : null;
     }
+
+    /// <summary>Where the owner's text carries the child, with the owner's own type taken from the
+    /// record type its path decides — the one fact the text alone cannot supply.</summary>
+    internal static EmbeddedChildSpan? EmbeddedChildIn(
+        byte[] ownerBytes, SourceUnit unit, string formKey, GameRelease release) =>
+        EmbeddedChildSplice.Find(
+            ownerBytes, EmbeddedChildSplice.ContainerTypeName(unit.OwnerRecordType, ownerBytes, release), formKey);
 
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
 

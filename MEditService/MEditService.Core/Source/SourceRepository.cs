@@ -1,4 +1,3 @@
-using System.Text;
 using MEditService.Core.Commands;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
@@ -6,7 +5,6 @@ using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
@@ -43,14 +41,13 @@ public sealed partial class SourceRepository
     public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
 
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
-    /// asked; the body is the tree's answer, re-extracted through the codec when another record's
-    /// document carries it.</summary>
+    /// asked; the body is the tree's answer, spliced out of another record's document when that is
+    /// what carries it.</summary>
     public SourceDocument? Get(PluginKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
 
-        var body = RecordBodyFromOwnerBytes(
-            File.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release, Codec);
+        var body = RecordBodyFromOwnerBytes(File.ReadAllBytes(unit.FullPath), unit, identity.FormKey, _release);
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
@@ -64,15 +61,11 @@ public sealed partial class SourceRepository
 
         if (unit.IsEmbedded)
         {
-            var owner = ReadOwner(unit);
-            if (ContainerChildFields.FindEmbeddedChild(owner, document.FormKey) is not { } found)
+            var ownerBytes = OwnerBytes(unit);
+            if (EmbeddedChildIn(ownerBytes, unit, document.FormKey, _release) is not { } span)
                 throw NoLongerCarried(unit, document.FormKey);
 
-            var child = Codec
-                .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body), _release, document.RecordType)
-                .GetAwaiter().GetResult();
-            ContainerChildFields.ReplaceInSlot(found.Parent, found.SlotName, found.SlotIndex, child);
-            Codec.SerializeAsync(owner, unit.FullPath, _release).GetAwaiter().GetResult();
+            WriteTextAtomic(unit.FullPath, EmbeddedChildSplice.Replace(ownerBytes, span, document.Body));
             Forget();
             return;
         }
@@ -91,11 +84,11 @@ public sealed partial class SourceRepository
 
         if (unit.IsEmbedded)
         {
-            var owner = ReadOwner(unit);
-            if (!ContainerChildFields.RemoveEmbeddedChild(owner, identity.FormKey))
+            var ownerBytes = OwnerBytes(unit);
+            if (EmbeddedChildIn(ownerBytes, unit, identity.FormKey, _release) is not { } span)
                 return SourceRemoval.OwnerDoesNotCarryIt;
 
-            Codec.SerializeAsync(owner, unit.FullPath, _release).GetAwaiter().GetResult();
+            WriteTextAtomic(unit.FullPath, EmbeddedChildSplice.Cut(ownerBytes, span));
             Forget();
             return SourceRemoval.Removed;
         }
@@ -145,15 +138,14 @@ public sealed partial class SourceRepository
         return Path.GetFileName(to);
     }
 
-    // The codec is the door for a record another document carries: the child is read and written as
-    // part of its owner's whole graph.
+    // A record another document carries is spliced into that document's text; only a document read
+    // back as a record still goes through the codec.
     private static RecordTextCodec Codec => LazyCodec.Value;
 
     private static readonly Lazy<RecordTextCodec> LazyCodec =
         new(() => new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
 
-    private IMajorRecord ReadOwner(SourceUnit unit) =>
-        Codec.DeserializeAsync(unit.FullPath, _release, unit.OwnerRecordType).GetAwaiter().GetResult();
+    private static byte[] OwnerBytes(SourceUnit unit) => StripUtf8Bom(File.ReadAllBytes(unit.FullPath));
 
     private static InvalidOperationException NoPlaceInTheTree(PluginKey plugin, RecordIdentity identity) =>
         new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +

@@ -54,8 +54,7 @@ public sealed partial class SourceRepository
             if (!CarriesFormKey(text, identity.FormKey)) continue;
             var unit = new SourceUnit(
                 relativePath, relativePath, document.FormKey, document.RecordType, IsEmbedded: true);
-            if (RecordBodyFromOwnerBytes(
-                    Encoding.UTF8.GetBytes(text), unit, identity.FormKey, _release, Codec) is { } body)
+            if (RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(text), unit, identity.FormKey, _release) is { } body)
             {
                 return Own(body);
             }
