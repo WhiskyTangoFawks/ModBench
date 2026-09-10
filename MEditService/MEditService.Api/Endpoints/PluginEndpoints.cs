@@ -77,13 +77,6 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        // Polled alongside the in-flight POST /plugins/track: always 200, no load order
-        // dependency, since progress lives on the singleton TrackService.
-        app.MapGet("/plugins/track/status", (TrackService trackService) => Results.Ok(trackService.Progress))
-            .WithName("GetTrackStatus")
-            .WithTags(Tag)
-            .Produces<TrackProgress>();
-
         // No "confirmed" flag: the compile-at-main modal is extension-side UX that must not leak
         // through the wire. Refusal is a typed 200 (CompileResult.Succeeded == false), never an
         // HTTP error.
@@ -153,16 +146,14 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<RebaseResponse>()
             .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(503);
+            .ProducesProblem(404);
 
         app.MapPost("/plugins/rebase/continue", ContinueRebase)
             .WithName("ContinueRebaseEditBranch")
             .WithTags(Tag)
             .Produces<RebaseResponse>()
             .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(503);
+            .ProducesProblem(404);
 
         return app;
     }

@@ -45,6 +45,18 @@ public sealed class WriteSideIndexScanTests
             AllowlistPath);
     }
 
+    // An empty allowlist and zero symbols found are the same string: this is what tells them apart,
+    // so a ProductionRoot or exclusion typo that scans nothing cannot pass by matching nothing.
+    [Fact]
+    public void TheScan_WalksMoreThanFiftyProductionFiles()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        var walked = ScannedFiles(root, [ProductionRoot], NotWriteSide).Count;
+
+        Assert.True(walked > 50, $"The write side scan walked only {walked} files under {ProductionRoot}.");
+    }
+
     // The write side's own suites, which would otherwise keep the shape the production code no
     // longer has: a write test that builds an Index is a test of the projection, not of the write.
     private const string TestAllowlistPath = "MEditService.Tests/Architecture/write-side-test-index-allowlist.txt";
@@ -125,7 +137,13 @@ public sealed class WriteSideIndexScanTests
     // A count, not a line number: a reference is the unit of work, and a line number would fail the
     // gate for any unrelated edit above one.
     private static List<string> Counts(
-        string root, string[] scannedRoots, string[] excludedRoots, string[] symbols)
+        string root, string[] scannedRoots, string[] excludedRoots, string[] symbols) =>
+        [.. ScannedFiles(root, scannedRoots, excludedRoots)
+            .SelectMany(file => References(File.ReadAllText(file), symbols)
+                .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Symbol}: {r.Count}"))
+            .Order(StringComparer.Ordinal)];
+
+    private static List<string> ScannedFiles(string root, string[] scannedRoots, string[] excludedRoots)
     {
         var excluded = excludedRoots
             .Select(r => Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar)) + Path.DirectorySeparatorChar)
@@ -134,10 +152,7 @@ public sealed class WriteSideIndexScanTests
         return [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
             .Where(file => !excluded.Exists(e => file.StartsWith(e, StringComparison.Ordinal)))
-            .Where(file => !Path.GetFileName(file).Equals(IndexIngestFileName, StringComparison.Ordinal))
-            .SelectMany(file => References(File.ReadAllText(file), symbols)
-                .Select(r => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {r.Symbol}: {r.Count}"))
-            .Order(StringComparer.Ordinal)];
+            .Where(file => !Path.GetFileName(file).Equals(IndexIngestFileName, StringComparison.Ordinal))];
     }
 
     private static IEnumerable<(string Symbol, int Count)> References(string text, string[] symbols) =>

@@ -12,13 +12,14 @@ public sealed class SourcePathLiteralScanTests
     // layout token and does not match: the needle carries the opening quote.
     private static readonly string[] Literals =
         ["\"source\"", "\"RecordData.json\"", "\"GroupRecordData.json\"", "\".json\"",
-         "\".git\"", "\"HEAD\"", "\"packed-refs\""];
+         "\".git\"", "\"HEAD\"", "\"packed-refs\"", "\"refs\""];
 
     private static readonly string[] ScannedRoots =
         ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
 
-    // The repository's own files: the partials of SourceRepository, which the layout lives in.
+    // The repository's own files: the partials of SourceRepository — only inside Source itself.
     private const string RepositoryFilePrefix = "SourceRepository";
+    private const string RepositoryFolder = "MEditService.Core/Source";
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/source-path-allowlist.txt";
 
@@ -39,26 +40,31 @@ public sealed class SourcePathLiteralScanTests
         var root = Directory.CreateTempSubdirectory("medit-source-path-scan-").FullName;
         try
         {
-            Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
+            Directory.CreateDirectory(Path.Combine(root, "MEditService.Core", "Source", "obj"));
             File.WriteAllText(
-                Path.Combine(root, "Layer", "SourceRepositoryLayout.cs"),
+                Path.Combine(root, "MEditService.Core", "Source", "SourceRepositoryLayout.cs"),
                 "internal const string RootFolderName = \"source\";\n"
                 + "internal const string RecordDataFileName = \"RecordData.json\";\n");
+            Directory.CreateDirectory(Path.Combine(root, "Layer", "obj"));
             File.WriteAllText(
                 Path.Combine(root, "Layer", "EditService.cs"),
                 "var tree = Path.Combine(modFolder, \"source\", plugin);\n"
                 + "var glob = Directory.EnumerateFiles(tree, \"*.json\");\n");
             File.WriteAllText(Path.Combine(root, "Layer", "obj", "Generated.cs"), "var root = \"source\";");
+            // The same file name prefix, outside Source: not the repository, so it is counted.
+            File.WriteAllText(
+                Path.Combine(root, "Layer", "SourceRepositoryRival.cs"), "internal const string Root = \"source\";");
 
-            var counts = Counts(root, ["Layer"]);
+            var counts = Counts(root, ["MEditService.Core", "Layer"]);
 
-            // The repository's own file is exempt, the glob is not a layout token, and build output
-            // names nobody.
-            Assert.Equal(["Layer/EditService.cs: \"source\": 1"], counts);
+            Assert.Equal(
+                ["Layer/EditService.cs: \"source\": 1", "Layer/SourceRepositoryRival.cs: \"source\": 1"],
+                counts);
 
             var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
             Assert.Contains("Layer/EditService.cs: \"source\": 1", unallowed.Message, StringComparison.Ordinal);
+            Assert.Contains("Layer/SourceRepositoryRival.cs: \"source\": 1", unallowed.Message, StringComparison.Ordinal);
 
             var stale = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(counts, [.. counts, "Layer/Gone.cs: \".json\": 2"], AllowlistPath));
@@ -92,10 +98,17 @@ public sealed class SourcePathLiteralScanTests
     private static List<string> Counts(string root, string[] scannedRoots) =>
         [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
-            .Where(file => !Path.GetFileName(file).StartsWith(RepositoryFilePrefix, StringComparison.Ordinal))
+            .Where(file => !IsRepositoryFile(root, file))
             .SelectMany(file => Occurrences(File.ReadAllText(file))
                 .Select(o => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {o.Literal}: {o.Count}"))
             .Order(StringComparer.Ordinal)];
+
+    // The same file name prefix elsewhere in the tree is not the repository: only Source itself is
+    // exempt (ADR-0046 invariant 9).
+    private static bool IsRepositoryFile(string root, string file) =>
+        Path.GetFileName(file).StartsWith(RepositoryFilePrefix, StringComparison.Ordinal)
+        && Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')
+            .StartsWith(RepositoryFolder + "/", StringComparison.Ordinal);
 
     private static IEnumerable<(string Literal, int Count)> Occurrences(string text) =>
         Literals

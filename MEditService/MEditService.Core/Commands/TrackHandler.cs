@@ -4,8 +4,7 @@ using MEditService.Core.Source;
 namespace MEditService.Core.Commands;
 
 /// <summary>The Track gesture's handler (ADR-0046 invariant 3). Parsing, serializing, the round-trip
-/// gate and the commit stay on <see cref="TrackService"/>, along with its own progress channel that
-/// <c>GET /plugins/track/status</c> polls.</summary>
+/// gate, the commit and its own progress notifications stay on <see cref="TrackService"/>.</summary>
 public sealed class TrackHandler
 {
     private readonly TrackService _trackService;
