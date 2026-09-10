@@ -14,7 +14,7 @@ import { createModlistWatcher } from './modlistWatcher';
 import { createOverwriteWatcher } from './overwriteWatcher';
 import { createPluginsTxtWatcher } from './pluginsTxtWatcher';
 import { createDownloadsWatcher } from './downloadsWatcher';
-import { scanDownloads } from './DownloadsPanel';
+import { scanDownloads } from './downloadsScan';
 import { buildDownloadRows, type DownloadRow } from './mo2/downloads';
 import { readGameName, readSelectedProfile } from './mo2/modOrganizerIni';
 import { parseModlist } from './mo2/modlistText';
