@@ -292,15 +292,20 @@ using git.
 
 ### External change: the one dialog
 
-When a tracked plugin's binary changes outside Modbench, or (Everything preset) a tracked file
-outside `source/` differs from git's own view of the edit branch (bridge watcher live, hash check
-at load — both compare against the parked ref or git status; self-echo of Modbench's own writes is
-suppressed, crash markers route to Crash recovery):
+The unit of classification is the mod, not the plugin: a tracked mod changed externally when a
+plugin's bytes differ from what Modbench last wrote (the parked ref), or a file git tracks outside
+`source/` differs from git's own view of the edit branch (Everything preset — Edits' `.gitignore`
+makes this half empty by construction). One `ModFolderWatcher` per tracked mod folder routes every
+path that is neither source nor a git ref into the mod's settle window, `meta.ini` included; the
+classifier runs once per settle — and once per tracked mod at the load-time check, so an upgrade
+made while mEdit was down is classified at the next load — against git's status, never against
+which path fired the window. Self-echo of Modbench's own writes is suppressed; crash markers route
+to Crash recovery.
 
 - **One native modal per affected mod repo**, queued sequentially when several changed —
-  never a mega-dialog. Message names the plugin and mod folder; detail states what was
-  observed, and shows the evidence when the meta tell fired (`meta.ini also changed
-  (version <old> → <new>)`).
+  never a mega-dialog. Message names the mod folder and every changed plugin and tracked
+  file; detail states what was observed, and shows the evidence when the meta tell fired
+  (`meta.ini also changed (version <old> → <new>)`).
 - **Buttons**: `Absorb Upstream Update` / `Keep as My Edit` / Esc. The default (first)
   button follows the `Meta-SHA256` compare — trailers may inform defaults, never actions
   (ADR-0041); the human always answers. The dialog is uniform across

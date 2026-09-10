@@ -27,9 +27,12 @@ export function subscribeExternalChangePending(
 ): () => void {
   const log = deps.log ?? (() => {});
   return notificationSubscriber.subscribe('external-change-pending', (event) => {
+    // `keys` carries the changed plugin names — the generic field every notification kind
+    // already has, repurposed rather than a second copy of the same list.
     const change: UnansweredExternalChange = {
-      plugin: event.plugin,
       origin: event.origin,
+      plugins: event.keys,
+      trackedFiles: event.externalChangeTrackedFiles ?? [],
       metaChanged: event.externalChangeMetaChanged ?? false,
       oldVersion: event.externalChangeOldVersion ?? null,
       newVersion: event.externalChangeNewVersion ?? null,
@@ -37,7 +40,7 @@ export function subscribeExternalChangePending(
     // ADR-0026: a dialog/dispatch failure gets a log line, never a second toast on top of
     // whatever the dialog or the mutate call already surfaced.
     handleUnanswered(deps, [change]).catch((e: unknown) => {
-      log(`[externalChangeCoordinator] handling ${change.plugin} failed: ${e instanceof Error ? e.message : String(e)}`);
+      log(`[externalChangeCoordinator] handling ${change.origin} failed: ${e instanceof Error ? e.message : String(e)}`);
     });
   });
 }

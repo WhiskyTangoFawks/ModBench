@@ -8,8 +8,9 @@ import { InMemoryMEditClient, type NotificationEvent } from '../client';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
-    kind: 'external-change-pending', plugin: 'Fixture.esp', origin: 'ModA', keys: [], sequence: 0,
+    kind: 'external-change-pending', plugin: '', origin: 'ModA', keys: ['Fixture.esp'], sequence: 0,
     externalChangeMetaChanged: false, externalChangeOldVersion: null, externalChangeNewVersion: null,
+    externalChangeTrackedFiles: [],
     ...overrides,
   };
 }

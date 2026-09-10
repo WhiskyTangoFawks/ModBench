@@ -50,12 +50,18 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
     public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
 }
 
-/// <summary>The plugin watcher recorded a change awaiting the user's Absorb/Keep answer.</summary>
-public sealed record ExternalChangePendingNotification(PluginKey Plugin, bool MetaChanged, string? OldVersion, string? NewVersion)
+/// <summary>The watcher (or the load-time check) recorded a mod's change awaiting the user's
+/// Absorb/Keep answer. The mod folder is never on the wire — Origin names it.</summary>
+public sealed record ExternalChangePendingNotification(
+    string Origin, IReadOnlyList<string> Plugins, IReadOnlyList<string> TrackedFiles,
+    bool MetaChanged, string? OldVersion, string? NewVersion)
     : Notification("external-change-pending")
 {
-    public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin ?? "", [], 0,
-        ExternalChangeMetaChanged: MetaChanged, ExternalChangeOldVersion: OldVersion, ExternalChangeNewVersion: NewVersion);
+    // Keys carries Plugins: the generic string list every other kind already has, repurposed rather
+    // than adding a field only this kind would fill.
+    public override NotificationEvent ToEvent() => new(Kind, "", Origin, Plugins, 0,
+        ExternalChangeMetaChanged: MetaChanged, ExternalChangeOldVersion: OldVersion, ExternalChangeNewVersion: NewVersion,
+        ExternalChangeTrackedFiles: TrackedFiles);
 }
 
 /// <summary>The one wire shape every notification kind serializes to. Kind is the discriminator; the
@@ -66,4 +72,5 @@ public sealed record NotificationEvent(
     TrackProgress? TrackProgress = null,
     bool? ExternalChangeMetaChanged = null,
     string? ExternalChangeOldVersion = null,
-    string? ExternalChangeNewVersion = null);
+    string? ExternalChangeNewVersion = null,
+    IReadOnlyList<string>? ExternalChangeTrackedFiles = null);

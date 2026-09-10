@@ -20,6 +20,10 @@ internal static class ExternalChangeLoadOrderHook
 
         var order = LoadOrder.From(loadOrder);
         var offers = new List<CrashRepairOffer>();
+        // Grouped by mod folder: the classifier runs once per mod (ADR-0041 amendment), covering
+        // every tracked plugin the mod holds in one pass, exactly as the live watcher's settle does.
+        var byModFolder = new Dictionary<string, List<(string Name, string Origin, string Path, byte[] Bytes)>>(StringComparer.Ordinal);
+
         foreach (var plugin in loadOrder.Plugins)
         {
             var key = new PluginKey(plugin.Name, plugin.Origin);
@@ -40,35 +44,40 @@ internal static class ExternalChangeLoadOrderHook
             }
             catch (IOException ex)
             {
-                // Nothing to hash, so this never reaches Classify: an unreadable tracked binary is
-                // reported as a repair offer rather than logged and dropped, and gets no live watch.
+                // Nothing to hash: an unreadable tracked binary is a repair offer, not classified,
+                // and gets no live watch.
                 logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
                 offers.Add(new CrashRepairOffer(plugin.Name, plugin.Origin, CrashRepairReason.MissingOrUnreadableBinary));
                 continue;
             }
 
-            switch (ExternalChangeClassifier.Classify(modFolder, plugin.Name, bytes))
+            if (!byModFolder.TryGetValue(modFolder, out var entries))
+                byModFolder[modFolder] = entries = [];
+            entries.Add((plugin.Name, plugin.Origin, plugin.Path, bytes));
+
+            watcher.Watch(modFolder, plugin.Name, plugin.Path);
+        }
+
+        foreach (var (modFolder, entries) in byModFolder)
+        {
+            switch (ExternalChangeClassifier.ClassifyMod(modFolder, [.. entries.Select(e => (e.Name, e.Bytes))]))
             {
                 case ExternalChangeClassification.ExternalChange change:
                     if (logger.IsEnabled(LogLevel.Information))
-                    {
-                        logger.LogInformation("External change detected at load for {Plugin} ({Origin})", plugin.Name, plugin.Origin);
-                    }
-                    watcher.ReportExternalChange(modFolder, plugin.Name, change);
+                        logger.LogInformation("External change detected at load for {ModFolder}", modFolder);
+                    watcher.ReportExternalChange(modFolder, change);
                     break;
                 case ExternalChangeClassification.CrashRecovery:
-                    // Never watcher.ReportExternalChange — the two prompts must never both fire
-                    // for one event, and this one already routes to the repair offer below instead
-                    // of the external-change dialog's queue.
-                    if (logger.IsEnabled(LogLevel.Information))
+                    // Never watcher.ReportExternalChange — the two prompts must never both fire for
+                    // one event, and this one already routes to the repair offer instead.
+                    foreach (var entry in entries)
                     {
-                        logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+                        if (logger.IsEnabled(LogLevel.Information))
+                            logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", entry.Name, entry.Origin);
+                        offers.Add(new CrashRepairOffer(entry.Name, entry.Origin, CrashRepairReason.InterruptedCompile));
                     }
-                    offers.Add(new CrashRepairOffer(plugin.Name, plugin.Origin, CrashRepairReason.InterruptedCompile));
                     break;
             }
-
-            watcher.Watch(modFolder, plugin.Name, plugin.Path);
         }
 
         return offers;

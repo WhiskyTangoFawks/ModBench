@@ -60,7 +60,10 @@ describe('runRebase', () => {
 });
 
 function unanswered(over: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
-  return { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: false, oldVersion: null, newVersion: null, ...over };
+  return {
+    origin: 'ModA', plugins: ['Fixture.esp'], trackedFiles: [], metaChanged: false, oldVersion: null, newVersion: null,
+    ...over,
+  };
 }
 
 function makeDispatchDeps(client: unknown, showDialogChoice: string | undefined) {
@@ -86,12 +89,12 @@ describe('handleUnanswered', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
-  // Both plugins share one origin, so one dialog answer must dispatch exactly one call.
-  it('two plugins sharing one origin dispatch one call, not two', async () => {
+  // A safety net: two notifications sharing one origin must still dispatch exactly one call.
+  it('two notifications sharing one origin dispatch one call, not two', async () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
     const deps = makeDispatchDeps(client, KEEP_BUTTON);
 
-    await handleUnanswered(deps, [unanswered({ plugin: 'A.esp' }), unanswered({ plugin: 'B.esp' })]);
+    await handleUnanswered(deps, [unanswered({ plugins: ['A.esp'] }), unanswered({ plugins: ['B.esp'] })]);
 
     expect(client.keepAsMyEdit).toHaveBeenCalledTimes(1);
     expect(client.keepAsMyEdit).toHaveBeenCalledWith('ModA');

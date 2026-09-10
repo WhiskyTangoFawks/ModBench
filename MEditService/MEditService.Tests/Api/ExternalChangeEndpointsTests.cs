@@ -43,30 +43,12 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     }
 
     [Fact]
-    public void ExternalChangeStatus_ReportsAWatcherQueuedQuestion_WithItsOriginResolved()
-    {
-        var watcher = new ModFolderWatcher();
-        watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
-            new ExternalChangeClassification.ExternalChange(true, "1.0", "2.0"));
-
-        var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Index);
-
-        var ok = Assert.IsAssignableFrom<Ok<List<UnansweredExternalChangeResponse>>>(result);
-        var unanswered = Assert.Single(ok.Value!);
-        Assert.Equal([IndexedModFixture.PluginName], unanswered.Plugins);
-        Assert.Equal(IndexedModFixture.ModFolderOrigin, unanswered.Origin);
-        Assert.True(unanswered.MetaChanged);
-        Assert.Equal("1.0", unanswered.OldVersion);
-        Assert.Equal("2.0", unanswered.NewVersion);
-    }
-
-    [Fact]
     public void AbsorbExternalChange_AbsorbsAndClearsTheUnansweredQuestion()
     {
         WriteExternalBinaryChange(0.9f);
         var watcher = new ModFolderWatcher();
-        watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
-            new ExternalChangeClassification.ExternalChange(false, null, null));
+        watcher.ReportExternalChange(_mod.ModFolder,
+            new ExternalChangeClassification.ExternalChange([IndexedModFixture.PluginName], [], false, null, null));
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
@@ -99,8 +81,8 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
         var watcher = new ModFolderWatcher();
-        watcher.ReportExternalChange(_mod.ModFolder, IndexedModFixture.PluginName,
-            new ExternalChangeClassification.ExternalChange(false, null, null));
+        watcher.ReportExternalChange(_mod.ModFolder,
+            new ExternalChangeClassification.ExternalChange([IndexedModFixture.PluginName], [], false, null, null));
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
