@@ -1,7 +1,7 @@
 // ADR-0044: an Instance recompute and a client connect are the only triggers for a load-order
 // PUT. No gesture, command or view may call `request()` on the sync itself.
 import { describe, it, expect } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname } from 'node:path';
@@ -23,23 +23,38 @@ function tsFiles(dir: string): string[] {
   return out;
 }
 
+// Shared by the production assertion and the rival test below, so a broken walk — a wrong root, a
+// silently-excluded directory — fails both the same way, not just the regex.
+function findOffenders(root: string, allowed: string): string[] {
+  return tsFiles(root)
+    .filter((path) => !path.endsWith(allowed))
+    .filter((path) => REQUEST_CALL.test(readFileSync(path, 'utf8')));
+}
+
 describe('no gesture, command or view requests a load-order sync', () => {
-  it('only the Instance wiring calls .request()', () => {
+  it('covers the whole extension source tree', () => {
     const root = join(__dirname, '..'); // src/
-    const offenders = tsFiles(root)
-      .filter((path) => !path.endsWith(ALLOWED))
-      .filter((path) => REQUEST_CALL.test(readFileSync(path, 'utf8')));
-    expect(offenders).toEqual([]);
+    expect(tsFiles(root).length).toBeGreaterThan(50);
   });
 
-  // Rival this catches: a gesture or command module planting a sync request directly instead of
-  // trusting the Instance's watcher to bring the change back.
-  it('flags a planted request() call in a non-wiring file', async () => {
+  it('only the Instance wiring calls .request()', () => {
+    const root = join(__dirname, '..'); // src/
+    expect(findOffenders(root, ALLOWED)).toEqual([]);
+  });
+
+  // Rival: a gesture or command module planting a sync request directly instead of trusting the
+  // Instance's watcher to bring the change back — caught by the real walk, not just the regex.
+  it('the tree walk itself catches a planted request() call in a non-wiring file', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-load-order-sync-scan-'));
     try {
-      const planted = join(dir, 'someCommand.ts');
-      await writeFile(planted, "export const fire = (session) => session.loadOrderSync?.request();\n");
-      expect(REQUEST_CALL.test(readFileSync(planted, 'utf8'))).toBe(true);
+      await mkdir(join(dir, 'nested'));
+      await writeFile(join(dir, 'topLevel.ts'), "export const noop = () => undefined;\n");
+      await writeFile(
+        join(dir, 'nested', 'someCommand.ts'),
+        "export const fire = (session) => session.loadOrderSync?.request();\n",
+      );
+      const offenders = findOffenders(dir, join('nowhere', 'no.ts'));
+      expect(offenders).toEqual([join(dir, 'nested', 'someCommand.ts')]);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
