@@ -42,7 +42,13 @@ internal static class RecordDocumentEdits
         foreach (var child in EmbeddedDescendants(duplicate))
         {
             var oldFormKey = child.FormKey.ToString();
-            if (!rekeys.TryGetValue(oldFormKey, out var childFormKey)) continue;
+            if (!rekeys.TryGetValue(oldFormKey, out var childFormKey))
+            {
+                throw new InvalidOperationException(
+                    $"The duplicate of {newFormKey} embeds {oldFormKey}, which "
+                    + $"{nameof(EmbeddedDescendantFormKeys)} did not name, so no fresh FormKey was drawn for it. "
+                    + "Copying it would land two records under one key.");
+            }
 
             child.FormKey = FormKey.Factory(childFormKey);
             RemapSelfLink(child, oldFormKey, childFormKey);
