@@ -514,8 +514,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy as New Record Into… — a deep copy of the source record under a fresh FormKey.
-         * @description Deep-copies the source record (Mutagen's own record-level Duplicate — no mod object is constructed) under a fresh FormKey in the destination plugin's working tree. FormKey is the caller's requested one or the next free local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto the new FormKey, so an internal self-reference follows the copy, not the original.
+         * Copy as New Record Into… — the source record under a fresh FormKey, its own child slots cleared.
+         * @description Copies the source record's own fields (Mutagen's own record-level Duplicate — no mod object is constructed) under a fresh FormKey in the destination plugin's working tree, clearing every child slot the record owns. FormKey is the caller's requested one or the next free local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto the new FormKey, so an internal self-reference follows the copy, not the original.
          */
         post: operations["CopyRecordAsNewRecord"];
         delete?: never;
