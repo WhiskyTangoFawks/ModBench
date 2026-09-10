@@ -20,7 +20,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import {
   PluginsTreeProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf,
-  type PluginListSource,
+  type PluginListSource, type PluginsTreeProviderOptions,
 } from '../PluginsTreeProvider';
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
@@ -60,6 +60,7 @@ class FakeInstance {
   // of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
+  private failureListeners: ((reason: string) => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -75,7 +76,21 @@ class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
+  onReadFailure(listener: (reason: string) => void) {
+    this.failureListeners.push(listener);
+    return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
+  }
+  // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
+  fail(reason: string): void {
+    for (const listener of [...this.failureListeners]) listener(reason);
+  }
 }
+
+// A hang must fail on an explicit assertion, not the test runner's own timeout.
+const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+  pending,
+  new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
+]);
 
 class FakeSource implements PluginListSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
@@ -174,6 +189,7 @@ function makeTree(
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     dataFolder: () => Promise<string | undefined>;
     implicitMasters: () => Promise<readonly string[] | undefined>;
+    reporter: PluginsTreeProviderOptions['reporter'];
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
@@ -187,6 +203,7 @@ function makeTree(
     publishDiagnoses: extra.publishDiagnoses,
     dataFolder: extra.dataFolder,
     implicitMasters: extra.implicitMasters,
+    reporter: extra.reporter,
   });
   return { tree, client, records, instance, source, logged };
 }
@@ -476,6 +493,34 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     expect(settled).toBe(true);
     expect(rows.map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+  });
+
+  // The timeout is the finding: a gate that settles only on a landed value leaves a first read
+  // that threw spinning forever — no row, no error node, no toast (ADR-0026).
+  it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
+    const instance = new FakeInstance(valueOf([]), 0);
+    const reports: { severity: string; message: string; detail?: string }[] = [];
+    const { tree } = makeTree([], {
+      instance,
+      reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
+    });
+
+    const pending = tree.getChildren();
+    instance.fail('EISDIR: illegal operation on a directory, read plugins.txt');
+    const rows = await within(pending, 500);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toBeInstanceOf(ErrorNode);
+    expect(rows[0].label).toBe('⚠ Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
+    expect(reports).toEqual([
+      { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EISDIR: illegal operation on a directory, read plugins.txt' },
+    ]);
+
+    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const after = await within(tree.getChildren(), 500);
+
+    expect(after.map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+    expect(reports).toHaveLength(1);
   });
 
   // A genuinely empty plugins.txt (sequence already past 0) is not "not read yet" — it must

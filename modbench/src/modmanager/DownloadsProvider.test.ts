@@ -12,11 +12,12 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions } from './DownloadsProvider';
+import { DownloadsProvider, DownloadNode, ReadFailureNode, type DownloadsProviderOptions, type DownloadsTreeNode } from './DownloadsProvider';
 import type { DownloadRow } from './mo2/downloads';
 import type { InstanceValue } from './instance';
 
-const rowNames = (nodes: DownloadNode[]): string[] => nodes.map((n) => n.row.name);
+// The cast is deliberate: a read-failure row here has no `row`, and the throw is the finding.
+const rowNames = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => (n as DownloadNode).row.name);
 
 const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
   name: 'foo.zip',
@@ -44,6 +45,7 @@ class FakeInstance {
   // it; a test of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
+  private failureListeners: ((reason: string) => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -59,7 +61,21 @@ class FakeInstance {
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
+  onReadFailure(listener: (reason: string) => void) {
+    this.failureListeners.push(listener);
+    return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
+  }
+  // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
+  fail(reason: string): void {
+    for (const listener of [...this.failureListeners]) listener(reason);
+  }
 }
+
+// A hang must fail on an explicit assertion, not the test runner's own timeout.
+const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+  pending,
+  new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
+]);
 
 // Never created on disk. If DownloadsProvider ever fell back to its own scan, every test here
 // would see an empty/ENOENT result instead of the fixture rows below.
@@ -67,10 +83,10 @@ const FAKE_ROOT = '/fake/instance-root-never-created';
 
 const makeProvider = (
   downloads: DownloadRow[],
-  extra: Partial<{ instance: FakeInstance; instanceRoot: string }> = {},
+  extra: Partial<{ instance: FakeInstance; instanceRoot: string; reporter: DownloadsProviderOptions['reporter'] }> = {},
 ): DownloadsProvider => {
   const instance = extra.instance ?? new FakeInstance(valueOf(downloads));
-  const options: DownloadsProviderOptions = { instanceRoot: extra.instanceRoot ?? FAKE_ROOT, instance };
+  const options: DownloadsProviderOptions = { instanceRoot: extra.instanceRoot ?? FAKE_ROOT, instance, reporter: extra.reporter };
   return new DownloadsProvider(options);
 };
 
@@ -326,6 +342,34 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
 
     expect(settled).toBe(true);
     expect(rowNames(rows)).toEqual(['a.zip']);
+  });
+
+  // The timeout is the finding: a gate that settles only on a landed value leaves a first read
+  // that threw spinning forever — no row, no error node, no toast (ADR-0026).
+  it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
+    const instance = new FakeInstance(valueOf([]), 0);
+    const reports: { severity: string; message: string; detail?: string }[] = [];
+    const provider = makeProvider([], {
+      instance,
+      reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
+    });
+
+    const pending = provider.getChildren();
+    instance.fail('ENOENT: no such file or directory, open modlist.txt');
+    const rows = await within(pending, 500);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toBeInstanceOf(ReadFailureNode);
+    expect(rows[0].label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
+    expect(reports).toEqual([
+      { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'ENOENT: no such file or directory, open modlist.txt' },
+    ]);
+
+    instance.publish(valueOf([row({ name: 'a.zip' })]));
+    const after = await within(provider.getChildren(), 500);
+
+    expect(rowNames(after)).toEqual(['a.zip']);
+    expect(reports).toHaveLength(1);
   });
 
   it('renders no rows immediately when the first landed value is genuinely empty', async () => {

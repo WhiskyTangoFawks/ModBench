@@ -397,6 +397,47 @@ describe('Instance — a value that survives a bad read', () => {
     expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
   });
 
+  // The failure a tree hears about before anything has landed, so its first render can settle on
+  // an error node instead of a spinner that never ends (ADR-0026).
+  it('reports a failed first read to failure subscribers, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
+    const { root, instance } = await realInstance();
+    const ini = join(root, 'ModOrganizer.ini');
+    const complete = await readFile(ini, 'utf8');
+    await writeFile(ini, ''); // unreadable before anything has landed
+    const failures: string[] = [];
+    const landed: number[] = [];
+    instance.onReadFailure((reason) => failures.push(reason));
+    instance.subscribe((_value, sequence) => landed.push(sequence));
+
+    await instance.refresh();
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain('ModOrganizer.ini');
+    expect(landed).toEqual([]);
+    expect(instance.sequence).toBe(0);
+
+    await writeFile(ini, complete);
+    await instance.refresh();
+
+    expect(landed).toEqual([1]);
+    expect(failures).toHaveLength(1);
+  });
+
+  it('reports a failure after a value has landed, keeping that value', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    const value = instance.value;
+    const failures: string[] = [];
+    instance.onReadFailure((reason) => failures.push(reason));
+
+    await writeFile(join(root, 'ModOrganizer.ini'), '');
+    await instance.refresh();
+
+    expect(instance.value).toBe(value);
+    expect(instance.sequence).toBe(1);
+    expect(failures).toHaveLength(1);
+  });
+
   it('keeps the mods when modlist.txt reads as empty mid-write, and logs', async () => {
     const { root, instance, logs } = await realInstance();
     await instance.refresh();

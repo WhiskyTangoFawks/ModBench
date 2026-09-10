@@ -315,13 +315,15 @@ export function createModListView(
 export function registerDownloadsView(
   own: Own,
   instanceRoot: string,
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>,
+  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>,
   outputChannel: vscode.LogOutputChannel,
 ): DownloadsProvider {
   // A shim for collaborators still taking a flat `(msg) => void`, built here at the boundary so
   // the flat shape stops at them rather than one level higher.
   const log = (msg: string) => outputChannel.info(msg);
-  const downloadsProvider = own(new DownloadsProvider({ instanceRoot, instance })); // disposes its Instance subscription
+  const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
+    instanceRoot, instance, reporter: makeReporter(outputChannel, 'downloads'),
+  }));
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
     canSelectMany: true,

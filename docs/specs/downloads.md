@@ -400,8 +400,9 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   `contextValue`, `resourceUri`); provider behavior against a fake Instance — rows come
   from the Instance value alone (fixtures, never real fs), default sort, hidden exclusion,
   `setShowHidden`/`setSort` re-rendering and firing `onDidChangeTreeData`, `hiddenNames()`,
-  the empty-value state, the `sequence === 0` "not read yet" guard, and re-rendering off a
-  newly published Instance value past a macrotask boundary.
+  the empty-value state, the `sequence === 0` "not read yet" guard, the failed-first-read error
+  node with its one report, and re-rendering off a newly published Instance value past a
+  macrotask boundary.
 - **`DownloadsPanel.test.ts`** (Vitest, `vscode` stubbed the way `ModListProvider.test.ts`
   does): `registerDownloadsSingleRowCommands` / `registerDownloadsMultiRowCommands` exercised
   by capturing the mocked `vscode.commands.registerCommand` calls and invoking the captured
