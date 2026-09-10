@@ -44,9 +44,10 @@ internal static class WriteEndpointMapping
         statusCode: result.Refusal switch
         {
             TrackRefusal.NoPluginWithOrigin => 404,
-            // Already tracked is a state conflict: the request is well-formed, and the answer is
-            // "not on a folder that already has a repository".
-            TrackRefusal.AlreadyTracked => 409,
+            // Both are state conflicts: the request is well-formed, and the answer is "not on a
+            // folder that already has a repository" or "not on the game's own Data folder" — the
+            // same status RecordEditRefusal.PluginHasNoModFolder uses for the latter.
+            TrackRefusal.AlreadyTracked or TrackRefusal.DataDirectoryOrigin => 409,
             TrackRefusal.GitUnavailable => 500,
             // A data problem in the plugin itself, the status the record edits' own refusals use.
             _ => 422,
