@@ -7,7 +7,8 @@ import type { ModStatus, ModStatusResult } from './statusChecker';
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from '../reporter';
-import type { Instance, InstanceValue } from './instance';
+import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from './instance';
+import { ErrorNode } from '../errorNode';
 import {
   moveModToSeparator as moveModToSeparatorCommand,
   reorderMod as reorderModCommand,
@@ -21,7 +22,7 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count — the tree's only data input (ADR-0047). */
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  instance: InstanceView;
   log?: (msg: string) => void;
   reporter?: Reporter;
   /** Only for the pinned Overwrite row's resourceUri (Explorer reveal / the decoration
@@ -111,7 +112,7 @@ export class OverwriteNode extends vscode.TreeItem {
   }
 }
 
-export type ModlistNode = CountNode | SeparatorNode | ModNode | OverwriteNode;
+export type ModlistNode = CountNode | SeparatorNode | ModNode | OverwriteNode | ErrorNode;
 
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
@@ -141,13 +142,10 @@ export class ModListProvider
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot: string;
-  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
-  // Resolves once the Instance lands its first recompute. `sequence === 0` means "not read
-  // yet", never "genuinely empty" — lets `getChildren()` await it instead of rendering early.
-  private readonly firstValue: Promise<void>;
-  private resolveFirstValue: (() => void) | undefined;
+  private readonly firstRead: FirstRead;
 
   constructor(options: ModListProviderOptions) {
     this.log = options.log ?? (() => {});
@@ -155,18 +153,16 @@ export class ModListProvider
     this.instanceRoot = options.instanceRoot;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
-    this.firstValue = options.instance.sequence > 0
-      ? Promise.resolve()
-      : new Promise((resolve) => { this.resolveFirstValue = resolve; });
+    this.firstRead = firstReadOf(options.instance, options.reporter);
     this.instanceSubscription = options.instance.subscribe((value) => {
       this.instanceValue = value;
-      this.resolveFirstValue?.();
       this.invalidate();
     });
   }
 
   dispose(): void {
     this.instanceSubscription.dispose();
+    this.firstRead.dispose();
   }
 
   /** Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
@@ -291,7 +287,8 @@ export class ModListProvider
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
     if (element instanceof SeparatorNode) return this.separatorChildren(element);
     if (element) return [];
-    await this.firstValue; // never render before the Instance has actually read once
+    await this.firstRead.settled; // never render before the Instance has actually read once
+    if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
 
     const tree = this.ensureLoaded();
     const roots = this.rootNodes(tree);

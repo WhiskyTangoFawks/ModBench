@@ -11,7 +11,10 @@ import type { ConfigChangeEvent } from './gameDirectoryResolver';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance, type InstanceValue } from './instance';
+import {
+  Instance, firstReadOf, loadOrderSnapshotOf, wireLoadOrderSyncToInstance,
+  type InstanceSubscriber, type InstanceValue, type ReadFailureListener,
+} from './instance';
 import { createLoadOrderSync } from '../loadOrderReconcile';
 import type { LoadOrderPlugin } from './loadOrderSnapshot';
 
@@ -397,6 +400,50 @@ describe('Instance — a value that survives a bad read', () => {
     expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
   });
 
+  // The failure a tree hears about before anything has landed, so its first render can settle on
+  // an error node instead of a spinner that never ends (ADR-0026).
+  it('reports a failed first read to failure subscribers, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
+    const { root, instance } = await realInstance();
+    const ini = join(root, 'ModOrganizer.ini');
+    const complete = await readFile(ini, 'utf8');
+    await writeFile(ini, ''); // unreadable before anything has landed
+    const failures: string[] = [];
+    const landed: number[] = [];
+    instance.onReadFailure((reason) => failures.push(reason));
+    instance.subscribe((_value, sequence) => landed.push(sequence));
+
+    await instance.refresh();
+
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toContain('ModOrganizer.ini');
+    expect(instance.readFailure).toBe(failures[0]);
+    expect(landed).toEqual([]);
+    expect(instance.sequence).toBe(0);
+
+    await writeFile(ini, complete);
+    await instance.refresh();
+
+    expect(landed).toEqual([1]);
+    expect(instance.readFailure).toBeUndefined();
+    expect(failures).toHaveLength(1);
+  });
+
+  it('reports a failure after a value has landed, keeping that value', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    const value = instance.value;
+    const failures: string[] = [];
+    instance.onReadFailure((reason) => failures.push(reason));
+
+    await writeFile(join(root, 'ModOrganizer.ini'), '');
+    await instance.refresh();
+
+    expect(instance.value).toBe(value);
+    expect(instance.sequence).toBe(1);
+    expect(failures).toHaveLength(1);
+    expect(instance.readFailure).toBe(failures[0]);
+  });
+
   it('keeps the mods when modlist.txt reads as empty mid-write, and logs', async () => {
     const { root, instance, logs } = await realInstance();
     await instance.refresh();
@@ -742,6 +789,61 @@ describe('loadOrderSnapshotOf', () => {
 
 // ADR-0044: the one path from a landed recompute to a PUT — no gesture, command or view calls
 // `request()` itself (asserted by a scan elsewhere); this is the sole wiring that does.
+describe('firstReadOf', () => {
+  // The Instance as a tree constructed at any moment sees it: a failure may already be held.
+  function fakeInstance(initial: { sequence: number; readFailure?: string }) {
+    let failureListener: ReadFailureListener | undefined;
+    let subscriber: InstanceSubscriber | undefined;
+    const instance = {
+      sequence: initial.sequence,
+      readFailure: initial.readFailure,
+      subscribe: (fn: InstanceSubscriber) => { subscriber = fn; return { dispose: () => {} }; },
+      onReadFailure: (fn: ReadFailureListener) => { failureListener = fn; return { dispose: () => {} }; },
+      fail: (reason: string) => { instance.readFailure = reason; failureListener?.(reason); },
+      land: () => { instance.readFailure = undefined; instance.sequence++; subscriber?.({} as InstanceValue, instance.sequence); },
+    };
+    return instance;
+  }
+  const reporterSpy = () => {
+    const reports: string[] = [];
+    return { reports, reporter: { report: (_severity: string, _message: string, detail?: string) => { reports.push(detail ?? ''); } } };
+  };
+
+  it('settles at once, with the failure and one report, when the first read failed before the tree subscribed', async () => {
+    const { reports, reporter } = reporterSpy();
+    const gate = firstReadOf(fakeInstance({ sequence: 0, readFailure: 'ENOENT modlist.txt' }), reporter);
+
+    await within(gate.settled, 500);
+
+    expect(gate.failure).toBe('ENOENT modlist.txt');
+    expect(reports).toEqual(['ENOENT modlist.txt']);
+  });
+
+  it('shows the latest failure while nothing has landed, reports once, and clears when a value lands', async () => {
+    const instance = fakeInstance({ sequence: 0 });
+    const { reports, reporter } = reporterSpy();
+    const gate = firstReadOf(instance, reporter);
+
+    instance.fail('ENOENT modlist.txt');
+    await within(gate.settled, 500);
+    instance.fail('EACCES plugins.txt');
+
+    expect(gate.failure).toBe('EACCES plugins.txt');
+    expect(reports).toEqual(['ENOENT modlist.txt']);
+
+    instance.land();
+    instance.fail('EISDIR meta.ini'); // after a value: the old rows stay, never an error node
+    expect(gate.failure).toBeUndefined();
+    expect(reports).toHaveLength(1);
+  });
+});
+
+// A hang must fail on an explicit assertion, not the test runner's own timeout.
+const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+  pending,
+  new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`did not settle within ${ms} ms`)), ms)),
+]);
+
 describe('wireLoadOrderSyncToInstance', () => {
   function fakeInstance(): Pick<Instance, 'subscribe'> & { land: () => void } {
     const subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
