@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Api;
-using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.TestSupport;
@@ -264,6 +263,33 @@ public sealed class ArchitectureTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    // ADR-0008: the adapter's write verb lays bytes down with neither backup nor rename, so who
+    // calls it is the whole of the backup discipline.
+    [Fact]
+    public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToBackUp()
+    {
+        // PluginWriter backs the existing binary up first. The create gesture writes a brand-new
+        // file and TrackService a scratch copy, so neither has an existing binary to back up.
+        string[] writers = ["PluginWriter.cs", "CreatePluginHandler.cs", "TrackService.cs"];
+
+        // Both needles: ".WriteAsync(" alone is an HTTP response or an output stream, and
+        // "PluginAdapter" is the stem of the namespace, the interface and the implementation alike,
+        // so no caller of this verb escapes it.
+        var writes = Offenders(
+            SolutionDirectory(), Projects, ["PluginAdapter", ".WriteAsync("], PluginBinaryWriters);
+
+        var offenders = Unallowed(writes, writers).ToList();
+        Assert.True(offenders.Count == 0,
+            "ADR-0008: a plugin binary is backed up before it is written, and the adapter's write verb makes "
+            + "no backup. Only PluginWriter (which backs up first) and the create and Track gestures (which "
+            + "write a file with no existing binary) may call it. It is called in:\n" + string.Join("\n", offenders));
+
+        var dead = DeadAllowances(writers, writes).ToList();
+        Assert.True(dead.Count == 0,
+            "Allowances naming no such call — delete them rather than leaving a plugin write pre-authorized:\n"
+            + string.Join("\n", dead));
     }
 
     // The repo is public: a plugin lands in TestData only by a deliberate edit to the allowlist.
