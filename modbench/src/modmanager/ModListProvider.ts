@@ -7,7 +7,8 @@ import type { ModStatus, ModStatusResult } from './statusChecker';
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from '../reporter';
-import { firstReadOf, type FirstRead, type Instance, type InstanceValue } from './instance';
+import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from './instance';
+import { ErrorNode } from '../errorNode';
 import {
   moveModToSeparator as moveModToSeparatorCommand,
   reorderMod as reorderModCommand,
@@ -21,7 +22,7 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count — the tree's only data input (ADR-0047). */
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>;
+  instance: InstanceView;
   log?: (msg: string) => void;
   reporter?: Reporter;
   /** Only for the pinned Overwrite row's resourceUri (Explorer reveal / the decoration
@@ -111,19 +112,7 @@ export class OverwriteNode extends vscode.TreeItem {
   }
 }
 
-/** The whole tree while the Instance's first read has failed and nothing has landed: one row
- *  carrying the reason, never an empty list that would read as "no mods" (ADR-0026). */
-export class ReadFailureNode extends vscode.TreeItem {
-  readonly kind = 'readFailure' as const;
-  constructor(reason: string) {
-    super(`⚠ Failed to load: ${reason}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'error';
-    this.tooltip = reason;
-    this.iconPath = new vscode.ThemeIcon('error');
-  }
-}
-
-export type ModlistNode = CountNode | SeparatorNode | ModNode | OverwriteNode | ReadFailureNode;
+export type ModlistNode = CountNode | SeparatorNode | ModNode | OverwriteNode | ErrorNode;
 
 function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
   return node.kind === 'mod' || node.kind === 'separator';
@@ -153,7 +142,7 @@ export class ModListProvider
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot: string;
-  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>;
+  private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
@@ -299,7 +288,7 @@ export class ModListProvider
     if (element instanceof SeparatorNode) return this.separatorChildren(element);
     if (element) return [];
     await this.firstRead.settled; // never render before the Instance has actually read once
-    if (this.firstRead.failure !== undefined) return [new ReadFailureNode(this.firstRead.failure)];
+    if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
 
     const tree = this.ensureLoaded();
     const roots = this.rootNodes(tree);

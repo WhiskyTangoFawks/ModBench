@@ -12,7 +12,8 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile },
 }));
 
-import { DownloadsProvider, DownloadNode, ReadFailureNode, type DownloadsProviderOptions, type DownloadsTreeNode } from './DownloadsProvider';
+import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from './DownloadsProvider';
+import { ErrorNode } from '../errorNode';
 import type { DownloadRow } from './mo2/downloads';
 import type { InstanceValue } from './instance';
 
@@ -44,6 +45,7 @@ class FakeInstance {
   // Defaults to 1 ("already loaded") so every existing fixture-based test needs no opinion on
   // it; a test of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
+  readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
   private failureListeners: ((reason: string) => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
@@ -58,6 +60,7 @@ class FakeInstance {
   // watcher-driven recompute does.
   publish(value: InstanceValue): void {
     this.value = value;
+    this.readFailure = undefined;
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
@@ -67,6 +70,7 @@ class FakeInstance {
   }
   // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
   fail(reason: string): void {
+    this.readFailure = reason;
     for (const listener of [...this.failureListeners]) listener(reason);
   }
 }
@@ -359,7 +363,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     const rows = await within(pending, 500);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toBeInstanceOf(ReadFailureNode);
+    expect(rows[0]).toBeInstanceOf(ErrorNode);
     expect(rows[0].label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
     expect(reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'ENOENT: no such file or directory, open modlist.txt' },

@@ -24,8 +24,9 @@ import {
 } from '../PluginsTreeProvider';
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
-  SubBlockNode, CellNode, InteriorCellsNode, InteriorLoadMoreNode, ErrorNode, IndexingNode,
+  SubBlockNode, CellNode, InteriorCellsNode, InteriorLoadMoreNode, IndexingNode,
 } from '../PluginTreeProvider';
+import { ErrorNode } from '../../errorNode';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ class FakeInstance {
   // Defaults to 1 ("already loaded") so every fixture-based test needs no opinion on it; a test
   // of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
+  readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
   private failureListeners: ((reason: string) => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
@@ -73,6 +75,7 @@ class FakeInstance {
   // watcher-driven recompute does.
   publish(value: InstanceValue): void {
     this.value = value;
+    this.readFailure = undefined;
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
@@ -82,6 +85,7 @@ class FakeInstance {
   }
   // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
   fail(reason: string): void {
+    this.readFailure = reason;
     for (const listener of [...this.failureListeners]) listener(reason);
   }
 }

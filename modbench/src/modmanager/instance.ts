@@ -70,6 +70,10 @@ export type InstanceSubscriber = (value: InstanceValue, sequence: number) => voi
  *  where they were: before the first landed value that is the empty sentinel at 0. */
 export type ReadFailureListener = (reason: string) => void;
 
+/** The Instance as a tree reads it: the held value, sequence and read failure, plus the two
+ *  channels they move on. */
+export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
+
 export interface InstanceOptions {
   instanceRoot: string;
   config: () => ConfigLike;
@@ -123,6 +127,8 @@ export class Instance implements vscode.Disposable {
 
   private seq = 0;
 
+  private failure: string | undefined;
+
   private subscribers: InstanceSubscriber[] = [];
 
   private failureListeners: ReadFailureListener[] = [];
@@ -166,6 +172,12 @@ export class Instance implements vscode.Disposable {
   /** Rises once per landed recompute. A failed read leaves it where it was. */
   get sequence(): number {
     return this.seq;
+  }
+
+  /** The latest recompute's failure reason, undefined once a recompute lands. Held, not just
+   *  fired, so a tree subscribing after the failure still hears it. */
+  get readFailure(): string | undefined {
+    return this.failure;
   }
 
   /** Called with each landed value and the sequence it landed at, never with a failure. */
@@ -223,10 +235,12 @@ export class Instance implements vscode.Disposable {
       next = await this.read();
     } catch (err) {
       this.options.log(`[instance] recompute failed, keeping the value at sequence ${this.seq}: ${message(err)}`);
-      this.notify(this.failureListeners, (listener) => listener(message(err)));
+      this.failure = message(err);
+      this.notify(this.failureListeners, (listener) => listener(this.failure!));
       return;
     }
     this.current = next;
+    this.failure = undefined;
     this.seq++;
     this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
   }
@@ -319,34 +333,37 @@ export interface FirstRead extends vscode.Disposable {
   readonly failure: string | undefined;
 }
 
-const READ_FAILED = 'Failed to read the MO2 instance.';
-
 /** The reporter hears the first failed read once; a later failure before any value has landed
  *  is the Instance's log line, nothing more, so a retrying watcher cannot toast per attempt. */
 export function firstReadOf(
-  instance: Pick<Instance, 'sequence' | 'subscribe' | 'onReadFailure'>,
+  instance: Pick<Instance, 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>,
   reporter: Reporter | undefined,
 ): FirstRead {
-  let failure: string | undefined;
+  const unread = () => instance.sequence === 0;
+  let reported = false;
+  const report = (reason: string) => {
+    if (reported) return;
+    reported = true;
+    reporter?.report('error', 'Failed to read the MO2 instance.', reason);
+  };
   let resolve = () => {};
-  const settled = instance.sequence > 0
-    ? Promise.resolve()
-    : new Promise<void>((r) => { resolve = r; });
+  const settled = unread() ? new Promise<void>((r) => { resolve = r; }) : Promise.resolve();
+  // Constructed after the first read already failed: the failure is held, not just fired.
+  if (unread() && instance.readFailure !== undefined) {
+    report(instance.readFailure);
+    resolve();
+  }
   const subscriptions = [
-    instance.subscribe(() => {
-      failure = undefined;
-      resolve();
-    }),
+    instance.subscribe(() => resolve()),
     instance.onReadFailure((reason) => {
-      if (instance.sequence > 0 || failure !== undefined) return;
-      failure = reason;
-      reporter?.report('error', READ_FAILED, reason);
+      if (!unread()) return;
+      report(reason);
       resolve();
     }),
   ];
   return {
     settled,
-    get failure() { return failure; },
+    get failure() { return unread() ? instance.readFailure : undefined; },
     dispose: () => { for (const subscription of subscriptions) subscription.dispose(); },
   };
 }

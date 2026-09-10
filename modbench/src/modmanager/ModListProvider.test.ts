@@ -31,7 +31,8 @@ vi.mock('./commands/modlist', () => ({
   reorderSeparatorBlock: (...args: unknown[]) => reorderSeparatorBlockMock(...args),
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, ReadFailureNode } from './ModListProvider';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode } from './ModListProvider';
+import { ErrorNode } from '../errorNode';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
@@ -70,6 +71,7 @@ class FakeInstance {
   // Defaults to 1 ("already loaded") so every existing fixture-based test needs no opinion on
   // it; a test of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
+  readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
   private failureListeners: ((reason: string) => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
@@ -84,6 +86,7 @@ class FakeInstance {
   // watcher-driven recompute does.
   publish(value: InstanceValue): void {
     this.value = value;
+    this.readFailure = undefined;
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
@@ -93,6 +96,7 @@ class FakeInstance {
   }
   // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
   fail(reason: string): void {
+    this.readFailure = reason;
     for (const listener of [...this.failureListeners]) listener(reason);
   }
 }
@@ -265,7 +269,7 @@ describe('ModListProvider', () => {
     const rows = await within(pending, 500);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toBeInstanceOf(ReadFailureNode);
+    expect(rows[0]).toBeInstanceOf(ErrorNode);
     expect(rows[0].label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
     expect(reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EACCES: permission denied, open modlist.txt' },
@@ -275,7 +279,7 @@ describe('ModListProvider', () => {
     const after = await within(provider.getChildren(), 500);
 
     expect(after.some((n) => n instanceof ModNode)).toBe(true);
-    expect(after.some((n) => n instanceof ReadFailureNode)).toBe(false);
+    expect(after.some((n) => n instanceof ErrorNode)).toBe(false);
     expect(reports).toHaveLength(1);
   });
 

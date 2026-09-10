@@ -11,7 +11,8 @@ import {
   type DownloadSortColumn,
   type DownloadStatus,
 } from './mo2/downloads';
-import { firstReadOf, type FirstRead, type Instance, type InstanceValue } from './instance';
+import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from './instance';
+import { ErrorNode } from '../errorNode';
 import type { Reporter } from '../reporter';
 
 // Mirrors MO2's own colour-coded Status cell. The icon is always set explicitly so the
@@ -66,25 +67,13 @@ export class DownloadNode extends vscode.TreeItem {
   }
 }
 
-/** The whole tree while the Instance's first read has failed and nothing has landed: one row
- *  carrying the reason, never an empty list that would read as "no downloads" (ADR-0026). */
-export class ReadFailureNode extends vscode.TreeItem {
-  readonly kind = 'readFailure' as const;
-  constructor(reason: string) {
-    super(`⚠ Failed to load: ${reason}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'error';
-    this.tooltip = reason;
-    this.iconPath = new vscode.ThemeIcon('error');
-  }
-}
-
-export type DownloadsTreeNode = DownloadNode | ReadFailureNode;
+export type DownloadsTreeNode = DownloadNode | ErrorNode;
 
 export interface DownloadsProviderOptions {
   instanceRoot: string;
   /** downloads/ rows, `.meta` sidecars folded in — the row provider's only row input
    *  (ADR-0047). */
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>;
+  instance: InstanceView;
   reporter?: Reporter;
 }
 
@@ -96,7 +85,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly instanceRoot: string;
-  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>;
+  private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
   private readonly firstRead: FirstRead;
@@ -170,7 +159,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeN
   async getChildren(element?: DownloadsTreeNode): Promise<DownloadsTreeNode[]> {
     if (element) return []; // flat list — no row has children
     await this.firstRead.settled; // never claim "no downloads" before the Instance has actually read one
-    if (this.firstRead.failure !== undefined) return [new ReadFailureNode(this.firstRead.failure)];
+    if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
     this.cache ??= this.build();
     if (!this.filterLower) return this.cache;
     return this.cache.filter((n) => n.row.name.toLowerCase().includes(this.filterLower));

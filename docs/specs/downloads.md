@@ -182,7 +182,10 @@ bookkeeping.
 ### Row rendering
 
 Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeItem`
-(`DownloadsProvider.ts`):
+(`DownloadsProvider.ts`). While the Instance's first read has failed and nothing has landed, the
+tree is instead one error node carrying the read's reason, and the injected reporter is told
+once ([ADR-0026](../adr/0026-error-surfacing-policy.md)); the next landed value replaces it
+with rows.
 
 - **Label** — `.meta` `name` when present and non-empty, else the raw filename (never
   blank, mirroring MO2's `displayNameByInfo`). This is a friendly display name, not the

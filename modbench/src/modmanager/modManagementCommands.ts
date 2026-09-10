@@ -7,7 +7,7 @@ import { type GameDirectoryResolver } from './gameDirectoryResolver';
 import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand } from './DownloadsPanel';
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
-import type { Instance } from './instance';
+import type { Instance, InstanceView } from './instance';
 import { nexusSlugForGame } from './mo2/gamePaths';
 import type { Own } from '../session';
 import { makeReporter } from '../reporter';
@@ -315,7 +315,7 @@ export function createModListView(
 export function registerDownloadsView(
   own: Own,
   instanceRoot: string,
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>,
+  instance: InstanceView,
   outputChannel: vscode.LogOutputChannel,
 ): DownloadsProvider {
   // A shim for collaborators still taking a flat `(msg) => void`, built here at the boundary so

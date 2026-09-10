@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 import type { MasterIssue, PluginDiagnosisReport, PluginMetadata, MEditClient } from '../medit/client';
-import { firstReadOf, type FirstRead, type Instance, type InstanceValue } from '../modmanager/instance';
+import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from '../modmanager/instance';
 import type { PluginEntry } from '../modmanager/model';
 import type { Reporter } from '../reporter';
 import { dropIndexForMove } from '../modmanager/mo2/pluginsText';
 import type { ImplicitMasterSource } from '../modmanager/commands/plugins';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 import type { LoadFailure } from '../loadOrderReconcile';
-import { ErrorNode, IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
+import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
+import { ErrorNode } from '../errorNode';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -51,7 +52,7 @@ export interface PluginMatch {
  *  Modbench runs, so a value captured at construction could go stale for the provider's life. */
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin copy — the row input (ADR-0047). */
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>;
+  instance: InstanceView;
   source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
   records?: RecordBrowser;
@@ -205,7 +206,7 @@ export class PluginsTreeProvider
   private readonly reporter?: Reporter;
   private readonly dataFolder: () => Promise<string | undefined>;
   private readonly implicitMasters: ImplicitMasterSource;
-  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence' | 'onReadFailure'>;
+  private readonly instance: InstanceView;
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
