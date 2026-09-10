@@ -81,7 +81,7 @@ public sealed class ModFolderWatcherTests
             var question = ExternalChangeDeferral.Unanswered(modFolder);
             Assert.NotNull(question);
             Assert.Contains("Test.esp", question, StringComparison.Ordinal);
-            // The dialog's own two current actions, never the buttons it retired.
+            // The dialog's own two current actions.
             Assert.Contains("Commit to main as new baseline", question, StringComparison.Ordinal);
             Assert.Contains("Apply to working tree on edit", question, StringComparison.Ordinal);
         }

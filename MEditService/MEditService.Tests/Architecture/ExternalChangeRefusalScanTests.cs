@@ -19,33 +19,38 @@ public sealed class ExternalChangeRefusalScanTests
     {
         var root = ArchitectureTests.SolutionDirectory();
 
-        var offenders = ScannedRoots
-            .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
-            .SelectMany(file => RetiredIn(File.ReadAllText(file))
-                .Select(needle => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {needle}"))
-            .Order(StringComparer.Ordinal)
-            .ToList();
-
-        Assert.Empty(offenders);
+        Assert.Empty(Offenders(root, ScannedRoots));
     }
 
-    // Proves the matcher alone; the walk over Core/Api/Bridge is exercised by the test above.
+    // Proves the walk, not only the matcher: a planted file under a scanned root's own
+    // subdirectory is found the same way a real one would be.
     [Fact]
-    public void TheScan_FindsBothPlantedRetiredStrings()
+    public void TheScan_FindsAPlantedRetiredStringUnderAScannedRoot()
     {
-        var dir = Directory.CreateTempSubdirectory("medit-external-change-refusal-scan-").FullName;
+        var root = Directory.CreateTempSubdirectory("medit-external-change-refusal-scan-").FullName;
         try
         {
-            var planted = Path.Combine(dir, "Planted.cs");
-            File.WriteAllText(planted, "var refusal = \"Absorb Upstream Update or Keep as My Edit.\";\n");
+            Directory.CreateDirectory(Path.Combine(root, "Layer"));
+            File.WriteAllText(
+                Path.Combine(root, "Layer", "Planted.cs"),
+                "var refusal = \"Absorb Upstream Update or Keep as My Edit.\";\n");
 
-            Assert.Equal(["Absorb Upstream Update", "Keep as My Edit"], RetiredIn(File.ReadAllText(planted)));
+            Assert.Equal(
+                ["Layer/Planted.cs: Absorb Upstream Update", "Layer/Planted.cs: Keep as My Edit"],
+                Offenders(root, ["Layer"]));
         }
         finally
         {
-            Directory.Delete(dir, recursive: true);
+            Directory.Delete(root, recursive: true);
         }
     }
+
+    private static List<string> Offenders(string root, string[] scannedRoots) =>
+        [.. scannedRoots
+            .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r)))
+            .SelectMany(file => RetiredIn(File.ReadAllText(file))
+                .Select(needle => $"{Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')}: {needle}"))
+            .Order(StringComparer.Ordinal)];
 
     private static List<string> RetiredIn(string text) => [.. RetiredStrings.Where(text.Contains)];
 }
