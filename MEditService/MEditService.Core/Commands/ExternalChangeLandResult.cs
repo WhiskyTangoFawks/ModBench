@@ -1,4 +1,4 @@
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Commands;
 
 /// <summary>Keep's outcome — a typed refusal (naming the colliding records), never a
 /// partial apply: either every touched record lands, or none of them do.</summary>

@@ -84,11 +84,16 @@ public sealed class WriteRouteHandlerTests
     public void EveryGestureHandler_IsTheHandlerOfExactlyOneWriteRoute()
     {
         var gestures = typeof(EditRecordHandler).Assembly.GetExportedTypes()
-            .Where(type => type.Namespace == CommandsNamespace)
+            .Where(IsHandler)
             .OrderBy(type => type.Name, StringComparer.Ordinal);
 
         Assert.Equal(gestures, Routes.Select(route => route.Handler).OrderBy(type => type.Name, StringComparer.Ordinal));
     }
+
+    // The carriers the gestures answer with share this namespace (ADR-0046 invariant 8), and only a
+    // handler is routed. CommandHandlerConventionTests is what holds the namespace to those two.
+    private static bool IsHandler(Type type) =>
+        type.Namespace == CommandsNamespace && type.Name.EndsWith("Handler", StringComparison.Ordinal);
 
     private readonly record struct MappedRoute(
         string Method, string Pattern, string? Name, IReadOnlyList<Type> Handlers);
@@ -109,6 +114,6 @@ public sealed class WriteRouteHandlerTests
                     endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName,
                     [.. (endpoint.Metadata.GetMetadata<MethodInfo>()?.GetParameters() ?? [])
                         .Select(parameter => parameter.ParameterType)
-                        .Where(type => type.Namespace == CommandsNamespace)])))];
+                        .Where(IsHandler)])))];
     }
 }

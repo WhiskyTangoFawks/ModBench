@@ -1,4 +1,4 @@
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Commands;
 
 /// <summary>Absorb's outcome — the applied-or-refusal spine its Keep sibling returns,
 /// so a binary that cannot be parsed is an answer, not an exception. A refused or conflicted

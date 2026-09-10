@@ -1,6 +1,6 @@
-using MEditService.Core.Source;
+using MEditService.Core.Plugins;
 
-namespace MEditService.Core.Plugins;
+namespace MEditService.Core.Commands;
 
 /// <summary>What the create gesture landed: the copy it registered, and the Track it ran when the
 /// destination held no repository yet — null when one was already there.</summary>

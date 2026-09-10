@@ -31,6 +31,21 @@ public sealed class CommandHandlerConventionTests
         (typeof(ContinueRebaseEditBranchHandler), "Applied"),
     ];
 
+    // What the gestures answer and report through, each with its own refusal vocabulary. The carrier
+    // is the gesture's own (ADR-0046 invariant 8), so it shares the gesture's namespace.
+    private static readonly Type[] Carriers =
+    [
+        typeof(AbsorbResult),
+        typeof(ExternalChangeLandResult),
+        typeof(PluginCreateResult),
+        typeof(RebaseOutcome),
+        typeof(RebaseResult),
+        typeof(TrackPhase),
+        typeof(TrackProgress),
+        typeof(TrackRefusal),
+        typeof(TrackResult),
+    ];
+
     private const string CommandsNamespace = "MEditService.Core.Commands";
 
     public static IEnumerable<object[]> EveryHandler => Handlers.Select(entry => new object[] { entry.Handler });
@@ -94,13 +109,15 @@ public sealed class CommandHandlerConventionTests
     }
 
     [Fact]
-    public void EveryCommandInTheNamespace_IsAHandlerThisSuiteNames()
+    public void EveryCommandInTheNamespace_IsAHandlerOrACarrierThisSuiteNames()
     {
         var found = typeof(EditRecordHandler).Assembly.GetExportedTypes()
             .Where(type => type.Namespace == CommandsNamespace)
             .OrderBy(type => type.Name, StringComparer.Ordinal);
 
-        Assert.Equal(Handlers.Select(entry => entry.Handler).OrderBy(type => type.Name, StringComparer.Ordinal), found);
+        Assert.Equal(
+            Handlers.Select(entry => entry.Handler).Concat(Carriers).OrderBy(type => type.Name, StringComparer.Ordinal),
+            found);
     }
 
     // Declared only, so the members every object has are not the gesture, and minus what an
