@@ -285,8 +285,9 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
     (extract → detect root → install into the loadout, stamping `installationFile` into
     the new mod's `meta.ini`), pre-supplied with this row's download path (skipping the
     file-picker). When the download's Nexus mod id matches an installed mod's, **the
-    upgrade pick** (below) runs first and its chosen target, if any, rides along as a
-    fifth argument the command uses in place of its own name prompt. On **success**,
+    upgrade pick** (below) runs first; its outcome rides along as a fifth argument — the
+    install target, either an upgrade naming the chosen mod or a new mod, which is what
+    sends the command to its name prompt. With no pick, the argument is a new mod. On **success**,
     write `installed=true` back to the download's `.meta`, so the row's Status
     transitions Downloaded → Installed live via the watcher.
   - **The upgrade pick** — `selectUpgradeCandidates` (`upgradeCandidates.ts`), pure over
@@ -299,8 +300,9 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
     row per candidate (label: mod name and version; description: "File ID match" when
     that candidate matched, named and sorted first, which is what makes it the QuickPick's
     default-highlighted row) plus a trailing "Install as a new mod…" row. Choosing a
-    candidate upgrades that mod's folder in place (ADR-0047 point 6); choosing "new mod"
-    or pressing **Esc** runs today's flow — Esc installs nothing.
+    candidate yields an upgrade of that mod's folder, replaced in place (ADR-0047 point 6);
+    choosing "new mod" yields a new mod, which reaches the name prompt. **Esc** yields
+    nothing at all and installs nothing.
   - **Visit on Nexus** — open `https://www.nexusmods.com/{gameSlug}/mods/{modID}`, where
     `gameSlug` derives from the instance's game (the existing MO2 game-name → Nexus-slug
     mapping) and `modID` from the `.meta`. **Gated off** when there's no `modID`
@@ -418,16 +420,19 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   `registerDownloadsHiddenToggleCommands` against the mocked provider. The upgrade pick, against
   a scripted `Pick<Instance, 'value'>` and the mocked `vscode.window.showQuickPick` (never real
   VS Code UI): the pick's rows, their order and the file-id match's active-row placement;
-  choosing a candidate or "Install as a new mod…" carries the right target into the install
-  command; Esc never calls the install command at all; a download with no mod id, or one an
-  installed mod does not share, never shows the pick.
+  the upgrade shape a candidate row yields and the new-mod shape the trailing row yields;
+  choosing either carries that shape into the install command; Esc never calls the install
+  command at all; a download with no mod id, or one an installed mod does not share, never
+  shows the pick and installs as a new mod.
 - **`upgradeCandidates.test.ts`** (Vitest, no `vscode`): `selectUpgradeCandidates` as a pure
   function over fixture `InstanceValue`/download shapes — one candidate with a file-id match,
   several without, none (no mod id on the download, and no installed mod sharing one that is
   present), and a match found only through the sidecar named by `installationFile`.
 - **`modManagementCommands.test.ts`**: `registerModInstallCommands`'s `installFromArchive`
-  command — a supplied target bypasses `promptModName` and installs under that name; no target
-  reaches the prompt as it does today, cancelling it installs nothing.
+  command — an upgrade target bypasses `promptModName` and installs as that upgrade; a new-mod
+  target, and the Mods-view entry that supplies none, reach the prompt and install as a new mod
+  under the prompted name; cancelling the prompt installs nothing. The Mods-view
+  `installFromFolder` entry likewise installs as a new mod.
 - **`downloadsWatcher.test.ts`**: debounces multiple rapid fs events into one `onChange`
   call.
 - **`HiddenDownloadDecorationProvider.test.ts`**: decorates only rows both under the

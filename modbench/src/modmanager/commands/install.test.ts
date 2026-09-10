@@ -108,7 +108,7 @@ describe('install commands', () => {
       }
     })();
 
-    const outcome = await installFromFolder(root, MOD, sourceFolder);
+    const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder);
     observing = false;
     await observer;
 
@@ -125,7 +125,7 @@ describe('install commands', () => {
   it('writes the mod folder and nothing else — no modlist line, no download bookkeeping', async () => {
     const before = await snapshotTree(root);
 
-    await installFromFolder(root, MOD, sourceFolder);
+    await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder);
 
     const after = await snapshotTree(root);
     assertOnlyChanged(before, after, new Set(COMPLETE.map((p) => `mods/${MOD}/${p}`)));
@@ -138,7 +138,7 @@ describe('install commands', () => {
       await writePayload(join(dest, 'Wrapper'));
     };
 
-    await installFromArchive(root, MOD, archive, { run });
+    await installFromArchive(root, { kind: 'new', name: MOD }, archive, { run });
 
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('gameName=Fallout 4');
@@ -150,7 +150,7 @@ describe('install commands', () => {
   it('a new install writes the sidecar\'s version, same as it writes modid and installedFiles', async () => {
     const archive = join(root, 'downloads', 'Freshly-1-0.7z');
 
-    await installFromArchive(root, MOD, archive, { run: runnerFor(), modID: '111', fileID: '222', version: '3.0.0' });
+    await installFromArchive(root, { kind: 'new', name: MOD }, archive, { run: runnerFor(), modID: '111', fileID: '222', version: '3.0.0' });
 
     const meta = await readFile(join(root, 'mods', MOD, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=3.0.0');
@@ -166,7 +166,7 @@ describe('install commands', () => {
     };
     const before = await snapshotTree(root);
 
-    const outcome = await installFromFolder(root, MOD, sourceFolder, { renameFn: exdev });
+    const outcome = await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder, { renameFn: exdev });
 
     expect(await treeOf(join(root, 'mods', MOD))).toBeNull();
     assertOnlyChanged(before, await snapshotTree(root), new Set());
@@ -175,11 +175,39 @@ describe('install commands', () => {
   });
 
   it('leaves no staging directory behind, on success or on refusal', async () => {
-    await installFromFolder(root, MOD, sourceFolder);
-    await installFromFolder(root, 'Harder VATS', sourceFolder);
+    await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder);
+    await installFromFolder(root, { kind: 'new', name: 'Harder VATS' }, sourceFolder);
 
     const leftovers = (await readdir(root)).filter((name) => name.startsWith('.medit-'));
     expect(leftovers).toEqual([]);
+  });
+
+  // Rival: restore the `exists(modDir)` branch that made an existing folder an upgrade. The
+  // folder is then emptied and refilled, so both the refusal and the untouched-tree assertion
+  // fail.
+  it('refuses a new install onto an existing folder and leaves it untouched, even unlisted', async () => {
+    const name = 'Unlisted Folder';
+    const modDir = await makeExistingMod(root, name, false);
+    const before = await treeOf(modDir);
+
+    const outcome = await installFromFolder(root, { kind: 'new', name }, sourceFolder);
+
+    expect(outcome).toMatchObject({ applied: false });
+    expect(outcome.applied === false && outcome.refusal).toMatch(/already exists/);
+    expect(await treeOf(modDir)).toEqual(before);
+  });
+
+  // Rival: fall back to landing a new mod when the folder is gone. The folder would then exist
+  // and hold the payload, so both assertions fail.
+  it('refuses an upgrade of a folder that is not under mods/, writing nothing', async () => {
+    const before = await snapshotTree(root);
+
+    const outcome = await installFromFolder(root, { kind: 'upgrade', name: 'Vanished Mod' }, sourceFolder);
+
+    expect(outcome).toMatchObject({ applied: false });
+    expect(outcome.applied === false && outcome.refusal).toMatch(/no folder by that name/);
+    expect(await treeOf(join(root, 'mods', 'Vanished Mod'))).toBeNull();
+    assertOnlyChanged(before, await snapshotTree(root), new Set());
   });
 
   it('upgrades a tracked target: .git survives byte-identical, the stale file goes, the release lands, meta.ini keeps owned keys, installedFiles and foreign keys', async () => {
@@ -188,7 +216,7 @@ describe('install commands', () => {
     const oldGitHead = await readFile(join(modDir, '.git', 'HEAD'));
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    const outcome = await installFromArchive(root, name, archive, { run: runnerFor(), modID: '111', fileID: '222' });
+    const outcome = await installFromArchive(root, { kind: 'upgrade', name }, archive, { run: runnerFor(), modID: '111', fileID: '222' });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await readFile(join(modDir, '.git', 'HEAD'))).toEqual(oldGitHead);
@@ -207,7 +235,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    const outcome = await installFromArchive(root, name, archive, { run: runnerFor() });
+    const outcome = await installFromArchive(root, { kind: 'upgrade', name }, archive, { run: runnerFor() });
 
     expect(outcome).toMatchObject({ applied: true });
     expect(await treeOf(modDir)).toEqual(COMPLETE);
@@ -218,7 +246,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    await installFromArchive(root, name, archive, { run: runnerFor(), version: '2.0.0' });
+    await installFromArchive(root, { kind: 'upgrade', name }, archive, { run: runnerFor(), version: '2.0.0' });
 
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=2.0.0');
@@ -232,7 +260,7 @@ describe('install commands', () => {
     const modDir = await makeExistingMod(root, name, false);
     const archive = join(root, 'downloads', 'Freshly-2-0.7z');
 
-    await installFromArchive(root, name, archive, { run: runnerFor() });
+    await installFromArchive(root, { kind: 'upgrade', name }, archive, { run: runnerFor() });
 
     const meta = await readFile(join(modDir, 'meta.ini'), 'utf8');
     expect(meta).toContain('version=1.0.0');
@@ -246,7 +274,7 @@ describe('install commands', () => {
     const watcher = watch(modDir, () => { fired = true; });
 
     try {
-      const outcome = await installFromArchive(root, name, archive, { run: runnerFor() });
+      const outcome = await installFromArchive(root, { kind: 'upgrade', name }, archive, { run: runnerFor() });
       expect(outcome).toMatchObject({ applied: true });
 
       fired = false;
@@ -257,22 +285,23 @@ describe('install commands', () => {
     }
   });
 
-  // Rival: drop the write lock. Both pass the exists() check before either has written
-  // anything, and the loser's rename onto the now-populated target fails with a raw ENOTEMPTY
-  // instead of cleanly falling through to the upgrade path.
-  it('serializes two installs of one name — the second lands as an upgrade of the first', async () => {
-    const [first, second] = await Promise.all([
-      installFromFolder(root, MOD, sourceFolder),
-      installFromFolder(root, MOD, sourceFolder),
+  // Rival: drop the write lock. Both see the folder absent before either has written anything,
+  // and the loser's rename onto the now-populated target fails with a raw ENOTEMPTY instead of
+  // the collision refusal.
+  it('serializes two new installs of one name — exactly one lands, the loser refuses as a collision', async () => {
+    const outcomes = await Promise.all([
+      installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder),
+      installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder),
     ]);
 
-    expect(first).toMatchObject({ applied: true });
-    expect(second).toMatchObject({ applied: true });
+    expect(outcomes.filter((o) => o.applied)).toHaveLength(1);
+    const loser = outcomes.find((o) => !o.applied);
+    expect(loser?.applied === false && loser.refusal).toMatch(/already exists/);
     expect(await treeOf(join(root, 'mods', MOD))).toEqual(COMPLETE);
   });
 
   it('leaves the source folder where the user put it', async () => {
-    await installFromFolder(root, MOD, sourceFolder);
+    await installFromFolder(root, { kind: 'new', name: MOD }, sourceFolder);
 
     expect(await treeOf(sourceFolder)).toEqual(PAYLOAD.map((p) => p.split(sep).join('/')).sort());
   });
@@ -280,7 +309,7 @@ describe('install commands', () => {
   it('reports a failed extraction as a refusal, not a throw', async () => {
     const run: Runner = () => Promise.reject(new Error('archive is corrupt'));
 
-    const outcome = await installFromArchive(root, MOD, join(root, 'downloads', 'bad.7z'), { run });
+    const outcome = await installFromArchive(root, { kind: 'new', name: MOD }, join(root, 'downloads', 'bad.7z'), { run });
 
     expect(outcome).toMatchObject({ applied: false });
     expect(outcome.applied === false && outcome.refusal).toMatch(/corrupt/);
