@@ -182,7 +182,10 @@ bookkeeping.
 ### Row rendering
 
 Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeItem`
-(`DownloadsProvider.ts`):
+(`DownloadsProvider.ts`). While the Instance's first read has failed and nothing has landed, the
+tree is instead one error node carrying the read's reason, and the injected reporter is told
+once ([ADR-0026](../adr/0026-error-surfacing-policy.md)); the next landed value replaces it
+with rows.
 
 - **Label** — `.meta` `name` when present and non-empty, else the raw filename (never
   blank, mirroring MO2's `displayNameByInfo`). This is a friendly display name, not the
@@ -400,8 +403,9 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   `contextValue`, `resourceUri`); provider behavior against a fake Instance — rows come
   from the Instance value alone (fixtures, never real fs), default sort, hidden exclusion,
   `setShowHidden`/`setSort` re-rendering and firing `onDidChangeTreeData`, `hiddenNames()`,
-  the empty-value state, the `sequence === 0` "not read yet" guard, and re-rendering off a
-  newly published Instance value past a macrotask boundary.
+  the empty-value state, the `sequence === 0` "not read yet" guard, the failed-first-read error
+  node with its one report, and re-rendering off a newly published Instance value past a
+  macrotask boundary.
 - **`DownloadsPanel.test.ts`** (Vitest, `vscode` stubbed the way `ModListProvider.test.ts`
   does): `registerDownloadsSingleRowCommands` / `registerDownloadsMultiRowCommands` exercised
   by capturing the mocked `vscode.commands.registerCommand` calls and invoking the captured

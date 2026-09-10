@@ -11,7 +11,9 @@ import {
   type DownloadSortColumn,
   type DownloadStatus,
 } from './mo2/downloads';
-import type { Instance, InstanceValue } from './instance';
+import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from './instance';
+import { ErrorNode } from '../errorNode';
+import type { Reporter } from '../reporter';
 
 // Mirrors MO2's own colour-coded Status cell. The icon is always set explicitly so the
 // file-icon theme never takes over; a colour is affordable because every row is an archive.
@@ -65,29 +67,28 @@ export class DownloadNode extends vscode.TreeItem {
   }
 }
 
+export type DownloadsTreeNode = DownloadNode | ErrorNode;
+
 export interface DownloadsProviderOptions {
   instanceRoot: string;
   /** downloads/ rows, `.meta` sidecars folded in — the row provider's only row input
    *  (ADR-0047). */
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  instance: InstanceView;
+  reporter?: Reporter;
 }
 
 /** Flat: downloads have no grouping or reorder concept, so every row is a leaf. One row per
  *  archive, read entirely from the Instance value (ADR-0047); this provider owns no cache or
  *  watcher over downloads/ itself. */
-export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode>, vscode.Disposable {
-  private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadNode | undefined>();
+export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeNode>, vscode.Disposable {
+  private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private readonly instanceRoot: string;
-  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  private readonly instance: InstanceView;
   private instanceValue: InstanceValue;
   private readonly instanceSubscription: vscode.Disposable;
-  // Resolves once the Instance lands its first recompute. `sequence === 0` means "not read
-  // yet", never "genuinely empty" — lets `getChildren()` await it instead of showing no rows
-  // before the Instance has read once (mirrors PluginsTreeProvider's `firstValue`).
-  private readonly firstValue: Promise<void>;
-  private resolveFirstValue: (() => void) | undefined;
+  private readonly firstRead: FirstRead;
 
   private cache?: DownloadNode[];
 
@@ -103,18 +104,16 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode>,
     this.instanceRoot = options.instanceRoot;
     this.instance = options.instance;
     this.instanceValue = options.instance.value;
-    this.firstValue = options.instance.sequence > 0
-      ? Promise.resolve()
-      : new Promise((resolve) => { this.resolveFirstValue = resolve; });
+    this.firstRead = firstReadOf(options.instance, options.reporter);
     this.instanceSubscription = options.instance.subscribe((value) => {
       this.instanceValue = value;
-      this.resolveFirstValue?.();
       this.invalidate();
     });
   }
 
   dispose(): void {
     this.instanceSubscription.dispose();
+    this.firstRead.dispose();
   }
 
   // Re-pulls `instance.value` rather than trusting the copy the last subscriber callback left:
@@ -153,13 +152,14 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadNode>,
     return new Set(hidden.map((n) => n.row.name));
   }
 
-  getTreeItem(element: DownloadNode): vscode.TreeItem {
+  getTreeItem(element: DownloadsTreeNode): vscode.TreeItem {
     return element;
   }
 
-  async getChildren(element?: DownloadNode): Promise<DownloadNode[]> {
+  async getChildren(element?: DownloadsTreeNode): Promise<DownloadsTreeNode[]> {
     if (element) return []; // flat list — no row has children
-    await this.firstValue; // never claim "no downloads" before the Instance has actually read one
+    await this.firstRead.settled; // never claim "no downloads" before the Instance has actually read one
+    if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
     this.cache ??= this.build();
     if (!this.filterLower) return this.cache;
     return this.cache.filter((n) => n.row.name.toLowerCase().includes(this.filterLower));

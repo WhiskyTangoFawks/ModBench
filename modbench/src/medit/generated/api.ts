@@ -871,6 +871,7 @@ export interface components {
         };
         PluginLoadFailure: {
             name: string;
+            origin: string;
             reason: string;
         };
         PluginRecordTypeCount: {

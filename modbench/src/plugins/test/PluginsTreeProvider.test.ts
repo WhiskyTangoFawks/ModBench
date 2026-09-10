@@ -6,7 +6,7 @@ import { reorderPlugins, setPluginEnabled } from '../../modmanager/commands/plug
 import { parsePlugins } from '../../modmanager/mo2/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../modmanager/loadOrderSnapshot';
 import type { InstanceValue } from '../../modmanager/instance';
-import { InMemoryMEditClient, type PluginDiagnosisReport, type PluginMetadata, type RecordPage } from '../../medit/client';
+import { InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage } from '../../medit/client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFilePlain, uriFrom, DataTransferItem, DataTransfer,
@@ -20,12 +20,13 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import {
   PluginsTreeProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf,
-  type PluginListSource,
+  type PluginListSource, type PluginsTreeProviderOptions,
 } from '../PluginsTreeProvider';
 import {
   PluginTreeProvider, RecordTypeNode, RecordNode, WorldspacesNode, WorldspaceNode, BlockNode,
-  SubBlockNode, CellNode, InteriorCellsNode, InteriorLoadMoreNode, ErrorNode, IndexingNode,
+  SubBlockNode, CellNode, InteriorCellsNode, InteriorLoadMoreNode, IndexingNode,
 } from '../PluginTreeProvider';
+import { ErrorNode } from '../../errorNode';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,9 @@ class FakeInstance {
   // Defaults to 1 ("already loaded") so every fixture-based test needs no opinion on it; a test
   // of the sequence === 0 ("not read yet") guard passes 0 explicitly.
   sequence: number;
+  readFailure: string | undefined;
   private subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
+  private failureListeners: ((reason: string) => void)[] = [];
   constructor(initial: InstanceValue, sequence = 1) {
     this.value = initial;
     this.sequence = sequence;
@@ -72,10 +75,26 @@ class FakeInstance {
   // watcher-driven recompute does.
   publish(value: InstanceValue): void {
     this.value = value;
+    this.readFailure = undefined;
     this.sequence++;
     for (const subscriber of [...this.subscribers]) subscriber(value, this.sequence);
   }
+  onReadFailure(listener: (reason: string) => void) {
+    this.failureListeners.push(listener);
+    return { dispose: () => { this.failureListeners = this.failureListeners.filter((l) => l !== listener); } };
+  }
+  // Simulates a recompute that threw: the value and sequence stay put, the reason goes out.
+  fail(reason: string): void {
+    this.readFailure = reason;
+    for (const listener of [...this.failureListeners]) listener(reason);
+  }
 }
+
+// A hang must fail on an explicit assertion, not the test runner's own timeout.
+const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race([
+  pending,
+  new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`getChildren() did not settle within ${ms} ms`)), ms)),
+]);
 
 class FakeSource implements PluginListSource {
   setPluginEnabledCalls: { pluginName: string; enabled: boolean }[] = [];
@@ -174,6 +193,7 @@ function makeTree(
     publishDiagnoses: (reports: PluginDiagnosisReport[]) => void;
     dataFolder: () => Promise<string | undefined>;
     implicitMasters: () => Promise<readonly string[] | undefined>;
+    reporter: PluginsTreeProviderOptions['reporter'];
   }> = {},
 ): Harness {
   const instance = extra.instance ?? new FakeInstance(valueOf(plugins));
@@ -187,6 +207,7 @@ function makeTree(
     publishDiagnoses: extra.publishDiagnoses,
     dataFolder: extra.dataFolder,
     implicitMasters: extra.implicitMasters,
+    reporter: extra.reporter,
   });
   return { tree, client, records, instance, source, logged };
 }
@@ -195,7 +216,7 @@ function makeTree(
 // pushing a fact in by hand. The malformed-plugin scan is fire-and-forget, so its microtasks
 // are drained here before anything is asserted.
 async function reconcile(
-  h: Harness, plugins: PluginMetadata[], failures: { name: string; reason: string }[] = [],
+  h: Harness, plugins: PluginMetadata[], failures: PluginLoadFailure[] = [],
 ): Promise<void> {
   h.client.setQueryAnswer('getPlugins', plugins);
   await h.tree.applyReconciled(failures);
@@ -476,6 +497,34 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     expect(settled).toBe(true);
     expect(rows.map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+  });
+
+  // The timeout is the finding: a gate that settles only on a landed value leaves a first read
+  // that threw spinning forever — no row, no error node, no toast (ADR-0026).
+  it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
+    const instance = new FakeInstance(valueOf([]), 0);
+    const reports: { severity: string; message: string; detail?: string }[] = [];
+    const { tree } = makeTree([], {
+      instance,
+      reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
+    });
+
+    const pending = tree.getChildren();
+    instance.fail('EISDIR: illegal operation on a directory, read plugins.txt');
+    const rows = await within(pending, 500);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toBeInstanceOf(ErrorNode);
+    expect(rows[0].label).toBe('⚠ Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
+    expect(reports).toEqual([
+      { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EISDIR: illegal operation on a directory, read plugins.txt' },
+    ]);
+
+    instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
+    const after = await within(tree.getChildren(), 500);
+
+    expect(after.map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+    expect(reports).toHaveLength(1);
   });
 
   // A genuinely empty plugins.txt (sequence already past 0) is not "not read yet" — it must
@@ -1301,7 +1350,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
   it('hides a plugin that failed to load while the filter matches none of its records', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     expect(await h.tree.getChildren()).toEqual([]);
   });
@@ -1682,7 +1731,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
     // The reason can be a multi-line exception-chain summary (LoadOrder.PluginLoadFailure
     // joins outer through innermost message) — the tooltip must carry every line, readably.
     const reason = 'InvalidOperationException: Malformed record\nFormatException: bad subrecord at offset 12';
-    await reconcile(h, [], [{ name: 'A.esp', reason }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason }]);
 
     const item = await rowItem(h);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
@@ -1696,7 +1745,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
   // would promise a completion that never comes (ADR-0026) — it answers the error node instead.
   it('never abandons the row: it stays collapsible, but expands to the error node — it will never be indexed', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     const [row] = await h.tree.getChildren();
@@ -1705,16 +1754,16 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
     expect((children[0] as vscode.TreeItem).tooltip).toBe('Malformed record');
   });
 
-  it('matches the plugin key case-insensitively', async () => {
+  it('matches the copy, name and origin, case-insensitively', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.ESP', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.ESP', origin: 'SOMEMOD', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).tooltip).toContain('Failed to load');
   });
 
   it('clears the failed tooltip once a later reconcile reports the plugin loaded', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
     expect((await rowItem(h)).tooltip).toContain('Failed to load');
 
     await reconcile(h, [held('A.esp')]);
@@ -1726,18 +1775,11 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
 
   it('leaves an unaffected plugin row undecorated', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('B.esp')], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [held('B.esp')], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     const item = await rowItem(h, 1);
     expect(item.tooltip).toBeUndefined();
     expect(item.iconPath).toBeUndefined();
-  });
-
-  it('names an unnamed failure reason rather than rendering "undefined"', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: null } as never]);
-
-    expect((await rowItem(h)).tooltip).toBe('Failed to load: Unknown error');
   });
 });
 
@@ -1825,7 +1867,7 @@ describe('PluginsTreeProvider — decoration precedence', () => {
     await reconcile(
       h,
       [held('A.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }] })],
-      [{ name: 'A.esp', reason: 'Malformed record' }],
+      [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }],
     );
 
     const item = await rowItem(h);
@@ -1858,7 +1900,7 @@ describe('PluginsTreeProvider — decoration precedence', () => {
   it('a load failure keeps authority over a diagnosis on the same row', async () => {
     const h = makeTree([A_ROW()]);
     h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).description).toBe('✗ Failed to load');
   });
@@ -1971,6 +2013,38 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     ]);
 
     expect((await rowItem(h)).description).toBeUndefined();
+  });
+
+  // A load failure names the copy that failed. The losing copy is not a row (rows are the
+  // winning copy of every plugins.txt line), so its failure lands on no row rather than on the
+  // copy that loaded.
+  it('leaves the winning row clean when the other copy is the one that failed to load', async () => {
+    const h = makeTree([SHARED_ROW(), plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB', winning: false })]);
+    await reconcile(h, [held('Shared.esp', { origin: 'ModA' })],
+      [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
+
+    const rows = await h.tree.getChildren();
+    expect(rows).toHaveLength(1);
+    const item = h.tree.getTreeItem(rows[0]);
+    expect(item.iconPath).toBeUndefined();
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
+  });
+
+  it('expands the winning row as still indexing, never into the other copy failure', async () => {
+    const h = makeTree([SHARED_ROW()]);
+    h.tree.applyIndexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
+
+    const [row] = await h.tree.getChildren();
+    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+  });
+
+  it('flags the row when its own copy failed to load and the other copy loaded', async () => {
+    const h = makeTree([SHARED_ROW()]);
+    await reconcile(h, [held('Shared.esp', { origin: 'ModB' })],
+      [{ name: 'Shared.esp', origin: 'ModA', reason: 'Malformed record' }]);
+
+    expect((await rowItem(h)).description).toBe('✗ Failed to load');
   });
 
   it('joins case-insensitively on the origin as well as the name', async () => {

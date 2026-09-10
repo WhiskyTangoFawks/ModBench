@@ -44,7 +44,7 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('warns and logs a skipped plugin, never silently (ADR-0026)', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin()], reconciled([{ name: 'Bad.esp', reason: 'RACE parse' }]), deps);
+    reportLoadOrderResult([plugin()], reconciled([{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }]), deps);
 
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('Bad.esp'));
     expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('Bad.esp'));

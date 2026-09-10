@@ -516,7 +516,9 @@ skipped so the rest of the load order still loads (`LoadOrder.Failures`) — a w
 bytes cannot be read at all has no record identity to hang a parse status on — but its row is
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeProvider` decorates it with its
-recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue;
+recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue,
+joined on the copy the failure names (ADR-0036), so a losing copy that failed leaves the winning
+copy's row clean and reaches the user only through the reconcile toast, since it has no row;
 the row stays collapsible but answers the error node on expand, carrying the same reason — never
 "still indexing", which would promise a completion a plugin the load order gave up on will never
 reach (ADR-0026). The existing
@@ -735,10 +737,12 @@ overflow, then native **Collapse All** last.
 
 ### Empty / error states
 
-- **Read failure** (missing/corrupt `plugins.txt`) — a single error tree node, per the existing
-  `modmanager/CLAUDE.md` convention ("show an error tree node instead of an empty list when a
-  fetch/read fails"), warning surfaced via the injected reporter per
-  [ADR-0026](../adr/0026-error-surfacing-policy.md).
+- **Read failure** — the Instance's first read threw (an unreadable `modlist.txt` or
+  `plugins.txt`, a profile folder that vanished, a permissions error) and nothing has landed: a
+  single error node carrying the read's own reason, and the injected reporter told once, at
+  error severity ([ADR-0026](../adr/0026-error-surfacing-policy.md)) — never a spinner that
+  never ends, and never an empty list. The next landed value replaces the node with rows. A read
+  that fails after a value has landed keeps that value's rows and is logged only.
 - **Empty `plugins.txt`** (no lines) — realistically near-unreachable (vanilla masters always
   populate it) but handled for completeness: a single informational node, "No plugins," the same
   fetch-failure-is-an-error-node/empty-is-a-known-fact convention every tree in this product

@@ -10,8 +10,9 @@ import {
   PluginTreeProvider, RecordTypeNode, RecordNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
-  ErrorNode, headerFormKeyFor,
+  headerFormKeyFor,
 } from '../PluginTreeProvider';
+import { ErrorNode } from '../../errorNode';
 import type { PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../../medit/recordResourceUri';
 

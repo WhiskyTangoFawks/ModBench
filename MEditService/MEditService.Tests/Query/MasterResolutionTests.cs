@@ -26,7 +26,7 @@ public class MasterResolutionTests
     public void Classify_MasterInFailedSet_ReturnsUnloadable()
     {
         var plugins = new[] { Plugin("Patch.esp", "Broken.esm") };
-        var failures = new[] { new PluginLoadFailure("Broken.esm", "Malformed record") };
+        var failures = new[] { new PluginLoadFailure("Broken.esm", "SomeMod", "Malformed record") };
 
         var result = MasterResolution.Classify(plugins, failures);
 

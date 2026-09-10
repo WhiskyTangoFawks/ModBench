@@ -1,8 +1,8 @@
 /** ADR-0044: the one path by which the Plugin load order reaches Editing, coalesced — a burst of
  *  triggers becomes one snapshot, and a request arriving mid-PUT becomes exactly one more PUT
  *  after it, never a race of two. */
-export interface LoadOrderSyncDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown>
-  extends ReconcileStepDepsWithoutArm<TPlugin, TProgress, TOffer> {
+export interface LoadOrderSyncDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown, TFailure = unknown>
+  extends ReconcileStepDepsWithoutArm<TPlugin, TProgress, TOffer, TFailure> {
   /** How long to wait for a burst to finish before sending. Two watchers can fire for one
    *  mod-level change, and a drag reorder rewrites plugins.txt once per drop — none of those
    *  deserve a PUT each. */
@@ -14,7 +14,8 @@ export interface LoadOrderSyncDeps<TPlugin = unknown, TProgress = unknown, TOffe
 }
 
 // Minus `arm`: this module owns the abort scope, the one step it does not take opaque.
-type ReconcileStepDepsWithoutArm<TPlugin, TProgress, TOffer> = Omit<ReconcileStepDeps<TPlugin, TProgress, TOffer>, 'arm'>;
+type ReconcileStepDepsWithoutArm<TPlugin, TProgress, TOffer, TFailure> =
+  Omit<ReconcileStepDeps<TPlugin, TProgress, TOffer, TFailure>, 'arm'>;
 
 export interface LoadOrderSync {
   /** Something that feeds the load order changed: send a snapshot soon, coalesced with any other
@@ -90,8 +91,8 @@ function createRunScheduler(
   };
 }
 
-export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOffer = unknown>(
-  deps: LoadOrderSyncDeps<TPlugin, TProgress, TOffer>,
+export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOffer = unknown, TFailure = unknown>(
+  deps: LoadOrderSyncDeps<TPlugin, TProgress, TOffer, TFailure>,
 ): LoadOrderSync {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
@@ -99,7 +100,7 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
 
   // The reconcile's own sequencing lives in `createReconcileSequencer`; this module coalesces
   // *when* it runs and owns the abort scope, shared so `abandon()` reaches the running reconcile.
-  const sequencer = createReconcileSequencer<TPlugin, TProgress, TOffer>({ ...deps, arm });
+  const sequencer = createReconcileSequencer<TPlugin, TProgress, TOffer, TFailure>({ ...deps, arm });
 
   const run = async (): Promise<ReconcileOutcome | undefined> => {
     let outcome: ReconcileOutcome | undefined;
@@ -145,20 +146,15 @@ export type ReconcileOutcome = 'reconciled' | 'no-game-directory' | 'failed' | '
 
 /** A tagged union matching the mEdit client's own `LoadOrderOutcome`: `failed` and `abandoned` are
  *  nothing-more-to-say endings, not a `reconciled` with empty arrays. */
-export type PutLoadOrderResult<TOffer> =
-  | { outcome: 'reconciled'; failures: LoadFailure[]; crashRepairOffers: TOffer[] }
+export type PutLoadOrderResult<TOffer, TFailure> =
+  | { outcome: 'reconciled'; failures: TFailure[]; crashRepairOffers: TOffer[] }
   | { outcome: 'failed' }
   | { outcome: 'abandoned' };
-
-export interface LoadFailure {
-  name?: string | null;
-  reason?: string | null;
-}
 
 /** The steps of a reconcile, each injected opaque enough that this file imports nothing. Generic
  *  rather than `unknown`-typed so the composition root's wiring stays fully typed — a type
  *  parameter carries the shape without carrying the import. */
-export interface ReconcileStepDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown> {
+export interface ReconcileStepDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown, TFailure = unknown> {
   arm: () => { signal: AbortSignal; abandoned: () => boolean };
   /** The Plugins view's own step narration (`TreeView.message`) — cleared by whichever progress
    *  wrapper the caller runs this under, never by this sequencer itself. */
@@ -175,11 +171,11 @@ export interface ReconcileStepDeps<TPlugin = unknown, TProgress = unknown, TOffe
   makeProgressHandler: () => { onProgress: (status: TProgress) => void; lastTotalPlugins: () => number };
   putLoadOrder: (
     plugins: TPlugin[], dataFolder: string, signal: AbortSignal, onProgress: (status: TProgress) => void,
-  ) => Promise<PutLoadOrderResult<TOffer>>;
+  ) => Promise<PutLoadOrderResult<TOffer, TFailure>>;
   syncFilterState: () => Promise<void>;
   /** The completed reconcile's whole hand-off to the tree — everything `GET /plugins` answers,
    *  bundled, so there is never a moment a caller could apply one part of it without the rest. */
-  applyReconciled: (failures: LoadFailure[], totalPlugins: number) => Promise<void>;
+  applyReconciled: (failures: TFailure[], totalPlugins: number) => Promise<void>;
   presentCrashRepairOffers: (offers: TOffer[]) => Promise<void>;
 }
 
@@ -187,8 +183,8 @@ export interface ReconcileSequencer {
   reconcile(): Promise<ReconcileOutcome>;
 }
 
-export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown, TOffer = unknown>(
-  deps: ReconcileStepDeps<TPlugin, TProgress, TOffer>,
+export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown, TOffer = unknown, TFailure = unknown>(
+  deps: ReconcileStepDeps<TPlugin, TProgress, TOffer, TFailure>,
 ): ReconcileSequencer {
   const reconcileOnce = async (): Promise<ReconcileOutcome> => {
     const { signal, abandoned } = deps.arm();
