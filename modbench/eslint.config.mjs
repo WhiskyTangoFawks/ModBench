@@ -4,7 +4,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 
 export default tseslint.config(
-    { ignores: ['src/medit/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**', 'src/medit/test/webviewUtils.test.ts'] },
+    { ignores: ['src/medit/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
     eslint.configs.recommended,
     tseslint.configs.recommendedTypeChecked,
@@ -19,7 +19,7 @@ export default tseslint.config(
         },
     },
 
-    // Mod Management never calls the backend (root CLAUDE.md).
+    // Mod Management never calls the backend (src/modmanager/CONTEXT.md).
     {
         files: ['src/modmanager/**/*.ts'],
         rules: {
@@ -30,7 +30,6 @@ export default tseslint.config(
     // Every backend call goes through the generated client, so the wire shape stays typed.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
-        ignores: ['src/medit/client/apiClient.ts'],
         rules: {
             'no-restricted-globals': ['error', { name: 'fetch', message: 'Backend HTTP goes through the mEdit client.' }],
         },
