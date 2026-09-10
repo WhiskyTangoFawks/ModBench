@@ -301,8 +301,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
   // Lowercased filenames of the load order's immutable plugins, pushed in from the tree's own
-  // `GET /plugins` read — record/placed rows under one hide Remove via their contextValue,
-  // matching the column header's !immutable `when` gate.
+  // `GET /plugins` read — record/placed rows under one get a contextValue Remove's `when`
+  // clause in package.json omits from its viewItem list.
   private readonly immutablePlugins = new Set<string>();
   // Lowercased filenames of the load order's *tracked* plugins, from the same `GET /plugins`
   // answer the immutable set comes from — never a filesystem probe from here: tracked-ness is a

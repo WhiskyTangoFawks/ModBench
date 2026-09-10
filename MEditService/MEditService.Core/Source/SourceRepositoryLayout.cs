@@ -32,8 +32,8 @@ public sealed partial class SourceRepository
     /// document at the plugin tree's root.</summary>
     internal const string RecordDataFileName = "RecordData.json";
 
-    /// <summary>The whole-mod door's own name for a group or block level's metadata file, written only
-    /// when the level has non-default metadata.</summary>
+    /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
+    /// every minted level, empty unless the level has non-default metadata.</summary>
     internal const string GroupRecordDataFileName = "GroupRecordData.json";
 
     /// <summary>The suffix the layout reads as "this file may hold a record".</summary>
@@ -463,8 +463,8 @@ public sealed partial class SourceRepository
 }
 
 /// <summary>Two source units under one plugin's tree carry the same FormKey: corruption, not a
-/// transient condition. An <see cref="InvalidOperationException"/> so the read path degrades on it;
-/// only the write path refuses.</summary>
+/// transient condition. An <see cref="InvalidOperationException"/>: the copy path turns it into a
+/// refusal, every other read in Core propagates it unhandled.</summary>
 public sealed class AmbiguousSourceUnitException : InvalidOperationException
 {
     public AmbiguousSourceUnitException() : base("More than one source unit claims one FormKey.")

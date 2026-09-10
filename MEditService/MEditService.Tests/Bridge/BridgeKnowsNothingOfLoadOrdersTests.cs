@@ -20,7 +20,7 @@ public sealed class BridgeKnowsNothingOfLoadOrdersTests
     }
 
     // Zero offenders and zero files walked read the same: a BridgeSourceDirectory that resolved to
-    // an empty or vanished folder would still pass the assertion above.
+    // an empty folder would still pass the assertion above.
     [Fact]
     public void TheScan_WalksAtLeastOneBridgeSourceFile()
     {

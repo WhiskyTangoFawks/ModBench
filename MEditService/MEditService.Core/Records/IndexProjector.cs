@@ -69,8 +69,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     }
 
     // ADR-0044: a copy that failed to open stays a row in an error state until its bytes change.
-    // Keyed by the hash the failure was seen against, so mentioning it again never pays the parse
-    // twice.
+    // Keyed by the plugin; the hash recorded alongside it is what changing detects.
     private readonly Dictionary<string, (PluginKey Key, string? Hash)> _failedHashes = new(StringComparer.OrdinalIgnoreCase);
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
@@ -414,9 +413,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         // plugin wait on the slowest before any could be indexed, and bury each open failure.
         foreach (var plugin in arriving)
         {
-            // At the top of each plugin rather than mid-plugin: a plugin is indexed in one
-            // transaction, so abandoning it partway would roll back work already paid for or leave
-            // half-written state.
+            // At the top of each plugin rather than mid-plugin: a plugin's ingest is several
+            // transactions, so abandoning it partway would leave some committed and others not.
             token.ThrowIfCancellationRequested();
 
             if (loadOrder.Open(plugin) is not { } metadata)
@@ -438,7 +436,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         lock (_lock) _conflictsComputed = true;
         // Ready: the last status transition a subscriber sees for this reconcile.
         PublishStatus();
-        // Any of the above can change which records match an active filter.
         ReapplyFilter();
 
         if (_logger.IsEnabled(LogLevel.Information))
@@ -642,7 +639,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             reports.Add(report);
         }
 
-        // Any of the above can change which records match an active filter.
         ReapplyFilter();
         return reports;
     }
@@ -758,7 +754,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             }
 
             index.UpdateWinners(Participating());
-            // Re-derived content can flip filter membership either way.
             ReapplyFilter();
         }
     }
@@ -785,7 +780,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         {
             index.Index(loaded.Getter, metadata.Registration, metadata.Key, metadata.Path);
             index.UpdateWinners(Participating());
-            // Re-indexed content can flip filter membership either way.
             ReapplyFilter();
         }
 
@@ -817,7 +811,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             _index.Unindex(key);
             // A removal moves winners for every FormKey it held, exactly as a re-index does.
             _index.UpdateWinners(Participating());
-            // Deleted rows cannot match a filter that a stale _filter still lists them in.
             ReapplyFilter();
         }
     }

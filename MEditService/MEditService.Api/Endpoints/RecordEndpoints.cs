@@ -150,20 +150,26 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // ADR-0041: Copy as New Record Into… — a deep copy under a fresh FormKey,
-        // via Mutagen's own record-level Duplicate. Same collision posture as CreateRecord, reused
-        // rather than re-implemented.
+        // ADR-0041: Copy as New Record Into… — the source record itself under a fresh FormKey, via
+        // Mutagen's own Duplicate. A top-level record's child slots are cleared; an embedded
+        // child's whole subtree rides along under fresh FormKeys.
         app.MapPost("/records/{formKey}/copy-as-new-record", (
             string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits, IndexWriteGate gate) =>
             CopyRecordAsNewRecord(formKey, request, edits, gate, logger))
         .WithName("CopyRecordAsNewRecord")
-        .WithSummary("Copy as New Record Into… — a deep copy of the source record under a fresh FormKey.")
+        .WithSummary(
+            "Copy as New Record Into… — the source record under a fresh FormKey; a top-level record's " +
+            "child slots are cleared, an embedded child's whole subtree copies with it.")
         .WithDescription(
-            "Deep-copies the source record (Mutagen's own record-level Duplicate — no mod object is " +
-            "constructed) under a fresh FormKey in the destination plugin's working tree. FormKey is the " +
-            "caller's requested one or the next free local FormID, both-refs collision-checked exactly " +
-            "as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto " +
-            "the new FormKey, so an internal self-reference follows the copy, not the original.")
+            "Copies the source record (Mutagen's own record-level Duplicate — no mod object is " +
+            "constructed) under a fresh FormKey in the destination plugin's working tree. A top-level " +
+            "record's own child slots are cleared, since a container's children never ride along that " +
+            "way; an embedded child (a quest topic, a topic response) instead copies its whole embedded " +
+            "subtree, each descendant under its own fresh FormKey, minting the container chain in the " +
+            "destination when it is missing. FormKey is the caller's requested one or the next free " +
+            "local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A " +
+            "FormLink from the record to itself is remapped onto the new FormKey, so an internal " +
+            "self-reference follows the copy, not the original.")
         .WithTags("Records")
         .Produces<RecordCopyAsNewRecordResponse>()
         .ProducesProblem(400)

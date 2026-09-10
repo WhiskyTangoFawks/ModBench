@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Source;
 
 /// <summary>Reading and writing a container's child major records through the members
-/// <see cref="ContainerMembers"/> derives. Nothing is stripped (ADR-0041 amendment).</summary>
+/// <see cref="ContainerMembers"/> derives. Nothing is stripped.</summary>
 internal static class ContainerChildFields
 {
     /// <summary>The child-major field names for <paramref name="recordType"/>, or null when it is not a

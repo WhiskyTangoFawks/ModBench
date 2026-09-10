@@ -28,7 +28,6 @@ public sealed class PlacementWalker
         foreach (var wrld in Enumerate(Get(mod, "Worldspaces")))
             WalkWorldspace(wrld, onCell, onPlacement);
 
-        // Interior cells: mod.Cells (ListGroup) -> CellBlock.SubBlocks -> CellSubBlock.Cells
         foreach (var cellBlock in Enumerate(Get(mod, "Cells")))
         {
             foreach (var subBlock in List(cellBlock, "SubBlocks"))

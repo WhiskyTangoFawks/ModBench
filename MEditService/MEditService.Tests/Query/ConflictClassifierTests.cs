@@ -295,7 +295,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_NoParticipationSupplied_BehavesAsBefore()
     {
-        // Default (null participation) = every plugin participates — legacy call sites unaffected.
+        // Default (null participation) = every plugin participates.
         var master = MakeOverride("A.esp", 0, false, ("Name", "Alice"));
         var winner = MakeOverride("B.esp", 1, true, ("Name", "Bob"));
         var result = Classify([master, winner]);

@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Records;
 
 /// <summary>Ingest plus every read, over one game's indexed plugins. One implementation over DuckDB;
-/// no SQL crosses this seam except <see cref="SetFilter"/> (invariant 8).</summary>
+/// no SQL crosses this seam except <see cref="SetFilter"/>.</summary>
 internal interface IRecordIndex : IDisposable
 {
     /// <summary>Repositions every read at <paramref name="recordRef"/>. Named <c>recordRef</c>, not

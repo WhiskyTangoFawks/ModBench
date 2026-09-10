@@ -276,7 +276,7 @@ export class PluginsTreeProvider
   }
 
   /** The write reaches disk; the Instance's own watcher is what brings the result back
-   *  (ADR-0047 point 6). `invalidate()` here only re-renders the still-cached rows early. */
+   *  (ADR-0047 point 6). `invalidate()` here drops the cache and re-renders ahead of it. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();

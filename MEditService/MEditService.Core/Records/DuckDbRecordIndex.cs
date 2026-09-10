@@ -19,9 +19,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-// The single DuckDB implementation of IRecordIndex/IRecordReads, split into three collaborators:
-// IndexStore, PluginIngest and WorkingTreeOverlay. This class owns every transaction boundary,
-// registration, the winner sweep, reads and the SQL door.
+// The single DuckDB implementation of IRecordIndex/IRecordReads, split into four collaborators:
+// IndexStore, PluginIngest, WorkingTreeOverlay and SourceValidation. This class owns every
+// transaction boundary, registration, the winner sweep, reads and the SQL door.
 internal sealed class DuckDbRecordIndex : IRecordIndex
 {
     private readonly SchemaReflector _schemaReflector;
@@ -58,7 +58,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private readonly TableDdlBuilder _ddlBuilder;
     private bool _recordTypeViewsCreated;
 
-    // ADR-0046: null in every test that does not care, so this stays additive over the ~100 direct
+    // ADR-0046: null in every test that does not care, so this stays additive over the 55 direct
     // constructions across the suite.
     private readonly INotificationPublisher? _notifications;
 
@@ -600,8 +600,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private const string EffectiveRelation = "records";
     private const string HeadRelation = "records_head";
 
-    // Created on first ask and reused: each is a stateless projection over this index, and
-    // At() is called per read on hot paths.
     private IRecordReads? _effectiveReads;
     private IRecordReads? _headReads;
 
@@ -626,7 +624,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         public RecordDocument? GetDocument(string formKey)
         {
             using var connection = owner.OpenRead();
-            owner.RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
+            owner.RequireSchemas(); // fails before any query runs, though OpenRead above has already opened the connection
             var tableName = FindRecordType(connection, records, formKey);
             return tableName == null ? null : owner.ReadDocument(connection, records, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
         }
@@ -687,7 +685,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         public RecordOverrides? GetOverrideStack(string formKey)
         {
             using var connection = owner.OpenRead();
-            owner.RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
+            owner.RequireSchemas(); // fails before any query runs, though OpenRead above has already opened the connection
             var tableName = FindRecordType(connection, records, formKey);
             if (tableName == null) return null;
             var schema = owner.RequireSchemas()[tableName];
@@ -924,7 +922,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             {
                 var fk = reader.GetString(0);
                 var colon = fk.IndexOf(':');
-                // "Native" = the record's own FormKey ModKey is this plugin (not an override of a master).
                 if (colon > 0 && fk.AsSpan(colon + 1).Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
                     result.Add(fk);
             }
@@ -1166,8 +1163,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         private static List<ReferenceResult> GetReferences(DuckDBConnection connection, string targetFormKey)
         {
-            // ADR-0041: a reference is what the indexed plugin actually declares — no working-tree
-            // overlay is applied here.
+            // ADR-0041: WorkingTreeOverlay keeps form_references rewritten as the working tree
+            // changes, so this already sees every edit without applying anything itself.
             const string sql = """
                 SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
                 FROM form_references fr

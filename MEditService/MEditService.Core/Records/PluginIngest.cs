@@ -93,9 +93,9 @@ internal sealed class PluginIngest
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
-        // Refs are collected in IndexRecordTable's one pass, walking the live object rather than the
-        // document it just wrote. What that pass does not see is what has no schema
-        // (SchemaReflector.ExcludedTables): no document, no row, no refs.
+        // Refs are collected in IndexRecordTable's one pass, off the document each record is
+        // serialized to. What that pass does not see is what has no schema
+        // (SchemaAnnotations.ExcludedSignatures): no document, no row, no refs.
 
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);

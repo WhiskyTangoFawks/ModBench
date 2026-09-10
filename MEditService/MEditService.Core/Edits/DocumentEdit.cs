@@ -27,9 +27,8 @@ internal static class DocumentEdit
     private const string EditorIdMember = nameof(IMajorRecordGetter.EditorID);
     private const string FormKeyMember = nameof(IMajorRecordGetter.FormKey);
 
-    /// <summary>The new document text, or the input text itself when the operation had nothing to do
-    /// (an element past the end), in <paramref name="text"/>; a refusal otherwise, with nothing
-    /// written anywhere.</summary>
+    /// <summary>The new document text in <paramref name="text"/> on success (a null return); a
+    /// refusal otherwise, with nothing written anywhere.</summary>
     internal static RecordEditResult? Patch(DocumentEditRequest request, out string text)
     {
         text = request.Text;

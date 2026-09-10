@@ -271,8 +271,8 @@ describe('PluginNode / ImplicitMasterNode — row click opens the plugin header'
   });
 });
 
-// ErrorNode and IndexingNode stand for a row's children, never a row itself — their
-// checkbox/lock absence is worth guarding here too, alongside EmptyNode's.
+// ErrorNode and IndexingNode replace whatever row they stand in for; their checkbox/lock
+// absence is worth guarding here too, alongside EmptyNode's.
 describe('leading slot — rows outside the load order render neither checkbox nor lock', () => {
   it('ErrorNode has no checkbox and no lock', () => {
     const node = new ErrorNode('boom');

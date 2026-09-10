@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Records;
 
 /// <summary>The shape a persistent file's rows were written under (ADR-0001); a mismatch at open
-/// rebuilds the whole file. Three parts: a hand-bumped format version, the Mutagen assembly
-/// version, and a digest of the reflected schema.</summary>
+/// rebuilds the whole file. Four parts: format version, game release, Mutagen assembly version,
+/// and a digest of the reflected schema.</summary>
 internal static class IndexVersion
 {
     // Bump on any change to TableDdlBuilder's fixed tables or the codec's conventions: CREATE TABLE
