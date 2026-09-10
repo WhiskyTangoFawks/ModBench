@@ -1,5 +1,5 @@
 using System.Text.Json;
-using MEditService.Core.Records;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;

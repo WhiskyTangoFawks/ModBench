@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace MEditService.Core.Queries;
+namespace MEditService.Core.Schema;
 
 /// <summary>Identified by its key members (xEdit's wbStructSK sort key). A numeric member
 /// compares by value so stage 10 sorts after 9; an absent member is the empty key, a real key a

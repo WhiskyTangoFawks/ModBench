@@ -1,4 +1,4 @@
-namespace MEditService.Core.Records;
+namespace MEditService.Core.Plugins;
 
 /// <summary>The three facts a <c>registrations</c> row carries (ADR-0044). Mod Management computes
 /// all three; nothing here is derived except the two predicates below, which are the only

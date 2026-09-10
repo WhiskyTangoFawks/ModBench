@@ -1,4 +1,4 @@
-using MEditService.Core.Queries;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 

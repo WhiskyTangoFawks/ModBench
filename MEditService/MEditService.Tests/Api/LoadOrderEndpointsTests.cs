@@ -1,7 +1,7 @@
+using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
 using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;

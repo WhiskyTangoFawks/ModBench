@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Api.Endpoints;
+using MEditService.Core.Commands;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Source;

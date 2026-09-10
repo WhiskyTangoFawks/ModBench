@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;

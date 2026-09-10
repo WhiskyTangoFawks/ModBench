@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using MEditService.Api;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.TestSupport;
@@ -11,6 +12,14 @@ namespace MEditService.Tests.Architecture;
 public sealed class ArchitectureTests
 {
     private static readonly Assembly Core = typeof(IndexProjector).Assembly;
+
+    // Where a DTO's own shape decides identity: the read side's models, and the wire records the
+    // endpoints bind. A record in either travels to the frontend as it is declared.
+    private static readonly (Assembly Assembly, string Namespace)[] DtoBoxes =
+    [
+        (Core, "MEditService.Core.Queries"),
+        (typeof(RecordEditRequest).Assembly, "MEditService.Api"),
+    ];
 
     // ADR-0036: a bare filename compiles and passes single-copy tests, then misidentifies.
     [Fact]
@@ -27,7 +36,8 @@ public sealed class ArchitectureTests
             offenders.AddRange(PluginStringsWithoutOrigin(type.GetProperties().Select(p => (p.Name, p.PropertyType)).ToArray())
                 .Select(p => $"{type.Name}.{p}"));
         }
-        foreach (var record in Core.GetExportedTypes().Where(t => t.Namespace == "MEditService.Core.Queries" && t.GetMethod("<Clone>$") != null))
+        foreach (var record in DtoBoxes.SelectMany(box => box.Assembly.GetExportedTypes()
+            .Where(t => t.Namespace == box.Namespace && t.GetMethod("<Clone>$") != null)))
         {
             var primary = record.GetConstructors().MaxBy(c => c.GetParameters().Length)!;
             offenders.AddRange(PluginStringsWithoutOrigin(primary.GetParameters())
@@ -145,7 +155,7 @@ public sealed class ArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["MEditService.Core/Records/Registration.cs"], spellings);
+        Assert.Equal(["MEditService.Core/Plugins/Registration.cs"], spellings);
     }
 
     // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning

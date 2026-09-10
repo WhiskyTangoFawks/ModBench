@@ -1,5 +1,5 @@
 using System.Text;
-using MEditService.Core.Queries;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
