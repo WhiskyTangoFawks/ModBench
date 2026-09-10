@@ -1,5 +1,4 @@
 using System.IO.Abstractions;
-using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
@@ -7,7 +6,7 @@ using Noggog;
 using Noggog.IO;
 using Noggog.WorkEngine;
 
-namespace MEditService.Core.Records;
+namespace MEditService.Core.Serialization;
 
 /// <summary>The header's source document — the whole-mod door's root <c>RecordData.json</c>
 /// (ADR-0041) — produced and read back through that same door, never a second implementation of

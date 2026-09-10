@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
@@ -48,6 +49,11 @@ public sealed class SchemaReflector
     public bool IsSupported(GameRelease release) => ResolveAssembly(release, release.ToCategory()) is not null;
 
     private static string AssemblyNameFor(GameCategory category) => $"Mutagen.Bethesda.{category}";
+
+    /// <summary>The Mutagen build this schema and every generated serializer came from — part of an
+    /// index file's version stamp (ADR-0001).</summary>
+    internal static string MutagenVersion =>
+        typeof(IModGetter).Assembly.GetName().Version?.ToString() ?? "unknown";
 
     // Never throws: FileNotFoundException from Assembly.Load means "not referenced in this build" and
     // is cached as null with one warning; GetSchemas turns that into a typed refusal.

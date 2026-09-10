@@ -7,7 +7,6 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
@@ -18,6 +17,10 @@ internal sealed class WorkingTreeOverlay
 {
     private const string HeadRelation = "records_head";
 
+    // The one covered slot that is a cell rather than a placed object, so the row it derives is a
+    // cell_location rather than a placement.
+    private const string TopCellSlot = "TopCell";
+
     // The columns `records` and `records_committed` share, in declaration order. Every read, copy
     // and insert here names it, so no column is silently dropped from a row.
     internal const string RecordColumnList =
@@ -26,19 +29,17 @@ internal sealed class WorkingTreeOverlay
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
     private readonly RecordTextCodec _codec;
-    private readonly PlacementWalker _placementWalker;
-    private readonly GameRelease _release;
+    private readonly ContainerDocuments _containers;
     private readonly IReadOnlyDictionary<string, RecordTableSchema> _schemas;
 
     public WorkingTreeOverlay(
-        DuckDBConnection connection, ILogger logger, RecordTextCodec codec, PlacementWalker placementWalker,
-        GameRelease release, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        DuckDBConnection connection, ILogger logger, RecordTextCodec codec,
+        ContainerDocuments containers, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         _connection = connection;
         _logger = logger;
         _codec = codec;
-        _placementWalker = placementWalker;
-        _release = release;
+        _containers = containers;
         _schemas = schemas;
     }
 
@@ -357,11 +358,13 @@ internal sealed class WorkingTreeOverlay
         }
 
         List<FormReferenceRow> refs;
+        List<ContainerDocuments.ChildDocument> children;
         using (var document = JsonDocument.Parse(body))
         {
             var root = document.RootElement;
             refs = PluginIngest.Rows(
                 FormReferences.Collect(root, schema), formKey, DocumentNodes.At(root, "EditorID")?.GetString(), recordType);
+            children = [.. _containers.ChildrenOf(recordType, root)];
         }
 
         DeleteFormReferencesForRecord(key, formKey);
@@ -373,21 +376,17 @@ internal sealed class WorkingTreeOverlay
         }
 
         // placement/cell_location/container_child track Effective the same way
-        // form_lookup/form_references do, rebuilt from the record the body reads back into: a
-        // container's child slots are walked through Mutagen's own object model.
-        var record = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, recordType)
-            .GetAwaiter().GetResult();
-        var containerType = ContainerChildFields.NormalizedTypeName(record.GetType());
+        // form_lookup/form_references do, rebuilt from the child documents this body carries.
+        var containerType = _containers.ContainerTypeOf(recordType);
         var recordedBefore = ChildrenRecorded(key, formKey, embeddedIn: containerType);
-        DeriveEmbeddedChildRows(key, record, touched);
-        RederiveContainmentForRecord(key, formKey, recordType, record);
+        DeriveEmbeddedChildRows(key, containerType, children, touched);
+        RederiveContainmentForRecord(key, formKey, recordType, containerType, children);
 
         // A child absent from the document is gone at Effective, unless another container's document
         // holds it (a renumbered container re-derives its children under the new identity first).
-        var carriedNow = ContainerChildFields.EnumerateChildren(record)
-            .Where(c => ContainerChildFields.EmbeddedSlots.Contains((containerType, c.SlotName)))
-            .Select(c => c.Child.FormKey.ToString())
+        var carriedNow = children
+            .Where(c => ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, c.SlotName)))
+            .Select(c => c.FormKey)
             .ToHashSet(StringComparer.Ordinal);
         foreach (var gone in recordedBefore.Where(fk => !carriedNow.Contains(fk)))
         {
@@ -420,7 +419,7 @@ internal sealed class WorkingTreeOverlay
         while (reader.Read())
         {
             var embedded = embeddedIn == null
-                || (reader.IsDBNull(1) || ContainerChildFields.EmbeddedSlots.Contains((embeddedIn, reader.GetString(1))))
+                || (reader.IsDBNull(1) || ContainerMembers.Derived.EmbeddedSlots.Contains((embeddedIn, reader.GetString(1))))
                     && reader.IsDBNull(2);
             if (embedded) recorded.Add(reader.GetString(0));
         }
@@ -443,24 +442,23 @@ internal sealed class WorkingTreeOverlay
     // An embedded child's own row is a projection of its container's document, like its placement
     // row: serialized out of the container's graph through the codec ingest uses. No schema, no
     // row, as at ingest.
-    private void DeriveEmbeddedChildRows(PluginKey key, IMajorRecordGetter container, ICollection<string> touched)
+    private void DeriveEmbeddedChildRows(
+        PluginKey key, string containerType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
+        ICollection<string> touched)
     {
-        var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
-        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container))
+        foreach (var child in children)
         {
-            if (!ContainerChildFields.EmbeddedSlots.Contains((containerType, slotName))) continue;
-            var childType = SourceRecordType.Resolve(child, _schemas);
-            if (!_schemas.ContainsKey(childType)) continue;
+            if (!ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, child.SlotName))) continue;
+            if (!_schemas.ContainsKey(child.RecordType)) continue;
 
-            var childFormKey = child.FormKey.ToString();
-            var childBody = Encoding.UTF8.GetString(_codec.SerializeToBytesAsync(child, _release).GetAwaiter().GetResult());
-            if (string.Equals(childBody, EffectiveBody(key, childFormKey), StringComparison.Ordinal)) continue;
+            var childBody = _containers.TextOf(_codec, child);
+            if (string.Equals(childBody, EffectiveBody(key, child.FormKey), StringComparison.Ordinal)) continue;
 
-            touched.Add(childFormKey);
-            if (RowExistsAtEffective(key, childFormKey) || RowExistsAtHead(key, childFormKey))
-                ApplyOneWorkingTreeChange(key, childFormKey, childBody, touched);
+            touched.Add(child.FormKey);
+            if (RowExistsAtEffective(key, child.FormKey) || RowExistsAtHead(key, child.FormKey))
+                ApplyOneWorkingTreeChange(key, child.FormKey, childBody, touched);
             else
-                MaterializeRecord(key, childFormKey, childType, childBody, touched);
+                MaterializeRecord(key, child.FormKey, child.RecordType, childBody, touched);
         }
     }
 
@@ -471,42 +469,38 @@ internal sealed class WorkingTreeOverlay
     // A container's child set and slot order live in its body, so a delete-then-insert per (parent,
     // table) is correct by construction. An embedded child that is itself a container derives its
     // own containment through its own row.
-    private void RederiveContainmentForRecord(PluginKey key, string formKey, string recordType, IMajorRecordGetter record)
+    private void RederiveContainmentForRecord(
+        PluginKey key, string formKey, string recordType, string containerType,
+        IReadOnlyList<ContainerDocuments.ChildDocument> children)
     {
-        // Two spellings of the type: the CLR name (Cell) is what CoveredByPlacementTables and
-        // EnumerateChildren key off; the schema table name (cell) is what a stored
+        // Two spellings of the type: the CLR name (Cell) is what CoveredByPlacementTables and the
+        // slot table key off; the schema table name (cell) is what a stored
         // ContainerChildRow.ParentRecordType carries, matching ingest and downstream readers.
-        var slotLookupType = ContainerChildFields.NormalizedTypeName(record.GetType());
         var containerChildRows = new List<ContainerChildRow>();
         var placementRows = new List<PlacementRow>();
         CellLocationRow? topCellRow = null;
 
-        foreach (var (slotName, slotIndex, child) in ContainerChildFields.EnumerateChildren(record))
+        foreach (var child in children)
         {
-            if (!PluginIngest.CoveredByPlacementTables.Contains((slotLookupType, slotName)))
+            if (!PluginIngest.CoveredByPlacementTables.Contains((containerType, child.SlotName)))
             {
                 containerChildRows.Add(new ContainerChildRow(
-                    child.FormKey.ToString(), formKey, recordType, slotName, slotIndex));
+                    child.FormKey, formKey, recordType, child.SlotName, child.SlotIndex));
                 continue;
             }
 
-            switch (slotName)
+            if (child.SlotName.Equals(TopCellSlot, StringComparison.Ordinal))
             {
-                case "Persistent":
-                    placementRows.Add(_placementWalker.EmitPlacementRow(child, formKey, "persistent"));
-                    break;
-                case "Temporary":
-                    placementRows.Add(_placementWalker.EmitPlacementRow(child, formKey, "temporary"));
-                    break;
-                case "TopCell":
-                    // No block/sub and never interior, by construction — a worldspace's top cell is
-                    // not part of any exterior grid.
-                    topCellRow = _placementWalker.EmitCellLocationRow(
-                        child, formKey, blockX: null, blockY: null, subX: null, subY: null, isInterior: false);
-                    break;
-                    // "SubCells": never yielded here — its items are WorldspaceBlock, which is not
-                    // IMajorRecordGetter.
+                // No block/sub and never interior, by construction — a worldspace's top cell is not
+                // part of any exterior grid.
+                topCellRow = PlacementWalker.CellLocation(
+                    child.FormKey, child.Node,
+                    new CellStructure(formKey, null, null, null, null, IsInterior: false));
+                continue;
             }
+
+            placementRows.Add(PlacementWalker.Placement(
+                child.FormKey, child.Node, formKey, child.SlotName.ToLowerInvariant()));
         }
 
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",

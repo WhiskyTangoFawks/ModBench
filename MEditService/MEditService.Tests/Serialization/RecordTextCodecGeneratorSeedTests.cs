@@ -97,7 +97,6 @@ public class RecordTextCodecGeneratorSeedTests
         const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "SourceIngest.cs",         // ingest-from-source
             "PluginCompileService.cs", // compile from the tree
             "TrackService.cs",         // Track's own round-trip gate reads its own tree back
             // The read half of the same header door. Symmetric by construction: the document this reads is the
@@ -144,7 +143,7 @@ public class RecordTextCodecGeneratorSeedTests
     public void DoorFiles_NeverNameAParallelWorkDropoff()
     {
         const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackService.cs", "SourceIngest.cs", "PluginCompileService.cs", "HeaderDocument.cs" };
+        var doorFiles = new[] { "TrackService.cs", "PluginCompileService.cs", "HeaderDocument.cs" };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories)
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))

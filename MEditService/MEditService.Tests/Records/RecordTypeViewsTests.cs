@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -19,7 +20,7 @@ public sealed class RecordTypeViewsTests
 
         var mod = new Fallout4Mod(ModKey.FromFileName(Plugin.Name), Fallout4Release.Fallout4);
         var npc = mod.Npcs.AddNew("LazyNpc");
-        index.Index(mod, Registration.Participating(0), Plugin);
+        index.IndexMod(mod, Registration.Participating(0), Plugin);
         index.UpdateWinners();
         return (index, npc.FormKey.ToString());
     }

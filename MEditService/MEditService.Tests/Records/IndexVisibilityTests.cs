@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -56,7 +57,7 @@ public sealed class IndexVisibilityTests
             .Create(GameRelease.Fallout4);
         using var loaded = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
         var key = new PluginKey("Big.esp", PluginOrigin.DataDirectory);
-        repository.Index(loaded, Registration.Participating(0), key, modPath.Path);
+        repository.IndexMod(loaded, Registration.Participating(0), key, modPath.Path);
         return (repository, modPath, dir, key);
     }
 
@@ -141,7 +142,7 @@ public sealed class IndexVisibilityTests
                 }
             })).ToArray();
 
-            repository.Index(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), PluginOrigin.DataDirectory));
+            repository.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), PluginOrigin.DataDirectory));
             await indexing.CancelAsync();
             await Task.WhenAll(readers);
 

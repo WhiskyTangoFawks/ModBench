@@ -1,3 +1,5 @@
+using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
@@ -17,6 +19,16 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
 
     public ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
         => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, param));
+
+    public IPluginDocuments OpenDocuments(
+        ModPath modPath,
+        GameRelease gameRelease,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        BinaryReadParameters? param = null)
+    {
+        var loaded = OpenForRead(modPath, gameRelease, param);
+        return ModDocuments.Of(loaded.Getter, schemas, loaded);
+    }
 
     public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
         => ModFactory.ImportSetter(modPath, gameRelease, param);

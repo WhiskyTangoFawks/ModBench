@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -42,7 +43,7 @@ public class GetDocumentsTests
         var key = new PluginKey("Bulk.esp", "ModA");
 
         using var repo = OpenRepo();
-        repo.Index(mod, Registration.Participating(0), key);
+        repo.IndexMod(mod, Registration.Participating(0), key);
         // Resolution answers from form_lookup's winning rows, so without the winner sweep every
         // FormLink in the fixture reads as dangling — the sweep is part of the real load pipeline.
         repo.UpdateWinners();
@@ -87,8 +88,8 @@ public class GetDocumentsTests
         modB.Npcs.AddNew("SecondFromModB");
 
         using var repo = OpenRepo();
-        repo.Index(modA, Registration.Participating(0), new PluginKey("Shared.esp", "ModA"));
-        repo.Index(modB, Registration.Participating(1), new PluginKey("Shared.esp", "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginKey("Shared.esp", "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginKey("Shared.esp", "ModB"));
 
         // Records only: each copy also carries its own header document, which is scoped
         // by origin exactly like the records are (asserted separately below) but says nothing about

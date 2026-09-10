@@ -30,7 +30,7 @@ read from bytes or written to them, and a live Mutagen object reaches nothing bu
 Plugin adapter — the banned-API analyzer fails the build on the live-object namespaces
 (`MEditService/BannedSymbols.txt`, scoped by folder in `.editorconfig` while the last boxes are
 cleared), and `GameNamespaceScanTests` fails it on a game-concrete name outside those two, outside a
-shrinking allowlist that still names Records and Source.
+shrinking allowlist that still names Source.
 
 **3. xEdit owns the presentation.** What a value *reads as* to a modder — the prose a collapsed row
 shows, the gesture that edits a cell, which arrays sort and by what — is xEdit's answer, cited to

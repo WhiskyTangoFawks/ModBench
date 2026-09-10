@@ -79,7 +79,7 @@ public sealed class RecordIndexingLoggingTests : IDisposable
             ModKey.FromFileName("LogTrace.esp"),
             Path.Combine(_fixture.DataFolder, "LogTrace.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         return repo;
     }
 

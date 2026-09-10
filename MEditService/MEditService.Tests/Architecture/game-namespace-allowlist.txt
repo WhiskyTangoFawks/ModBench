@@ -1,11 +1,6 @@
 # Game-concrete Mutagen names outside the codec (Serialization, Schema) and the Plugin adapter
 # (Plugins). Each line goes with the ticket that moves its site behind one of those two; the
 # shrinking of this list is what the work is measured by.
-MEditService.Core/Records/HeaderDocument.cs: using Mutagen.Bethesda.Fallout4;
-MEditService.Core/Records/HeaderDocument.cs: var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());
-MEditService.Core/Records/HeaderDocument.cs: var clone = new Fallout4Mod(source.ModKey, source.GameRelease.ToFallout4Release());
-MEditService.Core/Records/HeaderDocument.cs: var source = (IFallout4ModGetter)Read(body);
-MEditService.Core/Records/HeaderDocument.cs: var source = (IFallout4ModGetter)mod;
 MEditService.Core/Source/ModelIdentity.cs: /// <summary>The <c>Fallout4ModHeader.Mask</c> fields Mutagen carries as opaque data, so a corruption is
 MEditService.Core/Source/ModelIdentity.cs: foreach (var type in typeof(Fallout4Mod).Assembly.GetTypes())
 MEditService.Core/Source/ModelIdentity.cs: private static bool TransientTypesMatch(IFallout4ModHeaderGetter original, IFallout4ModHeaderGetter recompiled)

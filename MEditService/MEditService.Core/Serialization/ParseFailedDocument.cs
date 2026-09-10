@@ -1,10 +1,9 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Records;
+namespace MEditService.Core.Serialization;
 
 /// <summary>The document stored for a record whose own document could not be produced: the members
 /// the codec reads before any field, and nothing else. Every later read deserializes it.</summary>

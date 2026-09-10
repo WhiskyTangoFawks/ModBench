@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -57,8 +58,8 @@ public class PluginParticipationTests
         using var repo = OpenRepo();
         // PluginB sits last in the load order (highest load_order_idx) but is disabled — a bare
         // MAX(load_order_idx) sweep would incorrectly make it the winner.
-        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "Data"));
-        repo.Index(modB, Registration.Disabled(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(modB, Registration.Disabled(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
@@ -79,15 +80,15 @@ public class PluginParticipationTests
         using var _y = fixtureY;
 
         using var repoFlipped = OpenRepo();
-        repoFlipped.Index(modAX, Registration.Participating(0), new PluginKey(modAX.ModKey.FileName.ToString(), "Data"));
-        repoFlipped.Index(modBX, Registration.Participating(1), new PluginKey(modBX.ModKey.FileName.ToString(), "Data"));
+        repoFlipped.IndexMod(modAX, Registration.Participating(0), new PluginKey(modAX.ModKey.FileName.ToString(), "Data"));
+        repoFlipped.IndexMod(modBX, Registration.Participating(1), new PluginKey(modBX.ModKey.FileName.ToString(), "Data"));
         repoFlipped.UpdateWinners();
         repoFlipped.Register(new PluginKey("PluginB.esp", "Data"), Registration.Disabled(1));
         repoFlipped.UpdateWinners();
 
         using var repoFromStart = OpenRepo();
-        repoFromStart.Index(modAY, Registration.Participating(0), new PluginKey(modAY.ModKey.FileName.ToString(), "Data"));
-        repoFromStart.Index(modBY, Registration.Disabled(1), new PluginKey(modBY.ModKey.FileName.ToString(), "Data"));
+        repoFromStart.IndexMod(modAY, Registration.Participating(0), new PluginKey(modAY.ModKey.FileName.ToString(), "Data"));
+        repoFromStart.IndexMod(modBY, Registration.Disabled(1), new PluginKey(modBY.ModKey.FileName.ToString(), "Data"));
         repoFromStart.UpdateWinners();
 
         var flipped = WinnersByPlugin(repoFlipped, npcKeyX.ToString());
@@ -105,8 +106,8 @@ public class PluginParticipationTests
         using var _ = fixture;
 
         using var repo = OpenRepo();
-        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "Data"));
-        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         repo.Register(new PluginKey("PluginB.esp", "Data"), Registration.Disabled(1));
@@ -133,7 +134,7 @@ public class PluginParticipationTests
         var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;
 
         using var repo = OpenRepo();
-        repo.Index(mod, Registration.Disabled(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Disabled(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString(), new PluginKey("Disabled.esp", "Data"));
@@ -155,7 +156,7 @@ public class PluginParticipationTests
         var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;
 
         using var repo = OpenRepo();
-        repo.Index(mod, Registration.Disabled(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Disabled(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         Assert.Null(repo.At(RecordRef.Effective).Resolve(npcKey.ToString()));

@@ -6,6 +6,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -238,6 +239,22 @@ public sealed class SourceIngestTests
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
         var failure = Assert.Single(mod.Index.Status.Failures);
+        Assert.Equal(IndexedModFixture.PluginName, failure.Name);
+        Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Never-assume-exclusive-ownership: a file another tool leaves half-written declares no FormKey,
+    // and a record going missing from the read model without a word is the hazard.
+    [Fact]
+    public void ADirtyFileThatDeclaresNoFormKey_DegradesToTheBinary_AndSaysSoInTheFailures()
+    {
+        using var mod = IndexedModFixture.Tracked();
+
+        File.WriteAllText(mod.NpcSourceFile, """{"EditorID": "HalfWritten"}""");
+
+        using var reloaded = Reload(mod);
+
+        var failure = Assert.Single(reloaded.Status.Failures);
         Assert.Equal(IndexedModFixture.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
     }

@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -78,8 +79,8 @@ public class RegistrationScopingTests
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.CreateRecordTypeViews();
-        repo.Index((IModGetter)alpha, Registration.Participating(0), AlphaKey);
-        repo.Index((IModGetter)beta, Registration.Participating(1), BetaKey);
+        repo.IndexMod((IModGetter)alpha, Registration.Participating(0), AlphaKey);
+        repo.IndexMod((IModGetter)beta, Registration.Participating(1), BetaKey);
         repo.UpdateWinners();
 
         // +1 for the plugin header's own row: it is an ordinary `records` row but is not an

@@ -63,7 +63,7 @@ public sealed class ProjectionSequenceTests : IDisposable
         using var index = OpenIndex();
         var before = index.Sequence;
 
-        index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
 
         Assert.True(index.Sequence > before);
     }
@@ -72,7 +72,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void Unindex_AdvancesTheSequence()
     {
         using var index = OpenIndex();
-        index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
         var before = index.Sequence;
 
         index.Unindex(BaseKey);
@@ -84,7 +84,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void Register_AdvancesTheSequence()
     {
         using var index = OpenIndex();
-        index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
         var before = index.Sequence;
 
         index.Register(BaseKey, Registration.Participating(1));
@@ -96,7 +96,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void Unregister_AdvancesTheSequence()
     {
         using var index = OpenIndex();
-        index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
         var before = index.Sequence;
 
         index.Unregister(BaseKey);
@@ -108,7 +108,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void UpdateWinners_AdvancesTheSequence()
     {
         using var index = OpenIndex();
-        index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
         var before = index.Sequence;
 
         index.UpdateWinners();
@@ -120,7 +120,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void ProjectDocuments_TwoDeltasInOneCall_AdvancesTheSequenceOnce()
     {
         using var index = OpenIndex();
-        index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
         index.UpdateWinners();
 
         var formKey1 = _npc1.ToString();
@@ -140,7 +140,7 @@ public sealed class ProjectionSequenceTests : IDisposable
     public void ProjectDocuments_WithNoDeltas_DoesNotAdvanceTheSequence()
     {
         using var index = OpenIndex();
-        index.Index(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
         index.UpdateWinners();
         var before = index.Sequence;
 

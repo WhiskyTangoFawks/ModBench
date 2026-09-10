@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -33,7 +34,7 @@ public class HardcodedFormKeyResolutionTests
 
         using var repo = OpenRepo();
         var key = new PluginKey("Hardcoded.esp", "ModA");
-        repo.Index(mod, Registration.Participating(0), key);
+        repo.IndexMod(mod, Registration.Participating(0), key);
         repo.UpdateWinners();
 
         var doc = repo.At(RecordRef.Effective).GetDocument(npc.FormKey.ToString(), key);

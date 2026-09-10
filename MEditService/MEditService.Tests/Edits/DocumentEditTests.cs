@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

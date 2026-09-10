@@ -7,6 +7,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -35,10 +36,11 @@ public sealed class IndexProjectorTests
 
     private sealed class CountingIndex(IRecordIndex inner, CountingFactory owner) : DelegatingRecordIndex(inner)
     {
-        public override void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null)
+        public override void Index(
+            IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
         {
             owner.Indexed++;
-            base.Index(plugin, registration, key, filePath);
+            base.Index(documents, registration, key, filePath);
         }
     }
 
