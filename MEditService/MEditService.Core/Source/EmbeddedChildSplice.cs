@@ -12,7 +12,8 @@ internal readonly record struct EmbeddedChildSpan(
     int Start, int End, int SlotNameStart, int SlotValueEnd, bool SlotIsList, string? Discriminator);
 
 /// <summary>Reading, replacing and cutting an embedded child in its owner's JSON text. The owner is
-/// never deserialized, so every byte outside the child's span survives a write.</summary>
+/// never deserialized: these verbs change the child's span and no other byte of the text they are
+/// handed.</summary>
 internal static class EmbeddedChildSplice
 {
     private const string FormKeyMember = "FormKey";

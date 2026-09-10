@@ -333,8 +333,8 @@ public sealed partial class SourceRepository
         return owners;
     }
 
-    // The one graph the repository still reads back: IdentityOf needs the child's own type and name,
-    // which only the codec's object model can answer.
+    // This, ReadOwn below and IdentityOf's child search are the three sites still reading a document
+    // back as a graph; all three answer identity, never a write (debt #859).
     private IMajorRecord ReadOwner(SourceUnit unit) =>
         Codec.DeserializeAsync(unit.FullPath, _release, unit.OwnerRecordType).GetAwaiter().GetResult();
 
