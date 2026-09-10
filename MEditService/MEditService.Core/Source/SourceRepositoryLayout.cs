@@ -463,8 +463,8 @@ public sealed partial class SourceRepository
 }
 
 /// <summary>Two source units under one plugin's tree carry the same FormKey: corruption, not a
-/// transient condition. An <see cref="InvalidOperationException"/>, uncaught anywhere in Core, so
-/// every caller here propagates it unhandled.</summary>
+/// transient condition. An <see cref="InvalidOperationException"/>: the copy path turns it into a
+/// refusal, every other read in Core propagates it unhandled.</summary>
 public sealed class AmbiguousSourceUnitException : InvalidOperationException
 {
     public AmbiguousSourceUnitException() : base("More than one source unit claims one FormKey.")

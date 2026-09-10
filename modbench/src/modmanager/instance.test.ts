@@ -506,8 +506,8 @@ describe('Instance — a value that survives a bad read', () => {
   });
 });
 
-// Simulates MO2, xEdit or the user rewriting ModOrganizer.ini's own selected_profile outside
-// Modbench, which only ever reads it.
+// Simulates MO2, xEdit or the user rewriting ModOrganizer.ini's own selected_profile — the
+// Instance only ever reads it.
 async function switchProfileOutsideModbench(root: string, profile: string): Promise<void> {
   const path = join(root, 'ModOrganizer.ini');
   await writeFile(path, setSelectedProfileInText(await readFile(path, 'utf8'), profile));

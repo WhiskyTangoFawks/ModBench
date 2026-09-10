@@ -514,8 +514,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy as New Record Into… — the source record under a fresh FormKey, its own child slots cleared.
-         * @description Copies the source record's own fields (Mutagen's own record-level Duplicate — no mod object is constructed) under a fresh FormKey in the destination plugin's working tree, clearing every child slot the record owns. FormKey is the caller's requested one or the next free local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto the new FormKey, so an internal self-reference follows the copy, not the original.
+         * Copy as New Record Into… — the source record under a fresh FormKey; a top-level record's child slots are cleared, an embedded child's whole subtree copies with it.
+         * @description Copies the source record (Mutagen's own record-level Duplicate — no mod object is constructed) under a fresh FormKey in the destination plugin's working tree. A top-level record's own child slots are cleared, since a container's children never ride along that way; an embedded child (a quest topic, a topic response) instead copies its whole embedded subtree, each descendant under its own fresh FormKey, minting the container chain in the destination when it is missing. FormKey is the caller's requested one or the next free local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto the new FormKey, so an internal self-reference follows the copy, not the original.
          */
         post: operations["CopyRecordAsNewRecord"];
         delete?: never;
