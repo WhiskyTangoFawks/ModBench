@@ -247,9 +247,10 @@ public sealed class HeldPlugins : ILoadOrder
     /// data Mutagen can't parse) through the same channel as open failures.</summary>
     internal void SetFailure(PluginKey key, string reason)
     {
+        ArgumentNullException.ThrowIfNull(key.Origin);
         lock (_mutation)
         {
-            _loadFailures[KeyOf(key)] = new PluginLoadFailure(key.Name, key.Origin!, reason);
+            _loadFailures[KeyOf(key)] = new PluginLoadFailure(key.Name, key.Origin, reason);
             Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
         }
     }

@@ -37,7 +37,7 @@ export interface UnansweredExternalChange {
   newVersion: string | null;
 }
 
-/** ADR-0044: names the copy that failed — two copies of one name are two rows. */
+/** ADR-0044: names the copy that failed — two copies of one name are two registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
 /** Rides `PUT /load-order`'s own response: either reason can newly arise only from a compile this

@@ -577,9 +577,8 @@ export class PluginsTreeProvider
     return this.matches?.get(file, this.joinOrigin(file, row)) === false;
   }
 
-  // The failed copy is not necessarily among the held ones the facts describe, so this joins on
-  // the row's own origin rather than through `joinOrigin`; an implicit master row has none and
-  // reads by filename.
+  // The facts describe held copies only, and the failed copy is not one, so this joins on the
+  // row's own origin rather than through `joinOrigin`.
   private loadFailureOf(row: PluginListNode): string | undefined {
     const file = pluginFileOf(row);
     if (file === undefined) return undefined;
