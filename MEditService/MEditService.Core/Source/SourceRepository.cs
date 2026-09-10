@@ -352,7 +352,7 @@ public sealed partial class SourceRepository
 
             // commit-tree is plumbing, same posture as ParkCompileSnapshot's own message: no
             // `--trailer` (porcelain-only), the trailer block hand-written at the message tail.
-            var message = "Absorb Upstream Update: new pristine baseline\n\n" + FormatTrailers(trailers);
+            var message = "Absorb: new pristine baseline\n\n" + FormatTrailers(trailers);
             var commitSha = GitCli.Run(gitDir, modFolder, "commit-tree", treeSha, "-p", parentSha, "-m", message).Trim();
 
             GitCli.Run(gitDir, modFolder, "update-ref", "refs/heads/main", commitSha);

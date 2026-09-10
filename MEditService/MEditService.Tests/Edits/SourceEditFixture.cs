@@ -123,7 +123,9 @@ public sealed class SourceEditFixture : IDisposable
 
     /// <summary>The question as the watcher raises it: the plugin's bytes differ from the parked
     /// snapshot, and the marker names the change.</summary>
-    public void RaiseExternalChange(string question = "Fixture.esp (in FixtureMod) changed outside Modbench.")
+    public void RaiseExternalChange(string question =
+        "Fixture.esp (in FixtureMod) changed outside Modbench and is awaiting an answer in the Plugins " +
+        "view — Commit to main as new baseline or Apply to working tree on edit.")
     {
         File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
         ExternalChangeDeferral.Set(ModFolder, question);

@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>Absorb Upstream Update's handler: re-serializes every plugin of the mod as Track does,
+/// <summary>Absorb's handler: re-serializes every plugin of the mod as Track does,
 /// commits the mod's whole tracked-file change to main as a new baseline, then rebases the edit
 /// branch onto it at once.</summary>
 public sealed class AbsorbExternalChangeHandler
