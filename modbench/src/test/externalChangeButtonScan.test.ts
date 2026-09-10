@@ -36,9 +36,8 @@ describe('the two new external-change button strings are the only ones in the ex
     expect(offenders).toEqual({});
   });
 
-  // Rival this catches: a retired string resurrected in a comment, a fixture, or a doc-in-code
-  // string, planted anywhere under src/.
-  it('flags a planted retired string in any file', async () => {
+  // Proves the matcher alone; the walk over src/ is exercised by the test above.
+  it('finds a retired string in a comment, a fixture, or a doc-in-code string', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'medit-external-change-button-scan-'));
     try {
       const planted = join(dir, 'someFixture.ts');

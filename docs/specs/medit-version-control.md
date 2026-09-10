@@ -305,7 +305,7 @@ to Crash recovery.
 - **One native modal per affected mod repo**, queued sequentially when several changed —
   never a mega-dialog. Message names the mod. Detail lists the changed plugins by name,
   the changed tracked files by count and name, and either the version movement
-  (`meta.ini`'s version moved from <old> to <new>`) when the tell fired or a line stating
+  (`meta.ini`'s version moved from `<old>` to `<new>`) when the tell fired or a line stating
   that no version change was observed.
 - **Buttons**: `Commit to main as new baseline` / `Apply to working tree on edit` / Esc.
   Order carries the default — VS Code's modal focuses the first — never a separate flag
