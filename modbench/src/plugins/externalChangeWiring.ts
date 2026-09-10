@@ -5,6 +5,7 @@ import {
   subscribeExternalChangePending, type OpenMergeEditor,
 } from '../medit/externalChangeCoordinator';
 import type { PluginTreeProvider } from './PluginTreeProvider';
+import { makeReporter } from '../reporter';
 
 // Its own file, not externalChangeGestures.ts: `subscribeExternalChangePending` (a value import)
 // lives in medit/externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —
@@ -21,11 +22,12 @@ export function wireExternalChangePending(
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.
   const log = (msg: string) => outputChannel.info(msg);
+  const reporter = makeReporter(outputChannel, 'externalChange');
   return subscribeExternalChangePending({
     client,
     showDialog: (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
     openMergeEditor: makeMergeEditorOpener(client, outputChannel),
-    showError: (message) => void vscode.window.showErrorMessage(message),
+    showError: (message) => reporter.report('error', message),
     refreshTree: () => treeProvider.refresh(),
     refreshMatchingPlugins,
     log,
