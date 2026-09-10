@@ -128,7 +128,7 @@ describe('handleUnanswered', () => {
 
     await handleUnanswered(deps, [unanswered()]);
 
-    expect(deps.showError).toHaveBeenCalledWith('mEdit: Could not keep "ModA" as your own edit — x');
+    expect(deps.showError).toHaveBeenCalledWith('Could not keep "ModA" as your own edit — x');
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
@@ -192,7 +192,7 @@ describe('handleUnanswered', () => {
     await handleUnanswered(deps, [unanswered()]);
 
     expect(deps.showError).toHaveBeenCalledWith(
-      'mEdit: Could not absorb the upstream update for "ModA" — could not be parsed',
+      'Could not absorb the upstream update for "ModA" — could not be parsed',
     );
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });

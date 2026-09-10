@@ -22,15 +22,15 @@ function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTre
   deps.refreshMatchingPlugins();
 }
 
-// A typed refusal rides a 200 (`succeeded: false`), which the WriteRefused check above never
-// sees — unsurfaced it leaves the mod unchanged and still read-only with nothing saying why
-// (ADR-0026).
+// A typed refusal rides a 200 (`succeeded: false`), which each dispatcher's own WriteRefused
+// check never sees — unsurfaced it leaves the mod unchanged and still read-only with nothing
+// saying why (ADR-0026).
 function reportTypedRefusal(
   deps: Pick<ExternalChangeCoordinatorDeps, 'log' | 'showError'>,
   callName: string, origin: string, summary: string, refusalReason: string | null | undefined,
 ): void {
   deps.log?.(`[externalChangeGestures] ${callName}(${origin}) refused: ${refusalReason ?? ''}`);
-  deps.showError(`mEdit: ${summary} — ${refusalReason ?? ''}`);
+  deps.showError(`${summary} — ${refusalReason ?? ''}`);
 }
 
 async function dispatchKeep(deps: ExternalChangeCoordinatorDeps, origin: string): Promise<void> {

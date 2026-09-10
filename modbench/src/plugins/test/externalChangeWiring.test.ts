@@ -31,11 +31,11 @@ describe('wireExternalChangePending', () => {
     wireExternalChangePending(client, outputChannel, treeProvider, vi.fn());
 
     const deps = subscribeExternalChangePending.mock.calls[0][0];
-    deps.showError('mEdit: Could not keep "ModA" as your own edit — x');
+    deps.showError('Could not keep "ModA" as your own edit — x');
 
     expect(outputChannel.error).toHaveBeenCalledWith(
-      '[externalChange] error: mEdit: Could not keep "ModA" as your own edit — x',
+      '[externalChange] error: Could not keep "ModA" as your own edit — x',
     );
-    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: mEdit: Could not keep "ModA" as your own edit — x');
+    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Could not keep "ModA" as your own edit — x');
   });
 });
