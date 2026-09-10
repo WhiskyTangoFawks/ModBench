@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { readdir, stat, readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadEntry, type DownloadSortColumn } from './mo2/downloads';
+import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadSortColumn } from './mo2/downloads';
 import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
 import { nexusSlugForGame } from './mo2/gamePaths';
@@ -18,26 +18,6 @@ async function readMetaText(path: string): Promise<string | undefined> {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw err;
   }
-}
-
-export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry[] | undefined> {
-  const dir = join(instanceRoot, 'downloads');
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw err;
-  }
-  // .meta sidecars are suppressed as rows by buildDownloadRows, not filtered
-  // here too — one place owns the suppression rule.
-  return Promise.all(
-    names.map(async (name) => {
-      const filePath = join(dir, name);
-      const [info, metaText] = await Promise.all([stat(filePath), readMetaText(`${filePath}.meta`)]);
-      return { name, size: info.size, mtimeMs: info.mtimeMs, metaText };
-    }),
-  );
 }
 
 interface UpgradePickItem extends vscode.QuickPickItem {

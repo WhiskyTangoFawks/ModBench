@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
-import { createOverwriteWatcher } from './overwriteWatcher';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import { type GameDirectoryResolver } from './gameDirectoryResolver';
 import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand } from './DownloadsPanel';
@@ -247,15 +246,13 @@ export function registerCreateEmptyModCommand(
     });
   });
 }
-/** A live watcher, so the Mods tree follows `overwrite/` filling and emptying without a manual
- *  refresh, plus the folder's sole action. */
+/** The pinned Overwrite row's reddish tint and its sole action; the row's own visibility and
+ *  count come from the Instance's value (ADR-0047), which already recomputes on `overwrite/`. */
 export function registerOverwriteView(
   instanceRoot: string,
-  modListProvider: ModListProvider,
   outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
   return [
-    createOverwriteWatcher(instanceRoot, () => modListProvider.invalidate()),
     // Tint the pinned Overwrite row reddish. Stateless: keyed on the
     // constant overwrite/ path, which matches OverwriteNode.resourceUri.
     vscode.window.registerFileDecorationProvider(new OverwriteDecorationProvider(instanceRoot)),
