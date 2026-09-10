@@ -8,7 +8,6 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;

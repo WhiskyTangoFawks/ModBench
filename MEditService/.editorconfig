@@ -393,3 +393,40 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator = 
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
+# ADR-0032 rule 2: a live Mutagen object reaches nothing but the codec and the Plugin adapter.
+# RS0030 reads BannedSymbols.txt beside this file, and the sections below are the whole exemption
+# list, pinned by BannedApiScopeTests and shrinking to codec, adapter and tests.
+[*.cs]
+dotnet_diagnostic.RS0030.severity = error
+
+# The codec — the one box a record is a CLR object in.
+[MEditService.Core/Serialization/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Core/Schema/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+# The Plugin adapter — bytes to a Mutagen mod and back.
+[MEditService.Core/Plugins/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+# Permanent: the fixture builder constructs plugins with live objects by design.
+[MEditService.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Tests.ProcessEnvironment/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+# Transitional: each of these four still holds live objects, and the slice that empties one
+# deletes its section here.
+[MEditService.Core/Commands/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Core/Edits/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Core/Records/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Core/Source/**.cs]
+dotnet_diagnostic.RS0030.severity = none
