@@ -28,9 +28,12 @@ appears as an editable field) and isolates "move a ref between cells" as a struc
 than a field edit. In a tracked mod's source, the same containment is the directory path
 (ADR-0041).
 
-**The structural walk is game-agnostic via reflection** (`PlacementWalker`). Mutagen generates
-uniform property names across games (`Worldspaces`, `SubCells`, `Persistent`, `Grid`, …), so the
-walker reflects on those names rather than a game-specific interface — consistent with the
+**The structural walk is game-agnostic via reflection.** `PlacementWalker` reads a placed object's
+position and a cell's grid off their own documents, at the schema's paths. The facts no document
+carries — parent worldspace and block/sub-block numbers — ride beside a cell's document as a
+`CellStructure`, from the GRUP hierarchy through the Plugin adapter or from the tree's block folder
+names. Both reflect on the property names Mutagen generates uniformly across games (`Worldspaces`,
+`SubCells`, `Persistent`, `Grid`, …) rather than a game-specific interface — consistent with the
 reflection-driven schema and the "support all games without code changes" invariant. (The Mutagen
 `ModContext` parent chain was considered but exposes the parent cell, not the
 persistent-vs-temporary sub-group the tree needs.)
