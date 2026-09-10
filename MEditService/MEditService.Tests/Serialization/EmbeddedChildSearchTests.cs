@@ -1,8 +1,8 @@
-using MEditService.Core.Source;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Tests.Serialization;
 
 /// <summary>The search descends every embedded slot at every level, and hands back the direct
 /// parent of what it finds.</summary>

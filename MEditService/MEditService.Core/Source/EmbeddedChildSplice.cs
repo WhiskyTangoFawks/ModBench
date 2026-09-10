@@ -5,47 +5,21 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Source;
 
-/// <summary>Where an embedded child's text sits inside its owner's document: the child's own span,
-/// and the slot member carrying it, which a remove takes whole when the child was all it
-/// held.</summary>
-internal readonly record struct EmbeddedChildSpan(
-    int Start, int End, int SlotNameStart, int SlotValueEnd, bool SlotIsList, string? Discriminator);
-
-/// <summary>Reading, replacing and cutting an embedded child in its owner's JSON text. The owner is
-/// never deserialized: these verbs change the child's span and no other byte of the text they are
+/// <summary>Replacing and cutting an embedded child in its owner's JSON text. The owner is never
+/// deserialized: these verbs change the child's span and no other byte of the text they are
 /// handed.</summary>
 internal static class EmbeddedChildSplice
 {
-    private const string FormKeyMember = "FormKey";
-
-    // Written ahead of the fields for a slot whose element type is abstract, and the one member of an
-    // embedded child's text a standalone document of an unambiguous type omits.
-    private const string DiscriminatorMember = "MutagenObjectType";
-
     /// <summary>The class name the owner's slots are keyed by: from the record type its path decides,
     /// or from the document's own discriminator when the path cannot name one.</summary>
     internal static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
-        ownerRecordType is { } recordType
-            ? RecordTypeDispatch.For(release).ConcreteFor(recordType)?.Name
-            : RootDiscriminator(ownerBytes);
+        EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release);
 
     /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
-    /// when no child slot of the owner carries it. Malformed text carries nothing.</summary>
-    internal static EmbeddedChildSpan? Find(byte[] ownerBytes, string? ownerTypeName, string formKey)
-    {
-        try
-        {
-            var reader = new Utf8JsonReader(ownerBytes);
-            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return null;
-
-            // The owner's own key is not a child of itself, so only what the scan found below it counts.
-            return ScanObject(ref reader, ownerTypeName, formKey).Deeper;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
+    /// when no child slot of the owner carries it.</summary>
+    internal static EmbeddedChildSpan? Find(
+        byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release) =>
+        EmbeddedChildLocator.Find(ownerBytes, ownerTypeName, formKey, release);
 
     /// <summary>The child's own text as the codec spells it standalone: the span de-indented, and
     /// without the discriminator a document of an unambiguous type carries none of.</summary>
@@ -126,128 +100,12 @@ internal static class EmbeddedChildSplice
         var reader = new Utf8JsonReader(bytes);
         reader.Read();
         if (!reader.Read() || reader.TokenType != JsonTokenType.PropertyName) return childText;
-        if (reader.ValueTextEquals(DiscriminatorMember)) return childText;
+        if (reader.ValueTextEquals(EmbeddedChildLocator.DiscriminatorMember)) return childText;
 
         var at = (int)reader.TokenStartIndex;
         var declaration = Encoding.UTF8.GetBytes(
-            $"\"{DiscriminatorMember}\": \"{discriminator}\",\n{new string(' ', IndentAt(bytes, at))}");
+            $"\"{EmbeddedChildLocator.DiscriminatorMember}\": \"{discriminator}\",\n{new string(' ', IndentAt(bytes, at))}");
         return Encoding.UTF8.GetString([.. bytes[..at], .. declaration, .. bytes[at..]]);
-    }
-
-    private static readonly IReadOnlySet<(string ParentType, string Slot)> Slots = ContainerMembers.Derived.EmbeddedSlots;
-
-    private static readonly HashSet<string> SlotNames = Slots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
-
-    // A container whose text names no type of its own accepts any container's slot name, the latitude
-    // EmbeddedChildPath takes for the same reason.
-    private static bool IsChildSlot(string? containerType, string member) =>
-        containerType is null ? SlotNames.Contains(member) : Slots.Contains((containerType, member));
-
-    private readonly record struct ObjectScan(string? FormKey, string? Discriminator, EmbeddedChildSpan? Deeper);
-
-    // Enters on the object's '{' and leaves on its '}'.
-    private static ObjectScan ScanObject(ref Utf8JsonReader reader, string? containerType, string formKey)
-    {
-        string? ownFormKey = null;
-        string? discriminator = null;
-        EmbeddedChildSpan? found = null;
-
-        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
-        {
-            var member = reader.GetString()!;
-            var memberStart = (int)reader.TokenStartIndex;
-            reader.Read();
-
-            if (reader.TokenType == JsonTokenType.String && member.Equals(FormKeyMember, StringComparison.Ordinal))
-            {
-                ownFormKey = reader.GetString();
-                continue;
-            }
-            if (reader.TokenType == JsonTokenType.String && member.Equals(DiscriminatorMember, StringComparison.Ordinal))
-            {
-                discriminator = reader.GetString();
-                containerType ??= discriminator;
-                continue;
-            }
-            if (found != null || !IsChildSlot(containerType, member))
-            {
-                reader.Skip();
-                continue;
-            }
-
-            found = reader.TokenType switch
-            {
-                JsonTokenType.StartObject => InSingleSlot(ref reader, formKey, memberStart),
-                JsonTokenType.StartArray => InListSlot(ref reader, formKey, memberStart),
-                _ => null,
-            };
-        }
-
-        return new ObjectScan(ownFormKey, discriminator, found);
-    }
-
-    // Enters on the slot value's '{' and leaves on its '}'.
-    private static EmbeddedChildSpan? InSingleSlot(ref Utf8JsonReader reader, string formKey, int memberStart)
-    {
-        var start = (int)reader.TokenStartIndex;
-        var scan = ScanObject(ref reader, null, formKey);
-        var end = (int)reader.BytesConsumed;
-
-        if (scan.Deeper is { } deeper) return deeper;
-
-        return string.Equals(scan.FormKey, formKey, StringComparison.Ordinal)
-            ? new EmbeddedChildSpan(start, end, memberStart, end, SlotIsList: false, scan.Discriminator)
-            : null;
-    }
-
-    private const int PendingSlotEnd = -1;
-
-    // Every element is walked even after a hit, so the reader leaves this slot on its ']'.
-    private static EmbeddedChildSpan? InListSlot(ref Utf8JsonReader reader, string formKey, int memberStart)
-    {
-        EmbeddedChildSpan? found = null;
-
-        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-        {
-            if (reader.TokenType != JsonTokenType.StartObject)
-            {
-                reader.Skip();
-                continue;
-            }
-
-            var start = (int)reader.TokenStartIndex;
-            var scan = ScanObject(ref reader, null, formKey);
-            var end = (int)reader.BytesConsumed;
-            if (found != null) continue;
-
-            found = scan.Deeper
-                ?? (string.Equals(scan.FormKey, formKey, StringComparison.Ordinal)
-                    ? new EmbeddedChildSpan(start, end, memberStart, PendingSlotEnd, SlotIsList: true, scan.Discriminator)
-                    : null);
-        }
-
-        // A hit from further down already names its own slot; only an element of this list waits for
-        // where the list ends.
-        return found is { SlotValueEnd: PendingSlotEnd } element
-            ? element with { SlotValueEnd = (int)reader.BytesConsumed }
-            : found;
-    }
-
-    private static string? RootDiscriminator(byte[] ownerBytes)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(ownerBytes);
-            return document.RootElement.ValueKind == JsonValueKind.Object
-                   && document.RootElement.TryGetProperty(DiscriminatorMember, out var value)
-                   && value.ValueKind == JsonValueKind.String
-                ? value.GetString()
-                : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
     }
 
     // Cut to the next member's own start, so the whitespace and comma between the two go with it.

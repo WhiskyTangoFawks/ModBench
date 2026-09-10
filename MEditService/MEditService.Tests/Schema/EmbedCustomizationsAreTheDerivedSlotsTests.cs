@@ -1,10 +1,9 @@
 using System.Linq.Expressions;
 using MEditService.Core.Serialization;
-using MEditService.Core.Source;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Customizations;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Tests.Schema;
 
 /// <summary>The embed customizations and the derived slots are one set, compared by replaying each
 /// customization against a recording builder. A customization the derivation does not name would put

@@ -151,7 +151,7 @@ public sealed class PluginCompileService(
         var typed = new List<(string RecordType, RecordTableSchema Schema, IMajorRecordGetter Record)>();
         foreach (var record in mod.EnumerateMajorRecords())
         {
-            var recordType = SourceRecordType.Resolve(record, schemas);
+            var recordType = RecordTableName.Of(record, schemas);
             if (schemas.TryGetValue(recordType, out var schema)) typed.Add((recordType, schema, record));
         }
 
@@ -312,7 +312,7 @@ public sealed class PluginCompileService(
     // parses an external binary, never from Compile.
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
-        var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
+        var regeneratedFiles = PluginTrees.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
         var treeRoot = SourceRepository.RootFor(pluginName);
         var rootHeaderPath = Path.Combine(treeRoot, SourceRepository.RecordDataFileName);
 

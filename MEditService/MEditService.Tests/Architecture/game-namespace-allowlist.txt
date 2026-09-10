@@ -1,15 +1,3 @@
 # Game-concrete Mutagen names outside the codec (Serialization, Schema) and the Plugin adapter
-# (Plugins). Each line goes with the ticket that moves its site behind one of those two; the
-# shrinking of this list is what the work is measured by.
-MEditService.Core/Source/ModelIdentity.cs: /// <summary>The <c>Fallout4ModHeader.Mask</c> fields Mutagen carries as opaque data, so a corruption is
-MEditService.Core/Source/ModelIdentity.cs: foreach (var type in typeof(Fallout4Mod).Assembly.GetTypes())
-MEditService.Core/Source/ModelIdentity.cs: private static bool TransientTypesMatch(IFallout4ModHeaderGetter original, IFallout4ModHeaderGetter recompiled)
-MEditService.Core/Source/ModelIdentity.cs: public static Divergence? FindFirst(IMod original, IFallout4Mod recompiled)
-MEditService.Core/Source/ModelIdentity.cs: public static string? FindFirstHeaderFieldDivergence(IFallout4ModHeaderGetter original, IFallout4ModHeaderGetter recompiled)
-MEditService.Core/Source/ModelIdentity.cs: using Mutagen.Bethesda.Fallout4;
-MEditService.Core/Source/TrackService.cs: (IFallout4ModGetter)mod,
-MEditService.Core/Source/TrackService.cs: Func<string, CancellationToken, Task<IFallout4Mod>> deserialize,
-MEditService.Core/Source/TrackService.cs: Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
-MEditService.Core/Source/TrackService.cs: if (ModelIdentity.FindFirstHeaderFieldDivergence(((IFallout4ModGetter)original).ModHeader, recompiledFromBinary.ModHeader) is { } headerField)
-MEditService.Core/Source/TrackService.cs: using Mutagen.Bethesda.Fallout4;
-MEditService.Core/Source/TrackService.cs: var recompiledFromBinary = (IFallout4Mod)MutagenPluginAdapter.Instance.OpenForWrite(
+# (PluginAdapter). This list is empty: every site that named a game has moved behind one of those
+# two, and a new line here is a regression rather than a step.

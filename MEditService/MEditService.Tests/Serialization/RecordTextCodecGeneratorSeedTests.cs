@@ -43,7 +43,7 @@ public class RecordTextCodecGeneratorSeedTests
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
             "RecordTextCodecGeneratorSeed.cs", // the compile-time seed, never invoked
-            "TrackService.cs",                 // Track
+            "PluginTrees.cs",                  // a plugin's binary and its tree, composed
         };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
@@ -68,7 +68,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "TrackService.cs",          // Track
+            "PluginTrees.cs",           // a plugin's binary read as its tree
             // The plugin header's own body: a ModHeader is not an IMajorRecordGetter, so the per-
             // record codec cannot produce it and the only alternative is the second dialect this
             // whitelist prevents.
@@ -98,7 +98,7 @@ public class RecordTextCodecGeneratorSeedTests
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
             "PluginCompileService.cs", // compile from the tree
-            "TrackService.cs",         // Track's own round-trip gate reads its own tree back
+            "PluginTrees.cs",          // a tree compiled back to bytes
             // The read half of the same header door. Symmetric by construction: the document this reads is the
             // one HeaderDocument.Write produced, so any other reader reintroduces the dialect split.
             "HeaderDocument.cs",       // the plugin header's document, both directions

@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -45,8 +46,8 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var deepParsed = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName), pluginPath),
-            _mod.LoadOrder.GameRelease, LocalizedStrings.ForRead(_mod.ModFolder));
-        var pristineFiles = TrackService
+            _mod.LoadOrder.GameRelease, LocalizedStrings.ForRead(PluginStrings.In(_mod.ModFolder)));
+        var pristineFiles = PluginTrees
             .SerializeToPristineFiles(deepParsed, SourceEditFixture.PluginName)
             .GetAwaiter().GetResult();
         var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath)));

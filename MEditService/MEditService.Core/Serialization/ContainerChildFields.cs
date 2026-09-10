@@ -1,8 +1,8 @@
-using MEditService.Core.Serialization;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Serialization;
 
 /// <summary>Reading and writing a container's child major records through the members
 /// <see cref="ContainerMembers"/> derives. Nothing is stripped.</summary>

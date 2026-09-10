@@ -143,7 +143,7 @@ public sealed class HeldPlugins : ILoadOrder
             var importTimer = Stopwatch.StartNew();
             mod = _adapter.OpenForRead(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), GameRelease,
-                LocalizedStrings.ForRead(ModFolders.Of(plugin.Origin, plugin.Path), DataFolderPath));
+                new PluginStrings(ModFolders.Of(plugin.Origin, plugin.Path), DataFolderPath));
             var importMs = importTimer.ElapsedMilliseconds;
 
             var metadataTimer = Stopwatch.StartNew();

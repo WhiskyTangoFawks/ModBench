@@ -4,7 +4,6 @@ using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
@@ -102,13 +101,17 @@ public sealed partial class SourceRepository
 
         if (OwnDocumentIdentity(sourceRoot, plugin.Name, parsed, spelled, schemas) is { } own) return own;
 
-        // Nothing of its own, so another record's document carries it inline, and only the codec can
-        // read a type and a name back out of that document's graph.
+        // Nothing of its own, so another record's document carries it inline, and the codec reads its
+        // type and name off that document's text.
         if (OwnersUnder(sourceRoot).DocumentHolding(spelled) is not { } owner) return null;
-        var ownerRecord = ReadOwner(Unit(owner.FullPath, owner.FormKey, owner.RecordType, isEmbedded: true));
-        if (ContainerChildFields.FindEmbeddedChild(ownerRecord, spelled)?.Child is not { } child) return null;
+        if (BytesOrNull(owner.FullPath) is not { } ownerBytes) return null;
+        if (new ContainerDocuments(_release, schemas).EmbeddedIdentity(owner.RecordType, ownerBytes, spelled)
+            is not { } child)
+        {
+            return null;
+        }
 
-        return new RecordIdentity(spelled, SourceRecordType.Resolve(child, schemas), child.EditorID);
+        return new RecordIdentity(spelled, child.RecordType, child.EditorId);
     }
 
     /// <summary>The reader's own words for a document whose name carries <paramref name="formKey"/>
@@ -170,9 +173,13 @@ public sealed partial class SourceRepository
             if (!FormKey.TryFactory(document.FormKey, out var declared) || declared != formKey) continue;
 
             // A path-ambiguous group's document names its own type, and that name is the codec's
-            // rather than the schema's table, so only the record itself says which table it is in.
-            var recordType = RecordTypeOf(relativePath, _release)
-                ?? SourceRecordType.Resolve(ReadOwn(documentPath), schemas);
+            // rather than the schema's table, so the codec maps it to one.
+            if ((RecordTypeOf(relativePath, _release)
+                 ?? new ContainerDocuments(_release, schemas).RecordTypeNamed(document.RecordType))
+                is not { } recordType)
+            {
+                continue;
+            }
             return new RecordIdentity(spelled, recordType, document.EditorId);
         }
         return null;
@@ -333,14 +340,18 @@ public sealed partial class SourceRepository
         return owners;
     }
 
-    // This, ReadOwn below and IdentityOf's child search are the three sites still reading a document
-    // back as a graph; all three answer identity, never a write (debt #859).
-    private IMajorRecord ReadOwner(SourceUnit unit) =>
-        Codec.DeserializeAsync(unit.FullPath, _release, unit.OwnerRecordType).GetAwaiter().GetResult();
-
-    // The document's own record, read with no type hint: a path-ambiguous document declares its type.
-    private IMajorRecordGetter ReadOwn(string documentPath) =>
-        Codec.DeserializeAsync(documentPath, _release, recordType: null).GetAwaiter().GetResult();
+    // Never exclusive owners of the file: it may be gone or locked since the listing named it.
+    private static byte[]? BytesOrNull(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? StripUtf8Bom(File.ReadAllBytes(path)) : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     // Which document carries a record no path names — a placed reference in its cell, a response in
     // its quest. One map per plugin's source root, from one token scan of every document under it.

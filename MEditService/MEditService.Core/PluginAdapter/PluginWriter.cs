@@ -25,7 +25,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         // No load order concept here, so no origin to distinguish a mod folder from the game Data folder:
         // the single-argument ForRead overload applies. The path names its own ModKey.
         var mod = MutagenPluginAdapter.Instance.OpenForWrite(
-            new ModPath(pluginPath), gameRelease, LocalizedStrings.ForRead(Path.GetDirectoryName(pluginPath)!));
+            new ModPath(pluginPath), gameRelease, PluginStrings.In(Path.GetDirectoryName(pluginPath)!));
         return PrepareFromModAsync(mod, pluginPath, loadOrder);
     }
 

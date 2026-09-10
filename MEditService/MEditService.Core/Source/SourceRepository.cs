@@ -138,13 +138,6 @@ public sealed partial class SourceRepository
         return Path.GetFileName(to);
     }
 
-    // A record another document carries is spliced into that document's text; only a document read
-    // back as a record still goes through the codec.
-    private static RecordTextCodec Codec => LazyCodec.Value;
-
-    private static readonly Lazy<RecordTextCodec> LazyCodec =
-        new(() => new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
-
     private static byte[] OwnerBytes(SourceUnit unit) => StripUtf8Bom(File.ReadAllBytes(unit.FullPath));
 
     private static InvalidOperationException NoPlaceInTheTree(PluginKey plugin, RecordIdentity identity) =>

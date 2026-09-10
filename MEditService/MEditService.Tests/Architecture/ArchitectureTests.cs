@@ -271,8 +271,8 @@ public sealed class ArchitectureTests
     public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToBackUp()
     {
         // PluginWriter backs the existing binary up first. The create gesture writes a brand-new
-        // file and TrackService a scratch copy, so neither has an existing binary to back up.
-        string[] writers = ["PluginWriter.cs", "CreatePluginHandler.cs", "TrackService.cs"];
+        // file and PluginTrees a scratch copy, so neither has an existing binary to back up.
+        string[] writers = ["PluginWriter.cs", "CreatePluginHandler.cs", "PluginTrees.cs"];
 
         // Both needles: ".WriteAsync(" alone is an HTTP response or an output stream, and
         // "PluginAdapter" is the stem of the namespace, the interface and the implementation alike,

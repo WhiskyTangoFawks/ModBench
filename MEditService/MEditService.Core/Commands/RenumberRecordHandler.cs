@@ -209,7 +209,7 @@ public sealed class RenumberRecordHandler
                 // The owner's own walk never reaches a child's VMAD — an embedded referencer's
                 // struct-list link is its own record's, and has to be asked of the child directly.
                 if (RefuseIfRemapIncomplete(
-                        child, SourceRecordType.Resolve(child, schemas), oldFormKey, referencerPlugin, release)
+                        child, RecordTableName.Of(child, schemas), oldFormKey, referencerPlugin, release)
                     is { } childIncomplete) return childIncomplete;
             }
 

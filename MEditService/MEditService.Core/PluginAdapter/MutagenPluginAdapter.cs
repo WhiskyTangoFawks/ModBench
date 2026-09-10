@@ -17,21 +17,24 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     /// prepared save — which need the adapter without a constructor to inject it through.</summary>
     public static readonly IPluginAdapter Instance = new MutagenPluginAdapter();
 
-    public ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
-        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, param));
+    public ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
+        => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(strings)));
 
     public IPluginDocuments OpenDocuments(
         ModPath modPath,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        BinaryReadParameters? param = null)
+        PluginStrings? strings = null)
     {
-        var loaded = OpenForRead(modPath, gameRelease, param);
+        var loaded = OpenForRead(modPath, gameRelease, strings);
         return ModDocuments.Of(loaded.Getter, schemas, loaded);
     }
 
-    public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
-        => ModFactory.ImportSetter(modPath, gameRelease, param);
+    public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
+        => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(strings));
+
+    private static BinaryReadParameters? ReadParameters(PluginStrings? strings) =>
+        strings is { } named ? LocalizedStrings.ForRead(named) : null;
 
     public IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);

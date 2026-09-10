@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Core.Commands;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
@@ -373,10 +375,10 @@ public sealed class TrackServiceTests
             var service = new TrackService(NullLogger<TrackService>.Instance);
 
             var deserializeCalls = 0;
-            Task<IFallout4Mod> CountingDeserialize(string folder, CancellationToken ct)
+            async Task<IMod> CountingDeserialize(string folder, CancellationToken ct)
             {
                 deserializeCalls++;
-                return RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+                return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
             }
 
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, CountingDeserialize);
@@ -411,7 +413,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
 
-            static async Task<IFallout4Mod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
+            static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
             {
                 var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
                 deserialized.Npcs.First().EditorID += "Corrupted";
@@ -457,7 +459,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
 
-            static async Task<IFallout4Mod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
+            static async Task<IMod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
             {
                 var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
                 deserialized.Npcs.First().HeightMin += 1.0f;
@@ -557,7 +559,7 @@ public sealed class TrackServiceTests
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
 
-            async Task<IFallout4Mod> DeserializeThenCorrupt(string folder, CancellationToken ct)
+            async Task<IMod> DeserializeThenCorrupt(string folder, CancellationToken ct)
             {
                 var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
                 corrupt(deserialized.ModHeader);

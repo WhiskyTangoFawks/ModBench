@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -99,7 +100,7 @@ public sealed class FormLinkResolver(
         if (Opened(copy) is not { } opened || !opened.Cache.TryResolve<IMajorRecordGetter>(formKey, out var record)) return null;
 
         return new RecordLookupEntry(
-            SourceRecordType.Resolve(record, schemaReflector.GetSchemas(loadOrder.GameRelease)), record.EditorID);
+            RecordTableName.Of(record, schemaReflector.GetSchemas(loadOrder.GameRelease)), record.EditorID);
     }
 
     private (ILoadedMod Mod, ILinkCache Cache)? Opened(RegisteredCopy copy)

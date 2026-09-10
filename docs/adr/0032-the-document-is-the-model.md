@@ -29,8 +29,8 @@ allowlist is empty. A record is a Mutagen object only while it is being
 read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the
 Plugin adapter — the banned-API analyzer fails the build on the live-object namespaces
 (`MEditService/BannedSymbols.txt`, scoped by folder in `.editorconfig` while the last boxes are
-cleared), and `GameNamespaceScanTests` fails it on a game-concrete name outside those two, outside a
-shrinking allowlist that still names Source.
+cleared), and `GameNamespaceScanTests` fails it on a game-concrete name outside those two. That
+scan's allowlist is empty.
 
 **3. xEdit owns the presentation.** What a value *reads as* to a modder — the prose a collapsed row
 shows, the gesture that edits a cell, which arrays sort and by what — is xEdit's answer, cited to

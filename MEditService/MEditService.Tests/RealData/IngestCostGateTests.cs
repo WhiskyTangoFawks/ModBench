@@ -103,7 +103,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             var sw = Stopwatch.StartNew();
             using var overlay = ModFactory.ImportGetter(
                 new ModPath(ModKey.FromFileName(name), path), gameRelease,
-                LocalizedStrings.ForRead(modFolder: null, dataDir.Path));
+                LocalizedStrings.ForRead(new PluginStrings(null, dataDir.Path)));
             var records = SerializeEveryRecord(schemas, codec, overlay);
             sw.Stop();
             codecMs += sw.ElapsedMilliseconds;
@@ -130,7 +130,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             var path = Path.Combine(dataFolderPath, name);
             using var overlay = ModFactory.ImportGetter(
                 new ModPath(ModKey.FromFileName(name), path), gameRelease,
-                LocalizedStrings.ForRead(modFolder: null, dataFolderPath));
+                LocalizedStrings.ForRead(new PluginStrings(null, dataFolderPath)));
             repo.IndexMod(overlay, Registration.Participating(slot), new PluginKey(name, "Data"));
         }
     }
