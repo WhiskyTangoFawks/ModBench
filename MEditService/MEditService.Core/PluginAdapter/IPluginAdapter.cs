@@ -2,7 +2,6 @@ using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.PluginAdapter;
@@ -17,10 +16,10 @@ public interface ILoadedMod : IDisposable
 /// is a parameter of every one of them, so no caller names a game to open or write a plugin.</summary>
 public interface IPluginAdapter
 {
-    /// <summary>An overlay for reading. <paramref name="param"/> is optional only for callers with
-    /// nothing localization-specific to say; every real deep parse builds one through
-    /// <see cref="Source.LocalizedStrings.ForRead(string?, string)"/>.</summary>
-    ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null);
+    /// <summary>An overlay for reading. <paramref name="strings"/> is optional only for callers with
+    /// nothing localization-specific to say: "pass nothing" is not neutral for a localized
+    /// plugin.</summary>
+    ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
     /// <summary>The same plugin as the documents its source tree would hold (ADR-0041), for callers
     /// outside the codec/adapter pair. Owns the open until the result is disposed.</summary>
@@ -28,11 +27,11 @@ public interface IPluginAdapter
         ModPath modPath,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        BinaryReadParameters? param = null);
+        PluginStrings? strings = null);
 
     /// <summary>A deep parse the caller may mutate, for the gestures that re-serialize or re-write a
-    /// plugin. Same <paramref name="param"/> rule as <see cref="OpenForRead"/>.</summary>
-    IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null);
+    /// plugin. Same <paramref name="strings"/> rule as <see cref="OpenForRead"/>.</summary>
+    IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
     /// <summary>An empty mod of <paramref name="gameRelease"/>'s own type, carrying nothing but its
     /// header.</summary>

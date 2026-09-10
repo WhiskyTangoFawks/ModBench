@@ -45,7 +45,7 @@ public sealed class AbsorbExternalChangeHandler
             {
                 deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
                     new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
-                    LocalizedStrings.ForRead(modFolder));
+                    PluginStrings.In(modFolder));
             }
             catch (Exception ex)
             {
@@ -56,7 +56,7 @@ public sealed class AbsorbExternalChangeHandler
             }
 
             allPristineFiles.AddRange(
-                TrackService.SerializeToPristineFiles(deepParsed, plugin.Name).GetAwaiter().GetResult());
+                PluginTrees.SerializeToPristineFiles(deepParsed, plugin.Name).GetAwaiter().GetResult());
             binarySha256ByPlugin[plugin.Name] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(plugin.Path)));
         }
 

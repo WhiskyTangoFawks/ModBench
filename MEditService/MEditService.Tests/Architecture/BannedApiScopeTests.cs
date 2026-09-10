@@ -15,7 +15,6 @@ public sealed class BannedApiScopeTests
         "MEditService.Core/PluginAdapter/**.cs",
         "MEditService.Core/Schema/**.cs",
         "MEditService.Core/Serialization/**.cs",
-        "MEditService.Core/Source/**.cs",
         "MEditService.Tests.ProcessEnvironment/**.cs",
         "MEditService.Tests/**.cs",
     ];

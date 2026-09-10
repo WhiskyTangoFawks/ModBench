@@ -183,6 +183,47 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.DoesNotContain("\"Response2\"", body, StringComparison.Ordinal);
     }
 
+    private RecordIdentity? IdentityOf(IMajorRecordGetter record) =>
+        Repository.IdentityOf(
+            Plugin, record.FormKey.ToString(),
+            SharedSchemaReflector.Instance.GetSchemas(Release));
+
+    // The child's type is written into its own text, since a placed reference's slot holds an
+    // abstract element type.
+    [Fact]
+    public void IdentityOf_APlacedReferenceInsideItsCell_NamesItsTypeAndEditorId()
+    {
+        Assert.Equal(
+            new RecordIdentity(_persistentRef.FormKey.ToString(), "refr", "PersistRef"),
+            IdentityOf(_persistentRef));
+    }
+
+    // The one its own text cannot answer: a topic's slot holds a concrete class, so the document
+    // carries no type of its own and only the slot says what it holds.
+    [Fact]
+    public void IdentityOf_AResponseInsideAQuestsTopic_NamesTheTypeItsSlotHolds()
+    {
+        Assert.Equal(
+            new RecordIdentity(_response.FormKey.ToString(), "info", "Response"),
+            IdentityOf(_response));
+    }
+
+    [Fact]
+    public void IdentityOf_ATopicInsideItsQuest_NamesTheTypeItsSlotHolds()
+    {
+        Assert.Equal(
+            new RecordIdentity(_topic.FormKey.ToString(), "dial", "Topic"),
+            IdentityOf(_topic));
+    }
+
+    [Fact]
+    public void IdentityOf_AReferenceTwoEmbedLevelsDown_NamesItThroughTheWorldspacesTopCell()
+    {
+        Assert.Equal(
+            new RecordIdentity(_topCellRef.FormKey.ToString(), "refr", "TopCellRef"),
+            IdentityOf(_topCellRef));
+    }
+
     [Fact]
     public void Get_OfARecordNoDocumentCarries_IsNull()
     {

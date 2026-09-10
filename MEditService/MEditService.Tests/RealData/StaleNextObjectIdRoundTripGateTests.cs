@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
@@ -84,7 +85,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         using var scratch = new TrackedScratch("LitR - Settings Holotapes Sorting.esp");
         FormKey? extra = null;
 
-        async Task<IFallout4Mod> DeserializeThenAddAnNpc(string folder, CancellationToken ct)
+        async Task<IMod> DeserializeThenAddAnNpc(string folder, CancellationToken ct)
         {
             var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
             extra = deserialized.Npcs.AddNew("ExtraNpc").FormKey;
@@ -144,7 +145,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
-        public Task<TrackResult> TrackAsync(Func<string, CancellationToken, Task<IFallout4Mod>>? deserialize = null) =>
+        public Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
             new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(_index, Plugin.Origin!, SourcePreset.Edits, deserialize);
 

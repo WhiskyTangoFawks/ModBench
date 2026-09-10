@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
@@ -75,7 +76,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         // The recompiled binary keeps the Localized flag.
         using var overlayDisposable = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4,
-            LocalizedStrings.ForRead(_modFolder, _gameDir));
+            LocalizedStrings.ForRead(new PluginStrings(_modFolder, _gameDir)));
         Assert.True(((IFallout4ModGetter)overlayDisposable).UsingLocalization);
 
         // Every strings file compile rewrote is byte-identical to what Track captured. A real change

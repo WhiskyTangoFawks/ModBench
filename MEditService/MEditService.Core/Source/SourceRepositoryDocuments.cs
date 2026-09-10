@@ -96,7 +96,7 @@ public sealed partial class SourceRepository
     internal static EmbeddedChildSpan? EmbeddedChildIn(
         byte[] ownerBytes, SourceUnit unit, string formKey, GameRelease release) =>
         EmbeddedChildSplice.Find(
-            ownerBytes, EmbeddedChildSplice.ContainerTypeName(unit.OwnerRecordType, ownerBytes, release), formKey);
+            ownerBytes, EmbeddedChildSplice.ContainerTypeName(unit.OwnerRecordType, ownerBytes, release), formKey, release);
 
     private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
 

@@ -38,7 +38,7 @@ content. Byte identity was a test of whichever tool last wrote the file, never o
 
 The verdict (2026-09-02 amendment — the comparison mechanism actually in force): every
 record in `parse(original)` has a counterpart in `parse(recompiled)` and vice versa, and each pair
-passes a **two-stage check in one door** (`MEditService.Core.Source.ModelIdentity.FindFirst`,
+passes a **two-stage check in one door** (`MEditService.Core.Serialization.ModelIdentity.FindFirst`,
 shared by `TrackService`'s live gate and the test suite's own Compile assertions, one checker and
 one exclusion list). Stage one is Mutagen's generated equality mask
 (`<Type>MixIn.GetEqualsMask(rhs, EqualsMaskHelper.Include.OnlyFailures)`, reached generically by
@@ -107,10 +107,10 @@ in the abstract.
 
 **The gate also checks a fixed allow-list of `ModHeader` (TES4) fields.**
 `ModelIdentity.FindFirst`'s own per-record walk never reaches `ModHeader` — it is not an
-`IMajorRecordGetter`, so `EnumerateMajorRecords()` never yields it. `TrackService.VerifyRoundTrip`
-runs a second, header-only check (`ModelIdentity.FindFirstHeaderFieldDivergence`) against the same
-generated equality mask, narrowed to the fields below rather than every `Fallout4ModHeader.Mask`
-field. `Fallout4ModHeader.Mask<TItem>` has exactly 16 members; the two tables below account for all
+`IMajorRecordGetter`, so `EnumerateMajorRecords()` never yields it. `ModelIdentity.FindFirstDivergence`,
+which is the whole verdict Track asks the Plugin adapter for, runs a second header-only check
+(`ModelIdentity.FindFirstHeaderFieldDivergence`) against the same generated equality mask, narrowed
+to the fields below rather than every `Fallout4ModHeader.Mask` field. `Fallout4ModHeader.Mask<TItem>` has exactly 16 members; the two tables below account for all
 16, so the partition can be verified against the type rather than trusted:
 
 | Allow-listed field | Subrecord | Checked with a test that corrupts it alone (both `ModelIdentityTests` and `TrackServiceTests`) |

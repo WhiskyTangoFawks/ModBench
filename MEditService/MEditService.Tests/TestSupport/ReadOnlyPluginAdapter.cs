@@ -3,7 +3,6 @@ using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.TestSupport;
@@ -13,19 +12,19 @@ namespace MEditService.Tests.TestSupport;
 public abstract class ReadOnlyPluginAdapter : IPluginAdapter
 {
     public abstract ILoadedMod OpenForRead(
-        ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null);
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
     public IPluginDocuments OpenDocuments(
         ModPath modPath,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        BinaryReadParameters? param = null)
+        PluginStrings? strings = null)
     {
-        var loaded = OpenForRead(modPath, gameRelease, param);
+        var loaded = OpenForRead(modPath, gameRelease, strings);
         return ModDocuments.Of(loaded.Getter, schemas, loaded);
     }
 
-    public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null) =>
+    public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
     public IMod CreateEmpty(ModKey modKey, GameRelease gameRelease) =>

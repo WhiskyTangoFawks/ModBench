@@ -84,8 +84,8 @@ public sealed class FormLinkValidationTests : IDisposable
     }
 }
 
-/// <summary>A link target whose container document the codec cannot read is one nothing can name, so
-/// the link is unresolved. The record being edited is readable and is not what refuses.</summary>
+/// <summary>A link target whose container document is not a document is one nothing can name, so the
+/// link is unresolved. The record being edited is readable and is not what refuses.</summary>
 public sealed class CorruptLinkTargetValidationTests : IDisposable
 {
     private readonly ContainerCopyFixture _mod = ContainerCopyFixture.CreateWithTrackedSource();
@@ -102,7 +102,7 @@ public sealed class CorruptLinkTargetValidationTests : IDisposable
             cellFile,
             File.ReadAllText(cellFile).Replace(
                 $"\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
-                $"\"MajorRecordFlagsRaw\": \"notanumber\",\n\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
+                $"\"MajorRecordFlagsRaw\": notanumber,\n\"EditorID\": \"{ContainerCopyFixture.PersistentRefEditorId}\"",
                 StringComparison.Ordinal));
 
         var result = _mod.EditHandler.Set(

@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
@@ -52,8 +53,8 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         // Track directly (bypassing TrackService.TrackAsync's own round-trip gate — see class doc comment).
         var deepParsed = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(FixtureFileName), pluginPath), GameRelease.Fallout4,
-            LocalizedStrings.ForRead(_modFolder));
-        var pristineFiles = TrackService.SerializeToPristineFiles(deepParsed, FixtureFileName, CancellationToken.None)
+            LocalizedStrings.ForRead(PluginStrings.In(_modFolder)));
+        var pristineFiles = PluginTrees.SerializeToPristineFiles(deepParsed, FixtureFileName, CancellationToken.None)
             .GetAwaiter().GetResult();
         SourceRepository.Track(_modFolder, SourcePreset.Edits, pristineFiles, new TrackProvenance(null, null, new Dictionary<string, string>()));
     }

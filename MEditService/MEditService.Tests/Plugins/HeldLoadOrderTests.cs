@@ -416,9 +416,9 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
         public IReadOnlyList<SpyLoadedMod> LoadedMods => _mods;
 
         public override ILoadedMod OpenForRead(
-            ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
+            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         {
-            var real = ModFactory.ImportGetter(modPath, gameRelease, param);
+            var real = ModFactory.ImportGetter(modPath, gameRelease);
             var spy = new SpyLoadedMod(real);
             _mods.Add(spy);
             return spy;

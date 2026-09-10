@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

@@ -1,13 +1,11 @@
-using System.Reflection;
 using System.Text.Json;
 using MEditService.Core.Schema;
-using MEditService.Core.Source;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Serialization;
 
-/// <summary>A container's embedded children read out of its own document, by the slot names
-/// <see cref="ContainerMembers"/> derives.</summary>
+/// <summary>A container's embedded children read out of its own document, by the slot facts
+/// <see cref="ContainerSlots"/> holds.</summary>
 internal sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<string, RecordTableSchema> schemas)
 {
     /// <summary><c>Node</c> is the child's subtree of its owner's document, which spells an ambiguous
@@ -18,6 +16,8 @@ internal sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionar
     private const string FormKeyMember = "FormKey";
 
     private readonly RecordTypeDispatch _dispatch = RecordTypeDispatch.For(release);
+
+    private readonly ContainerSlots _slots = ContainerSlots.For(release);
 
     /// <summary>The concrete class name a container's slot table is keyed by, which is the codec's
     /// spelling of the type rather than the schema's table name.</summary>
@@ -37,7 +37,8 @@ internal sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionar
     internal IEnumerable<ChildDocument> ChildrenOf(string ownerRecordType, JsonElement ownerRoot)
     {
         if (_dispatch.ConcreteFor(ownerRecordType) is not { } owner) yield break;
-        if (!ContainerMembers.Derived.ChildFieldsByType.TryGetValue(owner.Name, out var slots)) yield break;
+        var slots = _slots.ChildSlotsOf(owner.Name);
+        if (slots.Count == 0) yield break;
         if (ownerRoot.ValueKind != JsonValueKind.Object) yield break;
 
         foreach (var slotName in slots)
@@ -90,35 +91,20 @@ internal sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionar
             ? _dispatch.ConcreteFor(named.GetString()!)
             : null;
 
-    private static Type? SlotElementType(Type owner, string slotName)
+    private Type? SlotElementType(Type owner, string slotName) =>
+        _slots.ElementTypeOf(owner.Name, slotName) is { } element ? _dispatch.ConcreteFor(element) : null;
+
+    private string TableFor(Type? concrete) => RecordTableName.Of(concrete, schemas);
+
+    /// <summary>The type and name of the child <paramref name="formKey"/> names anywhere inside
+    /// <paramref name="ownerBytes"/>; null when no embedded slot of the owner carries it.</summary>
+    internal (string RecordType, string? EditorId)? EmbeddedIdentity(
+        string? ownerRecordType, byte[] ownerBytes, string formKey)
     {
-        var member = owner.GetProperty(slotName, BindingFlags.Public | BindingFlags.Instance)?.PropertyType;
-        if (member == null) return null;
+        var ownerTypeName = EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release);
+        if (EmbeddedChildLocator.Find(ownerBytes, ownerTypeName, formKey, release) is not { } span) return null;
 
-        return member.GetInterfaces()
-            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
-            .Select(i => i.GetGenericArguments()[0])
-            .FirstOrDefault()
-            ?? member;
+        var declared = span.Discriminator ?? _slots.ElementTypeOf(null, span.SlotName);
+        return (TableFor(_dispatch.ConcreteFor(declared ?? string.Empty)), span.EditorId);
     }
-
-    // SourceRecordType's answer, asked of a type rather than an instance: the table whose type it is
-    // one of, else the GRUP signature the schema names tables after, else the lowercased class name.
-    private string TableFor(Type? concrete)
-    {
-        if (concrete == null) return string.Empty;
-
-        foreach (var (tableName, schema) in schemas)
-        {
-            if (schema.RecordType.IsAssignableFrom(concrete)) return tableName;
-        }
-
-        return GrupSignatureOf(concrete) ?? concrete.Name.ToLowerInvariant();
-    }
-
-    private static string? GrupSignatureOf(Type type) =>
-        type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
-            is Mutagen.Bethesda.Plugins.RecordType grup
-            ? grup.Type.ToLowerInvariant()
-            : null;
 }

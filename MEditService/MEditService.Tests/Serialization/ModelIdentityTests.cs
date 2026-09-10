@@ -1,11 +1,11 @@
-using MEditService.Core.Source;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.Tests.Serialization;
 
 /// <summary>Tested directly, not only through <c>TrackService</c>, so a regression in the mask
 /// reflection or the exclusion list fails at its own boundary (ADR-0042 decision 2).</summary>

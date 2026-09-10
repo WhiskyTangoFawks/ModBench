@@ -46,7 +46,7 @@ internal sealed class CopySource(
         if (_tree != null) return _tree.IdentityOf(plugin, formKey, _schemas);
 
         return Getter(formKey) is { } record
-            ? new RecordIdentity(record.FormKey.ToString(), SourceRecordType.Resolve(record, _schemas), record.EditorID)
+            ? new RecordIdentity(record.FormKey.ToString(), RecordTableName.Of(record, _schemas), record.EditorID)
             : null;
     }
 
@@ -92,7 +92,7 @@ internal sealed class CopySource(
 
         return new Containment(
             embedded.Parent.FormKey.ToString(),
-            SourceRecordType.Resolve(embedded.Parent, _schemas),
+            RecordTableName.Of(embedded.Parent, _schemas),
             embedded.SlotName);
     }
 
@@ -121,7 +121,7 @@ internal sealed class CopySource(
 
         foreach (var record in mod.EnumerateMajorRecords())
         {
-            var parentType = SourceRecordType.Resolve(record, _schemas);
+            var parentType = RecordTableName.Of(record, _schemas);
             foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(record))
             {
                 _containments.TryAdd(

@@ -106,7 +106,7 @@ public sealed class KeepExternalChangeHandler
 
         // Keep only runs against a tracked plugin, so the mod-folder-only ForRead overload applies.
         var deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
-            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, LocalizedStrings.ForRead(repository.ModFolder));
+            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, PluginStrings.In(repository.ModFolder));
         var touched = new List<TouchedRecord>();
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
@@ -118,7 +118,7 @@ public sealed class KeepExternalChangeHandler
             // The external change never touched this record, so nothing about it is this gesture's.
             if (string.Equals(incomingText, baselineText, StringComparison.Ordinal)) continue;
 
-            var recordType = SourceRecordType.Resolve(record, schemas);
+            var recordType = RecordTableName.Of(record, schemas);
             var held = repository.IdentityOf(plugin, formKey, schemas);
 
             if (held is { } identity && repository.Locate(plugin, identity) is { IsEmbedded: true } unit)

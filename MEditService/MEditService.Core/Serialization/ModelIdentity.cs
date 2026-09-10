@@ -1,17 +1,18 @@
 using System.Collections.Concurrent;
 using System.Reflection;
 using Loqui;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Serialization;
 
 /// <summary>ADR-0042 decision 2's amendment: the round-trip verdict is model identity via Mutagen's
 /// generated equality mask, walked by reflection rather than its ToString(), which omits inherited
 /// members. Bare Equals has false negatives.</summary>
-public static class ModelIdentity
+internal static class ModelIdentity
 {
     // The only exclusion ADR-0042 decision 2 allows: fields Mutagen backs from an enclosing GRUP header,
     // never a subrecord. Scoped per declaring type, since Unknown/Timestamp names collide with real
@@ -32,11 +33,40 @@ public static class ModelIdentity
 
     /// <summary>One record that failed the model-identity verdict, or the whole-mod fallback when
     /// every individual record matched (header/container-only divergence).</summary>
-    public sealed record Divergence(string RecordType, FormKey FormKey, string? EditorId, string Description);
+    internal sealed record Divergence(string RecordType, FormKey FormKey, string? EditorId, string Description)
+    {
+        /// <summary>The sentence a refusal quotes. A divergence at no FormKey is the mod header's, and
+        /// its description already names the field.</summary>
+        internal string Describe() =>
+            FormKey == FormKey.Null
+                ? Description
+                : $"{RecordType} {FormKey} (EditorID '{EditorId}') {Description}";
+    }
+
+    /// <summary>The whole verdict: the first record that does not survive a round trip, else the mod
+    /// header field that does not. Null when the recompiled plugin is model-identical.</summary>
+    internal static Divergence? FindFirstDivergence(IModGetter original, IModGetter recompiled)
+    {
+        if (FindFirst(original, recompiled) is { } record) return record;
+
+        // FindFirst never reaches ModHeader (not an IMajorRecordGetter); this is the header's own check,
+        // scoped to OpaqueHeaderFields' allow-list — a blanket sweep would refuse legitimate divergence.
+        return HeaderOf(original) is { } originalHeader && HeaderOf(recompiled) is { } recompiledHeader
+               && FindFirstHeaderFieldDivergence(originalHeader, recompiledHeader) is { } field
+            ? new Divergence(
+                PluginHeader.RecordType, FormKey.Null, null,
+                $"TES4 header field '{field}' changed after being recompiled from its own tracked source.")
+            : null;
+    }
+
+    // Every game's mod type declares its own header class under this one member name; IModGetter
+    // itself has none to bind to.
+    private static ILoquiObjectGetter? HeaderOf(IModGetter mod) =>
+        mod.GetType().GetProperty("ModHeader")?.GetValue(mod) as ILoquiObjectGetter;
 
     /// <summary>The first record, in <paramref name="original"/>'s GRUP order, that does not survive a
     /// round trip, naming the field the mask disagrees on; null when every record is model-identical.</summary>
-    public static Divergence? FindFirst(IMod original, IFallout4Mod recompiled)
+    internal static Divergence? FindFirst(IModGetter original, IModGetter recompiled)
     {
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
         var originalFormKeys = new HashSet<FormKey>();
@@ -90,10 +120,9 @@ public static class ModelIdentity
     internal static readonly HashSet<string> OpaqueHeaderFields =
         ["TypeOffsets", "Deleted", "Screenshot", "INTV", "INCC", "Author", "Description"];
 
-    /// <summary>The first <see cref="OpaqueHeaderFields"/> member the mask disagrees on, or null.
-    /// FO4-shaped: a round-trip gate generalized to another game needs its own header type and
-    /// allow-list here.</summary>
-    public static string? FindFirstHeaderFieldDivergence(IFallout4ModHeaderGetter original, IFallout4ModHeaderGetter recompiled)
+    /// <summary>The first <see cref="OpaqueHeaderFields"/> member the mask disagrees on, or null. The
+    /// allow-list is shared across games; only the TransientTypes check below is FO4-shaped.</summary>
+    internal static string? FindFirstHeaderFieldDivergence(ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {
         foreach (var (_, field) in FailingFields(original, recompiled))
         {
@@ -103,7 +132,11 @@ public static class ModelIdentity
 
         // The mask reports a TransientTypes item against the nested leaf's type and ignores a count
         // difference, so it is compared by plain values here.
-        if (!TransientTypesMatch(original, recompiled)) return "TransientTypes";
+        if (original is IFallout4ModHeaderGetter fromOriginal && recompiled is IFallout4ModHeaderGetter fromRecompiled
+            && !TransientTypesMatch(fromOriginal, fromRecompiled))
+        {
+            return "TransientTypes";
+        }
         return null;
     }
 
@@ -218,8 +251,8 @@ public static class ModelIdentity
     private static string NormalizeNegativeZeros(string text) =>
         System.Text.RegularExpressions.Regex.Replace(text, @"(?<![\w.])-0(?=$|[,\s""\]}])", "0");
 
-    private static readonly Serialization.RecordTextCodec Codec =
-        new(Microsoft.Extensions.Logging.Abstractions.NullLogger<Serialization.RecordTextCodec>.Instance);
+    private static readonly RecordTextCodec Codec =
+        new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
 
     // Deep copies without the encoding a rewrite is entitled to change: group-header-derived fields
     // zeroed, and a worldspace's block levels in one canonical order, since the tree carries none

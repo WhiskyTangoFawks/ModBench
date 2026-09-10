@@ -123,7 +123,7 @@ internal sealed class ReferencerScan(
         }
 
         var root = codec.Deserialize(document.Body, release, document.RecordType);
-        schemaType = SourceRecordType.Resolve(root, schemas);
+        schemaType = RecordTableName.Of(root, schemas);
         return root;
     }
 
@@ -140,7 +140,7 @@ internal sealed class ReferencerScan(
         foreach (var child in EmbeddedDescendants(root))
         {
             if (Is(child.FormKey, itself)) continue;
-            if (!schemas.TryGetValue(SourceRecordType.Resolve(child, schemas), out var childSchema)) continue;
+            if (!schemas.TryGetValue(RecordTableName.Of(child, schemas), out var childSchema)) continue;
 
             var body = codec.SerializeToText(child, release);
             if (Links(body, childSchema, target)) linkers.Add(child.FormKey.ToString());

@@ -1,16 +1,16 @@
 using System.Reflection;
-using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Schema;
 
 /// <summary>The members holding child major records, read from each game module's own types.
 /// <see cref="EmbeddedSlots"/> is the subset the embed customization accepts, and a container's
 /// document carries exactly those.</summary>
 internal sealed record ContainerMembers(
     IReadOnlyDictionary<string, string[]> ChildFieldsByType,
-    IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlots)
+    IReadOnlySet<(string ParentType, string Slot)> EmbeddedSlots,
+    IReadOnlyDictionary<(string ParentType, string Slot), string> ElementTypeBySlot)
 {
     internal static ContainerMembers Derived => Instance.Value;
 
@@ -20,6 +20,7 @@ internal sealed record ContainerMembers(
     {
         var childFields = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         var embedded = new HashSet<(string ParentType, string Slot)>();
+        var elementTypes = new Dictionary<(string ParentType, string Slot), string>();
 
         foreach (var assembly in GameModules())
         {
@@ -34,14 +35,25 @@ internal sealed record ContainerMembers(
                         childFields[recordType.Name] = members = new SortedSet<string>(StringComparer.Ordinal);
                     members.Add(property.Name);
                     if (embeds) embedded.Add((recordType.Name, property.Name));
+                    if (ElementTypeOf(property.PropertyType) is { } element)
+                        elementTypes[(recordType.Name, property.Name)] = element.Name;
                 }
             }
         }
 
         return new ContainerMembers(
             childFields.ToDictionary(entry => entry.Key, entry => entry.Value.ToArray(), StringComparer.Ordinal),
-            embedded);
+            embedded,
+            elementTypes);
     }
+
+    /// <summary>A list slot's element, or a single-value slot's own type.</summary>
+    internal static Type? ElementTypeOf(Type slotType) =>
+        slotType.GetInterfaces()
+            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            .Select(i => i.GetGenericArguments()[0])
+            .FirstOrDefault()
+        ?? slotType;
 
     // Every game this build references, so a module added later needs no line here.
     private static IEnumerable<Assembly> GameModules() =>

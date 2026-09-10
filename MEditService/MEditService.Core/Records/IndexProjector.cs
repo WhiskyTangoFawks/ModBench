@@ -626,7 +626,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
             gameRelease,
             _schemaReflector.GetSchemas(gameRelease),
-            LocalizedStrings.ForRead(ModFolders.Of(plugin.Origin, plugin.Path), dataFolderPath));
+            new PluginStrings(ModFolders.Of(plugin.Origin, plugin.Path), dataFolderPath));
 
     /// <summary>ADR-0046 invariant 6's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy

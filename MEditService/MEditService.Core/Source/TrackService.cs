@@ -3,13 +3,8 @@ using MEditService.Core.Commands;
 using MEditService.Core.Notifications;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
-using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Core.Source;
 
@@ -47,12 +42,9 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         IReadOnlyCollection<PluginKey> heldCopies,
         string origin,
         SourcePreset preset,
-        Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
+        TreeDeserializer? deserializeForVerification,
         CancellationToken cancel = default)
     {
-        var deserialize = deserializeForVerification
-            ?? ((folder, ct) => RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct));
-
         // A copy the Index could not open has no bytes to deep-parse, so Track passes over it
         // rather than failing the whole origin on it.
         var plugins = loadOrder.Copies
@@ -82,6 +74,8 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             var pristineFiles = new List<PristineFile>();
             var binaryHashesByPlugin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+            var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
+
             SetProgress(origin, TrackPhase.Parsing, 0, plugins.Count);
             var parsedDone = 0;
             foreach (var plugin in plugins)
@@ -89,13 +83,11 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 cancel.ThrowIfCancellationRequested();
 
                 // A fresh deep parse, not the load order's own overlay, whose lifetime Track does not control.
-                // Explicit strings parameters: "pass nothing" is not neutral for a Localized plugin (LocalizedStrings).
-                IMod deepParsed;
+                // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
+                PluginTrees.PluginTree tree;
                 try
                 {
-                    deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
-                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
-                        LocalizedStrings.ForRead(modFolder, loadOrder.DataFolderPath));
+                    tree = await PluginTrees.ReadAsync(plugin.Name, plugin.Path, loadOrder.GameRelease, strings, cancel);
                 }
                 catch (Exception ex)
                 {
@@ -108,27 +100,26 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                         $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}");
                 }
 
-                // Refuse by name: TranslatedString.TryLookup returns false for a missing file with no exception.
-                if (LocalizedStrings.FindMissingStringsFile(deepParsed, plugin.Name, modFolder, loadOrder.DataFolderPath, loadOrder.GameRelease) is { } missingFile)
+                if (tree.MissingStringsFile is { } missingFile)
                 {
                     return TrackResult.Refused(
                         TrackRefusal.MissingLocalizationStrings,
                         $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
-                        $"in {LocalizedStrings.FolderFor(modFolder, loadOrder.DataFolderPath)}. Restore the file, then track again.");
+                        $"in {strings.Folder}. Restore the file, then track again.");
                 }
 
                 parsedDone++;
                 SetProgress(origin, TrackPhase.Parsing, parsedDone, plugins.Count);
 
                 SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
-                var pluginPristineFiles = await SerializeToPristineFiles(deepParsed, plugin.Name, cancel);
+                var pluginPristineFiles = tree.Files;
 
                 // ADR-0042 decision 2: the gate refuses before a single byte of any plugin in this Track is
                 // committed, leaving the folder exactly as untracked as it was. Same Serializing phase — no new
                 // TrackPhase.
                 if (await VerifyRoundTrip(
-                        deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, loadOrder.GameRelease,
-                        deserialize, logger, cancel) is { } refusal)
+                        plugin.Name, plugin.Path, pluginPristineFiles, loadOrder.GameRelease, strings,
+                        deserializeForVerification, logger, cancel) is { } refusal)
                     return TrackResult.Refused(TrackRefusal.RoundTripFailed, refusal);
 
                 pristineFiles.AddRange(pluginPristineFiles);
@@ -173,12 +164,12 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     // record is model-identical. Reparse, not the pre-write object: only written bytes show what the
     // writer does.
     private static async Task<string?> VerifyRoundTrip(
-        IMod original,
         string pluginName,
         string originalPluginPath,
         IReadOnlyList<PristineFile> pristineFilesForThisPlugin,
         GameRelease gameRelease,
-        Func<string, CancellationToken, Task<IFallout4Mod>> deserialize,
+        PluginStrings strings,
+        TreeDeserializer? deserialize,
         ILogger logger,
         CancellationToken cancel)
     {
@@ -188,14 +179,10 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             await PristineFileWriter.WriteAllAsync(pristineFilesForThisPlugin, scratchDir, cancel);
 
             var treeRoot = Path.Combine(scratchDir, SourceRepository.RootFor(pluginName));
-            var recompiled = await deserialize(treeRoot, cancel);
-
             var recompiledPath = Path.Combine(scratchDir, pluginName);
-            // The adapter's bare write, not PluginWriter's: a scratch verification must not drop a
-            // .bak beside the real plugin.
             try
             {
-                await MutagenPluginAdapter.Instance.WriteAsync(recompiled, recompiledPath);
+                await PluginTrees.WriteFromTreeAsync(treeRoot, recompiledPath, deserialize, cancel);
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
@@ -224,22 +211,10 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                       "present in the original — dropped during parsing, before Track ever wrote its source.");
             }
 
-            var recompiledFromBinary = (IFallout4Mod)MutagenPluginAdapter.Instance.OpenForWrite(
-                new ModPath(ModKey.FromFileName(pluginName), recompiledPath), gameRelease);
-
-            if (ModelIdentity.FindFirst(original, recompiledFromBinary) is { } divergence)
+            if (PluginTrees.DivergenceBetween(pluginName, originalPluginPath, recompiledPath, gameRelease, strings)
+                is { } divergence)
             {
-                return $"{pluginName} does not round-trip through its own tracked source: " +
-                    $"{divergence.RecordType} {divergence.FormKey} (EditorID '{divergence.EditorId}') " +
-                    divergence.Description;
-            }
-
-            // FindFirst never reaches ModHeader (not an IMajorRecordGetter); this is the header's own check,
-            // scoped to OpaqueHeaderFields' allow-list — a blanket sweep would refuse legitimate divergence.
-            if (ModelIdentity.FindFirstHeaderFieldDivergence(((IFallout4ModGetter)original).ModHeader, recompiledFromBinary.ModHeader) is { } headerField)
-            {
-                return $"{pluginName} does not round-trip through its own tracked source: " +
-                    $"TES4 header field '{headerField}' changed after being recompiled from its own tracked source.";
+                return $"{pluginName} does not round-trip through its own tracked source: {divergence.Describe()}";
             }
 
             // Model-identical but not byte-identical: an encoding-only difference ADR-0042 decision 2
@@ -261,51 +236,12 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     }
 
 
-    /// <summary>One plugin's complete source tree, ready to commit — the one implementation of the door's
-    /// write. A second serializer that dropped the root RecordData.json would delete the header from
-    /// the baseline: CommitPristineToMain never merges.</summary>
-    internal static async Task<IReadOnlyList<PristineFile>> SerializeToPristineFiles(
-        IModGetter mod, string pluginName, CancellationToken cancel = default)
-    {
-        var scratchDir = Directory.CreateTempSubdirectory("medit-serialize-").FullName;
-        try
-        {
-            // Always the inline dropoff, explicitly: MajorRecordListParallelHelper has a real upstream race
-            // under a genuinely parallel dropoff (nested-list containers writing into each other's folders).
-            await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                // FO4-typed: the generated whole-mod mixin is itself seeded from an FO4 mod type — the existing
-                // generalization boundary.
-                (IFallout4ModGetter)mod,
-                scratchDir,
-                InlineWorkDropoff.Instance,
-                cancel);
-
-            // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
-            // after the write, as the per-record codec does.
-            var pristineFiles = new List<PristineFile>();
-            foreach (var file in Directory.EnumerateFiles(scratchDir, "*", SearchOption.AllDirectories))
-            {
-                cancel.ThrowIfCancellationRequested();
-                var relativePath = Path.Combine(
-                    SourceRepository.RootFor(pluginName), Path.GetRelativePath(scratchDir, file));
-                pristineFiles.Add(new PristineFile(relativePath, StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel))));
-            }
-            return pristineFiles;
-        }
-        finally
-        {
-            Directory.Delete(scratchDir, recursive: true);
-        }
-    }
-
     private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal)
     {
         var progress = new TrackProgress(origin, phase, pluginsDone, pluginsTotal);
         Volatile.Write(ref _progress, progress);
         _notifications?.Publish(new TrackProgressNotification(progress));
     }
-
-    private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 
     private static string ComputeSha256(string filePath) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath)));

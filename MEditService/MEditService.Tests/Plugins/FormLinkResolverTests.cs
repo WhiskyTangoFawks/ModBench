@@ -82,7 +82,7 @@ public sealed class FormLinkResolverTests
     private sealed class OneModAdapter(ILoadedMod mod) : ReadOnlyPluginAdapter
     {
         public override ILoadedMod OpenForRead(
-            ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null) => mod;
+            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) => mod;
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public sealed class FormLinkResolverTests
         using var data = new PluginFixtureBuilder("resolver-embedded")
             .WithPlugin(TrackedPlugin, mod => { built = mod; placed = AddCellWithPlacedObject(mod); }, origin: "TrackedMod")
             .BuildScattered();
-        var pristine = await TrackService.SerializeToPristineFiles(built!, TrackedPlugin);
+        var pristine = await PluginTrees.SerializeToPristineFiles(built!, TrackedPlugin);
         Track(ModFolderOf(data, TrackedPlugin), [.. pristine]);
 
         using var resolver = ResolverOver(data);
