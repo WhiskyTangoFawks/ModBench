@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -7,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Order;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Plugins;
+namespace MEditService.Core.PluginAdapter;
 
 /// <summary>The plugin copies Editing holds (ADR-0044). Mutated in place by reconcile — a copy
 /// arrives, leaves, or has its registration moved — and never torn down as a whole for a change in
@@ -17,9 +18,10 @@ public sealed class HeldPlugins : ILoadOrder
     // ADR-0036: keyed by the compound (origin, filename) identity — two copies of one filename are
     // ordinarily held at once, and a filename-keyed dictionary would silently drop one. Joined into
     // one string so a single OrdinalIgnoreCase comparer covers both halves.
-    private readonly Dictionary<string, IModDisposeGetter> _modsByKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ILoadedMod> _modsByKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PluginMetadata> _plugins = [];
     private readonly Dictionary<string, PluginLoadFailure> _loadFailures = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IPluginAdapter _adapter;
     private readonly ILogger _logger;
 
     private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
@@ -38,8 +40,11 @@ public sealed class HeldPlugins : ILoadOrder
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
 
-    public HeldPlugins(string dataFolderPath, string? instanceRoot, GameRelease gameRelease, ILogger? logger = null)
+    public HeldPlugins(
+        IPluginAdapter adapter, string dataFolderPath, string? instanceRoot, GameRelease gameRelease,
+        ILogger? logger = null)
     {
+        _adapter = adapter;
         _logger = logger ?? NullLogger.Instance;
         DataFolderPath = dataFolderPath;
         InstanceRoot = instanceRoot;
@@ -103,7 +108,7 @@ public sealed class HeldPlugins : ILoadOrder
         // Under the same lock as the writes: a Dictionary read concurrent with a write is not merely
         // stale, it can spin or throw. Cheap — this is per-save and per-index, not per-read.
         lock (_mutation)
-            return _modsByKey.TryGetValue(KeyOf(origin, pluginName), out var mod) ? mod : null;
+            return _modsByKey.TryGetValue(KeyOf(origin, pluginName), out var mod) ? mod.Getter : null;
     }
 
     public PluginMetadata? Find(PluginKey key) =>
@@ -129,20 +134,20 @@ public sealed class HeldPlugins : ILoadOrder
                 plugin.Name, plugin.Origin, plugin.Registration.LoadOrderIndex, plugin.Registration.Enabled, plugin.Registration.Winning);
         }
 
-        IModDisposeGetter? mod = null;
+        ILoadedMod? mod = null;
         try
         {
             // The binary path — the "binary is for untracked plugins" overlay (ADR-0041
             // amendment) — needs the same explicit strings parameters Track does, or a Localized
             // untracked plugin throws instead of opening.
             var importTimer = Stopwatch.StartNew();
-            mod = ModFactory.ImportGetter(
+            mod = _adapter.OpenForRead(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), GameRelease,
                 LocalizedStrings.ForRead(ModFolders.Of(plugin.Origin, plugin.Path), DataFolderPath));
             var importMs = importTimer.ElapsedMilliseconds;
 
             var metadataTimer = Stopwatch.StartNew();
-            var metadata = BuildPluginMetadata(mod, plugin);
+            var metadata = BuildPluginMetadata(mod.Getter, plugin);
             var metadataMs = metadataTimer.ElapsedMilliseconds;
 
             Hold(mod, metadata);
@@ -173,7 +178,7 @@ public sealed class HeldPlugins : ILoadOrder
     // Republishes the snapshot readers see, so a copy is never half-held from a reader's point of
     // view. Replaces any copy already held under the same key: two PluginMetadata under one
     // (origin, filename) would make every keyed lookup ambiguous.
-    private void Hold(IModDisposeGetter mod, PluginMetadata metadata)
+    private void Hold(ILoadedMod mod, PluginMetadata metadata)
     {
         lock (_mutation)
         {

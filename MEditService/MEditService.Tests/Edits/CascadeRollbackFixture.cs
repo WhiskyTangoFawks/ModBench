@@ -2,6 +2,7 @@ using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -113,6 +114,7 @@ public sealed class CascadeRollbackFixture : IDisposable
         if (!watched) return;
 
         Index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         Index.Reconcile(_data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
 

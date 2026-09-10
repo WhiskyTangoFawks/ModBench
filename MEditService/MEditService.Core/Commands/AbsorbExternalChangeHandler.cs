@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
@@ -42,7 +43,7 @@ public sealed class AbsorbExternalChangeHandler
             IMod deepParsed;
             try
             {
-                deepParsed = ModFactory.ImportSetter(
+                deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
                     new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
                     LocalizedStrings.ForRead(modFolder));
             }

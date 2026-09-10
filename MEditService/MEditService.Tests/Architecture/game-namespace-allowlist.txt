@@ -20,6 +20,5 @@ MEditService.Core/Source/TrackService.cs: (IFallout4ModGetter)mod,
 MEditService.Core/Source/TrackService.cs: Func<string, CancellationToken, Task<IFallout4Mod>> deserialize,
 MEditService.Core/Source/TrackService.cs: Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
 MEditService.Core/Source/TrackService.cs: if (ModelIdentity.FindFirstHeaderFieldDivergence(((IFallout4ModGetter)original).ModHeader, recompiledFromBinary.ModHeader) is { } headerField)
-MEditService.Core/Source/TrackService.cs: new ModPath(ModKey.FromFileName(pluginName), recompiledPath), Fallout4Release.Fallout4);
 MEditService.Core/Source/TrackService.cs: using Mutagen.Bethesda.Fallout4;
-MEditService.Core/Source/TrackService.cs: var recompiledFromBinary = Fallout4Mod.CreateFromBinary(
+MEditService.Core/Source/TrackService.cs: var recompiledFromBinary = (IFallout4Mod)MutagenPluginAdapter.Instance.OpenForWrite(

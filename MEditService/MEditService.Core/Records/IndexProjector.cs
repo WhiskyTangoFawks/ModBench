@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
@@ -20,7 +21,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
     private readonly IRecordIndexFactory _indexFactory;
-    private readonly IModImporter _modImporter;
+    private readonly IPluginAdapter _adapter;
     // ADR-0046: null in every test that does not care, matching DuckDbRecordIndex's own posture.
     private readonly INotificationPublisher? _notifications;
     // A direct constructor parameter rather than routed through IRecordIndexFactory, which has no
@@ -40,30 +41,31 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside
     /// <c>Core/Records</c> names the store, its factory or how a file is opened (ADR-0001).</summary>
     public IndexProjector(
+        IPluginAdapter adapter,
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
-        IModImporter? modImporter = null,
         INotificationPublisher? notifications = null)
         : this(
+            adapter,
             new DuckDbRecordIndexFactory(
                 schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
                 loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>()),
-            loggerFactory?.CreateLogger<IndexProjector>(), modImporter, schemaReflector, notifications)
+            loggerFactory?.CreateLogger<IndexProjector>(), schemaReflector, notifications)
     {
     }
 
     /// <summary>The store's factory as a seam, for a test that faults or counts what the store
     /// does.</summary>
     internal IndexProjector(
+        IPluginAdapter adapter,
         IRecordIndexFactory indexFactory,
         ILogger? logger = null,
-        IModImporter? modImporter = null,
         SchemaReflector? schemaReflector = null,
         INotificationPublisher? notifications = null)
     {
         _indexFactory = indexFactory;
         _logger = logger ?? NullLogger.Instance;
-        _modImporter = modImporter ?? new DefaultModImporter();
+        _adapter = adapter;
         _schemaReflector = schemaReflector ?? new SchemaReflector();
         _notifications = notifications;
     }
@@ -305,7 +307,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
         }
         var loadOrder = new HeldPlugins(
-            snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
+            _adapter, snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
 
         lock (_lock)
         {
@@ -773,7 +775,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
         var modPath = new ModPath(modKey, metadata.Path);
-        using var loaded = _modImporter.Import(
+        using var loaded = _adapter.OpenForRead(
             modPath, gameRelease, LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _heldPlugins!.DataFolderPath));
 
         lock (_lock)

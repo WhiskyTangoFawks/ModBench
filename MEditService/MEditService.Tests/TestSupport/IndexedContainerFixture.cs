@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
@@ -20,6 +21,7 @@ public sealed class IndexedContainerFixture : IDisposable
     public IndexedContainerFixture(INotificationPublisher? notifications = null)
     {
         Index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(
                 SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
         Index.Reconcile(_source.GameDirectory, _source.Entries, GameRelease.Fallout4);

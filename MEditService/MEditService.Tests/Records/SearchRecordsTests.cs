@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -16,7 +17,7 @@ public class SearchRecordsTests(TestPluginFixture fixture)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new IndexProjector(factory);
+        var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return manager;
     }

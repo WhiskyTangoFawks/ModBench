@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -20,6 +21,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     private IndexProjector NewLoadOrder()
     {
         var index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         index.Reconcile(
             _fixture.GameDirectory,

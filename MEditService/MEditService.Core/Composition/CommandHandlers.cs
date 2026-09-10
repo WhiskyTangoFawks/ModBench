@@ -1,5 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -20,7 +21,7 @@ public static class CommandHandlers
         // a handler that built its own would answer from the same four.
         services.AddSingleton(sp => new WriteTargets(
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IModImporter>(),
+            sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(WriteTargets))));
@@ -67,7 +68,7 @@ public static class CommandHandlers
         services.AddSingleton(sp => new RenumberRecordHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<IModImporter>(),
+            sp.GetRequiredService<IPluginAdapter>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<RenumberRecordHandler>>()));

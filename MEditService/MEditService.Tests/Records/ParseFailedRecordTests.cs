@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -256,6 +257,7 @@ public sealed class ParseFailedRecordTests
             if (corruptWholeFile) File.WriteAllBytes(pluginPath, [0x54, 0x45, 0x53, 0x34, 0xFF]);
 
             Index = new IndexProjector(
+                MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             Index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
             Query = new RecordQueryService(Index, SharedSchemaReflector.Instance, new ConflictClassifier());

@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -15,6 +16,7 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
         .Build();
 
     private readonly IndexProjector _index = new(
+        MutagenPluginAdapter.Instance,
         new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
 
     private PluginKey Key => new(_data.Plugins[0].Name, _data.Plugins[0].Origin);

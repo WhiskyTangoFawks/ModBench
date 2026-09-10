@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -14,6 +15,7 @@ public sealed class IndexAfterACopyTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
     private readonly IndexProjector _index = new(
+        MutagenPluginAdapter.Instance,
         new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
 
     public IndexAfterACopyTests() =>

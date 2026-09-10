@@ -1,4 +1,5 @@
 using System.Text;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
@@ -23,7 +24,7 @@ public sealed class FormLinkResolverTests
     private static FormLinkResolver ResolverOver(
         ScatteredFixtureData data, IReadOnlyList<LoadOrderEntry>? registered = null) =>
         new(LoadOrder.From(data.GameDirectory, data.Root, GameRelease.Fallout4, registered ?? data.Plugins),
-            new DefaultModImporter(),
+            new MutagenPluginAdapter(),
             SharedSchemaReflector.Instance);
 
     private static string ModFolderOf(ScatteredFixtureData data, string pluginName) =>
@@ -78,9 +79,10 @@ public sealed class FormLinkResolverTests
         public void Dispose() => Disposed = true;
     }
 
-    private sealed class OneModImporter(ILoadedMod mod) : IModImporter
+    private sealed class OneModAdapter(ILoadedMod mod) : ReadOnlyPluginAdapter
     {
-        public ILoadedMod Import(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null) => mod;
+        public override ILoadedMod OpenForRead(
+            ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null) => mod;
     }
 
     [Fact]
@@ -94,7 +96,7 @@ public sealed class FormLinkResolverTests
 
         using (var resolver = new FormLinkResolver(
                    LoadOrder.From(data.GameDirectory, data.Root, GameRelease.Fallout4, data.Plugins),
-                   new OneModImporter(unreadable),
+                   new OneModAdapter(unreadable),
                    SharedSchemaReflector.Instance,
                    new LoggerFactory([new CollectingLoggerProvider(log)]).CreateLogger<FormLinkResolver>()))
         {
@@ -221,7 +223,7 @@ public sealed class FormLinkResolverTests
 
         using var resolver = new FormLinkResolver(
             LoadOrder.From(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, []),
-            new DefaultModImporter(),
+            new MutagenPluginAdapter(),
             SharedSchemaReflector.Instance);
 
         Assert.Null(resolver.Resolve(keyword.ToString()));

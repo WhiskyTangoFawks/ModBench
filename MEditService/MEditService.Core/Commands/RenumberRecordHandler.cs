@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -19,7 +20,7 @@ public sealed class RenumberRecordHandler
     // pre-write gate and draws its new FormKey, both through this one module.
     private readonly WriteTargets _targets;
     private readonly LoadOrderHolder _loadOrder;
-    private readonly IModImporter _importer;
+    private readonly IPluginAdapter _importer;
     private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger<RenumberRecordHandler> _logger;
@@ -29,7 +30,7 @@ public sealed class RenumberRecordHandler
     internal RenumberRecordHandler(
         WriteTargets targets,
         LoadOrderHolder loadOrder,
-        IModImporter importer,
+        IPluginAdapter importer,
         RecordTextCodec codec,
         SchemaReflector schemaReflector,
         ILogger<RenumberRecordHandler> logger)

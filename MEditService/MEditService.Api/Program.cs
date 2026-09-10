@@ -7,6 +7,7 @@ using MEditService.Bridge;
 using MEditService.Core.Composition;
 using MEditService.Core.Edits;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -66,14 +67,14 @@ try
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
     builder.Services.AddSingleton<ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
-    builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
+    builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
     // ADR-0046 invariant 10: one Index for the whole process, so the two sides never project into
     // two stores. ADR-0001: which file it opens comes from the load request, not from here.
     builder.Services.AddSingleton(sp => new IndexProjector(
+        sp.GetRequiredService<IPluginAdapter>(),
         sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILoggerFactory>(),
-        sp.GetRequiredService<IModImporter>(),
         sp.GetRequiredService<INotificationPublisher>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
     // Resolved from the Index rather than registered on its own, so there is exactly one write
@@ -88,7 +89,7 @@ try
     // A factory, not a singleton: one resolver per gesture over the load order as it stood when the
     // gesture started, disposed with it, so no answer outlives the write it was asked for.
     builder.Services.AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
-        held, sp.GetRequiredService<IModImporter>(), sp.GetRequiredService<SchemaReflector>(),
+        held, sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILogger<FormLinkResolver>>()));
     // ADR-0046 invariant 3: one handler per gesture, registered where the module they share is
     // visible, and resolved by the route that names the gesture.
