@@ -6,6 +6,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -187,8 +188,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var ddl = new TableDdlBuilder(reflector);
         using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.Index((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data", Enabled: true, Winning: true) };

@@ -1,8 +1,8 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests;
 
@@ -21,8 +21,9 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual IDisposable BeginProjection() => Inner.BeginProjection();
     public virtual void Announce(Action publish) => Inner.Announce(publish);
 
-    public virtual void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null) =>
-        Inner.Index(plugin, registration, key, filePath);
+    public virtual void Index(
+        IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null) =>
+        Inner.Index(documents, registration, key, filePath);
     public virtual string? IndexedContentHash(PluginKey key) => Inner.IndexedContentHash(key);
     public virtual void Unindex(PluginKey key) => Inner.Unindex(key);
     public virtual void Register(PluginKey key, Registration registration) =>

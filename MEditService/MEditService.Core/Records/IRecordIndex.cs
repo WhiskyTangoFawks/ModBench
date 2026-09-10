@@ -1,6 +1,6 @@
 using MEditService.Core.Plugins;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
@@ -29,10 +29,10 @@ internal interface IRecordIndex : IDisposable
     /// immediately outside a scope, after that scope's advance inside one.</summary>
     void Announce(Action publish);
 
-    /// <summary>Indexes one plugin file, replacing whatever <paramref name="key"/> held. ADR-0001:
-    /// <paramref name="filePath"/> is stamped with its content hash so the rows are validatable at
-    /// the next open; omitting it claims no file backs them.</summary>
-    void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null);
+    /// <summary>Indexes one plugin's documents, replacing whatever <paramref name="key"/> held.
+    /// ADR-0001: <paramref name="filePath"/> is stamped with its content hash so the rows are
+    /// validatable at the next open; omitting it claims no file backs them.</summary>
+    void Index(IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null);
 
     /// <summary>The hash of the file <paramref name="key"/>'s rows were built from, or null when the
     /// index holds no validated rows for it. Independent of registration, so a returning profile

@@ -140,11 +140,11 @@ internal sealed class CopySource(
         _cells = new Dictionary<string, CellPlacement>(StringComparer.Ordinal);
         if (Mod() is not { } mod) return _cells;
 
-        new PlacementWalker().Walk(
-            mod,
-            cell => _cells[cell.CellFormKey] = new CellPlacement(
-                cell.ParentWorldspace, cell.BlockX, cell.BlockY, cell.SubX, cell.SubY, cell.IsInterior),
-            _ => { });
+        foreach (var (formKey, cell) in ModDocuments.CellStructuresOf(mod))
+        {
+            _cells[formKey] = new CellPlacement(
+                cell.ParentWorldspace, cell.BlockX, cell.BlockY, cell.SubX, cell.SubY, cell.IsInterior);
+        }
         return _cells;
     }
 

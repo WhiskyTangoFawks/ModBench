@@ -6,6 +6,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -33,7 +34,7 @@ public class HeaderIndexingTests
     private static DuckDbRecordIndex Indexed(IFallout4Mod mod, string origin = "Data")
     {
         var repo = NewRepo();
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), origin));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), origin));
         repo.UpdateWinners();
         return repo;
     }
@@ -165,8 +166,8 @@ public class HeaderIndexingTests
 
         using var repo = NewRepo();
         var key = new PluginKey("ReindexHeader.esp", "Data");
-        repo.Index((IModGetter)mod, Registration.Participating(0), key);
-        repo.Index((IModGetter)mod, Registration.Participating(0), key);
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), key);
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), key);
 
         var rows = Query(repo,
             "SELECT COUNT(*) AS c FROM records WHERE record_type = 'header' AND plugin = $1", "ReindexHeader.esp");
@@ -204,8 +205,8 @@ public class HeaderIndexingTests
         var modB = new Fallout4Mod(ModKey.FromFileName("PluginB.esp"), Fallout4Release.Fallout4);
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "Data"));
-        repo.Index((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var overridesA = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginA.esp")!.Entries;
@@ -229,8 +230,8 @@ public class HeaderIndexingTests
         modB.ModHeader.Author = "Author B";
 
         using var repo = NewRepo();
-        repo.Index((IModGetter)modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var overrides = repo.At(RecordRef.Effective).GetOverrideStack("000000:Shared.esp")!.Entries;
 

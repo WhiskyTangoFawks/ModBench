@@ -3,6 +3,7 @@ using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -89,7 +90,7 @@ public class PlacementIndexingTests
 
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         return new Built(repo, wrld.FormKey.ToString(), topCell.FormKey.ToString(),
@@ -146,7 +147,7 @@ public class PlacementIndexingTests
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.Index(overlay, Registration.Participating(0), new PluginKey(overlay.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(overlay, Registration.Participating(0), new PluginKey(overlay.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
             var rows = Query(repo,
@@ -183,8 +184,8 @@ public class PlacementIndexingTests
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));  // re-index same plugin
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));  // re-index same plugin
         repo.UpdateWinners();
 
         var cellRows = Query(repo,
@@ -357,8 +358,8 @@ public class PlacementIndexingTests
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.Index((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
 
         var formKey = barrel.FormKey.ToString();
         Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginKey("Placed.esp", "ModA")));
@@ -397,8 +398,8 @@ public class PlacementIndexingTests
 
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.Index((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         return new WorldspaceFixture(repo, wrld.FormKey.ToString(), extCell.FormKey.ToString(),
@@ -484,7 +485,7 @@ public class PlacementIndexingTests
 
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         total = intSub.Cells.Count;
         return repo;

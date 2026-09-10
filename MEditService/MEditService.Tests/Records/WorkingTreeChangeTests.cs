@@ -37,7 +37,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
         var index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         index.Initialize(GameRelease.Fallout4);
         var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-        index.Index(Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(0), BaseKey);
+        index.IndexMod(Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(0), BaseKey);
         index.UpdateWinners();
         return index;
     }

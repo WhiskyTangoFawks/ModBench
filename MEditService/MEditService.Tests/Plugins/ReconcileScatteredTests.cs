@@ -3,6 +3,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -123,11 +124,12 @@ public sealed class ReconcileScatteredTests
     private sealed class ThrowingOnIndexRepository(IRecordIndex inner, string poisonPlugin)
         : DelegatingRecordIndex(inner)
     {
-        public override void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null)
+        public override void Index(
+            IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
         {
-            if (plugin.ModKey.FileName.ToString().Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
+            if (key.Name.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
-            base.Index(plugin, registration, key, filePath);
+            base.Index(documents, registration, key, filePath);
         }
     }
 }

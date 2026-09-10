@@ -1,6 +1,7 @@
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -27,10 +28,11 @@ public sealed class ReconcileDiffTests
 
     private sealed class CountingIndex(IRecordIndex inner, CountingFactory owner) : DelegatingRecordIndex(inner)
     {
-        public override void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null)
+        public override void Index(
+            IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
         {
             owner.Indexed++;
-            base.Index(plugin, registration, key, filePath);
+            base.Index(documents, registration, key, filePath);
         }
 
         public override void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)

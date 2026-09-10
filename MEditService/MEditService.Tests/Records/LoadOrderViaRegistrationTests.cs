@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -55,8 +56,8 @@ public class LoadOrderViaRegistrationTests
         var bKey = new PluginKey("PluginB.esp", "Data");
 
         using var repo = OpenRepo();
-        repo.Index(modA, Registration.Participating(0), aKey);
-        repo.Index((IModGetter)modB, Registration.Participating(1), bKey);
+        repo.IndexMod(modA, Registration.Participating(0), aKey);
+        repo.IndexMod((IModGetter)modB, Registration.Participating(1), bKey);
         repo.UpdateWinners();
 
         var beforeA = MirrorRecordCount(repo, aKey);

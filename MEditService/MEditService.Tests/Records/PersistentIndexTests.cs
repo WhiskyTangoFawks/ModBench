@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -61,7 +62,7 @@ public class PersistentIndexTests : IDisposable
     {
         var key = KeyOf(Path.GetFileName(path));
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-        index.Index(mod, Registration.Participating(loadOrderIndex), key, path);
+        index.IndexMod(mod, Registration.Participating(loadOrderIndex), key, path);
     }
 
     private static long RecordRowsFor(DuckDbRecordIndex index, PluginKey key)
@@ -252,7 +253,7 @@ public class PersistentIndexTests : IDisposable
 
         var mod = new Fallout4Mod(ModKey.FromFileName("Alpha.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("NpcAlpha");
-        index.Index((IModGetter)mod, Registration.Participating(0), KeyOf("Alpha.esp"));
+        index.IndexMod((IModGetter)mod, Registration.Participating(0), KeyOf("Alpha.esp"));
 
         Assert.NotEmpty(index.At(RecordRef.Effective).GetDocuments(KeyOf("Alpha.esp")));
         Assert.Null(index.IndexedContentHash(KeyOf("Alpha.esp")));

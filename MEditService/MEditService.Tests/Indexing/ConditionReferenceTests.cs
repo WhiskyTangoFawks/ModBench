@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -23,7 +24,7 @@ public class ConditionReferenceTests
         repo.Initialize(GameRelease.Fallout4);
         var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(plugin), Path.Combine(fixture.DataFolder, plugin)), Fallout4Release.Fallout4);
-        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -85,7 +86,7 @@ public class ConditionReferenceTests
         var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("CondCheck.esp"), Path.Combine(fixture.DataFolder, "CondCheck.esp")),
             Fallout4Release.Fallout4);
-        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var document = repo.At(RecordRef.Effective)

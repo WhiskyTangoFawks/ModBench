@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -33,7 +34,7 @@ public sealed class CutDownPluginFixture : IDisposable
 
         Repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         Repo.Initialize(GameRelease.Fallout4);
-        Repo.Index(_overlay, Registration.Participating(0), new PluginKey(_overlay.ModKey.FileName.ToString(), "Data"));
+        Repo.IndexMod(_overlay, Registration.Participating(0), new PluginKey(_overlay.ModKey.FileName.ToString(), "Data"));
         Repo.UpdateWinners();
     }
 

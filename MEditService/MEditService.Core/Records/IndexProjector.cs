@@ -4,12 +4,12 @@ using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
@@ -524,7 +524,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         {
             // ADR-0036: threads the origin into the index, so the DuckDB row is identified
             // by (origin, plugin) together, not filename alone.
-            IndexOnePlugin(loadOrder, index, plugin, loadOrder.GetMod(plugin.Name, plugin.Origin)!, sourceTree, token);
+            IndexOnePlugin(loadOrder, index, plugin, sourceTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
@@ -569,14 +569,14 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     // fallback would leave the user reading pre-Track binary content believing it was their source.
     private void IndexOnePlugin(
         HeldPlugins loadOrder, IRecordIndex index, PluginMetadata plugin,
-        IModGetter binary, string? sourceTree, CancellationToken token)
+        string? sourceTree, CancellationToken token)
     {
         // One advance for the whole copy, whichever door it came through (ADR-0046).
         using var _ = index.BeginProjection();
 
         if (sourceTree == null)
         {
-            index.Index(binary, plugin.Registration, plugin.Key, plugin.Path);
+            IndexFromBinary(loadOrder, index, plugin);
             return;
         }
 
@@ -587,7 +587,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
                 _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
             }
             SourceIngest.Ingest(
-                index, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
+                index, ModFolders.Of(plugin.Origin, plugin.Path)!,
                 plugin.Registration, plugin.Key, plugin.Path, loadOrder.GameRelease,
                 _schemaReflector, _logger, token);
             return;
@@ -610,8 +610,23 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
                 "compiled binary instead — edits made since the last compile are not reflected.");
         }
 
-        index.Index(binary, plugin.Registration, plugin.Key, plugin.Path);
+        IndexFromBinary(loadOrder, index, plugin);
     }
+
+    // ADR-0032 rule 2: the binary reaches the index as documents, through the adapter's own door,
+    // never as the open getter HeldPlugins keeps for metadata and the write path.
+    private void IndexFromBinary(HeldPlugins loadOrder, IRecordIndex index, PluginMetadata plugin)
+    {
+        using var documents = OpenDocuments(plugin, loadOrder.GameRelease, loadOrder.DataFolderPath);
+        index.Index(documents, plugin.Registration, plugin.Key, plugin.Path);
+    }
+
+    private IPluginDocuments OpenDocuments(PluginMetadata plugin, GameRelease gameRelease, string dataFolderPath) =>
+        _adapter.OpenDocuments(
+            new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
+            gameRelease,
+            _schemaReflector.GetSchemas(gameRelease),
+            LocalizedStrings.ForRead(ModFolders.Of(plugin.Origin, plugin.Path), dataFolderPath));
 
     /// <summary>ADR-0046 invariant 6's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
@@ -743,7 +758,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             try
             {
                 SourceIngest.Ingest(
-                    index, ModFolders.Of(metadata.Origin, metadata.Path)!, sourceTree,
+                    index, ModFolders.Of(metadata.Origin, metadata.Path)!,
                     metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
             }
             catch (Exception ex)
@@ -773,14 +788,11 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease)
     {
-        var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
-        var modPath = new ModPath(modKey, metadata.Path);
-        using var loaded = _adapter.OpenForRead(
-            modPath, gameRelease, LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _heldPlugins!.DataFolderPath));
+        using var documents = OpenDocuments(metadata, gameRelease, _heldPlugins!.DataFolderPath);
 
         lock (_lock)
         {
-            index.Index(loaded.Getter, metadata.Registration, metadata.Key, metadata.Path);
+            index.Index(documents, metadata.Registration, metadata.Key, metadata.Path);
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }

@@ -1,3 +1,5 @@
+using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
@@ -19,6 +21,14 @@ public interface IPluginAdapter
     /// nothing localization-specific to say; every real deep parse builds one through
     /// <see cref="Source.LocalizedStrings.ForRead(string?, string)"/>.</summary>
     ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null);
+
+    /// <summary>The same plugin as the documents its source tree would hold (ADR-0041), for callers
+    /// outside the codec/adapter pair. Owns the open until the result is disposed.</summary>
+    IPluginDocuments OpenDocuments(
+        ModPath modPath,
+        GameRelease gameRelease,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        BinaryReadParameters? param = null);
 
     /// <summary>A deep parse the caller may mutate, for the gestures that re-serialize or re-write a
     /// plugin. Same <paramref name="param"/> rule as <see cref="OpenForRead"/>.</summary>

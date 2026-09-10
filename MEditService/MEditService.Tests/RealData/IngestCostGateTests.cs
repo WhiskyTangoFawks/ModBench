@@ -5,6 +5,7 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
@@ -130,7 +131,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             using var overlay = ModFactory.ImportGetter(
                 new ModPath(ModKey.FromFileName(name), path), gameRelease,
                 LocalizedStrings.ForRead(modFolder: null, dataFolderPath));
-            repo.Index(overlay, Registration.Participating(slot), new PluginKey(name, "Data"));
+            repo.IndexMod(overlay, Registration.Participating(slot), new PluginKey(name, "Data"));
         }
     }
 
@@ -149,7 +150,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
         using var overlay = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
         using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index(overlay, Registration.Participating(0), new PluginKey(overlay.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(overlay, Registration.Participating(0), new PluginKey(overlay.ModKey.FileName.ToString(), "Data"));
     }
 
     // Open through the importer, enumerate every major record, serialise each through

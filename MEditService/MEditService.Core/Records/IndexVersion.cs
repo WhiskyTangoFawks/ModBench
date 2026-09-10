@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
@@ -17,8 +16,7 @@ internal static class IndexVersion
 
     internal static string For(SchemaReflector reflector, GameRelease release)
     {
-        var mutagen = typeof(IModGetter).Assembly.GetName().Version?.ToString() ?? "unknown";
-        return $"{FormatVersion}|{release}|{mutagen}|{SchemaDigest(reflector, release)}";
+        return $"{FormatVersion}|{release}|{SchemaReflector.MutagenVersion}|{SchemaDigest(reflector, release)}";
     }
 
     // Table name, column name and DuckDB type of every reflected column, in a deterministic order —

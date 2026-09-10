@@ -63,7 +63,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     private void Open(DuckDbRecordIndex index, string name, int loadOrderIndex)
     {
         var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
-        index.Index(
+        index.IndexMod(
             Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginKey(name, "Data"));
     }
 

@@ -1,21 +1,17 @@
 using System.Diagnostics;
-using System.Text;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Core.Source;
 
 /// <summary>A tracked plugin's read model is seeded from its source, never the compiled artifact
-/// (ADR-0041 amendment). The tree deserializes to an IModGetter, so tracked and untracked plugins
-/// share one indexing call. A designated whole-mod door.</summary>
+/// (ADR-0041 amendment). The tree reads as documents, so tracked and untracked plugins share one
+/// indexing call.</summary>
 internal static class SourceIngest
 {
     /// <summary>The tree to ingest from, or null to use the binary: no mod folder, untracked, or tracked
@@ -34,29 +30,25 @@ internal static class SourceIngest
     /// binary instead" is a silent lie. <paramref name="binaryPath"/> only stamps the rows; null
     /// claims no file backs them.</summary>
     internal static void Ingest(
-        IRecordIndex index, string modFolder, string sourceTree, Registration registration,
+        IRecordIndex index, string modFolder, Registration registration,
         PluginKey key, string? binaryPath, GameRelease gameRelease, SchemaReflector schemaReflector,
         ILogger logger, CancellationToken cancel = default)
     {
-        var timer = Stopwatch.StartNew();
-        // Blocking is deliberate: the reconcile loop is synchronous, and making IRecordIndex async to
-        // match Mutagen's signature would push a false shape upward.
-        var mod = RecordTextCodecGeneratorSeed
-            .DeserializeWholeMod(sourceTree, InlineWorkDropoff.Instance, cancel)
-            .GetAwaiter().GetResult();
-        var deserializeMs = timer.ElapsedMilliseconds;
+        cancel.ThrowIfCancellationRequested();
+        var schemas = schemaReflector.GetSchemas(gameRelease);
 
-        timer.Restart();
-        index.Index(mod, registration, key, binaryPath);
+        var timer = Stopwatch.StartNew();
+        using (var documents = new SourceTreeDocuments(modFolder, key.Name, gameRelease, schemas))
+            index.Index(documents, registration, key, binaryPath);
         var indexMs = timer.ElapsedMilliseconds;
 
         timer.Restart();
-        ReconcileHead(index, modFolder, key, gameRelease, schemaReflector, logger, mod);
+        ReconcileHead(index, modFolder, key, gameRelease, schemas, logger);
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug(
-                "Ingested {Plugin} from source: deserialize {DeserializeMs} ms, index {IndexMs} ms, reconcile {ReconcileMs} ms",
-                key.Name, deserializeMs, indexMs, timer.ElapsedMilliseconds);
+                "Ingested {Plugin} from source: index {IndexMs} ms, reconcile {ReconcileMs} ms",
+                key.Name, indexMs, timer.ElapsedMilliseconds);
         }
     }
 
@@ -64,14 +56,13 @@ internal static class SourceIngest
     // compare: the hash is of the codec's canonical form, so any other tree would read as wholly dirty.
     private static void ReconcileHead(
         IRecordIndex index, string modFolder, PluginKey key, GameRelease gameRelease,
-        SchemaReflector schemaReflector, ILogger logger, IModGetter effectiveMod)
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, ILogger logger)
     {
         // The clean fast path: reconciling every record would still be correct, so no test can tell bounded
         // from unbounded here; keep the bound anyway.
         var dirty = SourceRepository.WorkingTreeStatus(modFolder);
         if (dirty.Count == 0) return;
 
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var baselines = new List<(string FormKey, string Body)>();
         var workingTreeOnly = new List<string>();
         var deletedInWorkingTree = new List<(string FormKey, string RecordType, string Body)>();
@@ -137,22 +128,22 @@ internal static class SourceIngest
             {
                 // Deleted in the working tree: gone at Effective, but it must keep answering at Head so the user
                 // can see, diff or revert it (ADR-0041).
-                if (headText != null)
-                    deletedInWorkingTree.Add(DeletedInWorkingTree(codec, gameRelease, identity, headText));
+                if (headText != null && SourceRepository.RootStringIn(headText, FormKeyMember) is { } goneFormKey)
+                    deletedInWorkingTree.Add((goneFormKey, identity.RecordType, headText));
                 continue;
             }
 
             // Identity from the document, not the path: an EditorID may contain " - " (SourceRecordIdentity).
-            var record = codec.DeserializeAsync(fullPath, gameRelease, identity.RecordType).GetAwaiter().GetResult();
+            if (SourceRepository.FormKeyDeclaredBy(fullPath, modFolder, key.Name) is not { } formKey) continue;
 
             if (headText == null)
             {
                 // Created and not yet committed — the ordinary shape, since the write path never runs git add.
-                workingTreeOnly.Add(record.FormKey.ToString());
+                workingTreeOnly.Add(formKey);
                 continue;
             }
 
-            baselines.Add((record.FormKey.ToString(), headText));
+            baselines.Add((formKey, headText));
         }
 
         PairRenamedSourceUnits(baselines, workingTreeOnly, deletedInWorkingTree);
@@ -160,7 +151,7 @@ internal static class SourceIngest
         if (needsStructuralFallback)
         {
             ReconcileHeadStructurally(
-                modFolder, key, gameRelease, schemaReflector, codec, effectiveMod, logger,
+                modFolder, key, gameRelease, schemas, logger,
                 baselines, workingTreeOnly, deletedInWorkingTree);
         }
 
@@ -172,88 +163,77 @@ internal static class SourceIngest
         index.SeedCommittedOnly(key, deletedInWorkingTree);
     }
 
-    // Diffs HEAD's tree against the effective mod by FormKey, needing no path identity (ADR-0041
-    // amendment). A schema-unpublished type is skipped on the deletion side only: a Head-only row for
-    // it could never be read back.
+    // Diffs HEAD's documents against the working tree's by FormKey, needing no path identity
+    // (ADR-0041 amendment). A schema-unpublished type is skipped on the deletion side only: a
+    // Head-only row for it could never be read back.
     private static void ReconcileHeadStructurally(
-        string modFolder, PluginKey key, GameRelease gameRelease, SchemaReflector schemaReflector,
-        RecordTextCodec codec, IModGetter effectiveMod, ILogger logger,
+        string modFolder, PluginKey key, GameRelease gameRelease,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, ILogger logger,
         List<(string FormKey, string Body)> baselines,
         List<string> workingTreeOnly,
         List<(string FormKey, string RecordType, string Body)> deletedInWorkingTree)
     {
-        var headMod = DeserializeHeadTree(modFolder, key, gameRelease);
-        var schemas = schemaReflector.GetSchemas(gameRelease);
-
         var alreadyHandled = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (formKey, _) in baselines) alreadyHandled.Add(formKey);
         foreach (var formKey in workingTreeOnly) alreadyHandled.Add(formKey);
         foreach (var (formKey, _, _) in deletedInWorkingTree) alreadyHandled.Add(formKey);
 
-        var effectiveByFormKey = effectiveMod.EnumerateMajorRecords()
-            .ToDictionary(r => r.FormKey.ToString(), StringComparer.Ordinal);
-        var headFormKeys = new HashSet<string>(StringComparer.Ordinal);
+        using var tree = new SourceTreeDocuments(modFolder, key.Name, gameRelease, schemas);
+        var effective = DocumentsByFormKey(tree.Records);
+        var head = DocumentsByFormKey(CommittedDocuments(tree, modFolder, key, gameRelease));
 
-        foreach (var headRecord in headMod.EnumerateMajorRecords())
+        foreach (var (formKey, headDocument) in head)
         {
-            var formKey = headRecord.FormKey.ToString();
-            headFormKeys.Add(formKey);
             if (alreadyHandled.Contains(formKey)) continue;
 
-            var headBody = Encoding.UTF8.GetString(
-                codec.SerializeToBytesAsync(headRecord, gameRelease).GetAwaiter().GetResult());
-
-            if (!effectiveByFormKey.TryGetValue(formKey, out var effectiveRecord))
+            if (!effective.TryGetValue(formKey, out var effectiveDocument))
             {
-                var recordType = SourceRecordType.Resolve(headRecord, schemas);
-                if (!schemas.ContainsKey(recordType))
+                if (!schemas.ContainsKey(headDocument.RecordType))
                 {
                     if (logger.IsEnabled(LogLevel.Debug))
                     {
                         logger.LogDebug(
                             "{FormKey} ({RecordType}) is not a schema-published record type, so its " +
-                            "working-tree deletion is not seeded at Head", formKey, recordType);
+                            "working-tree deletion is not seeded at Head", formKey, headDocument.RecordType);
                     }
                     continue;
                 }
 
-                deletedInWorkingTree.Add((formKey, recordType, headBody));
+                deletedInWorkingTree.Add((formKey, headDocument.RecordType, headDocument.Text));
                 continue;
             }
 
-            var effectiveBody = Encoding.UTF8.GetString(
-                codec.SerializeToBytesAsync(effectiveRecord, gameRelease).GetAwaiter().GetResult());
-            if (!string.Equals(effectiveBody, headBody, StringComparison.Ordinal))
-                baselines.Add((formKey, headBody));
+            if (!string.Equals(effectiveDocument.Text, headDocument.Text, StringComparison.Ordinal))
+                baselines.Add((formKey, headDocument.Text));
         }
 
-        foreach (var formKey in effectiveByFormKey.Keys)
+        foreach (var formKey in effective.Keys)
         {
-            if (headFormKeys.Contains(formKey) || alreadyHandled.Contains(formKey)) continue;
+            if (head.ContainsKey(formKey) || alreadyHandled.Contains(formKey)) continue;
             workingTreeOnly.Add(formKey);
         }
     }
 
-    // Not Edits.SourceCheckout, which does exactly this: Source must not depend on Edits (the
-    // dependency runs the other way), and duplicating this small a materialization is cheaper than a cycle.
-    private static IModGetter DeserializeHeadTree(string modFolder, PluginKey plugin, GameRelease gameRelease)
+    // Last one wins, as the reader's FormKey-keyed cache does for a tree that files one FormKey twice.
+    private static Dictionary<string, PluginDocument> DocumentsByFormKey(IEnumerable<PluginDocument> documents)
     {
-        var scratchRoot = Directory.CreateTempSubdirectory("medit-reconcile-head-").FullName;
-        try
-        {
-            SourceRepository.Open(modFolder, gameRelease)?.MaterializeAtRef(plugin, "HEAD", scratchRoot);
+        var byFormKey = new Dictionary<string, PluginDocument>(StringComparer.Ordinal);
+        foreach (var document in documents) byFormKey[document.FormKey] = document;
+        return byFormKey;
+    }
 
-            var treeRoot = Path.Combine(scratchRoot, SourceRepository.RootFor(plugin.Name));
-            return RecordTextCodecGeneratorSeed
-                .DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
-                .GetAwaiter().GetResult();
-        }
-        finally
+    // HEAD's own documents, straight from the object store: no checkout and no second working tree.
+    // The header is excluded because the flat pass above already reconciles it by name.
+    private static IEnumerable<PluginDocument> CommittedDocuments(
+        SourceTreeDocuments tree, string modFolder, PluginKey key, GameRelease gameRelease)
+    {
+        if (SourceRepository.Open(modFolder, gameRelease) is not { } repository) yield break;
+
+        foreach (var document in repository.ReadAll(key, "HEAD"))
         {
-            // Best-effort: a scratch delete failure must never mask whatever the try block threw.
-            try { Directory.Delete(scratchRoot, recursive: true); }
-            catch (IOException) { /* scratch, best-effort */ }
-            catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+            if (document.RecordType.Equals(PluginHeader.RecordType, StringComparison.Ordinal)) continue;
+            foreach (var expanded in tree.Expand(document.RecordType, document.FormKey, document.Body))
+                yield return expanded;
         }
     }
 
@@ -280,14 +260,5 @@ internal static class SourceIngest
         deletedInWorkingTree.RemoveAll(d => created.Contains(d.FormKey));
     }
 
-    // Record type from the path (the file is gone); FormKey from HEAD's document.
-    private static (string FormKey, string RecordType, string Body) DeletedInWorkingTree(
-        RecordTextCodec codec, GameRelease gameRelease, SourceRecordIdentity identity, string headText)
-    {
-        var record = codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(headText), gameRelease, identity.RecordType)
-            .GetAwaiter().GetResult();
-
-        return (record.FormKey.ToString(), identity.RecordType, headText);
-    }
+    private const string FormKeyMember = "FormKey";
 }

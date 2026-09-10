@@ -14,7 +14,6 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
@@ -26,7 +25,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger _logger;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
-    private readonly PlacementWalker _placementWalker = new();
     private static readonly string[] PlacedTableNames = ["refr", "achr"];
     private bool _filterActive;
 
@@ -99,9 +97,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _schemas = _schemaReflector.GetSchemas(release);
         _release = release;
 
-        _pluginIngest = new PluginIngest(Connection, _logger, _codec, _placementWalker);
-        _workingTreeOverlay = new WorkingTreeOverlay(
-            Connection, _logger, _codec, _placementWalker, release, _schemas);
+        var containers = new ContainerDocuments(release, _schemas);
+        _pluginIngest = new PluginIngest(Connection, _logger, containers);
+        _workingTreeOverlay = new WorkingTreeOverlay(Connection, _logger, _codec, containers, _schemas);
         _sourceValidation = new SourceValidation(this, Connection, _logger);
 
         // Unindex is this class's cross-cutting verb (registration plus every ingest-owned table), so
@@ -122,8 +120,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Indexing ---
 
-    public void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null) =>
-        Index(plugin, registration, key.Origin!, filePath);
+    public void Index(IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null) =>
+        Index(documents, registration, key.Name, key.Origin!, filePath);
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginKey key) => _indexStore.IndexedContentHash(key);
@@ -139,10 +137,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // ADR-0036: origin is threaded into every per-plugin delete/upsert/append so a plugin is
     // identified by (origin, plugin) together, never filename alone.
-    private void Index(IModGetter pluginMod, Registration registration, string origin, string? filePath)
+    private void Index(
+        IPluginDocuments documents, Registration registration, string plugin, string origin, string? filePath)
     {
         var schemas = RequireSchemas();
-        var plugin = pluginMod.ModKey.FileName.ToString();
 
         // One transaction for the whole reindex so a throw partway leaves the read model intact
         // rather than a partial snapshot. DuckDB appenders enroll in the active transaction, so
@@ -161,7 +159,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // The appender's `using` stays here so its disposal keeps the required ordering relative to
         // tx.Commit() below: tx declared first, appender second, both disposed LIFO after the commit.
         using var documentAppender = Connection.CreateAppender("mirror", "records");
-        var timing = _pluginIngest.IndexPlugin(pluginMod, plugin, origin, schemas, documentAppender);
+        var timing = _pluginIngest.IndexPlugin(documents, plugin, origin, schemas, documentAppender);
         _indexStore.BumpSequence();
 
         var commitTimer = Stopwatch.StartNew();
@@ -489,7 +487,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using (BeginProjection())
         {
             SourceIngest.Ingest(
-                this, modFolder, sourceTree, registration, key, _indexStore.IndexedFile(key)?.FilePath,
+                this, modFolder, registration, key, _indexStore.IndexedFile(key)?.FilePath,
                 _release, _schemaReflector, _logger);
             ResweepWinners();
         }

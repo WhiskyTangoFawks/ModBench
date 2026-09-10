@@ -7,8 +7,6 @@ using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
@@ -19,17 +17,13 @@ internal sealed class PluginIngest
 {
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
-    private readonly RecordTextCodec _codec;
-    private readonly PlacementWalker _placementWalker;
+    private readonly ContainerDocuments _containers;
 
-    public PluginIngest(
-        DuckDBConnection connection, ILogger logger, RecordTextCodec codec,
-        PlacementWalker placementWalker)
+    public PluginIngest(DuckDBConnection connection, ILogger logger, ContainerDocuments containers)
     {
         _connection = connection;
         _logger = logger;
-        _codec = codec;
-        _placementWalker = placementWalker;
+        _containers = containers;
     }
 
     internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs, long ExtractedMs);
@@ -42,17 +36,12 @@ internal sealed class PluginIngest
         ("Cell", "Persistent"), ("Cell", "Temporary"), ("Worldspace", "TopCell"),
     ];
 
-    // Everything the index derives from one record, computed off the appender thread; only writing
+    // Everything the index derives from one document, computed off the appender thread; only writing
     // it is sequential. ParseDiagnosis is null for a record whose document was produced.
     private sealed record PreparedRecord(
-        string FormKey, byte[] Body, string ContentHash, List<FormReferenceRow> Refs,
-        List<ContainerChildRow> ChildRows, string? EditorId, string? ParseDiagnosis);
-
-    private sealed class RefCounters
-    {
-        public long PrepareMs;
-        public long AppendMs;
-    }
+        string RecordType, string FormKey, byte[] Body, string ContentHash, List<FormReferenceRow> Refs,
+        List<ContainerChildRow> ChildRows, List<PlacementRow> Placements, CellLocationRow? CellLocation,
+        string? EditorId, string? ParseDiagnosis);
 
     // ADR-0041: a re-index replaces its own rows, the header's included. Called before
     // DuckDbRecordIndex.Index creates the appender rather than resting on an unverified assumption
@@ -67,42 +56,40 @@ internal sealed class PluginIngest
         DeleteExistingForOrigin("records_committed", plugin, origin);
     }
 
-    // ADR-0041: one document per major record, from the same enumeration that fills its row. The
-    // appender is opened once per Index() call because `records` is one table spanning every type.
-    // DeletePriorDocuments must run first.
+    // ADR-0041: one row per document, from the one stream that carries them. The appender is opened
+    // once per Index() call because `records` is one table spanning every type. DeletePriorDocuments
+    // must run first.
     public IndexTiming IndexPlugin(
-        IModGetter pluginMod, string plugin, string origin,
+        IPluginDocuments documents, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, DuckDBAppender documentAppender)
     {
         var refs = new List<FormReferenceRow>();
         var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
         var containerChildRows = new List<ContainerChildRow>();
-        var typeFailures = new List<(string RecordType, string Diagnosis)>();
+        var placementRows = new List<PlacementRow>();
+        var cellLocationRows = new List<CellLocationRow>();
 
         var phaseTimer = Stopwatch.StartNew();
-        var counters = new RefCounters();
-        foreach (var (tableName, schema) in schemas)
+        var counters = new PhaseCounters();
+        foreach (var batch in Indexable(documents, schemas).Chunk(PrepareBatchSize))
         {
-            // The header is never a major-record type (no FormKey/EditorID), so EnumerateMajorRecords
-            // cannot reach it; HeaderIndexer.Index appends it separately below.
-            if (tableName == PluginHeader.RecordType) continue;
-            IndexRecordTable(
-                tableName, schema, pluginMod, plugin, origin, refs, lookupRows,
-                containerChildRows, typeFailures, documentAppender, pluginMod.GameRelease, counters);
+            AppendBatch(
+                batch, schemas, plugin, origin, documentAppender, counters,
+                refs, lookupRows, containerChildRows, placementRows, cellLocationRows);
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
-        // Refs are collected in IndexRecordTable's one pass, off the document each record is
-        // serialized to. What that pass does not see is what has no schema
-        // (SchemaAnnotations.ExcludedSignatures): no document, no row, no refs.
+        // Refs are collected in the one pass above, off the document each row is written from. What
+        // that pass does not see is what has no schema (SchemaAnnotations.ExcludedSignatures): no
+        // document, no row, no refs.
 
         phaseTimer.Restart();
-        IndexPlacement(pluginMod, plugin, origin);
+        WritePlacement(plugin, origin, placementRows, cellLocationRows);
 
         // Before the form_lookup flush, so the header's row and lookup row go through the same two
         // flushes as every record's (ADR-0031: one lookup row per record row, by construction).
         if (schemas.ContainsKey(PluginHeader.RecordType))
-            lookupRows.Add(HeaderIndexer.Index(pluginMod, plugin, origin, documentAppender));
+            lookupRows.Add(HeaderIndexer.Index(documents.Header, plugin, origin, documentAppender));
 
         DeleteFormReferencesForPlugin(plugin, origin);
         if (refs.Count > 0)
@@ -141,20 +128,7 @@ internal sealed class PluginIngest
                 AppendContainerChildRow(containerChildAppender, row, plugin, origin);
         }
 
-        DeleteExistingForOrigin("record_type_failure", plugin, origin);
-        if (typeFailures.Count > 0)
-        {
-            using var failureAppender = _connection.CreateAppender("mirror", "record_type_failure");
-            foreach (var (recordType, diagnosis) in typeFailures)
-            {
-                var row = failureAppender.CreateRow();
-                row.AppendValue(plugin);
-                row.AppendValue(origin);
-                row.AppendValue(recordType);
-                row.AppendValue(diagnosis);
-                row.EndRow();
-            }
-        }
+        WriteTypeFailures(plugin, origin, documents.Failures);
 
         var extractedMs = phaseTimer.ElapsedMilliseconds;
         return new IndexTiming(documentsMs, counters.PrepareMs, counters.AppendMs, extractedMs);
@@ -176,50 +150,143 @@ internal sealed class PluginIngest
         DeleteExistingForOrigin("record_type_failure", plugin, origin);
     }
 
-    // Blocking on the codec's async path is deliberate: serialization runs over a MemoryStream with
-    // no IO, and making Index() async to match would push a false IO-bound shape up through
-    // IRecordIndex for no benefit.
-    private PreparedRecord PrepareRecord(
-        IMajorRecordGetter record, string recordType, RecordTableSchema schema, GameRelease gameRelease)
+    private sealed class PhaseCounters
     {
-        // A container's children get a recorded parent slot, for the relationships
-        // placement/cell_location don't already carry. Read off the same record about to be
-        // serialized, so what is remembered and what is stored cannot describe different graphs.
-        var childRows = new List<ContainerChildRow>();
-        var parentType = ContainerChildFields.NormalizedTypeName(record.GetType());
-        foreach (var (slotName, slotIndex, child) in ContainerChildFields.EnumerateChildren(record))
+        public long PrepareMs;
+        public long AppendMs;
+    }
+
+    // Large enough to keep eight cores busy on cheap records; small enough that a batch of the
+    // largest cell documents stays inside a few hundred MB.
+    private const int PrepareBatchSize = 2048;
+
+    // A document whose record type the schema does not publish has no table to land in, exactly as
+    // it had no enumeration to reach it before.
+    private static IEnumerable<PluginDocument> Indexable(
+        IPluginDocuments documents, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        documents.Records.Where(d => schemas.ContainsKey(d.RecordType));
+
+    private void AppendBatch(
+        PluginDocument[] batch, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string plugin, string origin, DuckDBAppender documentAppender, PhaseCounters counters,
+        List<FormReferenceRow> refs,
+        List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
+        List<ContainerChildRow> containerChildRows,
+        List<PlacementRow> placementRows,
+        List<CellLocationRow> cellLocationRows)
+    {
+        // Per-document work is CPU-bound and independent, so it runs in parallel; only the appender
+        // writes stay sequential.
+        List<PreparedRecord> prepared;
+        var batchTimer = Stopwatch.StartNew();
+        try
         {
-            if (CoveredByPlacementTables.Contains((parentType, slotName))) continue;
-            childRows.Add(new ContainerChildRow(
-                child.FormKey.ToString(), record.FormKey.ToString(), recordType, slotName, slotIndex));
+            prepared = [.. batch
+                .AsParallel().AsOrdered()
+                .Select(document => PrepareRecord(document, schemas[document.RecordType]))];
+        }
+        catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
+        {
+            ExceptionDispatchInfo.Capture(ex.InnerExceptions[0]).Throw();
+            throw;
+        }
+        counters.PrepareMs += batchTimer.ElapsedMilliseconds;
+        batchTimer.Restart();
+
+        foreach (var p in prepared)
+        {
+            if (p.ParseDiagnosis is { } diagnosis && _logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(
+                    "Could not read {RecordType} record {FormKey} ({EditorID}) from {Plugin}; indexing it with its parse diagnosis: {Diagnosis}",
+                    p.RecordType, p.FormKey, p.EditorId, plugin, diagnosis);
+            }
+
+            try
+            {
+                AppendPrepared(documentAppender, p, plugin, origin);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                    p.RecordType, p.FormKey, p.EditorId, plugin);
+                throw;
+            }
+            refs.AddRange(p.Refs);
+            containerChildRows.AddRange(p.ChildRows);
+            placementRows.AddRange(p.Placements);
+            if (p.CellLocation is { } cellLocation) cellLocationRows.Add(cellLocation);
+            lookupRows.Add((p.FormKey, p.RecordType, p.EditorId));
+            if (_logger.IsEnabled(LogLevel.Trace))
+            {
+                _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                    p.RecordType, p.FormKey, p.EditorId, plugin);
+            }
+        }
+        counters.AppendMs += batchTimer.ElapsedMilliseconds;
+    }
+
+    private PreparedRecord PrepareRecord(PluginDocument document, RecordTableSchema schema)
+    {
+        // Hashed from the document's own bytes rather than a string, so the hash is defined by what
+        // the source file would contain.
+        var body = Encoding.UTF8.GetBytes(document.Text);
+        using var parsed = JsonDocument.Parse(body);
+        var root = parsed.RootElement;
+        var editorId = DocumentNodes.At(root, "EditorID")?.GetString();
+
+        // A stub carries identity and nothing else, so the walks below would answer over a graph the
+        // codec never read.
+        if (document.ParseDiagnosis is { } diagnosis)
+        {
+            return new PreparedRecord(
+                document.RecordType, document.FormKey, body, GitBlobHash.Of(body), [], [], [], null,
+                editorId, diagnosis);
         }
 
-        // ADR-0041: a container's document carries its embedded children, as its source file does.
-        // Do not add a reconciliation pass between inline copies and separate child files; that is
-        // the shape the ADR's amendment exists to delete.
-        var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
+        // References are read off the document, never a live object: the document is the model, and
+        // what Referenced-By answers is what the source file holds.
+        var refs = Rows(FormReferences.Collect(root, schema), document.FormKey, editorId, document.RecordType);
 
-        // References are read off the document just written, never the live object: the document is
-        // the model, and what Referenced-By answers is what the source file holds.
-        List<FormReferenceRow> refs;
-        using (var document = JsonDocument.Parse(body))
-            refs = Rows(FormReferences.Collect(document.RootElement, schema), record.FormKey.ToString(), record.EditorID, recordType);
+        var childRows = new List<ContainerChildRow>();
+        var placements = new List<PlacementRow>();
+        var containerType = _containers.ContainerTypeOf(document.RecordType);
+        foreach (var child in _containers.ChildrenOf(document.RecordType, root))
+        {
+            if (!CoveredByPlacementTables.Contains((containerType, child.SlotName)))
+            {
+                childRows.Add(new ContainerChildRow(
+                    child.FormKey, document.FormKey, document.RecordType, child.SlotName, child.SlotIndex));
+                continue;
+            }
 
-        // Hashed from the codec's own bytes rather than a string, so the hash is defined by what the
-        // source file would contain.
+            // A cell the document door placed in the world; a container's other covered slot is the
+            // worldspace's top cell, which carries its own cell_location row as a record of its own.
+            if (document.Cell is not null)
+            {
+                placements.Add(PlacementWalker.Placement(
+                    child.FormKey, child.Node, document.FormKey, child.SlotName.ToLowerInvariant()));
+            }
+        }
+
+        CellLocationRow? cellLocation = document.Cell is { } structure
+            ? PlacementWalker.CellLocation(document.FormKey, root, structure)
+            : null;
+
         return new PreparedRecord(
-            record.FormKey.ToString(), body, GitBlobHash.Of(body), refs, childRows, record.EditorID, ParseDiagnosis: null);
+            document.RecordType, document.FormKey, body, GitBlobHash.Of(body), refs, childRows,
+            placements, cellLocation, editorId, ParseDiagnosis: null);
     }
 
     private static void AppendPrepared(
-        DuckDBAppender documentAppender, PreparedRecord prepared, string recordType,
-        string plugin, string origin)
+        DuckDBAppender documentAppender, PreparedRecord prepared, string plugin, string origin)
     {
         var row = documentAppender.CreateRow();
         row.AppendValue(prepared.FormKey);
         row.AppendValue(plugin);
         row.AppendValue(origin);
-        row.AppendValue(recordType);
+        row.AppendValue(prepared.RecordType);
         if (prepared.EditorId is { } editorId)
             row.AppendValue(editorId);
         else
@@ -234,136 +301,46 @@ internal sealed class PluginIngest
         row.EndRow();
     }
 
-    private void IndexRecordTable(
-        string tableName, RecordTableSchema schema, IModGetter pluginMod,
-        string plugin, string origin, List<FormReferenceRow> refs,
-        List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
-        List<ContainerChildRow> containerChildRows,
-        List<(string RecordType, string Diagnosis)> typeFailures,
-        DuckDBAppender documentAppender, GameRelease gameRelease, RefCounters counters)
-    {
-        // Enumerated one at a time rather than materialized in one shot: Mutagen's group enumerator
-        // throws out of MoveNext and cannot be resumed, so everything it yielded first is kept and
-        // the type carries the diagnosis for what never arrived.
-        var records = new List<IMajorRecordGetter>();
-        try
-        {
-            foreach (var record in pluginMod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false))
-                records.Add(record);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Could not finish enumerating {RecordType} records from {Plugin}; indexing the {Count} that were reachable",
-                tableName, plugin, records.Count);
-            typeFailures.Add((tableName, PluginDiagnosis.FromParseException(ex).Describe()));
-        }
-
-        if (records.Count == 0) return;
-
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
-        }
-
-        // Per-record work is CPU-bound and independent, so it runs in parallel; only the appender
-        // writes stay sequential. Bounded batches: preparing a whole type before appending any held
-        // every body live, ~100 s of GC on Fallout4.esm.
-        foreach (var batch in records.Chunk(PrepareBatchSize))
-        {
-            List<PreparedRecord> prepared;
-            var batchTimer = Stopwatch.StartNew();
-            try
-            {
-                prepared = batch
-                    .AsParallel().AsOrdered()
-                    .Select(record => PrepareRecordLogged(record, tableName, schema, plugin, gameRelease))
-                    .ToList();
-            }
-            catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
-            {
-                ExceptionDispatchInfo.Capture(ex.InnerExceptions[0]).Throw();
-                throw;
-            }
-            counters.PrepareMs += batchTimer.ElapsedMilliseconds;
-            batchTimer.Restart();
-
-            foreach (var p in prepared)
-            {
-                try
-                {
-                    AppendPrepared(documentAppender, p, tableName, plugin, origin);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex,
-                        "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, p.FormKey, p.EditorId, plugin);
-                    throw;
-                }
-                refs.AddRange(p.Refs);
-                containerChildRows.AddRange(p.ChildRows);
-                lookupRows.Add((p.FormKey, tableName, p.EditorId));
-                if (_logger.IsEnabled(LogLevel.Trace))
-                {
-                    _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, p.FormKey, p.EditorId, plugin);
-                }
-            }
-            counters.AppendMs += batchTimer.ElapsedMilliseconds;
-        }
-    }
-
-    // Large enough to keep eight cores busy on cheap records; small enough that a batch of the
-    // largest cell documents stays inside a few hundred MB.
-    private const int PrepareBatchSize = 2048;
-
-    private PreparedRecord PrepareRecordLogged(
-        IMajorRecordGetter record, string tableName, RecordTableSchema schema, string plugin, GameRelease gameRelease)
-    {
-        try
-        {
-            return PrepareRecord(record, tableName, schema, gameRelease);
-        }
-        catch (Exception ex)
-        {
-            var editorId = ReadEditorIdOrNull(record);
-            _logger.LogWarning(ex,
-                "Could not read {RecordType} record {FormKey} ({EditorID}) from {Plugin}; indexing it with its parse diagnosis",
-                tableName, record.FormKey, editorId, plugin);
-            return ParseFailed(record, editorId, PluginDiagnosis.FromParseException(ex).Describe(), gameRelease);
-        }
-    }
-
-    // No refs and no child rows: the walks that would produce them are the ones that just failed.
-    private static PreparedRecord ParseFailed(
-        IMajorRecordGetter record, string? editorId, string diagnosis, GameRelease gameRelease)
-    {
-        var body = ParseFailedDocument.For(record, editorId, gameRelease);
-        return new PreparedRecord(record.FormKey.ToString(), body, GitBlobHash.Of(body), [], [], editorId, diagnosis);
-    }
-
-    // The EditorID of an unreadable record is read through the same lazy Mutagen field access that
-    // just threw, so it answers null rather than taking the plugin down with it.
-    private static string? ReadEditorIdOrNull(IMajorRecordGetter record)
-    {
-        try { return record.EditorID; }
-        catch (Exception) { return null; }
-    }
-
-    // ADR-0023: populate the worldspace-tree side tables from the GRUP hierarchy that
-    // EnumerateMajorRecords flattens away.
-    private void IndexPlacement(IModGetter pluginMod, string plugin, string origin)
+    // ADR-0023: the worldspace-tree side tables, from the rows the document pass derived.
+    private void WritePlacement(
+        string plugin, string origin,
+        List<PlacementRow> placementRows, List<CellLocationRow> cellLocationRows)
     {
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
 
-        using var cellAppender = _connection.CreateAppender("mirror", "cell_location");
-        using var placeAppender = _connection.CreateAppender("mirror", "placement");
+        if (cellLocationRows.Count > 0)
+        {
+            using var cellAppender = _connection.CreateAppender("mirror", "cell_location");
+            foreach (var row in cellLocationRows)
+                AppendCellLocationRow(cellAppender, row, plugin, origin);
+        }
 
-        _placementWalker.Walk(pluginMod,
-            cell => AppendCellLocationRow(cellAppender, cell, plugin, origin),
-            placed => AppendPlacementRow(placeAppender, placed, plugin, origin));
+        if (placementRows.Count == 0) return;
+        using var placeAppender = _connection.CreateAppender("mirror", "placement");
+        foreach (var row in placementRows)
+            AppendPlacementRow(placeAppender, row, plugin, origin);
+    }
+
+    private void WriteTypeFailures(string plugin, string origin, IReadOnlyList<RecordTypeFailure> failures)
+    {
+        DeleteExistingForOrigin("record_type_failure", plugin, origin);
+        if (failures.Count == 0) return;
+
+        using var failureAppender = _connection.CreateAppender("mirror", "record_type_failure");
+        foreach (var failure in failures)
+        {
+            _logger.LogWarning(
+                "Could not finish enumerating {RecordType} records from {Plugin}: {Diagnosis}",
+                failure.RecordType, plugin, failure.Diagnosis);
+
+            var row = failureAppender.CreateRow();
+            row.AppendValue(plugin);
+            row.AppendValue(origin);
+            row.AppendValue(failure.RecordType);
+            row.AppendValue(failure.Diagnosis);
+            row.EndRow();
+        }
     }
 
     // The rows the shared kernel's answer becomes once the record naming the links is known. Shared

@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -42,7 +43,7 @@ public class FormLookupTests
 
         using var repo = OpenRepo();
         var mod = LoadMod(fixture.DataFolder, "Lookup.esp");
-        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -75,8 +76,8 @@ public class FormLookupTests
 
         using var repo = OpenRepo();
         var mod = LoadMod(fixture.DataFolder, "Reindex.esp");
-        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data")); // re-index same plugin
+        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data")); // re-index same plugin
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();

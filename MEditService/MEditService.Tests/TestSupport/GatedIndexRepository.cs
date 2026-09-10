@@ -1,5 +1,6 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -54,9 +55,10 @@ internal sealed class GatedIndexRepository(
     public bool WinnersComputed { get; private set; }
     public bool Disposed { get; private set; }
 
-    public override void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null)
+    public override void Index(
+        IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
     {
-        var pluginName = plugin.ModKey.FileName.ToString();
+        var pluginName = key.Name;
         if (gateBefore != null && pluginName.Equals(gateBefore, StringComparison.OrdinalIgnoreCase))
         {
             arrived.Release();
@@ -69,7 +71,7 @@ internal sealed class GatedIndexRepository(
         if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"injected index failure for {pluginName}");
 
-        base.Index(plugin, registration, key, filePath);
+        base.Index(documents, registration, key, filePath);
         Indexed.Add(pluginName);
     }
 
