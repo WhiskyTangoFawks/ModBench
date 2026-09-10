@@ -1,36 +1,37 @@
 import type { UnansweredExternalChange } from '../medit/client';
 
-/** Pinned UX contract: the two buttons, native cancel (Esc) always a third, unnamed option. */
-export const ABSORB_BUTTON = 'Absorb Upstream Update';
-export const KEEP_BUTTON = 'Keep as My Edit';
+/** The glossary's Edit branch entry: the fixed branch name every Track creates, matching the
+ *  backend's `SourceRepository.EditBranchName` — never derived per repository. */
+export const EDIT_BRANCH_NAME = 'edit';
+
+/** Pinned UX contract: the two buttons, native cancel (Esc) always a third, unnamed option. Each
+ *  label states what it does to the repository. */
+export const BASELINE_BUTTON = 'Commit to main as new baseline';
+export const APPLY_BUTTON = `Apply to working tree on ${EDIT_BRANCH_NAME}`;
 
 export type ExternalChangeDialogAnswer = 'absorb' | 'keep' | 'defer';
 
 /** Button order carries the default — VS Code's modal focuses the first — never a separate flag:
- *  Absorb leads when the meta changed (ADR-0041). */
+ *  baseline leads when the tell (meta.ini's version move) fired (ADR-0041). */
 export function buttonsInDefaultOrder(change: UnansweredExternalChange): [string, string] {
-  return change.metaChanged ? [ABSORB_BUTTON, KEEP_BUTTON] : [KEEP_BUTTON, ABSORB_BUTTON];
+  return change.metaChanged ? [BASELINE_BUTTON, APPLY_BUTTON] : [APPLY_BUTTON, BASELINE_BUTTON];
 }
 
-/** Evidence shown, not hidden, per the pinned contract. Keeps the single-plugin wording for a
- *  mod with exactly one changed plugin and no tracked file; names the mod and lists what changed
- *  otherwise. */
+/** Message is the mod name; detail lists changed plugins by name, changed tracked files by count
+ *  and name, and the version movement when the tell fired, else a no-change line. Evidence shown,
+ *  not hidden. */
 export function messageFor(change: UnansweredExternalChange): { message: string; detail: string } {
-  const metaDetail = change.metaChanged
-    ? `meta.ini also changed (version ${change.oldVersion ?? '?'} → ${change.newVersion ?? '?'})`
-    : 'No matching meta.ini version change was observed.';
-
-  if (change.plugins.length === 1 && change.trackedFiles.length === 0) {
-    return { message: `${change.plugins[0]} (in ${change.origin}) changed outside Modbench.`, detail: metaDetail };
+  const lines: string[] = [];
+  if (change.plugins.length > 0) lines.push(`Plugin(s) changed: ${change.plugins.join(', ')}`);
+  if (change.trackedFiles.length > 0) {
+    lines.push(`${change.trackedFiles.length} tracked file(s) changed: ${change.trackedFiles.join(', ')}`);
   }
-
-  const parts: string[] = [];
-  if (change.plugins.length > 0) parts.push(`plugin(s) ${change.plugins.join(', ')}`);
-  if (change.trackedFiles.length > 0) parts.push(`tracked file(s) ${change.trackedFiles.join(', ')}`);
-  return {
-    message: `${change.origin} changed outside Modbench.`,
-    detail: `Affected: ${parts.join(' and ')}. ${metaDetail}`,
-  };
+  lines.push(
+    change.metaChanged
+      ? `meta.ini's version moved from ${change.oldVersion ?? '?'} to ${change.newVersion ?? '?'}.`
+      : 'No version change was observed.',
+  );
+  return { message: change.origin, detail: lines.join('\n') };
 }
 
 /** The one shape this module needs from `vscode.window.showWarningMessage` — injected so the
@@ -64,7 +65,7 @@ export async function runExternalChangeDialogs(
 }
 
 function toAnswer(choice: string | undefined): ExternalChangeDialogAnswer {
-  if (choice === ABSORB_BUTTON) return 'absorb';
-  if (choice === KEEP_BUTTON) return 'keep';
+  if (choice === BASELINE_BUTTON) return 'absorb';
+  if (choice === APPLY_BUTTON) return 'keep';
   return 'defer';
 }

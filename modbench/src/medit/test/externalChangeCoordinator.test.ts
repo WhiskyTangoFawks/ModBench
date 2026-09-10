@@ -3,7 +3,7 @@ import {
   subscribeExternalChangePending,
   type ExternalChangeCoordinatorDeps,
 } from '../externalChangeCoordinator';
-import { ABSORB_BUTTON, KEEP_BUTTON } from '../../plugins/externalChangeDialog';
+import { BASELINE_BUTTON, APPLY_BUTTON } from '../../plugins/externalChangeDialog';
 import { InMemoryMEditClient, type NotificationEvent } from '../client';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
@@ -23,7 +23,7 @@ function makeDeps(
 ): ExternalChangeCoordinatorDeps {
   return {
     client,
-    showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON),
+    showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
     refreshTree: vi.fn(),
@@ -56,9 +56,9 @@ describe('subscribeExternalChangePending', () => {
     expect(deps.showDialog).not.toHaveBeenCalled();
   });
 
-  it('runs the dialog and dispatches Keep as My Edit', async () => {
+  it('runs the dialog and dispatches Apply to working tree', async () => {
     const client = clientScriptedForKeepAndAbsorb();
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON) });
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON) });
     subscribeExternalChangePending(deps, client);
 
     client.emit(pendingEvent());
@@ -70,7 +70,7 @@ describe('subscribeExternalChangePending', () => {
 
   it('dispatches Absorb; a clean rebase is silent', async () => {
     const client = clientScriptedForKeepAndAbsorb();
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeExternalChangePending(deps, client);
 
     client.emit(pendingEvent());
@@ -90,7 +90,7 @@ describe('subscribeExternalChangePending', () => {
       succeeded: true, refusalReason: null,
       rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] },
     });
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeExternalChangePending(deps, client);
 
     client.emit(pendingEvent());
@@ -115,7 +115,7 @@ describe('subscribeExternalChangePending', () => {
   it('a failed Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('absorbUpstreamUpdate', undefined); // transport failure
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeExternalChangePending(deps, client);
 
     client.emit(pendingEvent());
@@ -127,7 +127,7 @@ describe('subscribeExternalChangePending', () => {
   it('a refused Absorb never opens the merge editor', async () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('absorbUpstreamUpdate', { succeeded: false, refusalReason: 'Fixture.esp could not be parsed.' });
-    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON) });
+    const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
     subscribeExternalChangePending(deps, client);
 
     client.emit(pendingEvent());
