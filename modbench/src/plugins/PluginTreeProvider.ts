@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { ErrorNode } from '../errorNode';
 import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
@@ -233,18 +234,6 @@ export class InteriorLoadMoreNode extends vscode.TreeItem {
     super(`$(sync) Load more… (${remaining.toLocaleString()} remaining)`, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'loadMore';
     this.command = { command: 'modbench.loadMore', title: 'Load More', arguments: [this] };
-  }
-}
-
-/** Inline error surface: shown instead of an empty list when a fetch fails,
- *  so a failure is never indistinguishable from "nothing here" (ADR-0026). */
-export class ErrorNode extends vscode.TreeItem {
-  readonly kind = 'error' as const;
-  constructor(message: string) {
-    super(`⚠ Failed to load: ${message}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'error';
-    this.tooltip = message;
-    this.iconPath = new vscode.ThemeIcon('error');
   }
 }
 

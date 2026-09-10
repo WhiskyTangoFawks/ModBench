@@ -1,14 +1,15 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 import type { MasterIssue, PluginDiagnosisReport, PluginMetadata, MEditClient } from '../medit/client';
-import type { Instance, InstanceValue } from '../modmanager/instance';
+import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from '../modmanager/instance';
 import type { PluginEntry } from '../modmanager/model';
 import type { Reporter } from '../reporter';
 import { dropIndexForMove } from '../modmanager/mo2/pluginsText';
 import type { ImplicitMasterSource } from '../modmanager/commands/plugins';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 import type { LoadFailure } from '../loadOrderReconcile';
-import { ErrorNode, IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
+import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
+import { ErrorNode } from '../errorNode';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -51,7 +52,7 @@ export interface PluginMatch {
  *  Modbench runs, so a value captured at construction could go stale for the provider's life. */
 export interface PluginsTreeProviderOptions {
   /** Name, origin, slot, enabled and winning for every plugin copy — the row input (ADR-0047). */
-  instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  instance: InstanceView;
   source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
   records?: RecordBrowser;
@@ -205,16 +206,13 @@ export class PluginsTreeProvider
   private readonly reporter?: Reporter;
   private readonly dataFolder: () => Promise<string | undefined>;
   private readonly implicitMasters: ImplicitMasterSource;
-  private readonly instance: Pick<Instance, 'value' | 'subscribe' | 'sequence'>;
+  private readonly instance: InstanceView;
   private readonly records?: RecordBrowser;
   private readonly client?: PluginFactsClient;
   private readonly publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
   private instanceValue: InstanceValue;
   private readonly subscriptions: vscode.Disposable[] = [];
-  // Resolves once the Instance lands its first recompute. `sequence === 0` means "not read
-  // yet", never "genuinely empty" — lets `getChildren()` await it instead of showing `EmptyNode`.
-  private readonly firstValue: Promise<void>;
-  private resolveFirstValue: (() => void) | undefined;
+  private readonly firstRead: FirstRead;
   // plugins.txt's raw file order as last rendered, so a drop computes its index against what
   // the user dragged against rather than a fresh read an external edit could skew.
   private lastOrder: string[] = [];
@@ -236,12 +234,9 @@ export class PluginsTreeProvider
     this.client = options.client;
     this.publishDiagnoses = options.publishDiagnoses;
     this.instanceValue = options.instance.value;
-    this.firstValue = options.instance.sequence > 0
-      ? Promise.resolve()
-      : new Promise((resolve) => { this.resolveFirstValue = resolve; });
-    this.subscriptions.push(options.instance.subscribe((value) => {
+    this.firstRead = firstReadOf(options.instance, options.reporter);
+    this.subscriptions.push(this.firstRead, options.instance.subscribe((value) => {
       this.instanceValue = value;
-      this.resolveFirstValue?.();
       this.invalidate();
     }));
     // Forwarded with the element intact, so a targeted refresh (a "Load more…" landing under one
@@ -321,8 +316,9 @@ export class PluginsTreeProvider
     return this.records?.getPluginChildren(file) ?? notConnected();
   }
 
-  private async rows(): Promise<PluginListNode[]> {
-    await this.firstValue; // never claim "No plugins" before the Instance has actually read one
+  private async rows(): Promise<(PluginListNode | ErrorNode)[]> {
+    await this.firstRead.settled; // never claim "No plugins" before the Instance has actually read one
+    if (this.firstRead.failure !== undefined) return [new ErrorNode(this.firstRead.failure)];
 
     if (!this.cache) {
       const built = await this.buildRows();

@@ -185,8 +185,10 @@ requires a deploy.**
   persistent `viewsWelcome` content — "this isn't an MO2 instance, open the folder
   containing `ModOrganizer.ini`" — instead of an error tree. A real instance
   with a genuinely corrupt or unreadable `modlist.txt` still reports as an error
-  ([ADR-0026](../adr/0026-error-surfacing-policy.md)) — that distinction is structural
-  presence vs. content, not "did a read fail."
+  ([ADR-0026](../adr/0026-error-surfacing-policy.md)): while the Instance's first read has
+  failed and nothing has landed, the tree is one error node carrying the read's reason, and the
+  injected reporter is told once; the next landed value replaces it with rows. That distinction
+  is structural presence vs. content, not "did a read fail."
 - **The welcome renders only once that check has actually run, not merely on the verdict** —
   gated on `modbench.workspaceMo2CheckDone` (a second, separate context key, set alongside the
   instance verdict on every activation exit path), so a workspace VS Code hasn't checked yet

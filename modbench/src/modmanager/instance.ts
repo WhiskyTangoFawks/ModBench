@@ -4,6 +4,7 @@
 import type * as vscode from 'vscode';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Reporter } from '../reporter';
 import type { ModlistEntry, PluginEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
@@ -65,6 +66,14 @@ export interface InstanceValue {
 
 export type InstanceSubscriber = (value: InstanceValue, sequence: number) => void;
 
+/** Hears each recompute that failed, with the read's own reason. The value and sequence are
+ *  where they were: before the first landed value that is the empty sentinel at 0. */
+export type ReadFailureListener = (reason: string) => void;
+
+/** The Instance as a tree reads it: the held value, sequence and read failure, plus the two
+ *  channels they move on. */
+export type InstanceView = Pick<Instance, 'value' | 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>;
+
 export interface InstanceOptions {
   instanceRoot: string;
   config: () => ConfigLike;
@@ -118,7 +127,11 @@ export class Instance implements vscode.Disposable {
 
   private seq = 0;
 
+  private failure: string | undefined;
+
   private subscribers: InstanceSubscriber[] = [];
+
+  private failureListeners: ReadFailureListener[] = [];
 
   private timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -161,12 +174,29 @@ export class Instance implements vscode.Disposable {
     return this.seq;
   }
 
-  /** Called with each landed value and the sequence it landed at. */
+  /** The latest recompute's failure reason, undefined once a recompute lands. Held, not just
+   *  fired, so a tree subscribing after the failure still hears it. */
+  get readFailure(): string | undefined {
+    return this.failure;
+  }
+
+  /** Called with each landed value and the sequence it landed at, never with a failure. */
   subscribe(subscriber: InstanceSubscriber): vscode.Disposable {
     this.subscribers.push(subscriber);
     return {
       dispose: () => {
         this.subscribers = this.subscribers.filter((s) => s !== subscriber);
+      },
+    };
+  }
+
+  /** Called with each failed recompute's reason. A separate channel from `subscribe`, so a
+   *  landed-value subscriber (the load-order PUT above all) never runs on a failure. */
+  onReadFailure(listener: ReadFailureListener): vscode.Disposable {
+    this.failureListeners.push(listener);
+    return {
+      dispose: () => {
+        this.failureListeners = this.failureListeners.filter((l) => l !== listener);
       },
     };
   }
@@ -183,6 +213,7 @@ export class Instance implements vscode.Disposable {
     for (const watcher of this.watchers) watcher.dispose();
     this.configSubscription.dispose();
     this.subscribers = [];
+    this.failureListeners = [];
   }
 
   private schedule(): void {
@@ -204,16 +235,23 @@ export class Instance implements vscode.Disposable {
       next = await this.read();
     } catch (err) {
       this.options.log(`[instance] recompute failed, keeping the value at sequence ${this.seq}: ${message(err)}`);
+      this.failure = message(err);
+      this.notify(this.failureListeners, (listener) => listener(this.failure!));
       return;
     }
     this.current = next;
+    this.failure = undefined;
     this.seq++;
-    for (const subscriber of [...this.subscribers]) {
+    this.notify(this.subscribers, (subscriber) => subscriber(next, this.seq));
+  }
+
+  // A throwing subscriber would otherwise reject the queue for good, and no later recompute
+  // would run — the dead chain tail every write queue's tail-catch documents.
+  private notify<T>(listeners: readonly T[], call: (listener: T) => void): void {
+    for (const listener of [...listeners]) {
       try {
-        subscriber(next, this.seq);
+        call(listener);
       } catch (err) {
-        // A throwing subscriber would otherwise reject the queue for good, and no later
-        // recompute would run — the dead chain tail every write queue's tail-catch documents.
         this.options.log(`[instance] subscriber threw at sequence ${this.seq}: ${message(err)}`);
       }
     }
@@ -285,6 +323,49 @@ export class Instance implements vscode.Disposable {
       overwriteFileCount,
     };
   }
+}
+
+/** A tree's first-render gate: `settled` resolves on the first landed value or the first failed
+ *  read — never "nothing here" before a read (ADR-0035), never an endless spinner (ADR-0026).
+ *  `failure` holds until a value lands. */
+export interface FirstRead extends vscode.Disposable {
+  readonly settled: Promise<void>;
+  readonly failure: string | undefined;
+}
+
+/** The reporter hears the first failed read once; a later failure before any value has landed
+ *  is the Instance's log line, nothing more, so a retrying watcher cannot toast per attempt. */
+export function firstReadOf(
+  instance: Pick<Instance, 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>,
+  reporter: Reporter | undefined,
+): FirstRead {
+  const unread = () => instance.sequence === 0;
+  let reported = false;
+  const report = (reason: string) => {
+    if (reported) return;
+    reported = true;
+    reporter?.report('error', 'Failed to read the MO2 instance.', reason);
+  };
+  let resolve = () => {};
+  const settled = unread() ? new Promise<void>((r) => { resolve = r; }) : Promise.resolve();
+  // Constructed after the first read already failed: the failure is held, not just fired.
+  if (unread() && instance.readFailure !== undefined) {
+    report(instance.readFailure);
+    resolve();
+  }
+  const subscriptions = [
+    instance.subscribe(() => resolve()),
+    instance.onReadFailure((reason) => {
+      if (!unread()) return;
+      report(reason);
+      resolve();
+    }),
+  ];
+  return {
+    settled,
+    get failure() { return unread() ? instance.readFailure : undefined; },
+    dispose: () => { for (const subscription of subscriptions) subscription.dispose(); },
+  };
 }
 
 /** ADR-0044's snapshot, read from the current value (ADR-0047) rather than a fresh walk.
