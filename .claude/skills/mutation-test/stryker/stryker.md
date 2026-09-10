@@ -100,11 +100,14 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 > unset. `run.sh` sets `TERM=xterm` for exactly this reason; don't remove it, and don't
 > reach for a pty to "give Stryker a terminal" — it writes to stdout perfectly well.
 
-> ⚠️ **Run `run.sh` as a background task and poll it.** A since-scoped run outlasts the
+> ⚠️ **Run `run.sh` detached and poll it in the foreground.** A since-scoped run outlasts the
 > 10-minute foreground command cap, so a foreground call gets killed two-thirds through and
-> looks exactly like a silent failure. `run.sh` spawns no terminal window, so backgrounding
-> is safe and required. Never `pkill dotnet` — that kills VS Code's C# servers; match
-> `dotnet-stryker` specifically.
+> looks exactly like a silent failure. From `MEditService/`:
+> `bash ../.claude/skills/validate/detached.sh start stryker bash ../.claude/skills/mutation-test/stryker/run.sh --since <ref>`,
+> then `bash ../.claude/skills/validate/detached.sh wait stryker` until it prints the verdict.
+> Exit 3 means call it again, and its "still running" line carries the log's last line.
+> `run.sh` spawns no terminal window. Never `pkill dotnet` — that kills VS Code's C# servers;
+> match `dotnet-stryker` specifically.
 
 > ⚠️ **Stryker's `since` resolves against the wrong checkout inside a linked worktree.**
 > `GitInfoProvider.RepositoryPath` is `Repository.Discover(projectPath).Split(".git")[0]`;

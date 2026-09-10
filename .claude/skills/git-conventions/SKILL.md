@@ -31,7 +31,8 @@ instance path from two places at once. A long-running process on a fixed port ta
 lockfile.
 Backend gate runs are the heaviest thing a stream does. `run-gates.sh` holds two machine-wide gate
 slots, so a third run waits rather than sharing: at three the machine has no memory headroom left.
-Run gates in the background, since a queued run can outlast a 10-minute foreground command.
+A queued run can outlast a 10-minute foreground command, so `/validate` runs the gates detached
+and polls them.
 Inner-loop `dotnet test --filter` runs take no slot.
 
 ## Merging

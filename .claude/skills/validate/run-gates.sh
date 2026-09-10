@@ -3,19 +3,27 @@
 BACKEND=false
 FRONTEND=false
 API_DRIFT=false
+DETACH=false
+WAIT=false
 FAILED=false
-ORIG_ARGS=("$@")
+GATE_ARGS=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --backend)   BACKEND=true;   shift ;;
-    --frontend)  FRONTEND=true;  shift ;;
-    --api-drift) API_DRIFT=true; shift ;;
+    --backend)   BACKEND=true;   GATE_ARGS+=("$1"); shift ;;
+    --frontend)  FRONTEND=true;  GATE_ARGS+=("$1"); shift ;;
+    --api-drift) API_DRIFT=true; GATE_ARGS+=("$1"); shift ;;
+    --detach)    DETACH=true;    shift ;;
+    --wait)      WAIT=true;      shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+DETACHED_SH="$ROOT/.claude/skills/validate/detached.sh"
+GATE_NAME="gates.$(basename "$ROOT")"
+$WAIT && exec bash "$DETACHED_SH" wait "$GATE_NAME"
+$DETACH && exec bash "$DETACHED_SH" start "$GATE_NAME" bash "$0" "${GATE_ARGS[@]}"
 
 # Two backend gate runs per machine, measured: a third leaves no memory headroom, and api-drift
 # kills every MEditService.Api and binds 5172, so it takes a slot too. -o keeps the lock out of
@@ -24,12 +32,12 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 GATE_SLOTS=2
 if { $BACKEND || $API_DRIFT; } && [[ -z ${GATE_SLOT:-} ]]; then
   for slot in $(seq 1 $GATE_SLOTS); do
-    GATE_SLOT=$slot flock -n -E 99 -o "/tmp/medit-backend-gate.$slot.lock" "$0" "${ORIG_ARGS[@]}"
+    GATE_SLOT=$slot flock -n -E 99 -o "/tmp/medit-backend-gate.$slot.lock" "$0" "${GATE_ARGS[@]}"
     status=$?
     [[ $status -ne 99 ]] && exit $status
   done
   echo "=== Waiting for a backend gate slot ==="
-  GATE_SLOT=1 exec flock -o /tmp/medit-backend-gate.1.lock "$0" "${ORIG_ARGS[@]}"
+  GATE_SLOT=1 exec flock -o /tmp/medit-backend-gate.1.lock "$0" "${GATE_ARGS[@]}"
 fi
 
 echo "=== Gate 1: Comment discipline ==="
@@ -55,6 +63,10 @@ done <<< "$MJS"
 (cd "$ROOT" && echo "$COMMENT_CODE" | xargs -d '\n' -r python3 .claude/hooks/comment-shape.py) || COMMENT_OK=false
 (cd "$ROOT" && python3 -m unittest discover -q -s .claude/hooks -p 'test_*.py') || COMMENT_OK=false
 $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
+
+echo "=== Gate runner tests ==="
+(cd "$ROOT" && python3 -m unittest discover -q -s .claude/skills/validate -p 'test_*.py') \
+  || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
 
 if $BACKEND; then
   echo "=== Gate 2: Backend format ==="
