@@ -137,9 +137,8 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         if (relativePath.Equals(_headerRelativePath, StringComparison.Ordinal)) yield break;
         if (Read(file) is not { } text) yield break;
 
-        // A file the tree files as a record but nothing here can read is a record that would go
-        // missing from the read model. The caller degrades to the binary and says so, which is
-        // visible; dropping it here would not be.
+        // A record filed here that nothing can read would go missing from the read model. The caller
+        // degrades to the binary and says so, which is visible; dropping it here would not be.
         using (var document = JsonDocument.Parse(text))
         {
             if (document.RootElement.ValueKind != JsonValueKind.Object)
