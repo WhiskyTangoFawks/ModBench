@@ -1,4 +1,5 @@
 using DuckDB.NET.Data;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -101,6 +102,7 @@ public sealed class SpatialParseFailurePrefixTests
             mod.WriteToBinary(path);
 
             _index = new IndexProjector(
+                MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             _index.Reconcile(
                 _dataFolder,

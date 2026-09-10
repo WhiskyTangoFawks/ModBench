@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -14,7 +15,7 @@ public sealed class HeldPluginsTests
 
     private static HeldPlugins Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILogger? logger = null)
     {
-        var loadOrder = new HeldPlugins(data.DataFolder, null, GameRelease.Fallout4, logger);
+        var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4, logger);
         foreach (var plugin in HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, entries ?? data.Plugins))
             loadOrder.Open(plugin);
         return loadOrder;
@@ -263,7 +264,7 @@ public sealed class HeldPluginsTests
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
         File.WriteAllBytes(loser.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
-        using var loadOrder = new HeldPlugins(fx.GameDirectory, null, GameRelease.Fallout4);
+        using var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, fx.GameDirectory, null, GameRelease.Fallout4);
 
         foreach (var plugin in HeldPlugins.Resolve(fx.GameDirectory, GameRelease.Fallout4, [winner, loser]))
             loadOrder.Open(plugin);
@@ -280,7 +281,7 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-recover")
             .WithPlugin("Fixed.esp")
             .Build();
-        var loadOrder = new HeldPlugins(data.DataFolder, null, GameRelease.Fallout4);
+        var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4);
         using var _ = loadOrder;
         var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins).Single();
         var missing = resolved with { Path = Path.Combine(data.DataFolder, "Elsewhere.esp") };

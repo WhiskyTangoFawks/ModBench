@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -17,7 +18,7 @@ public sealed class ProgressiveIndexingTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var gate = new GatedIndexRepositoryFactory(inner, gateBefore);
-        var manager = new IndexProjector(gate);
+        var manager = new IndexProjector(MutagenPluginAdapter.Instance, gate);
         return (manager, gate);
     }
 
@@ -103,7 +104,7 @@ public sealed class ProgressiveIndexingTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp", poisonPlugin: "A.esp");
-        using var manager = new IndexProjector(gate);
+        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, gate);
 
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();

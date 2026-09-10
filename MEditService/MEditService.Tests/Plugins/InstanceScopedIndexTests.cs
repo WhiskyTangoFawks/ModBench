@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -28,7 +29,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
     private static IndexProjector MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        return new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
     }
 
     private string AnInstance(string name, string editorId)

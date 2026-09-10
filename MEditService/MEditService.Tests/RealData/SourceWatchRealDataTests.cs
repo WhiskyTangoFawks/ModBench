@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -38,7 +39,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        Index = new IndexProjector(new DuckDbRecordIndexFactory(
+        Index = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(
             SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), Notifications));
         Index.Reconcile(
             _gameDirectory,

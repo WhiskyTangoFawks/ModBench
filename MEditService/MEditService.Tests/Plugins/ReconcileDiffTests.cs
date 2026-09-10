@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -43,7 +44,7 @@ public sealed class ReconcileDiffTests
     {
         var reflector = SharedSchemaReflector.Instance;
         var counts = new CountingFactory(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        return (new IndexProjector(counts), counts);
+        return (new IndexProjector(MutagenPluginAdapter.Instance, counts), counts);
     }
 
     // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack every winner assertion

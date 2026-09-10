@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -104,7 +105,7 @@ public sealed class KeepExternalChangeHandler
             baselineByFormKey.TryAdd(document.FormKey, document.Body);
 
         // Keep only runs against a tracked plugin, so the mod-folder-only ForRead overload applies.
-        var deepParsed = ModFactory.ImportSetter(
+        var deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
             new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, LocalizedStrings.ForRead(repository.ModFolder));
         var touched = new List<TouchedRecord>();
         foreach (var record in deepParsed.EnumerateMajorRecords())

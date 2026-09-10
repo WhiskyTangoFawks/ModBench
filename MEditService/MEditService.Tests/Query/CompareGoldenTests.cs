@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -98,7 +99,7 @@ public sealed class CompareGoldenTests : IDisposable
 
         var reflector = SharedSchemaReflector.Instance;
         _reflector = reflector;
-        _manager = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }

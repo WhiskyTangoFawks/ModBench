@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -25,7 +26,7 @@ public sealed class CutDownPluginCompareFixture : IDisposable
     public CutDownPluginCompareFixture()
     {
         var reflector = SharedSchemaReflector.Instance;
-        Index = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        Index = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         Index.Reconcile(
             _gameDirectory,
             [new LoadOrderEntry(

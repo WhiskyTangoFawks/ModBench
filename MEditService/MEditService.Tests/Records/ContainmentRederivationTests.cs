@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -248,6 +249,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Contains("\"Scale\": 6.5", live!, StringComparison.Ordinal);
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             _fixture.GameDirectory,
@@ -269,6 +271,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         var live = _fixture.Index.Projected().GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             _fixture.GameDirectory,
@@ -317,6 +320,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             _fixture.GameDirectory,
@@ -361,6 +365,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             _fixture.GameDirectory,
@@ -398,6 +403,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             .Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             _fixture.GameDirectory,

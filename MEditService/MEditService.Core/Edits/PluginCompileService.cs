@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -20,7 +21,7 @@ public sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
     RecordTextCodec codec,
-    IModImporter importer,
+    IPluginAdapter importer,
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {

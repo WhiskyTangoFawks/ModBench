@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -13,7 +14,7 @@ public sealed class SecondWindowRefusedTests
     private static IndexProjector MakeIndex()
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        return new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
     }
 
     // One story, because the three assertions are one lifecycle: refused while the first

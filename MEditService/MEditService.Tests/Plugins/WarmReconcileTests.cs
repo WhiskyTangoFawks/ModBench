@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -17,7 +18,7 @@ public sealed class WarmReconcileTests
     private static IndexProjector MakeManager(ILogger<IndexProjector>? logger = null)
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
+        return new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
     }
 
     private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
@@ -77,7 +78,7 @@ public sealed class WarmReconcileTests
         var observed = new List<int>();
         var factory = new ProgressWatchingFactory(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), observed);
-        using var warm = new IndexProjector(factory);
+        using var warm = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         factory.Index = warm;
 
         warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);

@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -26,6 +27,7 @@ public sealed class FileOverrideCompareColumnTests
         using var _ = fx;
 
         using var manager = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         // ADR-0044: the snapshot carries both copies — plugins.txt names the filename once, so
         // both share its slot, and only ModA is the copy the Mod override order resolves it to.
@@ -61,6 +63,7 @@ public sealed class FileOverrideCompareColumnTests
         using var _ = fx;
 
         using var manager = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         var snapshot = fx.Plugins.Select(p => p with { Enabled = false }).ToList();
         manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -22,12 +23,11 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
-    private static IndexProjector MakeManager(IModImporter? modImporter = null)
+    private static IndexProjector MakeManager(IPluginAdapter? adapter = null)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(factory,
-            modImporter: modImporter);
+        return new IndexProjector(adapter ?? MutagenPluginAdapter.Instance, factory);
     }
 
     // An explicit request for a release this build has no Mutagen assembly for must refuse with a
@@ -57,7 +57,7 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
             var reflector = SharedSchemaReflector.Instance;
             var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             var faulting = new FaultingUpdateWinnersRepositoryFactory(inner);
-            using var manager = new IndexProjector(faulting);
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, faulting);
 
             Assert.Throws<InvalidOperationException>(() =>
                 manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4));
@@ -77,7 +77,7 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
-        using var manager = new IndexProjector(spy);
+        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, spy);
 
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
@@ -279,7 +279,7 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
                 b.SetMinimumLevel(LogLevel.Debug);
                 b.AddProvider(new CollectingLoggerProvider(entries));
             });
-            using var manager = new IndexProjector(faulting, loggerFactory.CreateLogger<IndexProjector>());
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, faulting, loggerFactory.CreateLogger<IndexProjector>());
 
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             manager.SetFilter("SELECT form_key FROM npc_");
@@ -410,12 +410,13 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
         return m;
     }
 
-    private sealed class SpyModImporter : IModImporter
+    private sealed class SpyAdapter : ReadOnlyPluginAdapter
     {
         private readonly List<SpyLoadedMod> _mods = [];
         public IReadOnlyList<SpyLoadedMod> LoadedMods => _mods;
 
-        public ILoadedMod Import(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
+        public override ILoadedMod OpenForRead(
+            ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
         {
             var real = ModFactory.ImportGetter(modPath, gameRelease, param);
             var spy = new SpyLoadedMod(real);

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -24,7 +25,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new IndexProjector(factory);
+        _manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
@@ -58,6 +59,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
         using var manager = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -86,6 +88,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             })
             .Build();
         using var manager = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -298,7 +301,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(factory);
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -360,7 +363,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(factory);
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -628,7 +631,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var manager = new IndexProjector(factory);
+        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
         test(new RecordQueryService(manager, reflector, new ConflictClassifier()));
     }
@@ -754,7 +757,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(factory);
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -792,7 +795,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(factory);
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -821,7 +824,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(factory);
+            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
@@ -837,7 +840,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new IndexProjector(factory);
+        var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         return new RecordQueryService(manager, reflector, new ConflictClassifier());
     }
 

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using MEditService.Core.Commands;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
@@ -93,7 +94,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 IMod deepParsed;
                 try
                 {
-                    deepParsed = ModFactory.ImportSetter(
+                    deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
                         new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
                         LocalizedStrings.ForRead(modFolder, loadOrder.DataFolderPath));
                 }
@@ -126,7 +127,9 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 // ADR-0042 decision 2: the gate refuses before a single byte of any plugin in this Track is
                 // committed, leaving the folder exactly as untracked as it was. Same Serializing phase — no new
                 // TrackPhase.
-                if (await VerifyRoundTrip(deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, deserialize, logger, cancel) is { } refusal)
+                if (await VerifyRoundTrip(
+                        deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, loadOrder.GameRelease,
+                        deserialize, logger, cancel) is { } refusal)
                     return TrackResult.Refused(TrackRefusal.RoundTripFailed, refusal);
 
                 pristineFiles.AddRange(pluginPristineFiles);
@@ -175,6 +178,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         string pluginName,
         string originalPluginPath,
         IReadOnlyList<PristineFile> pristineFilesForThisPlugin,
+        GameRelease gameRelease,
         Func<string, CancellationToken, Task<IFallout4Mod>> deserialize,
         ILogger logger,
         CancellationToken cancel)
@@ -188,18 +192,11 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             var recompiled = await deserialize(treeRoot, cancel);
 
             var recompiledPath = Path.Combine(scratchDir, pluginName);
-            // Raw Mutagen write, not PluginWriter: a scratch verification must not drop a .bak beside the real
-            // plugin. WithLoadOrderFromHeaderMasters fixes master order; NoNextFormIDProcessing and NoCheck
-            // keep the header's stored values rather than Mutagen's recompute.
+            // The adapter's bare write, not PluginWriter's: a scratch verification must not drop a
+            // .bak beside the real plugin.
             try
             {
-                await recompiled.BeginWrite
-                    .ToPath(recompiledPath)
-                    .WithLoadOrderFromHeaderMasters()
-                    .WithNoDataFolder()
-                    .NoNextFormIDProcessing()
-                    .WithRecordCount(RecordCountOption.NoCheck)
-                    .WriteAsync();
+                await MutagenPluginAdapter.Instance.WriteAsync(recompiled, recompiledPath);
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
@@ -228,8 +225,8 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                       "present in the original — dropped during parsing, before Track ever wrote its source.");
             }
 
-            var recompiledFromBinary = Fallout4Mod.CreateFromBinary(
-                new ModPath(ModKey.FromFileName(pluginName), recompiledPath), Fallout4Release.Fallout4);
+            var recompiledFromBinary = (IFallout4Mod)MutagenPluginAdapter.Instance.OpenForWrite(
+                new ModPath(ModKey.FromFileName(pluginName), recompiledPath), gameRelease);
 
             if (ModelIdentity.FindFirst(original, recompiledFromBinary) is { } divergence)
             {

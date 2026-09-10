@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Api;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.TestSupport;
@@ -204,18 +205,23 @@ public sealed class ArchitectureTests
         Assert.DoesNotMatch(ParticipationRule, "registration.Enabled && registration.LoadOrderIndex is not null");
     }
 
-    // The create gesture writes only a brand-new file and TrackService only a scratch copy, so
-    // neither has an existing binary to back up.
-    private static readonly string[] PluginBinaryWriters = ["PluginWriter.cs", "CreatePluginHandler.cs", "TrackService.cs"];
+    private static readonly string[] PluginBinaryWriters = ["MutagenPluginAdapter.cs"];
 
-    // ADR-0008: PluginWriter backs the binary up first.
+    // The codec asks the factory for the release's mod type; nothing else opens or mints a mod.
+    private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
+
+    // ADR-0032 rule 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
+    // where ADR-0008's backup-first discipline then sits.
     [Fact]
-    public void ExistingPluginBinary_IsWrittenOnlyByPluginWriter()
+    public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()
     {
         var offenders = Offenders(SolutionDirectory(), Projects, "WriteToBinary(", PluginBinaryWriters)
             .Concat(Offenders(SolutionDirectory(), Projects, "BeginWrite", PluginBinaryWriters))
+            .Concat(Offenders(SolutionDirectory(), Projects, "ModFactory.", ModFactoryCallers))
+            .Concat(Offenders(SolutionDirectory(), Projects, "CreateFromBinary", ModFactoryCallers))
             .ToList();
-        Assert.True(offenders.Count == 0, "Plugin binary written outside PluginWriter in:\n" + string.Join("\n", offenders));
+        Assert.True(offenders.Count == 0,
+            "A plugin binary is opened or written outside the Plugin adapter in:\n" + string.Join("\n", offenders));
     }
 
     // Zero offenders and zero files walked read the same: a Projects typo that scans nothing
@@ -228,10 +234,10 @@ public sealed class ArchitectureTests
         Assert.True(walked > 100, $"The plugin-binary-write scan walked only {walked} files under {string.Join(", ", Projects)}.");
     }
 
-    // The same Offenders() the assertion above calls, with its own two needles: proves a planted
-    // write outside PluginBinaryWriters is caught under either spelling.
+    // The same Offenders() the assertion above calls, with its own four needles: proves a planted
+    // open or write outside the adapter is caught under every spelling.
     [Fact]
-    public void ExistingPluginBinary_TheScanCatchesAPlantedBinaryWriteOutsideAnAllowedFile()
+    public void ExistingPluginBinary_TheScanCatchesAPlantedBinaryOpenOrWriteOutsideAnAllowedFile()
     {
         var root = Directory.CreateTempSubdirectory("medit-plugin-binary-scan-").FullName;
         try
@@ -239,14 +245,19 @@ public sealed class ArchitectureTests
             Directory.CreateDirectory(Path.Combine(root, "P"));
             File.WriteAllText(Path.Combine(root, "P", "WriteToBinary.cs"), "plugin.WriteToBinary(path);");
             File.WriteAllText(Path.Combine(root, "P", "BeginWrite.cs"), "recompiled.BeginWrite.ToPath(path);");
-            File.WriteAllText(Path.Combine(root, "P", "PluginWriter.cs"), "plugin.WriteToBinary(path);");
+            File.WriteAllText(Path.Combine(root, "P", "Import.cs"), "var mod = ModFactory.ImportSetter(path, release);");
+            File.WriteAllText(Path.Combine(root, "P", "Reload.cs"), "var mod = Fallout4Mod.CreateFromBinary(path, release);");
+            File.WriteAllText(Path.Combine(root, "P", "MutagenPluginAdapter.cs"), "plugin.WriteToBinary(ModFactory.X);");
 
             var offenders = Offenders(root, ["P"], "WriteToBinary(", PluginBinaryWriters)
                 .Concat(Offenders(root, ["P"], "BeginWrite", PluginBinaryWriters))
+                .Concat(Offenders(root, ["P"], "ModFactory.", ModFactoryCallers))
+                .Concat(Offenders(root, ["P"], "CreateFromBinary", ModFactoryCallers))
                 .ToList();
 
             Assert.Equal(
-                [Path.Combine("P", "BeginWrite.cs"), Path.Combine("P", "WriteToBinary.cs")],
+                [Path.Combine("P", "BeginWrite.cs"), Path.Combine("P", "Import.cs"),
+                 Path.Combine("P", "Reload.cs"), Path.Combine("P", "WriteToBinary.cs")],
                 offenders.Order(StringComparer.Ordinal));
         }
         finally

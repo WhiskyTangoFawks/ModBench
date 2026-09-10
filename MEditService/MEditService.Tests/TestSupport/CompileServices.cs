@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
@@ -18,7 +19,7 @@ public static class CompileServices
             holder,
             SharedSchemaReflector.Instance,
             new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
-            new DefaultModImporter(),
+            new MutagenPluginAdapter(),
             new PluginWriter(NullLogger<PluginWriter>.Instance),
             NullLogger<PluginCompileService>.Instance);
     }

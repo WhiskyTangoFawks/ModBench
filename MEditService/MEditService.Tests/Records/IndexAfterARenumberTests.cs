@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -20,6 +21,7 @@ public sealed class IndexAfterARenumberTests
     private static IndexProjector MirrorOver(string gameDirectory, IReadOnlyList<LoadOrderEntry> entries)
     {
         var index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         index.Reconcile(gameDirectory, entries, GameRelease.Fallout4);
         return index;
