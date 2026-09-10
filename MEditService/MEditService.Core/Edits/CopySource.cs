@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -14,7 +15,7 @@ namespace MEditService.Core.Edits;
 /// answers from its working tree, an untracked one from the loaded copy through the codec. One per
 /// gesture, not thread-safe.</summary>
 internal sealed class CopySource(
-    PluginKey plugin, LoadOrder loadOrder, IModImporter importer, RecordTextCodec codec, SchemaReflector schemaReflector)
+    PluginKey plugin, LoadOrder loadOrder, IPluginAdapter importer, RecordTextCodec codec, SchemaReflector schemaReflector)
     : IDisposable
 {
     /// <summary>The container whose document carries a record, and the slot it sits in: a placed

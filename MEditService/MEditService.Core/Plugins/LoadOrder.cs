@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Plugins;

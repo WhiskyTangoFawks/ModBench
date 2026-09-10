@@ -1,3 +1,4 @@
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using Mutagen.Bethesda.Plugins;
@@ -36,12 +37,12 @@ public sealed class CreatePluginHandler
         if (File.Exists(filePath))
             throw new IOException($"Plugin file already exists: {name}");
 
-        var mod = ModFactory.Activator(ModKey.FromFileName(name), loadOrder.GameRelease);
+        var mod = MutagenPluginAdapter.Instance.CreateEmpty(ModKey.FromFileName(name), loadOrder.GameRelease);
         // A new plugin defaults to an ESL-flagged ESP, silently; the flag is an ordinary editable
         // header field afterward. An explicit .esl is already light, an explicit .esm asked for a
         // full master.
         if (extension.Equals(".esp", StringComparison.OrdinalIgnoreCase)) mod.IsSmallMaster = true;
-        mod.WriteToBinary(filePath);
+        await MutagenPluginAdapter.Instance.WriteAsync(mod, filePath);
 
         // ADR-0041: a participant at once, so Track below and every later reader see it without
         // waiting for the snapshot that appends its plugins.txt line.

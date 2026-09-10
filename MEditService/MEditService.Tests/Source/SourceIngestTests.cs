@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -22,6 +23,7 @@ public sealed class SourceIngestTests
     private static IndexProjector Reload(IndexedModFixture mod)
     {
         var index = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         index.Reconcile(
             mod.GameDirectory,

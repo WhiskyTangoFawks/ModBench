@@ -1,6 +1,7 @@
 using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
@@ -123,7 +124,7 @@ public sealed class BinaryChangeApplierTests
     {
         using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
 
-        using var noLoadOrder = new IndexProjector(SharedSchemaReflector.Instance);
+        using var noLoadOrder = new IndexProjector(MutagenPluginAdapter.Instance, SharedSchemaReflector.Instance);
 
         var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(noLoadOrder, watcher, NullLogger.Instance);
 

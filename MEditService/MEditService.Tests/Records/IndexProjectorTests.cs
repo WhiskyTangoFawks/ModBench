@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -42,12 +43,12 @@ public sealed class IndexProjectorTests
     }
 
     private static IndexProjector MakeProjector() =>
-        new(new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
+        new(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
 
     private static (IndexProjector Projector, CountingFactory Counts) MakeCountingProjector()
     {
         var counts = new CountingFactory(new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
-        return (new IndexProjector(counts), counts);
+        return (new IndexProjector(MutagenPluginAdapter.Instance, counts), counts);
     }
 
     // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack the winner assertions read.

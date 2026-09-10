@@ -1,4 +1,4 @@
-namespace MEditService.Core.Edits;
+namespace MEditService.Core.PluginAdapter;
 
 /// <summary>An uncommitted plugin write: temp-written binary and strings files plus the <c>.bak</c>
 /// already made. Commit renames them into place; Dispose discards the temp state either way.</summary>

@@ -1,6 +1,7 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Composition;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -22,11 +23,11 @@ internal static class TestEditService
         new ServiceCollection()
             .AddLogging(logging ?? (_ => { }))
             .AddSingleton(holder)
-            .AddSingleton<IModImporter, DefaultModImporter>()
+            .AddSingleton<IPluginAdapter, MutagenPluginAdapter>()
             .AddSingleton<RecordTextCodec>()
             .AddSingleton(SharedSchemaReflector.Instance)
             .AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
-                held, sp.GetRequiredService<IModImporter>(), sp.GetRequiredService<SchemaReflector>()))
+                held, sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<SchemaReflector>()))
             .AddSingleton<TrackService>()
             .AddSingleton<PluginWriter>()
             .AddSingleton<PluginCompileService>()

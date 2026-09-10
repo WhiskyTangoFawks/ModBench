@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -23,6 +24,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         Assert.True(created.Applied, created.Message);
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             mod.GameDirectory,
@@ -47,6 +49,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
 
         using var reloaded = new IndexProjector(
+            MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         reloaded.Reconcile(
             mod.GameDirectory,

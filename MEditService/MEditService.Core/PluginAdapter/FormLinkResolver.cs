@@ -1,3 +1,4 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
@@ -8,13 +9,13 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.Plugins;
+namespace MEditService.Core.PluginAdapter;
 
 /// <summary>Where a FormLink points, without the Index (ADR-0046 invariant 7): the copy the load
 /// order loads answers, from its working tree when tracked and its own file when not. One per
 /// request, not thread-safe.</summary>
 public sealed class FormLinkResolver(
-    LoadOrder loadOrder, IModImporter importer, SchemaReflector schemaReflector,
+    LoadOrder loadOrder, IPluginAdapter adapter, SchemaReflector schemaReflector,
     ILogger<FormLinkResolver>? logger = null) : IDisposable
 {
     private readonly ILogger _logger = logger ?? NullLogger<FormLinkResolver>.Instance;
@@ -109,7 +110,7 @@ public sealed class FormLinkResolver(
         ILoadedMod? mod = null;
         try
         {
-            mod = importer.Import(new ModPath(copy.Path), loadOrder.GameRelease);
+            mod = adapter.OpenForRead(new ModPath(copy.Path), loadOrder.GameRelease);
             opened = (mod, mod.Getter.ToUntypedImmutableLinkCache());
         }
         // Every failure, as HeldPlugins opens a copy: Mutagen throws its own hierarchy for a

@@ -1,6 +1,7 @@
 using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -37,7 +38,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         holder.Apply(previous);
 
         var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), new IndexProjector(new RefusingIndexFactory()), holder,
+            SnapshotRequest(), new IndexProjector(MutagenPluginAdapter.Instance, new RefusingIndexFactory()), holder,
             new ModFolderWatcher(), NullLoggerFactory.Instance);
 
         Assert.Equal(500, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
@@ -72,7 +73,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         using var factory = new GatedIndexRepositoryFactory(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), gateBefore: "A.esp");
-        using var index = new IndexProjector(factory);
+        using var index = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         var holder = new LoadOrderHolder();
         var put = Task.Run(() => LoadOrderEndpoints.PutLoadOrder(
             Request(data), index, holder, new ModFolderWatcher(), NullLoggerFactory.Instance));
@@ -132,7 +133,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
             data.Plugins.Select(p => new LoadOrderPlugin(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning)).ToList(),
             data.DataFolder, data.InstanceRoot, "Fallout4");
         var reflector = SharedSchemaReflector.Instance;
-        using var thisWindow = new IndexProjector(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        using var thisWindow = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
 
         var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new LoadOrderHolder(), new ModFolderWatcher(), NullLoggerFactory.Instance);
 
@@ -151,7 +152,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var thisWindow = new IndexProjector(factory);
+        using var thisWindow = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
         var result = LoadOrderEndpoints.PostRebuildIndex(request, thisWindow, NullLoggerFactory.Instance);
@@ -167,7 +168,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var data = new PluginFixtureBuilder("rebuild-ok").WithPlugin("A.esp").Build();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var index = new IndexProjector(factory);
+        using var index = new IndexProjector(MutagenPluginAdapter.Instance, factory);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
         var result = LoadOrderEndpoints.PostRebuildIndex(request, index, NullLoggerFactory.Instance);

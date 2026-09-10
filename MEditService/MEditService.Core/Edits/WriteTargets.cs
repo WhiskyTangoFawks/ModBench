@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -19,7 +20,7 @@ namespace MEditService.Core.Edits;
 /// gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
-    IModImporter importer,
+    IPluginAdapter importer,
     RecordTextCodec codec,
     SchemaReflector schemaReflector,
     ILogger logger)

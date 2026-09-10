@@ -16,6 +16,7 @@ public sealed class ReadSideImportScanTests
         "MEditService.Core/Schema",
         "MEditService.Core/Edits",
         "MEditService.Core/Commands",
+        "MEditService.Core/PluginAdapter",
         "MEditService.Core/Plugins",
     ];
 
