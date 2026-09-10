@@ -255,6 +255,27 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
+    public void Open_LosingCopyUnparseable_TheFailureNamesTheLosingOrigin()
+    {
+        using var fx = new PluginFixtureBuilder("lo-losing-garbage")
+            .WithPlugin("Shared.esp", origin: "ModA")
+            .WithPlugin("Shared.esp", origin: "ModB")
+            .BuildScattered();
+        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
+        var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
+        File.WriteAllBytes(loser.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
+        using var loadOrder = new HeldPlugins(fx.GameDirectory, null, GameRelease.Fallout4);
+
+        foreach (var plugin in HeldPlugins.Resolve(fx.GameDirectory, GameRelease.Fallout4, [winner, loser]))
+            loadOrder.Open(plugin);
+
+        Assert.Equal("ModA", Assert.Single(loadOrder.Plugins).Origin);
+        var failure = Assert.Single(loadOrder.Failures);
+        Assert.Equal("Shared.esp", failure.Name);
+        Assert.Equal("ModB", failure.Origin);
+    }
+
+    [Fact]
     public void Open_AfterAFailure_ClearsTheFailure()
     {
         using var data = new PluginFixtureBuilder("lo-recover")

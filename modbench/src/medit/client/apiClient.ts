@@ -37,6 +37,9 @@ export interface UnansweredExternalChange {
   newVersion: string | null;
 }
 
+/** ADR-0044: names the copy that failed — two copies of one name are two rows. */
+export type PluginLoadFailure = Schemas['PluginLoadFailure'];
+
 /** Rides `PUT /load-order`'s own response: either reason can newly arise only from a compile this
  *  process drives, or from a restart, and every reconcile observes both (ADR-0026). */
 export type CrashRepairReason = Schemas['CrashRepairReason'];
@@ -92,7 +95,7 @@ export interface LoadOrderStatus {
   conflictsComputed: boolean;
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
    *  the reconcile finishes (ADR-0026). */
-  failures: Schemas['PluginLoadFailure'][];
+  failures: PluginLoadFailure[];
 }
 
 /** The transform a `load-order-status` notification's nested payload needs before it is this

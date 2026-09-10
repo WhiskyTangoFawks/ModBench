@@ -99,8 +99,36 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal("Bad.esp", failure.Name);
     }
 
+    // ADR-0044: two copies of one name are two rows, so a failure that named only the file would
+    // land on whichever row the reader looked up first.
+    [Fact]
+    public async Task PutLoadOrder_LosingCopyUnparseable_TheFailureNamesTheLosingOrigin()
+    {
+        using var fx = new PluginFixtureBuilder("api-losing-copy-bad")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
+            .WithPlugin("Shared.esp", origin: "ModB")
+            .BuildScattered();
+        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
+        var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
+        await System.IO.File.WriteAllTextAsync(loser.Path, "this is not a plugin");
+
+        var response = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
+            plugins = new[] { winner, loser }.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<LoadOrderResponseDto>();
+        var failure = Assert.Single(body!.Failures);
+        Assert.Equal("Shared.esp", failure.Name);
+        Assert.Equal("ModB", failure.Origin);
+    }
+
     private sealed record LoadOrderResponseDto(string Status, IReadOnlyList<PluginLoadFailureDto> Failures);
-    private sealed record PluginLoadFailureDto(string Name, string Reason);
+    private sealed record PluginLoadFailureDto(string Name, string Origin, string Reason);
 
     [Fact]
     public async Task PutLoadOrder_MissingGameDirectory_Returns400()

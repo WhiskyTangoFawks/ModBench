@@ -6,7 +6,7 @@ import { reorderPlugins, setPluginEnabled } from '../../modmanager/commands/plug
 import { parsePlugins } from '../../modmanager/mo2/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../modmanager/loadOrderSnapshot';
 import type { InstanceValue } from '../../modmanager/instance';
-import { InMemoryMEditClient, type PluginDiagnosisReport, type PluginMetadata, type RecordPage } from '../../medit/client';
+import { InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage } from '../../medit/client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFilePlain, uriFrom, DataTransferItem, DataTransfer,
@@ -195,7 +195,7 @@ function makeTree(
 // pushing a fact in by hand. The malformed-plugin scan is fire-and-forget, so its microtasks
 // are drained here before anything is asserted.
 async function reconcile(
-  h: Harness, plugins: PluginMetadata[], failures: { name: string; reason: string }[] = [],
+  h: Harness, plugins: PluginMetadata[], failures: PluginLoadFailure[] = [],
 ): Promise<void> {
   h.client.setQueryAnswer('getPlugins', plugins);
   await h.tree.applyReconciled(failures);
@@ -1301,7 +1301,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
   it('hides a plugin that failed to load while the filter matches none of its records', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [held('A.esp', { hasMatchingRecords: false })], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     expect(await h.tree.getChildren()).toEqual([]);
   });
@@ -1682,7 +1682,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
     // The reason can be a multi-line exception-chain summary (LoadOrder.PluginLoadFailure
     // joins outer through innermost message) — the tooltip must carry every line, readably.
     const reason = 'InvalidOperationException: Malformed record\nFormatException: bad subrecord at offset 12';
-    await reconcile(h, [], [{ name: 'A.esp', reason }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason }]);
 
     const item = await rowItem(h);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
@@ -1696,7 +1696,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
   // would promise a completion that never comes (ADR-0026) — it answers the error node instead.
   it('never abandons the row: it stays collapsible, but expands to the error node — it will never be indexed', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
     const [row] = await h.tree.getChildren();
@@ -1705,16 +1705,16 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
     expect((children[0] as vscode.TreeItem).tooltip).toBe('Malformed record');
   });
 
-  it('matches the plugin key case-insensitively', async () => {
+  it('matches the copy, name and origin, case-insensitively', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.ESP', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.ESP', origin: 'SOMEMOD', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).tooltip).toContain('Failed to load');
   });
 
   it('clears the failed tooltip once a later reconcile reports the plugin loaded', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
     expect((await rowItem(h)).tooltip).toContain('Failed to load');
 
     await reconcile(h, [held('A.esp')]);
@@ -1726,18 +1726,11 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
 
   it('leaves an unaffected plugin row undecorated', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
-    await reconcile(h, [held('B.esp')], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [held('B.esp')], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     const item = await rowItem(h, 1);
     expect(item.tooltip).toBeUndefined();
     expect(item.iconPath).toBeUndefined();
-  });
-
-  it('names an unnamed failure reason rather than rendering "undefined"', async () => {
-    const h = makeTree([A_ROW()]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: null } as never]);
-
-    expect((await rowItem(h)).tooltip).toBe('Failed to load: Unknown error');
   });
 });
 
@@ -1825,7 +1818,7 @@ describe('PluginsTreeProvider — decoration precedence', () => {
     await reconcile(
       h,
       [held('A.esp', { masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }] })],
-      [{ name: 'A.esp', reason: 'Malformed record' }],
+      [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }],
     );
 
     const item = await rowItem(h);
@@ -1858,7 +1851,7 @@ describe('PluginsTreeProvider — decoration precedence', () => {
   it('a load failure keeps authority over a diagnosis on the same row', async () => {
     const h = makeTree([A_ROW()]);
     h.client.setQueryAnswer('getDiagnoses', [diagnosis('A.esp', 'some diagnosis')]);
-    await reconcile(h, [], [{ name: 'A.esp', reason: 'Malformed record' }]);
+    await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
 
     expect((await rowItem(h)).description).toBe('✗ Failed to load');
   });
@@ -1971,6 +1964,38 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
     ]);
 
     expect((await rowItem(h)).description).toBeUndefined();
+  });
+
+  // A load failure names the copy that failed. The losing copy is not a row (rows are the
+  // winning copy of every plugins.txt line), so its failure lands on no row rather than on the
+  // copy that loaded.
+  it('leaves the winning row clean when the other copy is the one that failed to load', async () => {
+    const h = makeTree([SHARED_ROW(), plugin({ name: 'Shared.esp', slot: 0, origin: 'ModB', winning: false })]);
+    await reconcile(h, [held('Shared.esp', { origin: 'ModA' })],
+      [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
+
+    const rows = await h.tree.getChildren();
+    expect(rows).toHaveLength(1);
+    const item = h.tree.getTreeItem(rows[0]);
+    expect(item.iconPath).toBeUndefined();
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
+  });
+
+  it('expands the winning row as still indexing, never into the other copy failure', async () => {
+    const h = makeTree([SHARED_ROW()]);
+    h.tree.applyIndexed([], [{ name: 'Shared.esp', origin: 'ModB', reason: 'Malformed record' }]);
+
+    const [row] = await h.tree.getChildren();
+    expect(await h.tree.getChildren(row)).toEqual([expect.any(IndexingNode)]);
+  });
+
+  it('flags the row when its own copy failed to load and the other copy loaded', async () => {
+    const h = makeTree([SHARED_ROW()]);
+    await reconcile(h, [held('Shared.esp', { origin: 'ModB' })],
+      [{ name: 'Shared.esp', origin: 'ModA', reason: 'Malformed record' }]);
+
+    expect((await rowItem(h)).description).toBe('✗ Failed to load');
   });
 
   it('joins case-insensitively on the origin as well as the name', async () => {

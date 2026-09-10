@@ -6,7 +6,7 @@ export type {
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue, RecordSummary,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
   PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult, ExternalChangeActionResult, LoadOrderStatus,
-  UnansweredExternalChange,
+  UnansweredExternalChange, PluginLoadFailure,
 } from './MEditClient';
 export { isRefused } from './MEditClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
