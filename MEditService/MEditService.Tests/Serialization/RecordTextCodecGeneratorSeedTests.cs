@@ -69,7 +69,6 @@ public class RecordTextCodecGeneratorSeedTests
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
             "TrackService.cs",          // Track
-            "SpatialContainerMint.cs",  // exterior WRLD/CELL spatial mint
             // The plugin header's own body: a ModHeader is not an IMajorRecordGetter, so the per-
             // record codec cannot produce it and the only alternative is the second dialect this
             // whitelist prevents.
