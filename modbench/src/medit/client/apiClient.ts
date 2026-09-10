@@ -42,8 +42,8 @@ export interface UnansweredExternalChange {
 export type CrashRepairReason = Schemas['CrashRepairReason'];
 export type CrashRepairOffer = Schemas['CrashRepairOffer'];
 
-/** Absorb Upstream Update / Keep as My Edit's shared result — a refusal (e.g. Keep's same-record
- *  collision) is a typed, successful answer, the same posture {@link CompileResult} uses. */
+/** Baseline / apply's shared result — a refusal (e.g. apply's same-record collision) is a typed,
+ *  successful answer, the same posture {@link CompileResult} uses. */
 export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
 
 /** The rebase's three outcomes, immediate after absorb or run by hand. `conflictedPaths` is the extension's cue to open each path

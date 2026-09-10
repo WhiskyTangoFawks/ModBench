@@ -53,7 +53,7 @@ using git.
   "everything I changed against upstream" for exactly as long as `main` stays pristine —
   which is this workflow's one discipline, kept by the user, not by Modbench.
 - **Take an upstream update** — a standard rebase: the branch stands still, `main` moves
-  under it. The update lands as an external binary change; `Absorb Upstream Update`
+  under it. The update lands as an external binary change; `Commit to main as new baseline`
   commits the new pristine state to `main` as new baselines, then rebases the edit branch
   onto it at once — `git rebase` with the platform's merge editor for conflicts.
   Uncommitted dirt refuses the rebase exactly as git would — commit, stash, or discard
@@ -303,35 +303,39 @@ which path fired the window. Self-echo of Modbench's own writes is suppressed; c
 to Crash recovery.
 
 - **One native modal per affected mod repo**, queued sequentially when several changed —
-  never a mega-dialog. Message names the mod folder and every changed plugin and tracked
-  file; detail states what was observed, and shows the evidence when the meta tell fired
-  (`meta.ini also changed (version <old> → <new>)`).
-- **Buttons**: `Absorb Upstream Update` / `Keep as My Edit` / Esc. The default (first)
-  button follows the `Meta-SHA256` compare — trailers may inform defaults, never actions
-  (ADR-0041); the human always answers. The dialog is uniform across
-  workflows: for an authored mod's own xEdit load order the meta tell doesn't fire and the
-  default is already `Keep as My Edit`.
+  never a mega-dialog. Message names the mod. Detail lists the changed plugins by name,
+  the changed tracked files by count and name, and either the version movement
+  (`meta.ini`'s version moved from <old> to <new>`) when the tell fired or a line stating
+  that no version change was observed.
+- **Buttons**: `Commit to main as new baseline` / `Apply to working tree on edit` / Esc.
+  Order carries the default — VS Code's modal focuses the first — never a separate flag
+  (ADR-0041): baseline leads when the tell fired (meta.ini's version moved against the
+  baseline trailer), apply leads otherwise; the human always answers. The dialog is uniform
+  across workflows: for an authored mod's own xEdit load order the tell doesn't fire and the
+  default is already `Apply to working tree on edit`.
 - **Both answers are per mod**: every plugin the mod holds and every changed tracked file
   outside `source/` answer together, not just the plugin whose bytes raised the question.
-- **Absorb Upstream Update**: every plugin re-serialized as new baselines, plus every changed
-  tracked file's current bytes or its deletion, committed to `main` by plumbing (no checkout,
-  fresh trailers), then the edit branch rebased onto the new baseline at once, no separate
-  offer. A clean replay is silent. A refusal over uncommitted dirt in the source tree names the
-  paths — commit, stash, or discard is the user's move, then re-run via `Modbench: Rebase onto
-  Updated Baseline`; a conflict opens VS Code's native merge editor on the source JSON. A
-  changed tracked file outside the source tree rides the rebase through regardless (`--autostash`):
-  Absorb already staged or matched it. Either way the baseline commit stands: `main` moved and the
-  trailers are written regardless of what the rebase does next. A binary Mutagen cannot parse, or a
-  missing git, refuses the whole gesture instead: an error notification names the plugin and the
-  reason, nothing is committed, and the question stays unanswered so `Keep as My Edit` is
-  still open. Absorb commits to `main` as it stands: if the user has merged into `main`
-  (the Authored workflow), there is no pristine left to diff against — that is the
-  topology they chose, not a state Modbench detects or repairs.
-- **Keep as My Edit**: each plugin's change deserializes into working-tree dirt on the affected
-  records — commit or revert as usual — and every changed tracked file stages as-is (deletions
-  staged too), so the same bytes cannot re-raise the question. A same-record collision with
-  existing uncommitted dirt refuses the whole gesture, naming the records; a tracked file already
-  staged from an earlier, unresolved answer refuses it too, naming the path.
+- **Commit to main as new baseline** (absorb): every plugin re-serialized as new baselines,
+  plus every changed tracked file's current bytes or its deletion, committed to `main` by
+  plumbing (no checkout, fresh trailers), then the edit branch rebased onto the new baseline
+  at once, no separate offer. A clean replay is silent. A refusal over uncommitted dirt in
+  the source tree names the paths — commit, stash, or discard is the user's move, then
+  re-run via `Modbench: Rebase onto Updated Baseline`; a conflict opens VS Code's native
+  merge editor on the source JSON. A changed tracked file outside the source tree rides the
+  rebase through regardless (`--autostash`): the baseline commit already staged or matched
+  it. Either way the baseline commit stands: `main` moved and the trailers are written
+  regardless of what the rebase does next. A binary Mutagen cannot parse, or a missing git,
+  refuses the whole gesture instead: an error notification names the plugin and the reason,
+  nothing is committed, and the question stays unanswered so `Apply to working tree on edit`
+  is still open. Committing to `main` as it stands: if the user has merged into `main` (the
+  Authored workflow), there is no pristine left to diff against — that is the topology they
+  chose, not a state Modbench detects or repairs.
+- **Apply to working tree on edit** (keep): each plugin's change deserializes into
+  working-tree dirt on the affected records — commit or revert as usual — and every changed
+  tracked file stages as-is (deletions staged too), so the same bytes cannot re-raise the
+  question. A same-record collision with existing uncommitted dirt refuses the whole
+  gesture, naming the records; a tracked file already staged from an earlier, unresolved
+  answer refuses it too, naming the path.
 - **Esc = defer, per-mod read-only**: nothing is written; every plugin the mod holds refuses
   edits (signposting the unanswered question) until answered; reads keep serving last-known state;
   the question re-asks at next detection or load.

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runRebase, handleUnanswered } from '../externalChangeGestures';
-import { KEEP_BUTTON, ABSORB_BUTTON } from '../externalChangeDialog';
+import { APPLY_BUTTON, BASELINE_BUTTON } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../medit/client';
 
 function makeRebaseDeps(client: unknown) {
@@ -80,7 +80,7 @@ function makeDispatchDeps(client: unknown, showDialogChoice: string | undefined)
 describe('handleUnanswered', () => {
   it('a landed Keep refreshes the tree and the matching-plugin set', async () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
-    const deps = makeDispatchDeps(client, KEEP_BUTTON);
+    const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -92,7 +92,7 @@ describe('handleUnanswered', () => {
   // A safety net: two notifications sharing one origin must still dispatch exactly one call.
   it('two notifications sharing one origin dispatch one call, not two', async () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: true, refusalReason: null }) };
-    const deps = makeDispatchDeps(client, KEEP_BUTTON);
+    const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
     await handleUnanswered(deps, [unanswered({ plugins: ['A.esp'] }), unanswered({ plugins: ['B.esp'] })]);
 
@@ -104,7 +104,7 @@ describe('handleUnanswered', () => {
   // tree that changed when nothing actually landed.
   it('a refused Keep does not refresh', async () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'collision' }) };
-    const deps = makeDispatchDeps(client, KEEP_BUTTON);
+    const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -113,7 +113,7 @@ describe('handleUnanswered', () => {
 
   it('a WriteRefused Keep shows the ready-to-show message', async () => {
     const client = { keepAsMyEdit: vi.fn().mockResolvedValue({ refused: true, message: 'mEdit: Could not keep "ModA" as your own edit — boom' }) };
-    const deps = makeDispatchDeps(client, KEEP_BUTTON);
+    const deps = makeDispatchDeps(client, APPLY_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -127,7 +127,7 @@ describe('handleUnanswered', () => {
         succeeded: true, refusalReason: null, rebase: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
       }),
     };
-    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
+    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -145,7 +145,7 @@ describe('handleUnanswered', () => {
         rebase: { outcome: 'Refused', refusalReason: 'Cannot rebase: uncommitted changes in source/A.esp/x.json.', conflictedPaths: [] },
       }),
     };
-    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
+    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -160,7 +160,7 @@ describe('handleUnanswered', () => {
         rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/A.esp/x.json', 'source/A.esp/y.json'] },
       }),
     };
-    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
+    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
@@ -176,7 +176,7 @@ describe('handleUnanswered', () => {
     const client = {
       absorbUpstreamUpdate: vi.fn().mockResolvedValue({ succeeded: false, refusalReason: 'could not be parsed' }),
     };
-    const deps = makeDispatchDeps(client, ABSORB_BUTTON);
+    const deps = makeDispatchDeps(client, BASELINE_BUTTON);
 
     await handleUnanswered(deps, [unanswered()]);
 
