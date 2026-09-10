@@ -4,35 +4,28 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Serialization;
 
-/// <summary>The one reader of a container's slot facts: which members hold child records, which of
+/// <summary>The slot facts a document read keys off: which members hold child records, which of
 /// those the owner's own document carries inline, and what a slot's elements are.</summary>
 internal sealed class ContainerSlots
 {
     private static readonly ConcurrentDictionary<GameCategory, ContainerSlots> Readers = new();
 
     internal static ContainerSlots For(GameRelease release) =>
-        Readers.GetOrAdd(release.ToCategory(), _ => new ContainerSlots(release));
+        Readers.GetOrAdd(release.ToCategory(), _ => new ContainerSlots());
 
-    private readonly RecordTypeDispatch _dispatch;
     private readonly ContainerMembers _members;
     private readonly HashSet<string> _embeddedSlotNames;
     private readonly Dictionary<string, string> _elementTypeBySlotName;
 
-    private ContainerSlots(GameRelease release)
+    private ContainerSlots()
     {
-        _dispatch = RecordTypeDispatch.For(release);
         _members = ContainerMembers.Derived;
         _embeddedSlotNames = _members.EmbeddedSlots.Select(slot => slot.Slot).ToHashSet(StringComparer.Ordinal);
-        _elementTypeBySlotName = _members.ElementTypeBySlot
-            .GroupBy(entry => entry.Key.Slot, entry => entry.Value, StringComparer.Ordinal)
+        _elementTypeBySlotName = _members.EmbeddedSlots
+            .GroupBy(slot => slot.Slot, slot => _members.ElementTypeBySlot[slot], StringComparer.Ordinal)
             .Where(group => group.Distinct(StringComparer.Ordinal).Count() == 1)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
     }
-
-    /// <summary>The concrete class name a container's slot table is keyed by, which is the codec's
-    /// spelling of the type rather than the schema's table name.</summary>
-    internal string? ContainerTypeOf(string? recordType) =>
-        recordType is null ? null : _dispatch.ConcreteFor(recordType)?.Name ?? recordType;
 
     /// <summary>Every member of <paramref name="containerTypeName"/> holding child records, empty for
     /// a type with none.</summary>

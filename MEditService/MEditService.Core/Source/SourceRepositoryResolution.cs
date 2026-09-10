@@ -4,7 +4,6 @@ using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
