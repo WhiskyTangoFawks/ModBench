@@ -9,16 +9,7 @@ namespace MEditService.Tests.RealData;
 /// table.</summary>
 public sealed class VanillaMalformedScanProofTests
 {
-    private sealed class SmokeFactAttribute : FactAttribute
-    {
-        public SmokeFactAttribute()
-        {
-            if (Environment.GetEnvironmentVariable("MEDIT_SMOKE") != "1")
-                Skip = "Set MEDIT_SMOKE=1 to run the vanilla-proof scan.";
-        }
-    }
-
-    [SmokeFact]
+    [SmokeFact("run the vanilla-proof scan")]
     public void VanillaPlugins_TripNoDetector()
     {
         if (!new GameLocator().TryGetDataDirectory(GameRelease.Fallout4, out var dataDir))
