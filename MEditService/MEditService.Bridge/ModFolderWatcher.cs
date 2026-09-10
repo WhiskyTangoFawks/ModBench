@@ -139,17 +139,16 @@ public sealed class ModFolderWatcher : IDisposable
     }
 
     /// <summary>Never CrashRecovery, which is filtered before a question is queued. One entry per
-    /// mod folder: a second settle replaces the queued question rather than duplicating it.</summary>
+    /// mod folder, and the queue follows the marker: a question whose marker was cleared elsewhere
+    /// is dropped here, so the two never disagree.</summary>
     public IReadOnlyList<UnansweredExternalChange> Unanswered()
     {
-        lock (_gate) return [.. _unanswered.Values];
-    }
-
-    /// <summary>Drops the mod folder's queued question — the deferral is per mod (ADR-0041
-    /// amendment), so one answer resolves every plugin and tracked file it named.</summary>
-    public void MarkAnswered(string modFolder)
-    {
-        lock (_gate) _unanswered.Remove(modFolder);
+        lock (_gate)
+        {
+            foreach (var modFolder in _unanswered.Keys.Where(m => ExternalChangeDeferral.Unanswered(m) == null).ToList())
+                _unanswered.Remove(modFolder);
+            return [.. _unanswered.Values];
+        }
     }
 
     /// <summary>Both triggers — the live watch and the load-time check — get
@@ -305,9 +304,9 @@ public sealed class ModFolderWatcher : IDisposable
     private void Settle(ModEntry mod)
     {
         List<SourceChangeEvent> batch;
-        List<PluginEntry> classificationTouched;
+        List<PluginEntry> classificationArmed;
         List<PluginEntry> indexedTouched;
-        bool candidate;
+        bool classify;
         lock (_gate)
         {
             if (!mod.BatchOpen) return;
@@ -316,9 +315,9 @@ public sealed class ModFolderWatcher : IDisposable
             mod.MaxWindowTimer.Stop();
 
             batch = [];
-            classificationTouched = [];
+            classificationArmed = [];
             indexedTouched = [];
-            candidate = mod.OtherCandidateTouched;
+            classify = mod.OtherCandidateTouched;
             mod.OtherCandidateTouched = false;
             foreach (var plugin in mod.Plugins.Values)
             {
@@ -333,9 +332,10 @@ public sealed class ModFolderWatcher : IDisposable
                 plugin.DocumentPaths.Clear();
                 plugin.WholePlugin = false;
 
+                if (plugin.ClassificationArmed) classificationArmed.Add(plugin);
                 if (plugin.FileTouched)
                 {
-                    if (plugin.ClassificationArmed) classificationTouched.Add(plugin);
+                    if (plugin.ClassificationArmed) classify = true;
                     if (plugin.IndexedArmed) indexedTouched.Add(plugin);
                     plugin.FileTouched = false;
                 }
@@ -343,16 +343,18 @@ public sealed class ModFolderWatcher : IDisposable
         }
 
         if (batch.Count > 0) RaiseSafely(() => SourceChanged?.Invoke(batch));
-        if (classificationTouched.Count > 0 || candidate) SettleExternalChange(mod.ModFolder, classificationTouched);
+        if (classify) SettleExternalChange(mod.ModFolder, classificationArmed);
         foreach (var plugin in indexedTouched) SettleIndexed(plugin);
     }
 
-    // One classification per mod per settle, whether a plugin write, a tracked-file candidate, or
-    // both opened the window.
-    private void SettleExternalChange(string modFolder, IReadOnlyList<PluginEntry> touchedPlugins)
+    // One classification per mod per settle. Every armed plugin is hashed, not only the touched
+    // ones, so a verdict of nothing is whole and clears the marker; an unread plugin leaves no
+    // whole verdict, and the marker stands.
+    private void SettleExternalChange(string modFolder, IReadOnlyList<PluginEntry> armedPlugins)
     {
         var plugins = new List<(string PluginName, byte[] ObservedBytes)>();
-        foreach (var plugin in touchedPlugins)
+        var whole = true;
+        foreach (var plugin in armedPlugins)
         {
             try
             {
@@ -361,12 +363,18 @@ public sealed class ModFolderWatcher : IDisposable
             catch (IOException)
             {
                 // Caught mid-write; the load-time hash check is the backstop if this is missed.
+                whole = false;
             }
         }
 
-        if (ExternalChangeClassifier.ClassifyMod(modFolder, plugins) is ExternalChangeClassification.ExternalChange change)
+        switch (ExternalChangeClassifier.ClassifyMod(modFolder, plugins))
         {
-            ReportExternalChange(modFolder, change);
+            case ExternalChangeClassification.ExternalChange change:
+                ReportExternalChange(modFolder, change);
+                break;
+            case null when whole:
+                ExternalChangeDeferral.Clear(modFolder);
+                break;
         }
     }
 

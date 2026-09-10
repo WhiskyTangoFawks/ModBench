@@ -679,6 +679,7 @@ export interface components {
             diagnostics: components["schemas"]["CompileDiagnostic"][];
             masters: string[];
             eslContradiction: boolean;
+            refusal: components["schemas"]["RecordEditRefusal"];
         };
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
@@ -991,6 +992,8 @@ export interface components {
             isPartialFormable: boolean;
             parseDiagnosis?: string | null;
         };
+        /** @enum {string} */
+        RecordEditRefusal: "None" | "PluginNotTracked" | "PluginHasNoModFolder" | "RecordNotFound" | "FieldNotFound" | "FieldReadOnly" | "InvalidFormLink" | "ExternalChangeUnanswered" | "RecordTypeNotFound" | "FormKeyCollision" | "UntrackedReferencer" | "NotNativeRecord" | "ReferenceRemapIncomplete" | "FormKeySpaceExhausted" | "ContainerRecordNotYetSupported" | "SourceUnitNotFound" | "LightPluginFormIdOutOfRange" | "PartialFormFieldReadOnly" | "SyntheticMemberIndirectWrite" | "ContainerParentMissingInDestination" | "CopyAsNewRecordDisallowedForType" | "UnderrideDestination" | "DuplicateKeyInKeyedArray" | "HeaderDeleteOrRenumberNotSupported" | "InvalidEnvelope" | "DiscriminatorInvalid" | "HexLengthMismatch" | "CodecRejected" | "CodecDroppedValue" | "RecordParseFailed";
         RecordEditRequest: {
             plugin: string;
             origin: string;

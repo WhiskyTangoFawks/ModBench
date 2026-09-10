@@ -53,6 +53,35 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
         Assert.Empty(offers); // clean state produces no repair activity either.
     }
 
+    // The marker outlived its change (bytes restored by hand, a re-Track, a superseding settle):
+    // the classifier is the authority, so a load finding nothing drops it rather than leaving the
+    // mod read-only over a question nobody can answer.
+    [Fact]
+    public void RunAfterReconcile_DropsAStaleMarker_AndQueuesNothing_WhenTheBytesMatchTheParkedSnapshot()
+    {
+        ExternalChangeDeferral.Set(_mod.ModFolder, "a question whose change is gone");
+        var watcher = new ModFolderWatcher();
+
+        ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index, watcher, NullLogger.Instance);
+
+        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+        Assert.Empty(watcher.Unanswered());
+    }
+
+    // An unreadable binary is a repair offer, and no verdict: the marker it would have cleared stands.
+    [Fact]
+    public void RunAfterReconcile_KeepsAStaleMarker_WhenTheTrackedPluginCannotBeRead()
+    {
+        ExternalChangeDeferral.Set(_mod.ModFolder, "a question the binary cannot answer for now");
+        File.Delete(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName));
+        var watcher = new ModFolderWatcher();
+
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(_mod.Index, watcher, NullLogger.Instance);
+
+        Assert.Equal(CrashRepairReason.MissingOrUnreadableBinary, Assert.Single(offers).Reason);
+        Assert.NotNull(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+    }
+
     // A crash between the journal's marker write and its clear is offered for repair and never
     // routed into the external-change queue: the two prompts must never both fire for one event.
     [Fact]

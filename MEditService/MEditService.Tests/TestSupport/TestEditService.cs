@@ -55,6 +55,9 @@ internal static class TestEditService
     internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(IndexProjector index) =>
         CopyAsNewHandler(HolderOver(index));
 
+    internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<CompilePluginHandler>();
+
     internal static AbsorbExternalChangeHandler AbsorbHandler() =>
         Over(new LoadOrderHolder()).GetRequiredService<AbsorbExternalChangeHandler>();
 

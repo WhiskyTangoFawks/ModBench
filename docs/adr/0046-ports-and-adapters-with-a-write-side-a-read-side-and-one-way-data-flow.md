@@ -36,9 +36,10 @@ gesture family. Read [target-architecture.md](../architecture/target-architectur
    load, on reconcile, and on watcher overflow, and is idempotent by hash, so a duplicate signal
    is harmless.
 7. **The write side's inputs are Source text, the envelope and the metadata tree.** It reads the
-   load order for which plugin copy a record lives in, and the Source repository for whether a
-   mod is tracked. Parse status comes from the codec at edit time. A document is never taken
-   from the Index; a missing file is a refusal.
+   load order for which plugin copy a record lives in, the Source repository for whether a
+   mod is tracked, and, while an external-change question is open, the mod's plugin bytes —
+   only to classify, never as content. Parse status comes from the codec at edit time. A
+   document is never taken from the Index; a missing file is a refusal.
 8. **A command returns applied-or-refusal, and what it did.** The answer says whether the write
    landed, carries the refusal when it did not, and carries whatever the gesture itself produced —
    the new FormKey, the diagnostics and masters, the landed keys. A refusal is returned, never
@@ -93,9 +94,11 @@ These describe the present and may change without revisiting the invariants.
   projection landed on, published only once that advance is durable.
 - Commands share an internal module for target resolution under the load order, the pre-write
   check that refuses while an external change is unanswered, rename on an EditorID change, and
-  FormKey allocation. It is an internal seam, tested through the handlers. The classifier that
-  decides whether an observed binary is a self-echo, a crash recovery or a real external change is
-  not part of it: its callers are the load-order hook and the watcher, both outside Commands.
+  FormKey allocation. It is an internal seam, tested through the handlers, and every write gesture
+  enters it first, compile included. The classifier that decides whether an observed binary is a
+  self-echo, a crash recovery or a real external change is not part of it: it lives in Source, and
+  the pre-write check, the load-order hook and the watcher all call it, since its verdict alone
+  decides whether a question is open and the marker file only caches that verdict (ADR-0041).
 - The Plugin adapter is thin over Mutagen and says so.
 - Tests cross the same seams callers do: the write API with a temporary source tree and a load
   order object and no Index; the Index through refresh and reads with a real DuckDB; the

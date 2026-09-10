@@ -37,6 +37,7 @@ public sealed class SourceEditFixture : IDisposable
     public DeleteRecordHandler DeleteHandler { get; }
     public CreateRecordHandler CreateHandler { get; }
     public PeekNextFreeFormKeyHandler PeekHandler { get; }
+    public CompilePluginHandler CompileHandler { get; }
     public AbsorbExternalChangeHandler AbsorbHandler { get; }
     public KeepExternalChangeHandler KeepHandler { get; }
 
@@ -88,6 +89,7 @@ public sealed class SourceEditFixture : IDisposable
         DeleteHandler = TestEditService.DeleteHandler(holder);
         CreateHandler = TestEditService.CreateHandler(holder);
         PeekHandler = TestEditService.PeekHandler(holder);
+        CompileHandler = TestEditService.CompileHandler(holder);
         AbsorbHandler = TestEditService.AbsorbHandler();
         KeepHandler = TestEditService.KeepHandler();
     }
@@ -118,6 +120,14 @@ public sealed class SourceEditFixture : IDisposable
     /// own single plugin, wrapped.</summary>
     public IReadOnlyList<RegisteredCopy> PluginCopies(string pluginPath) =>
         [new RegisteredCopy(ActualPluginName, ModFolderOrigin, pluginPath, 0, true, true)];
+
+    /// <summary>The question as the watcher raises it: the plugin's bytes differ from the parked
+    /// snapshot, and the marker names the change.</summary>
+    public void RaiseExternalChange(string question = "Fixture.esp (in FixtureMod) changed outside Modbench.")
+    {
+        File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
+        ExternalChangeDeferral.Set(ModFolder, question);
+    }
 
     public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
         Path.Combine(ModFolder, RelativeSourcePath(formKey, recordType, editorId));

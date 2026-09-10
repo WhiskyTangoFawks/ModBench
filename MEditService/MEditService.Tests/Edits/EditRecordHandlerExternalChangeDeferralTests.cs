@@ -20,9 +20,9 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void EditField_Refuses_WhileAnExternalChangeQuestionIsUnansweredForThePlugin()
+    public void EditField_Refuses_WhileAnExternalChangeQuestionIsUnansweredForItsMod()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, "Fixture.esp (in FixtureMod) changed outside Modbench.");
+        _mod.RaiseExternalChange();
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
@@ -35,7 +35,7 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     public void EditField_Refuses_BeforeTouchingTheSourceFile()
     {
         var before = File.ReadAllText(_mod.NpcSourceFile);
-        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
+        _mod.RaiseExternalChange();
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
@@ -47,17 +47,51 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     public void EditField_Refuses_BeforeTheDocumentTheRepositoryServesChanges()
     {
         var before = _mod.Document(_mod.Npc.ToString())!.Body;
-        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
+        _mod.RaiseExternalChange();
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.Equal(before, _mod.Document(_mod.Npc.ToString())!.Body);
     }
 
+    // The marker is a cache of the classifier's verdict, not the verdict: bytes restored by hand after
+    // the question was raised leave nothing to ask, so the stale marker goes and the edit proceeds.
+    [Fact]
+    public void EditField_Proceeds_AndDropsTheStaleMarker_WhenTheBytesWereRestoredByHand()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
+        var original = File.ReadAllBytes(pluginPath);
+        _mod.RaiseExternalChange();
+        File.WriteAllBytes(pluginPath, original);
+
+        var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+    }
+
+    // A plugin caught mid-write gives no verdict: the marker stands and the edit stays refused, since
+    // clearing on the plugins that could be read would let the write through while the question is live.
+    [Fact]
+    public void EditField_StaysRefused_AndKeepsTheMarker_WhileAPluginCannotBeRead()
+    {
+        var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
+        var original = File.ReadAllBytes(pluginPath);
+        _mod.RaiseExternalChange();
+        File.WriteAllBytes(pluginPath, original);
+        using var held = new FileStream(pluginPath, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
+        Assert.NotNull(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+    }
+
     [Fact]
     public void EditField_SucceedsAgain_OnceTheDeferralIsCleared()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
+        _mod.RaiseExternalChange();
         ExternalChangeDeferral.Clear(_mod.ModFolder);
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
@@ -71,7 +105,7 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     public void EditField_InADifferentMod_IsUnaffectedByThatModsDeferral()
     {
         using var otherMod = SourceEditFixture.Tracked();
-        ExternalChangeDeferral.Set(otherMod.ModFolder, "unanswered");
+        otherMod.RaiseExternalChange();
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 

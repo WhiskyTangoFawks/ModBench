@@ -63,7 +63,7 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
     }
 
     [Fact]
-    public void Absorb_ClearsAnyUnansweredDeferralForThePlugin()
+    public void Absorb_ClearsTheModsUnansweredDeferral()
     {
         ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
         WriteExternalBinaryChange(0.9f);

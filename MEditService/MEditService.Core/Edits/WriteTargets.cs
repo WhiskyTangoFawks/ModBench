@@ -123,9 +123,9 @@ internal sealed class WriteTargets(
             $"{formKey} cannot be read, so copying it would land a stub holding only its FormKey and " +
             $"EditorID rather than the record: {why}");
 
-    // INVARIANT: every record write gesture enters here first, and this is the only place the
-    // deferral refusal is raised. A write that reaches a source tree without it is not refused while
-    // an external-change question is unanswered.
+    // INVARIANT: every write gesture — the six record gestures and compile — enters here first, and
+    // this is the only place the deferral refusal is raised. A write that bypasses it is not refused
+    // while a question is unanswered.
     internal RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder, out SourceRepository repository)
     {
         modFolder = "";
@@ -136,10 +136,47 @@ internal sealed class WriteTargets(
 
         (modFolder, repository) = (folder, opened);
 
-        // Checked before anything else, so the source file is never reached.
-        return ExternalChangeDeferral.Unanswered(folder) is { } question
-            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
-            : null;
+        // Checked before anything else, so the source file is never reached. The marker caches the
+        // classifier's last verdict (ADR-0041 amendment): present means classify again, and a verdict
+        // of nothing drops it and lets the write through.
+        if (ExternalChangeDeferral.Unanswered(folder) is not { } question) return null;
+
+        // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
+        if (PluginBytesIn(folder) is not { } plugins)
+            return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
+
+        switch (ExternalChangeClassifier.ClassifyMod(folder, plugins))
+        {
+            case ExternalChangeClassification.ExternalChange:
+                return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
+            case null:
+                ExternalChangeDeferral.Clear(folder);
+                return null;
+            default:
+                // An interrupted compile is the repair offer's state, not this question's; the marker
+                // waits for a verdict either way.
+                return null;
+        }
+    }
+
+    // Every copy the load order holds in this mod folder, as the load-time check hashes them, or
+    // null when one cannot be read: a partial set would classify the rest as the whole mod.
+    private List<(string PluginName, byte[] ObservedBytes)>? PluginBytesIn(string modFolder)
+    {
+        var plugins = new List<(string, byte[])>();
+        foreach (var copy in loadOrder.Current.Copies)
+        {
+            if (!string.Equals(ModFolders.Of(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal)) continue;
+            try
+            {
+                plugins.Add((copy.Name, File.ReadAllBytes(copy.Path)));
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }
+        return plugins;
     }
 
     // Two refusals, because there are two different ways out and a message that named neither

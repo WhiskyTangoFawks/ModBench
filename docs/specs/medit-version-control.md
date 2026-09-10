@@ -337,8 +337,12 @@ to Crash recovery.
   gesture, naming the records; a tracked file already staged from an earlier, unresolved
   answer refuses it too, naming the path.
 - **Esc = defer, per-mod read-only**: nothing is written; every plugin the mod holds refuses
-  edits (signposting the unanswered question) until answered; reads keep serving last-known state;
-  the question re-asks at next detection or load.
+  edits and Save & Compile (each refusal signposting the unanswered question; the compile refusal
+  surfaces through the same error toast every compile refusal uses) until answered; reads keep
+  serving last-known state; the question re-asks at next detection or load. The classifier decides
+  whether the question is still open — the marker in the mod's `.git` only caches its verdict — so
+  bytes restored by hand, a re-Track or a later settle that finds nothing end the question without
+  an answer at the next write, settle or load.
 - A destroyed repo (MO2 Replace install) is **not** this dialog — the mod reads as
   untracked, per ADR-0041.
 

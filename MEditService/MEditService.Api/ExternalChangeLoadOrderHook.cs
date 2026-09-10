@@ -23,6 +23,8 @@ internal static class ExternalChangeLoadOrderHook
         // Grouped by mod folder: the classifier runs once per mod (ADR-0041 amendment), covering
         // every tracked plugin the mod holds in one pass, exactly as the live watcher's settle does.
         var byModFolder = new Dictionary<string, List<(string Name, string Origin, string Path, byte[] Bytes)>>(StringComparer.Ordinal);
+        // A mod with a plugin nobody could hash has no whole verdict, so nothing of its is cleared.
+        var unreadable = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var plugin in loadOrder.Plugins)
         {
@@ -48,6 +50,7 @@ internal static class ExternalChangeLoadOrderHook
                 // and gets no live watch.
                 logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
                 offers.Add(new CrashRepairOffer(plugin.Name, plugin.Origin, CrashRepairReason.MissingOrUnreadableBinary));
+                unreadable.Add(modFolder);
                 continue;
             }
 
@@ -76,6 +79,11 @@ internal static class ExternalChangeLoadOrderHook
                             logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", entry.Name, entry.Origin);
                         offers.Add(new CrashRepairOffer(entry.Name, entry.Origin, CrashRepairReason.InterruptedCompile));
                     }
+                    break;
+                case null when !unreadable.Contains(modFolder):
+                    // The classifier is the authority and the marker only its cache (ADR-0041
+                    // amendment): a question whose change is gone is not asked again, or kept.
+                    ExternalChangeDeferral.Clear(modFolder);
                     break;
             }
         }

@@ -88,6 +88,118 @@ public sealed class ModFolderWatcherTests
         }
     }
 
+    // Absorb and Keep clear the marker in Core, where the watcher cannot be reached: the queue reads
+    // the marker as its authority rather than holding a third copy that disagrees.
+    [Fact]
+    public void Unanswered_DropsAQuestion_OnceItsMarkerIsClearedElsewhere()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
+            using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.Watch(modFolder, "Test.esp", pluginPath);
+            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
+
+            ExternalChangeDeferral.Clear(modFolder);
+
+            Assert.Empty(watcher.Unanswered());
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    // A later settle superseding the change: the bytes are back to what the parked snapshot names,
+    // so the classifier finds nothing and the marker goes with the question.
+    [Fact]
+    public void Settle_DropsTheMarkerAndTheQuestion_WhenTheBytesAreRestored()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var original = "original"u8.ToArray();
+            var pluginPath = Track(modFolder, "Test.esp", original);
+            using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.Watch(modFolder, "Test.esp", pluginPath);
+            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
+            Assert.NotNull(ExternalChangeDeferral.Unanswered(modFolder));
+
+            File.WriteAllBytes(pluginPath, original);
+            WaitUntil(() => ExternalChangeDeferral.Unanswered(modFolder) == null, TimeSpan.FromSeconds(3));
+
+            Assert.Null(ExternalChangeDeferral.Unanswered(modFolder));
+            Assert.Empty(watcher.Unanswered());
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    // A settle that could not read the plugin has no verdict to clear on; the next one that can does.
+    [Fact]
+    public void Settle_KeepsTheMarker_WhileThePluginCannotBeRead_AndClearsOnceItCan()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var original = "original"u8.ToArray();
+            var pluginPath = Track(modFolder, "Test.esp", original);
+            using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.Watch(modFolder, "Test.esp", pluginPath);
+            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
+
+            using (var held = new FileStream(pluginPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                held.SetLength(0);
+                held.Write(original);
+                held.Flush(flushToDisk: true);
+                Thread.Sleep(500);
+                Assert.NotNull(ExternalChangeDeferral.Unanswered(modFolder));
+            }
+
+            File.WriteAllBytes(pluginPath, original);
+            WaitUntil(() => ExternalChangeDeferral.Unanswered(modFolder) == null, TimeSpan.FromSeconds(3));
+
+            Assert.Null(ExternalChangeDeferral.Unanswered(modFolder));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    // A candidate touch alone (an asset, not a plugin) settles with every plugin hashed, so a mod
+    // whose plugin still differs keeps its question rather than losing it to a partial verdict.
+    [Fact]
+    public void Settle_OverAnUnrelatedFile_KeepsTheQuestion_WhileThePluginStillDiffers()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
+            using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.Watch(modFolder, "Test.esp", pluginPath);
+            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
+
+            File.WriteAllText(Path.Combine(modFolder, "readme.txt"), "an asset, not the plugin");
+            Thread.Sleep(400);
+
+            Assert.NotNull(ExternalChangeDeferral.Unanswered(modFolder));
+            Assert.Single(watcher.Unanswered());
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
     [Fact]
     public void Watch_DoesNotQueueAnythingBeforeTheQuietWindowElapses()
     {
