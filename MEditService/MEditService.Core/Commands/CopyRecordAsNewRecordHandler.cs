@@ -41,7 +41,7 @@ public sealed class CopyRecordAsNewRecordHandler
     private RecordEditResult CopyAsNewRecord(
         WriteTargets.CopyTarget copy, PluginKey destinationPlugin, string? requestedFormKey)
     {
-        var (source, identity, destination, release, _) = copy;
+        var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
         if (RefuseIfDisallowedForCopyAsNewRecord(identity.RecordType) is { } disallowedRefusal) return disallowedRefusal;
 
@@ -58,7 +58,7 @@ public sealed class CopyRecordAsNewRecordHandler
                 destination.Repository, destinationPlugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var newRecord = source.Record(identity).Duplicate(FormKey.Factory(targetFormKey));
+        var newRecord = _codec.Deserialize(body, release, identity.RecordType).Duplicate(FormKey.Factory(targetFormKey));
         RemapSelfLink(newRecord, formKey, targetFormKey);
 
         // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
@@ -85,9 +85,9 @@ public sealed class CopyRecordAsNewRecordHandler
     // Links between copied siblings are not remapped, xEdit's own behavior. A missing container chain
     // auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
-        WriteTargets.CopyTarget copy, CopySource.Containment container, PluginKey destinationPlugin, string? requestedFormKey)
+        WriteTargets.CopyTarget copy, DocumentContainment container, PluginKey destinationPlugin, string? requestedFormKey)
     {
-        var (source, identity, destination, release, _) = copy;
+        var (source, identity, destination, release, body) = copy;
 
         var allocator = _targets.AllocatorOver(destination.Repository, destinationPlugin);
         if (WriteTargets.ResolveTargetFormKey(allocator, requestedFormKey, out var targetFormKey) is { } refusedTarget)
@@ -95,14 +95,16 @@ public sealed class CopyRecordAsNewRecordHandler
 
         // Its own text carries its whole embedded subtree, so the codec has already read every
         // descendant by the time one can be re-keyed.
-        var newRecord = source.Record(identity).Duplicate(FormKey.Factory(targetFormKey));
+        var newRecord = _codec.Deserialize(body, release, identity.RecordType).Duplicate(FormKey.Factory(targetFormKey));
         RemapSelfLink(newRecord, identity.FormKey, targetFormKey);
 
         var taken = new HashSet<string>(StringComparer.Ordinal) { targetFormKey };
         if (RekeyEmbeddedDescendants(allocator, newRecord, taken) is { } childRefused) return childRefused;
 
         var appended = _recordCopy.AppendEmbeddedChild(
-            source, container.ParentFormKey, container.ParentRecordType, container.SlotName, newRecord,
+            source, container,
+            new SourceDocument(
+                targetFormKey, identity.RecordType, newRecord.EditorID, _codec.SerializeToText(newRecord, release)),
             destination, release);
         if (!appended.Applied) return appended;
 

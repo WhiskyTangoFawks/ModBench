@@ -67,7 +67,7 @@ public sealed class RenumberRecordHandler
             is { } refusedTarget) return refusedTarget;
 
         var (referencers, untrackedReferencers) =
-            new ReferencerScan(_loadOrder.Current, _importer, _codec, _schemaReflector, _logger).Of(formKey, plugin);
+            new ReferencerScan(_loadOrder.Current, _importer, _schemaReflector, _logger).Of(formKey, plugin);
         if (untrackedReferencers.Count > 0)
         {
             return RecordEditResult.Refused(

@@ -8,9 +8,6 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Analysis;
-using Mutagen.Bethesda.Plugins.Records;
-using Noggog.WorkEngine;
 
 namespace MEditService.Core.Edits;
 
@@ -21,7 +18,7 @@ public sealed class PluginCompileService(
     LoadOrderHolder loadOrderHolder,
     SchemaReflector schemaReflector,
     RecordTextCodec codec,
-    IPluginAdapter importer,
+    IPluginAdapter adapter,
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
@@ -44,25 +41,24 @@ public sealed class PluginCompileService(
                 $"{plugin.Name} has no source tree at {checkout.Description}, so there is nothing to compile.");
         }
 
-        var (parsedMod, deserializeRefusal) = DeserializeSource(checkout.TreeRoot, plugin.Name);
+        var (parsedTree, deserializeRefusal) = DeserializeSource(checkout.TreeRoot, plugin.Name, loadOrder.GameRelease);
         if (deserializeRefusal != null)
             return CompileResult.Refused(deserializeRefusal);
-        var mod = parsedMod!;
+        var tree = parsedTree!;
 
         // An ESL-addressable plugin with native records outside the light FormID range would compile
         // to a binary the game mis-addresses, so refuse it. Only a header flag can be removed; a
         // plugin light by .esl extension needs renaming.
-        if (PluginFlagPredicates.IsLight(mod, plugin.Name)
-            && RecordCompactionCompatibilityDetection.GetSmallMasterRange(mod) is { } lightRange)
+        if (tree.IsLight(plugin.Name) && tree.SmallMasterRange is { } lightRange)
         {
-            var outOfRange = mod.EnumerateMajorRecords()
-                .Where(r => r.FormKey.ModKey == mod.ModKey
-                    && (r.FormKey.ID < lightRange.Min || r.FormKey.ID > lightRange.Max))
-                .Select(r => r.FormKey.ToString())
+            var outOfRange = tree.FormKeys
+                .Where(key => key.ModKey == tree.ModKey
+                    && (key.ID < lightRange.Min || key.ID > lightRange.Max))
+                .Select(key => key.ToString())
                 .ToList();
             if (outOfRange.Count > 0)
             {
-                var flagRemovable = mod.IsSmallMaster;
+                var flagRemovable = tree.IsSmallMaster;
                 var remedy = flagRemovable
                     ? "Remove the ESL flag (the header's IsSmallMaster member), or renumber the record(s) into the light range."
                     : "Rename the plugin off the .esl extension, or renumber the record(s) into the light range.";
@@ -76,11 +72,11 @@ public sealed class PluginCompileService(
         }
 
         // Two source units claiming one FormKey can only become one binary record, so refuse rather
-        // than pick a winner. Asked of the tree, not `mod`: the reader's group cache has already
-        // resolved a same-folder collision before `mod` exists.
+        // than pick a winner. Asked of the files: the reader's group cache has already resolved a
+        // same-folder collision before the tree is read.
         var collidingFormKeys = SourceRepository
             .Over(checkout.ResolverRoot, loadOrder.GameRelease)
-            .FormKeysWithMoreThanOneDocument(plugin, mod.EnumerateMajorRecords().Select(r => r.FormKey));
+            .FormKeysWithMoreThanOneDocument(plugin, tree.FormKeys);
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
@@ -88,11 +84,11 @@ public sealed class PluginCompileService(
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
-        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(mod, plugin.Name, checkout.ResolverRoot);
+        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(tree, plugin.Name, checkout.ResolverRoot);
         if (roundTripRefusal != null)
             return CompileResult.Refused(roundTripRefusal);
 
-        var (diagnostics, masters) = ContentFacts(mod, plugin, loadOrder, checkout.ResolverRoot);
+        var (diagnostics, masters) = ContentFacts(tree, plugin, loadOrder, checkout.ResolverRoot);
 
         var loadOrderNames = loadOrder.Copies
             .Where(c => c.Registration.InLoadOrder)
@@ -109,7 +105,7 @@ public sealed class PluginCompileService(
         {
             try
             {
-                writer.SaveFromModAsync(mod, copy.Path, loadOrderNames).GetAwaiter().GetResult();
+                tree.SaveThroughAsync(writer, copy.Path, loadOrderNames).GetAwaiter().GetResult();
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
@@ -133,7 +129,7 @@ public sealed class PluginCompileService(
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
-                plugin.Name, plugin.Origin, mod.EnumerateMajorRecords().Count());
+                plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
         return CompileResult.Success(diagnostics, masters);
     }
@@ -142,26 +138,27 @@ public sealed class PluginCompileService(
     // (ADR-0038) and the check errors the editor shows come from the records here, through the
     // same collector, schema and link resolver.
     private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
-        IMod mod, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
+        CompiledTree tree, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
     {
-        // One walk, and the record type is the one SourceRecordType names, so what compile files a
+        // One walk, and the record type is the one RecordTableName gives, so what compile files a
         // record under and what the tree calls it cannot differ. A type no schema claims has no
         // document, so nothing is derived from it.
         var schemas = schemaReflector.GetSchemas(loadOrder.GameRelease);
-        var typed = new List<(string RecordType, RecordTableSchema Schema, IMajorRecordGetter Record)>();
-        foreach (var record in mod.EnumerateMajorRecords())
+        var typed = new List<(string RecordType, RecordTableSchema Schema, PluginDocument Document, string? EditorId)>();
+        foreach (var document in tree.Documents(schemas))
         {
-            var recordType = RecordTableName.Of(record, schemas);
-            if (schemas.TryGetValue(recordType, out var schema)) typed.Add((recordType, schema, record));
+            typed.Add((
+                document.RecordType, schemas[document.RecordType], document,
+                WriteTargets.EditorIdOf(document.Text)));
         }
 
         var own = new Dictionary<string, RecordLookupEntry>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (recordType, _, record) in typed)
-            own[record.FormKey.ToString()] = new RecordLookupEntry(recordType, record.EditorID);
+        foreach (var (recordType, _, document, editorId) in typed)
+            own[document.FormKey] = new RecordLookupEntry(recordType, editorId);
 
         // The records just read answer for this plugin, at the ref being compiled; the working tree
         // the resolver reads for a tracked plugin is a different answer at a named ref.
-        using var links = new FormLinkResolver(loadOrder, importer, schemaReflector);
+        using var links = new FormLinkResolver(loadOrder, adapter, schemaReflector);
         RecordLookupEntry? ResolveOnce(string formKey)
         {
             if (own.TryGetValue(formKey, out var entry)) return entry;
@@ -183,16 +180,14 @@ public sealed class PluginCompileService(
         var repository = SourceRepository.Over(resolverRoot, loadOrder.GameRelease);
         var diagnostics = new List<CompileDiagnostic>();
         var masters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (recordType, schema, record) in typed)
+        foreach (var (recordType, schema, record, editorId) in typed)
         {
-            var formKey = record.FormKey.ToString();
+            var formKey = record.FormKey;
             // An override carries another plugin's FormKey, which needs that plugin as a master
             // whether or not the record references anything.
             if (PluginNameIn(formKey) is { } native) masters.Add(native);
 
-            // The document, not the live object: what a reference is, is what the source file holds.
-            var body = codec.SerializeToBytesAsync(record, loadOrder.GameRelease).GetAwaiter().GetResult();
-            using var document = JsonDocument.Parse(body);
+            using var document = JsonDocument.Parse(record.Text);
             foreach (var reference in FormReferences.Collect(document.RootElement, schema))
             {
                 if (PluginNameIn(reference.TargetFormKey) is { } target) masters.Add(target);
@@ -204,7 +199,7 @@ public sealed class PluginCompileService(
             // Only records with something to report pay for resolution, which keeps a container's
             // subtree scan off the common path.
             var relativePath = repository
-                .Locate(plugin, new RecordIdentity(formKey, recordType, record.EditorID))
+                .Locate(plugin, new RecordIdentity(formKey, recordType, editorId))
                 ?.RelativePath ?? string.Empty;
             diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }
@@ -283,14 +278,12 @@ public sealed class PluginCompileService(
 
     // Whatever is wrong with the source, the remedy is re-Track (ADR-0042), so the catch is
     // deliberately unfiltered and the message uniform.
-    private (IMod? Mod, string? RefusalReason) DeserializeSource(string treeRoot, string pluginName)
+    private (CompiledTree? Tree, string? RefusalReason) DeserializeSource(
+        string treeRoot, string pluginName, GameRelease release)
     {
         try
         {
-            var mod = RecordTextCodecGeneratorSeed
-                .DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
-                .GetAwaiter().GetResult();
-            return (mod, null);
+            return (PluginTrees.ReadTreeAsync(treeRoot, codec, release).GetAwaiter().GetResult(), null);
         }
         catch (Exception ex)
         {
@@ -310,9 +303,9 @@ public sealed class PluginCompileService(
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
-    private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
+    private static string? RefuseIfSourceDoesNotRoundTrip(CompiledTree tree, string pluginName, string resolverRoot)
     {
-        var regeneratedFiles = PluginTrees.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
+        var regeneratedFiles = tree.SerializeToPristineFilesAsync(pluginName).GetAwaiter().GetResult();
         var treeRoot = SourceRepository.RootFor(pluginName);
         var rootHeaderPath = Path.Combine(treeRoot, SourceRepository.RecordDataFileName);
 

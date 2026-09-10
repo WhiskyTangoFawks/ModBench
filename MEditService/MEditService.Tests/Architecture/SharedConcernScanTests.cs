@@ -15,7 +15,7 @@ public sealed class SharedConcernScanTests
         ("target resolution", @"\bUnreadableDocumentFor\b"),
         ("the pre-write deferral check", @"\bExternalChangeDeferral\.Unanswered\b"),
         ("rename on an EditorID change", @"\bRename\("),
-        ("FormKey allocation", @"\bDefaultHighRangeFormID\b"),
+        ("FormKey allocation", @"\bHighRangeFormIdFloor\b"),
         ("FormKey allocation", @"\bFullIdMask\b"),
     ];
 
@@ -80,7 +80,7 @@ public sealed class SharedConcernScanTests
             File.WriteAllText(
                 Path.Combine(root, "Layer", "Second.cs"),
                 "if (repository.UnreadableDocumentFor(plugin, formKey) is { } why) return why;\n"
-                + "var floor = GameConstants.Get(release).DefaultHighRangeFormID;\n");
+                + "var floor = PluginFlagPredicates.HighRangeFormIdFloor(release);\n");
             File.WriteAllText(Path.Combine(root, "Layer", "Renamer.cs"), "repository.Rename(plugin, at, editorId);");
             // The module's own file is what the counts are measured against, so it is not one of them.
             File.WriteAllText(Path.Combine(root, "Layer", SharedModuleFileName), "repository.Rename(plugin, at, id);");
@@ -92,7 +92,7 @@ public sealed class SharedConcernScanTests
             Assert.Equal(
                 [
                     @"Layer/Renamer.cs: \bRename\(: 1",
-                    @"Layer/Second.cs: \bDefaultHighRangeFormID\b: 1",
+                    @"Layer/Second.cs: \bHighRangeFormIdFloor\b: 1",
                     @"Layer/Second.cs: \bUnreadableDocumentFor\b: 1",
                 ],
                 counts);

@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using Mutagen.Bethesda;
 
 namespace MEditService.Core.Edits;
 
@@ -8,8 +8,6 @@ namespace MEditService.Core.Edits;
 /// of the element carrying its FormKey, at any depth of embedding.</summary>
 internal static class EmbeddedChildPath
 {
-    private const string FormKeyMember = "FormKey";
-
     /// <summary>The node the hops address, walked without metadata; null where the document has none.</summary>
     internal static JsonNode? Walk(JsonNode? root, IReadOnlyList<PathHop> hops)
     {
@@ -19,21 +17,27 @@ internal static class EmbeddedChildPath
         return node;
     }
 
-    internal static List<PathHop>? Find(JsonObject parent, string parentTypeName, string formKey)
+    internal static List<PathHop>? Find(JsonObject parent, string? parentTypeName, string formKey, GameRelease release) =>
+        Find(parent, parentTypeName, formKey, ContainerSlots.For(release));
+
+    private static List<PathHop>? Find(JsonObject parent, string? parentTypeName, string formKey, ContainerSlots slots)
     {
-        foreach (var slot in ContainerChildFields.EmbeddedSlots.Where(s => s.ParentType == parentTypeName).Select(s => s.Slot))
+        foreach (var slot in slots.EmbeddedSlotsOf(parentTypeName))
         {
             if (!parent.TryGetPropertyValue(slot, out var value)) continue;
             switch (value)
             {
                 case JsonObject single:
-                    if (Found(single, formKey, [PathHop.Member(slot)]) is { } inSingle) return inSingle;
+                    if (Found(single, formKey, [PathHop.Member(slot)], slots) is { } inSingle) return inSingle;
                     break;
                 case JsonArray list:
                     for (var i = 0; i < list.Count; i++)
                     {
-                        if (list[i] is JsonObject element && Found(element, formKey, [PathHop.Member(slot), PathHop.At(i)]) is { } inList)
+                        if (list[i] is JsonObject element
+                            && Found(element, formKey, [PathHop.Member(slot), PathHop.At(i)], slots) is { } inList)
+                        {
                             return inList;
+                        }
                     }
                     break;
             }
@@ -42,19 +46,15 @@ internal static class EmbeddedChildPath
     }
 
     // The element itself, or a child embedded further down (a worldspace's TopCell holds placed refs).
-    // A single-object slot's element names no type of its own, so every embedding type is tried.
-    private static List<PathHop>? Found(JsonObject element, string formKey, List<PathHop> hops)
+    // A slot's element names no type of its own, so every container's embedded slots are tried.
+    private static List<PathHop>? Found(JsonObject element, string formKey, List<PathHop> hops, ContainerSlots slots)
     {
-        if (element[FormKeyMember] is JsonValue key && key.TryGetValue<string>(out var text)
+        if (element[RecordMembers.FormKey] is JsonValue key && key.TryGetValue<string>(out var text)
             && string.Equals(text, formKey, StringComparison.Ordinal))
         {
             return hops;
         }
 
-        foreach (var type in ContainerChildFields.EmbeddedSlots.Select(s => s.ParentType).Distinct(StringComparer.Ordinal))
-        {
-            if (Find(element, type, formKey) is { } deeper) return [.. hops, .. deeper];
-        }
-        return null;
+        return Find(element, null, formKey, slots) is { } deeper ? [.. hops, .. deeper] : null;
     }
 }

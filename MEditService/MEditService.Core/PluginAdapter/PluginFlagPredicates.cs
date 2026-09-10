@@ -1,12 +1,18 @@
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Meta;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.PluginAdapter;
 
-/// <summary>The header flag is authoritative and the extension only a secondary path, as in
-/// Mutagen's own <c>IModFlagsGetter</c>: the common light plugin is a header-flagged esp, and an
-/// ESM-flagged esp is a legal master.</summary>
+/// <summary>A plugin's flags and its FormID range. The header flag is authoritative and the
+/// extension only a secondary path, as in Mutagen's own <c>IModFlagsGetter</c>.</summary>
 public static class PluginFlagPredicates
 {
+    /// <summary>The floor a fresh FormID is drawn above: <c>GetDefaultInitialNextFormID</c> is this
+    /// for every mod of a release.</summary>
+    public static uint HighRangeFormIdFloor(GameRelease release) =>
+        GameConstants.Get(release).DefaultHighRangeFormID;
+
     /// <summary>Mutagen's own <see cref="Mutagen.Bethesda.Plugins.FormID.SmallIdMask"/>, restated
     /// once here so every call site reads one name. The range's game-dependent <i>lower</i> bound is
     /// <c>RecordCompactionCompatibilityDetection.GetSmallMasterRange</c>'s to answer.</summary>

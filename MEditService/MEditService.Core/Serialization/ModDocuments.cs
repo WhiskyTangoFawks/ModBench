@@ -22,10 +22,11 @@ internal static class ModDocuments
         IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
         new MutagenModDocuments(mod, schemas, open);
 
-    /// <summary>Every cell in the mod and where the GRUP hierarchy puts it (ADR-0023), for a caller
-    /// asking about placement without reading a document.</summary>
-    internal static IReadOnlyDictionary<string, CellStructure> CellStructuresOf(IModGetter mod) =>
-        MutagenModDocuments.CellsIn(mod).ToDictionary(c => c.Key, c => c.Value.Structure, StringComparer.Ordinal);
+    /// <summary>The same mod for a caller asking about a handful of records by key rather than
+    /// streaming the whole plugin. <paramref name="open"/> is disposed with the result.</summary>
+    internal static IPluginRecordLookup LookupOf(
+        IModGetter mod, IReadOnlyDictionary<string, RecordTableSchema> schemas, IDisposable? open = null) =>
+        new ModRecordLookup(mod, schemas, open);
 }
 
 // Large enough to keep eight cores busy on cheap records; small enough that a batch of the largest

@@ -10,8 +10,6 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Meta;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
@@ -20,7 +18,7 @@ namespace MEditService.Core.Edits;
 /// gestures.</summary>
 internal sealed class WriteTargets(
     LoadOrderHolder loadOrder,
-    IPluginAdapter importer,
+    IPluginAdapter adapter,
     RecordTextCodec codec,
     SchemaReflector schemaReflector,
     ILogger logger)
@@ -93,7 +91,7 @@ internal sealed class WriteTargets(
             is { } blocked) return blocked;
 
         var release = loadOrder.Current.GameRelease;
-        var source = new CopySource(sourcePlugin, loadOrder.Current, importer, codec, schemaReflector);
+        var source = new CopySource(sourcePlugin, loadOrder.Current, adapter, codec, schemaReflector);
         try
         {
             if (source.Identity(formKey) is not { } identity)
@@ -215,36 +213,31 @@ internal sealed class WriteTargets(
             return AllocatorOver(repository, plugin);
         }
 
-        using var opened = importer.Open(copy, loadOrder.Current.GameRelease);
-        return AllocatorOver(opened.Getter, plugin);
+        // The copy's own records are the whole answer: it has no uncompiled state, so no second ref.
+        var own = adapter.ReadFormIds(copy, loadOrder.Current.GameRelease);
+        return AllocatorOver(
+            plugin, HeaderDocument.IsLight(Encoding.UTF8.GetBytes(own.HeaderText)),
+            own.Native, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
     // Both refs from the tree alone (ADR-0046 invariant 7): the working tree, plus HEAD, whose IDs a
     // working-tree deletion has not freed until the plugin is compiled.
-    internal Allocator AllocatorOver(SourceRepository repository, PluginKey plugin)
-    {
-        var byRemovableFlag = IsLightByRemovableFlag(repository, plugin);
-        return new Allocator(
+    internal Allocator AllocatorOver(SourceRepository repository, PluginKey plugin) =>
+        AllocatorOver(
             plugin,
+            IsLightByRemovableFlag(repository, plugin),
+            repository.NativeFormKeysHeld(plugin),
+            repository.NativeFormKeysHeldAt(plugin, "HEAD"));
+
+    // A .esl extension also reads as light, and no header edit can un-flag that one.
+    private Allocator AllocatorOver(
+        PluginKey plugin, bool byRemovableFlag, IReadOnlySet<string> effective, IReadOnlySet<string> head) =>
+        new(plugin,
             loadOrder.Current.GameRelease,
             byRemovableFlag || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase),
             byRemovableFlag,
-            repository.NativeFormKeysHeld(plugin),
-            repository.NativeFormKeysHeldAt(plugin, "HEAD"));
-    }
-
-    // The copy's own records are the whole answer: it has no uncompiled state, so no second ref.
-    private Allocator AllocatorOver(IModGetter mod, PluginKey plugin) =>
-        new(plugin,
-            loadOrder.Current.GameRelease,
-            PluginFlagPredicates.IsLight(mod, plugin.Name),
-            mod.IsSmallMaster,
-            mod.EnumerateMajorRecords()
-                .Select(r => r.FormKey)
-                .Where(k => k.ModKey.FileName.String.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
-                .Select(k => k.ToString())
-                .ToHashSet(StringComparer.OrdinalIgnoreCase),
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            effective,
+            head);
 
     // One allocator read per gesture, for the gestures that draw a single key. The embedded copy
     // draws several from one allocator and calls the overload below directly.
@@ -296,7 +289,7 @@ internal sealed class WriteTargets(
     }
 
     // The header document in the working tree is the truth (ADR-0041), so a flag flipped this session
-    // caps minting immediately. A .esl extension also reads as light, but no header edit can un-flag it.
+    // caps minting immediately.
     private static bool IsLightByRemovableFlag(SourceRepository repository, PluginKey plugin)
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
@@ -335,9 +328,7 @@ internal sealed class WriteTargets(
     // deleted, whose IDs must not be reused before compile). Null means exhausted.
     internal static string? NextFreeNativeFormId(Allocator allocator, bool isLight, IReadOnlySet<string>? taken = null)
     {
-        // GetDefaultInitialNextFormID is this constant for every mod of a release: its own default
-        // argument takes the branch that returns the high range, loaded plugin or not.
-        var floor = GameConstants.Get(allocator.Release).DefaultHighRangeFormID;
+        var floor = PluginFlagPredicates.HighRangeFormIdFloor(allocator.Release);
         var highest = allocator.Taken
             .Concat(taken ?? Enumerable.Empty<string>())
             .Select(LocalId)
@@ -383,7 +374,7 @@ internal sealed class WriteTargets(
     internal static string? EditorIdOf(string text)
     {
         using var document = JsonDocument.Parse(text);
-        return document.RootElement.TryGetProperty(nameof(IMajorRecordGetter.EditorID), out var editorId)
+        return document.RootElement.TryGetProperty(RecordMembers.EditorId, out var editorId)
             && editorId.ValueKind == JsonValueKind.String
             ? editorId.GetString()
             : null;

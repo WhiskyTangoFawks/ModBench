@@ -3,8 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
@@ -24,8 +24,8 @@ internal sealed record DocumentEditRequest(
 /// in, text or one refusal out.</summary>
 internal static class DocumentEdit
 {
-    private const string EditorIdMember = nameof(IMajorRecordGetter.EditorID);
-    private const string FormKeyMember = nameof(IMajorRecordGetter.FormKey);
+    private const string EditorIdMember = RecordMembers.EditorId;
+    private const string FormKeyMember = RecordMembers.FormKey;
 
     /// <summary>The new document text in <paramref name="text"/> on success (a null return); a
     /// refusal otherwise, with nothing written anywhere.</summary>

@@ -27,4 +27,10 @@ internal static class RecordMint
         if (partialForm) members[nameof(IMajorRecordGetter.MajorRecordFlagsRaw)] = PartialFormFlag.Bit;
         return codec.Deserialize(members.ToJsonString(), release, schema.TableName);
     }
+
+    /// <summary>The same record as the document a copy places, for a caller that writes text rather
+    /// than a graph.</summary>
+    internal static string BareDocument(
+        RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId, bool partialForm) =>
+        codec.SerializeToText(Bare(codec, schema, release, formKey, editorId, partialForm), release);
 }

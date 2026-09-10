@@ -20,9 +20,9 @@ internal readonly record struct EmbeddedChildSpan(
 /// here.</summary>
 internal static class EmbeddedChildLocator
 {
-    private const string FormKeyMember = "FormKey";
+    private const string FormKeyMember = RecordMembers.FormKey;
 
-    private const string EditorIdMember = "EditorID";
+    private const string EditorIdMember = RecordMembers.EditorId;
 
     /// <summary>Written ahead of the fields for a slot whose element type is abstract, and the member
     /// a standalone document of an unambiguous type omits.</summary>

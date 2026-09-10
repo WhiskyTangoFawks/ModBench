@@ -32,6 +32,13 @@ internal sealed class ContainerSlots
     internal IReadOnlyList<string> ChildSlotsOf(string containerTypeName) =>
         _members.ChildFieldsByType.TryGetValue(containerTypeName, out var slots) ? slots : [];
 
+    /// <summary>The members of <paramref name="containerTypeName"/> serializing their children
+    /// inline. A null type answers with every container's, since nothing narrows it.</summary>
+    internal IEnumerable<string> EmbeddedSlotsOf(string? containerTypeName) =>
+        containerTypeName is null
+            ? _embeddedSlotNames
+            : _members.EmbeddedSlots.Where(slot => slot.ParentType == containerTypeName).Select(slot => slot.Slot);
+
     /// <summary>Whether a member serializes its children inline. A container whose text names no type
     /// of its own accepts any container's embedded slot name, since nothing narrows it.</summary>
     internal bool IsEmbeddedSlot(string? containerTypeName, string member) =>

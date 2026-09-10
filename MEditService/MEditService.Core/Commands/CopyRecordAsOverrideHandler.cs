@@ -53,7 +53,8 @@ public sealed class CopyRecordAsOverrideHandler
             && source.ContainerOf(identity) is { } container)
         {
             return _recordCopy.CopyEmbeddedChildAsOverride(
-                source, formKey, source.Record(identity), container, destination, release);
+                source, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body),
+                container, destination, release);
         }
 
         if (RefuseIfCopySourceHasNoContainerOfItsOwn(identity.RecordType, release) is { } containerRefusal)
@@ -66,7 +67,7 @@ public sealed class CopyRecordAsOverrideHandler
             // replaced, own-fields-only (xEdit's copy-into behavior). Every other record still
             // refuses, as does a record held only at Head.
             if (isContainer && _recordCopy.Identity(destination, formKey, release) is { } existingTarget)
-                return ReplaceExplicitContainerCopyTarget(source, identity, existingTarget, destination, release);
+                return ReplaceExplicitContainerCopyTarget(source, identity, body, existingTarget, destination, release);
 
             return RecordEditResult.Refused(
                 RecordEditRefusal.FormKeyCollision,
@@ -80,10 +81,12 @@ public sealed class CopyRecordAsOverrideHandler
         var placement = isCell ? source.CellPlacementOf(identity) : null;
         if (isCell && placement?.IsInterior == false && placement.Value.BlockX != null)
         {
-            var cellRecord = source.Record(identity);
-            ContainerChildFields.ClearAllChildSlots(cellRecord);
             var mintResult = _recordCopy.MintExteriorCell(
-                source, formKey, placement.Value, cellRecord, destination, release);
+                source, placement.Value,
+                new SourceDocument(
+                    formKey, identity.RecordType, identity.EditorId,
+                    StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release)),
+                destination, release);
             if (mintResult.Applied && _logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(
@@ -134,14 +137,14 @@ public sealed class CopyRecordAsOverrideHandler
     // cannot delete them. An EditorID difference renames the unit, since the round-trip gate
     // regenerates canonical names.
     private RecordEditResult ReplaceExplicitContainerCopyTarget(
-        CopySource source, RecordIdentity identity, RecordIdentity existingTarget,
+        CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
     {
         var unit = destination.Repository.Locate(destination.Plugin, existingTarget)
             ?? throw new InvalidOperationException(
                 $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
 
-        var replacement = source.Record(identity);
+        var replacement = _codec.Deserialize(body, release, identity.RecordType);
         ContainerChildFields.ClearAllChildSlots(replacement);
         var destinationRecord = _codec
             .DeserializeAsync(unit.FullPath, release, unit.OwnerRecordType).GetAwaiter().GetResult();
@@ -202,12 +205,6 @@ public sealed class CopyRecordAsOverrideHandler
             "container document in the source plugin carries this record.");
     }
 
-    // The one place a plain Copy as Override deserializes at all; every other type's own-fields copy
-    // is the verbatim bytes.
-    private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release)
-    {
-        var record = _codec.Deserialize(body, release, recordType);
-        ContainerChildFields.ClearAllChildSlots(record);
-        return _codec.SerializeToText(record, release);
-    }
+    private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release) =>
+        ContainerDocumentEdits.WithoutChildren(_codec, body, release, recordType);
 }

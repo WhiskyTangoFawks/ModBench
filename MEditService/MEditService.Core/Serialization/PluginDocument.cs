@@ -1,3 +1,5 @@
+using MEditService.Core.Source;
+
 namespace MEditService.Core.Serialization;
 
 /// <summary>Where a cell sits in the GRUP hierarchy (ADR-0023): the placement fact no document
@@ -9,6 +11,10 @@ public readonly record struct CellStructure(
 /// <summary>One placed record a cell's GRUP holds, and which of its two groups (ADR-0023). The
 /// parentage no placed record's own document carries.</summary>
 public readonly record struct PlacedInCell(string FormKey, string PlacementGroup);
+
+/// <summary>Which container's document carries a record inline, and the slot it sits in: a placed
+/// reference in its cell, a response in its topic, a topic in its quest.</summary>
+public readonly record struct DocumentContainment(string ParentFormKey, string ParentRecordType, string SlotName);
 
 /// <summary>One record as the text its source file holds (ADR-0041), under the schema table name
 /// the index keys it by. A diagnosis makes the text an identity-only stub (ADR-0032 rule 5).</summary>
@@ -23,6 +29,27 @@ public sealed record PluginDocument(
 /// <summary>A record type whose enumeration could not be finished, so the plugin's rows for it are
 /// whatever was reachable before the throw.</summary>
 public sealed record RecordTypeFailure(string RecordType, string Diagnosis);
+
+/// <summary>One plugin's records looked up a few at a time rather than streamed: what a copy asks
+/// of a source whose tree it cannot read. Owns the open until disposed.</summary>
+public interface IPluginRecordLookup : IDisposable
+{
+    /// <summary>The record type and EditorID the plugin's copy gives <paramref name="formKey"/>,
+    /// without serializing the record; null when it holds nothing under that key.</summary>
+    RecordIdentity? IdentityOf(string formKey);
+
+    /// <summary>The record's own document, or null when the plugin holds nothing under that
+    /// key.</summary>
+    string? TextOf(string formKey);
+
+    /// <summary>The container whose own document carries <paramref name="formKey"/> inline, and the
+    /// slot it sits in; null when the record has a document of its own.</summary>
+    DocumentContainment? ContainmentOf(string formKey);
+
+    /// <summary>Where the GRUP hierarchy puts the cell <paramref name="formKey"/> names (ADR-0023),
+    /// or null when the plugin holds no cell under that key.</summary>
+    CellStructure? CellStructureOf(string formKey);
+}
 
 /// <summary>A plugin's documents, whichever door they came through: the binary through the Plugin
 /// adapter, or a tracked plugin's source tree.</summary>

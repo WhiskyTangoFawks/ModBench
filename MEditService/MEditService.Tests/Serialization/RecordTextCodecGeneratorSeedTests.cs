@@ -97,8 +97,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "PluginCompileService.cs", // compile from the tree
-            "PluginTrees.cs",          // a tree compiled back to bytes
+            "PluginTrees.cs",          // a tree read as a mod, and compiled back to bytes
             // The read half of the same header door. Symmetric by construction: the document this reads is the
             // one HeaderDocument.Write produced, so any other reader reintroduces the dialect split.
             "HeaderDocument.cs",       // the plugin header's document, both directions
@@ -143,7 +142,7 @@ public class RecordTextCodecGeneratorSeedTests
     public void DoorFiles_NeverNameAParallelWorkDropoff()
     {
         const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackService.cs", "PluginCompileService.cs", "HeaderDocument.cs" };
+        var doorFiles = new[] { "TrackService.cs", "PluginTrees.cs", "HeaderDocument.cs" };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories)
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))

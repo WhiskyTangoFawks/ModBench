@@ -76,7 +76,8 @@ public sealed class EditRecordHandler
             var parentType = RecordTypeDispatch.For(release).ConcreteFor(target.RecordType);
             var found = parentType == null
                 ? null
-                : EmbeddedChildPath.Find((JsonObject)JsonNode.Parse(text)!, ContainerChildFields.NormalizedTypeName(parentType), formKey);
+                : EmbeddedChildPath.Find(
+                    (JsonObject)JsonNode.Parse(text)!, ContainerChildFields.NormalizedTypeName(parentType), formKey, release);
             if (found == null)
             {
                 return RecordEditResult.Refused(
