@@ -67,8 +67,10 @@ public sealed class PluginAdapterTests
         Assert.Empty(mod.EnumerateMajorRecords());
     }
 
+    // ADR-0042: the header's stored NextObjectID is written as stored. Mutagen's own write default
+    // re-derives it, and for a record-less new plugin that derivation is zero.
     [Fact]
-    public async Task CreateEmpty_ThenWritten_IsAPluginTheReadVerbOpens()
+    public async Task CreateEmpty_ThenWritten_IsAPluginTheReadVerbOpens_CarryingItsStoredNextFormId()
     {
         var scratch = Directory.CreateTempSubdirectory("medit-adapter-create-").FullName;
         try
@@ -81,6 +83,7 @@ public sealed class PluginAdapterTests
             using var reread = Adapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4);
             Assert.Equal(ModKey.FromFileName(PluginName), reread.Getter.ModKey);
             Assert.Empty(reread.Getter.EnumerateMajorRecords());
+            Assert.Equal(mod.NextFormID, reread.Getter.NextFormID);
         }
         finally
         {
