@@ -51,13 +51,15 @@ public sealed partial class SourceRepository
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
-    /// <summary>Creates or replaces the record's document, minting the group folder the first time
-    /// the plugin holds this type. A record another document carries is replaced at its own slot
-    /// position, every other byte of that document untouched.</summary>
+    /// <summary>Creates or replaces the record's document, placing an absent one from its identity
+    /// alone and minting the levels above it. A record another document carries is replaced at its
+    /// own slot, every other byte untouched.</summary>
     public void Put(PluginKey plugin, SourceDocument document)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        var unit = Locate(plugin, identity) ?? throw NoPlaceInTheTree(plugin, identity);
+        var unit = Locate(plugin, identity)
+                   ?? PlaceNewDocument(plugin, identity)
+                   ?? throw NoPlaceInTheTree(plugin, identity);
 
         if (unit.IsEmbedded)
         {

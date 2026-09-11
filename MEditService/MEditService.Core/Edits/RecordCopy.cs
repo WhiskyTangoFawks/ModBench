@@ -142,7 +142,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     }
 
     // A top-level container the destination lacks: a block-placed exterior cell lands through the
-    // spatial mint with its worldspace; everything else at its own placement in its group folder.
+    // spatial mint with its worldspace; everything else is a put, which places it.
     private RecordEditResult PlaceMintedContainer(
         CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
@@ -166,25 +166,14 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
             return MintExteriorCell(source, exterior, container, destination, release);
         }
 
-        // An interior cell's block bucket is chosen (or minted) rather than derived.
-        var written = SourceRepository.PlacementFor(
-            destination.Plugin.Name, container.RecordType, formKey, container.EditorId, release,
-            placement != null
-                ? SourceRepository.EnsureInteriorCellBlockPath(destination.ModFolder, destination.Plugin.Name, release)
-                : null);
-        SourceRepository.WriteAt(
-            destination.ModFolder, written, path =>
-            {
-                SourceRepository.WriteTextAtomic(path, container.Body);
-                return container.Body;
-            });
+        destination.Repository.Put(destination.Plugin, container);
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "Auto-created {FormKey} as a Partial Form override in {DestinationPlugin} ({DestinationOrigin}) " +
-                "— container for a copied child, at {SourcePath}",
-                formKey, destination.Plugin.Name, destination.Plugin.Origin, written.RelativePath);
+                "— container for a copied child",
+                formKey, destination.Plugin.Name, destination.Plugin.Origin);
         }
         return RecordEditResult.Success();
     }

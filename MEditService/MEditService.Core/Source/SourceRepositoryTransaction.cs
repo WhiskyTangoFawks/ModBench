@@ -37,12 +37,11 @@ internal sealed class SourceTransaction
     internal void Put(SourceRepository repository, PluginKey plugin, SourceDocument document)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        if (repository.Locate(plugin, identity) is not { } unit)
-        {
-            // Nothing to record: the repository refuses without touching the tree.
-            repository.Put(plugin, document);
-            return;
-        }
+
+        // Refused before the tree is touched, as a container's removal is: putting a record no
+        // document holds would have the repository decide its place and mint the levels above it,
+        // which one document's bytes cannot take back.
+        if (repository.Locate(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
 
         var before = Snapshot(unit.FullPath);
         var minted = SourceRepository.LevelsMintedBy(System.IO.Path.GetDirectoryName(unit.FullPath)!);
@@ -80,6 +79,11 @@ internal sealed class SourceTransaction
             _log.Add(new FileState(repository.ModFolder, unit.FullPath, before, Snapshot(unit.FullPath)));
         }
     }
+
+    private static NotSupportedException NotRestorableCreate(PluginKey plugin, RecordIdentity identity) =>
+        new($"No document in {plugin.Name}'s tree holds {identity.FormKey} and its type has no file of its " +
+            "own, so putting it would create one and mint the levels above it. A batch holds one " +
+            "document's bytes per act, so it cannot put that back — put it outside the batch.");
 
     private static NotSupportedException NotRestorable(SourceUnit unit, RecordIdentity identity) =>
         new($"{identity.FormKey} has a directory of its own at {unit.RelativePath}, and removing it takes " +

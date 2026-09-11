@@ -139,6 +139,25 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
     }
 
+    // The put the repository would answer by minting a directory and the block levels above it —
+    // more than the one document's bytes a batch entry holds.
+    [Fact]
+    public void ABatchAskedToPutAContainerTheTreeDoesNotHold_RefusesBeforeTouchingTheTree()
+    {
+        var repository = Track(_firstFolder, "First.esp");
+        var plugin = new PluginKey("First.esp", "FirstMod");
+        var before = TreeSnapshot.Of(_firstFolder);
+
+        var transaction = new SourceTransaction();
+        var refusal = Assert.Throws<NotSupportedException>(() => transaction.Put(
+            repository, plugin,
+            new SourceDocument("000900:First.esp", "cell", "FreshCell", "{\n  \"FormKey\": \"000900:First.esp\"\n}")));
+
+        Assert.Contains("000900:First.esp", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(transaction.Rollback());
+        Assert.Equal(before, TreeSnapshot.Of(_firstFolder));
+    }
+
     [Fact]
     public void ABatchWhoseRemoveFollowsAPut_PutsBothBackOnRollback()
     {
