@@ -1,4 +1,5 @@
 using MEditService.Core.Notifications;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -32,6 +33,25 @@ public sealed class WatchOverflowTests : IDisposable
         // A single edited field drifts one row, not the whole document set — Validate's own
         // RowsChangedNotification, not the re-derived-whole branch.
         Assert.Contains(_notifications.Notifications, n => n is RowsChangedNotification rc && rc.Plugin == _mod.Plugin);
+    }
+
+    // Both routes on one copy is one dropped-events verdict, not two. The origin comes off the watch
+    // that was armed, because a load order holding no such copy can answer nothing.
+    [Fact]
+    public void AnOverflow_OnACopyArmedBothWays_ValidatesItOnce_WithTheOriginItsWatchKnows()
+    {
+        var index = new RecordingRefreshIndex();
+        var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
+        using var watcher = TestWatcher.Over(new LoadOrderHolder(), index, _notifications);
+        watcher.Watch(_mod.ModFolder, IndexedModFixture.PluginName, pluginPath);
+        watcher.WatchIndexed(
+            IndexedModFixture.PluginName, IndexedModFixture.ModFolderOrigin, pluginPath, "the-baseline-hash");
+
+        watcher.Interrupted(_mod.ModFolder);
+
+        var validated = Assert.Single(index.Of("validate"));
+        Assert.Equal(
+            new PluginKey(IndexedModFixture.PluginName, IndexedModFixture.ModFolderOrigin), validated.Plugin);
     }
 
     [Fact]

@@ -373,9 +373,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    // An operating-system overflow drops events, so nothing this mod's watch saw can be trusted.
-    // A vanished root raises the same event, with nothing left to watch.
-    private void Interrupted(string modFolder)
+    /// <summary>An operating-system overflow drops events, so nothing this mod's watch saw can be
+    /// trusted. A vanished root raises the same event, with nothing left to watch.</summary>
+    internal void Interrupted(string modFolder)
     {
         List<(string Name, string? Origin, bool ClassificationArmed, bool IndexedArmed)> targets;
         lock (_gate)
@@ -399,10 +399,10 @@ public sealed class ModFolderWatcher : IDisposable
         foreach (var (name, origin, classificationArmed, indexedArmed) in targets)
         {
             if (!classificationArmed && !indexedArmed) continue;
-            // A classification registration carries no origin of its own, so the load order answers
-            // for it; an indexed one was registered with the origin it was found under.
-            var key = new PluginKey(
-                name, classificationArmed ? OriginOf(_holder.Current, modFolder, name) : origin ?? "");
+            // The registration first: a copy the load order has since dropped still knows the origin
+            // its watch was armed with. The load order answers for a classification-only watch,
+            // which carries none.
+            var key = new PluginKey(name, origin ?? OriginOf(_holder.Current, modFolder, name));
             RaiseSafely(() => ValidateAfterOverflow(key));
         }
     }
