@@ -38,6 +38,29 @@ public sealed class BlockChildMemberNamesTests
     }
 
     [Fact]
+    public void InteriorCellBlockLevels_AreTheCellsGroupsTwoBlockTypes_OutermostFirst() =>
+        Assert.Equal(
+            [typeof(CellBlock), typeof(CellSubBlock)],
+            RecordTypeDispatch.For(GameRelease.Fallout4).InteriorCellBlockLevels);
+
+    [Fact]
+    public void BlockNumberMember_NamesARealMemberOfBothInteriorLevels()
+    {
+        Assert.NotNull(typeof(CellBlock).GetProperty(RecordTypeDispatch.BlockNumberMember));
+        Assert.NotNull(typeof(CellSubBlock).GetProperty(RecordTypeDispatch.BlockNumberMember));
+    }
+
+    [Fact]
+    public void InteriorCellBlockGroupTypes_NameTheGroupTypesOfTheTwoInteriorLevels() =>
+        Assert.Equal(
+            [GroupTypeEnum.InteriorCellBlock, GroupTypeEnum.InteriorCellSubBlock],
+            RecordTypeDispatch.InteriorCellBlockGroupTypes.Select(Enum.Parse<GroupTypeEnum>));
+
+    [Fact]
+    public void GroupTypeMember_NamesARealMemberOfABlockLevel() =>
+        Assert.NotNull(typeof(CellBlock).GetProperty(RecordTypeDispatch.GroupTypeMember));
+
+    [Fact]
     public void CellGridMember_NamesARealMemberOfACell() =>
         Assert.NotNull(typeof(Cell).GetProperty(RecordTypeDispatch.CellGridMember));
 
@@ -52,5 +75,7 @@ public sealed class BlockChildMemberNamesTests
 
     [Fact]
     public void BlockLevelsUnder_ABlockShapeThatNestsItself_YieldsThatLevelOnceAndStops() =>
-        Assert.Equal([typeof(SelfNestingBlock)], RecordTypeDispatch.BlockLevelsUnder(typeof(SelfNestingBlock)));
+        Assert.Equal(
+            [typeof(SelfNestingBlock)],
+            RecordTypeDispatch.BlockLevelsUnder(typeof(SelfNestingBlock), RecordTypeDispatch.BlockNumberXMember));
 }

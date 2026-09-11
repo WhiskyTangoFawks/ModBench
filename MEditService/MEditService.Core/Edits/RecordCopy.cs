@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -12,9 +13,9 @@ namespace MEditService.Core.Edits;
 /// codec: one write path (ADR-0007).</summary>
 internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
-    /// <summary>The tracked plugin a copy lands in: its repository, its key, and the mod folder the
-    /// spatial mint writes directories under.</summary>
-    internal readonly record struct Destination(SourceRepository Repository, PluginKey Plugin, string ModFolder);
+    /// <summary>The tracked plugin a copy lands in: its repository and its key. No folder — every
+    /// write here is a put, and the repository decides where a document goes.</summary>
+    internal readonly record struct Destination(SourceRepository Repository, PluginKey Plugin);
 
     /// <summary>Bare fields are xEdit parity; Partial Form is a deliberate mEdit divergence, so conflict
     /// detection ignores the ancestor's stub fields. Own fields only, like every plain Copy as Override:
@@ -142,7 +143,7 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     }
 
     // A top-level container the destination lacks: a block-placed exterior cell lands through the
-    // spatial mint with its worldspace; everything else at its own placement in its group folder.
+    // spatial mint with its worldspace; everything else is a put, which places it.
     private RecordEditResult PlaceMintedContainer(
         CopySource source, SourceDocument container, Destination destination, GameRelease release)
     {
@@ -166,32 +167,21 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
             return MintExteriorCell(source, exterior, container, destination, release);
         }
 
-        // An interior cell's block bucket is chosen (or minted) rather than derived.
-        var written = SourceRepository.PlacementFor(
-            destination.Plugin.Name, container.RecordType, formKey, container.EditorId, release,
-            placement != null
-                ? SourceRepository.EnsureInteriorCellBlockPath(destination.ModFolder, destination.Plugin.Name, release)
-                : null);
-        SourceRepository.WriteAt(
-            destination.ModFolder, written, path =>
-            {
-                SourceRepository.WriteTextAtomic(path, container.Body);
-                return container.Body;
-            });
+        destination.Repository.Put(destination.Plugin, container);
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "Auto-created {FormKey} as a Partial Form override in {DestinationPlugin} ({DestinationOrigin}) " +
-                "— container for a copied child, at {SourcePath}",
-                formKey, destination.Plugin.Name, destination.Plugin.Origin, written.RelativePath);
+                "— container for a copied child",
+                formKey, destination.Plugin.Name, destination.Plugin.Origin);
         }
         return RecordEditResult.Success();
     }
 
-    /// <summary>Mints an exterior CELL at its worldspace block/sub-block, auto-creating a bare Partial
-    /// Form WRLD when the destination has none. The block directories it writes are where the cell's
-    /// location is read back from.</summary>
+    /// <summary>Lands an exterior CELL at its worldspace's block and sub-block, minting a bare Partial
+    /// Form WRLD first when the destination has none: the put of a cell whose worldspace is absent
+    /// refuses.</summary>
     internal RecordEditResult MintExteriorCell(
         CopySource source, CellPlacement placement, SourceDocument cell, Destination destination, GameRelease release)
     {
@@ -210,28 +200,39 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
                 $"{cellFormKey} has no recorded parent worldspace — cannot place it.");
         }
 
-        // An existing worldspace override is merged into: its directory name carries the destination's
-        // EditorID, which the bare synthetic ancestor's never would.
-        string? existingWorldspaceDirectory = null;
-        if (Identity(destination, worldspaceFormKey, release) is { } existingWorldspace)
-            existingWorldspaceDirectory = Path.GetDirectoryName(Locate(destination, existingWorldspace).FullPath)!;
+        if (Identity(destination, worldspaceFormKey, release) is null)
+        {
+            var sourceWorldspace = source.Identity(worldspaceFormKey)
+                ?? throw new InvalidOperationException(
+                    $"{source.Plugin.Name} does not hold {worldspaceFormKey} — the cell it carries names it as its worldspace.");
+            destination.Repository.Put(
+                destination.Plugin,
+                BarePartialFormAncestor(worldspaceFormKey, sourceWorldspace.RecordType, release));
+        }
 
-        var sourceWorldspace = source.Identity(worldspaceFormKey)
-            ?? throw new InvalidOperationException(
-                $"{source.Plugin.Name} does not hold {worldspaceFormKey} — the cell it carries names it as its worldspace.");
-        var worldspaceAncestor = BarePartialFormAncestor(worldspaceFormKey, sourceWorldspace.RecordType, release);
-
-        // The mint's cell (bare when it is only a placed reference's ancestor) carries none of its own
-        // grid; the source cell's document does, so the grid rides along from here.
         var sourceCell = source.Identity(cellFormKey)
             ?? throw new InvalidOperationException(
                 $"{source.Plugin.Name} does not hold {cellFormKey} — its own placement named it.");
+        var placed = cell with { RecordType = sourceCell.RecordType };
 
-        SpatialContainerMint.Mint(
-            codec, destination, release, placement, worldspaceAncestor,
-            cell with { RecordType = sourceCell.RecordType }, source.Body(sourceCell), existingWorldspaceDirectory);
+        destination.Repository.Put(
+            destination.Plugin,
+            placed with { Body = WithGridFrom(source.Body(sourceCell), placed, release) },
+            placement);
 
         return RecordEditResult.Success();
+    }
+
+    // A cell minted bare as a placed reference's ancestor carries none of its own grid; the source
+    // cell's document does, so the grid rides along as a member and the codec respells the result.
+    private string WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
+    {
+        var grid = JsonNode.Parse(sourceCellText)!.AsObject()[RecordTypeDispatch.CellGridMember];
+        if (grid == null) return cell.Body;
+
+        var withGrid = JsonNode.Parse(cell.Body)!.AsObject();
+        withGrid[RecordTypeDispatch.CellGridMember] = grid.DeepClone();
+        return codec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType);
     }
 
     /// <summary>What the destination's tree names at <paramref name="formKey"/>, or null when nothing

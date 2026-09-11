@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -18,7 +17,6 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private readonly string _pluginFileName;
     private readonly GameRelease _release;
     private readonly ContainerDocuments _containers;
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly string _root;
     private readonly string _headerRelativePath;
 
@@ -153,7 +151,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             ?? throw new UnreadableSourceDocumentException(file, "it declares no FormKey");
 
         yield return new PluginDocument(recordType, formKey, text, null, cell, ContentsOf(recordType, text));
-        foreach (var child in Embedded(recordType, formKey, text)) yield return child;
+        foreach (var child in Embedded(recordType, formKey, text, file)) yield return child;
     }
 
     // ADR-0005: what a cell's two placement groups hold. Read off its own document, since the tree
@@ -182,23 +180,31 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     {
         var table = _containers.RecordTypeNamed(recordType) ?? recordType;
         yield return new PluginDocument(table, formKey, text, null, null, ContentsOf(table, text));
-        foreach (var child in Embedded(table, formKey, text)) yield return child;
+        foreach (var child in Embedded(table, formKey, text, formKey)) yield return child;
     }
 
     // A container's own document is the system of record for every child it embeds, at every depth: a
     // worldspace embeds its top cell, which embeds its placed references.
-    private IEnumerable<PluginDocument> Embedded(string ownerRecordType, string ownerFormKey, string ownerText)
+    private IEnumerable<PluginDocument> Embedded(
+        string ownerRecordType, string ownerFormKey, string ownerText, string ownerDocument)
     {
         List<ContainerDocuments.ChildDocument> children;
         using (var document = JsonDocument.Parse(ownerText))
             children = [.. _containers.ChildrenOf(ownerRecordType, document.RootElement)];
 
         var containerType = _containers.ContainerTypeOf(ownerRecordType);
+        var ownerBytes = Encoding.UTF8.GetBytes(ownerText);
         foreach (var child in children)
         {
             if (!ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, child.SlotName))) continue;
 
-            var text = _containers.TextOf(_codec, child);
+            // ADR-0003: the tree is the system of record for a record's content, so a hand edit the
+            // codec would respell reaches the index as the file spells it.
+            var text = EmbeddedChildSplice.TextOf(ownerBytes, containerType, child.FormKey, _release)
+                ?? throw new UnreadableSourceDocumentException(
+                    ownerDocument,
+                    $"its '{child.SlotName}' names '{child.FormKey}', and a child an embedded slot " +
+                    "names has a span of its owner's text that nothing here carries");
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _containers.IsCell(child.RecordType)
                 ? new CellStructure(ownerFormKey, null, null, null, null, IsInterior: false)
@@ -206,7 +212,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
 
             yield return new PluginDocument(
                 child.RecordType, child.FormKey, text, null, cell, ContentsOf(child.RecordType, text));
-            foreach (var deeper in Embedded(child.RecordType, child.FormKey, text)) yield return deeper;
+            foreach (var deeper in Embedded(child.RecordType, child.FormKey, text, ownerDocument)) yield return deeper;
         }
     }
 

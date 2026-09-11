@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -107,46 +107,6 @@ public sealed partial class SourceRepository
 
         return new SourcePlacement(Path.Combine(
             [RootFor(pluginFileName), groupFolder, .. blockPath ?? [], leaf, RecordDataFileName]));
-    }
-
-    /// <summary>Where an exterior cell's subtree lands, each path relative to the mod folder: the
-    /// worldspace's own document, the two block levels' group documents, and the cell's document
-    /// beneath them.</summary>
-    internal readonly record struct ExteriorCellSubtree(
-        string GroupDirectory,
-        string WorldspaceDirectory,
-        SourcePlacement WorldspaceDocument,
-        SourcePlacement BlockGroupDocument,
-        SourcePlacement SubBlockGroupDocument,
-        SourcePlacement CellDocument);
-
-    /// <summary>The one cell whose directory sits inside another record's rather than in its own
-    /// group folder, under the two block levels <paramref name="location"/> numbers.</summary>
-    internal static ExteriorCellSubtree ExteriorCellSubtreeFor(
-        string pluginFileName,
-        string worldspaceRecordType,
-        string worldspaceFormKey,
-        string? worldspaceEditorId,
-        string cellFormKey,
-        string? cellEditorId,
-        CellPlacement location,
-        GameRelease gameRelease)
-    {
-        var worldspaceDocument = PlacementFor(
-            pluginFileName, worldspaceRecordType, worldspaceFormKey, worldspaceEditorId, gameRelease);
-        var worldspaceDirectory = Path.GetDirectoryName(worldspaceDocument.RelativePath)!;
-        var block = Path.Combine(worldspaceDirectory, BlockLevelName(location.BlockX, location.BlockY));
-        var subBlock = Path.Combine(block, BlockLevelName(location.SubX, location.SubY));
-        var cellDirectory = Path.Combine(
-            subBlock, LeafNameFor(FormKey.Factory(cellFormKey), cellEditorId, isDirectory: true));
-
-        return new ExteriorCellSubtree(
-            Path.GetDirectoryName(worldspaceDirectory)!,
-            worldspaceDirectory,
-            worldspaceDocument,
-            new SourcePlacement(Path.Combine(block, GroupRecordDataFileName)),
-            new SourcePlacement(Path.Combine(subBlock, GroupRecordDataFileName)),
-            new SourcePlacement(Path.Combine(cellDirectory, RecordDataFileName)));
     }
 
     // "<x>, <y>", the whole-mod door's own name for a block level's directory, and the spelling
@@ -259,56 +219,6 @@ public sealed partial class SourceRepository
         };
     }
 
-    /// <summary>Which FormKeys more than one document claims. Asked of the tree, not the compiled mod:
-    /// the reader's FormKey-keyed RecordCache collapses two files in one group folder to the last
-    /// read.</summary>
-    internal IReadOnlyList<string> FormKeysWithMoreThanOneDocument(PluginKey plugin, IEnumerable<FormKey> formKeys)
-    {
-        var sourceRoot = RootIn(_modFolder, plugin.Name);
-        if (!Directory.Exists(sourceRoot)) return [];
-
-        var unitsByTail = new Dictionary<string, int>(StringComparer.Ordinal);
-        void Count(string leaf)
-        {
-            foreach (var tail in TailsCarriedBy(leaf))
-            {
-                unitsByTail[tail] = unitsByTail.GetValueOrDefault(tail) + 1;
-            }
-        }
-
-        // Group-level files and block directories carry no FormKey, so they never match a tail and need no
-        // exclusion.
-        foreach (var directory in Directory.EnumerateDirectories(sourceRoot, "*", SearchOption.AllDirectories))
-            Count(Path.GetFileName(directory));
-        foreach (var file in Directory.EnumerateFiles(sourceRoot, $"*{JsonSuffix}", SearchOption.AllDirectories))
-            Count(Path.GetFileName(file));
-
-        var colliding = new List<string>();
-        foreach (var formKey in formKeys)
-        {
-            var filesafe = LeafNameFor(formKey, editorId: null, isDirectory: true);
-            var units = unitsByTail.GetValueOrDefault(filesafe)
-                        + unitsByTail.GetValueOrDefault(filesafe + JsonSuffix);
-            if (units > 1) colliding.Add(formKey.ToString());
-        }
-        return colliding;
-    }
-
-    // More than one candidate arises only when an EditorID itself contains " - "; a non-FormKey
-    // candidate is simply never looked up.
-    private static IEnumerable<string> TailsCarriedBy(string leaf)
-    {
-        yield return leaf;
-
-        const string separator = " - ";
-        var at = leaf.IndexOf(separator, StringComparison.Ordinal);
-        while (at >= 0)
-        {
-            yield return leaf[(at + separator.Length)..];
-            at = leaf.IndexOf(separator, at + separator.Length, StringComparison.Ordinal);
-        }
-    }
-
     /// <summary>One place that knows a container is a directory and a flat record a file, so callers and
     /// the rollback cannot disagree.</summary>
     internal static void MoveEntry(string from, string to)
@@ -371,60 +281,148 @@ public sealed partial class SourceRepository
     internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
 
-    /// <summary>Writes the record's file at its placement, minting the directories above it and
-    /// removing them again if the write throws.</summary>
-    internal static string WriteAt(string modFolder, SourcePlacement placement, Func<string, string> write)
+    // Where a document this plugin does not hold yet lands, from the identity alone. Null for a
+    // record with no group folder: it lands inside its container's document, which its own identity
+    // cannot name.
+    private SourceUnit? PlaceNewDocument(PluginKey plugin, RecordIdentity identity, CellPlacement? placement)
     {
-        var path = Path.Combine(modFolder, placement.RelativePath);
-        return InMintedDirectory(Path.GetDirectoryName(path)!, () => write(path));
+        var dispatch = RecordTypeDispatch.For(_release);
+        if (dispatch.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
+
+        // The one document that does not sit in a group folder at all. Only the placement it is put
+        // with tells an exterior cell from an interior one, which has no worldspace above it.
+        if (dispatch.IsCell(identity.RecordType) && placement is { IsInterior: false } exterior)
+        {
+            return Unit(
+                Path.Combine(ExteriorCellDirectory(plugin, identity, exterior), RecordDataFileName),
+                identity.FormKey, identity.RecordType, isEmbedded: false);
+        }
+
+        // A Cell's block bucket is the one level chosen rather than derived, so it is settled — and
+        // minted — before the placement it becomes part of.
+        var blockPath = dispatch.IsCell(identity.RecordType)
+            ? InteriorCellBlockPathIn(Path.Combine(_modFolder, RootFor(plugin.Name), groupFolder))
+            : null;
+
+        var where = PlacementFor(
+            plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release, blockPath);
+        return Unit(
+            Path.Combine(_modFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false);
     }
 
-    /// <summary>Interior placement carries no gameplay meaning (PlacementWalker records null block/sub
-    /// for every interior cell), so this reuses whichever block/sub-block directory the destination
-    /// already has, minting <c>0/0</c> only the first time.</summary>
-    internal static IReadOnlyList<string> EnsureInteriorCellBlockPath(
-        string modFolder, string pluginName, GameRelease release)
+    // The worldspace's directory is found by its FormKey rather than composed from it: an override
+    // the destination named itself is written into, never doubled by a bare-named sibling.
+    private string ExteriorCellDirectory(PluginKey plugin, RecordIdentity identity, CellPlacement placement)
     {
-        var cellsFolder = RecordTypeDispatch.For(release).GroupFolderNameFor("cell")
-            ?? throw new InvalidOperationException(
-                "This game's schema has no Cell group folder, so an interior cell has no block " +
-                "directory to land in; only a caller that has already established the record is a " +
-                "cell reaches here.");
-        var cellsDirectory = Path.Combine(modFolder, RootFor(pluginName), cellsFolder);
-        InMintedDirectory(cellsDirectory, () => WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null));
+        var levels = RecordTypeDispatch.For(_release).ExteriorCellBlockLevels;
+        if (levels.Count != ExteriorBlockLevels)
+        {
+            throw new NotSupportedException(
+                $"{_release} nests an exterior cell under {levels.Count} block levels, and the source " +
+                $"tree's layout has exactly {ExteriorBlockLevels}.");
+        }
 
-        var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
-        var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
+        var block = MintBlockLevel(
+            WorldspaceDirectoryHolding(plugin, placement), levels[0], placement.BlockX, placement.BlockY);
+        var subBlock = MintBlockLevel(block, levels[1], placement.SubX, placement.SubY);
 
-        return [Path.GetFileName(blockDirectory), Path.GetFileName(subBlockDirectory)];
+        return Path.Combine(
+            subBlock, LeafNameFor(FormKey.Factory(identity.FormKey), identity.EditorId, isDirectory: true));
     }
 
-    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType)
-    {
-        var existing = Directory.EnumerateDirectories(parentDirectory).FirstOrDefault();
-        if (existing != null) return existing;
+    private const int ExteriorBlockLevels = 2;
 
-        var directory = Path.Combine(parentDirectory, "0");
-        InMintedDirectory(directory, () => WriteMinimalGroupRecordDataIfMissing(directory, groupType));
+    // A worldspace is a record and only the codec mints one, so a tree already holding it is this
+    // put's precondition.
+    private string WorldspaceDirectoryHolding(PluginKey plugin, CellPlacement placement)
+    {
+        if (placement.ParentWorldspace is not { } worldspace)
+            throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");
+
+        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), worldspace) is not { } document)
+        {
+            throw new InvalidOperationException(
+                $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
+                "inside it has nowhere to land.");
+        }
+        return Path.GetDirectoryName(document)!;
+    }
+
+    // Track writes a level's document with whatever metadata the source mod carried, and a cell
+    // landing in the level is no reason to respell it.
+    private string MintBlockLevel(string parentDirectory, Type level, int? x, int? y)
+    {
+        var directory = Path.Combine(parentDirectory, BlockLevelName(x, y));
+        if (File.Exists(Path.Combine(directory, GroupRecordDataFileName))) return directory;
+
+        var document = RecordTextCodec.BlankDocument(
+            level, _release,
+            new JsonObject
+            {
+                [RecordTypeDispatch.BlockNumberXMember] = x ?? 0,
+                [RecordTypeDispatch.BlockNumberYMember] = y ?? 0,
+            });
+        InMintedDirectory(
+            directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
         return directory;
     }
 
-    // Matches Track's own WriteIndented output; WriteMinimalGroupRecordDataIfMissing's byte-exact
-    // contract depends on it.
-    private static readonly JsonSerializerOptions GroupRecordDataOptions = new() { WriteIndented = true };
+    // Interior placement carries no gameplay meaning (PlacementWalker records null block/sub for
+    // every interior cell), so the bucket already standing is reused and a fresh one minted only the
+    // first time.
+    private List<string> InteriorCellBlockPathIn(string groupDirectory)
+    {
+        var levels = RecordTypeDispatch.For(_release).InteriorCellBlockLevels;
+        var labels = RecordTypeDispatch.InteriorCellBlockGroupTypes;
+        if (levels.Count != labels.Count)
+        {
+            throw new NotSupportedException(
+                $"{_release} nests an interior cell under {levels.Count} block levels, and the source " +
+                $"tree's layout has exactly {labels.Count}.");
+        }
 
-    // Not a record the codec has a schema for, so written directly. BlockNumber is omitted because
-    // Track omits a BlockNumber of 0; the bytes are verified identical to Track's for both shapes,
-    // which byte-compare tooling depends on.
-    private static void WriteMinimalGroupRecordDataIfMissing(string directory, string? groupType)
+        // The group's own level has no blank document to ask the codec for: its class has a generated
+        // serializer and no deserializer. The compile round-trip gate needs the file, so the empty
+        // document stands in.
+        InMintedDirectory(groupDirectory, () => WriteIfMissing(groupDirectory, EmptyLevelDocument));
+
+        var path = new List<string>();
+        var parent = groupDirectory;
+        for (var level = 0; level < levels.Count; level++)
+        {
+            parent = FindOrMintBlockDirectory(parent, levels[level], labels[level]);
+            path.Add(Path.GetFileName(parent));
+        }
+        return path;
+    }
+
+    private static readonly string EmptyLevelDocument = new JsonObject().ToJsonString();
+
+    private static void WriteIfMissing(string directory, string document)
     {
         var path = Path.Combine(directory, GroupRecordDataFileName);
-        if (File.Exists(path)) return;
-        var bytes = groupType == null
-            ? JsonSerializer.SerializeToUtf8Bytes(new { }, GroupRecordDataOptions)
-            : JsonSerializer.SerializeToUtf8Bytes(new { GroupType = groupType }, GroupRecordDataOptions);
-        File.WriteAllBytes(path, bytes);
+        if (!File.Exists(path)) WriteTextAtomic(path, document);
     }
+
+    // A minted bucket is numbered zero, which the codec's blank document leaves out as the level's
+    // own default, so the directory's name and its document agree.
+    private string FindOrMintBlockDirectory(string parentDirectory, Type level, string groupType)
+    {
+        if (Directory.Exists(parentDirectory)
+            && Directory.EnumerateDirectories(parentDirectory).FirstOrDefault() is { } standing)
+        {
+            return standing;
+        }
+
+        var directory = Path.Combine(parentDirectory, FirstBlockName);
+        var document = RecordTextCodec.BlankDocument(
+            level, _release, new JsonObject { [RecordTypeDispatch.GroupTypeMember] = groupType });
+        InMintedDirectory(
+            directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
+        return directory;
+    }
+
+    private const string FirstBlockName = "0";
 
     /// <summary>Takes back the levels <see cref="LevelsMintedBy"/> named, deepest first, so a parent is
     /// already empty by the time it is reached. A level something else filled stops the walk.</summary>

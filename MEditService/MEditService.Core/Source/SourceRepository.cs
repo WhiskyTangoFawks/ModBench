@@ -20,7 +20,7 @@ public sealed partial class SourceRepository
     internal string ModFolder => _modFolder;
 
     // Private so a repository comes from one of the two named doors, each stating what it observed:
-    // Open, which found a tracked folder, or Over, which was handed a materialized tree.
+    // Open, which found a tracked folder, or Over, which established that or did not need it.
     private SourceRepository(string modFolder, GameRelease release) =>
         (_modFolder, _release) = (modFolder, release);
 
@@ -30,9 +30,9 @@ public sealed partial class SourceRepository
     public static SourceRepository? Open(string modFolder, GameRelease release) =>
         IsTracked(modFolder) ? new SourceRepository(modFolder, release) : null;
 
-    /// <summary>The documents under a tree with no <c>.git</c> of its own — a compile's scratch
-    /// checkout at a named ref. Only the document verbs answer; every git verb here needs
-    /// <see cref="Open"/>.</summary>
+    /// <summary>The repository over a folder whose tracked state the caller has already established,
+    /// or does not need: the document verbs answer either way, and a git verb over an untracked folder
+    /// answers empty rather than throwing.</summary>
     internal static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
     /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
@@ -51,13 +51,20 @@ public sealed partial class SourceRepository
         return body == null ? null : new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, body);
     }
 
-    /// <summary>Creates or replaces the record's document, minting the group folder the first time
-    /// the plugin holds this type. A record another document carries is replaced at its own slot
-    /// position, every other byte of that document untouched.</summary>
-    public void Put(PluginKey plugin, SourceDocument document)
+    /// <summary>Creates or replaces the record's document, placing an absent one from its identity
+    /// alone and minting the levels above it. A record another document carries is replaced at its
+    /// own slot, every other byte untouched.</summary>
+    public void Put(PluginKey plugin, SourceDocument document) => Put(plugin, document, placement: null);
+
+    /// <summary>The put of an exterior cell, the one record whose directory sits inside another
+    /// record's: <paramref name="placement"/> names the worldspace holding it and its block numbers.
+    /// Every other record is placed from its identity alone.</summary>
+    internal void Put(PluginKey plugin, SourceDocument document, CellPlacement? placement)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
-        var unit = Locate(plugin, identity) ?? throw NoPlaceInTheTree(plugin, identity);
+        var unit = Locate(plugin, identity)
+                   ?? PlaceNewDocument(plugin, identity, placement)
+                   ?? throw NoPlaceInTheTree(plugin, identity);
 
         if (unit.IsEmbedded)
         {

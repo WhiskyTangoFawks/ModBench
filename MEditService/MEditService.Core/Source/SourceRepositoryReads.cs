@@ -97,19 +97,6 @@ public sealed partial class SourceRepository
             keys.Add(formKey);
     }
 
-    /// <summary>Writes the plugin's tree as <paramref name="gitRef"/> has it under
-    /// <paramref name="destinationRoot"/>, same layout, no <c>.git</c> — the scratch checkout a
-    /// whole-mod read at a ref needs.</summary>
-    internal void MaterializeAtRef(PluginKey plugin, string gitRef, string destinationRoot)
-    {
-        foreach (var (relativePath, text) in BlobsAtRef(plugin.Name, gitRef))
-        {
-            var destination = Path.Combine(destinationRoot, relativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.WriteAllText(destination, text);
-        }
-    }
-
     // The plugin's committed subtree, path and text, from one ls-tree plus one cat-file per blob.
     // Empty, never null: "nothing at that ref" is an answer here.
     private IEnumerable<(string RelativePath, string Text)> BlobsAtRef(string pluginName, string gitRef)
@@ -144,9 +131,8 @@ public sealed partial class SourceRepository
     {
         if (CarriesNoRecord(relativePath)) return null;
 
-        var headerDocument = Path.Combine(
-            RootFor(pluginFileName), RecordDataFileName);
-        if (FormKeyDeclaredIn(text, relativePath, headerDocument, pluginFileName) is not { } formKey)
+        if (FormKeyDeclaredIn(text, relativePath, HeaderDocumentFor(pluginFileName), pluginFileName)
+            is not { } formKey)
             return null;
 
         var recordType = RecordTypeOf(relativePath, _release)

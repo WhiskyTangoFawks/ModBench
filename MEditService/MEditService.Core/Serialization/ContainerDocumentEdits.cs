@@ -49,18 +49,17 @@ internal static class ContainerDocumentEdits
         return codec.SerializeToText(owner, release);
     }
 
-    /// <summary>The document at <paramref name="destinationPath"/> with its own fields replaced by
-    /// <paramref name="replacementText"/>'s, keeping the children it already carries. Read from the
-    /// path, so a container whose children are files of their own arrives whole.</summary>
+    /// <summary><paramref name="destinationText"/> with its own fields replaced by
+    /// <paramref name="replacementText"/>'s, keeping the children it already carries. A child with a
+    /// document of its own is not one of them: it stays where it is.</summary>
     internal static NamedDocument WithOwnFieldsReplaced(
-        RecordTextCodec codec, string destinationPath, string? destinationRecordType,
+        RecordTextCodec codec, string destinationText, string? destinationRecordType,
         string replacementText, string? replacementRecordType, GameRelease release)
     {
         var replacement = codec.Deserialize(replacementText, release, replacementRecordType);
         ContainerChildFields.ClearAllChildSlots(replacement);
 
-        var destination = codec.DeserializeAsync(destinationPath, release, destinationRecordType)
-            .GetAwaiter().GetResult();
+        var destination = codec.Deserialize(destinationText, release, destinationRecordType);
         ContainerChildFields.TransplantChildSlots(destination, replacement);
 
         return new NamedDocument(codec.SerializeToText(replacement, release), replacement.EditorID);
