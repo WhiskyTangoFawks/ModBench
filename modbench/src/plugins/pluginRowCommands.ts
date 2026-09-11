@@ -3,7 +3,7 @@ import * as path from 'path';
 import { isRefused, type MEditClient, type CompileResult } from '../medit/client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
 import { resolveCompileTarget } from '../medit/compileTarget';
-import { promptEslFlagRemoval } from '../medit/promptEslFlagRemoval';
+import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';
 import { resolveOrigin } from '../medit/resolveOrigin';
 import type { OriginFolder } from '../modmanager/loadOrderSnapshot';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../medit/trackedRepositories';
@@ -203,7 +203,7 @@ export async function compileAndReport(
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
     if (result.eslContradiction
-        && await promptEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', client, ask)) {
+        && await offerEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', client, ask, reporter)) {
       await compileAndReport(client, diagnostics, originFolder, reporter, ask, target, atRef);
       return;
     }

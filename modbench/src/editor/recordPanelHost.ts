@@ -13,6 +13,7 @@ import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
 import { makeReporter } from '../reporter';
+import { askQuestion } from '../dialog';
 
 export interface EditorCommandDeps {
   context: vscode.ExtensionContext;
@@ -84,8 +85,10 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     }),
     // Editor owns the record gestures (create/delete/renumber/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
-    ...registerRecordLifecycleCommands(meditClient, outputChannel, treeSync, refreshMatchingPlugins),
-    ...registerRecordCopyCommands(meditClient, outputChannel, treeSync, refreshMatchingPlugins),
+    ...registerRecordLifecycleCommands(
+      meditClient, outputChannel, makeReporter(outputChannel, 'recordLifecycle'), askQuestion, treeSync, refreshMatchingPlugins),
+    ...registerRecordCopyCommands(
+      meditClient, outputChannel, makeReporter(outputChannel, 'recordCopy'), askQuestion, treeSync, refreshMatchingPlugins),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });

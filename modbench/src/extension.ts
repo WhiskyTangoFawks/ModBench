@@ -178,6 +178,7 @@ export function activate(context: vscode.ExtensionContext) {
       scriptsPath, client: meditClient, treeProvider,
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
+      reporter: makeReporter(outputChannel, 'recordFilter'),
     }),
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, referencedByTreeView, outputChannel,

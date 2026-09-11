@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
-  handlers, registerCommand, showQuickPick, showErrorMessage, activeTextEditor,
+  handlers, registerCommand, showQuickPick, activeTextEditor,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
   return {
@@ -11,7 +11,6 @@ const {
       return { dispose: vi.fn() };
     }),
     showQuickPick: vi.fn(),
-    showErrorMessage: vi.fn(),
     activeTextEditor: { value: undefined as { document: Record<string, unknown> } | undefined },
   };
 });
@@ -19,7 +18,7 @@ const {
 vi.mock('vscode', () => ({
   commands: { registerCommand },
   window: {
-    showQuickPick, showErrorMessage,
+    showQuickPick,
     get activeTextEditor() { return activeTextEditor.value; },
   },
   workspace: { openTextDocument: vi.fn() },
@@ -29,6 +28,7 @@ vi.mock('fs', () => ({ existsSync: vi.fn().mockReturnValue(false), readdirSync: 
 
 import { registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
 import { InMemoryMEditClient } from '../../medit/client';
+import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
 
 beforeEach(() => {
   handlers.clear();
@@ -36,13 +36,16 @@ beforeEach(() => {
   activeTextEditor.value = undefined;
 });
 
-function makeDeps(client: InMemoryMEditClient): FilterCommandDeps & { treeProvider: { refresh: ReturnType<typeof vi.fn> } } {
+function makeDeps(client: InMemoryMEditClient): FilterCommandDeps & {
+  treeProvider: { refresh: ReturnType<typeof vi.fn> }; reporter: RecordingReporter;
+} {
   return {
     scriptsPath: '/scripts',
     client,
     treeProvider: { refresh: vi.fn() } as any,
     refreshMatchingPlugins: vi.fn(),
     setFilterActive: vi.fn(),
+    reporter: recordingReporter(),
   };
 }
 
@@ -69,7 +72,7 @@ describe('setFilterFromDocument', () => {
 
   // The rival: setting the filter active (or refreshing) on a failed setFilter too would leave
   // the readout claiming a filter is applied that the backend never actually accepted.
-  it('shows the framed error and touches nothing else when setFilter fails', async () => {
+  it('reports the framed error and touches nothing else when setFilter fails', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('setFilter', 'Filter SQL must return a form_key column');
     activeTextEditor.value = { document: { getText: () => 'SELECT editor_id FROM "npc_"', isUntitled: true } };
@@ -77,7 +80,9 @@ describe('setFilterFromDocument', () => {
 
     await handler();
 
-    expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Filter failed — Filter SQL must return a form_key column');
+    expect(deps.reporter.reports).toEqual([
+      { severity: 'error', message: 'mEdit: Filter failed — Filter SQL must return a form_key column', detail: undefined },
+    ]);
     expect(deps.setFilterActive).not.toHaveBeenCalled();
     expect(deps.treeProvider.refresh).not.toHaveBeenCalled();
     expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { MEditClient } from '../medit/client';
+import type { Reporter } from '../reporter';
 import type { InteriorLoadMoreNode, PluginTreeProvider } from './PluginTreeProvider';
 
 // The row's own load-more gesture: a partial record page grew a synthetic "load more" leaf, and
@@ -20,12 +21,13 @@ export interface FilterCommandDeps {
   /** The record filter's single writer — the context key, the code lens's active SQL, and the
    *  Plugins tree's readout. */
   setFilterActive: (active: boolean, sql?: string, label?: string) => void;
+  reporter: Reporter;
 }
 
 // The record filter scopes which records a plugin row's children show — a distinct concern from
 // the record-panel and reveal commands, so it is its own registration.
 export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposable[] {
-  const { scriptsPath, client, treeProvider, refreshMatchingPlugins, setFilterActive } = deps;
+  const { scriptsPath, client, treeProvider, refreshMatchingPlugins, setFilterActive, reporter } = deps;
 
   // Symmetric on purpose (plugins.md): a set and a clear both re-derive the same two things.
   const refreshAfterFilterChange = (): void => {
@@ -36,7 +38,7 @@ export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposab
   const applyFilter = async (sql: string, label?: string): Promise<void> => {
     const error = await client.setFilter(sql);
     if (error) {
-      void vscode.window.showErrorMessage(`mEdit: Filter failed — ${error}`);
+      reporter.report('error', `mEdit: Filter failed — ${error}`);
       return;
     }
     setFilterActive(true, sql, label);

@@ -1,6 +1,7 @@
 import { headerFormKeyFor } from './formKeyIdentity';
 import type { MEditClient } from './client';
 import type { AskQuestion } from '../dialog';
+import type { Reporter } from '../reporter';
 
 /** Deliberately not `CompileTarget`: create and copy-as-new reach this refusal too, so the
  *  shape is not named for one gesture. */
@@ -16,7 +17,7 @@ export async function offerEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string,
   repository: Pick<MEditClient, 'editRecord'>,
   ask: AskQuestion,
-  showError: (message: string) => void,
+  reporter: Reporter,
 ): Promise<boolean> {
   const accept = `Remove ESL Flag and ${verb}`;
   const choice = await ask(
@@ -28,6 +29,6 @@ export async function offerEslFlagRemoval(
     headerFormKeyFor(target.name), target.name, target.origin,
     { op: 'set', path: [{ kind: 'member', name: 'IsSmallMaster' }], value: false });
   if (outcome.applied) return true;
-  showError(`Modbench: Could not remove the ESL flag on "${target.name}" — ${outcome.message}`);
+  reporter.report('error', `Could not remove the ESL flag on "${target.name}" — ${outcome.message}`);
   return false;
 }
