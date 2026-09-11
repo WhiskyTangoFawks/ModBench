@@ -9,7 +9,7 @@ const SURFACING_GOES_THROUGH_THE_REPORTER =
 
 const MESSAGE_API = /^show(Information|Warning|Error)Message$/;
 
-// Every way to reach one: dotted, bracketed, and destructured off `vscode.window`.
+// Every way to name one: a dotted member, a bracketed member, a destructured property.
 const MESSAGE_API_SITES = [
     `MemberExpression[property.name=${MESSAGE_API}]`,
     `MemberExpression[computed=true][property.value=${MESSAGE_API}]`,
