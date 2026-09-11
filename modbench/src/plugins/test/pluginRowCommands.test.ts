@@ -151,6 +151,19 @@ describe('registerRebaseCommand', () => {
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
+  it('reports an unresolvable origin at error and never asks the backend to rebase', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', []);
+    const { handler, reporter } = invokeRebase(client);
+
+    await handler(pluginNode());
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not resolve which mod "MyMod.esp" belongs to.', detail: undefined },
+    ]);
+    expect(client.calls.filter((c) => c.method === 'rebaseOntoMain')).toEqual([]);
+  });
+
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the rebase outright', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('rebaseOntoMain', { refused: true, message: 'mEdit: Could not rebase "ModA" — boom' } as any);
@@ -165,7 +178,6 @@ describe('registerRebaseCommand', () => {
     expect(refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
-  // A typed refusal is the repository declining, not the transport failing: warning, not error.
   it('reports a typed rebase refusal at warning, in the reason the backend gave', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason: 'the working tree is dirty', conflictedPaths: [] } as any);
@@ -356,6 +368,20 @@ describe('registerSaveAndCompileCommand', () => {
     ]);
   });
 
+  it('reports a picked plugin with no mod folder at error and compiles nothing', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', [{ name: 'Orphan.esp', origin: undefined, inLoadOrder: true } as any]);
+    showQuickPick.mockResolvedValue({ label: 'Orphan.esp', description: undefined });
+    const { handler, reporter } = invokeSaveAndCompile(client);
+
+    await handler(undefined);
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: '"Orphan.esp" has no mod folder to compile into.', detail: undefined },
+    ]);
+    expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
+  });
+
   it('reports an unresolvable compile target at error and compiles nothing', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
@@ -397,6 +423,20 @@ describe('registerCompileAtRefCommand', () => {
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom', detail: undefined },
     ]);
+  });
+
+  it('reports an unresolvable compile target at error and never asks whether to compile at main', async () => {
+    const client = new InMemoryMEditClient();
+    client.setQueryAnswer('getPlugins', []);
+    const { handler, reporter, ask } = invokeCompileAtRef(client, 'Compile at main');
+
+    await handler({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not resolve which mod "MyPatch.esp" belongs to.', detail: undefined },
+    ]);
+    expect(ask.asked).toEqual([]);
+    expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
   });
 
   // The rival: compiling on any answer would overwrite the binary on a native Esc.
