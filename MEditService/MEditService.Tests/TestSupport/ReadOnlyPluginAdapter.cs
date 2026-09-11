@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>A stand-in for the read verb alone, throwing on the three write verbs so a test that
+/// <summary>A stand-in for the read verb alone, throwing on every write verb so a test that
 /// reaches one names itself rather than passing on a silent stub.</summary>
 public abstract class ReadOnlyPluginAdapter : IPluginAdapter
 {
@@ -49,6 +49,10 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
     public IMod CreateEmpty(ModKey modKey, GameRelease gameRelease) =>
+        throw new NotSupportedException($"{GetType().Name} answers reads only.");
+
+    public Task CreateAndWriteAsync(
+        ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
     public Task WriteAsync(

@@ -5,7 +5,6 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
@@ -144,19 +143,16 @@ public sealed class CopyRecordAsOverrideHandler
             ?? throw new InvalidOperationException(
                 $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
 
-        var replacement = _codec.Deserialize(body, release, identity.RecordType);
-        ContainerChildFields.ClearAllChildSlots(replacement);
-        var destinationRecord = _codec
-            .DeserializeAsync(unit.FullPath, release, unit.OwnerRecordType).GetAwaiter().GetResult();
-        ContainerChildFields.TransplantChildSlots(destinationRecord, replacement);
+        var replacement = ContainerDocumentEdits.WithOwnFieldsReplaced(
+            _codec, unit.FullPath, unit.OwnerRecordType, body, identity.RecordType, release);
 
         // Move first, then write: a crash between leaves the leaf at its new name with old content,
         // still findable by FormKey. The reverse order leaves two units claiming one FormKey.
-        _targets.RenameTo(destination.Repository, destination.Plugin, existingTarget, replacement.EditorID);
+        _targets.RenameTo(destination.Repository, destination.Plugin, existingTarget, replacement.EditorId);
         destination.Repository.Put(
             destination.Plugin,
             new SourceDocument(
-                identity.FormKey, existingTarget.RecordType, replacement.EditorID, _codec.SerializeToText(replacement, release)));
+                identity.FormKey, existingTarget.RecordType, replacement.EditorId, replacement.Text));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

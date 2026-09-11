@@ -28,9 +28,9 @@ by deserializing through it, never by hand-written construction or reflective pr
 allowlist is empty. A record is a Mutagen object only while it is being
 read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the
 Plugin adapter — the banned-API analyzer fails the build on the live-object namespaces
-(`MEditService/BannedSymbols.txt`, scoped by folder in `.editorconfig` while the last boxes are
-cleared), and `GameNamespaceScanTests` fails it on a game-concrete name outside those two. That
-scan's allowlist is empty.
+(`MEditService/BannedSymbols.txt`, exempted per folder in `.editorconfig` for the codec, the adapter
+and the test projects and nothing else, which `BannedApiScopeTests` pins), and `GameNamespaceScanTests`
+fails it on a game-concrete name outside those two. That scan's allowlist is empty.
 
 **3. xEdit owns the presentation.** What a value *reads as* to a modder — the prose a collapsed row
 shows, the gesture that edits a cell, which arrays sort and by what — is xEdit's answer, cited to

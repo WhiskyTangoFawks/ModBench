@@ -5,7 +5,6 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
@@ -51,13 +50,12 @@ public sealed class CreateRecordHandler
         if (_targets.ResolveTargetFormKey(repository, plugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var record = RecordMint.Bare(
-            _codec, schema, release, targetFormKey, string.IsNullOrWhiteSpace(editorId) ? null : editorId, partialForm: false);
+        var name = string.IsNullOrWhiteSpace(editorId) ? null : editorId;
+        var body = RecordMint.BareDocument(_codec, schema, release, targetFormKey, name, partialForm: false);
 
         // RefuseIfContainerType guarantees a flat record, so the repository's own layout is the whole
         // answer: no block path, and the group folder minted by the write when this type is new here.
-        repository.Put(
-            plugin, new SourceDocument(targetFormKey, recordType, record.EditorID, _codec.SerializeToText(record, release)));
+        repository.Put(plugin, new SourceDocument(targetFormKey, recordType, name, body));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {

@@ -8,7 +8,6 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
@@ -88,8 +87,8 @@ public sealed class RenumberRecordHandler
         var transaction = new SourceTransaction();
         try
         {
-            foreach (var rewrite in rewrites) WriteComputedRewrite(transaction, rewrite, release);
-            WriteTargetRewrite(transaction, plugin, targetRewrite, targetFormKey, release);
+            foreach (var rewrite in rewrites) WriteComputedRewrite(transaction, rewrite);
+            WriteTargetRewrite(transaction, plugin, targetRewrite, targetFormKey);
         }
         catch (Exception ex)
         {
@@ -162,10 +161,10 @@ public sealed class RenumberRecordHandler
         return named.Count == 0 ? null : $"{string.Join(", ", named)} — {phrase}.";
     }
 
-    // Record is the file's top-level record: the referencer itself, or its owner when embedded.
-    // Owner is the document's own identity, Record the graph its whole text serializes from.
+    // Owner is the identity of the document this rewrite lands as: the referencer's own, or its
+    // container's when the referencer is embedded. Text is that whole document, remapped.
     private sealed record ComputedRewrite(
-        PluginKey Plugin, SourceRepository Repository, RecordIdentity Owner, IMajorRecord Record)
+        PluginKey Plugin, SourceRepository Repository, RecordIdentity Owner, string Text)
     {
         internal string ModFolder => Repository.ModFolder;
     }
@@ -179,7 +178,6 @@ public sealed class RenumberRecordHandler
         out List<ComputedRewrite> rewrites)
     {
         rewrites = [];
-        var mapping = RenumberMapping(oldFormKey, newFormKey);
         var schemas = _schemaReflector.GetSchemas(release);
 
         foreach (var (referencerPlugin, referencerRepository, document, schemaType, embeddedFormKeys) in referencers)
@@ -196,20 +194,24 @@ public sealed class RenumberRecordHandler
             if (!schemas.ContainsKey(schemaType))
                 return RefuseNoSchema(document.FormKey, schemaType, referencerPlugin);
 
-            var owner = _codec.Deserialize(document.Body, release, document.RecordType);
-            ((IFormLinkContainer)owner).RemapLinks(mapping);
-            if (RefuseIfRemapIncomplete(owner, schemaType, oldFormKey, referencerPlugin, release) is { } incomplete)
-                return incomplete;
+            var remapped = RecordDocumentEdits.WithLinksRemapped(
+                _codec, document.Body, release, document.RecordType, oldFormKey, newFormKey);
+            if (RefuseIfRemapIncomplete(remapped, document.FormKey, schemaType, oldFormKey, referencerPlugin, release)
+                is { } incomplete) return incomplete;
 
             foreach (var embeddedFormKey in embeddedFormKeys)
             {
                 // A remap never moves a record's own FormKey, so the child is still found under it.
-                if (ContainerChildFields.FindEmbeddedChild(owner, embeddedFormKey)?.Child is not { } child) continue;
+                if (ContainerDocumentEdits.EmbeddedChildIn(
+                        _codec, remapped, release, document.RecordType, embeddedFormKey, schemas) is not { } child)
+                {
+                    continue;
+                }
 
                 // The owner's own walk never reaches a child's VMAD — an embedded referencer's
                 // struct-list link is its own record's, and has to be asked of the child directly.
                 if (RefuseIfRemapIncomplete(
-                        child, RecordTableName.Of(child, schemas), oldFormKey, referencerPlugin, release)
+                        child.Text, embeddedFormKey, child.RecordType, oldFormKey, referencerPlugin, release)
                     is { } childIncomplete) return childIncomplete;
             }
 
@@ -217,7 +219,7 @@ public sealed class RenumberRecordHandler
             // relative to this repository's folder.
             rewrites.Add(new ComputedRewrite(
                 referencerPlugin, referencerRepository,
-                new RecordIdentity(document.FormKey, schemaType, document.EditorId), owner));
+                new RecordIdentity(document.FormKey, schemaType, document.EditorId), remapped));
         }
 
         return null;
@@ -231,26 +233,23 @@ public sealed class RenumberRecordHandler
             $"'{recordType}' has no reflected schema, so the remap-completeness check for " +
             $"{formKey} in {plugin.Name} could not run. Nothing was written.");
 
-    private static Dictionary<FormKey, FormKey> RenumberMapping(string oldFormKey, string newFormKey) =>
-        new() { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) };
-
     // A link the typed remap left behind is refused wherever it sits; a KnownDefects row is what
     // names the member Mutagen is known to skip. Asked of the collector: text cannot tell a link
     // from an EditorID or string.
     private RecordEditResult? RefuseIfRemapIncomplete(
-        IMajorRecordGetter record, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
+        string text, string formKey, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
     {
         if (!_schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
-            return RefuseNoSchema(record.FormKey.ToString(), recordType, plugin);
+            return RefuseNoSchema(formKey, recordType, plugin);
 
         List<FormReference> refs;
-        using (var document = JsonDocument.Parse(_codec.SerializeToText(record, release)))
+        using (var document = JsonDocument.Parse(text))
             refs = FormReferences.Collect(document.RootElement, schema);
         if (refs.FirstOrDefault(r => r.TargetFormKey == oldFormKey) is { TargetFormKey: not null } stale)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.ReferenceRemapIncomplete,
-                $"{record.FormKey} in {plugin.Name} still links {oldFormKey} at {stale.FieldPath} after the " +
+                $"{formKey} in {plugin.Name} still links {oldFormKey} at {stale.FieldPath} after the " +
                 $"typed link remap, so renumbering would leave that reference dangling. {WhyRemapIsIncomplete(stale, release)} " +
                 "Nothing was written.");
         }
@@ -272,20 +271,19 @@ public sealed class RenumberRecordHandler
 
     // A referencer's remapped graph is its owning document's whole text, so the batch takes it as one
     // put against that document's own identity.
-    private void WriteComputedRewrite(SourceTransaction transaction, ComputedRewrite rewrite, GameRelease release)
+    private static void WriteComputedRewrite(SourceTransaction transaction, ComputedRewrite rewrite)
     {
         transaction.Put(
             rewrite.Repository, rewrite.Plugin,
             new SourceDocument(
-                rewrite.Owner.FormKey, rewrite.Owner.RecordType, rewrite.Owner.EditorId,
-                _codec.SerializeToText(rewrite.Record, release)));
+                rewrite.Owner.FormKey, rewrite.Owner.RecordType, rewrite.Owner.EditorId, rewrite.Text));
     }
 
-    // Root is the whole record the target's own document serializes from: the owner when embedded,
-    // and Written is that document's identity. Held is the target's own identity, as the tree has it.
+    // Text is the target's own document renumbered — the owner's whole text when embedded — and
+    // Written is that document's identity. Held is the target's own identity, as the tree has it.
     private sealed record ComputedTarget(
         SourceRepository Repository, SourceUnit Unit, RecordIdentity Written, RecordIdentity Held,
-        IMajorRecord Root);
+        string Text);
 
     // The referencer pass skips the target, so this is the only place a self-link is remapped.
     // Nothing here writes; every failure mode is a typed refusal.
@@ -294,7 +292,6 @@ public sealed class RenumberRecordHandler
         string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget target)
     {
         target = null!;
-        var mapping = RenumberMapping(oldFormKey, newFormKey);
         var schemas = _schemaReflector.GetSchemas(release);
 
         if (unit.IsEmbedded)
@@ -308,8 +305,9 @@ public sealed class RenumberRecordHandler
                     $"{unit.RelativePath} carries {oldFormKey} inside. Nothing was written.");
             }
 
-            var owner = _codec.Deserialize(ownerDocument.Body, release, ownerDocument.RecordType);
-            if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
+            if (RecordDocumentEdits.WithEmbeddedChildRenumbered(
+                    _codec, ownerDocument.Body, release, ownerDocument.RecordType, oldFormKey, newFormKey)
+                is not { } renumbered)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
@@ -317,20 +315,16 @@ public sealed class RenumberRecordHandler
                     "Nothing was written.");
             }
 
-            // Remapped on the owner, not the child: a sibling embedded in the same document may hold
-            // the self-link, and its own file is this same one.
-            ((IFormLinkContainer)owner).RemapLinks(mapping);
+            // The guard reads links, which the re-key does not move, so it answers the same either
+            // side of one; the old FormKey is passed in so a refusal names the record the user asked about.
+            if (RefuseIfRemapIncomplete(
+                    renumbered.Text, ownerIdentity.FormKey, ownerIdentity.RecordType, oldFormKey, plugin, release)
+                is { } ownerIncomplete) return ownerIncomplete;
+            if (RefuseIfRemapIncomplete(
+                    renumbered.ChildText, oldFormKey, identity.RecordType, oldFormKey, plugin, release)
+                is { } childIncomplete) return childIncomplete;
 
-            // Guarded before the new FormKey is stamped on, so a refusal names the record the user
-            // asked about.
-            if (RefuseIfRemapIncomplete(owner, ownerIdentity.RecordType, oldFormKey, plugin, release) is { } ownerIncomplete)
-                return ownerIncomplete;
-            if (RefuseIfRemapIncomplete(found.Child, identity.RecordType, oldFormKey, plugin, release) is { } childIncomplete)
-                return childIncomplete;
-
-            ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
-
-            target = new ComputedTarget(repository, unit, ownerIdentity, identity, owner);
+            target = new ComputedTarget(repository, unit, ownerIdentity, identity, renumbered.Text);
             return null;
         }
 
@@ -341,26 +335,22 @@ public sealed class RenumberRecordHandler
                 $"No source unit in {plugin.Name}'s tree holds {oldFormKey}. Nothing was written.");
         }
 
-        var record = _codec.Deserialize(document.Body, release, document.RecordType);
-        ((IFormLinkContainer)record).RemapLinks(mapping);
+        var renumberedRecord = RecordDocumentEdits.WithSelfRenumbered(
+            _codec, document.Body, release, document.RecordType, oldFormKey, newFormKey);
 
-        if (RefuseIfRemapIncomplete(record, identity.RecordType, oldFormKey, plugin, release) is { } recordIncomplete)
-            return recordIncomplete;
-
-        ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
+        if (RefuseIfRemapIncomplete(renumberedRecord, oldFormKey, identity.RecordType, oldFormKey, plugin, release)
+            is { } recordIncomplete) return recordIncomplete;
 
         target = new ComputedTarget(
             repository, unit, new RecordIdentity(newFormKey, identity.RecordType, identity.EditorId),
-            identity, record);
+            identity, renumberedRecord);
         return null;
     }
 
-    private void WriteTargetRewrite(
-        SourceTransaction transaction, PluginKey plugin, ComputedTarget target, string newFormKey,
-        GameRelease release)
+    private static void WriteTargetRewrite(
+        SourceTransaction transaction, PluginKey plugin, ComputedTarget target, string newFormKey)
     {
-        var (repository, unit, written, held, root) = target;
-        var text = _codec.SerializeToText(root, release);
+        var (repository, unit, written, held, text) = target;
 
         // No file moves for an embedded record — it has no leaf name of its own — so the owner's own
         // document, reserialized around the child's new FormKey, is the whole write.
@@ -382,8 +372,7 @@ public sealed class RenumberRecordHandler
             transaction.Move(repository.ModFolder, oldLeafPath, newLeafPath);
             var writePath = Path.Combine(newLeafPath, SourceRepository.RecordDataFileName);
             transaction.Write(
-                repository.ModFolder, writePath,
-                () => _codec.SerializeAsync(root, writePath, release).GetAwaiter().GetResult());
+                repository.ModFolder, writePath, () => SourceRepository.WriteTextAtomic(writePath, text));
             return;
         }
 

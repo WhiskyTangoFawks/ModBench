@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using MEditService.Core.Edits;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
@@ -9,8 +8,6 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
@@ -104,21 +101,18 @@ public sealed class KeepExternalChangeHandler
         foreach (var document in repository.ReadAll(plugin, SourceRepository.LastCompileRef(pluginName)))
             baselineByFormKey.TryAdd(document.FormKey, document.Body);
 
-        // Keep only runs against a tracked plugin, so the mod-folder-only ForRead overload applies.
-        var deepParsed = MutagenPluginAdapter.Instance.OpenForWrite(
-            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, PluginStrings.In(repository.ModFolder));
+        // Keep only runs against a tracked plugin, so the mod-folder-only strings overload applies.
         var touched = new List<TouchedRecord>();
-        foreach (var record in deepParsed.EnumerateMajorRecords())
+        foreach (var (incoming, incomingText) in PluginTrees.RecordDocumentsOf(
+                     pluginName, pluginPath, gameRelease, PluginStrings.In(repository.ModFolder), codec, schemas))
         {
-            var formKey = record.FormKey.ToString();
-            var incomingText = Encoding.UTF8.GetString(
-                codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+            var formKey = incoming.FormKey;
             var baselineText = baselineByFormKey.GetValueOrDefault(formKey);
 
             // The external change never touched this record, so nothing about it is this gesture's.
             if (string.Equals(incomingText, baselineText, StringComparison.Ordinal)) continue;
 
-            var recordType = RecordTableName.Of(record, schemas);
+            var recordType = incoming.RecordType;
             var held = repository.IdentityOf(plugin, formKey, schemas);
 
             if (held is { } identity && repository.Locate(plugin, identity) is { IsEmbedded: true } unit)
@@ -130,7 +124,7 @@ public sealed class KeepExternalChangeHandler
                     _logger.LogTrace(
                         "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
                         "it is embedded, not its own source unit",
-                        record.FormKey, recordType, pluginName, unit.OwnerFormKey);
+                        formKey, recordType, pluginName, unit.OwnerFormKey);
                 }
                 continue;
             }
@@ -145,16 +139,16 @@ public sealed class KeepExternalChangeHandler
                     _logger.LogDebug(
                         "Skipping {FormKey} ({RecordType}) in {Plugin}: no existing source unit anywhere in " +
                         "the tree — landing a brand-new container isn't supported yet",
-                        record.FormKey, recordType, pluginName);
+                        formKey, recordType, pluginName);
                 }
                 continue;
             }
 
             // An external EditorID change moves a flat record's file, so what the tree holds is asked
             // by FormKey: the collision check reads the real current text, and the leaf moves after.
-            var at = held ?? new RecordIdentity(formKey, recordType, record.EditorID);
+            var at = held ?? incoming;
             touched.Add(new TouchedRecord(
-                formKey, at, renameable, record.EditorID, incomingText,
+                formKey, at, renameable, incoming.EditorId, incomingText,
                 held is { } current ? repository.Get(plugin, current)?.Body : null,
                 baselineText));
         }

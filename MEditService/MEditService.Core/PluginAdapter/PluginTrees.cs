@@ -28,8 +28,7 @@ internal static class PluginTrees
         string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default)
     {
-        var mod = MutagenPluginAdapter.Instance.OpenForWrite(
-            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, strings);
+        var mod = OpenFor(pluginName, pluginPath, gameRelease, strings);
 
         // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
         // file with no exception.
@@ -37,6 +36,26 @@ internal static class PluginTrees
             ? new PluginTree([], missing)
             : new PluginTree(await SerializeToPristineFiles(mod, pluginName, cancel), null);
     }
+
+    /// <summary>A plugin's binary re-serialized as its whole source tree, with no localization
+    /// check: what a re-baseline of an already tracked plugin commits.</summary>
+    internal static Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
+        string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        SerializeToPristineFiles(OpenFor(pluginName, pluginPath, gameRelease, strings), pluginName, cancel);
+
+    /// <summary>A plugin's binary as every record's own document plus the identity a source tree
+    /// files it by. The mod is held here, so the caller never has one (ADR-0032 rule 2).</summary>
+    internal static IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
+        string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings,
+        RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        ModDocuments.IdentifiedRecordsOf(
+            OpenFor(pluginName, pluginPath, gameRelease, strings), codec, schemas);
+
+    private static IMod OpenFor(
+        string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings) =>
+        MutagenPluginAdapter.Instance.OpenForWrite(
+            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, strings);
 
     /// <summary>One plugin's complete source tree, ready to commit — the one implementation of the
     /// door's write. A second serializer that dropped the root RecordData.json would delete the header

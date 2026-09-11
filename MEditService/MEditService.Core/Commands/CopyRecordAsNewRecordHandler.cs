@@ -3,13 +3,11 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Commands;
 
 /// <summary>The Copy as New Record gesture's handler (ADR-0046 invariant 3): xEdit's "Copy as New
-/// Record Into…" — a Mutagen <c>Duplicate</c> under a freshly allocated FormKey (ADR-0041).</summary>
+/// Record Into…" — the codec's duplicate under a freshly allocated FormKey (ADR-0041).</summary>
 public sealed class CopyRecordAsNewRecordHandler
 {
     private readonly WriteTargets _targets;
@@ -58,17 +56,17 @@ public sealed class CopyRecordAsNewRecordHandler
                 destination.Repository, destinationPlugin, requestedFormKey, out var targetFormKey)
             is { } refusedTarget) return refusedTarget;
 
-        var newRecord = _codec.Deserialize(body, release, identity.RecordType).Duplicate(FormKey.Factory(targetFormKey));
-        RemapSelfLink(newRecord, formKey, targetFormKey);
-
         // Own-record-only, like Copy as Override: a container's children never ride along (deep copy
         // is a separate operation).
-        ContainerChildFields.ClearAllChildSlots(newRecord);
+        var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
+            _codec, body, release, identity.RecordType, targetFormKey);
         var placement = SourceRepository.PlacementFor(
-            destinationPlugin.Name, identity.RecordType, targetFormKey, newRecord.EditorID, release);
-        SourceRepository.WriteAt(
-            destination.ModFolder, placement,
-            path => _codec.SerializeAndWrite(newRecord, path, release));
+            destinationPlugin.Name, identity.RecordType, targetFormKey, duplicate.EditorId, release);
+        SourceRepository.WriteAt(destination.ModFolder, placement, path =>
+        {
+            SourceRepository.WriteTextAtomic(path, duplicate.Text);
+            return duplicate.Text;
+        });
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -82,8 +80,7 @@ public sealed class CopyRecordAsNewRecordHandler
     }
 
     // The embedded subtree rides along, each record under a fresh key drawn before anything is written.
-    // Links between copied siblings are not remapped, xEdit's own behavior. A missing container chain
-    // auto-creates bare and Partial Form.
+    // A missing container chain auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
         WriteTargets.CopyTarget copy, DocumentContainment container, PluginKey destinationPlugin, string? requestedFormKey)
     {
@@ -95,16 +92,23 @@ public sealed class CopyRecordAsNewRecordHandler
 
         // Its own text carries its whole embedded subtree, so the codec has already read every
         // descendant by the time one can be re-keyed.
-        var newRecord = _codec.Deserialize(body, release, identity.RecordType).Duplicate(FormKey.Factory(targetFormKey));
-        RemapSelfLink(newRecord, identity.FormKey, targetFormKey);
-
         var taken = new HashSet<string>(StringComparer.Ordinal) { targetFormKey };
-        if (RekeyEmbeddedDescendants(allocator, newRecord, taken) is { } childRefused) return childRefused;
+        var rekeys = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var descendant in RecordDocumentEdits.EmbeddedDescendantFormKeys(
+                     _codec, body, release, identity.RecordType))
+        {
+            if (WriteTargets.ResolveTargetFormKey(allocator, requestedFormKey: null, out var childFormKey, taken) is { } refused)
+                return refused;
+            taken.Add(childFormKey);
+            rekeys[descendant] = childFormKey;
+        }
+
+        var duplicate = RecordDocumentEdits.DuplicatedWithSubtreeRekeyed(
+            _codec, body, release, identity.RecordType, targetFormKey, rekeys);
 
         var appended = _recordCopy.AppendEmbeddedChild(
             source, container,
-            new SourceDocument(
-                targetFormKey, identity.RecordType, newRecord.EditorID, _codec.SerializeToText(newRecord, release)),
+            new SourceDocument(targetFormKey, identity.RecordType, duplicate.EditorId, duplicate.Text),
             destination, release);
         if (!appended.Applied) return appended;
 
@@ -115,36 +119,9 @@ public sealed class CopyRecordAsNewRecordHandler
                 "{DestinationPlugin} ({DestinationOrigin}) — inside {ContainerFormKey}'s {SlotName} slot, " +
                 "with {DescendantCount} embedded descendant(s) each under a fresh FormKey",
                 identity.FormKey, source.Plugin.Name, source.Plugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, container.ParentFormKey, container.SlotName, taken.Count - 1);
+                destinationPlugin.Origin, container.ParentFormKey, container.SlotName, rekeys.Count);
         }
         return RecordEditResult.Success(targetFormKey);
-    }
-
-    // In place, on the duplicate's own graph: the list order is untouched, and a child's own
-    // embedded children are re-keyed the same way one level down.
-    private static RecordEditResult? RekeyEmbeddedDescendants(
-        WriteTargets.Allocator allocator, IMajorRecordGetter container, HashSet<string> taken)
-    {
-        var containerType = ContainerChildFields.NormalizedTypeName(container.GetType());
-        foreach (var (slotName, _, child) in ContainerChildFields.EnumerateChildren(container).ToList())
-        {
-            if (!ContainerChildFields.EmbeddedSlots.Contains((containerType, slotName))) continue;
-            if (WriteTargets.ResolveTargetFormKey(allocator, requestedFormKey: null, out var childFormKey, taken) is { } refused)
-                return refused;
-            taken.Add(childFormKey);
-
-            var oldFormKey = child.FormKey.ToString();
-            ((IMajorRecordInternal)child).FormKey = FormKey.Factory(childFormKey);
-            RemapSelfLink(child, oldFormKey, childFormKey);
-            if (RekeyEmbeddedDescendants(allocator, child, taken) is { } deeper) return deeper;
-        }
-        return null;
-    }
-
-    private static void RemapSelfLink(IMajorRecordGetter record, string oldFormKey, string newFormKey)
-    {
-        if (record is IFormLinkContainer links)
-            links.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(oldFormKey)] = FormKey.Factory(newFormKey) });
     }
 
     // xEdit refuses CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI: a fresh FormKey leaves the copy with no group
