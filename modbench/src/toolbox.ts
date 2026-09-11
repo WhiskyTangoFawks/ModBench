@@ -14,6 +14,7 @@ import { ModListProvider } from './modmanager/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
 import { makeReporter, type Reporter } from './reporter';
+import { askQuestion } from './dialog';
 import { originFolder } from './modmanager/loadOrderSnapshot';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
@@ -393,7 +394,7 @@ function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] 
           instance.value.gameDirectory,
           await loadOrderTarget(),
           deployReporter,
-          (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
+          askQuestion,
         ))),
     vscode.commands.registerCommand('modbench.toolbox.purge', () =>
       runDeployment(deployReporter, 'Purge failed.', 'Modbench: Deployed mods purged.', () =>

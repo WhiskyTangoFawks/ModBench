@@ -1,5 +1,6 @@
 import { headerFormKeyFor } from './formKeyIdentity';
 import type { MEditClient } from './client';
+import type { AskQuestion } from '../dialog';
 
 /** Deliberately not `CompileTarget`: create and copy-as-new reach this refusal too, so the
  *  shape is not named for one gesture. */
@@ -14,11 +15,11 @@ export interface EslFlagRemovalTarget {
 export async function offerEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string,
   repository: Pick<MEditClient, 'editRecord'>,
-  showWarning: (message: string, options: { modal: true }, ...items: string[]) => Thenable<string | undefined>,
+  ask: AskQuestion,
   showError: (message: string) => void,
 ): Promise<boolean> {
   const accept = `Remove ESL Flag and ${verb}`;
-  const choice = await showWarning(
+  const choice = await ask(
     `"${target.name}" does not fit ESL. Remove the ESL flag and ${verb.toLowerCase()}?\n\n${refusalReason}`,
     { modal: true }, accept);
   if (choice !== accept) return false;

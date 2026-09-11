@@ -321,7 +321,7 @@ const hasLitr = existsSync(litrModlistPath);
 
 
 function fakeReporter() {
-  return { report: () => {} };
+  return { report: () => {}, landed: () => {} };
 }
 
 describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in)', () => {

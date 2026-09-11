@@ -57,7 +57,7 @@ function makeDeps(tempRoot: string, overrides: Partial<ExtendedFieldEditorDeps> 
     tempRoot,
     onCommit: vi.fn(),
     log: vi.fn(),
-    reporter: { report: vi.fn() },
+    reporter: { report: vi.fn(), landed: vi.fn() },
     ...overrides,
   };
 }

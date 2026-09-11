@@ -14,6 +14,7 @@ vi.mock('vscode', () => ({
 
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from './DownloadsProvider';
 import { ErrorNode } from '../errorNode';
+import { recordingReporter } from '../test/surfacingDoubles';
 import type { DownloadRow } from './mo2/downloads';
 import type { InstanceValue } from './instance';
 
@@ -352,11 +353,8 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   // that threw spinning forever — no row, no error node, no toast (ADR-0019).
   it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const reports: { severity: string; message: string; detail?: string }[] = [];
-    const provider = makeProvider([], {
-      instance,
-      reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
-    });
+    const reporter = recordingReporter();
+    const provider = makeProvider([], { instance, reporter });
 
     const pending = provider.getChildren();
     instance.fail('ENOENT: no such file or directory, open modlist.txt');
@@ -365,7 +363,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
     expect(rows[0].label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
-    expect(reports).toEqual([
+    expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'ENOENT: no such file or directory, open modlist.txt' },
     ]);
 
@@ -373,7 +371,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
     const after = await within(provider.getChildren(), 500);
 
     expect(rowNames(after)).toEqual(['a.zip']);
-    expect(reports).toHaveLength(1);
+    expect(reporter.reports).toHaveLength(1);
   });
 
   it('renders no rows immediately when the first landed value is genuinely empty', async () => {

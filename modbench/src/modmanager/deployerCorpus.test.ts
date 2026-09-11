@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { parseModlist } from './mo2/modlistText';
 import { deploy, purge } from './deployer';
 import { buildFileConflictIndex } from './fileConflictIndex';
+import { recordingReporter } from '../test/surfacingDoubles';
 import type { GameDirectory } from './gameDirectory';
 import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, snapshotTree } from './test/corpusFixture';
 
@@ -15,11 +16,6 @@ const TRACKED_GIT_HEAD = 'mods/Tracked Patch Mod/.git/HEAD';
 const TRACKED_GIT_OBJECT = 'mods/Tracked Patch Mod/.git/objects/deadbeef';
 const TRACKED_SOURCE = 'mods/Tracked Patch Mod/source/Tracked Patch Mod.esp/RecordData.json';
 const PREEXISTING_OVERWRITE = 'overwrite/F4SE/Plugins/SomePlugin.log';
-
-function fakeReporter() {
-  const reports: { severity: string; message: string; detail?: string }[] = [];
-  return { reports, report: (severity: string, message: string, detail?: string) => reports.push({ severity, message, detail }) };
-}
 
 describe('deploy/purge corpus', () => {
   let dir: string;
@@ -53,7 +49,7 @@ describe('deploy/purge corpus', () => {
 
   it('deploy hardlinks only real mod content into Data/, excluding a tracked mod\'s .git/ and source/, touching nothing else', async () => {
     const before = await snapshotTree(dir);
-    const reporter = fakeReporter();
+    const reporter = recordingReporter();
     await deploy(dir, gameDirectory, await realIndex(), reporter);
     const after = await snapshotTree(dir);
 
@@ -83,7 +79,7 @@ describe('deploy/purge corpus', () => {
   });
 
   it('purge removes the links and manifest, restores Data/ to its pre-deploy state, and relocates a stray runtime file into overwrite/', async () => {
-    await deploy(dir, gameDirectory, await realIndex(), fakeReporter());
+    await deploy(dir, gameDirectory, await realIndex(), recordingReporter());
 
     // A runtime output the game itself wrote into Data/ after deploy (an F4SE log) —
     // not one of our links, not part of the vanilla baseline.
@@ -91,7 +87,7 @@ describe('deploy/purge corpus', () => {
     await writeFile(join(gameDirectory.dataFolder, 'F4SE', 'Logs', 'Runtime.log'), 'runtime output');
 
     const before = await snapshotTree(dir);
-    await purge(dir, gameDirectory, fakeReporter());
+    await purge(dir, gameDirectory, recordingReporter());
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(
@@ -117,8 +113,8 @@ describe('deploy/purge corpus', () => {
 
   it('a full deploy-then-purge cycle never touches a tracked mod\'s .git/ or source/ subtree (ADR-0007)', async () => {
     const before = await snapshotTree(dir);
-    await deploy(dir, gameDirectory, await realIndex(), fakeReporter());
-    await purge(dir, gameDirectory, fakeReporter());
+    await deploy(dir, gameDirectory, await realIndex(), recordingReporter());
+    await purge(dir, gameDirectory, recordingReporter());
     const after = await snapshotTree(dir);
 
     // Deploy+purge round-trips Data/ back to empty and removes the manifest — the

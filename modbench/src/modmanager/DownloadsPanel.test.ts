@@ -38,7 +38,7 @@ import type { DownloadRow } from './mo2/downloads';
 import type { Instance, InstanceValue } from './instance';
 
 // The panel's one surfacing channel (ADR-0019): a test reads the report, never the toast.
-const reporter = () => ({ report: vi.fn() });
+const reporter = () => ({ report: vi.fn(), landed: vi.fn() });
 
 const node = (name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
   ({ row: { name, ...row } } as DownloadNode);

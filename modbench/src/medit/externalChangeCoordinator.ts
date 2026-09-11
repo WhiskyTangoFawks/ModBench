@@ -1,5 +1,5 @@
 import type { MEditClient, UnansweredExternalChange } from './client';
-import type { ShowExternalChangeDialog } from '../plugins/externalChangeDialog';
+import type { AskQuestion } from '../dialog';
 import { handleUnanswered } from '../plugins/externalChangeGestures';
 
 /** `origin` rides along explicitly because re-deriving it from the unanswered queue when the
@@ -9,7 +9,7 @@ export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable
 export interface ExternalChangeCoordinatorDeps {
   // The three write verbs Keep/Absorb/Rebase dispatch to, narrowed off the port (ADR-0002).
   client: Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>;
-  showDialog: ShowExternalChangeDialog;
+  showDialog: AskQuestion;
   openMergeEditor: OpenMergeEditor;
   /** ADR-0019: the gesture's own refusal, verbatim — Keep/Absorb/Rebase share this one surface. */
   showError: (message: string) => void;

@@ -33,6 +33,8 @@ vi.mock('./commands/modlist', () => ({
 
 import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode } from './ModListProvider';
 import { ErrorNode } from '../errorNode';
+import { recordingReporter } from '../test/surfacingDoubles';
+import type { Reporter } from '../reporter';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';
@@ -111,7 +113,7 @@ const makeProvider = (
   mods: ModlistEntry[],
   extra: Partial<{
     instance: FakeInstance;
-    log: (m: string) => void; reporter: { report: (severity: string, message: string, detail?: string) => void };
+    log: (m: string) => void; reporter: Reporter;
     instanceRoot: string;
   }> = {},
 ) => new ModListProvider({
@@ -270,11 +272,8 @@ describe('ModListProvider', () => {
   // that threw spinning forever — no row, no error node, no toast (ADR-0019).
   it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const reports: { severity: string; message: string; detail?: string }[] = [];
-    const provider = makeProvider([], {
-      instance,
-      reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
-    });
+    const reporter = recordingReporter();
+    const provider = makeProvider([], { instance, reporter });
 
     const pending = provider.getChildren();
     instance.fail('EACCES: permission denied, open modlist.txt');
@@ -283,7 +282,7 @@ describe('ModListProvider', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
     expect(rows[0].label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
-    expect(reports).toEqual([
+    expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EACCES: permission denied, open modlist.txt' },
     ]);
 
@@ -292,7 +291,7 @@ describe('ModListProvider', () => {
 
     expect(after.some((n) => n instanceof ModNode)).toBe(true);
     expect(after.some((n) => n instanceof ErrorNode)).toBe(false);
-    expect(reports).toHaveLength(1);
+    expect(reporter.reports).toHaveLength(1);
   });
 
   it('renders a genuinely empty modlist immediately when the first landed value already carries none', async () => {
@@ -603,13 +602,10 @@ describe('ModListProvider', () => {
     ];
 
     function makeFailingProvider() {
-      const reports: { severity: string; message: string; detail?: string }[] = [];
+      const reporter = recordingReporter();
       const logs: string[] = [];
-      const provider = makeProvider(dndEntries, {
-        log: (m) => logs.push(m),
-        reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
-      });
-      return { provider, reports, logs };
+      const provider = makeProvider(dndEntries, { log: (m) => logs.push(m), reporter });
+      return { provider, reports: reporter.reports, logs };
     }
 
     async function drop(provider: ModListProvider, target: unknown, payload: DragItem): Promise<void> {
@@ -660,17 +656,15 @@ describe('ModListProvider', () => {
       expect(failingFired).toBe(true); // refresh fired to resync against disk
       expect(failingReports).toHaveLength(1);
 
-      const okReports: { severity: string; message: string }[] = [];
-      const ok = makeProvider(dndEntries, {
-        reporter: { report: (severity, message) => { okReports.push({ severity, message }); } },
-      });
+      const okReporter = recordingReporter();
+      const ok = makeProvider(dndEntries, { reporter: okReporter });
       let okFired = false;
       ok.onDidChangeTreeData(() => { okFired = true; });
       const okRoots = await ok.getChildren();
       const okDeltaNode = okRoots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
       await drop(ok, okDeltaNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(okFired).toBe(true);
-      expect(okReports).toEqual([]);
+      expect(okReporter.reports).toEqual([]);
     });
   });
 

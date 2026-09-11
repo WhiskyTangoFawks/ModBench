@@ -1,4 +1,5 @@
 import type { CrashRepairOffer } from './client';
+import type { AskQuestion } from '../dialog';
 
 /** Working tree first, so VS Code focuses it: an interrupted compile means the user was compiling
  *  their own working tree, so recovering to it matches intent. */
@@ -18,13 +19,6 @@ export function messageFor(offer: CrashRepairOffer): { message: string; detail: 
   return { message, detail };
 }
 
-/** The one shape this module needs from `vscode.window.showWarningMessage` — injected so the
- *  sequencing below is testable without a VS Code host, same idiom `externalChangeDialog.ts`
- *  already establishes for the sibling dialog. */
-export type ShowCrashRepairOffer = (
-  message: string, options: { modal: true; detail: string }, ...buttons: string[]
-) => Thenable<string | undefined> | Promise<string | undefined>;
-
 /** Called only when the user accepted — `atRef` is `undefined` for "Compile from Working Tree"
  *  (the normal Save & Compile source) or `'main'` for "Compile at main", the same two values
  *  `LoadOrderController.compile`'s own `atRef` parameter already takes. */
@@ -35,7 +29,7 @@ export type AcceptCrashRepair = (offer: CrashRepairOffer, atRef: string | undefi
  *  clears the journal marker on a decline. */
 export async function presentCrashRepairOffers(
   offers: readonly CrashRepairOffer[],
-  show: ShowCrashRepairOffer,
+  show: AskQuestion,
   onAccept: AcceptCrashRepair,
 ): Promise<void> {
   for (const offer of offers) {
