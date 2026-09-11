@@ -2,8 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Captures every registerCommand(id, handler) so a row's handler can be invoked directly — the
 // same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
-// The three message APIs are deliberately absent from the mock: this module surfaces through the
-// injected reporter and dialog, so a reintroduced direct call throws here instead of passing.
+// The three message APIs are absent, so a reintroduced direct call throws.
 const { handlers, registerCommand, showInputBox, showQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
   return {
