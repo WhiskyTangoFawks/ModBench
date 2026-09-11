@@ -105,6 +105,27 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         Assert.Equal("RenamedByHand", await EditorIdReaches(npc, key, "RenamedByHand"));
     }
 
+    // ADR-0007: the destination is Tracked inside the create gesture, so its watch is armed there
+    // too — the mod's own copy answers from source with no load order put after the create.
+    [Fact]
+    public async Task AfterCreate_AHandEditToTheDestinationsSource_LandsInTheIndex_WithNoReconcile()
+    {
+        FormKey npc = default;
+        using var fx = new PluginFixtureBuilder("api-create-watch")
+            .WithPlugin("Held.esp", mod => npc = mod.Npcs.AddNew("HeldNpc").FormKey, origin: "CreatedIntoMod")
+            .BuildScattered();
+        await LoadOnly(fx, "CreatedIntoMod");
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "CreatedIntoMod").Path)!;
+        var key = new PluginKey("Held.esp", "CreatedIntoMod");
+
+        var response = await _client.PostAsJsonAsync(
+            "/plugins/create", new { name = "Minted.esp", path = modFolder, origin = "CreatedIntoMod" });
+        response.EnsureSuccessStatusCode();
+        RenameByHand(modFolder, "Held.esp", "HeldNpc", "RenamedByHand");
+
+        Assert.Equal("RenamedByHand", await EditorIdReaches(npc, key, "RenamedByHand"));
+    }
+
     private static void RenameByHand(string modFolder, string plugin, string editorId, string renamed)
     {
         var document = Directory

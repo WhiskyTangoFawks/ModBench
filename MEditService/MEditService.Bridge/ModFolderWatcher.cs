@@ -208,23 +208,6 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    // The copy has no source to project from: its repository is gone, or the load order dropped it.
-    // Clears only source routing; a classification or indexed registration is untouched.
-    private void Unwatch(string pluginName, string origin)
-    {
-        lock (_gate)
-        {
-            foreach (var mod in _mods.Values)
-            {
-                if (mod.Plugins.TryGetValue(pluginName, out var plugin)
-                    && string.Equals(plugin.Origin, origin, StringComparison.OrdinalIgnoreCase))
-                {
-                    plugin.SourceRoot = null;
-                }
-            }
-        }
-    }
-
     private void UnwatchAll()
     {
         lock (_gate)
@@ -537,13 +520,9 @@ public sealed class ModFolderWatcher : IDisposable
         var key = new PluginKey(change.PluginName, change.Origin);
         try
         {
-            // MO2, git and the user can delete a repository at any moment, and a mod that has none is
-            // untracked rather than broken: there is nothing left to project from.
-            if (!SourceRepository.IsTracked(change.ModFolder))
-            {
-                Unwatch(change.PluginName, change.Origin);
-                return;
-            }
+            // A mod with no repository is untracked rather than broken: nothing to project from yet,
+            // or any more. The registration stands, since Track registers before it writes.
+            if (!SourceRepository.IsTracked(change.ModFolder)) return;
 
             if (change.Scope == SourceChangeScope.Documents && FormKeysOf(change) is { } formKeys)
             {

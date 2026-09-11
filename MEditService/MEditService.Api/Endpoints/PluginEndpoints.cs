@@ -164,7 +164,7 @@ public static class PluginEndpoints
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, IndexProjector index, LoadOrderHolder holder, CreatePluginHandler create,
-        ILoggerFactory loggerFactory)
+        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (Malformed(req) is { } malformed) return malformed;
@@ -190,6 +190,10 @@ public static class PluginEndpoints
             logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 503);
         }
+
+        // After the registration and before the Track inside this gesture, for the same reason the
+        // Track route does it: the destination's tree comes back through the watch.
+        watcher.WatchSourceOf(req.Origin);
 
         try
         {

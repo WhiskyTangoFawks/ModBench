@@ -758,6 +758,38 @@ public sealed class ModFolderWatcherTests
         }
     }
 
+    // The rival this pins: unregistering the source root on a settle that finds no repository, which
+    // takes Track's registration with it while Track is still parsing.
+    [Fact]
+    public void ASettleBeforeTheRepositoryExists_KeepsTheRegistration_SoTracksOwnTreeStillLands()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var holder = HoldingUntracked(modFolder, "Tracked.esp", "TrackedMod");
+            var index = new RecordingRefreshIndex();
+            using var watcher = TestWatcher.Over(
+                holder, index, new InMemoryNotificationPublisher(), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
+            watcher.Rearm(holder.Current);
+            watcher.WatchSourceOf("TrackedMod");
+
+            var sourceRoot = SourceRepository.RootIn(modFolder, "Tracked.esp");
+            Directory.CreateDirectory(sourceRoot);
+            Write(sourceRoot);
+            WaitUntil(() => Scopes(index) > 0, TimeSpan.FromSeconds(10));
+            Assert.Empty(index.Of("validate"));
+
+            TrackTree(modFolder, "Tracked.esp");
+
+            WaitUntil(() => index.Of("validate").Count > 0, TimeSpan.FromSeconds(10));
+            Assert.Equal(["Tracked.esp"], ValidatedIn(index, 2));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
     private static LoadOrderHolder HoldingUntracked(string modFolder, string plugin, string origin)
     {
         var pluginPath = Path.Combine(modFolder, plugin);

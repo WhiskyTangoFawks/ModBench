@@ -23,7 +23,7 @@ public sealed class CreatePluginEndpointTests : IDisposable
         PluginEndpoints.CreatePlugin(
             new CreatePluginRequest(name, path, origin),
             _mod.Index, holder ?? _mod.Holder,
-            TestEditService.PluginCreateHandler(holder ?? _mod.Holder), NullLoggerFactory.Instance);
+            TestEditService.PluginCreateHandler(holder ?? _mod.Holder), TestWatcher.Inert(), NullLoggerFactory.Instance);
 
     private RegisteredCopy? Registered(string name, string origin) =>
         _mod.Holder.Current.Copy(new PluginKey(name, origin));
