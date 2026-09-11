@@ -5,8 +5,8 @@ import { rm } from 'node:fs/promises';
 import { appendPlugin, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../commands/plugins';
 import { switchProfile } from '../commands/profile';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, readActiveProfile, readModlistEntries,
-  readPluginLines, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, providedPluginsIn, readActiveProfile,
+  readModlistEntries, readPluginLines, snapshotTree,
 } from '../test/corpusFixture';
 
 const INI = 'ModOrganizer.ini';
@@ -38,7 +38,8 @@ describe('plugins.txt + profile corpus', () => {
 
   it('reconcilePlugins converges the fixture on disk, touching only plugins.txt', async () => {
     const before = await snapshotTree(dir);
-    const result = await reconcilePlugins(dir, PROFILE, undefined, () => Promise.resolve([]), () => {});
+    const result = await reconcilePlugins(
+      dir, PROFILE, await providedPluginsIn(dir), undefined, () => Promise.resolve([]), () => {});
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([DEFAULT_PLUGINS]));
 

@@ -2,7 +2,7 @@
 // instance root, the profile and its own inputs, returning applied or a refusal. No class,
 // no interface, no base type.
 
-import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import {
   deleteSeparatorInText,
   insertModAtWinningEnd,
@@ -14,13 +14,10 @@ import {
   removeModFromText,
   renameSeparatorInText,
   setEnabledInText,
-  unlistedModNames,
-  deadModEntryNames,
 } from '../mo2/modlistText';
 import { setUninstalledInText } from '../mo2/downloads';
-import { downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile, modsDir } from '../mo2/layout';
+import { downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile } from '../mo2/layout';
 import { parseMetaIni } from '../mo2/metaIni';
-import type { ModlistEntry } from '../model';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -178,36 +175,22 @@ export async function createEmptyMod(instanceRoot: string, profile: string, name
   return spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
 }
 
-/** modlist.txt converges on what `mods/` holds. A missing `mods/` reconciles nothing, so a
- *  malformed workspace can never read as a mass delete. */
-export async function reconcileMods(
-  instanceRoot: string, profile: string,
-): Promise<{ applied: true; added: string[]; pruned: string[] } | { applied: false; refusal: string }> {
-  let dirNames: string[];
-  try {
-    const dirents = await readdir(modsDir(instanceRoot), { withFileTypes: true });
-    dirNames = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { applied: true, added: [], pruned: [] };
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
-  }
-  let entries: ModlistEntry[];
-  try {
-    entries = parseModlist(await readFile(modlistFile(instanceRoot, profile), 'utf8'));
-  } catch (err) {
-    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
-  }
-  // insertModAtWinningEnd always lands its new line above whatever is currently first, so
-  // inserting in reverse-sorted order leaves the batch ascending top-to-bottom on disk.
-  const added = unlistedModNames(dirNames, entries);
-  for (const name of [...added].reverse()) {
-    const outcome = await spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
-    if (!outcome.applied) return outcome;
-  }
-  const pruned = deadModEntryNames(dirNames, entries);
-  for (const name of pruned) {
-    const outcome = await spliceModlist(instanceRoot, profile, (text) => removeModFromText(text, name));
-    if (!outcome.applied) return outcome;
-  }
-  return { applied: true, added, pruned };
+/** The Instance value's unlisted folders get a line each, disabled, at the winning end, in one
+ *  write. Nothing here reads `mods/`: which folders need a line is the value's answer, not a
+ *  command's (ADR-0015 invariants 1 and 2). */
+export async function adoptMods(
+  instanceRoot: string, profile: string, folderNames: readonly string[],
+): Promise<{ applied: true; added: string[] } | { applied: false; refusal: string }> {
+  let added: string[] = [];
+  const outcome = await spliceModlist(instanceRoot, profile, (text) => {
+    // Read off the text about to be spliced, inside the write lock: two landed values can hand
+    // the same folder over before the first write comes back, and only this can refuse the
+    // second line. Separators are excluded, as `unlistedModNames` excludes them.
+    const listed = new Set(parseModlist(text).filter((e) => e.kind !== 'separator').map((e) => e.name));
+    added = [...folderNames].filter((name) => !listed.has(name)).sort((a, b) => a.localeCompare(b));
+    // insertModAtWinningEnd always lands its new line above whatever is currently first, so
+    // inserting in reverse order leaves the batch ascending top-to-bottom on disk.
+    return [...added].reverse().reduce(insertModAtWinningEnd, text);
+  });
+  return outcome.applied ? { applied: true, added } : outcome;
 }

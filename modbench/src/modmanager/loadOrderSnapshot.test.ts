@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
-import { buildLoadOrderSnapshot, originFolder, resolvePluginPaths } from './loadOrderSnapshot';
+import { buildLoadOrderSnapshot, originFolder, providedPluginsOf, resolvePluginPaths } from './loadOrderSnapshot';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
 // to produce them: those are a wire contract (ADR-0012), and asserting against the same symbol
@@ -231,5 +231,43 @@ describe('originFolder', () => {
     const rows = [row('TS Mod', undefined), row('TS Mod', join('/instance', 'mods', 'TS Mod', 'B.esp'))];
 
     expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
+  });
+});
+
+// What the plugins reconcile is handed instead of walking mods/ a second time: the Mod override
+// order's own answer, already resolved on the value.
+describe('providedPluginsOf', () => {
+  const row = (
+    name: string, origin: string, path: string | undefined, winning = true,
+  ) => ({ name, path, origin, slot: null, enabled: false, winning });
+
+  it('keys each provided copy by its folded name, at the winning copy\u2019s own on-disk casing', () => {
+    const rows = [row('ZETA.esp', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'Zeta.esp'))];
+
+    expect(providedPluginsOf(rows)).toEqual(new Map([['zeta.esp', 'Zeta.esp']]));
+  });
+
+  // The overwrite-wins rule is spelled once, where the rows are built: the losing mod copy of a
+  // name overwrite/ also provides must not be the name's answer here.
+  it('answers a contested name with the winning copy alone', () => {
+    const rows = [
+      row('A.esp', 'overwrite', join('/instance', 'overwrite', 'A.esp')),
+      row('A.esp', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'A.esp'), false),
+    ];
+
+    expect(providedPluginsOf(rows)).toEqual(new Map([['a.esp', 'A.esp']]));
+  });
+
+  // Data is presence, never provision: the instance did not supply it, so it is no append source.
+  it('leaves out a Data-folder copy and a line with no copy at all', () => {
+    const rows = [row('Fallout4.esm', 'Data', join('/game', 'Data', 'Fallout4.esm')), row('Ghost.esp', 'Data', undefined)];
+
+    expect(providedPluginsOf(rows)).toEqual(new Map());
+  });
+
+  it('leaves out a root-level file that is not a plugin', () => {
+    const rows = [row('readme.txt', 'TS Mod', join('/instance', 'mods', 'TS Mod', 'readme.txt'))];
+
+    expect(providedPluginsOf(rows)).toEqual(new Map());
   });
 });

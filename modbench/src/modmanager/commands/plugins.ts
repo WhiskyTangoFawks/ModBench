@@ -2,11 +2,9 @@
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { basename } from 'node:path';
-import { buildFileConflictIndex, foldPath, rootLevelWinners, type FileConflictIndex } from '../fileConflictIndex';
+import { foldPath } from '../fileConflictIndex';
 import { isPluginFile } from '../pluginFile';
-import { modlistFile, overwriteDir, pluginsFile } from '../mo2/layout';
-import { parseModlist } from '../mo2/modlistText';
+import { pluginsFile } from '../mo2/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2/pluginsText';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
@@ -104,43 +102,20 @@ async function rootLevelPlugins(folder: string): Promise<Map<string, string>> {
   return new Map(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => [foldPath(d.name), d.name]));
 }
 
-// overwrite/ doesn't exist until a purge deposits a stray file, so ENOENT is "none" here.
-async function overwritePlugins(instanceRoot: string): Promise<Map<string, string>> {
-  try {
-    return await rootLevelPlugins(overwriteDir(instanceRoot));
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map();
-    throw err;
-  }
-}
-
-// An implicit master is left out: the tree gives it a row of its own, never from a line, so a
-// mod's copy of one must not earn a line.
-function providedPlugins(
-  index: FileConflictIndex, overwrite: ReadonlyMap<string, string>, implicit: ReadonlySet<string>,
-): Map<string, string> {
-  const provided = new Map<string, string>();
-  for (const [folded, winnerPath] of rootLevelWinners(index)) {
-    if (isPluginFile(winnerPath)) provided.set(folded, basename(winnerPath));
-  }
-  for (const [folded, real] of overwrite) provided.set(folded, real);
-  for (const folded of implicit) provided.delete(folded);
-  return provided;
-}
-
 /** Answers the plugins this install loads with no plugins.txt line, or `undefined` when the
  *  backend that knows them cannot be reached. Only the backend can answer it: deriving the set
  *  here would mean parsing plugin headers (ADR-0016). */
 export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
 
 /** plugins.txt is the complete inventory the Plugins tree reads, so when disk disagrees the file
- *  is updated (docs/specs/plugins.md). Any failure to enumerate disk refuses the whole run — an
- *  errored walk must never read as "everything vanished". */
+ *  is updated (docs/specs/plugins.md). `provided` is the Instance value's own winners
+ *  (ADR-0015): this walks neither mods/ nor overwrite/. A failure to enumerate the Data folder
+ *  refuses the whole run — an errored walk must never read as "everything vanished". */
 export async function reconcilePlugins(
-  instanceRoot: string, profile: string, dataFolder: string | undefined,
-  implicitMasters: ImplicitMasterSource, log: (msg: string) => void,
+  instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
+  dataFolder: string | undefined, implicitMasters: ImplicitMasterSource, log: (msg: string) => void,
 ): Promise<PluginsReconcileResult> {
-  let provided: ReadonlyMap<string, string>;
+  let appendable: ReadonlyMap<string, string>;
   let inData: ReadonlySet<string> | undefined;
   try {
     const implicit = await implicitMasters();
@@ -151,13 +126,11 @@ export async function reconcilePlugins(
       log('[plugins] the implicit masters are unknown — appending and pruning nothing this run');
       return { applied: true, wrote: false, append: [], prune: [] };
     }
-    const entries = parseModlist(await readFile(modlistFile(instanceRoot, profile), 'utf8'));
-    const [index, overwrite] = await Promise.all([
-      buildFileConflictIndex(entries, instanceRoot, log),
-      overwritePlugins(instanceRoot),
-    ]);
     inData = dataFolder === undefined ? undefined : new Set((await rootLevelPlugins(dataFolder)).keys());
-    provided = providedPlugins(index, overwrite, new Set(implicit.map(foldPath)));
+    // An implicit master is left out: the tree gives it a row of its own, never from a line, so
+    // a mod's copy of one must not earn a line.
+    const implicitFolded = new Set(implicit.map(foldPath));
+    appendable = new Map([...provided].filter(([folded]) => !implicitFolded.has(folded)));
   } catch (err) {
     return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
   }
@@ -166,7 +139,7 @@ export async function reconcilePlugins(
   const result = await modifyPlugins(instanceRoot, profile, (text) => {
     // The delta is computed inside the write chain, from the text about to be spliced, so two
     // overlapping runs can neither double-append nor prune a line the other just wrote.
-    delta = pluginLinesDelta(parsePlugins(text).map((e) => e.name), provided, inData);
+    delta = pluginLinesDelta(parsePlugins(text).map((e) => e.name), appendable, inData);
     let out = text;
     for (const name of delta.prune) out = removePluginFromText(out, name);
     for (const name of delta.append) out = appendPluginInText(out, name, false);

@@ -2,7 +2,7 @@
 // MO2-side watchers, holds one whole value, and is built only by watching.
 
 import type * as vscode from 'vscode';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import type { Reporter } from '../reporter';
 import type { ModlistEntry, PluginEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
@@ -14,10 +14,10 @@ import { createOverwriteWatcher } from './overwriteWatcher';
 import { createPluginsTxtWatcher } from './pluginsTxtWatcher';
 import { createDownloadsWatcher } from './downloadsWatcher';
 import { scanDownloads } from './downloadsScan';
-import { buildDownloadRows, type DownloadRow } from './mo2/downloads';
-import { SETTINGS_FILE_NAME, modMetaFile, modlistFile, overwriteDir, pluginsFile, settingsFile } from './mo2/layout';
+import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from './mo2/downloads';
+import { SETTINGS_FILE_NAME, modMetaFile, modlistFile, modsDir, overwriteDir, pluginsFile, settingsFile } from './mo2/layout';
 import { readGameName, readSelectedProfile } from './mo2/modOrganizerIni';
-import { parseModlist } from './mo2/modlistText';
+import { parseModlist, unlistedModNames } from './mo2/modlistText';
 import { parsePlugins } from './mo2/pluginsText';
 import { parseMetaIni } from './mo2/metaIni';
 import { resolveGameDirectory, type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory } from './gameDirectory';
@@ -39,6 +39,10 @@ const SETTLE_MS = 200;
 export interface InstanceValue {
   /** Mods and separators in Mod override order, winning-first, with `enabled`. */
   readonly mods: readonly ModlistEntry[];
+  /** Every directory under mods/ the active profile's modlist.txt has no line for, sorted.
+   *  Disjoint from `mods`, and rendered by no tree: it is what the adoption command is handed
+   *  so that no command walks the instance itself (ADR-0015 invariants 1 and 2). */
+  readonly unlistedFolders: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
@@ -95,6 +99,18 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
   }
 }
 
+// A missing mods/ lists nothing rather than throwing: a workspace before its first install is
+// not a failed read. Any other listing failure is a real one and fails the recompute.
+async function readModFolderNames(instanceRoot: string): Promise<string[]> {
+  try {
+    const dirents = await readdir(modsDir(instanceRoot), { withFileTypes: true });
+    return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
+}
+
 async function readModlistEntries(instanceRoot: string, profile: string): Promise<ModlistEntry[]> {
   const entries = parseModlist(await readFile(modlistFile(instanceRoot, profile), 'utf8'));
   return Promise.all(entries.map(async (entry) =>
@@ -107,6 +123,7 @@ async function readPluginEntries(instanceRoot: string, profile: string): Promise
 
 const EMPTY: InstanceValue = {
   mods: [],
+  unlistedFolders: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
   plugins: [],
@@ -276,12 +293,13 @@ export class Instance implements vscode.Disposable {
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
-    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount] = await Promise.all([
+    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount, modFolderNames] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
       scanDownloads(instanceRoot),
       isDeployed(instanceRoot),
       countOverwriteFiles(overwriteDir(instanceRoot)),
+      readModFolderNames(instanceRoot),
     ]);
     // The ini is read once above and handed to resolveGameDirectory as-is, so a rewrite
     // between it and activeProfile/gameRelease below cannot land two generations in one value.
@@ -308,10 +326,11 @@ export class Instance implements vscode.Disposable {
     ]);
     return {
       mods: entries,
+      unlistedFolders: unlistedModNames(modFolderNames, entries),
       files: index.files,
       filesByMod: index.filesByMod,
       plugins,
-      downloads: downloadEntries ? buildDownloadRows(downloadEntries) : [],
+      downloads: downloadEntries ? buildDownloadRows(downloadEntries, modsByInstallationFile(entries)) : [],
       activeProfile: profile,
       gameRelease: readGameName(iniText),
       gameDirectory: gameDirectory ?? undefined,

@@ -172,16 +172,6 @@ export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): s
     .sort((a, b) => a.localeCompare(b));
 }
 
-/** Entries whose folder is absent from the listing — deleted outside Modbench.
- *  Separators are never dead here: their on-disk form is a marker folder, which
- *  this listing does not describe. In modlist order. */
-export function deadModEntryNames(dirNames: string[], entries: ModlistEntry[]): string[] {
-  const present = new Set(dirNames);
-  return entries
-    .filter((e) => e.kind === 'mod' && !present.has(e.name))
-    .map((e) => e.name);
-}
-
 /** Throws if the name is absent, or resolves to a separator. */
 export function removeModFromText(text: string, modName: string): string {
   return withBomPreserved(text, (bomless) => {

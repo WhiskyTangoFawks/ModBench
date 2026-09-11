@@ -77,7 +77,7 @@ const DISPOSABLE_PRODUCERS = [
   'registerModContextCommands',
   'registerModInstallCommands',
   'registerModListCoreCommands',
-  'registerModsReconcile',
+  'registerModAdoption',
   'registerNameFilter',
   'registerNotMo2InstanceWelcome',
   'registerOverwriteView',

@@ -9,6 +9,7 @@ import { expect } from 'vitest';
 import { parseModlist } from '../mo2/modlistText';
 import { parsePlugins } from '../mo2/pluginsText';
 import { readSelectedProfile } from '../mo2/modOrganizerIni';
+import { buildLoadOrderRows, providedPluginsOf } from '../loadOrderSnapshot';
 import type { ModlistEntry, PluginEntry } from '../model';
 
 // A sibling of fixtures/mo2-instance/, never an extension of it: that one is read
@@ -30,6 +31,20 @@ export const readPluginLines = async (root: string, profile = 'Default'): Promis
 
 export const readActiveProfile = async (root: string): Promise<string> =>
   readSelectedProfile(await readFile(join(root, 'ModOrganizer.ini'), 'utf8'));
+
+/** The winners the Instance's value carries for a tree on disk, built through the value's own
+ *  builder: a test handing the plugins reconcile its argument fakes no walk of its own. */
+export async function providedPluginsIn(
+  root: string, profile = 'Default', dataFolder?: string,
+): Promise<ReadonlyMap<string, string>> {
+  const entries = await readModlistEntries(root, profile);
+  const lines = await readPluginLines(root, profile);
+  return providedPluginsOf(await buildLoadOrderRows({
+    readModlist: () => Promise.resolve(entries),
+    readPluginOrder: () => Promise.resolve(lines.map((e) => e.name)),
+    readEnabledPlugins: () => Promise.resolve(lines.filter((e) => e.enabled).map((e) => e.name)),
+  }, root, dataFolder));
+}
 
 /** Caller owns cleanup of the returned temp root. */
 export async function cloneCorpusFixture(): Promise<string> {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildDownloadRows,
+  buildDownloadRows as buildRows,
+  modsByInstallationFile,
   downloadContextValue,
   filterHiddenRows,
   parseDownloadMeta,
@@ -295,6 +296,9 @@ describe('buildDownloadRows', () => {
     mtimeMs,
     metaText,
   });
+  // Most rows here are about the sidecar alone, so no mod claims them.
+  const buildDownloadRows = (entries: DownloadEntry[], installedInto: ReadonlyMap<string, readonly string[]> = new Map()) =>
+    buildRows(entries, installedInto);
 
   it('maps a plain archive with no .meta sidecar to a Downloaded row (gating off)', () => {
     const rows = buildDownloadRows([entry('foo.zip', 100)]);
@@ -377,5 +381,50 @@ describe('buildDownloadRows', () => {
   it('carries no fileID when the sidecar has none', () => {
     const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nmodID=12345\r\n')]);
     expect(rows[0].fileID).toBeUndefined();
+  });
+});
+
+// Issue #60: a download is installed when a mod says so, never when the sidecar says so —
+// uninstall a mod outside Modbench and its `.meta` still claims `installed=true`.
+describe('modsByInstallationFile — which mods each download was installed into', () => {
+  it('keys a mod under the download its meta.ini names, case-folded', () => {
+    expect(modsByInstallationFile([{ name: 'UFO4P', archiveFilename: 'UFO4P-4598.7z' }]))
+      .toEqual(new Map([['ufo4p-4598.7z', ['UFO4P']]]));
+  });
+
+  // Many to many: one download installed into several mods, never forced to one.
+  it('keys every mod naming the same download under it, in mod order', () => {
+    expect(modsByInstallationFile([
+      { name: 'Textures', archiveFilename: 'Pack.7z' },
+      { name: 'Meshes', archiveFilename: 'pack.7z' },
+    ])).toEqual(new Map([['pack.7z', ['Textures', 'Meshes']]]));
+  });
+
+  it('claims no download for a mod with no installation file: unknown, never an uninstall', () => {
+    expect(modsByInstallationFile([{ name: 'Hand Made' }])).toEqual(new Map());
+  });
+});
+
+describe('buildDownloadRows — Installed follows the mods, not the sidecar', () => {
+  const entry = (name: string, metaText?: string): DownloadEntry => ({ name, size: 1, mtimeMs: 1, metaText });
+
+  it('reads as Installed when a mod names it, whatever the sidecar says', () => {
+    const rows = buildRows([entry('Pack.7z', '[General]\r\nmodID=1\r\n')], new Map([['pack.7z', ['Textures']]]));
+
+    expect(rows[0].status).toBe('Installed');
+  });
+
+  // The stale row this issue is about: the mod is gone, the sidecar still claims the install.
+  it('never reads as Installed when no mod names it, though the sidecar claims it', () => {
+    const rows = buildRows([entry('Pack.7z', '[General]\r\ninstalled=true\r\n')], new Map());
+
+    expect(rows[0].status).toBe('Downloaded');
+  });
+
+  // MO2's own Uninstalled is a user statement about the archive, not a claim about a mod.
+  it('keeps the sidecar\u2019s Uninstalled when no mod names it', () => {
+    const rows = buildRows([entry('Pack.7z', '[General]\r\nuninstalled=true\r\n')], new Map());
+
+    expect(rows[0].status).toBe('Uninstalled');
   });
 });

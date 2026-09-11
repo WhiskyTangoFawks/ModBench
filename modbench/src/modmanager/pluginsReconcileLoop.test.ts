@@ -92,9 +92,9 @@ async function wiredInstance(gameName = 'Fallout 4'): Promise<{
   // The game each run was handed — the backend answers a different implicit-master set per game,
   // so a run that assumed one would ask about the wrong install.
   const games: string[] = [];
-  registerPluginsReconcile(instance, (profile, dataFolder, gameName) => {
+  registerPluginsReconcile(instance, (profile, provided, dataFolder, gameName) => {
     games.push(gameName);
-    const run = reconcilePlugins(root, profile, dataFolder, () => Promise.resolve([]), () => {});
+    const run = reconcilePlugins(root, profile, provided, dataFolder, () => Promise.resolve([]), () => {});
     reconciles.push(run);
     return run;
   });

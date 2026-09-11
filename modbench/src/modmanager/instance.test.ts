@@ -189,6 +189,59 @@ describe('Instance — the value', () => {
       .toEqual({ kind: 'separator', name: 'Unassigned (Modlist Development)', enabled: false });
   });
 
+  // The Mods tree renders `mods` alone, so a folder with no line reaches the value on a field
+  // of its own or the adoption command never hears of it.
+  it('carries a folder under mods with no line for the active profile as unlisted, never as a mod', async () => {
+    const { root, instance } = await realInstance();
+    await mkdir(join(root, 'mods', 'Hand Extracted Mod'), { recursive: true });
+
+    await instance.refresh();
+
+    // The fixture ships "DragIn Manual Extract" unlisted; sorted, so the batch is deterministic.
+    expect(instance.value.unlistedFolders).toEqual(['DragIn Manual Extract', 'Hand Extracted Mod']);
+    expect(instance.value.mods.map((m) => m.name)).not.toContain('Hand Extracted Mod');
+  });
+
+  // The other half of the same split: a folder the active profile lists is the mods list's alone.
+  it('never carries a folder the active profile lists as unlisted', async () => {
+    const { instance } = await realInstance();
+
+    await instance.refresh();
+
+    expect(instance.value.mods.map((m) => m.name)).toContain('Harder VATS');
+    expect(instance.value.unlistedFolders).not.toContain('Harder VATS');
+    // overwrite/ is no mod, and a separator's on-disk form is a marker folder, not a mod folder.
+    expect(instance.value.unlistedFolders).not.toContain('overwrite');
+    expect(instance.value.unlistedFolders).not.toContain('Unassigned (Modlist Development)_separator');
+  });
+
+  // Only a directory can be a mod folder: a stray archive or Thumbs.db dropped into mods/ must
+  // never earn a modlist line.
+  it('never carries a stray file directly under mods as an unlisted folder', async () => {
+    const { root, instance } = await realInstance();
+    await writeFile(join(root, 'mods', 'Thumbs.db'), '');
+
+    await instance.refresh();
+
+    expect(instance.value.unlistedFolders).toEqual(['DragIn Manual Extract']);
+  });
+
+  // The profile the ini names is the one the field answers for: a switch must move a folder
+  // between the two lists, never leave it answered from the profile the user left.
+  it('answers the unlisted folders for the active profile, not a remembered one', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    expect(instance.value.unlistedFolders).toEqual(['DragIn Manual Extract']);
+
+    await switchProfileOutsideModbench(root, 'Secondary');
+    await instance.refresh();
+
+    // Secondary lists only the Unofficial Patch and Harder VATS, so every other folder is
+    // unlisted under it — "ENBoost - 12k" among them, which Default does list.
+    expect(instance.value.unlistedFolders).toContain('ENBoost - 12k');
+    expect(instance.value.unlistedFolders).not.toContain('Harder VATS');
+  });
+
   it('carries the winner of a path two enabled mods provide, and each enabled mod\'s own files', async () => {
     const { root, instance } = await realInstance();
     const winner = await writeModFile(root, NONO, 'textures/shared.dds', 'winning');
@@ -537,6 +590,21 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     expect(instance.value.deployed).toBe(true);
   });
 
+  // Issue #60: the fixture's sidecar claims `installed=true`, and only the Unofficial Patch
+  // mod's own meta.ini makes that claim true. Rival: reading Status off the sidecar alone.
+  it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
+    const { root, instance } = await realInstance();
+    const archive = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
+    const statusOf = () => instance.value.downloads.find((d) => d.name === archive)?.status;
+    await instance.refresh();
+    expect(statusOf()).toBe('Installed');
+
+    await rm(join(root, 'mods', 'Unofficial Fallout 4 Patch'), { recursive: true, force: true });
+    await instance.refresh();
+
+    expect(statusOf()).toBe('Downloaded');
+  });
+
   it('reflects a profile switch made outside Modbench in the next value', async () => {
     const { root, instance } = await realInstance();
     await instance.refresh();
@@ -577,6 +645,21 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
 
     expect(instance.sequence).toBe(before + 1);
     expect(instance.value.downloads).toEqual([]);
+  });
+
+  // A workspace before its first install has no mods/ at all. The sequence bump is what proves
+  // the recompute landed rather than a swallowed failure, as the downloads case above.
+  it('yields a value with no unlisted folders, rather than a failure, when mods/ is absent', async () => {
+    const { root, instance } = await realInstance();
+    await instance.refresh();
+    expect(instance.value.unlistedFolders.length).toBeGreaterThan(0); // the fixture starts with one
+    const before = instance.sequence;
+
+    await rm(join(root, 'mods'), { recursive: true, force: true });
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(before + 1);
+    expect(instance.value.unlistedFolders).toEqual([]);
   });
 
   // Same reasoning as the downloads case above: `deployed: false` is also the empty value's own

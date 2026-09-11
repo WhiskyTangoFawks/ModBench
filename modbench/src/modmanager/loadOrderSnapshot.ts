@@ -3,7 +3,7 @@
 // prepended by the backend, never listed here.
 
 import { readdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { ModlistEntry } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { OVERWRITE_DIR_NAME, overwriteDir } from './mo2/layout';
@@ -52,6 +52,22 @@ export function originFolder(
 ): string | undefined {
   const copy = plugins.find((p) => p.path !== undefined && p.origin === origin);
   return copy?.path === undefined ? undefined : dirname(copy.path);
+}
+
+/** The plugin files this instance provides, keyed case-folded to the winning copy's own on-disk
+ *  name — the Mod override order's answer, overwrite/ included, read off the value's rows so
+ *  that no caller walks mods/ or re-spells the rule (ADR-0015). A Data-folder copy is presence,
+ *  not provision, and is left out. */
+export function providedPluginsOf(
+  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'name' | 'origin' | 'path' | 'winning'>[],
+): Map<string, string> {
+  const provided = new Map<string, string>();
+  for (const copy of plugins) {
+    if (copy.path === undefined || !copy.winning || copy.origin === DATA_DIRECTORY_ORIGIN) continue;
+    const real = basename(copy.path);
+    if (isPluginFile(real)) provided.set(foldPath(real), real);
+  }
+  return provided;
 }
 
 /** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
