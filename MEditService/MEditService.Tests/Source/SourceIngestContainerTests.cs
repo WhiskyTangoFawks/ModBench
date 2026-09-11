@@ -112,7 +112,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     public void AFlatRecordEditedBesideTheContainer_DoesReconcileItsHead()
     {
         var holder = new LoadOrderHolder();
-        // Asked of the repository rather than computed: FlatPathFor needs an order index this test
+        // Asked of the repository rather than computed: the path needs an order index this test
         // has no reason to track.
         var npcFile = SourceDocumentPath.Of(
             _fixture.ModFolder, ContainerModFixture.PluginName, "npc_", _fixture.Npc.ToString(),

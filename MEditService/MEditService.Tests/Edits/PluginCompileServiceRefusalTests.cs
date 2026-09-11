@@ -69,6 +69,9 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // or compile would refuse the mismatch before it ever reaches the duplicate check under test.
         var duplicatePath = Path.Combine(
             Path.GetDirectoryName(_mod.NpcSourceFile)!, $"CopyOfFixtureNpc - {_mod.Npc.ID:X6}_{CompileFixture.PluginName}.json");
+        // Guards the arrangement itself: a leaf this close to the real one must still land beside it,
+        // never overwrite it, or the "two files" premise below is false.
+        Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);
 
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());

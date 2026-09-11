@@ -157,10 +157,9 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         // Something outside Modbench replaced this record's source file with a directory. Any I/O
         // failure would do; this one needs no privileges and is deterministic.
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-        // Routed through the production path helper (Spriggit-flat layout) rather than
-        // hand-reconstructed — "ApiNpc" is BuildOneModOnePlugin's own literal EditorID above.
-        // Asked of the repository rather than computed: FlatPathFor needs an order index this test
-        // has no reason to track.
+        // Asked of the repository rather than hand-reconstructed (Spriggit-flat layout): the path
+        // needs an order index this test has no reason to track. "ApiNpc" is BuildOneModOnePlugin's
+        // own literal EditorID above.
         var sourcePath = SourceDocumentPath.Of(
             modFolder, Plugin, "npc_", formKey, "ApiNpc", GameRelease.Fallout4);
         Assert.True(File.Exists(sourcePath), $"expected a source file at {sourcePath}");

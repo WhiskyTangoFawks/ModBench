@@ -116,8 +116,8 @@ public sealed class CopyFixture : IDisposable
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
 
-    // Asked of the repository, matching TwoModFixture's own reason: FlatPathFor needs an order
-    // index this fixture has no reason to track.
+    // Asked of the repository, matching TwoModFixture's own reason: computing the path needs an
+    // order index this fixture has no reason to track.
     public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
         SourceDocumentPath.Of(
             plugin.Origin == SourceOrigin ? SourceModFolder : DestinationModFolder,
