@@ -103,7 +103,7 @@ public sealed class ExternalChangeLoadOrderHookTests : IDisposable
     }
 
     // The repo and source survive, only the plugin's own binary is gone — reachable
-    // without the repo being destroyed (ADR-0041's "reads as untracked" case is a different, already-
+    // without the repo being destroyed (ADR-0007's "reads as untracked" case is a different, already-
     // handled path).
     [Fact]
     public void RunAfterReconcile_OffersRepair_WhenTheTrackedPluginsBinaryIsMissing()

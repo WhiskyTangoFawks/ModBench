@@ -15,7 +15,7 @@ shape costs a stub, never a feature.
 Any new or changed interactive element: a menu entry, tree node, dialog, badge, right-click
 action, or a changed appearance/placement of one that already shipped — a retextured badge
 is exactly as unreviewed as a new one. No exemption for a shape that traces straight to xEdit
-or an ADR — ADR-0034 tells you what to build, not that anyone has watched it run; the checkpoint
+or an ADR — ADR-0018 tells you what to build, not that anyone has watched it run; the checkpoint
 is what closes that gap, not a second design pass.
 
 ## What the stub may and may not do

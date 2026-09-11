@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>ADR-0032 rule 2: the game-concrete namespaces are the codec's and the Plugin adapter's
+/// <summary>ADR-0005 rule 2: the game-concrete namespaces are the codec's and the Plugin adapter's
 /// alone. The banned-API analyzer holds the live-object namespaces; this scan holds the per-game
 /// ones.</summary>
 public sealed class GameNamespaceScanTests

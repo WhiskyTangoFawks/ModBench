@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Source;
 
 /// <summary>One batch of puts and removes across two tracked mod folders: either every tree takes it,
-/// or every tree goes back (ADR-0045).</summary>
+/// or every tree goes back (ADR-0007).</summary>
 public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
 {
     private static readonly GameRelease Release = GameRelease.Fallout4;

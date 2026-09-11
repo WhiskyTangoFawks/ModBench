@@ -29,7 +29,7 @@ function editCommand<Ctx extends { formKey: string; plugin: string; origin: stri
   };
 }
 
-// ADR-0039: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
+// ADR-0018: the tab's save is the same leaf commit an inline edit posts — one `set` at the row's
 // own path, as many times as the user saves.
 function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringValueContext): Promise<void> {
   return openExtendedFieldEditor(
@@ -58,7 +58,7 @@ const CONTEXT_COMMANDS: ContextCommand[] = [
 ];
 
 /** The record panel's native right-click menus. Each command writes from the extension host with
- *  the envelope its own `data-vscode-context` spells (ADR-0041), posting nothing into the panel. */
+ *  the envelope its own `data-vscode-context` spells (ADR-0007), posting nothing into the panel. */
 export function registerRecordPanelContextCommands(deps: RecordPanelContextCommandDeps): vscode.Disposable[] {
   return CONTEXT_COMMANDS.map(({ command, run }) =>
     vscode.commands.registerCommand(command, (ctx?: unknown) => (ctx ? run(deps, ctx) : undefined)),

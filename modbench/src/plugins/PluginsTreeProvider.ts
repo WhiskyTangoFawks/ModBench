@@ -32,7 +32,7 @@ export interface PluginListSource {
  *  calls. Pulled once per reconcile, never per rendered row. */
 export type PluginFactsClient = Pick<MEditClient, 'getPlugins' | 'getDiagnoses'>;
 
-/** The record browser a row's children are delegated to (ADR-0035). `PluginTreeProvider`
+/** The record browser a row's children are delegated to (ADR-0002). `PluginTreeProvider`
  *  satisfies it. */
 export type RecordBrowser = Pick<
   PluginTreeProvider,
@@ -50,7 +50,7 @@ export interface PluginMatch {
 /** `dataFolder` is a getter, not a settled `Promise`: the setting it resolves is editable while
  *  Modbench runs, so a value captured at construction could go stale for the provider's life. */
 export interface PluginsTreeProviderOptions {
-  /** Name, origin, slot, enabled and winning for every plugin copy — the row input (ADR-0047). */
+  /** Name, origin, slot, enabled and winning for every plugin copy — the row input (ADR-0015). */
   instance: InstanceView;
   source: PluginListSource;
   /** A row's children. Absent in tests that exercise rows alone. */
@@ -60,24 +60,24 @@ export interface PluginsTreeProviderOptions {
   /** The malformed-plugin scan's other surface, the Problems panel, which needs an instance root
    *  this provider has no business knowing. */
   publishDiagnoses?: (reports: PluginDiagnosisReport[]) => void;
-  /** ADR-0026: this provider states the severity, so a background blip and a failed read do not
+  /** ADR-0019: this provider states the severity, so a background blip and a failed read do not
    *  land on the same channel level. */
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
   reporter?: Reporter;
   dataFolder?: () => Promise<string | undefined>;
-  /** The rows the game forces on, which only the backend can name (ADR-0021). `undefined` — it
+  /** The rows the game forces on, which only the backend can name (ADR-0016). `undefined` — it
    *  could not be reached — renders no implicit row rather than a guessed one. */
   implicitMasters?: ImplicitMasterSource;
 }
 
 /** No `resourceUri`: VS Code infers a base icon from one unless `iconPath` overrides it, so
  *  setting one would silently change every row's icon. Losing copies are registered
- *  (ADR-0044), not displayed. */
+ *  (ADR-0013), not displayed. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(
     public readonly plugin: PluginEntry,
-    /** ADR-0036: which copy of the name this row stands for — the join key for every fact. */
+    /** ADR-0012: which copy of the name this row stands for — the join key for every fact. */
     public readonly origin?: string,
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
@@ -92,7 +92,7 @@ export class PluginNode extends vscode.TreeItem {
 
 /** MO2's checked-but-disabled checkbox is not reproducible: `TreeItemCheckboxState` has no
  *  non-interactive variant, so a rendered checkbox would invite a toggle the extension must
- *  revert. A lock substitutes (ADR-0035). */
+ *  revert. A lock substitutes (ADR-0017). */
 export class ImplicitMasterNode extends vscode.TreeItem {
   readonly kind = 'implicitMaster' as const;
   constructor(public readonly name: string, path?: string) {
@@ -145,7 +145,7 @@ interface PluginFacts {
   parseFailure?: boolean;
 }
 
-// ADR-0036: plugin identity is origin plus filename, so every fact is filed under both.
+// ADR-0012: plugin identity is origin plus filename, so every fact is filed under both.
 class ByPluginCopy<T> {
   private readonly byCopy = new Map<string, T>();
   private readonly byName = new Map<string, T>();
@@ -185,7 +185,7 @@ type RowDecoration = {
   iconPath: vscode.TreeItem['iconPath'];
 };
 
-/** The one Plugins tree (ADR-0035). Rows are plugins.txt's lines, read from the Instance; their
+/** The one Plugins tree (ADR-0017). Rows are plugins.txt's lines, read from the Instance; their
  *  children are the record browser's; every badge comes from facts pulled once per reconcile. */
 export class PluginsTreeProvider
   implements vscode.TreeDataProvider<PluginsTreeNode>, vscode.TreeDragAndDropController<PluginsTreeNode>, vscode.Disposable
@@ -276,7 +276,7 @@ export class PluginsTreeProvider
   }
 
   /** The write reaches disk; the Instance's own watcher is what brings the result back
-   *  (ADR-0047 point 6). `invalidate()` here drops the cache and re-renders ahead of it. */
+   *  (ADR-0015 invariant 2). `invalidate()` here drops the cache and re-renders ahead of it. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
@@ -301,11 +301,11 @@ export class PluginsTreeProvider
     if (!isRow(element)) return this.records?.getChildren(element) ?? [];
     const file = pluginFileOf(element);
     if (file === undefined) return []; // EmptyNode: no plugin to expand into
-    // ADR-0035: never an empty list — that would read as "no records" (ADR-0026).
+    // ADR-0002: never an empty list — that would read as "no records" (ADR-0019).
     if (this.heldFiles === undefined) return notConnected();
     if (!this.heldFiles.has(file.toLowerCase())) {
       // A plugin the load order gave up on will never be reached by a later tick — saying
-      // "still indexing" would promise a completion that is not coming (ADR-0026).
+      // "still indexing" would promise a completion that is not coming (ADR-0019).
       const failure = this.loadFailureOf(element);
       return [failure !== undefined ? new ErrorNode(failure) : new IndexingNode()];
     }
@@ -330,7 +330,7 @@ export class PluginsTreeProvider
     const named = this.filterText
       ? this.cache.rows.filter((n) => (n.label as string).toLowerCase().includes(this.filterLower))
       : this.cache.rows;
-    // ADR-0035 §Filters: a row the record filter matches nothing of is omitted, not merely left
+    // plugins.md: a row the record filter matches nothing of is omitted, not merely left
     // unexpandable — a visible-but-inert row is still noise.
     return named.filter((row) => !this.isHiddenByFilter(row));
   }
@@ -346,7 +346,7 @@ export class PluginsTreeProvider
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
 
     // One entry per plugins.txt line: the winning copy of every listed name, in file order
-    // (ADR-0044) — a losing copy of the same name carries the same slot and is excluded.
+    // (ADR-0013) — a losing copy of the same name carries the same slot and is excluded.
     const listed = this.instanceValue.plugins
       .filter((p) => p.slot !== null && p.winning)
       .sort((a, b) => a.slot! - b.slot!);
@@ -369,7 +369,7 @@ export class PluginsTreeProvider
 
   getTreeItem(element: PluginsTreeNode): vscode.TreeItem {
     if (!isRow(element)) return this.records?.getTreeItem(element) ?? element;
-    // ADR-0035: every row is collapsible — mEdit is always running, so there is no absence for a
+    // ADR-0002: every row is collapsible — mEdit is always running, so there is no absence for a
     // chevron to encode. `pluginFileOf` is the row's own identity, never a backend fact.
     element.collapsibleState = pluginFileOf(element) === undefined
       ? vscode.TreeItemCollapsibleState.None
@@ -401,7 +401,7 @@ export class PluginsTreeProvider
     return this.originalDecoration.get(item)!;
   }
 
-  // ADR-0035: appended, never replacing, so a row's own badge survives. A MarkdownString base
+  // ADR-0017: appended, never replacing, so a row's own badge survives. A MarkdownString base
   // would be replaced rather than appended to, and no row carries one.
   private applyReadOnlyNote(item: vscode.TreeItem, file: string, origin: string | undefined): void {
     if (this.facts?.get(file, origin)?.readOnly !== true) return;
@@ -451,7 +451,7 @@ export class PluginsTreeProvider
   }
 
   // The backend's own wording, which is the only master verdict there is: nothing here reads a
-  // plugin's declared masters (ADR-0021).
+  // plugin's declared masters (ADR-0016).
   private applyMasterIssueDecoration(item: vscode.TreeItem, issues: MasterIssue[]): void {
     const lines = issues.map((i) =>
       i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`);
@@ -501,7 +501,7 @@ export class PluginsTreeProvider
     // The last scan's diagnoses describe binaries this load order may not hold.
     this.diagnoses = undefined;
     this._onDidChangeTreeData.fire(undefined);
-    // Fire-and-forget (ADR-0026 background tier): the tree hand-off must not wait on a
+    // Fire-and-forget (ADR-0019 background tier): the tree hand-off must not wait on a
     // whole-load-order scan, and a blip retries at the next reconcile.
     void this.scanDiagnoses(generation);
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
@@ -519,7 +519,7 @@ export class PluginsTreeProvider
     return plugins.map((p) => ({ name: p.name, hasMatchingRecords: p.hasMatchingRecords }));
   }
 
-  // ADR-0044: keyed by filename, reading the `inLoadOrder` copies — two held copies can share
+  // ADR-0013: keyed by filename, reading the `inLoadOrder` copies — two held copies can share
   // one. A failed read is never swallowed into an empty list, which would read as "nothing held".
   private async readPlugins(): Promise<PluginMetadata[] | undefined> {
     if (!this.client) return undefined;
@@ -534,7 +534,7 @@ export class PluginsTreeProvider
     }
   }
 
-  // ADR-0037: `masterIssues` is a required, non-nullable array on the wire, so it is read straight
+  // ADR-0017: `masterIssues` is a required, non-nullable array on the wire, so it is read straight
   // through — a `??` default would compensate for nothing the backend can do.
   private applyPluginFacts(plugins: PluginMetadata[]): void {
     const facts = new ByPluginCopy<PluginFacts>();
@@ -581,7 +581,7 @@ export class PluginsTreeProvider
     return this.loadFailures.get(file, row.kind === 'plugin' ? row.origin : undefined);
   }
 
-  // ADR-0036 keys every fact by origin. An implicit master has no mod origin to key on, so a row
+  // ADR-0012 keys every fact by origin. An implicit master has no mod origin to key on, so a row
   // the client's answer names no copy for falls back to the filename.
   private joinOrigin(file: string, row: PluginListNode): string | undefined {
     const origin = row.kind === 'plugin' ? row.origin : undefined;
@@ -619,7 +619,7 @@ export class PluginsTreeProvider
     try {
       await this.source.reorderPlugins(names, toIndex);
     } catch (e) {
-      // ADR-0026: an explicit user action failed — notify + log, then resync the
+      // ADR-0019: an explicit user action failed — notify + log, then resync the
       // moved rows against disk so the tree never shows a phantom reorder.
       this.log('info', `[PluginsTreeProvider] reorderPlugins failed: ${message(e)}`);
       this.reporter?.report('error', 'Failed to reorder plugins.', message(e));

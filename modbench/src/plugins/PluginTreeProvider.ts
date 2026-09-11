@@ -47,7 +47,7 @@ export class RecordTypeNode extends vscode.TreeItem {
     public readonly recordType: string,
     count: number,
     displayName: string = recordType,
-    /** ADR-0036: which copy of `plugin` this node browses, or undefined for an ordinary
+    /** ADR-0012: which copy of `plugin` this node browses, or undefined for an ordinary
      *  load-order plugin (the backend resolves that case; a filename is unambiguous there). */
     public readonly origin?: string,
     hasParseFailure = false,
@@ -76,7 +76,7 @@ function recordContextValue(record: RecordSummary, immutable: boolean, tracked: 
 export class RecordNode extends vscode.TreeItem {
   readonly kind = 'record' as const;
   // A record-scoped command acts on the clicked row's own copy of the record, so the row carries
-  // which copy it is (plugin via record, origin — ADR-0036); a row whose plugin can't be edited
+  // which copy it is (plugin via record, origin — ADR-0012); a row whose plugin can't be edited
   // hides Remove.
   constructor(
     public readonly record: RecordSummary,
@@ -113,7 +113,7 @@ export class RecordNode extends vscode.TreeItem {
 
 // ── Worldspace / cell / placed-object nodes ─────────────────────────
 
-// ADR-0036: every node in the spatial chain carries the same optional `origin` — a node built for
+// ADR-0012: every node in the spatial chain carries the same optional `origin` — a node built for
 // a specific copy has to keep saying so down to its leaves, since each hop's own repository call
 // needs it too.
 export class WorldspacesNode extends vscode.TreeItem {
@@ -238,7 +238,7 @@ export class InteriorLoadMoreNode extends vscode.TreeItem {
 }
 
 /** Shown under a row the backend has not indexed yet. Distinct from `ErrorNode`: this state
- *  clears on its own as indexing catches up, an error does not (ADR-0035). */
+ *  clears on its own as indexing catches up, an error does not (ADR-0013). */
 export class IndexingNode extends vscode.TreeItem {
   readonly kind = 'indexing' as const;
   constructor() {
@@ -335,7 +335,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return this.trackedPlugins.has(plugin.toLowerCase());
   }
 
-  // ADR-0036: a shadowed copy (origin stated) is read-only by construction — an edit to a
+  // ADR-0012: a shadowed copy (origin stated) is read-only by construction — an edit to a
   // file the game does not load changes nothing observable — so origin alone decides before the
   // immutable set is even consulted.
   private isImmutable(plugin: string, origin?: string): boolean {
@@ -457,7 +457,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return e instanceof Error ? e.message : String(e);
   }
 
-  // A failed fetch renders as an ErrorNode in place of the children, never an empty list (ADR-0026).
+  // A failed fetch renders as an ErrorNode in place of the children, never an empty list (ADR-0019).
   private async orErrorNode(op: string, build: () => Promise<PluginTreeNode[]>): Promise<PluginTreeNode[]> {
     try {
       return await build();
@@ -481,7 +481,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
 
   /** Keyed by filename rather than by a node this provider built: `PluginsTreeProvider` expands
    *  its own load-order rows, whose whole knowledge of this side is a plugin filename
-   *  (ADR-0035). */
+   *  (ADR-0002). */
   async getPluginChildren(pluginName: string, origin?: string): Promise<PluginTreeNode[]> {
     return this.orErrorNode(`getPluginChildren(${pluginName})`, async () => {
       const types = await this.repository.getRecordTypes(pluginName, origin);

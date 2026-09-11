@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Serialization.Customizations;
 namespace MEditService.Core.Serialization;
 
 /// <summary>The embed list: a container member holding child major records is inlined in the
-/// container's document in Mutagen's list order (ADR-0042 decision 4). No SortList: decision 3
+/// container's document in Mutagen's list order (ADR-0006 decision 4). No SortList: decision 3
 /// forbids re-sorting.</summary>
 public sealed class CellEmbedCustomization : ICustomize<ICellGetter>
 {

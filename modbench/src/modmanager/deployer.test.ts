@@ -225,7 +225,7 @@ describe('deploy', () => {
     expect(await readFile(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'), 'utf8')).toBe('VANILLA');
     const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual([]);
-    // ADR-0026 integrity tier: this is mandatory, so the severity tier matters, not just that
+    // ADR-0019 integrity tier: this is mandatory, so the severity tier matters, not just that
     // some report happened to fire.
     expect(reporter.reports.some((r) => r.severity === 'warning' && r.detail?.includes('textures/foo.dds'))).toBe(true);
   });
@@ -237,7 +237,7 @@ describe('deploy', () => {
 
     await deploy(fx.instanceRoot, fx.gameDirectory, makeIndex({ 'mod.esp': source }), reporter);
 
-    // ADR-0026 rejects notification fatigue: nothing went wrong, so nothing should surface.
+    // ADR-0019 rejects notification fatigue: nothing went wrong, so nothing should surface.
     expect(reporter.reports).toEqual([]);
   });
 

@@ -47,7 +47,7 @@ describe('createDebouncedFsWatcher', () => {
   });
 
   // A mod's `.git` directory churns heavily without any of the load-order facts this watcher
-  // relays ever changing (ADR-0041).
+  // relays ever changing (ADR-0007).
   it('ignores an event inside a mod\'s .git directory, while a sibling content event still fires', () => {
     const onChange = vi.fn();
     createDebouncedFsWatcher('/instance', 'mods/**', onChange);

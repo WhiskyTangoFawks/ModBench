@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0046 invariant 6: the plugin watcher's overflow delegate routes to
+/// <summary>ADR-0015 invariant 4: the plugin watcher's overflow delegate routes to
 /// <c>IndexProjector.ValidateIndex</c>, mirroring <see cref="SourceChangeApplier"/>'s own shape.</summary>
 public sealed class ExternalChangeApplierTests : IDisposable
 {

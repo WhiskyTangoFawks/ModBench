@@ -2,7 +2,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The kernel, the codec and the write side never import the read side (ADR-0046
+/// <summary>The kernel, the codec and the write side never import the read side (ADR-0014
 /// invariants 1 and 3): an import here is a type filed in Queries that is not a read
 /// model.</summary>
 public sealed class ReadSideImportScanTests

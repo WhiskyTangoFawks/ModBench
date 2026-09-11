@@ -68,7 +68,7 @@ export class FileConflictLookup {
   }
 }
 
-/** The winner lookup minus its one mutator: a value is replaced whole, never patched (ADR-0047).
+/** The winner lookup minus its one mutator: a value is replaced whole, never patched (ADR-0015).
  *  Every reader of the Instance's `files` field, the deployer included, takes this. */
 export type FileWinners = Omit<FileConflictLookup, 'set'>;
 
@@ -90,7 +90,7 @@ export function rootLevelWinners(index: FileConflictIndex): Map<string, string> 
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winner]));
 }
 
-/** The origin-resolution twin of `rootLevelWinners` (ADR-0036), under the same
+/** The origin-resolution twin of `rootLevelWinners` (ADR-0012), under the same
  *  root-level-only contract. */
 export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
@@ -214,7 +214,7 @@ export async function buildFileConflictIndex(
   const walked = await Promise.all(enabledMods.map((mod) => walkMod(instanceRoot, mod.name, log)));
 
   // modlist.txt is winning-first, so the FIRST enabled provider wins and later ones only
-  // register as contenders (modmanager/CONTEXT.md, "Override order").
+  // register as contenders (CONTEXT.md, "Override order").
   for (let i = 0; i < enabledMods.length; i++) {
     const mod = enabledMods[i];
     const modFiles = walked[i];

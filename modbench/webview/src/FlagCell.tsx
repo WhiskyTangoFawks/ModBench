@@ -17,7 +17,7 @@ interface FlagCellProps {
   collapsed?: boolean;
 }
 
-/** A `flags` member renders as an always-visible checkbox list — a deliberate ADR-0034
+/** A `flags` member renders as an always-visible checkbox list — a deliberate ADR-0018
  *  divergence from xEdit, whose `etCheckComboBox` appears only on the edit gesture. There is no
  *  text state and nothing to open, so F2 is inert. */
 export function FlagCell({ value, meta, editable, onCommit, collapsed }: FlagCellProps) {

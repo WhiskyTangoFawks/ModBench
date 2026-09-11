@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>ADR-0041's create gesture: the plugin file, and the Track its destination needs before
+/// <summary>ADR-0007's create gesture: the plugin file, and the Track its destination needs before
 /// anything can be edited there. The endpoint registers the copy before this runs. Never touches
 /// plugins.txt.</summary>
 public sealed class CreatePluginHandler

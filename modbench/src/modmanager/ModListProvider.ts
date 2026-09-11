@@ -21,7 +21,7 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
 
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
-   *  overwrite/ file count — the tree's only data input (ADR-0047). */
+   *  overwrite/ file count — the tree's only data input (ADR-0015). */
   instance: InstanceView;
   log?: (msg: string) => void;
   reporter?: Reporter;
@@ -119,7 +119,7 @@ function isEntryNode(node: ModlistNode): node is ModNode | SeparatorNode {
 }
 
 /** Sidebar Mods tree over an MO2 instance's active profile — rows, statuses and
- *  the overwrite count all read entirely from the Instance value (ADR-0047); this provider owns
+ *  the overwrite count all read entirely from the Instance value (ADR-0015); this provider owns
  *  no cache or watcher over MO2's files itself. */
 export class ModListProvider
   implements vscode.TreeDataProvider<ModlistNode>, vscode.TreeDragAndDropController<ModlistNode>, vscode.Disposable
@@ -137,7 +137,7 @@ export class ModListProvider
   private groupingOn = true;
   // View order only (no override weight). false (default) = losing end at top —
   // base/vanilla-adjacent mods on top, winning overrides at the bottom, matching
-  // MO2's default. See modmanager/CONTEXT.md ("View order").
+  // MO2's default. See CONTEXT.md ("View order").
   private winningAtTop = false;
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
@@ -210,7 +210,7 @@ export class ModListProvider
     if (target?.kind === 'count' || target?.kind === 'overwrite') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
     // Resync against disk afterwards so a failed mutation never leaves a phantom reorder on
-    // screen (ADR-0026).
+    // screen (ADR-0019).
     await this.applyDrop(kind, name, target);
     this.invalidate();
   }

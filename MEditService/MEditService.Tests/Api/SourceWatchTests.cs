@@ -15,7 +15,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0046 invariant 4: a hand edit, a commit and a checkout reach the Index the same way
+/// <summary>ADR-0015 invariant 2: a hand edit, a commit and a checkout reach the Index the same way
 /// our own writes do. Wired the way the composition root wires it, over a real git working
 /// tree.</summary>
 public sealed class SourceWatchTests : IDisposable
@@ -141,7 +141,7 @@ public sealed class SourceWatchTests : IDisposable
         Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
     }
 
-    // ADR-0046 invariant 4: our own write reaches the Index the way a hand edit does, and a second
+    // ADR-0015 invariant 2: our own write reaches the Index the way a hand edit does, and a second
     // signal over bytes that already landed changes nothing.
     [Fact]
     public async Task AWriteThroughTheWriteApi_LandsThroughTheWatcher_AndChangesNoRowASecondTime()
@@ -172,7 +172,7 @@ public sealed class SourceWatchTests : IDisposable
         Assert.Equal("RenamedByHand", EditorIdAt(RecordRef.Effective));
     }
 
-    // The header is a source unit too (ADR-0041, ADR-0005): the watcher's own root is the mod
+    // The header is a source unit too (ADR-0007, ADR-0011): the watcher's own root is the mod
     // folder, so a hand edit to RecordData.json reaches the index the same way any other document's
     // does.
     [Fact]
@@ -284,7 +284,7 @@ public sealed class SourceWatchTests : IDisposable
         Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
-    // Never exclusive owners of the folder (ADR-0041): MO2's Replace install shell-deletes a mod
+    // Never exclusive owners of the folder (ADR-0007): MO2's Replace install shell-deletes a mod
     // folder, repository and all, under a running backend.
     [Fact]
     public void ADeletedRepository_StopsTheWatch_AndTheModReadsAsUntracked()

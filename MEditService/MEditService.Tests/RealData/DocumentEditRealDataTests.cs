@@ -15,7 +15,7 @@ using static MEditService.Tests.TestSupport.Envelopes;
 namespace MEditService.Tests.RealData;
 
 /// <summary>Whole-document equality per gesture over every record of the real plugin. A keyed
-/// array the binary left out of key order is sorted by its first edit (ADR-0032), so each document
+/// array the binary left out of key order is sorted by its first edit (ADR-0005), so each document
 /// is settled once first.</summary>
 public sealed class DocumentEditRealDataTests(CutDownPluginFixture fixture, ITestOutputHelper output)
     : IClassFixture<CutDownPluginFixture>

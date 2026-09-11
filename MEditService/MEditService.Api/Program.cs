@@ -61,7 +61,7 @@ try
         o.SchemaFilter<MEditService.Api.Swagger.NullabilitySchemaFilter>();
     });
     builder.Services.AddSingleton<SchemaReflector>();
-    // ADR-0046: one publisher instance, resolved as both types — the concrete type for the stream
+    // ADR-0014: one publisher instance, resolved as both types — the concrete type for the stream
     // endpoint's own subscribe/unsubscribe, the interface for every publisher.
     builder.Services.AddSingleton<SseNotificationPublisher>();
     builder.Services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<SseNotificationPublisher>());
@@ -69,8 +69,8 @@ try
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IPluginAdapter, MutagenPluginAdapter>();
     builder.Services.AddSingleton<LoadOrderHolder>();
-    // ADR-0046 invariant 10: one Index for the whole process, so the two sides never project into
-    // two stores. ADR-0001: which file it opens comes from the load request, not from here.
+    // ADR-0014 invariant 5: one Index for the whole process, so the two sides never project into
+    // two stores. ADR-0009: which file it opens comes from the load request, not from here.
     builder.Services.AddSingleton(sp => new IndexProjector(
         sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IPluginAdapter>(),
@@ -92,18 +92,18 @@ try
     builder.Services.AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
         held, sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILogger<FormLinkResolver>>()));
-    // ADR-0046 invariant 3: one handler per gesture, registered where the module they share is
+    // ADR-0014 invariant 3: one handler per gesture, registered where the module they share is
     // visible, and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();
     // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // ADR-0046: one recursive watcher per mod folder in the load order, a process singleton so the
+    // ADR-0014: one recursive watcher per mod folder in the load order, a process singleton so the
     // reconcile-time check (PUT /load-order), Track and the live watch all share it.
     builder.Services.AddSingleton<ModFolderWatcher>();
 
     var app = builder.Build();
 
-    // ADR-0001: subscribed once, not per reconcile — the watcher is a process singleton, and
+    // ADR-0009: subscribed once, not per reconcile — the watcher is a process singleton, and
     // re-subscribing would stack a handler per reconcile. Which plugins are watched is re-decided
     // per reconcile instead.
     var index = app.Services.GetRequiredService<IndexProjector>();
@@ -116,7 +116,7 @@ try
     watcher.IndexedBinaryChanged = binaryChanges.Apply;
     watcher.IndexedWatchOverflowed = binaryChanges.ApplyOverflow;
 
-    // ADR-0046: the mod watcher's own external-change signals, subscribed once for the same reason.
+    // ADR-0014: the mod watcher's own external-change signals, subscribed once for the same reason.
     var externalChanges = new ExternalChangeApplier(
         index,
         holder,
@@ -125,7 +125,7 @@ try
     watcher.ExternalChangeReported = externalChanges.ApplyPending;
     watcher.WatchOverflowed = externalChanges.ApplyOverflow;
 
-    // ADR-0046: the same watcher's source-routing half. The Index announces each reconcile and
+    // ADR-0014: the same watcher's source-routing half. The Index announces each reconcile and
     // Track the repository it has created, so a watch starts with no restart.
     var sourceChanges = new SourceChangeApplier(
         index, holder, app.Services.GetRequiredService<IndexWriteGate>(), watcher,

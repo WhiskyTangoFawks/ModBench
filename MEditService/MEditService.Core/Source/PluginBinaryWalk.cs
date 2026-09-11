@@ -5,7 +5,7 @@ using System.Text;
 namespace MEditService.Core.Source;
 
 /// <summary>Mutagen-free byte-level walker over a plugin's record/GRUP/subrecord structure, shared by
-/// Track's tripwire and the Repair surface. Mutagen-free by requirement (ADR-0043): its model is
+/// Track's tripwire and the Repair surface. Mutagen-free by requirement (ADR-0006): its model is
 /// where the data goes missing.</summary>
 public static class PluginBinaryWalk
 {
@@ -107,7 +107,7 @@ public static class PluginBinaryWalk
 
     /// <summary>The first record whose subrecord inventory shows a drop, or null. Paired by type and
     /// FormID, never by position: a rewrite carries no group order. TES4's MAST/DATA are exempt
-    /// (ADR-0038 re-derives the master list).</summary>
+    /// (ADR-0008 re-derives the master list).</summary>
     public static SubrecordLoss? FindFirstSubrecordLoss(byte[] originalPluginBytes, byte[] rewrittenPluginBytes)
     {
         var rewrittenByIdentity = new Dictionary<(string Type, uint FormId), RecordSpan>();

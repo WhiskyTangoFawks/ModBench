@@ -29,7 +29,7 @@ it is not a capability the extension can add.
 Building either of these would mean abandoning the native `TreeView` for a
 custom-rendered one (e.g. a webview tree) just to control a highlight
 color and a cancel gesture — which the project's native-first doctrine
-(ADR-0027) rules out. A webview is justified by what it renders, never by
+(ADR-0017) rules out. A webview is justified by what it renders, never by
 chrome around a native widget, and this is exactly the "reinvent what
 VS Code already gives us for free" case that doctrine exists to prevent.
 

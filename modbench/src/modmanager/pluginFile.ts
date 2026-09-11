@@ -1,5 +1,5 @@
 // Which filenames are plugins. Nothing here opens one: the extension parses no plugin binary
-// (ADR-0021), and every fact about a plugin's contents comes from the backend.
+// (ADR-0016), and every fact about a plugin's contents comes from the backend.
 
 import { extname } from 'node:path';
 

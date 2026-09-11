@@ -335,7 +335,7 @@ describe('reconcileMods — modlist.txt converges on what mods/ holds', () => {
   });
 });
 
-// ADR-0047 point 6: a command never reads the Instance, the read model built only by watching.
+// ADR-0015 invariant 2: a command never reads the Instance, the read model built only by watching.
 // commands/instanceScan.test.ts glob-scans this whole folder too; this is this file's own guard.
 describe('modlist commands never import the Instance', () => {
   it('names no import from ../instance and no `Instance` identifier', () => {

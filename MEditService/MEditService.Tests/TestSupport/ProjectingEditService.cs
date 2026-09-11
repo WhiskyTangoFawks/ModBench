@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>The write API with the projection behind it. ADR-0046 makes the write and the Index
+/// <summary>The write API with the projection behind it. ADR-0014 makes the write and the Index
 /// learning of it two events, so a test reading after a write lets the projector catch up
 /// first.</summary>
 internal sealed class ProjectingEditService(IndexProjector index, IServiceProvider handlers)

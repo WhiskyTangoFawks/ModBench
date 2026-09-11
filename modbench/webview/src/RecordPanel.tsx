@@ -26,7 +26,7 @@ const mEditWindow = window as Window & typeof globalThis & {
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
 
-// ADR-0036: one sweep over the response's own overrides, keyed the way the backend keys its
+// ADR-0012: one sweep over the response's own overrides, keyed the way the backend keys its
 // dictionaries, so every whole-grid column set is minted the same way.
 function columnKeysWhere(
   overrides: CompareOverride[] | undefined, holds: (o: CompareOverride, key: ColumnKey) => boolean,
@@ -45,19 +45,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0035: a copy the load order doesn't name drives the header's dimming and tooltip wording
+  // ADR-0013: a copy the load order doesn't name drives the header's dimming and tooltip wording
   // independently of the plain immutable fact.
   const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0041: starts empty and stays empty until a load says otherwise — fail-closed, so a panel
+  // ADR-0007: starts empty and stays empty until a load says otherwise — fail-closed, so a panel
   // that has not heard from /plugins offers no editing rather than edits that cannot land.
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0035: whether the winner sweep has run. Initial `true` only matters until the first load
+  // ADR-0013: whether the winner sweep has run. Initial `true` only matters until the first load
   // lands (the `!result` early return renders "Loading…" until then), so it can never read as a
   // false "settled".
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
-  // ADR-0034: one source of truth for "which value cell is focused," so at most one cell across
+  // ADR-0018: one source of truth for "which value cell is focused," so at most one cell across
   // the grid is focused at once. Reset on LOAD_RECORD (a different record has no "same cell") but
   // not by refresh().
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
@@ -67,7 +67,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // Keyed by column identity — two same-filename columns must collapse independently.
   // Deliberately not reset by LOAD_RECORD: collapse state persists across record navigation.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
-  // ADR-0041: one definition of "this column can be written", computed for the whole grid at
+  // ADR-0007: one definition of "this column can be written", computed for the whole grid at
   // once, since per cell it would lag. The backend refuses every write to a parse-failed record,
   // so a diagnosis vetoes it too.
   const editableColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
@@ -75,13 +75,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     && !o.isPartialForm && o.parseDiagnosis == null),
     [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
-  // ADR-0035/ADR-0036: one definition of "this column renders at reduced weight" — a copy the load
+  // ADR-0013/ADR-0012: one definition of "this column renders at reduced weight" — a copy the load
   // order does not name, or a Partial Form record — so the header and the cells cannot disagree.
   const dimmedColumns = useMemo(() => columnKeysWhere(result?.overrides, (o, key) =>
     notInLoadOrderSet.has(key) || o.isPartialForm),
     [result, notInLoadOrderSet]);
 
-  // ADR-0036: the column key alone is a rendering key; the override carries the compound identity
+  // ADR-0012: the column key alone is a rendering key; the override carries the compound identity
   // the write path needs and the values a wire path resolves against.
   const overrideFor = useCallback(
     (plugin: ColumnKey) => (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin),
@@ -158,7 +158,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         if (!map[fv.metadata.name]) map[fv.metadata.name] = fv.metadata;
       }
     }
-    // ADR-0038: the header record's masters field displays but is never directly editable —
+    // ADR-0008: the header record's masters field displays but is never directly editable —
     // stamped readOnly here rather than gated a second way, so every consumer sees one answer.
     const mastersMeta = map.MasterReferences;
     if (isHeaderRecord && mastersMeta) {
@@ -181,7 +181,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     if (envelope) post(plugin, envelope);
   }, [post, hopsTo]);
 
-  // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0032).
+  // One leaf, one set: the writer applies whatever a governing member's change idles (ADR-0005).
   const handleCellCommit = useCallback((plugin: ColumnKey, path: PathSegment[], rootField: string, value: unknown) => {
     post(plugin, { op: 'set', path: hopsTo(plugin, rootField, path), value });
   }, [post, hopsTo]);
@@ -205,7 +205,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
         void refresh(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED) {
-        // ADR-0035: a panel already open when the sweep lands must reflect the settled data, not
+        // ADR-0013: a panel already open when the sweep lands must reflect the settled data, not
         // just clear its banner over stale content. Load-order-wide, not record-specific, so no
         // self-filter — every open panel reacts.
         void refresh(prevFormKeyRef.current);
@@ -220,7 +220,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result],
   );
 
-  // ADR-0036: origin appears inline in the header only when two copies share a filename —
+  // ADR-0012: origin appears inline in the header only when two copies share a filename —
   // computed from this response's own overrides, never the load order's plugin list.
   const collidingPluginNames = useMemo(
     () => collidingFilenames(result?.overrides ?? []),
@@ -343,7 +343,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
         {title}
       </div>
-      {/* ADR-0035: an unmarked cell here doesn't just omit a badge, it paints a verdict nothing
+      {/* ADR-0017: an unmarked cell here doesn't just omit a badge, it paints a verdict nothing
           has checked yet. Clears itself with no user action once refresh() next lands a settled
           `conflictsComputed`. */}
       {recordPanelIncompleteMessage(conflictsComputed) && (
@@ -361,12 +361,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
               {columns.map(col => {
                 {
-                  // ADR-0036: keyed by col.key (ColumnKey), not the bare plugin filename — two
+                  // ADR-0012: keyed by col.key (ColumnKey), not the bare plugin filename — two
                   // same-filename columns must collapse and read-only independently. The header
                   // context still gets the real plugin+origin pair, never the compound key.
                   const isCollapsed = collapsedColumns.has(col.key);
                   const isImmutable = immutableSet.has(col.key);
-                  // ADR-0035: the column's own load-order membership drives both the header's
+                  // ADR-0013: the column's own load-order membership drives both the header's
                   // reason wording and the dimming that carries down through every cell in this
                   // column — "non-participating copies render dimmed".
                   const inLoadOrder = !notInLoadOrderSet.has(col.key);

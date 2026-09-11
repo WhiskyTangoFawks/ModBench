@@ -3,9 +3,9 @@ import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSyn
 import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
 
-// ADR-0022/ADR-0046: the generated client, `openapi-fetch`, `undici` and the notification
+// ADR-0002/ADR-0014: the generated client, `openapi-fetch`, `undici` and the notification
 // stream's endpoint path live only under medit/client/. The webview also calls the backend
-// directly (RecordPanelClient.ts, ADR-0041) but sits outside modbench/src, unreached here.
+// directly (RecordPanelClient.ts, ADR-0007) but sits outside modbench/src, unreached here.
 
 const SRC = join(__dirname, '..');
 const CLIENT_DIR = join('medit', 'client');

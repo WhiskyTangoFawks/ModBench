@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Schema;
 
 /// <summary>A leaf kind is built once, so its facts do not depend on where the walk reached it: a
-/// top-level column, a member nested inside a struct and an array element all read alike (ADR-0032).</summary>
+/// top-level column, a member nested inside a struct and an array element all read alike (ADR-0005).</summary>
 public sealed class OneLeafBuilderTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

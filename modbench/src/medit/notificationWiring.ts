@@ -3,7 +3,7 @@ import type { MEditClient } from './client';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
 
 // Any reconcile-free record change is reason enough for a whole refresh() — the tree has no
-// per-row identity to check against the event (ADR-0046 invariant 5).
+// per-row identity to check against the event (ADR-0015 invariant 3).
 export function subscribeTreeToNotifications(
   client: Pick<MEditClient, 'subscribe'>, tree: { refresh(): void },
 ): () => void {

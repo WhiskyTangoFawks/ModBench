@@ -8,7 +8,7 @@ using Noggog;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0036 for the spatial routes, over a load order really holding two files of one filename.
+// ADR-0012 for the spatial routes, over a load order really holding two files of one filename.
 // Real mod-folder origins: ColumnKey.Of elides PluginOrigin.DataDirectory, so a default-origin
 // fixture passes whether or not the routes honour origin.
 [Collection(WebHostCollection.Name)]
@@ -61,7 +61,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        // ADR-0044: both copies travel in the one snapshot, ModB as the losing copy at the same
+        // ADR-0013: both copies travel in the one snapshot, ModB as the losing copy at the same
         // slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"

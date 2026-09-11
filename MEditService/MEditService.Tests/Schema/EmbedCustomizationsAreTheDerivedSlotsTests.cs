@@ -58,13 +58,13 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
 
         public ICustomizationBuilder<TObject> EmbedRecordsInSameFile(Expression<Func<TObject, IReadOnlyList<IMajorRecordGetter>?>> field) => Record(field);
 
-        // ADR-0042 decision 3: neither customization exists, and a document that grew one would read
+        // ADR-0006 decision 3: neither customization exists, and a document that grew one would read
         // here as an unrecorded member rather than as a passing test.
         public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field) =>
-            throw new NotSupportedException("Omit drops real data (ADR-0042 decision 3).");
+            throw new NotSupportedException("Omit drops real data (ADR-0006 decision 3).");
 
         public ICustomizationBuilder<TObject> Omit<TField>(Expression<Func<TObject, TField>> field, Func<TObject, TField, bool> predicate) =>
-            throw new NotSupportedException("Omit drops real data (ADR-0042 decision 3).");
+            throw new NotSupportedException("Omit drops real data (ADR-0006 decision 3).");
 
         private ICustomizationBuilder<TObject> Record(LambdaExpression field)
         {

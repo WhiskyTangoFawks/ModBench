@@ -3,7 +3,7 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Compile gesture's handler (ADR-0046 invariant 3): the door every write shares
+/// <summary>The Compile gesture's handler (ADR-0014 invariant 3): the door every write shares
 /// first, then every step of the compile itself stays on <see cref="PluginCompileService"/>.</summary>
 public sealed class CompilePluginHandler
 {

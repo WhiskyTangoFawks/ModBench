@@ -168,7 +168,7 @@ public sealed class SwaggerSchemaTests
     // Swashbuckle never reads C#'s nullable-reference-type annotations, so without a filter no
     // property lands in `required` and the whole wire types optional-and-nullable.
     [Theory]
-    // PluginResponse: every member is non-nullable except LoadOrderIndex (`int?` — ADR-0044's
+    // PluginResponse: every member is non-nullable except LoadOrderIndex (`int?` — ADR-0013's
     // honest null for a copy no plugins.txt line names), which must stay optional.
     [InlineData(
         "PluginResponse",

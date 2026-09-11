@@ -9,7 +9,7 @@ namespace MEditService.Core.Edits;
 
 /// <summary>The container half of both copy gestures: a child lands inside its container's document,
 /// minted bare and Partial Form when the destination lacks it. Shares the write side's schema and
-/// codec: one write path (ADR-0041).</summary>
+/// codec: one write path (ADR-0007).</summary>
 internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger, RecordTextCodec codec)
 {
     /// <summary>The tracked plugin a copy lands in: its repository, its key, and the mod folder the

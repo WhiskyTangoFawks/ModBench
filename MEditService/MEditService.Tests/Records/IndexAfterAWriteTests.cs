@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046: the write side never pushes, so what the Index serves after a write is what a
+/// <summary>ADR-0014: the write side never pushes, so what the Index serves after a write is what a
 /// projection of the changed tree made of it. Read here, never in the write suites.</summary>
 public sealed class IndexAfterAWriteTests : IDisposable
 {
@@ -42,7 +42,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        // The file write and the projection are two events (ADR-0046), and both have to have landed:
+        // The file write and the projection are two events (ADR-0014), and both have to have landed:
         // dirt on disk with the editor showing the old value is half a write path.
         var index = _mod.Index.Store!;
         Assert.Contains(

@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Source;
 
 /// <summary>The repository's document verbs against a real tracked tree with no index anywhere in
-/// the fixture: a mod folder, git, and the files Track committed (ADR-0046 invariant 9).</summary>
+/// the fixture: a mod folder, git, and the files Track committed (ADR-0014 invariant 5).</summary>
 public sealed class SourceRepositoryDocumentTests : IDisposable
 {
     private const string PluginName = "Fixture.esp";

@@ -6,7 +6,7 @@ namespace MEditService.Tests.Schema;
 
 /// <summary>Record classes sharing a signature, OMOD's generic-closed properties, abstract and
 /// concrete unions: every base with leaves is one sparse union, the document's discriminator
-/// beside members carrying a variant per leaf wherever leaves differ (ADR-0032).</summary>
+/// beside members carrying a variant per leaf wherever leaves differ (ADR-0005).</summary>
 public sealed class UnionMechanismSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

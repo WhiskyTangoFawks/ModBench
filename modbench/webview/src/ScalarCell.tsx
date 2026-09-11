@@ -9,7 +9,7 @@ interface ScalarCellProps {
   // There is no edit mode — editability is a property of the column (is the plugin mutable, is it
   // tracked), never of a state the user toggles into.
   editable?: boolean;
-  // ADR-0034: gates the plain click, so a *second* click on an already-focused cell opens while a
+  // ADR-0018: gates the plain click, so a *second* click on an already-focused cell opens while a
   // first click only focuses — this handler runs before DiskCell's ancestor onFocusCell, so
   // `isFocused` is still the pre-click value here.
   isFocused?: boolean;
@@ -34,8 +34,8 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
     : <span aria-label={ariaLabel}>{displayValue(value, meta)}</span>;
 }
 
-/** ADR-0034: xEdit's gesture, unchanged — a click *focuses* a cell, it does not edit it.
- *  ADR-0039: a VS Code tab relocates the user, so no left-click gesture may reach the extended
+/** ADR-0018: xEdit's gesture, unchanged — a click *focuses* a cell, it does not edit it.
+ *  ADR-0018: a VS Code tab relocates the user, so no left-click gesture may reach the extended
  *  editor. */
 export function ScalarCell({
   value, meta, editable = false, isFocused = true, onCommit, ariaLabel, displayOverride,
@@ -56,7 +56,7 @@ export function ScalarCell({
   }
 
   if (!active) {
-    // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it. ADR-0034:
+    // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it. ADR-0018:
     // no cursor override — a text caret would falsely imply editing is the only thing a click can
     // start.
     return (

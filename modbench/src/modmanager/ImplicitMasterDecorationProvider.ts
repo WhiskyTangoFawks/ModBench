@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-/** Grays an implicit master's row as MO2 does for a `forceLoaded` row (ADR-0035);
+/** Grays an implicit master's row as MO2 does for a `forceLoaded` row (ADR-0013);
  *  `TreeItem` has no label-color property, so row coloring must be a
  *  `FileDecorationProvider`. */
 export class ImplicitMasterDecorationProvider implements vscode.FileDecorationProvider {

@@ -8,4 +8,4 @@ named on a line is the full statement.
   A hand-written type is a transform of the wire type, never a mirror of it.
 - Every UI surface has a living spec in `docs/specs/`; a UI change updates its spec in the same
   change.
-- A site that both logs and toasts goes through the injected `makeReporter`; the severity table is ADR-0026.
+- A site that both logs and toasts goes through the injected `makeReporter`; the severity table is ADR-0019.

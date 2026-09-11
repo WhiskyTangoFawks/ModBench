@@ -221,7 +221,7 @@ describe('a term that matches nothing says so', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // ADR-0026: the message is decided by what survived the filter, not by whether the term matched.
+  // ADR-0019: the message is decided by what survived the filter, not by whether the term matched.
   // A view whose rows are an error row still has rows; "no matches" sends that user
   // debugging the filter instead of the data.
   it('stays silent when what survived the filter is an error row', async () => {

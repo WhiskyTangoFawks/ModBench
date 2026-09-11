@@ -34,7 +34,7 @@ internal sealed class IndexStore : IDisposable
         Connection = Open();
     }
 
-    // Rebuilds from scratch if the file cannot be opened at all (ADR-0001 point 6): the index is
+    // Rebuilds from scratch if the file cannot be opened at all (ADR-0009 point 5): the index is
     // derived state and losing it costs one cold load, so a rebuild beats refusing to start.
     private DuckDBConnection Open()
     {
@@ -130,7 +130,7 @@ internal sealed class IndexStore : IDisposable
         TableDdlBuilder.CreateTables(Connection);
     }
 
-    // ADR-0001: a codec or schema version change invalidates the whole file, and there is no
+    // ADR-0009: a codec or schema version change invalidates the whole file, and there is no
     // in-place migration: the file is deleted and reopened empty, costing one cold load.
     private void DiscardFileWrittenUnderAnotherVersion()
     {
@@ -177,7 +177,7 @@ internal sealed class IndexStore : IDisposable
     }
 
     // Only reachable once the file has already been opened, so it can never race the second-writer
-    // case IsAnotherWriter guards. Internal: ADR-0046's rebuild reuses this same delete-and-reopen.
+    // case IsAnotherWriter guards. Internal: ADR-0014's rebuild reuses this same delete-and-reopen.
     internal void RebuildFile()
     {
         lock (_rebuildGate)
@@ -198,8 +198,8 @@ internal sealed class IndexStore : IDisposable
         }
     }
 
-    /// <summary>ADR-0001: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
-    /// and the user all write these files. Registrations are not cleared (ADR-0044); the first
+    /// <summary>ADR-0009: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
+    /// and the user all write these files. Registrations are not cleared (ADR-0013); the first
     /// reconcile corrects them.</summary>
     public List<PluginKey> ValidateAgainstDisk()
     {
@@ -289,7 +289,7 @@ internal sealed class IndexStore : IDisposable
             key.Name, key.Origin!);
     }
 
-    // ADR-0001: the file half of an Index() call, inside its transaction. A caller naming no file
+    // ADR-0009: the file half of an Index() call, inside its transaction. A caller naming no file
     // (an in-memory mod) writes no row, so nothing vouches for those rows and the next load
     // re-indexes.
     public void StampIndexedFile(string plugin, string origin, string? filePath)
@@ -306,7 +306,7 @@ internal sealed class IndexStore : IDisposable
     public void DeleteIndexedFile(string plugin, string origin) =>
         DuckDbSql.ExecuteFor(Connection, $"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
 
-    // ADR-0046: one advance per logical projection, not per transaction inside it. A whole-plugin
+    // ADR-0014: one advance per logical projection, not per transaction inside it. A whole-plugin
     // ingest is four transactions, so a client awaiting the sequence once could otherwise read an
     // in-between state.
     private readonly Lock _projectionLock = new();
@@ -414,7 +414,7 @@ internal sealed class IndexStore : IDisposable
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
-    // ADR-0046: raises the sequence to at least atLeast, never lowers it — Sequence must never
+    // ADR-0014: raises the sequence to at least atLeast, never lowers it — Sequence must never
     // regress within one process across a rebuild.
     internal void SeedSequence(long atLeast)
     {

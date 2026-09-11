@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace MEditService.Core.Source;
 
-/// <summary><c>meta.ini</c> read as a source, never tracked content (ADR-0041 amendment). The one
+/// <summary><c>meta.ini</c> read as a source, never tracked content (ADR-0003). The one
 /// reading shared by Track's baseline trailers and the external-change classifier.</summary>
 internal static class MetaIni
 {

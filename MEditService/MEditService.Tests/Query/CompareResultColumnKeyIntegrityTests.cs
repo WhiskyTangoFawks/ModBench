@@ -16,7 +16,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-// ADR-0036: "every key contains the delimiter" is no safety net, since ColumnKey.Of elides the
+// ADR-0012: "every key contains the delimiter" is no safety net, since ColumnKey.Of elides the
 // Data-directory origin. Driven through GetCompare, where the step that builds column keys lives.
 public sealed class CompareResultColumnKeyIntegrityTests
 {

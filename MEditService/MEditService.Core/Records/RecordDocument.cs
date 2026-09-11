@@ -3,7 +3,7 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Core.Records;
 
-/// <summary>One plugin's copy of one record (ADR-0041). <see cref="Body"/> is exactly the bytes the
+/// <summary>One plugin's copy of one record (ADR-0007). <see cref="Body"/> is exactly the bytes the
 /// record's source file holds — for the header, the root <c>RecordData.json</c>.</summary>
 public record RecordDocument(
     string FormKey,

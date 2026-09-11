@@ -8,7 +8,7 @@ using Noggog;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>The codec adopts Spriggit's embed customization verbatim (ADR-0041): the five embedded
+/// <summary>The codec adopts Spriggit's embed customization verbatim (ADR-0007): the five embedded
 /// slots serialize inline in the container's own document.</summary>
 public sealed class RecordTextCodecEmbedTests
 {

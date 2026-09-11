@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>Reads the <c>winners</c> table directly because where the answer is stored is the point
-/// (ADR-0001: winning is a function of the registered load order, never a column on a data row).</summary>
+/// (ADR-0009: winning is a function of the registered load order, never a column on a data row).</summary>
 public sealed class WinnersDerivedTableTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;

@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.PluginAdapter;
 
-/// <summary>Where a FormLink points, without the Index (ADR-0046 invariant 7): the copy the load
+/// <summary>Where a FormLink points, without the Index (ADR-0015 invariant 5): the copy the load
 /// order loads answers, from its working tree when tracked and its own file when not. One per
 /// request, not thread-safe.</summary>
 public sealed class FormLinkResolver(
@@ -38,7 +38,7 @@ public sealed class FormLinkResolver(
         // throws nothing.
         if (!FormKey.TryFactory(formKey, out var parsed)) return null;
         if (loadOrder.WinningCopy(parsed.ModKey.FileName) is not { } copy) return null;
-        // ADR-0044: a disabled, losing or unlisted copy is registered but not loaded, so nothing it
+        // ADR-0013: a disabled, losing or unlisted copy is registered but not loaded, so nothing it
         // holds is what this FormKey points at.
         if (!copy.Registration.Participates) return null;
 

@@ -4,14 +4,14 @@ using MEditService.Core.Source;
 
 namespace MEditService.Core.Notifications;
 
-/// <summary>ADR-0046 invariant 12: the notification channel's one publish surface. Who is
+/// <summary>ADR-0014 invariant 2: the notification channel's one publish surface. Who is
 /// listening — the SSE stream, a test recorder, nobody — is the adapter's business alone.</summary>
 public interface INotificationPublisher
 {
     void Publish(Notification notification);
 }
 
-/// <summary>One of the notification kinds ADR-0046 names. Kind is both the SSE event name and the
+/// <summary>One of the notification kinds ADR-0014 names. Kind is both the SSE event name and the
 /// wire discriminator.</summary>
 public abstract record Notification(string Kind)
 {
@@ -27,7 +27,7 @@ public sealed record RowsChangedNotification(PluginKey Plugin, IReadOnlyList<str
     public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin ?? "", Keys, Sequence);
 }
 
-/// <summary>The plugin watcher re-indexed or removed a whole binary (ADR-0001) — too many rows to
+/// <summary>The plugin watcher re-indexed or removed a whole binary (ADR-0009) — too many rows to
 /// name, so this names the plugin instead.</summary>
 public sealed record PluginChangedNotification(PluginKey Plugin, long Sequence)
     : Notification("plugin-changed")

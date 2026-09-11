@@ -1,6 +1,6 @@
 namespace MEditService.Core.Records;
 
-/// <summary>One DuckDB file per MO2 instance, in the instance root (ADR-0001). Never under
+/// <summary>One DuckDB file per MO2 instance, in the instance root (ADR-0009). Never under
 /// <c>mods/</c>, <c>overwrite/</c> or <c>profiles/</c>: a reinstall, profile delete or archiver
 /// would take it as content.</summary>
 public static class IndexFile

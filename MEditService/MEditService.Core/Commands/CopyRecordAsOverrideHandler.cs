@@ -8,8 +8,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Copy as Override gesture's handler (ADR-0046 invariant 3): xEdit's "Copy as
-/// Override Into…" — the source's own bytes land verbatim under the same FormKey (ADR-0041).</summary>
+/// <summary>The Copy as Override gesture's handler (ADR-0014 invariant 3): xEdit's "Copy as
+/// Override Into…" — the source's own bytes land verbatim under the same FormKey (ADR-0007).</summary>
 public sealed class CopyRecordAsOverrideHandler
 {
     private readonly WriteTargets _targets;
@@ -171,7 +171,7 @@ public sealed class CopyRecordAsOverrideHandler
     {
         var copies = _loadOrder.Current.Copies;
 
-        // A FormKey carries only a filename, so with two same-named copies (ADR-0036) the winning one
+        // A FormKey carries only a filename, so with two same-named copies (ADR-0012) the winning one
         // is the origin.
         var originName = FormKey.Factory(formKey).ModKey.FileName.String;
         var sameNamed = copies.Where(p => p.Name.Equals(originName, StringComparison.OrdinalIgnoreCase)).ToList();

@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0036: the IndexProjector-level Reconcile call that carries a caller-supplied
+// ADR-0012: the IndexProjector-level Reconcile call that carries a caller-supplied
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.
 public sealed class ReconcileOriginTests
 {
@@ -36,7 +36,7 @@ public sealed class ReconcileOriginTests
         Assert.Equal("SomeMod", opened.Origin);
     }
 
-    // ADR-0036: PluginMetadata.Origin alone (asserted above) is not enough — the indexed row
+    // ADR-0012: PluginMetadata.Origin alone (asserted above) is not enough — the indexed row
     // itself must carry the real origin rather than silently falling back to the reserved default.
     [Fact]
     public void Reconcile_WithOrigin_IndexedRecordCarriesRealOrigin()

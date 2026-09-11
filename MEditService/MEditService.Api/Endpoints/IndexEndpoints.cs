@@ -14,7 +14,7 @@ public static class IndexEndpoints
 
     public static IEndpointRouteBuilder MapIndexEndpoints(this IEndpointRouteBuilder app)
     {
-        // ADR-0046 invariants 4 and 6: the Index's second way of learning of change. POST because it
+        // ADR-0015 invariants 2 and 4: the Index's second way of learning of change. POST because it
         // is a gesture with an effect, not state.
         app.MapPost("/index/reconcile", Reconcile)
             .WithName("ReconcileIndex")
@@ -43,7 +43,7 @@ public static class IndexEndpoints
             logger.LogInformation("Received ReconcileIndex for {Plugin} ({Origin})", plugin ?? "every plugin", origin);
         }
 
-        // ADR-0036: a copy is (origin, plugin) together, so half an identity names nothing.
+        // ADR-0012: a copy is (origin, plugin) together, so half an identity names nothing.
         if (string.IsNullOrEmpty(plugin) != string.IsNullOrEmpty(origin))
             return Results.Problem("Name a copy with both plugin and origin, or neither to check every copy.", statusCode: 400);
 

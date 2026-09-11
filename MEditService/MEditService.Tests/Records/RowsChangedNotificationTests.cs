@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046 invariant 12, the in-memory adapter: the same Index verbs the write API
+/// <summary>ADR-0014 invariant 2, the in-memory adapter: the same Index verbs the write API
 /// reaches publish rows-changed through the port with no HTTP or SSE stream involved, proving the
 /// port — not the transport — is the seam.</summary>
 public sealed class RowsChangedNotificationTests : IDisposable

@@ -5,7 +5,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046 invariant 6: the projector compares what it holds against the system of record
+/// <summary>ADR-0015 invariant 4: the projector compares what it holds against the system of record
 /// and repairs the difference. Through the Index's own seam with a real git working tree, because
 /// what git answers is under test.</summary>
 public sealed class ValidateTests : IDisposable

@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The command convention, enforced rather than described (ADR-0046 invariant 3): one type
+/// <summary>The command convention, enforced rather than described (ADR-0014 invariant 3): one type
 /// per gesture, one public method, applied-or-refusal returned. No interface states it, because
 /// Track is asynchronous and the rest are not.</summary>
 public sealed class CommandHandlerConventionTests
@@ -32,7 +32,7 @@ public sealed class CommandHandlerConventionTests
     ];
 
     // What the gestures answer and report through, each with its own refusal vocabulary. The carrier
-    // is the gesture's own (ADR-0046 invariant 8), so it shares the gesture's namespace.
+    // is the gesture's own (ADR-0014 invariant 4), so it shares the gesture's namespace.
     private static readonly Type[] Carriers =
     [
         typeof(AbsorbResult),
@@ -74,7 +74,7 @@ public sealed class CommandHandlerConventionTests
         Assert.True(
             LandedType(answer, landed) == typeof(bool),
             $"{answer.Name} has no public {landed} of type bool, so {handler.Name}'s carrier does " +
-            "not answer with it (ADR-0046 invariant 8).");
+            "not answer with it (ADR-0014 invariant 4).");
     }
 
     [Theory]

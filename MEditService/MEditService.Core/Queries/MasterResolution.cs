@@ -3,7 +3,7 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Queries;
 
-// ADR-0037: a plugin with an unresolvable master is indexed and flagged, never deactivated. A
+// ADR-0012: a plugin with an unresolvable master is indexed and flagged, never deactivated. A
 // directly-missing master (never attempted) is told apart from one that is itself unloadable
 // so a cascade doesn't read as one undifferentiated error.
 [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -16,7 +16,7 @@ public enum MasterIssueKind
 public sealed record MasterIssue(string MasterName, MasterIssueKind Kind);
 
 // Pure and deliberately shallow: only a plugin's own declared Masters are consulted, never a
-// master's masters — a cascade is exactly what ADR-0037 rules out; nothing here deactivates,
+// master's masters — a cascade is exactly what ADR-0012 rules out; nothing here deactivates,
 // so there is nothing to propagate.
 public static class MasterResolution
 {

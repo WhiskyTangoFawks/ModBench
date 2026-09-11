@@ -3,7 +3,7 @@ import { modelValue } from './modelValue';
 import type { FormKeyResolution } from './types';
 import { fieldMeta } from './test/fixtures';
 
-// ADR-0034: modelValue is the single definition of the string a cell's editor shows for every
+// ADR-0018: modelValue is the single definition of the string a cell's editor shows for every
 // field type, checked here independently of the leaf components' own logic.
 
 const strMeta = fieldMeta({ name: 'Name', type: 'string' });

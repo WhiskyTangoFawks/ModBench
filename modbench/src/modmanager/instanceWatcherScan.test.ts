@@ -1,4 +1,4 @@
-// ADR-0047 §3: the Instance owns every MO2-side watcher. A view or command wiring its own
+// ADR-0015 invariant 7: the Instance owns every MO2-side watcher. A view or command wiring its own
 // watcher would duplicate the Instance's recompute trigger instead of reading its value.
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';

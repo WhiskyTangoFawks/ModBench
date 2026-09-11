@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0001: loading a load order the index has seen registers its plugins rather than indexing them.
+// ADR-0009: loading a load order the index has seen registers its plugins rather than indexing them.
 public sealed class WarmReconcileTests
 {
     private static IndexProjector MakeManager(LoadOrderHolder holder, ILogger<IndexProjector>? logger = null)
@@ -188,8 +188,8 @@ public sealed class WarmReconcileTests
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
     }
 
-    // A tracked plugin's truth is its source tree (ADR-0041/0042), so persistence must never override
-    // the working tree. ADR-0046 invariant 6: the load validates by content, so an unmoved tree costs
+    // A tracked plugin's truth is its source tree (ADR-0007/0042), so persistence must never override
+    // the working tree. ADR-0015 invariant 4: the load validates by content, so an unmoved tree costs
     // a register and a comparison.
     [Fact]
     public async Task ATrackedPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()

@@ -1,4 +1,4 @@
-// ADR-0021: the extension parses no plugin binary. Every fact about a plugin's contents reaches
+// ADR-0016: the extension parses no plugin binary. Every fact about a plugin's contents reaches
 // it through the generated client, so nothing in src/ opens a file for its bytes.
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';

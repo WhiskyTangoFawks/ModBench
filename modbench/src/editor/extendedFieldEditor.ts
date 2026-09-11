@@ -16,7 +16,7 @@ function sanitizeForPath(segment: string): string {
 
 // Deterministic per record+field+plugin, so re-opening the same cell reveals the same tab.
 // `origin` is its own directory segment: two columns can share a filename and would otherwise
-// alias onto one temp file (ADR-0036).
+// alias onto one temp file (ADR-0012).
 export function extendedEditorPath(
   tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string,
 ): string {
@@ -30,7 +30,7 @@ export interface OpenExtendedFieldEditorParams {
   recordLabel: string;
   fieldName: string;
   plugin: string;
-  // ADR-0036: threaded into extendedEditorPath so two same-filename columns never alias onto one
+  // ADR-0012: threaded into extendedEditorPath so two same-filename columns never alias onto one
   // temp file.
   origin: string;
   readOnly: boolean;
@@ -82,14 +82,14 @@ export async function openExtendedFieldEditor(
       saveListener.dispose();
       closeListener.dispose();
       // Best-effort: the OS reclaims the temp dir regardless, so this is logged, not surfaced
-      // (ADR-0026). Awaited so the listener's promise settles only once the file is gone — an
+      // (ADR-0019). Awaited so the listener's promise settles only once the file is gone — an
       // orphaned unlink races anything observing the path.
       await unlink(path).catch((err: unknown) => {
         deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${err instanceof Error ? err.message : String(err)}`);
       });
     });
   } catch (err) {
-    // The user double-clicked a cell — an explicit action — so a failure here is ADR-0026's
+    // The user double-clicked a cell — an explicit action — so a failure here is ADR-0019's
     // "explicit action failed" row: error notification + log, not a silent swallow.
     deps.reporter.report('error', 'Could not open the extended editor.', err instanceof Error ? err.message : String(err));
   }

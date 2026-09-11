@@ -41,7 +41,7 @@ describe('reportLoadOrderResult — reconciled', () => {
     expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
   });
 
-  it('warns and logs a skipped plugin, never silently (ADR-0026)', () => {
+  it('warns and logs a skipped plugin, never silently (ADR-0019)', () => {
     const deps = makeDeps();
 
     reportLoadOrderResult([plugin()], reconciled([{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }]), deps);
@@ -66,7 +66,7 @@ describe('reportLoadOrderResult — reconciled', () => {
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
   });
 
-  // ADR-0044: every copy is sent, so a non-empty snapshot does not mean the profile has anything
+  // ADR-0013: every copy is sent, so a non-empty snapshot does not mean the profile has anything
   // enabled — participation is enabled AND winning AND listed, derived.
   it('warns when plugins were sent but none of them participate', () => {
     const deps = makeDeps();
@@ -106,7 +106,7 @@ describe('reportLoadOrderResult — failed', () => {
     expect(deps.error).toHaveBeenCalledWith('mEdit: Failed to send the load order — bad dir');
   });
 
-  it('touches nothing else — a failed PUT tore nothing down (ADR-0044)', () => {
+  it('touches nothing else — a failed PUT tore nothing down (ADR-0013)', () => {
     const deps = makeDeps();
 
     reportLoadOrderResult([plugin()], { outcome: 'failed', message: 'boom' }, deps);
@@ -177,7 +177,7 @@ describe('syncActiveFilter', () => {
     expect(deps.log).not.toHaveBeenCalled();
   });
 
-  // ADR-0026: an unsurfaced read failure is a notify-and-log tier — both the toast and the
+  // ADR-0019: an unsurfaced read failure is a notify-and-log tier — both the toast and the
   // channel line, never one without the other.
   it('logs and warns a read failure, and sets the filter inactive', async () => {
     const deps = makeSyncDeps();

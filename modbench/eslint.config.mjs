@@ -19,7 +19,7 @@ export default tseslint.config(
         },
     },
 
-    // Mod Management never calls the backend (CONTEXT-MAP.md).
+    // Mod Management never calls the backend (CONTEXT.md).
     {
         files: ['src/modmanager/**/*.ts'],
         rules: {
@@ -35,12 +35,12 @@ export default tseslint.config(
         },
     },
 
-    // ADR-0012: the mEdit client takes no VS Code types, so chat tool handlers (and its own
-    // in-memory adapter) can call it directly without pulling in the extension host.
+    // The mEdit client takes no VS Code types, so any caller (its own in-memory adapter today,
+    // a tool handler or a test tomorrow) can call it without pulling in the extension host.
     {
         files: ['src/medit/client/**/*.ts'],
         rules: {
-            'no-restricted-imports': ['error', { paths: [{ name: 'vscode', message: 'The mEdit client takes no VS Code types (ADR-0012).' }] }],
+            'no-restricted-imports': ['error', { paths: [{ name: 'vscode', message: 'The mEdit client takes no VS Code types.' }] }],
         },
     },
 

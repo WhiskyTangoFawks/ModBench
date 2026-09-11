@@ -18,7 +18,7 @@ public sealed class RecordOrderCustomizationBanTests
 
         Assert.True(
             offenders.Count == 0,
-            $"Order is carried in the parent's ordered child list (ADR-0042 decision 4), not in file " +
+            $"Order is carried in the parent's ordered child list (ADR-0006 decision 4), not in file " +
             $"names. Remove the .EnforceRecordOrder() call in: {string.Join(", ", offenders)}");
     }
 

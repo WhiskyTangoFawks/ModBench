@@ -109,7 +109,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         ((IMajorRecordInternal)found!.Value.Child).FormKey = newFormKey;
 
         // The renumber's whole file side: the owner's document is what carries the child's new
-        // identity, and the projector re-reads the rows out of it (ADR-0046).
+        // identity, and the projector re-reads the rows out of it (ADR-0014).
         await codec.SerializeAsync(
             owner, _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId), GameRelease.Fallout4);
         index.RefreshByKeys(_fixture.Plugin, _fixture.ModFolder, [_fixture.EmbedCell.ToString()]);

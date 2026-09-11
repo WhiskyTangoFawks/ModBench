@@ -26,7 +26,7 @@ export type CheckHonestNullableSurvives =
 export type CheckWireEnumIsStringUnion =
   Assert<Exact<WireSchemas['WorkingTreeState'], 'None' | 'Modified' | 'Added'>>;
 
-// ADR-0036: columnKey() must agree with the backend's ColumnKey.Of for the same (plugin,
+// ADR-0012: columnKey() must agree with the backend's ColumnKey.Of for the same (plugin,
 // origin) pair. With one origin per filename almost any implementation looks green; the red
 // case is two columns sharing a filename but differing in origin.
 describe('columnKey', () => {
@@ -44,7 +44,7 @@ describe('columnKey', () => {
     expect(columnKey('Shared.esp', 'Data')).toBe('Shared.esp');
   });
 
-  // ADR-0036: origin is not omittable, so a literal `null` is the only way to elide Data.
+  // ADR-0012: origin is not omittable, so a literal `null` is the only way to elide Data.
 
   // Case-folding is scoped to the Data-origin check only: "Data"/"data"/"DATA" must elide the
   // same way whichever casing a response uses.

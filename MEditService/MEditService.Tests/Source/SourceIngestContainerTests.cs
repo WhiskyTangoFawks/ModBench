@@ -64,7 +64,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         var holder = new LoadOrderHolder();
         using var reloaded = NewLoadOrder(holder);
 
-        // Nothing is dirty, so the one parse serves both refs — ADR-0041's clean fast path, asserted
+        // Nothing is dirty, so the one parse serves both refs — ADR-0007's clean fast path, asserted
         // rather than assumed, and asserted for a record that exists only inside its parent's document.
         var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         var head = reloaded.Store!.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);

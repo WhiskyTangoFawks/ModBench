@@ -6,7 +6,7 @@ import type { RecordEditEnvelope } from '../medit/messages';
  *  inline and keyboard edits through the message router, the right-click menus straight from the
  *  command they invoke. */
 export interface RecordWriteDeps {
-  // ADR-0041: the single write path, the port's own verb. Injected rather than imported so this
+  // ADR-0007: the single write path, the port's own verb. Injected rather than imported so this
   // stays callable from a plain unit test.
   meditClient: Pick<MEditClient, 'editRecord'>;
   // plugin/origin ride along because a FormKey names a record, not which plugin's copy of it this
@@ -16,7 +16,7 @@ export interface RecordWriteDeps {
 }
 
 /** An edit travels through the extension host rather than straight to the backend because a
- *  refusal has to become a native notification (ADR-0026), a surface only the host has. A refusal
+ *  refusal has to become a native notification (ADR-0019), a surface only the host has. A refusal
  *  is a warning, a transport failure an error. */
 export async function applyRecordEdit(
   deps: RecordWriteDeps, formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope,

@@ -4,7 +4,7 @@ using MEditService.Tests.TestSupport;
 namespace MEditService.Tests.Architecture;
 
 /// <summary>Retirements, one scan: the source order carrier, the Index's push verbs and
-/// validate-on-read (ADR-0046 invariant 4). References are counted against an allowlist that
+/// validate-on-read (ADR-0015 invariant 2). References are counted against an allowlist that
 /// stays empty; "folder-split" is refused in docs prose.</summary>
 public sealed class CarrierScanTests
 {

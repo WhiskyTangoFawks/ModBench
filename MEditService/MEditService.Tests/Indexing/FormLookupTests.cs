@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// ADR-0031: form_lookup population — mirrors FormReferencesTests.cs.
+// ADR-0005: form_lookup population — mirrors FormReferencesTests.cs.
 public class FormLookupTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -50,7 +50,7 @@ public class FormLookupTests
         cmd.CommandText = "SELECT COUNT(*) FROM form_lookup WHERE plugin = 'Lookup.esp'";
         var count = (long)cmd.ExecuteScalar()!;
 
-        // Two records and the plugin header: ADR-0031 keeps exactly one lookup row per `records` row, and
+        // Two records and the plugin header: ADR-0005 keeps exactly one lookup row per `records` row, and
         // the header is one of those rows. Written as the sum so the reason for each row stays visible.
         Assert.Equal(2 + 1, count);
 

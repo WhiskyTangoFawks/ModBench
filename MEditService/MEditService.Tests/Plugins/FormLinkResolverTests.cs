@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-/// <summary>ADR-0046 invariant 7: what a FormLink points at, answered from the load order, the
+/// <summary>ADR-0015 invariant 5: what a FormLink points at, answered from the load order, the
 /// working tree and the plugin file, with no Index anywhere in the fixture.</summary>
 public sealed class FormLinkResolverTests
 {
@@ -233,7 +233,7 @@ public sealed class FormLinkResolverTests
     public void Resolve_AFormKeyInACopyThatDoesNotParticipate_IsUnresolved()
     {
         // Registered, present on disk and holding the record — and not loaded, because its
-        // plugins.txt line has no `*` (ADR-0044).
+        // plugins.txt line has no `*` (ADR-0013).
         FormKey keyword = default;
         using var data = new PluginFixtureBuilder("resolver-disabled")
             .WithPlugin(UntrackedPlugin, mod => keyword = mod.Keywords.AddNew("FixtureKeyword").FormKey,

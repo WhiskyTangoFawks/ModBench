@@ -5,7 +5,7 @@ record editor, matching xEdit's own placement and lifecycle for this surface.
 
 Editing context — operates on **records**, **FormKeys**, and **plugins**; the Mod-Management
 vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not here
-([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
+([CONTEXT.md](../../CONTEXT.md)).
 
 One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared load order lifecycle,
 status bar, command palette, and architecture seams. Siblings:
@@ -30,7 +30,7 @@ A native `TreeView`, listing every record that holds a FormLink to the current o
 the referencing record** so that multiple plugin overrides of the same referencer collapse into a
 single entry. Every group is a navigation target, so tracing a reference chain is clicking.
 
-Per [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md), this surface
+Per [ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md), this surface
 follows xEdit's own answer for where "Referenced By" lives: xEdit puts it in a tab beside the
 record view (`View`, `Messages`, `Referenced By`), not in the navigation pane, and it is never
 invoked — it simply reflects whatever record is currently selected, carrying its own referrer
@@ -113,7 +113,7 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   `modbench.referencedByTree.copy` is reachable by a `Ctrl+C` keybinding (`focusedView ==
   modbench.referencedByTree`) *and* a `view/item/context` entry — both invoking the one command,
   the same shape `modbench.record.delete` already uses elsewhere in this tree family.
-  [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)'s "no action reachable
+  [ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)'s "no action reachable
   two ways" is about redundant *affordances* for one action (an inline button duplicating a menu
   item), not a command carrying both a keybinding and a menu entry — those are the same route, not
   two. **The group node is the copyable unit; field rows are detail** — `referencedByCopyText`
@@ -126,14 +126,14 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   paste target (an issue, a changelog, a chat) wants the identity, not a count with no plugin names
   attached to it. The write itself goes through the extension host
   (`vscode.env.clipboard.writeText`), never the (nonexistent, for this surface) webview — the
-  record editor's own precedent, [ADR-0034 divergence
-  #3](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md#permitted-divergences-and-why-each-is-forced) —
+  record editor's own precedent, [ADR-0018 divergence
+  #3](../adr/0018-xedit-is-the-reference-for-record-editing.md#permitted-divergences) —
   with the same catch-log-surface treatment `COPY_TO_CLIPBOARD` already uses
-  ([ADR-0026](../adr/0026-error-surfacing-policy.md)).
+  ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)).
 - Empty state: "No references found." A **failed fetch** yields an error node
   (`ErrorNode`, "Failed to load references."), never the empty state — the same
   fetch-failure-is-not-empty convention every tree in this product follows
-  ([ADR-0026](../adr/0026-error-surfacing-policy.md)).
+  ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)).
 - Reference data comes from the backend (`GET /records/{formKey}/references`) through the
   mEdit client's references query, never raw `fetch()` and never the generated client directly;
   this surface renders it and does not derive it.
@@ -149,7 +149,7 @@ condition-specific collector.
 both `ParameterOneNumber` and `ParameterOneRecord`, so every numeric parameter also reads as a
 FormID; and `Reference` is populated whatever the Run On value says. Filing either as a reference
 would invent a referrer. the form-reference collector therefore skips a member the record's own governing
-value says is idle, driven by `FieldMetadata.SiblingsInUse` (ADR-0032) — a quest-stage index is not
+value says is idle, driven by `FieldMetadata.SiblingsInUse` (ADR-0005) — a quest-stage index is not
 a reference to whatever record happens to hold that FormID, and a Run On of Subject does not point
 at whatever target the condition last carried.
 
@@ -222,7 +222,7 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   batch `GET /records/{formKeys}/references`-style endpoint; today's endpoint is single-FormKey,
   so an N-record selection would be N round trips. The grouping model already supports the result
   shape (collapse-by-FormKey over a larger input) — only the backend call is missing.
-- **Reference validation at edit time** — that is a backend concern (ADR-0041: FormLinks
+- **Reference validation at edit time** — that is a backend concern (ADR-0007: FormLinks
   validate at edit time), surfaced by whichever command made the edit, not
   here.
 - **A referrer whose record type has no schema** — `SchemaReflector.ExcludedTables` is a deliberate

@@ -5,7 +5,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Plugins;
 
-/// <summary>ADR-0046 invariant 6's second trigger: a reconcile request, over one plugin or every
+/// <summary>ADR-0015 invariant 4's second trigger: a reconcile request, over one plugin or every
 /// registered one. The store is corrupted by hand because nothing else makes the index disagree with
 /// an untouched system of record.</summary>
 public sealed class ReconcileRequestTests : IDisposable

@@ -1,5 +1,5 @@
 // Deploy and purge end-to-end against the committed mo2-instance-corpus fixture. The standing
-// regression it guards: a tracked mod's `.git/` and `source/` subtrees (ADR-0041) must never be
+// regression it guards: a tracked mod's `.git/` and `source/` subtrees (ADR-0007) must never be
 // walked, hardlinked into Data/, or otherwise disturbed.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -115,7 +115,7 @@ describe('deploy/purge corpus', () => {
     expect(after.get(PREEXISTING_OVERWRITE)).toEqual(before.get(PREEXISTING_OVERWRITE));
   });
 
-  it('a full deploy-then-purge cycle never touches a tracked mod\'s .git/ or source/ subtree (ADR-0041)', async () => {
+  it('a full deploy-then-purge cycle never touches a tracked mod\'s .git/ or source/ subtree (ADR-0007)', async () => {
     const before = await snapshotTree(dir);
     await deploy(dir, gameDirectory, await realIndex(), fakeReporter());
     await purge(dir, gameDirectory, fakeReporter());

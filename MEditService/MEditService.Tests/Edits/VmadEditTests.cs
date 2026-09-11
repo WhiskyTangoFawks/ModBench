@@ -357,7 +357,7 @@ public sealed class VmadEditTests : IDisposable
         Assert.Equal(before, _fixture.Body(_fixture.Scene));
     }
 
-    // Absent means default (ADR-0032): a null set clears the member, and the document loses it.
+    // Absent means default (ADR-0005): a null set clears the member, and the document loses it.
     [Fact]
     public void NullingAStructTheRecordCarries_ClearsItAndTouchesNothingElse()
     {

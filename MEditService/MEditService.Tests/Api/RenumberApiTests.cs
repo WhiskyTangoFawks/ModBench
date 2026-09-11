@@ -55,7 +55,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         created.EnsureSuccessStatusCode();
         var oldFormKey = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey").GetString()!;
 
-        // ADR-0046: the create wrote the source tree and returned; the renumber below resolves its
+        // ADR-0014: the create wrote the source tree and returned; the renumber below resolves its
         // target through the Index, so it waits for the Source watcher's projection of that write.
         Assert.True(await ProjectionLanded(beforeCreate), "the created record never reached the index");
 
@@ -66,7 +66,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         renumbered.EnsureSuccessStatusCode();
         var newFormKey = (await renumbered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey").GetString()!;
 
-        // ADR-0046: the renumber's create, delete and cascade settle as one batch and that batch is
+        // ADR-0014: the renumber's create, delete and cascade settle as one batch and that batch is
         // one advance, so one await is the whole wait — no poll for an end state.
         Assert.True(await ProjectionLanded(beforeRenumber), "the renumbered record never reached the index");
 

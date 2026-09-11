@@ -1,5 +1,5 @@
 // Every physical plugin copy the enabled mods and overwrite/ provide, plus the Data-folder copy
-// of any plugins.txt line no mod provides (ADR-0044). Vanilla masters and .ccc content are
+// of any plugins.txt line no mod provides (ADR-0013). Vanilla masters and .ccc content are
 // prepended by the backend, never listed here.
 
 import { readdir } from 'node:fs/promises';
@@ -10,22 +10,22 @@ import { isPluginFile } from './pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from './mo2/pluginsText';
 
-// Reserved origin values (ADR-0036), matching their literal directory names. Never a real mod
+// Reserved origin values (ADR-0012), matching their literal directory names. Never a real mod
 // folder name: mod folders live under `mods/`.
 export const DATA_DIRECTORY_ORIGIN = 'Data';
 export const OVERWRITE_ORIGIN = 'overwrite';
 
-/** One physical plugin copy in the snapshot — the boundary object (CONTEXT-MAP.md): a plugin file
+/** One physical plugin copy in the snapshot — the boundary object (CONTEXT.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */
 export interface LoadOrderPlugin {
   name: string;
   path: string;
-  /** The mod folder that provided this copy, or a reserved origin value above (ADR-0036). */
+  /** The mod folder that provided this copy, or a reserved origin value above (ADR-0012). */
   origin: string;
   /** The name's plugins.txt line index, or null when no line names it. A losing copy of a listed
    *  name carries the same slot as the winning one. */
   slot: number | null;
-  /** The line's `*` prefix (ADR-0035); false when no line names the file. */
+  /** The line's `*` prefix (ADR-0013); false when no line names the file. */
   enabled: boolean;
   /** This copy is the one the Mod override order resolves the name to — overwrite/ first, then the
    *  winning enabled mod. Editing derives participation (`enabled AND winning AND listed`) on its
@@ -143,7 +143,7 @@ async function buildRows(
 const defaultBuildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {});
 
 /** A disabled plugins.txt line is still sent: its missing `*` becomes `enabled: false` rather
- *  than deciding whether the line appears at all (ADR-0035). */
+ *  than deciding whether the line appears at all (ADR-0013). */
 export async function buildLoadOrderSnapshot(
   source: Source,
   instanceRoot: string,

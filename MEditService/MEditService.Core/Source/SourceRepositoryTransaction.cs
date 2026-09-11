@@ -22,12 +22,12 @@ internal enum UnrestoredReason
 }
 
 /// <summary>One path a rollback left standing, relative to the mod folder as the Source Control panel
-/// lists it. ADR-0026: a partial outcome is a structured collection, never a formatted string.</summary>
+/// lists it. ADR-0019: a partial outcome is a structured collection, never a formatted string.</summary>
 internal sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
 /// <summary>A batch of puts and removes across one or more repositories, applied all or restored all
-/// (ADR-0045). Conditional by design: a path something else has written since is preserved and
+/// (ADR-0007). Conditional by design: a path something else has written since is preserved and
 /// reported, never reverted.</summary>
 internal sealed class SourceTransaction
 {
@@ -67,7 +67,7 @@ internal sealed class SourceTransaction
 
         // Refused before the tree is touched: a container's removal takes its whole directory, block
         // subtree and all, and one document's bytes cannot put that back. A batch that cannot restore
-        // an act must not perform it (ADR-0045).
+        // an act must not perform it (ADR-0007).
         if (unit.IsDirectoryPerRecord) throw NotRestorable(unit, identity);
 
         var before = Snapshot(unit.FullPath);
@@ -154,7 +154,7 @@ internal sealed class SourceTransaction
 
     /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
     /// before an earlier act moves back into it. A restore failure never stops the pass; it is
-    /// collected (ADR-0026), not thrown.</summary>
+    /// collected (ADR-0019), not thrown.</summary>
     internal IReadOnlyList<UnrestoredPath> Rollback()
     {
         var unrestored = new List<UnrestoredPath>();

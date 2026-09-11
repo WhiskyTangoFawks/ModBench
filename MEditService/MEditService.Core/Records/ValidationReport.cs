@@ -2,9 +2,9 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Records;
 
-/// <summary>What one plugin's validate found (ADR-0046 invariant 6). <c>NeedsRebuild</c> means the
+/// <summary>What one plugin's validate found (ADR-0015 invariant 4). <c>NeedsRebuild</c> means the
 /// document set or the binary moved, which only a rebuild expresses. <c>Failures</c> tells "nothing
-/// drifted" from "nothing was checked" (ADR-0026).</summary>
+/// drifted" from "nothing was checked" (ADR-0019).</summary>
 public sealed record ValidationReport(
     PluginKey Plugin,
     IReadOnlyList<string> ChangedKeys,

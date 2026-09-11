@@ -85,7 +85,7 @@ describe('setFilterFromDocument', () => {
 });
 
 describe('clearFilter', () => {
-  // "Symmetric on purpose" (ADR-0035): a clear refreshes exactly as a set does, or a stale
+  // "Symmetric on purpose" (plugins.md): a clear refreshes exactly as a set does, or a stale
   // no-match chevron survives the filter that produced it.
   it('sets the filter inactive, refreshes the tree, and refreshes the matching-plugin set — same as a set', async () => {
     const client = new InMemoryMEditClient();

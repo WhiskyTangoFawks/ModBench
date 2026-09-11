@@ -67,7 +67,7 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** ADR-0046 invariant 12's stream adapter. `start()`/`stop()` are idempotent and follow the
+/** ADR-0014 invariant 2's stream adapter. `start()`/`stop()` are idempotent and follow the
  *  backend's lifecycle from the composition root; a dropped or ended stream reconnects on its
  *  own, on `reconnectDelayMs`, until `stop()` ends the loop. */
 export class SseNotificationSubscriber extends NotificationListenerRegistry {

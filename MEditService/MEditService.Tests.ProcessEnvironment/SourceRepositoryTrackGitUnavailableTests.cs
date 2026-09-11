@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.ProcessEnvironment;
 
 /// <summary>Git missing from PATH is one typed failure, checked once, early, never a raw
-/// <c>Win32Exception</c> from the first <c>Process.Start</c> (ADR-0026).</summary>
+/// <c>Win32Exception</c> from the first <c>Process.Start</c> (ADR-0019).</summary>
 public sealed class SourceRepositoryTrackGitUnavailableTests
 {
     [Fact]

@@ -79,7 +79,7 @@ public sealed class ExternalChangeClassifierTests
         }
     }
 
-    // ── The meta tell: default-button evidence, never acted on by itself (ADR-0041 amendment). ──
+    // ── The meta tell: default-button evidence, never acted on by itself (ADR-0003). ──
 
     [Fact]
     public void ClassifyMod_ReportsMetaChanged_WhenMetaIniVersionMovedSinceTheBaseline()

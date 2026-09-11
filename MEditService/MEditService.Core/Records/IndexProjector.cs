@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Records;
 
-/// <summary>ADR-0046 invariant 10: the Index's other half. Ingest, the registration sweep and the
+/// <summary>ADR-0014 invariant 5: the Index's other half. Ingest, the registration sweep and the
 /// watchers' re-projections, deciding nothing — the load order value answers who participates and
 /// wins, the schema where a field goes.</summary>
 public sealed class IndexProjector : IQueryIndex, IDisposable
@@ -22,12 +22,12 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     private readonly ILogger _logger;
     private readonly IRecordIndexFactory _indexFactory;
     private readonly IPluginAdapter _adapter;
-    // ADR-0046: null in every test that does not care, matching DuckDbRecordIndex's own posture.
+    // ADR-0014: null in every test that does not care, matching DuckDbRecordIndex's own posture.
     private readonly INotificationPublisher? _notifications;
     // A direct constructor parameter rather than routed through IRecordIndexFactory, which has no
     // other reason to carry it; DI already registers SchemaReflector as its own singleton.
     private readonly SchemaReflector _schemaReflector;
-    // ADR-0046 invariant 11: the one load order, the kernel's. The projector reads it for who
+    // ADR-0013 invariant 4: the one load order, the kernel's. The projector reads it for who
     // participates and for a copy's mod folder; it never writes it and keeps no view of its own.
     private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
@@ -42,7 +42,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     private int _plannedCount;
 
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside
-    /// <c>Core/Records</c> names the store, its factory or how a file is opened (ADR-0001).</summary>
+    /// <c>Core/Records</c> names the store, its factory or how a file is opened (ADR-0009).</summary>
     public IndexProjector(
         LoadOrderHolder holder,
         IPluginAdapter adapter,
@@ -77,7 +77,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         _notifications = notifications;
     }
 
-    // ADR-0044: a copy that failed to open stays a row in an error state until its bytes change.
+    // ADR-0013: a copy that failed to open stays a row in an error state until its bytes change.
     // Keyed by the plugin; the hash recorded alongside it is what changing detects.
     private readonly Dictionary<string, (PluginKey Key, string? Hash)> _failedHashes = new(StringComparer.OrdinalIgnoreCase);
 
@@ -106,7 +106,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     private GameRelease _gameRelease;
 
     public IRecordReads? Reads { get { lock (_lock) return _index?.At(RecordRef.Effective); } }
-    /// <summary>The store the projections land in. Internal: ADR-0046 invariant 10 makes the Index
+    /// <summary>The store the projections land in. Internal: ADR-0014 invariant 5 makes the Index
     /// one module, and the rows behind this are its own. Null until a reconcile opens one.</summary>
     internal IRecordIndex? Store { get { lock (_lock) return _index; } }
 
@@ -117,7 +117,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         lock (_lock) return _index?.RegisteredPlugins().Contains(key) == true;
     }
 
-    /// <summary>ADR-0001: the hash the store's rows for this copy were built from, or null when it
+    /// <summary>ADR-0009: the hash the store's rows for this copy were built from, or null when it
     /// holds no validated rows for it — the watch registration's one question of the store.</summary>
     public string? IndexedContentHash(PluginKey key)
     {
@@ -166,7 +166,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     /// <summary>Assembled from live state rather than cached, so it cannot drift from the reconcile
     /// it describes; failures come straight off the held copies' own list rather than a second place
-    /// that could disagree (ADR-0035).</summary>
+    /// that could disagree (ADR-0013).</summary>
     public LoadOrderStatus Status
     {
         get
@@ -180,13 +180,13 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0046: every site that changes what Status reports calls this after. _lock is reentrant
+    // ADR-0014: every site that changes what Status reports calls this after. _lock is reentrant
     // (see ReapplyFilter), so this is safe to call from inside a lock a caller already holds.
     private void PublishStatus() => _notifications?.Publish(new LoadOrderStatusNotification(Status));
 
     public long Sequence { get { lock (_lock) return _index?.Sequence ?? 0; } }
 
-    /// <summary>ADR-0046: everything projected inside the scope advances the sequence once, when
+    /// <summary>ADR-0014: everything projected inside the scope advances the sequence once, when
     /// the outermost of any nested scopes closes. A no-op with no store held.</summary>
     public IDisposable BeginProjection()
     {
@@ -223,7 +223,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0044's one verb: the store's registrations are made equal to the snapshot's
+    /// <summary>ADR-0013's one verb: the store's registrations are made equal to the snapshot's
     /// copies, copies it has never held are indexed, then one winner sweep. A superseded reconcile
     /// throws, leaving its work for its successor.</summary>
     public void Reconcile(LoadOrder snapshot)
@@ -287,11 +287,11 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    // ADR-0001: the index's home is the MO2 instance — one persistent file per instance, so a fresh
+    // ADR-0009: the index's home is the MO2 instance — one persistent file per instance, so a fresh
     // open finds whatever the last run left there, and `origin` (a mod folder name) is unique only
     // within one.
 
-    // Published before any plugin is opened, which is what makes the reconcile progressive (ADR-0035).
+    // Published before any plugin is opened, which is what makes the reconcile progressive (ADR-0013).
     private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrder snapshot)
     {
         lock (_lock)
@@ -402,13 +402,13 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
         foreach (var plugin in moved)
         {
-            // ADR-0044: a reorder, an enable, a change of which copy wins — all the same SQL-only
+            // ADR-0013: a reorder, an enable, a change of which copy wins — all the same SQL-only
             // move: no re-read, no re-index, so it is safe to apply live and unprompted.
             var metadata = held.Update(open[KeyOf(plugin.Key)], plugin.Registration);
             index.Register(metadata.Key, metadata.Registration);
         }
 
-        // Two numbers ADR-0035 makes distinct — time to the first queryable plugin (the tree
+        // Two numbers ADR-0013 makes distinct — time to the first queryable plugin (the tree
         // becomes usable) and time to the winner sweep completing. Measured here rather than
         // client-side, where the 500 ms status poll caps the resolution.
         var timer = Stopwatch.StartNew();
@@ -434,7 +434,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
-        // arrived earlier was browsable but its winner state was not yet decided (ADR-0035).
+        // arrived earlier was browsable but its winner state was not yet decided (ADR-0013).
         _logger.LogDebug("Computing winners");
         var winnersTimer = Stopwatch.StartNew();
         index.UpdateWinners(snapshot.Participating);
@@ -491,10 +491,10 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         return failedAt.Hash != null && PluginBinaryHash.OfFile(plugin.Path) == failedAt.Hash;
     }
 
-    // ADR-0001: a copy the index has already seen is registered rather than indexed — a non-null
+    // ADR-0009: a copy the index has already seen is registered rather than indexed — a non-null
     // content hash means "held, and still matching the bytes on disk".
 
-    // ADR-0046 invariant 6: a tracked copy takes the same warm path, its source tree validated by
+    // ADR-0015 invariant 4: a tracked copy takes the same warm path, its source tree validated by
     // content where the untracked branch checked the binary hash at open. Only a moved document set
     // is re-derived whole.
 
@@ -525,7 +525,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         var indexTimer = Stopwatch.StartNew();
         try
         {
-            // ADR-0036: threads the origin into the index, so the DuckDB row is identified
+            // ADR-0012: threads the origin into the index, so the DuckDB row is identified
             // by (origin, plugin) together, not filename alone.
             IndexOnePlugin(held, index, plugin, sourceTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
@@ -557,7 +557,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         PublishStatus();
     }
 
-    // Where a plugin's records come from (ADR-0041): a tracked plugin's source tree, the binary for
+    // Where a plugin's records come from (ADR-0007): a tracked plugin's source tree, the binary for
     // everything else. Both branches end in the same Index call, which is what keeps the read model
     // free of a dialect.
 
@@ -574,7 +574,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         HeldPlugins held, IRecordIndex index, PluginMetadata plugin,
         string? sourceTree, CancellationToken token)
     {
-        // One advance for the whole copy, whichever door it came through (ADR-0046).
+        // One advance for the whole copy, whichever door it came through (ADR-0014).
         using var _ = index.BeginProjection();
 
         if (sourceTree == null)
@@ -616,7 +616,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         IndexFromBinary(held, index, plugin);
     }
 
-    // ADR-0032 rule 2: the binary reaches the index as documents, through the adapter's own door,
+    // ADR-0005 rule 2: the binary reaches the index as documents, through the adapter's own door,
     // never as the open getter HeldPlugins keeps for metadata and the write path.
     private void IndexFromBinary(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
@@ -631,7 +631,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             _schemaReflector.GetSchemas(gameRelease),
             new PluginStrings(ModFolders.Of(plugin.Origin, plugin.Path), dataFolderPath));
 
-    /// <summary>ADR-0046 invariant 6's reconcile request: validates <paramref name="plugin"/>, or
+    /// <summary>ADR-0015 invariant 4's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
     /// this call re-derived whole.</summary>
     public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin)
@@ -654,7 +654,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
             // A record set that moved is a whole-plugin re-derivation, which is the projector's to
-            // run: it holds the mod and knows which truth this copy reads (ADR-0041).
+            // run: it holds the mod and knows which truth this copy reads (ADR-0007).
             if (report.NeedsRebuild) ReindexPlugin(key).GetAwaiter().GetResult();
             reports.Add(report);
         }
@@ -663,7 +663,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         return reports;
     }
 
-    /// <summary>ADR-0046 invariant 4's narrow signal: re-projects these keys from the source tree
+    /// <summary>ADR-0015 invariant 2's narrow signal: re-projects these keys from the source tree
     /// under the write gate. An untracked or unheld copy is a no-op.</summary>
     public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys)
     {
@@ -683,12 +683,12 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         ReapplyFilter();
     }
 
-    // ADR-0044: the sweep is handed who competes, read from the kernel's load order — the rule is
+    // ADR-0013: the sweep is handed who competes, read from the kernel's load order — the rule is
     // Registration.Participates and runs there. Read whole, not per plugin.
     private IReadOnlyList<RegisteredCopy> Participating() => _holder.Current.Participating;
 
     /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
-    /// copy from its source tree (ADR-0041), because reading a tracked copy's binary would discard
+    /// copy from its source tree (ADR-0007), because reading a tracked copy's binary would discard
     /// uncommitted edits.</summary>
     public Task ReindexPlugin(PluginKey key)
     {
@@ -702,7 +702,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease) = RequireHeldCopy(key);
-        // ADR-0046: a whole copy re-derived is one projection, so it is one advance whichever
+        // ADR-0014: a whole copy re-derived is one projection, so it is one advance whichever
         // branch below runs.
         using var projection = index.BeginProjection();
 
@@ -869,7 +869,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0046's Refresh: closes the scope, drops the instance's index file and reopens
+    /// <summary>ADR-0014's Refresh: closes the scope, drops the instance's index file and reopens
     /// it empty, flooring the new file's sequence at what this process has already handed out. The
     /// next reconcile fills it.</summary>
     public void RebuildStore(GameRelease gameRelease, string instanceRoot)

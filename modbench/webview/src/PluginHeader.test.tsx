@@ -59,7 +59,7 @@ describe('PluginHeader', () => {
     );
   });
 
-  // ADR-0036: "(not loaded)", not "(not in load order)" — a shadowed copy is a file conflict
+  // ADR-0012: "(not loaded)", not "(not in load order)" — a shadowed copy is a file conflict
   // decided by the Mod override order, not the Plugin load order the longer label would imply.
   it('shows a distinct label for an immutable column the load order does not name', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={false} />);
@@ -102,27 +102,27 @@ describe('PluginHeader', () => {
     expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
   });
 
-  // ADR-0036: origin is never what the user reads by default — only the filename.
+  // ADR-0012: origin is never what the user reads by default — only the filename.
   it('does not render origin inline when there is no collision', () => {
     render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} showOriginInline={false} />);
     expect(screen.getByText('MyMod.esp')).toBeInTheDocument();
     expect(screen.queryByText(/ModA/)).not.toBeInTheDocument();
   });
 
-  // ADR-0036: "origin appears inline only when two loaded copies share a filename."
+  // ADR-0012: "origin appears inline only when two loaded copies share a filename."
   it('renders origin inline when showOriginInline is true', () => {
     render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} showOriginInline={true} />);
     expect(screen.getByText('MyMod.esp (ModA)')).toBeInTheDocument();
   });
 
-  // ADR-0036: "filename in the header, origin in its tooltip" — unconditionally, so a
+  // ADR-0012: "filename in the header, origin in its tooltip" — unconditionally, so a
   // non-colliding column still tells a curious user which origin it's from on hover.
   it('always sets the origin in a tooltip on the name chip, regardless of collision', () => {
     render(<PluginHeader {...baseProps()} override={override({ origin: 'ModA' })} showOriginInline={false} />);
     expect(screen.getByText('MyMod.esp')).toHaveAttribute('title', expect.stringContaining('ModA'));
   });
 
-  // The copy commands live on the header's native right-click menu (ADR-0027/0033), so there is
+  // The copy commands live on the header's native right-click menu (ADR-0017), so there is
   // no rendered button to assert on — only the `data-vscode-context` payload they are gated on.
   it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
     const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data'));
@@ -138,7 +138,7 @@ describe('PluginHeader', () => {
     expect(container.firstElementChild).not.toHaveAttribute('data-vscode-context');
   });
 
-  // ADR-0034: no standalone control once an action is right-click-reachable — PluginHeader
+  // ADR-0018: no standalone control once an action is right-click-reachable — PluginHeader
   // renders no Add Master… button or candidate dropdown.
   it('does not render an Add Master… button', () => {
     render(<PluginHeader {...baseProps()} />);
@@ -146,7 +146,7 @@ describe('PluginHeader', () => {
   });
 });
 
-// ADR-0041: an untracked plugin is visibly read-only with the way out named — visibly, before
+// ADR-0007: an untracked plugin is visibly read-only with the way out named — visibly, before
 // the user attempts an edit, so it lives on the header, not only in the backend's refusal.
 describe('PluginHeader — untracked signposting', () => {
   it('marks an untracked column read-only on screen, not only in a tooltip', () => {

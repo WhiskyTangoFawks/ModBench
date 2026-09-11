@@ -38,7 +38,7 @@ function valueOf(downloads: DownloadRow[]): InstanceValue {
 }
 
 // The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
-// compatible with `Instance` without ever constructing one (ADR-0047's watcher is Instance's
+// compatible with `Instance` without ever constructing one (ADR-0015's watcher is Instance's
 // concern, not this provider's).
 class FakeInstance {
   value: InstanceValue;
@@ -349,7 +349,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever — no row, no error node, no toast (ADR-0026).
+  // that threw spinning forever — no row, no error node, no toast (ADR-0019).
   it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
     const reports: { severity: string; message: string; detail?: string }[] = [];

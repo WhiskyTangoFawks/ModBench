@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
-  // ADR-0035: the winner sweep has landed, so a panel opened mid-reconcile stops rendering a
+  // ADR-0013: the winner sweep has landed, so a panel opened mid-reconcile stops rendering a
   // settled-looking grid over unsettled data. Load-order-wide: no self-filter, every panel reacts.
   CONFLICTS_COMPUTED: 'conflictsComputed',
   // A reply to the one panel that asked (`requestId`), never a broadcast: the QuickPick existed
@@ -19,9 +19,9 @@ export const WEBVIEW_TO_EXTENSION = {
   // (webview clipboard access isn't guaranteed), so the webview posts the already-computed model
   // value up. Fire-and-forget: nothing comes back.
   COPY_TO_CLIPBOARD: 'copyToClipboard',
-  // ADR-0041: routed through the extension host rather than posted to the backend the way a
+  // ADR-0007: routed through the extension host rather than posted to the backend the way a
   // *read* is, because an edit can be refused and a refusal has to become a native notification
-  // (ADR-0026).
+  // (ADR-0019).
   EDIT_FIELD: 'editField',
   // Native QuickPick: only the extension host can call `vscode.window.createQuickPick`. `seed` is
   // the current reference (empty when there is none), which pre-selects the matching item.
@@ -37,7 +37,7 @@ export type WebviewToExtension =
   | {
       type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD;
       formKey: string;
-      // ADR-0036: the compound plugin identity, never a bare filename — a filename alone is
+      // ADR-0012: the compound plugin identity, never a bare filename — a filename alone is
       // ambiguous the moment the instance holds two copies of one name.
       plugin: string;
       origin: string;
@@ -71,7 +71,7 @@ export interface ArrayParentContext {
 }
 
 // Resolving the commands this feeds never round-trips back through the webview: the mutation is
-// an ordinary host-side call (ADR-0041), so this context only says which record, plugin and
+// an ordinary host-side call (ADR-0007), so this context only says which record, plugin and
 // origin was right-clicked.
 export interface ColumnHeaderContext {
   webviewSection: 'recordHeader';
@@ -90,7 +90,7 @@ export type PathSegment =
   | { kind: 'key'; key: string }
   | { kind: 'value'; value: string };
 
-/** The wire's hop kinds (ADR-0032), narrowed to the closed set the backend resolves. */
+/** The wire's hop kinds (ADR-0005), narrowed to the closed set the backend resolves. */
 export type PathHop = Exclude<PathSegment, { kind: 'value' }>;
 
 /** The one write shape: an operation, a path and an optional value, spelled by the webview and
@@ -106,7 +106,7 @@ export function moveEnvelope(path: PathHop[], delta: -1 | 1): RecordEditEnvelope
   return element?.kind === 'index' ? { op: 'move', path, value: element.index + delta } : undefined;
 }
 
-// ADR-0039: right-click is the extended editor's only trigger. `value`/`readOnly` come from the
+// ADR-0018: right-click is the extended editor's only trigger. `value`/`readOnly` come from the
 // webview, not the host. Offered on immutable cells too: a read-only tab is the only way to read
 // a long value in full.
 export interface StringValueContext {

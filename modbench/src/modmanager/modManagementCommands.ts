@@ -69,7 +69,7 @@ export function registerModListCoreCommands(
           return;
         }
         void updateProfileDescription();
-        // ADR-0044/ADR-0047: the write lands in ModOrganizer.ini, which the Instance already
+        // ADR-0013/ADR-0015: the write lands in ModOrganizer.ini, which the Instance already
         // watches — its own recompute is what reaches the load-order sync and the Toolbox's
         // profile row, never this command.
       }),
@@ -231,7 +231,7 @@ export function registerSeparatorCommands(
       }),
   ];
 }
-/** Mods tree title-bar action: a name prompt, refusing a name already in use (ADR-0047 point 6
+/** Mods tree title-bar action: a name prompt, refusing a name already in use (ADR-0015 invariant 2
  *  — the command itself decides the refusal; this only surfaces it). */
 export function registerCreateEmptyModCommand(
   instanceRoot: string, instance: Pick<Instance, 'value'>,
@@ -247,7 +247,7 @@ export function registerCreateEmptyModCommand(
   });
 }
 /** The pinned Overwrite row's reddish tint and its sole action; the row's own visibility and
- *  count come from the Instance's value (ADR-0047), which already recomputes on `overwrite/`. */
+ *  count come from the Instance's value (ADR-0015), which already recomputes on `overwrite/`. */
 export function registerOverwriteView(
   instanceRoot: string,
   outputChannel: vscode.LogOutputChannel,
@@ -300,7 +300,7 @@ export function createModListView(
     hasRows: async () => (await modListProvider.getChildren()).some((n) => !(n instanceof OverwriteNode)),
     toggle: { icon: 'list-tree', label: 'Group by separator' },
   }));
-  // Async only because Refresh's own sequence awaits it (ADR-0046); the profile is a field of
+  // Async only because Refresh's own sequence awaits it (ADR-0014); the profile is a field of
   // the value the Instance already landed, so there is no disk read left to fail.
   const updateProfileDescription = () => {
     modListFilter.setBaseDescription(instance.value.activeProfile);
@@ -313,7 +313,7 @@ export function createModListView(
   return { modListView, updateProfileDescription };
 }
 /** Returns the live provider alongside its disposables, so integration tests can reach it.
- *  Rows come entirely from the Instance value (ADR-0047); no own scan or watcher here. */
+ *  Rows come entirely from the Instance value (ADR-0015); no own scan or watcher here. */
 export function registerDownloadsView(
   own: Own,
   instanceRoot: string,

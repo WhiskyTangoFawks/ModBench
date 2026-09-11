@@ -34,7 +34,7 @@ import { withPluginsViewProgress, type ExtensionSession, type Own } from './sess
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 
 // The port members every gesture, the reconcile and the launch in this file call — narrowed off
-// `MEditClient` (ADR-0022), never the controller or the repository.
+// `MEditClient` (ADR-0002), never the controller or the repository.
 export type ToolboxClient = Pick<MEditClient,
   'putLoadOrder' | 'implicitMasters' | 'rebuildIndex' | 'getActiveFilter' | 'createPlugin'
   | 'status' | 'start' | 'stop' | 'onStatusChanged'>;
@@ -54,7 +54,7 @@ export interface ToolboxDeps {
    *  writers can clear both diagnosis surfaces together. */
   loadDiagnostics: vscode.DiagnosticCollection;
   /** The one status bar item, written from the reconcile's own outcome — never by the
-   *  controller, a lower layer that presents nothing (ADR-0046 invariant 2). */
+   *  controller, a lower layer that presents nothing (ADR-0014 invariant 1). */
   setStatusText: (text: string) => void;
   /** Fires on every completed reconcile and on a landed Track: every open record panel refetches
    *  its comparison, and every tracked mod's repo (re-)registers with `vscode.git`. */
@@ -80,7 +80,7 @@ async function applyOrThrow(command: Promise<PluginsCommandResult>): Promise<voi
 }
 
 // The commands are free functions, so the composition root binds the instance root and the
-// profile the Instance last landed, and turns a refusal into the rejection ADR-0026's
+// profile the Instance last landed, and turns a refusal into the rejection ADR-0019's
 // notify-and-log path is written against.
 function pluginListSource(instanceRoot: string, instance: Instance): PluginListSource {
   return {
@@ -100,9 +100,9 @@ interface PluginListDeps {
   // A getter through the single game-directory resolver, not a Promise settled once. Folds a
   // resolution failure to undefined, which leaves an implicit row without a file to point at.
   dataFolder: () => Promise<string | undefined>;
-  /** The rows the game forces on, asked of the backend (ADR-0021). */
+  /** The rows the game forces on, asked of the backend (ADR-0016). */
   implicitMasters: ImplicitMasterSource;
-  /** ADR-0047: the tree's only row input — name, origin, slot, enabled and winning for every
+  /** ADR-0015: the tree's only row input — name, origin, slot, enabled and winning for every
    *  plugin copy. */
   instance: Instance;
   /** The record browser that supplies a plugin row's children. */
@@ -113,11 +113,11 @@ interface PluginListDeps {
   loadDiagnostics: vscode.DiagnosticCollection;
 }
 
-// ADR-0035: one tree, one owner — rows from the Instance, children from the record browser,
+// ADR-0002: one tree, one owner — rows from the Instance, children from the record browser,
 // every badge from the facts the provider pulls itself.
 function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
   const { own, session, outputChannel, reporter, instanceRoot, dataFolder, implicitMasters, instance } = deps;
-  // The tree states its own severity (ADR-0026); this routes it to the matching channel level.
+  // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source = pluginListSource(instanceRoot, instance);
   const pluginsTree = own(new PluginsTreeProvider({
@@ -144,7 +144,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     new ImplicitMasterDecorationProvider(dataFolder, () => pluginsTree.implicitMasterNames()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginsTree, outputChannel)));
-  // ADR-0044: the one trigger for a PUT — a landed Instance recompute, never a gesture.
+  // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture.
   own(wireLoadOrderSyncToInstance(instance, session.loadOrderSync!));
   own(registerRevealInExplorerCommand(pluginsTree, outputChannel));
   return pluginsTree;
@@ -166,7 +166,7 @@ function registerPluginsNameFilter(
 interface ReconcileDeps {
   session: ExtensionSession;
   instanceRoot: string;
-  /** ADR-0044/ADR-0047: the sync reads its snapshot from this, never from a walk of its own. */
+  /** ADR-0013/ADR-0015: the sync reads its snapshot from this, never from a walk of its own. */
   instance: Instance;
   client: ToolboxClient;
   /** The record browser a reconciled load order refreshes — a different provider from
@@ -190,7 +190,7 @@ function applySyncedFilterState(
   });
 }
 
-// ADR-0044: the sync an Instance change and a client connect both feed. 250 ms covers a burst
+// ADR-0013: the sync an Instance change and a client connect both feed. 250 ms covers a burst
 // of Instance recomputes landing close together. `resolveGameDirectory`/`buildSnapshot` read one
 // Instance value together (closed over below), never two generations of it.
 function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
@@ -238,7 +238,7 @@ function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
   });
 }
 
-// ADR-0035: rows gain chevrons here — and *finish* gaining them here. The tree reads the
+// ADR-0002: rows gain chevrons here — and *finish* gaining them here. The tree reads the
 // backend's own plugin list itself; the failures the toast inside putLoadOrder already consumed
 // ride along rather than being re-derived.
 async function applyLoadOrderToTree(
@@ -253,7 +253,7 @@ async function applyLoadOrderToTree(
   const held = await session.pluginsTree?.applyReconciled(failures);
   if (held === undefined) {
     // Leaving every row a leaf is a safe *render* but not an honest one: the reconcile did land,
-    // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0026).
+    // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0019).
     outputChannel.error('[toolbox] the reconciled load order did not reach the tree; plugin rows will not expand');
     void vscode.window.showWarningMessage(
       'Modbench: The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records. Close and relaunch mEdit to retry.',
@@ -283,13 +283,13 @@ function makeTreeProgressHandler(
   };
 }
 
-// `loadOrderSync.arm()` returns a pure check — it cannot hold an `outputChannel` (ADR-0044) — so
+// `loadOrderSync.arm()` returns a pure check — it cannot hold an `outputChannel` (ADR-0013) — so
 // each call site logs explicitly instead.
 function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
   outputChannel.info('[toolbox] the reconcile was abandoned before it landed; leaving the closed view alone');
 }
 
-// ADR-0035: owns its own progress indicator rather than leaving each caller to wrap it, and
+// ADR-0002: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(
   session: ExtensionSession, instance: Instance, client: ToolboxClient,
@@ -350,7 +350,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   }
   // An MO2 instance is the folder containing ModOrganizer.ini, mods/, and profiles/ — distinct
   // from a real instance with a genuinely unreadable/corrupt modlist, which still reports as an
-  // error tree node (ADR-0026).
+  // error tree node (ADR-0019).
   if (!isMo2Instance(instanceRoot)) {
     own(registerNotMo2InstanceWelcome(instanceRoot, outputChannel));
     return undefined;
@@ -369,7 +369,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // stuck-broken setting logs once instead of once per visible file.
   const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
     outputChannel.error(`[toolbox] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
-  // ADR-0047: the one Instance over MO2's files, its own watchers and game-directory
+  // ADR-0015: the one Instance over MO2's files, its own watchers and game-directory
   // resolution included — a second, independent resolution from the memoised one above.
   const instance = own(new Instance({
     instanceRoot, log,
@@ -379,16 +379,16 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
   void instance.refresh();
-  // ADR-0047: rows, statuses and the overwrite count all come from the Instance value now —
+  // ADR-0015: rows, statuses and the overwrite count all come from the Instance value now —
   // this provider builds no index and reads no disk of its own.
   const modListProvider = own(new ModListProvider({ instance, log, instanceRoot, reporter: modListReporter }));
-  // ADR-0044: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
+  // ADR-0013: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
   // and enterEditing below need the session slot filled first.
   session.loadOrderSync = own(makeLoadOrderSync({
     session, instanceRoot, instance, client, recordBrowser, outputChannel, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
   }));
-  // The backend answers this, never the extension (ADR-0021), and it needs both the Data folder
+  // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.
   const implicitMastersIn = (folder: string | undefined, gameName: string): Promise<string[] | undefined> =>
@@ -452,7 +452,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     () => modListProvider.invalidate(), outputChannel));
   own(registerPluginsReconcile(instance, runPluginsReconcile));
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, outputChannel);
-  // ADR-0046: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
+  // ADR-0014: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
   // a rebuild failure is reported through makeReporter, never a bare toast (modbench/CLAUDE.md).
   const refreshAll = makeRefreshAll({
     rebuildIndex: () => rebuildIndexVia(
@@ -461,12 +461,12 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
       gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
     ),
     sendLoadOrder: () => session.loadOrderSync!.flush(),
-    // The Mods tree renders the Instance's value now (ADR-0047): force a real re-read of disk,
+    // The Mods tree renders the Instance's value now (ADR-0015): force a real re-read of disk,
     // not just a re-render of whatever the Instance last landed.
     invalidateMods: () => { void instance.refresh(); modListProvider.invalidate(); },
-    // Same as invalidateMods above: Plugins renders the Instance value too (ADR-0047).
+    // Same as invalidateMods above: Plugins renders the Instance value too (ADR-0015).
     invalidatePlugins: () => { void instance.refresh(); pluginsTree.invalidate(); },
-    // Same as invalidatePlugins above: Downloads renders the Instance value too (ADR-0047).
+    // Same as invalidatePlugins above: Downloads renders the Instance value too (ADR-0015).
     invalidateDownloads: () => { void instance.refresh(); downloadsProvider.invalidate(); },
     updateProfileDescription,
   });
@@ -487,7 +487,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
 
   const mo2 = buildMo2Side(own, deps);
 
-  // ADR-0047: the view's rows are the Instance's value. The provider holds no state and reads
+  // ADR-0015: the view's rows are the Instance's value. The provider holds no state and reads
   // no disk, so a landed recompute is the only thing that can change what it shows.
   const provider = new ToolboxProvider({
     state: () => (mo2 ? { activeProfile: mo2.instance.value.activeProfile, deployed: mo2.instance.value.deployed } : undefined),

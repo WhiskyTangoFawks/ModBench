@@ -55,7 +55,7 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
   });
 
-  // ADR-0036: two entries sharing a filename but differing in origin must produce two distinct
+  // ADR-0012: two entries sharing a filename but differing in origin must produce two distinct
   // Set members, or one origin's mutability silently applies to both columns.
   it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
@@ -77,7 +77,7 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
   });
 
-  // ADR-0036: a copy the load order does not name is both immutable and absent from it, and
+  // ADR-0012: a copy the load order does not name is both immutable and absent from it, and
   // PluginHeader needs the second fact independently — a vanilla master is only the first.
   it('computes notInLoadOrderSet from inLoadOrder flags, keyed by compound identity like immutableSet', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
@@ -125,7 +125,7 @@ describe('RecordPanelClient.load', () => {
     expect(r.notInLoadOrderSet).toBeNull();
   });
 
-  // ADR-0035: an absent conflict badge must never be mistakable for "no conflict", so the panel
+  // ADR-0013: an absent conflict badge must never be mistakable for "no conflict", so the panel
   // reads the load-order status alongside the comparison it is about to render.
   it('returns conflictsComputed true when the sweep has run', async () => {
     const r = await createRecordPanelClient(5172).load('000001:A.esp');
@@ -149,7 +149,7 @@ describe('RecordPanelClient.load', () => {
   });
 
   // Fails closed: the opposite default would let a status-fetch blip render a settled-looking
-  // grid over a comparison that was never checked (ADR-0026, ADR-0035).
+  // grid over a comparison that was never checked (ADR-0019, ADR-0013).
   it('defaults conflictsComputed to false when the status fetch itself fails', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;

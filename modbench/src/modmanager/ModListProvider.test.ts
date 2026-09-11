@@ -13,7 +13,7 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-// Every modlist.txt gesture the provider fires goes through these free commands now (ADR-0047
+// Every modlist.txt gesture the provider fires goes through these free commands now (ADR-0015
 // point 6) rather than an injected source — mocked at the module boundary, in the style already
 // established by recordPanelContextCommands.test.ts.
 const {
@@ -64,7 +64,7 @@ function valueOf(
 }
 
 // The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
-// compatible with `Instance` without ever constructing one (ADR-0047's watchers are Instance's
+// compatible with `Instance` without ever constructing one (ADR-0015's watchers are Instance's
 // concern, not this provider's).
 class FakeInstance {
   value: InstanceValue;
@@ -190,7 +190,7 @@ describe('ModListProvider', () => {
     expect(fired).toBe(true);
   });
 
-  // The command returns a refusal rather than throwing (ADR-0047 point 6); the provider turns
+  // The command returns a refusal rather than throwing (ADR-0015 invariant 2); the provider turns
   // that into a rejected promise so existing callers (the checkbox handler) keep their contract.
   it('setModEnabled throws when the command refuses, and fires no refresh', async () => {
     setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'nope' });
@@ -255,7 +255,7 @@ describe('ModListProvider', () => {
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever — no row, no error node, no toast (ADR-0026).
+  // that threw spinning forever — no row, no error node, no toast (ADR-0019).
   it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
     const reports: { severity: string; message: string; detail?: string }[] = [];
@@ -566,7 +566,7 @@ describe('ModListProvider', () => {
     });
   });
 
-  // A failed drop reports on ADR-0026's "explicit action failed" tier, and the tree resyncs
+  // A failed drop reports on ADR-0019's "explicit action failed" tier, and the tree resyncs
   // against disk rather than showing a phantom move.
   describe('drag-and-drop — failure handling', () => {
     type DragItem = { value: unknown };

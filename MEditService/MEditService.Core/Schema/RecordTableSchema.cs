@@ -7,7 +7,7 @@ namespace MEditService.Core.Schema;
 public sealed record SyntheticBit(string BackingPath, long Bit, string? FlagName, IReadOnlyList<string> Aliases);
 
 /// <summary>One column of a record table: the member's own spec, plus the database facts a
-/// generated view (ADR-0041) needs on top of it. A column refuses writes only by naming
+/// generated view (ADR-0007) needs on top of it. A column refuses writes only by naming
 /// ReadOnlyReason; the codec decides the rest.</summary>
 public sealed record ColumnSpec(
     SubFieldSpec Field,

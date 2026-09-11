@@ -24,7 +24,7 @@ export interface RecordedCall {
 // below drains the queue, in order, before falling back to the fixed script.
 type ScriptedStep<T> = { kind: 'answer'; value: T } | { kind: 'failure'; error: Error };
 
-/** The in-memory adapter (ADR-0022): a test scripts each answer/result by method name, drives
+/** The in-memory adapter (ADR-0002): a test scripts each answer/result by method name, drives
  *  notifications with `emit`, and reads every recorded call back. An unscripted query rejects,
  *  so a forgotten script fails loudly, not silently empty. */
 export class InMemoryMEditClient implements MEditClient {

@@ -20,7 +20,7 @@ export const baseCell: React.CSSProperties = {
 
 export const headerCell: React.CSSProperties = { ...baseCell, fontWeight: 600 };
 
-// ADR-0035: non-participating copies render dimmed. Header and cells both carry the cue
+// ADR-0013: non-participating copies render dimmed. Header and cells both carry the cue
 // because the grid's <thead> is not sticky.
 export const DIMMED_OPACITY = 0.55;
 
@@ -54,7 +54,7 @@ export function getCellStyle(cellState: ConflictThis | undefined): React.CSSProp
   return { backgroundColor: bg };
 }
 
-// ADR-0034's focus paints use inset box-shadow, not `outline`: in a collapsed-border table a
+// ADR-0018's focus paints use inset box-shadow, not `outline`: in a collapsed-border table a
 // neighbour can overdraw an outline along the shared edge, and happy-dom drops
 // `outline-color: var(...)`.
 export const focusedRowStyle: React.CSSProperties = {

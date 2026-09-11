@@ -1,6 +1,6 @@
 # mEdit — Context Overview
 
-**Status: Implemented.** Editing is git-native (ADR-0041) — see
+**Status: Implemented.** Editing is git-native (ADR-0007) — see
 [Version control — Track, branch, compile](medit-version-control.md) for tracking, review &
 commit, Save & Compile, and external-change handling. This document covers what is shared
 across mEdit's surfaces, unaffected by that model.
@@ -13,16 +13,16 @@ lives in that surface's spec.
 Editing context — operates on **records**, **FormKeys**, and **plugins** (physical
 `.esp`/`.esm`/`.esl` files loaded by the backend); the Mod-Management vocabulary ("mod",
 "loadout", "deploy") belongs to the sibling surfaces, not here
-([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
+([CONTEXT.md](../../CONTEXT.md)).
 
-Placement: [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — native VS Code
+Placement: [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md) — native VS Code
 views (sidebar trees + editor-tab webviews), not a custom panel switcher. The Mod-Management surface
 that launches this one is specified in [mods.md](mods.md).
 
 **Vocabulary note:** navigation starts from the **Plugins tree** ([plugins.md](plugins.md)) — one
 merged surface, owned jointly by Mod Management (the rows: identity, Plugin load order, checkbox)
 and Editing (a row's children: record types, records, the spatial hierarchy, whenever a load order
-is running). [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) is the design.
+is running). [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md) is the design.
 
 ## Problem Statement
 
@@ -53,13 +53,13 @@ The backend **launches with the extension** (the DB-file-backed session makes st
 cheap enough that lifecycle is not a user decision; there is no Launch mEdit / Close mEdit
 command). At activation it spawns the
 backend and builds the load order from every line of the active profile's `plugins.txt` — disabled
-entries included, carrying their participation (ADR-0035) — plus vanilla masters
-(the `PUT /load-order` snapshot, ADR-0044); teardown is workspace close (or crash handling). A
+entries included, carrying their participation (ADR-0013) — plus vanilla masters
+(the `PUT /load-order` snapshot, ADR-0013); teardown is workspace close (or crash handling). A
 launch that found no game directory retries when `modbench.mods.gameDirectory` changes. The Plugins tree's rows gain chevrons
 once the load order is ready — no other surface swap happens: the MO2-side views (Toolbox, Mods, Plugins,
 Downloads) are always visible regardless of load order state, and Referenced By is
 always-present-and-following rather than gated on a mode.
-Editing writes records to the working-tree source text of tracked plugins (ADR-0041); writing the
+Editing writes records to the working-tree source text of tracked plugins (ADR-0007); writing the
 physical plugin file is a separate Save & Compile gesture, and neither requires a deploy.
 
 ## User Stories
@@ -89,10 +89,10 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   `MEditService/CLAUDE.md` and the generated API client, not restated here.
 - Modbench is a single activity-bar container (`modbench`). There is no view mode and no
   `modbench.viewMode` context key
-  ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)): every
+  ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)): every
   MO2-side and mEdit view is contributed unconditionally, and each surface that needs to hide
   does so on its own signal rather than a shared mode — the Plugins tree's rows gain chevrons
-  once a load order exists (ADR-0035), and Referenced By is always present, following the active
+  once a load order exists (ADR-0017), and Referenced By is always present, following the active
   record editor ([medit-referenced-by.md](medit-referenced-by.md)). The backend launches at
   activation and loads the active modlist as the load order; there is no Launch/Close command
   and no `modbench.backendRunning` context key. Per the maintainer's ruling, mEdit is
@@ -112,7 +112,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   **Stopped** (`$(circle-slash) mEdit: Stopped`), and, once the load order is ready, **Ready**
   (`$(check) mEdit: Ready ({N} plugin copies)`). No game name is shown in any state.
 - The first four come from the mEdit client's own status, read through its status-changed event
-  (ADR-0022); Ready comes from the load-order-status stream, written by the reconcile's outcome.
+  (ADR-0002); Ready comes from the load-order-status stream, written by the reconcile's outcome.
   A disconnect is reported, never adapted to: the Plugins rows stay and expand into an error
   node, and the crash-repair offer arrives with the next reconcile.
 - The item carries **no command** — clicking it does nothing. The backend starts with the
@@ -123,7 +123,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 - All `modbench.*` commands are available in the palette; `package.json`'s
   `contributes.commands` is the canonical registry. There is no Launch/Close mEdit (the backend
   launches with the extension) and no Reload: the load order is reconciled on every loadout change
-  (ADR-0044). Navigation/workflow commands include Open Editor
+  (ADR-0013). Navigation/workflow commands include Open Editor
   (internal; also bound to
   tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
   active record if a panel is open, else global).
@@ -133,7 +133,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 
 ### Architecture / seams
 
-- **The mEdit client (`medit/client/`) is the seam every view crosses** (ADR-0022): its port
+- **The mEdit client (`medit/client/`) is the seam every view crosses** (ADR-0002): its port
   answers the commands, the queries, the subscription and the backend's status, and it hides the
   generated API client, the transport and the backend process alike. A view takes the narrowest
   `Pick` of that port it needs, never a transport object.
@@ -141,12 +141,12 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   and all mutations are behaviors of endpoints owned by `MEditService/`. The frontend holds
   rendering logic, not record semantics.
 - **Conflict classification** (the two-axis ConflictAll/ConflictThis model,
-  [ADR-0016](../adr/0016-two-axis-conflict-model.md)) is computed backend-side and consumed by
+  [ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)) is computed backend-side and consumed by
   the grid as `cellStates` — the frontend maps states to color, it does not derive them. Its
   visual encoding is specified in [medit-record-editor.md](medit-record-editor.md).
 - Behind the client, all backend HTTP calls go through the generated `openapi-fetch` client
   (`medit/client/apiClient.ts`) — never raw `fetch()`; a source scan enforces it.
-- Errors surface on [ADR-0026](../adr/0026-error-surfacing-policy.md)'s severity tiers via an
+- Errors surface on [ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)'s severity tiers via an
   injected reporter, never raw `vscode.window.*` below the gesture that asked.
 
 ## Testing Decisions
@@ -177,7 +177,7 @@ Per-surface testing decisions live in the surface specs. Shared:
 - Record browsing is the **only** capability that requires the C# backend; the Mod-Management
   surfaces ([mods.md](mods.md), [downloads.md](downloads.md)) and the Plugin load order half of
   the merged Plugins tree ([plugins.md](plugins.md)) all run without it — a row is a leaf until a
-  load order exists, per ADR-0035. The backend lifecycle (spawn at activation, teardown on
+  load order exists, per ADR-0002. The backend lifecycle (spawn at activation, teardown on
   workspace close, restart on crash) lives inside the mEdit client per
-  [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and is specified from the
+  [ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md) and is specified from the
   Mod-Management side in [mods.md](mods.md).

@@ -13,7 +13,7 @@ function makeDeps(over: Partial<RefreshAllDeps> = {}): RefreshAllDeps {
   };
 }
 
-// ADR-0046: Refresh rebuilds the Index before it resends the load order, and re-reads mods,
+// ADR-0014: Refresh rebuilds the Index before it resends the load order, and re-reads mods,
 // plugins and downloads after — the ordinary cold load, run again.
 describe('makeRefreshAll', () => {
   it('calls rebuildIndex, then sendLoadOrder, then re-reads all three trees, in that order', async () => {

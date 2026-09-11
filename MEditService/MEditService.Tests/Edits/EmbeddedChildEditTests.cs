@@ -219,7 +219,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         // Branch one: no document of its own, and no other record's document carries it. An interior
         // cell removed from disk by something outside Modbench is exactly that, and the tree is the
-        // only thing asked (ADR-0046 invariant 7).
+        // only thing asked (ADR-0015 invariant 5).
         Directory.Delete(Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!, recursive: true);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));

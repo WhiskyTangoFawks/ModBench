@@ -53,10 +53,10 @@ public static class PluginEndpoints
             .WithName("CreatePlugin")
             .WithTags(Tag)
             .WithDescription(
-                "Creates a new plugin at the given path/origin (ADR-0041), Tracking that " +
+                "Creates a new plugin at the given path/origin (ADR-0007), Tracking that " +
                 "destination under the Edits preset first if it is not already tracked. Does NOT " +
                 "add the plugin to any load order — the caller (the extension's Mod Management " +
-                "writer, or a script/agent consumer per ADR-0024) is responsible for that.")
+                "writer, or a script/agent consumer) is responsible for that.")
             .Produces<PluginCreatedResponse>()
             .ProducesProblem(400)
             // 404 and 422 are Track's own refusal map, which this route answers with rather than
@@ -159,7 +159,7 @@ public static class PluginEndpoints
         return app;
     }
 
-    // ADR-0041: an untracked destination is Tracked in the same gesture, silently and always under
+    // ADR-0007: an untracked destination is Tracked in the same gesture, silently and always under
     // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
@@ -181,7 +181,7 @@ public static class PluginEndpoints
                 req.Name, req.Origin, Path.Combine(req.Path, req.Name), NextSlot(previous),
                 Enabled: true, Winning: true);
             registered = previous.With(copy);
-            // ADR-0041: a participant before the file exists, so the Track inside this gesture and
+            // ADR-0007: a participant before the file exists, so the Track inside this gesture and
             // every later reader see it without waiting for the snapshot that lists it.
             holder.Apply(registered);
         }
@@ -205,7 +205,7 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refused);
             }
 
-            // ADR-0046 invariants 1 and 4: the write is done. The Index has never held this copy, so
+            // ADR-0015 invariants 1 and 2: the write is done. The Index has never held this copy, so
             // it learns of it from the next snapshot, as it does for any newly installed plugin.
             return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot));
         }
@@ -258,7 +258,7 @@ public static class PluginEndpoints
     private static IReadOnlyCollection<PluginKey> HeldCopies(IndexProjector index) =>
         [.. index.RequireReads().OpenedCopies.Keys];
 
-    // ADR-0041: the Track gesture. Origin names the mod folder (every loaded plugin sharing
+    // ADR-0007: the Track gesture. Origin names the mod folder (every loaded plugin sharing
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(

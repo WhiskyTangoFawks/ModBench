@@ -2,7 +2,7 @@ import type { LoadOrderOutcome, LoadOrderPluginInput, WriteRefused } from './cli
 import { isRefused } from './client';
 import { reportSkippedPlugins } from './pluginFailures';
 
-/** Each callback is exactly one ADR-0026 surface — `warn`/`error` toast, `log` writes the
+/** Each callback is exactly one ADR-0019 surface — `warn`/`error` toast, `log` writes the
  *  channel, `setStatusText` writes the status bar, `notifyConflictsComputed` fires once,
  *  `refreshTree` re-reads the record browser's own caches. */
 export interface LoadOrderOutcomeDeps {
@@ -30,7 +30,7 @@ export function reportLoadOrderResult(
 
   reportSkippedPlugins(result.failures, deps);
   // Participation is derived — enabled AND winning AND listed — and the snapshot is every copy,
-  // so a non-empty one can still have nothing that participates (ADR-0044).
+  // so a non-empty one can still have nothing that participates (ADR-0013).
   if (!plugins.some((p) => p.enabled && p.winning && p.slot !== null)) {
     deps.warn(
       'mEdit: The active profile has no enabled plugins — only base-game masters are held. ' +
@@ -39,10 +39,10 @@ export function reportLoadOrderResult(
   }
   deps.setStatusText(`$(check) mEdit: Ready (${plugins.length} plugin copies)`);
   // A reconciled load order can move which records a row's page/interior/reference caches hold,
-  // so the record browser re-reads them the same as any other write (ADR-0035).
+  // so the record browser re-reads them the same as any other write (ADR-0002).
   deps.refreshTree();
   // The backend answers this PUT only after the winner sweep, so reaching here *is* "conflicts
-  // are computed" (ADR-0035).
+  // are computed" (ADR-0013).
   deps.notifyConflictsComputed();
 }
 
@@ -61,7 +61,7 @@ export function applyFilterSyncResult(
 }
 
 /** `getActiveFilter` is a plain port query with no `WriteRefused` wrapping of its own — this is
- *  that wrapping (ADR-0026: a read failure both logs and warns, never throws out of the sync). */
+ *  that wrapping (ADR-0019: a read failure both logs and warns, never throws out of the sync). */
 export async function syncActiveFilter(
   getActiveFilter: () => Promise<string | null>,
   deps: { log: (msg: string) => void; warn: (msg: string) => void; setFilterActive: (active: boolean, sql?: string, label?: string) => void },

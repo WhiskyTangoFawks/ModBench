@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>The create endpoint is the holder's second writer (ADR-0044): it builds the copy,
+/// <summary>The create endpoint is the holder's second writer (ADR-0013): it builds the copy,
 /// composes it into the current value and applies that before the handler runs.</summary>
 public sealed class CreatePluginEndpointTests : IDisposable
 {
@@ -28,7 +28,7 @@ public sealed class CreatePluginEndpointTests : IDisposable
     private RegisteredCopy? Registered(string name, string origin) =>
         _mod.Holder.Current.Copy(new PluginKey(name, origin));
 
-    // ADR-0041: a created plugin is a registered copy at once, so the Track that follows it in the
+    // ADR-0007: a created plugin is a registered copy at once, so the Track that follows it in the
     // same gesture, and every later reader, find it without waiting for the next snapshot.
     [Fact]
     public async Task CreatePlugin_RegistersTheCopyInTheSharedKernel()
@@ -147,7 +147,7 @@ public sealed class CreatePluginEndpointTests : IDisposable
         Assert.Equal(["A.esp", "B.esp"], reverted.Copies.Select(copy => copy.Name).Order(StringComparer.Ordinal));
     }
 
-    // ADR-0041: the endpoint's registration is what makes a created plugin editable at once — the
+    // ADR-0007: the endpoint's registration is what makes a created plugin editable at once — the
     // edit side resolves its write target from the kernel, asking the Index nothing.
     [Fact]
     public async Task AnEditAfterCreate_ResolvesToTheNewCopy()

@@ -2,7 +2,7 @@
 
 **Status: Implemented.** There is **one** Plugins tree (`modbench.pluginListTree`), covering
 what were once separate Mod-Management "Plugins (Load Order)" and Editing "mEdit Plugins tree"
-surfaces ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)).
+surfaces ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)).
 
 **Two bounded contexts, one view, structurally.** Mod Management owns the rows — identity, Plugin
 load order, checkbox — operating on physical plugin files (`.esm`/`.esp`/`.esl`) and
@@ -10,12 +10,12 @@ load order, checkbox — operating on physical plugin files (`.esm`/`.esp`/`.esl
 types, records, the spatial worldspace/cell hierarchy — whenever the backend is running.
 One provider serves the tree (`plugins/PluginsTreeProvider.ts`): it builds the rows from the
 Instance and delegates a row's children to the record browser, which speaks none of Mod
-Management's vocabulary ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), each context's own
-`CONTEXT.md`). That structural check is what answers ADR-0027's objection to merging these views:
+Management's vocabulary ([CONTEXT.md](../../CONTEXT.md), each context's own
+`CONTEXT.md`). That structural check is what answers ADR-0017's objection to merging these views:
 the merge is not a conflation of contexts.
 
 **Vocabulary note:** "load order" is ambiguous across Modbench's two contexts and this spec
-uses the disambiguated terms throughout — see [CONTEXT-MAP.md](../../CONTEXT-MAP.md) and each
+uses the disambiguated terms throughout — see [CONTEXT.md](../../CONTEXT.md) and each
 context's `CONTEXT.md`:
 
 - **Mod override order** — `modlist.txt` order (the **Modlist**, owned by the Mods tree); the mod
@@ -31,9 +31,9 @@ reorder, master verdicts — **and**, whenever the backend is running, be the en
 point for all per-record navigation in the mEdit view: browsing each plugin's records by type,
 spatially by worldspace and cell, and narrowing by name or by a SQL record filter. In xEdit these
 are one tree; this surface is Modbench's answer to the same design
-([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)).
+([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)).
 
-## Placement ([ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+## Placement ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md), [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md))
 
 A sidebar `TreeView` (`modbench.pluginListTree`, "Plugins"), stacked below the Mods tree in the
 `modbench` view container, **always visible, unconditionally** — not a switchable tab, no view
@@ -44,7 +44,7 @@ shape. Reuses the `TreeDragAndDropController` pattern already built for the Mods
 
 Freely relocatable by the user (e.g. to the auxiliary bar, to reconstruct MO2's literal
 side-by-side layout) via VS Code's native "Move View" — but never defaults there, per
-ADR-0027's auxiliary-bar convention.
+ADR-0017's auxiliary-bar convention.
 
 ## Problem Statement
 
@@ -67,7 +67,7 @@ A **Plugins** sidebar tree — one row per `plugins.txt` line, in Plugin load or
 checkbox (enable/disable), drag-and-drop reorder (single- or multi-row), a master-issue badge, a
 name filter, and a Reveal-in-Explorer row action. It mirrors MO2's Plugins tab closely enough to
 alternate between the two on the same instance. Rows, order and gestures need no backend; the
-implicit-master rows and the master-issue badge come from it (ADR-0021).
+implicit-master rows and the master-issue badge come from it (ADR-0016).
 
 Every row also expands into that plugin's records — by type, spatially by worldspace and cell —
 narrowing on two independent axes: the row-level name filter above, and a SQL record filter
@@ -75,7 +75,7 @@ scoped to a row's children. Every path through the record-browsing side ends at 
 [Record editor panel](medit-record-editor.md).
 
 The load order is constructed on entry from every line of the active profile's `plugins.txt` —
-disabled entries included, carrying their participation (ADR-0035) — plus vanilla masters;
+disabled entries included, carrying their participation (ADR-0013) — plus vanilla masters;
 there is no separate load-order step.
 
 ## User Stories
@@ -142,7 +142,7 @@ there is no separate load-order step.
 21. As a user, I want to filter the record tree by a SQL query against the backend's per-type
     tables (returning `form_key`), pruning record types and records with no matches — but
     never a plugin row itself, since that would make the load order unviewable and
-    unreorderable mid-patch (ADR-0035 amends ADR-0018 on this point) — so that I can slice the
+    unreorderable mid-patch — so that I can slice the
     loadout by any condition I can express without a fixed toggle UI.
 22. As a user, I want to save filters as `.sql` files, apply one from a picker or from an
     inline Code Lens on the file, and see which filter is active, so that my useful queries are
@@ -158,7 +158,7 @@ there is no separate load-order step.
     Viewing is built; **editing is not yet built**: no header column carries a write delegate
     (`author`, `flags` and `masters` are each declared read-only with a named reason, since a null
     write delegate is structurally unrepresentable), so every header field edit refuses.
-    Making the header a source unit (ADR-0041) changes only *which* refusal fires; genuine
+    Making the header a source unit (ADR-0007) changes only *which* refusal fires; genuine
     writability — setting the author, toggling ESL/ESM with eligibility rejection — remains
     future work, not yet built.
 25. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's
@@ -171,7 +171,7 @@ there is no separate load-order step.
     missing entirely or is present but itself failed to load, so that I can inspect and fix the
     problem instead of losing the plugin from the tree. If a plugin fails to open or parse
     outright, I want its row to stay and show me why, rather than the load silently continuing
-    without it ([ADR-0037](../adr/0037-unresolvable-masters-are-indexed-and-flagged.md)).
+    without it ([ADR-0012](../adr/0012-every-plugin-copy-is-indexed.md)).
 
 ## Implementation Decisions
 
@@ -180,7 +180,7 @@ there is no separate load-order step.
 - This spec covers the whole merged surface: the sidebar tree, checkbox, drag reorder, the name
   filter, Refresh, Reveal-in-Explorer, and — whenever the backend is running — the implicit-master
   rows, record browsing, the spatial hierarchy, the SQL record filter, record-authoring commands,
-  and the master-issue and load-failure decorations (ADR-0037).
+  and the master-issue and load-failure decorations (ADR-0017).
 - **Auto-sort** (dependency-aware topological sort, LOOT parity) is **out of scope, deferred
   indefinitely** — a possible future initiative of its own, not scheduled. See Out of Scope.
 - **Cross-highlight with the Mods tree** (selecting a plugin highlights its providing mod(s)
@@ -200,7 +200,7 @@ there is no separate load-order step.
   doesn't compute or care about — it only manages the sequence of names.
 - Checkbox reflects the line's `*` prefix (MO2's own enabled marker).
 - **The leading slot answers exactly one question — "can you change whether this loads?"**
-  ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)):
+  ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)):
   a checkbox on a togglable `plugins.txt` line (`contextValue: "plugin"`); a lock icon on an
   implicit master (`contextValue: "pluginImplicit"`, named by the backend rather than by a
   `plugins.txt` line) — forced on, neither toggled nor dragged; nothing at all on a row that
@@ -231,9 +231,9 @@ there is no separate load-order step.
   plugin's header is not an editing action, only the fields inside it are (see Record navigation
   below).
 
-### Row children ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+### Row children ([ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md))
 
-- **Every row is collapsible from launch** (ADR-0035): mEdit is always running, so there is no
+- **Every row is collapsible from launch** (ADR-0002): mEdit is always running, so there is no
   absence for a chevron to encode, and nothing on the Mod-Management side of this surface changes
   across launch or close. Neither transition re-reads `plugins.txt`, so the load order, the name
   filter, row expansion and scroll position all survive it.
@@ -244,26 +244,26 @@ there is no separate load-order step.
   answers one "still indexing" node — or, if the client cannot answer at all, or the load order
   has already given up on that plugin (see Load-failure decoration below), the record browser's
   own error node — rather than opening onto an empty list, which would read as "this plugin has
-  no records" (ADR-0026).
+  no records" (ADR-0019).
 - **Disabled plugins expand and browse like any other.** The load order indexes every `plugins.txt`
   line, enabled or disabled; the `*` prefix is *participation* — whether the plugin competes for
   winner — not whether it is loaded. A disabled plugin can never be the winning record for a
   FormKey and never takes part in conflict classification.
-- **Every physical plugin copy is registered, not only the load order's picks** (ADR-0044). A
+- **Every physical plugin copy is registered, not only the load order's picks** (ADR-0013). A
   copy losing the Mod override order, and a file no `plugins.txt` line names, arrive in the same
   snapshot as the winners and are held beside them — non-participating and read-only, but **not
   displayed**: `PluginsTreeProvider` reads only `plugins.txt`'s own line set for rows, and a
   plugin more than one enabled mod provides renders exactly like any other row. How a losing or
   unlisted copy surfaces — per-reason show/hide toggles, dimming, origin labelling — is an open
   UX design; an always-on Stack node and file-override badge were reviewed live and rejected
-  (ADR-0035).
+  (ADR-0013).
 - **One provider owns the tree** (`plugins/PluginsTreeProvider.ts`): rows from the Instance,
   children delegated to the record browser, which imports nothing from Mod Management — enforced
   by `src/test/contextBoundary.test.ts`, not by review. A drop onto a child row is refused rather
   than treated as "past the last row", which would silently move the dragged plugins to the end
   of the load order.
 
-### Progressive load ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+### Progressive load ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md))
 
 The load is progressive: rows land as each plugin finishes indexing rather than all at once at the
 end.
@@ -284,7 +284,7 @@ end.
   The progress subscription is torn down, message and progress clear, and nothing is reported as
   broken. The rows are left exactly as they are: what a row expands into is the read it makes at
   that moment, so a backend that has gone shows as the error node without the tree adapting its
-  shape (ADR-0022). This
+  shape (ADR-0002). This
   holds for the whole launch, not just the load: a close during the backend spawn and mod-tree
   walk must not report "Backend failed to start" for the stop the user just asked for, so the
   cancellation is armed before the launch's first await and checked after each one. Same for a
@@ -293,10 +293,10 @@ end.
 - **A second window on the same instance is refused, by name.** The backend answers the load
   `423 Locked` ("this instance's index is open in another Modbench window") and holds nothing; the
   frontend surfaces that message as the load failure. No read-only mode, no waiting, never a second
-  index file ([ADR-0001](../adr/0001-persistent-per-instance-index-load-order-is-a-registration.md)
+  index file ([ADR-0009](../adr/0009-the-record-index-mirrors-the-files-on-disk.md)
   point 6).
 - **Mechanism: subscribe, don't poll.** The load POST stays blocking, and progress rides the
-  `load-order-status` notification on the SSE stream (ADR-0046 invariant 12) alongside the
+  `load-order-status` notification on the SSE stream (ADR-0014 invariant 2) alongside the
   still in-flight `PUT /load-order`, which remains the completion signal. The extension's
   subscription is one call, the mEdit client's own `subscribeStatus`, unsubscribed once the PUT
   settles; the session-wide stream itself is opened by the mEdit client the moment its status
@@ -345,7 +345,7 @@ end.
   VS Code's own `TreeView` already virtualizes rendering, so row count alone was never the
   limitation pagination solved; xEdit itself shows a record-type group's full child list
   unconditionally (`xeMainForm.pas`'s `vstNavInitChildren`: `ChildCount := Container.ElementCount`,
-  no `LIMIT`), so this also removes an ADR-0034 divergence that never had a demonstrated platform
+  no `LIMIT`), so this also removes an ADR-0018 divergence that never had a demonstrated platform
   limitation behind it.
 - **Record nodes** — one of four `contextValue`s, which together carry everything the row's own
   context menu gates on. `"recordTracked"` and `"recordUntracked"` are both *master* rows (this
@@ -392,9 +392,8 @@ end.
   a load-failed or missing-master plugin, which is otherwise always visible. `GET /plugins`
   itself never drops a plugin row (`HasMatchingRecords` is an additive per-plugin fact, backend-
   tested); the hiding is a presentation decision in the Plugins tree, made only while a filter is
-  active. Clearing the filter restores every hidden row immediately, in load order. (ADR-0035
-  amends [ADR-0018](../adr/0018-sql-file-based-record-filter.md) on record/record-type pruning
-  and on plugin-row hiding.)
+  active. Clearing the filter restores every hidden row immediately, in load order. (plugins.md governs record and record-type pruning
+  and plugin-row hiding.)
 - Entry points: a title-bar funnel (opens a `setFilter` quick pick of `.sql` files in
   `modbench.scriptsPath` plus "New filter…"), a funnel-slash to clear (shown only while a
   filter is active), command-palette equivalents, and **Code Lens** on open `.sql` files under
@@ -403,10 +402,10 @@ end.
   the active indicators.
 - If reading the active-filter state fails (backend error), the sync degrades to *inactive* and
   warns the user rather than silently presenting the unfiltered tree as a confirmed "no filter"
-  ([ADR-0026](../adr/0026-error-surfacing-policy.md); same degrade-and-warn convention as other
+  ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md); same degrade-and-warn convention as other
   secondary reads). The failure is non-fatal to launch.
 - Conflict-status filtering, EditorID search, and record-type narrowing are all expressed as
-  user-written SQL — **no structured toggle UI**. Per ADR-0041/ADR-0005 the per-type names are
+  user-written SQL — **no structured toggle UI**. Per ADR-0007/ADR-0011 the per-type names are
   generated `json_extract` **views** over the one `records` documents table, so existing
   per-type filter SQL keeps working by name. View columns are **scalar leaves only** with types
   preserved via casts: primitives, plain enums, FormLinks, translated strings (their `Value`),
@@ -421,7 +420,7 @@ end.
 - **Per-plugin**, under each plugin node: "Worldspaces" and "cell - Interior" group nodes show
   what *that plugin* declares (records and overrides), never a cross-plugin winner. Placed
   records (REFR/ACHR) are indexed; parentage lives in `placement` / `cell_location` side tables
-  ([ADR-0023](../adr/0023-placed-objects-indexed-with-placement-side-tables.md)).
+  ([ADR-0005](../adr/0005-the-document-is-the-record-model.md)).
 - The spatial hierarchy descends Worldspace → Block → Sub-block → Cell (by XCLC coordinates) →
   Persistent/Temporary placed-reference groups → placed references. Block and Sub-block nodes
   are grouping-only (no record, no click); clicking a CELL or REFR node opens the editor.
@@ -436,12 +435,12 @@ end.
 
 - A Quest's dialog topics/branches/scenes are inline in the quest's own document, and a Dialog
   Topic's responses inline in the topic's, in Mutagen's list order. A container's document carries
-  its embedded children (ADR-0041 amendment; `ContainerChildFields`), and each child is also its own
+  its embedded children (ADR-0006; `ContainerChildFields`), and each child is also its own
   extracted index row. The Plugins tree restores navigation to them as expandable tree children,
   reading the same containment index the worldspace tree above reads, never a parallel source.
 - A Quest row expands to its `DialogTopics`, `DialogBranches`, then `Scenes`, in that flat order
   with no intermediate grouping node — xEdit's own GroupType-10 order
-  ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)). A Dialog Topic row
+  ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). A Dialog Topic row
   (whether reached directly or as a Quest's child) expands to its `Responses`.
 - Child rows are ordinary record rows — same `modbench.openEditor` command, same context menu,
   same origin-keyed identity as every other record row (no new command was needed for this).
@@ -457,11 +456,11 @@ end.
 ### Master-issue and load-failure decoration
 
 Every master verdict on a row is the backend's. The extension parses no plugin binary
-([ADR-0021](../adr/0021-mod-manager-in-extension.md)), so there is one signal to render and
-nothing to reconcile — [ADR-0037](../adr/0037-unresolvable-masters-are-indexed-and-flagged.md)
+([ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md)), so there is one signal to render and
+nothing to reconcile — [ADR-0012](../adr/0012-every-plugin-copy-is-indexed.md)
 governs what it says.
 
-**Load-order-derived (Editing, once the backend is running — ADR-0037).** Presence-only, never
+**Load-order-derived (Editing, once the backend is running — ADR-0012).** Presence-only, never
 order-aware — Mutagen resolves a master by reading it from the plugin's own header, so it never
 needs that master positioned before the plugin, only present and loadable somewhere in the
 load order. `GET /plugins`' `masterIssues` reports, per plugin, every one of its own declared masters
@@ -470,8 +469,7 @@ no `plugins.txt` line for it, or its file doesn't exist) renders "Missing master
 `Unloadable` (it has a line and a file, but that file itself failed to open or parse) renders
 "Master `{name}` cannot be loaded". The declaring plugin is never deactivated, excluded or hidden
 for this — it stays indexed, browsable, and (if enabled) participating in winner computation
-exactly as it would without the flag; ADR-0037 is the deliberate, recorded divergence from
-xEdit's force-deactivate-and-cascade rule. There is no cascade: a plugin whose master merely has
+exactly as it would without the flag, as MO2 does and xEdit does not (ADR-0012). There is no cascade: a plugin whose master merely has
 *its own* missing master is not itself flagged — `masterIssues` only ever describes a plugin's
 own declared masters, never a transitive fact about a master's masters.
 
@@ -511,22 +509,22 @@ the prefix on it even when nothing of it could be read at all, which is what kee
 subtree from reading as "this plugin has no NPCs". The plugin still opens and its other types index
 normally. The record editor's read-only handling of a parse-failed record is specced separately.
 
-**Load-failure decoration (ADR-0037).** A plugin that fails to open or parse is
+**Load-failure decoration (ADR-0017).** A plugin that fails to open or parse is
 skipped so the rest of the load order still loads (`LoadOrder.Failures`) — a whole file whose
 bytes cannot be read at all has no record identity to hang a parse status on — but its row is
 never dropped — Mod Management builds rows from `plugins.txt`, not from which plugins the load order
 managed to index, so the row was already there. `PluginsTreeProvider` decorates it with its
 recorded failure reason ("Failed to load: `{reason}`") the same way it decorates a master issue,
-joined on the copy the failure names (ADR-0036), so a losing copy that failed leaves the winning
+joined on the copy the failure names (ADR-0012), so a losing copy that failed leaves the winning
 copy's row clean and reaches the user only through the reconcile toast, since it has no row;
 the row stays collapsible but answers the error node on expand, carrying the same reason — never
 "still indexing", which would promise a completion a plugin the load order gave up on will never
-reach (ADR-0026). The existing
+reach (ADR-0019). The existing
 reconcile toast (the load-order outcome module's `reportLoadOrderResult`, one aggregated warning per load) is
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.
 
-### The load order is mirrored, not loaded ([ADR-0044](../adr/0044-the-load-order-is-mirrored-not-loaded.md))
+### The load order is state ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md))
 
 Every loadout gesture — a reorder, an enable/disable, installing, uninstalling or reprioritising
 a mod, a profile switch, activation itself — is the same thing to Editing: the next snapshot.
@@ -556,7 +554,7 @@ snapshot → the mEdit client's own `putLoadOrder` → filter sync → the tree 
 the activation-time launch runs (via `loadOrderSync.flush()`) after the backend comes up.
 
 **A failed PUT tears nothing down.** The backend keeps whatever it held; the error is surfaced
-(ADR-0026's explicit-action tier) and the next snapshot retries. A copy that cannot be opened or
+(ADR-0019's explicit-action tier) and the next snapshot retries. A copy that cannot be opened or
 indexed is a row in an error state (`LoadOrderStatus.failures`, decorated on its row), retried only
 once its bytes change. There is no "exit to the mod list on load failure" any more.
 
@@ -620,7 +618,7 @@ overflow, then native **Collapse All** last.
   is `modbench.filterActive` — a separate key from slot 1's, because the two axes are cleared
   independently. Gate, code lens and readout are written from one place, so the three can never
   disagree; a backend that goes away clears none of them, because the view keeps its shape and
-  reports the disconnect rather than narrowing or widening itself (ADR-0022).
+  reports the disconnect rather than narrowing or widening itself (ADR-0002).
 - **Both axes read out in the view description** when both are active — `"arm" · records:
   cells.sql`. The record filter is named by its **source** (the `.sql` filename, or `document`
   when applied from an open editor; `SQL` when a load-order sync reports a filter this
@@ -634,8 +632,8 @@ overflow, then native **Collapse All** last.
   (plugin → record type → record), so it earns the affordance.
 - **No Refresh of its own.** Re-reading `plugins.txt` is part of the single
   workspace-scope Refresh on the [Toolbox](containers.md), which re-reads every
-  Mod-Management source together and also drops and rebuilds the Index (ADR-0046) — the one
-  reload gesture, distinct from the ordinary per-change reconcile (ADR-0044).
+  Mod-Management source together and also drops and rebuilds the Index (ADR-0014) — the one
+  reload gesture, distinct from the ordinary per-change reconcile (ADR-0013).
 - **Refresh is not how the tab recovers from an external edit.** The `mods/**`,
   `profiles/*/modlist.txt` and `profiles/*/plugins.txt` watchers each invalidate this tree as
   well as requesting the editing-side reconcile, so a `plugins.txt` line added, removed,
@@ -658,9 +656,9 @@ overflow, then native **Collapse All** last.
   row of its own, never from a line) is never appended, even when a mod ships a copy. With that
   list unknown — an unreachable backend, no game directory to ask about, or a game Mutagen has no
   release for — nothing is appended or pruned at all, since every verdict would then be a guess. Matching is case-insensitive throughout. The edit is
-  surgical (ADR-0021): one read-modify-write on the commands' write chain, the delta computed from
+  surgical (ADR-0017): one read-modify-write on the commands' write chain, the delta computed from
   a fresh parse, no write at all when the resulting text is unchanged. It is a command like the
-  three gestures beside it (ADR-0046) — it enumerates disk itself, reads no Instance, and returns
+  three gestures beside it (ADR-0014) — it enumerates disk itself, reads no Instance, and returns
   applied-or-refusal with the delta it applied; the composition root logs that. Every landed
   Instance value runs it (`pluginsReconcileTrigger.ts`), including the value its own write
   produces through the `plugins.txt` watcher: that loop terminates because the following run
@@ -671,7 +669,7 @@ overflow, then native **Collapse All** last.
   nothing. Silent by ruling: no prompt, no toast, the Output line is the record. Between a file
   appearing on disk and the reconcile's write, the tree shows the file exactly as it is — no
   transitional decoration. A checkbox toggle on a name whose line has meanwhile gone is refused,
-  and the refusal is reported (ADR-0026).
+  and the refusal is reported (ADR-0019).
 
 ### Row context menu
 
@@ -718,7 +716,7 @@ overflow, then native **Collapse All** last.
   unprompted via the surgical splice write above — a direct `plugins.txt` edit, nothing else.
   The write itself is a `plugins.txt` edit and nothing else; the load order reaches the backend
   through `loadOrderSync`, per the next bullet.
-- **Checkbox toggles and drag reorders are live (ADR-0044).** Both write `plugins.txt` and
+- **Checkbox toggles and drag reorders are live (ADR-0013).** Both write `plugins.txt` and
   then become the next snapshot (`loadOrderSync.request()` — the toggle asks explicitly, the
   plugins.txt watcher covers both); the backend moves the affected registrations SQL-only — no
   reload, no re-read, no re-index (proved at the Index seam: a reorder or a disable changes the
@@ -740,7 +738,7 @@ overflow, then native **Collapse All** last.
 - **Read failure** — the Instance's first read threw (an unreadable `modlist.txt` or
   `plugins.txt`, a profile folder that vanished, a permissions error) and nothing has landed: a
   single error node carrying the read's own reason, and the injected reporter told once, at
-  error severity ([ADR-0026](../adr/0026-error-surfacing-policy.md)) — never a spinner that
+  error severity ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)) — never a spinner that
   never ends, and never an empty list. The next landed value replaces the node with rows. A read
   that fails after a value has landed keeps that value's rows and is logged only.
 - **Empty `plugins.txt`** (no lines) — realistically near-unreachable (vanilla masters always
@@ -764,7 +762,7 @@ overflow, then native **Collapse All** last.
   own name, translated from `ModOrganizer.ini`'s `gameName` by `mo2/gamePaths.ts`'s
   `gameReleaseForGame` — the two vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no
   release is one of the unknowables above.
-- **Load-order-derived master classification** (ADR-0037): `MasterResolution.Classify`
+- **Load-order-derived master classification** (ADR-0012): `MasterResolution.Classify`
   (`MEditService.Core/Queries/`), a pure function over data the load order already has
   (`LoadOrder.Plugins`, `LoadOrder.Failures`) — no Mutagen re-read. Consulted once per
   `GET /plugins` call and reported on `PluginResponse.MasterIssues`; distinguishes `DirectlyMissing`
@@ -866,13 +864,13 @@ overflow, then native **Collapse All** last.
   MO2 doesn't guard-rail it either, and the backend's master-issue badge catches the fallout if
   it happens.
 - **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
-  user-written SQL against the generated per-type views, not a fixed toggle set (ADR-0018).
+  user-written SQL against the generated per-type views, not a fixed toggle set.
 - **Multi-step form-space operations** — compact FormIDs, copy-as-underride (moving a record
   down into a master), and merge-into-another-plugin — are deferred and will be delivered as
   Python scripts over the header/renumber/delete edit primitives, not bespoke commands.
   They compose from those primitives and are inherently multi-step. Masters sort/clean/remove are
   not on this deferred list: per
-  [ADR-0038](../adr/0038-masters-are-lifecycle-derived-never-user-declared.md), a plugin's masters
+  [ADR-0008](../adr/0008-masters-are-derived-from-content.md), a plugin's masters
   are wholly derived from its content, never directly user-editable — so those never exist as a
   separate operation (scripted or otherwise) to defer in the first place. Near-term
   header editing (author, ESL/ESM flag) is a first-class feature — see User Story 24.
@@ -882,9 +880,9 @@ overflow, then native **Collapse All** last.
 ## Further Notes
 
 - **Glossary** — `CONTEXT.md` (Editing) and
-  [modmanager `CONTEXT.md`](../../modbench/src/modmanager/CONTEXT.md) distinguish **Plugin
+  [CONTEXT.md](../../CONTEXT.md) distinguish **Plugin
   load order** (this surface's subject, `plugins.txt`, record-level) from **Mod override order**
-  (the Modlist, `modlist.txt`, file-level). [CONTEXT-MAP.md](../../CONTEXT-MAP.md)'s Mod-Management→Editing relationship
+  (the Modlist, `modlist.txt`, file-level). [CONTEXT.md](../../CONTEXT.md)'s Mod-Management→Editing relationship
   description matches: the editing backend's plugin *order* comes from Plugin load order, not
   Modlist order (Modlist only resolves each plugin *name* to its winning physical file).
 - **Filter box is a declared cross-surface convention**, not a per-surface bespoke choice: Mods

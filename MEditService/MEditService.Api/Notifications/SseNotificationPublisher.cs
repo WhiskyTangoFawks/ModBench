@@ -5,7 +5,7 @@ using MEditService.Core.Notifications;
 
 namespace MEditService.Api.Notifications;
 
-/// <summary>ADR-0046's first notification transport. A subscriber that falls behind is dropped: a
+/// <summary>ADR-0014's first notification transport. A subscriber that falls behind is dropped: a
 /// missed event is recoverable, an unbounded queue behind a stalled client is not.</summary>
 public sealed class SseNotificationPublisher : INotificationPublisher
 {

@@ -36,13 +36,13 @@ public interface IRecordReads
     IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin);
 
     /// <summary>O(1) FormKey → (record type, EditorID) lookup against the winning override,
-    /// backed by <c>form_lookup</c> (ADR-0031).</summary>
+    /// backed by <c>form_lookup</c> (ADR-0005).</summary>
     RecordLookupEntry? Resolve(string formKey);
 
     IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey);
 
     /// <summary>Every plugin name at least one filtered record matches, restricted to
-    /// <paramref name="tableNames"/> (ADR-0035). Empty when no filter is active: every plugin
+    /// <paramref name="tableNames"/> (plugins.md). Empty when no filter is active: every plugin
     /// already has matches.</summary>
     IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames);
 
@@ -60,7 +60,7 @@ public interface IRecordReads
     /// plugin) — ESL-eligibility validation.</summary>
     IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin);
 
-    // Worldspace tree reads (ADR-0023) (from the placement / cell_location side tables).
+    // Worldspace tree reads (ADR-0005) (from the placement / cell_location side tables).
     IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey);
     PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset);
     CellReferences GetCellReferences(PluginKey plugin, string cellFormKey);

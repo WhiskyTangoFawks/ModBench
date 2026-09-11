@@ -6,7 +6,7 @@
 A composition-root spec: the two view containers Modbench contributes to VS Code, the views
 each holds in default order, and the title-bar placement rules every one of those views
 carries. It belongs to neither bounded context
-([CONTEXT-MAP.md](../../CONTEXT-MAP.md)) — a container holds views from both, and the
+([CONTEXT.md](../../CONTEXT.md)) — a container holds views from both, and the
 placement rules are UI mechanics, not domain vocabulary.
 
 Per-view behavior lives in each view's own spec: [Mods](mods.md), [Plugins](plugins.md),
@@ -21,7 +21,7 @@ view or command's title-bar home is decided; read it before placing one.
 | --- | --- | --- | --- |
 | 1 | Toolbox | `modbench.toolbox` | Composition root — see *The Toolbox* below |
 | 2 | Mods | `modbench.modList` | Mod Management |
-| 3 | Plugins | `modbench.pluginListTree` | Mod Management, plus Editing's record rows once a load order is running ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)) |
+| 3 | Plugins | `modbench.pluginListTree` | Mod Management, plus Editing's record rows once a load order is running ([ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)) |
 | 4 | Downloads | `modbench.downloads` | Mod Management; registered collapsed by default |
 
 Every view here is contributed unconditionally — there is no `modbench.viewMode` context key
@@ -49,7 +49,7 @@ exposed one for a multi-view container (it doesn't — see *Rule 1* below). Its 
 home for every workspace-scope action that isn't about any one domain tree.
 
 It renders the **Instance**'s value
-([ADR-0047](../adr/0047-the-extension-mirrors-the-backends-shape-one-read-model-built-only-by-watching.md))
+([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md))
 and nothing else: the active profile and deployed-ness are fields of that value, so the readout
 can never disagree with what the trees below it show. It names *profiles* and a *deployment*,
 and never records, FormKeys, mods or files.
@@ -79,7 +79,7 @@ stays quiet rather than repeating it.
 | Deployment | `deployed` / `not deployed` | Deploy, when not deployed |
 
 - The **Profile** row reads `—` rather than erroring while the Instance holds its empty
-  pre-first-read value: a readout blip is ADR-0026's background tier, not a toast.
+  pre-first-read value: a readout blip is ADR-0019's background tier, not a toast.
 - The **Deployment** row reads deployed-ness from the Instance's `deployed` field — the
   presence of the deploy manifest (`mods/.medit-manifest.json`), the same question purge
   already asks, so the readout cannot disagree with what purge would do. A corrupt manifest
@@ -109,7 +109,7 @@ superseded by there being no pair to place.)
 **Refresh** is one command id (`modbench.refresh`) that refreshes the whole of Modbench, not only
 Mod Management. It re-reads mods, plugins and downloads from disk as it always did, and it also
 drops the Index and rebuilds it from scratch: every plugin re-indexed from its bytes, every
-tracked mod re-ingested from its source, through the same path the first load takes (ADR-0046).
+tracked mod re-ingested from its source, through the same path the first load takes (ADR-0014).
 A partial refresh is the state where the user believes they have resynced and one tree still
 quietly disagrees. Refresh remains a safety net for flaky watch events, never the primary path:
 every one of those sources is otherwise watcher-driven.
@@ -140,7 +140,7 @@ script-extender loader exits immediately and its exit code says nothing about th
 
 ### Deltas the Toolbox absorbed
 
-Historical record from before ADR-0035 merged Mod Management's "Plugins (load order)" and
+Historical record from before the merge of Mod Management's "Plugins (load order)" and
 Editing's "mEdit Plugins tree" into the one shared Plugins tree that exists today — the two
 "Plugins" rows below describe the two pre-merge views, not two views that exist now.
 

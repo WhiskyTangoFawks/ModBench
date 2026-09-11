@@ -15,7 +15,7 @@ const flagMeta = fieldMeta({
     { value: 'C', bitValue: '4' }, { value: 'D', bitValue: '8' }],
 });
 
-// A deliberate ADR-0034 divergence, recorded there: the checkbox list is the cell — always
+// A deliberate ADR-0018 divergence, recorded there: the checkbox list is the cell — always
 // visible, one checkbox per flag, no gesture to reveal it.
 describe('FlagCell — always-visible checkbox list', () => {
   it('renders one checkbox per member, checked where the document names it', () => {

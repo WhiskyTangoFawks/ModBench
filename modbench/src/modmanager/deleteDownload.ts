@@ -10,7 +10,7 @@ export interface DeleteDownloadDeps {
   confirm: () => Promise<boolean>;
   metaExists: () => Promise<boolean>;
   trash: (path: string) => Promise<void>;
-  /** Surface a failure per ADR-0026 (log + error notification). */
+  /** Surface a failure per ADR-0019 (log + error notification). */
   reportFailure: (message: string) => void;
 }
 

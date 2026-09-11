@@ -3,14 +3,14 @@ using MEditService.Core.Records;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>Why an edit was refused, typed rather than a string to match on (ADR-0026). Each value
+/// <summary>Why an edit was refused, typed rather than a string to match on (ADR-0019). Each value
 /// names a different way out, which is what the message has to say.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RecordEditRefusal
 {
     None,
 
-    /// <summary>The way out is Track, once per mod (ADR-0041: the friction is deliberate).</summary>
+    /// <summary>The way out is Track, once per mod (ADR-0007: the friction is deliberate).</summary>
     PluginNotTracked,
 
     /// <summary>A vanilla/DLC master straight from Data, where Track cannot apply; the way out is a patch plugin.</summary>
@@ -22,7 +22,7 @@ public enum RecordEditRefusal
     /// (a column only another record class declares, a union member of another leaf).</summary>
     FieldNotFound,
 
-    /// <summary>Permanently unwritable (masters are compile-derived, ADR-0038), unlike the state-dependent Partial Form refusal.</summary>
+    /// <summary>Permanently unwritable (masters are compile-derived, ADR-0008), unlike the state-dependent Partial Form refusal.</summary>
     FieldReadOnly,
 
     /// <summary>Blocked at edit time rather than reported afterwards: always a data error.</summary>
@@ -63,7 +63,7 @@ public enum RecordEditRefusal
     LightPluginFormIdOutOfRange,
 
     /// <summary>A Partial Form record's own fields are never seen by the game; the way out is clearing the
-    /// flag. EditorID is exempt: xEdit's <c>CanAssignInternal</c> allows EDID on a Partial Form (ADR-0034).</summary>
+    /// flag. EditorID is exempt: xEdit's <c>CanAssignInternal</c> allows EDID on a Partial Form (ADR-0018).</summary>
     PartialFormFieldReadOnly,
 
     /// <summary>A reflected column aliasing the flags a synthetic member is one bit of would flip that bit

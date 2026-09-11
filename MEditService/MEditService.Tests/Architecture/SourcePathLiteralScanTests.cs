@@ -3,7 +3,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The repository is the only type naming a path under source (ADR-0046 invariant 9): the
+/// <summary>The repository is the only type naming a path under source (ADR-0014 invariant 5): the
 /// root folder, the door's file names and the JSON suffix are spelled in its own files and nowhere
 /// else.</summary>
 public sealed class SourcePathLiteralScanTests
@@ -104,7 +104,7 @@ public sealed class SourcePathLiteralScanTests
             .Order(StringComparer.Ordinal)];
 
     // The same file name prefix elsewhere in the tree is not the repository: only Source itself is
-    // exempt (ADR-0046 invariant 9).
+    // exempt (ADR-0014 invariant 5).
     private static bool IsRepositoryFile(string root, string file) =>
         Path.GetFileName(file).StartsWith(RepositoryFilePrefix, StringComparison.Ordinal)
         && Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')

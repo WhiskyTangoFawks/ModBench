@@ -27,7 +27,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
 | `nxm://` handler ("Download with manager") | ✓ | ✓ | 🔜 (still pending) |
-| Download queue UI with progress | ✓ Downloads tab | ✓ | ✅ sidebar tree + status-bar item — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) |
+| Download queue UI with progress | ✓ Downloads tab | ✓ | ✅ sidebar tree + status-bar item — [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md) |
 | Install from download | ✓ double-click | ✓ | ✅ `modbench.downloads.install` |
 | Nexus account login / API key | ✓ | ✓ (first-party) | 🔜 modbench-7 (`vscode.SecretStorage`) |
 | Update-available check | ✓ | ✓ | 🔜 modbench-8 (`meta.ini` version vs Nexus) |
@@ -39,11 +39,11 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
-| Plugin enable/disable + reorder | ✓ Plugins tab | ✓ Plugins page | ✅ the one Plugins tree ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)), writes `plugins.txt` |
+| Plugin enable/disable + reorder | ✓ Plugins tab | ✓ Plugins page | ✅ the one Plugins tree ([ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)), writes `plugins.txt` |
 | LOOT auto-sort | ✓ one-click, full masterlist | ✓ built-in, native grouping | ➖ deferred indefinitely (see plugins.md) |
 | ESL flags / capacity display | ✓ | ✓ | ✅ ESL/ESM flag edited on the header record (Editing); capacity display ❓ |
 | Missing-master warnings | ✓ | ✓ | ✅ (badge, via `MasterReader`) |
-| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([ADR-0021](../adr/0021-mod-manager-in-extension.md)) |
+| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md)) |
 
 ## Other MO2/Vortex surfaces
 
@@ -60,7 +60,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 
 ## Structural deltas worth remembering
 
-- **Deployment**: Modbench already took Vortex's side of the USVFS-vs-hardlinks fork (rationale in [docs/specs/mods.md](../specs/mods.md), [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)). Editing never requires deploy.
+- **Deployment**: Modbench already took Vortex's side of the USVFS-vs-hardlinks fork (rationale in [docs/specs/mods.md](../specs/mods.md), [ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)). Editing never requires deploy.
 - **Vortex compatibility**: Vortex has no simple text modlist; its staging + `vortex.deployment.json` manifest supports at best a read-only adapter. Full Vortex management remains out of scope unless demand appears.
 - **VS Code-native substitutions**: several MO2 surfaces dissolve into the platform — instance manager → Open Folder; tool launcher → tasks; INI editor → the editor itself; extensions → VS Code extensions. A "tab" is only worth building where VS Code has no native equivalent (Downloads queue, mod tree, record editor).
 

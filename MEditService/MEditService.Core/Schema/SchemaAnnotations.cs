@@ -26,7 +26,7 @@ internal sealed record SchemaAnnotations(
     // and xEdit's REFR-flavour placement variants this repo collapses into refr.
     Dictionary<string, string> ExcludedSignatures,
     // Top-level properties that are not record data: GRUP timestamps. The serializer still writes
-    // them (ADR-0042); a reflected column and a source-document field are different promises.
+    // them (ADR-0006); a reflected column and a source-document field are different promises.
     HashSet<(string TypeName, string MemberName)> ExcludedColumns,
     // Skipped at every depth: Loqui plumbing and reserved padding. Keyed on the declaring type
     // because some names are real data elsewhere (Type is a genuine enum on Keyword).
@@ -45,7 +45,7 @@ internal sealed record SchemaAnnotations(
     // Shapes the walk reaches and could present, but nobody has decided a presentation for, by CLR
     // name (a generic by its definition's). Each reason says what a future ticket would decide.
     Dictionary<string, string> RefusedShapes,
-    // xEdit's own name for an enum member the document spells with Mutagen's (ADR-0034). A label,
+    // xEdit's own name for an enum member the document spells with Mutagen's (ADR-0018). A label,
     // never a value: the document is the model, so nothing here changes what is written.
     Dictionary<(string TypeName, string MemberName), IReadOnlyDictionary<string, string>> EnumMemberLabels,
     // Upstream Mutagen defects, each with an effect the schema and the write path honour. A defect
@@ -77,7 +77,7 @@ internal sealed record SchemaAnnotations(
     ];
 
     // Placed refr/achr are indexed as normal records with cell parentage in the placement side table
-    // (ADR-0023); landscape and navmesh data get no such treatment.
+    // (ADR-0005); landscape and navmesh data get no such treatment.
     private const string NoEditorSurface = "no editor surface: landscape and navmesh data are record fields in no game";
 
     // Rare REFR-flavour placement types: projectile, hazard and the rest of xEdit's variants.

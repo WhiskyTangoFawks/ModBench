@@ -2,7 +2,7 @@ using MEditService.Core.Notifications;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>ADR-0046's second notification adapter: a plain recorder, so a test asserts the port
+/// <summary>ADR-0014's second notification adapter: a plain recorder, so a test asserts the port
 /// fired without a live HTTP stream.</summary>
 internal sealed class InMemoryNotificationPublisher : INotificationPublisher
 {

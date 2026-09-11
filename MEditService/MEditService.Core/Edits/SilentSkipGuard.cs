@@ -8,7 +8,7 @@ namespace MEditService.Core.Edits;
 
 /// <summary>What the codec wrote back holds what the patch asked: every member the patch spelled
 /// is present in the codec's spelling, unless a default the codec omits. A dropped member names the
-/// failure (ADR-0032).</summary>
+/// failure (ADR-0005).</summary>
 internal static class SilentSkipGuard
 {
     // What came back holds what was asked: every member the patch spelled is present, in whatever

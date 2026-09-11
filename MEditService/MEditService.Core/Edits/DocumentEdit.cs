@@ -19,7 +19,7 @@ internal sealed record DocumentEditRequest(
     Func<string, RecordLookupEntry?> Resolve,
     Func<string, string> RoundTrip);
 
-/// <summary>A write is a patch on the document (ADR-0032): resolve, pre-check, cascade, patch, key
+/// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch, key
 /// order, codec round trip, compare what came back with what was asked. Pure: text and metadata
 /// in, text or one refusal out.</summary>
 internal static class DocumentEdit
@@ -307,7 +307,7 @@ internal static class DocumentEdit
             Fields: [.. schema.RecordColumns.Where(c => c.Synthetic == null).Select(c => c.ToFieldMetadata())]);
 
     // A Partial Form record's own fields are never seen by the game (CONTEXT.md). EditorID is exempt
-    // (xEdit's CanAssignInternal, ADR-0034), as is the flag itself: clearing it is the only way out.
+    // (xEdit's CanAssignInternal, ADR-0018), as is the flag itself: clearing it is the only way out.
     private static RecordEditResult? RefuseIfPartialForm(JsonObject record, RecordTableSchema schema, Cursor cursor, string spelled)
     {
         if (schema.IsHeader || !PartialFormFlag.IsSet(JsonSerializer.SerializeToElement(record), schema.RecordType)) return null;

@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Plugins;
 
 /// <summary>Text a user or Track put in a mod folder is not Modbench's to remove because a binary
-/// went missing (ADR-0041, never assume exclusive ownership). The load itself is the positive
+/// went missing (ADR-0007, never assume exclusive ownership). The load itself is the positive
 /// control.</summary>
 public sealed class ReconcileLeavesSourceTreesAloneTests
 {

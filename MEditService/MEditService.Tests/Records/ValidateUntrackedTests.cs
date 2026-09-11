@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046 invariant 6 over the other system of record: an untracked copy's rows came from
+/// <summary>ADR-0015 invariant 4 over the other system of record: an untracked copy's rows came from
 /// its binary, which carries no unit smaller than itself, so validate reports and the caller
 /// re-derives.</summary>
 public sealed class ValidateUntrackedTests : IDisposable

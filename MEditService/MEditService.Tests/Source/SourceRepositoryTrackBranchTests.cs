@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary><c>git diff main &lt;branch&gt;</c> must be genuinely empty right after Track, not
-/// empty because no distinct branch exists (ADR-0041: Modified vs Authored is repo topology).</summary>
+/// empty because no distinct branch exists (ADR-0007: Modified vs Authored is repo topology).</summary>
 public sealed class SourceRepositoryTrackBranchTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-branch-").FullName;

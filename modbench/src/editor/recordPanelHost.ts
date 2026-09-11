@@ -43,8 +43,8 @@ export interface EditorCommandDeps {
   refreshSourceControlFor: (plugin: string) => void;
   outputChannel: vscode.LogOutputChannel;
 }
-// ADR-0041: the single write path. A panel showing this record re-reads on rows-changed from the
-// notification stream (ADR-0046 invariant 5), not a broadcast from here.
+// ADR-0007: the single write path. A panel showing this record re-reads on rows-changed from the
+// notification stream (ADR-0015 invariant 3), not a broadcast from here.
 function recordPanelWriteDeps(
   deps: EditorCommandDeps, recordDecorationProvider: RecordDecorationProvider,
 ): RecordWriteDeps {
@@ -55,7 +55,7 @@ function recordPanelWriteDeps(
       () => { deps.refreshMatchingPlugins(); },
       (plugin) => deps.refreshSourceControlFor(plugin),
     ),
-    // ADR-0026 surfacing for a refused edit, and for a failed clipboard write.
+    // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
     reporter: makeReporter(deps.outputChannel, 'recordPanel'),
   };
 }
@@ -90,7 +90,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
-    // A named "Open to the Side" (ADR-0034), not a right-click side effect. `item`/`allSelected`
+    // A named "Open to the Side" (ADR-0018), not a right-click side effect. `item`/`allSelected`
     // mirror VS Code's view/item/context invocation shape, falling back to the tree's current
     // selection when neither is supplied.
     vscode.commands.registerCommand('modbench.openEditorBeside',
@@ -113,7 +113,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     vscode.commands.registerCommand('modbench.showReferencedBy',
       () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
     // xEdit parity (xeMainForm.pas's CopyInto). One command behind both a keybinding and a menu
-    // entry: ADR-0034's "no action reachable two ways" bars redundant affordances, not this.
+    // entry: ADR-0018's "no action reachable two ways" bars redundant affordances, not this.
     vscode.commands.registerCommand('modbench.referencedByTree.copy',
       async (node?: ReferencedByGroupNode, allSelected?: ReferencedByTreeNode[]) => {
         const nodes = allSelected?.length ? allSelected

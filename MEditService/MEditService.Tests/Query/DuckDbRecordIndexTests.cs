@@ -146,7 +146,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Equal(raceFormKey.ToString(), Assert.IsType<JsonElement>(raceField.Value).GetString());
     }
 
-    // ADR-0036: two origins loading the same physical file under different origin values —
+    // ADR-0012: two origins loading the same physical file under different origin values —
     // exercised directly at the repository seam.
     [Fact]
     public void GetAllOverrides_SameFilenameDifferentOrigin_ReturnsDistinctOriginPerRow()
@@ -353,7 +353,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Null(document);
     }
 
-    // --- ResolveFormKey (ADR-0031) ---
+    // --- ResolveFormKey (ADR-0005) ---
 
     [Fact]
     public void ResolveFormKey_KnownFormKey_ReturnsRecordTypeAndEditorId()

@@ -5,7 +5,7 @@ using MEditService.Core.Records;
 
 namespace MEditService.Api;
 
-/// <summary>ADR-0001's runtime half. Nothing escapes <see cref="Apply"/>, which runs on a timer
+/// <summary>ADR-0009's runtime half. Nothing escapes <see cref="Apply"/>, which runs on a timer
 /// thread where an exception is a process crash; a false answer keeps the watcher from believing
 /// the index matches bytes it never read.</summary>
 internal sealed class BinaryChangeApplier(IndexProjector index, INotificationPublisher notifications, ILogger logger)
@@ -31,7 +31,7 @@ internal sealed class BinaryChangeApplier(IndexProjector index, INotificationPub
                     break;
             }
 
-            // ADR-0046: the plugin watcher's own re-index, so the whole plugin changed rather than
+            // ADR-0014: the plugin watcher's own re-index, so the whole plugin changed rather than
             // named rows — the same event Track's own reindex would raise if it went through here.
             notifications.Publish(new PluginChangedNotification(key, index.Sequence));
             return true;
@@ -46,7 +46,7 @@ internal sealed class BinaryChangeApplier(IndexProjector index, INotificationPub
         }
     }
 
-    /// <summary>ADR-0046 invariant 6: an OS overflow on the indexed-binary watch, the same
+    /// <summary>ADR-0015 invariant 4: an OS overflow on the indexed-binary watch, the same
     /// overflow-to-validate shape <see cref="SourceChangeApplier"/> has for the Source side.</summary>
     internal void ApplyOverflow(string pluginName, string origin)
     {

@@ -1,13 +1,13 @@
 # mEdit Record editor panel — Surface Specification
 
-**Status: Implemented.** Editing is git-native (ADR-0041): a field edit writes the record's
+**Status: Implemented.** Editing is git-native (ADR-0007): a field edit writes the record's
 working-tree source text directly — there is no staged intermediate state and no second
 column standing in for one. The grid, conflict colouring, and type-appropriate editors below all
 ship and work on that write path. Review, commit, and revert happen in VS Code's native Source
 Control panel, one repo per tracked mod — see
 [Version control — Track, branch, compile](medit-version-control.md) for that surface; this
 document covers the grid and its gestures only.
-The **gesture model** is [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md),
+The **gesture model** is [ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md),
 catalogued in [the xEdit UX audit](../research/xedit-ux-audit.md).
 In the field grid, a single click focuses
 the cell — the row highlights, the focused cell is outlined, focus survives a re-render, and no
@@ -15,7 +15,7 @@ cell shows a `grab` cursor. Editing is off single click: a second click on the f
 cell, `F2`, or a double click opens a mutable cell's editor; double-clicking the label column
 expands/collapses that node; the editor selects its whole text on focus. Every scalar type,
 `string` included, agrees on this: second click, `F2` and double click all open the same inline
-editor, immediately, with no debounce ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)
+editor, immediately, with no debounce ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)
 — no left-click gesture may relocate the user out of the record panel). `Ctrl+C` copies
 the focused cell's model value in both column kinds; `Ctrl+X`/`Ctrl+V` are the mutating half
 of that same contract — clipboard read/write both round-trip through the extension host, and both
@@ -27,13 +27,13 @@ two sets *Array arity and order* below defines — Add/Remove/Move Up/Move Down 
 Add/Remove alone on a keyed one; there are no inline ▲▼✕/＋
 buttons. There is no read-only value
 surface: an immutable cell opens nothing on plain click, second click, `F2`, or double click —
-**a `string` cell included** (ADR-0039) — with Ctrl+C on the focused cell as every
+**a `string` cell included** (ADR-0018) — with Ctrl+C on the focused cell as every
 immutable cell's copy path regardless, and the right-click menu's **Open in Editor…** entry (see
 *Editing* below) as a long immutable value's own read path, read-only.
 
 Editing context — operates on **records**, **FormKeys**, and **plugins**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
-here ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
+here ([CONTEXT.md](../../CONTEXT.md)).
 
 One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared load order lifecycle,
 status bar, command palette, and architecture seams. Siblings:
@@ -59,9 +59,9 @@ in, produces broken plugins.
 
 > **The grid renders the full override stack** — the multi-column description throughout this
 > document is the shipped shape, per
-> [ADR-0019](../adr/0019-xedit-unified-tree-model-for-compare-grid.md) and
-> [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md). The one narrowing
-> is [ADR-0036](../adr/0036-plugin-identity-is-origin-plus-filename.md)'s
+> [ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md) and
+> [ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md). The one narrowing
+> is [ADR-0012](../adr/0012-every-plugin-copy-is-indexed.md)'s
 > file-level-loser exclusion: a losing physical copy of a duplicate-named plugin file
 > (`Registration.Winning` false — never the broader `Participates`) is excluded backend-side at
 > `RecordQueryService.GetCompare`, the single site a show-losing-copies toggle would
@@ -70,10 +70,10 @@ in, produces broken plugins.
 An editor-tab webview presenting a **compare grid**: one row per field, one column per plugin
 containing the record, in load order — master on the left, winning override on the right — with
 per-cell conflict color coding from the two-axis model
-([ADR-0016](../adr/0016-two-axis-conflict-model.md)). Values render as what they mean (flag
+([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Values render as what they mean (flag
 names, EditorID links) rather than as what they are stored as.
 
-Editing is in-place and writes the record's working-tree source text directly (ADR-0041) — there
+Editing is in-place and writes the record's working-tree source text directly (ADR-0007) — there
 is no intermediate staged state. Save & Compile and review/commit are separate gestures, specified
 in [medit-version-control.md](medit-version-control.md).
 
@@ -122,7 +122,7 @@ in [medit-version-control.md](medit-version-control.md).
 ### Interaction model
 
 **xEdit's model, ported** — the one compare grid
-([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md); the behaviour being matched is catalogued in
+([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md); the behaviour being matched is catalogued in
 [the xEdit UX audit](../research/xedit-ux-audit.md)). Every user of this panel arrives fluent in
 xEdit, so it is the reference, and divergence needs a platform limitation to justify it — not a
 better idea.
@@ -135,10 +135,10 @@ better idea.
   "click, then click again to rename" pattern, and xEdit's `toEditOnClick`.
 - **Double-click a value cell** — open the same inline editor a second click/`F2` on the
   already-focused cell would: numeric and flag types inline, `string` inline too
-  ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md) — no left-click gesture
+  ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md) — no left-click gesture
   may reach the extended editor). A FormKey's
   double click stays on the native QuickPick, same as its second click/F2 — that QuickPick is
-  already its richest editor (ADR-0034's divergence #1). **Double-click the label column** —
+  already its richest editor (ADR-0018's divergence #1). **Double-click the label column** —
   expand/collapse that node.
 - **The keyboard acts on the focused cell** — `F2` edit · `Ctrl+C` copy · `Ctrl+X` cut ·
   `Ctrl+V` paste · `Insert` add a list entry · `Delete` remove the entry or clear the value ·
@@ -159,16 +159,16 @@ better idea.
   also the `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` accelerators above — the menu is the canonical
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
   ▲▼✕ controls**, per the no-second-route rule below. On a **`string` value cell**, right-click also
-  offers **Open in Editor…** (ADR-0039) — the extended editor's only remaining trigger, on
+  offers **Open in Editor…** (ADR-0018) — the extended editor's only remaining trigger, on
   mutable and immutable columns alike; see *Editing* below for what opens. The column-header menu is VS Code's own
   native context menu (`contributes.menus["webview/context"]`, gated on a `data-vscode-context`
-  attribute the header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
-  native-first precedent applied inside the webview) rather than a rendered overlay. Per ADR-0038
+  attribute the header carries — [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)'s
+  native-first precedent applied inside the webview) rather than a rendered overlay. Per ADR-0008
   there is no Add Master… — masters are
   lifecycle-derived, never a direct user edit; the header record's masters field shows on this
   column header, read-only, derived from content at compile (Effective masters — the plugin's
   committed masters unioned with the origins of every currently uncommitted working-tree change,
-  ADR-0038).
+  ADR-0008).
 - **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.
@@ -181,7 +181,7 @@ reference that actually resolves.
 ### Gesture matrix
 
 Where each gesture is available. Under
-[ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md) this is nearly uniform,
+[ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md) this is nearly uniform,
 which is the point — the previous model's availability holes were consequences of routing copy
 through DOM text selection, and they close when the clipboard carries the model value instead.
 
@@ -189,13 +189,13 @@ through DOM text selection, and they close when the clipboard carries the model 
 
 Focus on click · drag out · `Ctrl+C` copy · right-click menu · default arrow cursor. Every scalar
 type's second click, `F2` and double click now agree on the same (inline) editor —
-`string` included ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)) — so
+`string` included ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)) — so
 there is no per-type exception left in this table at all.
 Drop in and all mutating operations (`Ctrl+V`, `Ctrl+X`, `F2`, `Insert`, `Delete`, `Ctrl+↑`/`↓`,
 editing of any kind) are **mutable columns only** — an immutable cell simply refuses, showing no
 distinct affordance beforehand, exactly as xEdit does. A `string` cell's right-click menu is the
 one exception offered on **both** column kinds — **Open in Editor…** opens the extended editor,
-read-only on an immutable/untracked/not-in-load-order/parse-failed column (ADR-0039).
+read-only on an immutable/untracked/not-in-load-order/parse-failed column (ADR-0018).
 
 #### By cell
 
@@ -222,7 +222,7 @@ member of one — renders an empty cell. A non-nullable struct has no unset, so 
 one holds that struct: the placeholder stays and each member reads its own default. The exception
 is a row *no* column carries a value for, which holds nothing but its children and is therefore
 present in every column; it keeps its
-placeholder throughout. **Absent means default** (ADR-0032): the document omits a member equal to
+placeholder throughout. **Absent means default** (ADR-0005): the document omits a member equal to
 its default, so a scalar the column's own owner omits reads as that default — `0`, `false`, the
 empty string, the enum default the metadata names, an empty flag set, `[0]` for a list — and its
 editor opens on it. `—` is reserved for a link that is there and unset (`FieldMetadata.AllowsNull`
@@ -320,13 +320,13 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   committed text with any uncommitted working-tree change overlaid. Column headers show
   the plugin name as a chip, filename only — origin (the
   mod folder that provided this copy, or a reserved value) lives in the chip's tooltip always, and
-  renders inline in the label only when a second loaded copy shares this filename (ADR-0036).
+  renders inline in the label only when a second loaded copy shares this filename (ADR-0012).
   Every chip carries a status note beneath it, one of five, worded by *why* the column reads the
   way it does: a vanilla/DLC/CC master reads `(read-only)`; a copy the effective load order does
-  not name (ADR-0035) reads `(not loaded)` instead; such a copy also renders dimmed throughout —
+  not name (ADR-0013) reads `(not loaded)` instead; such a copy also renders dimmed throughout —
   header and every cell — whichever note it ends up showing, that being the one cue distinguishing
   it from a participating column once scrolled past the header. A mutable copy whose mod is not
-  tracked reads `(untracked)` and a tracked one `(tracked)` (ADR-0041); and a record the codec
+  tracked reads `(untracked)` and a tracked one `(tracked)` (ADR-0007); and a record the codec
   could not read at index time reads `(parse failure)`, with the stored diagnosis as the rest of
   its tooltip. Parse failure wins over the other four — nothing the user can do about tracking or
   the load order makes such a record editable, so naming a way out would name the wrong one, and
@@ -339,7 +339,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   order) and a plugin `plugins.txt` never lists at all (decided by the Plugin load order) — so the
   tooltip states the fact and names both surfaces that decide it (the Mods view, the Plugins view)
   rather than one gesture that would only fix one cause. Never "move it earlier in the load
-  order" — that names the wrong axis for a shadowed copy (CONTEXT-MAP.md, CONTEXT.md). Left-click
+  order" — that names the wrong axis for a shadowed copy (CONTEXT.md, CONTEXT.md). Left-click
   collapses/expands a column (state persisted for the panel's lifetime, not across restarts).
   The grid's scroll region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
@@ -440,7 +440,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   specific Mutagen type and member (`ISceneActionGetter.Type`'s upstream crash is Fallout 4's one
   member-read-only row); the header schema, which is not a major record and builds its columns from
   its own presented-members table rather than a walk, carries its own three reasons the same way
-  (`Author`, `Flags`, and `Masters`' compile-derived content, ADR-0038). Classification
+  (`Author`, `Flags`, and `Masters`' compile-derived content, ADR-0008). Classification
   is likewise total: every property the reflection walk reaches lands in exactly one structural class
   or is a **reported anomaly**, never silence. Shapes with no class yet are excluded by name with
   their live count, so a gap is a written-down decision rather than an absence —
@@ -470,16 +470,16 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   `KnownDefects` row marks read-only refuses (`FieldReadOnly`), naming the field and the row's own
   reason rather than implying the value was invalid.
 - **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
-  ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); ADR-0034
-  divergence #2). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless
+  ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)
+  divergences #2 and #8). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless
   window; a modeless Delphi form has no analogue worth reproducing in a webview (reproducing one
-  would be exactly the chrome [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)
+  would be exactly the chrome [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)
   forbids), so the vehicle is substituted for a real **editor tab**, opened `ViewColumn.Beside` so
   the grid stays visible, non-preview so it isn't silently replaced by the next single-click
   preview elsewhere. xEdit's window also shows the value across every compared record; the grid
   already does that (one row, one column per plugin), so that half of `TfrmViewElements` isn't
   ported — the tab holds one plugin's value. The
-  *trigger*, per ADR-0039: xEdit's own gesture for this (`EditTips`: *"Double click on text fields
+  *trigger*, per ADR-0018: xEdit's own gesture for this (`EditTips`: *"Double click on text fields
   in the right pane to open multiline editor"*) opens its modeless form **over** the grid, leaving
   the tree and the user's place untouched — but the substituted vehicle is a VS Code tab, which
   **relocates** the user (the record panel loses focus, the active editor changes), an interaction
@@ -510,7 +510,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     envelope the inline editor posts, at the row's own path — the cell's context carries that path,
     and the extension host commits the saved text against it directly, with no round trip back
     through the panel. A top-level string field's commit is the one-hop form of the same envelope.
-  - **Trigger gesture**: right-click only (ADR-0039). A `string` cell's second click, `F2` and
+  - **Trigger gesture**: right-click only (ADR-0018). A `string` cell's second click, `F2` and
     double click all agree with every other scalar type on the inline editor, immediately, with no
     debounce — there is no second left-click target to disambiguate against.
   - **Scope**: every plugin column (`ScalarCell`/`DiffRow`). A plain `string`-typed row reaches the
@@ -552,15 +552,15 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   than its master read as an absence at those keys. An element of an array sorted by its own value
   sits at a different position in every column too, so its `set` carries an `index` hop found in
   the written column's own value. The webview holds no model beside the document:
-  no path setter, no mirror of the backend's key rule, no cascade, no default table (ADR-0032).
+  no path setter, no mirror of the backend's key rule, no cascade, no default table (ADR-0005).
   There is no free drag-reorder and no auto-sort.
 - **A container's children keep their positions across every edit.** A parent record's document
   holds its own fields and its embedded child slots inline, in Mutagen's list order
-  ([ADR-0042](../adr/0042-plugin-is-the-source-of-truth-lossless-source.md) decision 4), and
+  ([ADR-0006](../adr/0006-the-plugin-is-the-source-of-truth.md) decision 4), and
   `DocumentEdit` patches exactly the edited path, so an ordinary field edit never reorders or drops
   a sibling — the same byte parity the whole-plugin writer holds survives an edit through this
   path too.
-- **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
+- **Editing writes working-tree source text directly** (ADR-0007) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy
   just that field into the target (which must be editable; the source need not be) — or **copied
   and pasted** when the target isn't conveniently reachable by drag, or lives outside mEdit
@@ -576,7 +576,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 - There is **no per-plugin or per-record Save** on the panel — writing the binary is the separate
   Save & Compile gesture ([medit-version-control.md](medit-version-control.md)).
 
-### Progressive load ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+### Progressive load ([ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md))
 
 A plugin's records are browsable — and therefore this panel is openable — the moment that plugin
 is indexed, well before the winner sweep runs (the Plugins tree states the same fact,
@@ -611,11 +611,11 @@ rather than merely omits.
 ### Conflict color coding
 
 The compare grid uses the two-axis model from
-[ADR-0016](../adr/0016-two-axis-conflict-model.md). These two mappings are kept as tables
+[ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md). These two mappings are kept as tables
 deliberately — they are enum→visual encodings that prose would only make less precise.
 
 **Axis 1 — ConflictAll → row background.** `ConflictAll` is computed at two independent scopes
-([ADR-0016](../adr/0016-two-axis-conflict-model.md)) — this table's
+([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)) — this table's
 colors apply at both, only the *granularity of computation* differs:
 
 - **Record-wide** (one value per record, `CompareResult.ConflictAll`): "the record's override
@@ -678,7 +678,7 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   Form exists specifically so a container can carry children without asserting its own fields, so
   only a type with children to carry can ever need it.
 - **Conflict exclusion.** A Partial Form override's own fields are excluded from conflict
-  classification entirely — treated as absent for every purpose ADR-0016's existing PartialForm
+  classification entirely — treated as absent for every purpose ADR-0018's existing PartialForm
   absent-field rule already covers (winner/contest/cell-state candidacy), regardless of whether the
   field is literally JSON `null` or carries a real, differing value. A cell whose only override
   beyond the master is a Partial Form record therefore classifies `NoConflict`, not `Override` or
@@ -701,10 +701,10 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   competing override, matching what the exclusion above already computed.
 - **Read-only except the header — and EditorID.** A Partial Form override's own fields refuse on
   the single write path (`RecordEditRefusal.PartialFormFieldReadOnly`) — a typed refusal, not just
-  a UI disable, so an agent (ADR-0024) sees the same rule a human does. Checked against the write
+  a UI disable, so an agent sees the same rule a human does. Checked against the write
   target, not the containing record, so an embedded child stays editable even though its Partial
   Form parent is not. **EditorID is exempt**, matching xEdit's own `CanAssignInternal`
-  (`wbImplementation.pas:9905-9914`, "allow EDID for partial forms") — ADR-0034 makes that binding
+  (`wbImplementation.pas:9905-9914`, "allow EDID for partial forms") — ADR-0018 makes that binding
   here rather than a scope choice this ticket could diverge from, and EditorID is an ordinary,
   already-writable field rather than part of the header's own flag-write surface, so the exemption
   needed no header write path to exist first. The record header itself — including clearing the
@@ -792,7 +792,7 @@ Three rulings inside that shape, recorded because they are rulings and not facts
 - **`', '` joins a passthrough's elements.** xEdit sets a delimiter per definition
   (`SetSummaryDelimiter`) for a struct's own members, but nothing in the clone shows how a
   passed-through *list* joins its elements — the machinery is absent
-  ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)). Comma-space is the
+  ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)). Comma-space is the
   ruling — a delimiter the definitions do use (`SetSummaryDelimiter(', ')`), and the one that reads
   as a list rather than as one run-on token.
 
@@ -819,7 +819,7 @@ Every gesture — cell edit, discriminator switch, add/remove/move — is the ge
 already had.
 
 Two facts about a Fallout 4 condition cannot be read off a property, and enter as `SiblingsInUse`
-annotation rows (ADR-0032) rather than as code: which parameter members a function actually uses
+annotation rows (ADR-0005) rather than as code: which parameter members a function actually uses
 (read from Mutagen's own `Condition.GetParameterTypes`, the same table its writer switches on), and
 that the Run On reference target is live only under the `Reference` Run On value. Both are
 load-bearing on the backend: the form-reference and check-error walks skip a member the current
@@ -902,7 +902,7 @@ These apply everywhere a field value is rendered — the one compare grid and an
    followable. This mirrors xEdit's `vstViewCheckHotTrack`, which gates hot-tracking on
    `Allow := Assigned(lLinksTo)` — a link you cannot follow must not look like one.
 
-   The **field grid** (ADR-0031) sources both the label and the affordance from the
+   The **field grid** (ADR-0005) sources both the label and the affordance from the
    backend's per-FormKey resolution signal on `FieldDiff` — a tri-state (unresolved /
    resolved-wrong-type / resolved-valid-type) computed server-side against the global FormKey
    index, carried independently per leaf so a dangling struct/array member never suppresses the
@@ -1074,7 +1074,7 @@ new value, so a large array or struct edit can't flood the panel.
   the cells must know which columns are immutable, or a read-only column renders inputs
   the backend then rejects.
 - **Open question: does `Ctrl+click`-to-follow survive alongside a right-click "Go to Record"?**
-  [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)'s gesture table lists
+  [ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)'s gesture table lists
   `Ctrl+click` without resolving this. The tension: it's undiscoverable (no visible
   UI element hints at it) but is also shipped, xEdit-familiar muscle memory: removing it costs
   existing users a gesture they already rely on; keeping it alongside a menu item means two ways

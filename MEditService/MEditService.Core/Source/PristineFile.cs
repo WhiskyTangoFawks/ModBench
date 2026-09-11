@@ -30,7 +30,7 @@ internal static class PristineFileWriter
     }
 }
 
-/// <summary>Provenance written as commit trailers on the pristine baseline (ADR-0041 amendment) —
+/// <summary>Provenance written as commit trailers on the pristine baseline (ADR-0003) —
 /// inputs, never invented here. Hashes are keyed by plugin file name because a mod folder can hold
 /// more than one plugin, each with its own trailer.</summary>
 public sealed record TrackProvenance(
@@ -38,7 +38,7 @@ public sealed record TrackProvenance(
     string? MetaSha256,
     IReadOnlyDictionary<string, string> BinarySha256ByPlugin);
 
-/// <summary>The two <c>.gitignore</c> presets ADR-0041 names: Edits tracks source only; Everything
+/// <summary>The two <c>.gitignore</c> presets ADR-0007 names: Edits tracks source only; Everything
 /// additionally tracks assets. Plugin binaries and <c>meta.ini</c> are ignored in both.</summary>
 public enum SourcePreset
 {

@@ -44,7 +44,7 @@ public sealed class PluginWriterSaveTests
         Assert.Empty(leftoverDirs);
     }
 
-    // ── Timestamped .bak (ADR-0008) ────────────────────────────────────────────
+    // ── Timestamped .bak ────────────────────────────────────────────
 
     [Fact]
     public async Task SaveAsync_WritesATimestampedBackupBesideThePlugin()

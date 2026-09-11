@@ -17,7 +17,7 @@ import {
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused,
 } from './MEditClient';
 
-// No convention in ADR-0026 or docs/specs/plugins.md anchors this: 30s is an ordinary
+// No convention in ADR-0019 or docs/specs/plugins.md anchors this: 30s is an ordinary
 // HTTP-client default. A slow call and a hung one look the same to the tree, so nothing tries to
 // tell them apart.
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
@@ -39,7 +39,7 @@ function eslContradictionMessage(error: unknown): string | undefined {
   return problem?.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
 }
 
-/** ADR-0022/ADR-0046: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
+/** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
  *  and the notification stream live only here, composed behind {@link MEditClient}. */
 export class HttpMEditClient implements MEditClient {
   private readonly apiClient: ApiClient;
@@ -57,7 +57,7 @@ export class HttpMEditClient implements MEditClient {
       log: deps.log,
     });
     this.lifecycle = new BackendLifecycle(deps.backend);
-    // ADR-0046 invariant 12: the stream is open exactly while the backend is attached, so no
+    // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no
     // module outside this one starts or stops it.
     this.lifecycle.onStatusChanged((status) => {
       if (status === 'attached') this.notifications.start();
@@ -80,7 +80,7 @@ export class HttpMEditClient implements MEditClient {
     return this.notifications.subscribe(kind, listener);
   }
 
-  // ADR-0046 invariant 12: `putLoadOrder` and `track` each ride one notification kind. `extract`
+  // ADR-0014 invariant 2: `putLoadOrder` and `track` each ride one notification kind. `extract`
   // picks that kind's payload out of the flat wire envelope; undefined skips the event.
   private subscribeStatus<T>(
     kind: NotificationKind,
@@ -139,7 +139,7 @@ export class HttpMEditClient implements MEditClient {
     return data ?? { name, path, origin, slot: null };
   }
 
-  /** ADR-0046: Refresh's first step — drops the instance's index file and reopens it empty,
+  /** ADR-0014: Refresh's first step — drops the instance's index file and reopens it empty,
    *  refusing (423) exactly as `putLoadOrder` does when another window holds it. `onFailure` is
    *  the caller's report, never a bare toast (modbench/CLAUDE.md). */
   async rebuildIndex(
@@ -156,7 +156,7 @@ export class HttpMEditClient implements MEditClient {
   }
 
   /** `gameDirectory` must be the resolved Data folder — the backend prepends implicit masters
-   *  from it. The backend keys its persistent index on `instanceRoot` (ADR-0001) because `origin`
+   *  from it. The backend keys its persistent index on `instanceRoot` (ADR-0009) because `origin`
    *  is a folder *name*, unique only within one instance. */
   async putLoadOrder(
     plugins: LoadOrderPluginInput[],
@@ -213,7 +213,7 @@ export class HttpMEditClient implements MEditClient {
     return true;
   }
 
-  /** The Track gesture (ADR-0041): every loaded plugin sharing `origin` is tracked together,
+  /** The Track gesture (ADR-0007): every loaded plugin sharing `origin` is tracked together,
    *  resolved backend-side. A 409 means it was already tracked. */
   async track(
     origin: string, preset: 'Edits' | 'Everything', options: { onProgress?: (status: TrackStatus) => void } = {},
@@ -376,7 +376,7 @@ export class HttpMEditClient implements MEditClient {
     });
   }
 
-  /** ADR-0041: the single write path. A refusal (untracked plugin, a link that would dangle) is
+  /** ADR-0007: the single write path. A refusal (untracked plugin, a link that would dangle) is
    *  an expected answer and comes back typed; only a transport failure rejects. */
   async editRecord(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): Promise<RecordEditOutcome> {
     const spelled = JSON.stringify(envelope.path);
@@ -410,7 +410,7 @@ export class HttpMEditClient implements MEditClient {
   // ── reads ────────────────────────────────────────────────────────────────
 
   // Never swallow a read failure into an empty list: it would be indistinguishable from
-  // genuinely empty data, so the tree could not render an ErrorNode (ADR-0026). A 200 with an
+  // genuinely empty data, so the tree could not render an ErrorNode (ADR-0019). A 200 with an
   // absent body is a legitimate empty result.
   private ensureOk(what: string, response: Response, error?: unknown): void {
     if (response.ok) return;

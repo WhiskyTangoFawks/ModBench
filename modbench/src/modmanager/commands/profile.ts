@@ -1,4 +1,4 @@
-// The active-profile gesture (ADR-0047 point 6): a free function returning applied or a
+// The active-profile gesture (ADR-0015 invariant 2): a free function returning applied or a
 // refusal. It writes ModOrganizer.ini and forgets — the Instance's watcher over that file is
 // how the switch comes back.
 

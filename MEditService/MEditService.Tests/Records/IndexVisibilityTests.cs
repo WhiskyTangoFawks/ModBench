@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>An in-between count is the failure (ADR-0035): a plugin reading as "412 records" while
+/// <summary>An in-between count is the failure (ADR-0013): a plugin reading as "412 records" while
 /// 1,588 are still being written is worse than absent, since nothing distinguishes it from one that
 /// genuinely holds 412.</summary>
 public sealed class IndexVisibilityTests

@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0044: PUT /load-order's one verb, at the Index seam. Every loadout gesture is the same
+// ADR-0013: PUT /load-order's one verb, at the Index seam. Every loadout gesture is the same
 // reconcile, and the counting factory below tells a cheap SQL-only one from a cold indexing one.
 public sealed class ReconcileDiffTests
 {
@@ -158,7 +158,7 @@ public sealed class ReconcileDiffTests
     }
 
     // A losing copy and the winning copy of one filename are both held and both registered
-    // (ADR-0044: the snapshot is every physical copy); only the winning one can win.
+    // (ADR-0013: the snapshot is every physical copy); only the winning one can win.
     [Fact]
     public void LosingCopy_IsRegisteredBesideTheWinner_AndNeverWins()
     {

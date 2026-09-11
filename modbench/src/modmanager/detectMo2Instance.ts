@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** Structural presence only, never file contents: a real instance with a corrupt
- *  `modlist.txt` still reads `true` here and surfaces its error elsewhere (ADR-0026)
+ *  `modlist.txt` still reads `true` here and surfaces its error elsewhere (ADR-0019)
  *  rather than as a wrong-folder message. */
 export function isMo2Instance(root: string): boolean {
   return existsSync(join(root, 'ModOrganizer.ini'))

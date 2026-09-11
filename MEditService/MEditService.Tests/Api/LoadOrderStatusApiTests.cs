@@ -56,7 +56,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
 
         var indexed = status.GetProperty("indexedPlugins").EnumerateArray().Single();
         Assert.Equal("A.esp", indexed.GetProperty("name").GetString());
-        // (origin, plugin) is the identity (ADR-0036) — a status contract must not ship bare
+        // (origin, plugin) is the identity (ADR-0012) — a status contract must not ship bare
         // filenames.
         Assert.False(string.IsNullOrWhiteSpace(indexed.GetProperty("origin").GetString()));
         Assert.Empty(status.GetProperty("failures").EnumerateArray());

@@ -5,7 +5,7 @@ import type {
 // toolbox.ts's own wiring is `vscode`-heavy to import, so each of its three port-facing calls is
 // pulled out here, vscode-free, testable with the in-memory adapter directly.
 
-/** ADR-0021: the rows the game forces on, asked of the backend — undefined whenever there is
+/** ADR-0016: the rows the game forces on, asked of the backend — undefined whenever there is
  *  nothing to resolve against (no folder, or a game with no Mutagen release). */
 export function implicitMastersFrom(
   client: Pick<MEditClient, 'implicitMasters'>, folder: string | undefined, gameRelease: string | undefined,
@@ -15,7 +15,7 @@ export function implicitMastersFrom(
     : client.implicitMasters(folder, gameRelease);
 }
 
-/** ADR-0046: Refresh's first step. */
+/** ADR-0014: Refresh's first step. */
 export function rebuildIndexVia(
   client: Pick<MEditClient, 'rebuildIndex'>,
   instanceRoot: string, onFailure: (message: string, detail: string) => void, gameRelease: string,
@@ -23,7 +23,7 @@ export function rebuildIndexVia(
   return client.rebuildIndex(instanceRoot, onFailure, gameRelease);
 }
 
-/** ADR-0044: the sync's own PUT. */
+/** ADR-0013: the sync's own PUT. */
 export function putLoadOrderVia(
   client: Pick<MEditClient, 'putLoadOrder'>,
   plugins: LoadOrderPluginInput[], dataFolder: string, instanceRoot: string, gameRelease: string,

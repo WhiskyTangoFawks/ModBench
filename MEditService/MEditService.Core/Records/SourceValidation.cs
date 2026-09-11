@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Records;
 
-/// <summary>Validate's tracked half (ADR-0046 invariant 6): a plugin's rows against the source
+/// <summary>Validate's tracked half (ADR-0015 invariant 4): a plugin's rows against the source
 /// documents they came from, by content. A collaborator of <see cref="DuckDbRecordIndex"/>, which
 /// owns every transaction, so the repairs go through its verbs.</summary>
 internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection connection, ILogger logger)

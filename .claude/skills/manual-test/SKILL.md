@@ -9,7 +9,7 @@ Build the extension if needed, then launch a VS Code Extension Development Host 
 a real MO2 instance directory. Do all steps proactively without waiting to be asked.
 
 The extension spawns the backend itself at activation
-([ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md); there is no Launch/Close
+([ADR-0002](../../../docs/adr/0002-mod-management-and-editing-are-one-tool.md); there is no Launch/Close
 mEdit command) — no manual `dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
 
 ## 0 — Confirm the checkout is current

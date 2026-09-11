@@ -52,7 +52,7 @@ describe('isMo2Instance', () => {
     expect(isMo2Instance(join(root, 'does-not-exist'))).toBe(false);
   });
 
-  it('does not read modlist.txt content — a corrupt-but-present instance still reads true (ADR-0026 boundary)', async () => {
+  it('does not read modlist.txt content — a corrupt-but-present instance still reads true (ADR-0019 boundary)', async () => {
     await layInstance();
     await mkdir(join(root, 'profiles', 'Default'));
     await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '\x00not valid text\xff');

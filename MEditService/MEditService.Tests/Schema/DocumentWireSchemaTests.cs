@@ -7,7 +7,7 @@ namespace MEditService.Tests.Schema;
 
 /// <summary>The metadata describes the codec document by Mutagen's own names: every field a
 /// declared property, every discriminator the document's MutagenObjectType, a type-varying member
-/// one field with a variant per leaf (ADR-0032).</summary>
+/// one field with a variant per leaf (ADR-0005).</summary>
 public sealed class DocumentWireSchemaTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

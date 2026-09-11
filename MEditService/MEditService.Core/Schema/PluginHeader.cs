@@ -9,7 +9,7 @@ internal static class PluginHeader
     internal const string RecordType = "header";
 
     /// <summary>The header's masters member, reflected as a read-only column: a write to it is refused
-    /// (ADR-0038: masters are content-derived at compile time). Never a runtime branch; the missing
+    /// (ADR-0008: masters are content-derived at compile time). Never a runtime branch; the missing
     /// delegate is the enforcement.</summary>
     internal const string MastersFieldName = "MasterReferences";
 

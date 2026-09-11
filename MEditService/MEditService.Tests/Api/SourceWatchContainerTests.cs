@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0046 invariant 4, for a container and an embedded child: a revert to a quest's or a
+/// <summary>ADR-0015 invariant 2, for a container and an embedded child: a revert to a quest's or a
 /// placed ref's owning cell file reaches the index the same way a flat record's does.</summary>
 public sealed class SourceWatchContainerTests : IDisposable
 {

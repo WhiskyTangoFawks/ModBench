@@ -19,7 +19,7 @@ import { say } from '../editingTeardown';
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
 
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
-// mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0041), so this
+// mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
   session: ExtensionSession, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
@@ -30,7 +30,7 @@ export function registerTrackCommand(
     const name = node.plugin.name;
     const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
     if (!origin) {
-      // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
+      // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
       makeReporter(outputChannel, 'pluginListTree.track').report('error', `Could not resolve which mod "${name}" belongs to.`);
       return;
     }
@@ -138,7 +138,7 @@ export function registerSaveAndCompileCommand(
 }
 
 // One confirmation names the ref literally, never "pristine" — there is no stored mode
-// (ADR-0041). Tree-row only: naming a ref with no plugin in hand isn't worth a QuickPick.
+// (ADR-0007). Tree-row only: naming a ref with no plugin in hand isn't worth a QuickPick.
 export function registerCompileAtRefCommand(
   client: CompileClient,
   outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
@@ -253,7 +253,7 @@ interface GitExtensionExports {
   getAPI(version: 1): MinimalGitApi;
 }
 
-/** ADR-0041: one `openRepository` per distinct tracked folder, so each shows its own native
+/** ADR-0007: one `openRepository` per distinct tracked folder, so each shows its own native
  *  Source Control group. A silent, logged no-op when `vscode.git` is unavailable: this only
  *  narrows the native UI, never blocks reading or editing. */
 export async function registerHeldTrackedRepositories(

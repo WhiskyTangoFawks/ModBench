@@ -39,7 +39,7 @@ describe('errorText', () => {
   });
 });
 
-// ADR-0035: the whole-set conflict sweep leaves a Ready load order with stale winners, so
+// ADR-0013: the whole-set conflict sweep leaves a Ready load order with stale winners, so
 // anything rendering conflict information must read `conflictsComputed`, never the wire's `state`.
 describe('toLoadOrderStatus', () => {
   it('keys indexedPlugins on filename alone, dropping origin and state', () => {

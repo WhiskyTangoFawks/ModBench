@@ -37,7 +37,7 @@ export interface BackendLifecycleOptions {
   stopGracePeriodMs?: number;
 }
 
-/** The backend process, as the HTTP adapter's own internals (ADR-0022). The only module that
+/** The backend process, as the HTTP adapter's own internals (ADR-0002). The only module that
  *  names a process, a port, a health poll or a spawn. */
 export class BackendLifecycle {
   private readonly port: number;

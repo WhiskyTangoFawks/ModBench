@@ -1,4 +1,4 @@
-// modlist.txt gesture commands (ADR-0047 point 6): a free function per gesture, taking the
+// modlist.txt gesture commands (ADR-0015 invariant 2): a free function per gesture, taking the
 // instance root, the profile and its own inputs, returning applied or a refusal. No class,
 // no interface, no base type.
 

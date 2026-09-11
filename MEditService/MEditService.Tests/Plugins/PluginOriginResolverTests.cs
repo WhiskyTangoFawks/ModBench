@@ -3,7 +3,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0036: once a load order can hold two copies of one filename, "which origin does this bare
+// ADR-0012: once a load order can hold two copies of one filename, "which origin does this bare
 // filename mean?" has two candidates and one right answer.
 public sealed class PluginOriginResolverTests
 {
@@ -38,7 +38,7 @@ public sealed class PluginOriginResolverTests
     public void Resolve_DisabledLoadOrderPlugin_ResolvesNormally()
     {
         // Participation is not membership: a disabled plugins.txt line is still in the load order
-        // and is still a legitimate write target (ADR-0035).
+        // and is still a legitimate write target (ADR-0013).
         var disabled = Copy("Disabled.esp", "SomeMod", inLoadOrder: true) with { Enabled = false };
         var loadOrder = LoadOrderWith(disabled);
 

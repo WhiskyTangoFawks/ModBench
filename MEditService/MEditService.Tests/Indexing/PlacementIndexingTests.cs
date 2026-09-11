@@ -343,7 +343,7 @@ public class PlacementIndexingTests
         Assert.Null(b.Repo.At(RecordRef.Effective).GetPlacement("FFFFFF:TestWorld.esp", new PluginKey("TestWorld.esp", "Data")));
     }
 
-    // ADR-0036: two origins loading the same physical file — the `placement` table
+    // ADR-0012: two origins loading the same physical file — the `placement` table
     // carries `origin` and IndexPlacement scopes its delete by it; GetPlacement's own
     // read side must scope by it too, not by filename alone.
     [Fact]
@@ -367,7 +367,7 @@ public class PlacementIndexingTests
         Assert.Null(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginKey("Placed.esp", "ModC")));
     }
 
-    // ADR-0036: one mod indexed twice under the same filename at two real origins. A worldspace tree
+    // ADR-0012: one mod indexed twice under the same filename at two real origins. A worldspace tree
     // read filtering by plugin filename alone answers an origin-scoped query with both origins merged.
     private sealed record WorldspaceFixture(
         DuckDbRecordIndex Repo, string WorldspaceFk, string ExtCellFk, string PlacedFk, string IntCellFk)

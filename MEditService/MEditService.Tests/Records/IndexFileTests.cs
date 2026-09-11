@@ -2,7 +2,7 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0001: one index file per MO2 instance, inside the instance root. `origin` is a mod folder
+// ADR-0009: one index file per MO2 instance, inside the instance root. `origin` is a mod folder
 // name unique only within an instance and every mirror table is keyed (plugin, origin), so the
 // instance is the only honest scope.
 public class IndexFileTests

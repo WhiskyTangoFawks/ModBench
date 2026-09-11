@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0026: a write-gate timeout on a settled batch is logged, never swallowed — the
+/// <summary>ADR-0019: a write-gate timeout on a settled batch is logged, never swallowed — the
 /// timer callback that raises it has no caller to propagate an exception to.</summary>
 public sealed class SourceChangeApplierWriteGateTests
 {

@@ -1,4 +1,4 @@
-// Deploy and purge as gesture commands (ADR-0047 point 6): applied-or-refusal, never a throw.
+// Deploy and purge as gesture commands (ADR-0015 invariant 2): applied-or-refusal, never a throw.
 // Winners come from the Instance, not a fresh walk, so deploy can't disagree with the trees.
 
 import { join } from 'node:path';

@@ -4,7 +4,7 @@ using Timer = System.Timers.Timer;
 
 namespace MEditService.Bridge;
 
-/// <summary>ADR-0046: one recursive watcher per mod folder in the load order, tracked or not. The
+/// <summary>ADR-0014: one recursive watcher per mod folder in the load order, tracked or not. The
 /// Source repository names what to watch; settling is per mod, so a batch is per mod while
 /// projection stays per plugin.</summary>
 public sealed class ModFolderWatcher : IDisposable
@@ -13,7 +13,7 @@ public sealed class ModFolderWatcher : IDisposable
     private readonly TimeSpan _maxWindow;
     private readonly object _gate = new();
     private readonly Dictionary<string, ModEntry> _mods = new(StringComparer.Ordinal);
-    // Keyed by mod folder alone: the unit of a question is the mod (ADR-0041 amendment).
+    // Keyed by mod folder alone: the unit of a question is the mod (ADR-0003).
     private readonly Dictionary<string, UnansweredExternalChange> _unanswered = new(StringComparer.Ordinal);
 
     // Past this many documents in one window the batch is projected whole: see SourceChangeApplier's
@@ -28,19 +28,19 @@ public sealed class ModFolderWatcher : IDisposable
         _maxWindow = maxWindow ?? TimeSpan.FromSeconds(2);
     }
 
-    /// <summary>ADR-0046: what the projector is handed once a mod's batch settles.</summary>
+    /// <summary>ADR-0014: what the projector is handed once a mod's batch settles.</summary>
     public Action<IReadOnlyList<SourceChangeEvent>>? SourceChanged { get; set; }
 
     /// <summary>Raised once an external-change question is queued, whichever trigger found it.</summary>
     public Action<UnansweredExternalChange>? ExternalChangeReported { get; set; }
 
-    /// <summary>ADR-0046 invariant 6: an OS overflow on a tracked plugin's classification route.</summary>
+    /// <summary>ADR-0015 invariant 4: an OS overflow on a tracked plugin's classification route.</summary>
     public Action<string, string>? WatchOverflowed { get; set; }
 
     /// <summary>The indexed-binary counterpart of <see cref="WatchOverflowed"/>.</summary>
     public Action<string, string>? IndexedWatchOverflowed { get; set; }
 
-    /// <summary>ADR-0001. A delegate, not an event, because the handler answers whether it applied: a
+    /// <summary>ADR-0009. A delegate, not an event, because the handler answers whether it applied: a
     /// false answer keeps the remembered hash so the next settle retries.</summary>
     public Func<IndexedBinaryEvent, bool>? IndexedBinaryChanged { get; set; }
 
@@ -73,7 +73,7 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>ADR-0001: every other indexed binary, tracked or not, re-reads on change with no
+    /// <summary>ADR-0009: every other indexed binary, tracked or not, re-reads on change with no
     /// question asked. <paramref name="contentHash"/> is the baseline a settle compares against.</summary>
     public void WatchIndexed(string pluginName, string origin, string pluginPath, string contentHash)
     {
@@ -526,7 +526,7 @@ public enum IndexedBinaryChange
     Deleted,
 }
 
-/// <summary>ADR-0001: one indexed binary's disk event. A bare (name, origin) pair rather than a
+/// <summary>ADR-0009: one indexed binary's disk event. A bare (name, origin) pair rather than a
 /// PluginKey: this assembly may not reference the load order or record-index namespaces.</summary>
 public sealed record IndexedBinaryEvent(string PluginName, string Origin, string PluginPath, IndexedBinaryChange Change);
 
@@ -542,7 +542,7 @@ public enum SourceChangeScope
     WholePlugin,
 }
 
-/// <summary>ADR-0046: one settled batch of source changes to one plugin copy. A bare (name, origin)
+/// <summary>ADR-0014: one settled batch of source changes to one plugin copy. A bare (name, origin)
 /// pair rather than a PluginKey: this assembly may not reference the load order or record-index
 /// namespaces.</summary>
 public sealed record SourceChangeEvent(

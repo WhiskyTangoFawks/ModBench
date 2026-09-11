@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Api;
 
 /// <summary>Everything preset: the answers cover every changed tracked file, not just the plugin
-/// (ADR-0041 amendment) — asserted through the HTTP API against a real git repo.</summary>
+/// (ADR-0003) — asserted through the HTTP API against a real git repo.</summary>
 public sealed class AbsorbKeepTrackedFileTests : IDisposable
 {
     private const string AssetRelativePath = "Meshes/Thing.nif";
@@ -180,7 +180,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
     }
 
     // The rival this guards: reading git's own 0 exit as Clean even though the autostash's own
-    // reapply conflicted and left the change in the stash — a silent wrong state (ADR-0026).
+    // reapply conflicted and left the change in the stash — a silent wrong state (ADR-0019).
     [Fact]
     public void RebaseEditBranch_WhenReapplyingTheAutostashConflicts_ReportsConflicted_KeepingTheStash()
     {

@@ -12,13 +12,13 @@ public static class LoadOrderEndpoints
 
     public static IEndpointRouteBuilder MapLoadOrderEndpoints(this IEndpointRouteBuilder app)
     {
-        // ADR-0044: the one way the load order reaches Editing. PUT, because it is state, not a
+        // ADR-0013: the one way the load order reaches Editing. PUT, because it is state, not a
         // command: sending the same body twice changes nothing.
         app.MapPut("/load-order", PutLoadOrder)
             .WithName("PutLoadOrder")
             .WithTags(Tag)
             .WithDescription(
-                "Reconciles the load order against this snapshot (ADR-0044): every physical plugin " +
+                "Reconciles the load order against this snapshot (ADR-0013): every physical plugin " +
                 "copy in the instance — winning and losing, listed and unlisted — each with its " +
                 "plugins.txt slot (null when no line names it), its * prefix and whether the Mod " +
                 "override order resolves the name to it. Copies new to the load order are opened " +
@@ -32,7 +32,7 @@ public static class LoadOrderEndpoints
             .ProducesProblem(409)
             .ProducesProblem(500);
 
-        // ADR-0035: polled alongside an in-flight PUT, so it answers 200 in every state
+        // ADR-0013: polled alongside an in-flight PUT, so it answers 200 in every state
         // including "no load order yet" — unlike the gated routes below, reporting that absence
         // *is* this endpoint's job, not a failure to do it.
         app.MapGet("/load-order/status", GetStatus)
@@ -61,7 +61,7 @@ public static class LoadOrderEndpoints
             .Produces<FilterResponse>()
             .ProducesProblem(503);
 
-        // ADR-0046: the read side's read-your-writes hook. 0 with no index held, the same
+        // ADR-0014: the read side's read-your-writes hook. 0 with no index held, the same
         // "absence is a state" answer GetLoadOrderStatus gives.
         app.MapGet("/load-order/sequence", GetSequence)
             .WithName("GetSequence")
@@ -86,7 +86,7 @@ public static class LoadOrderEndpoints
             .Produces<IReadOnlyList<string>>()
             .ProducesProblem(400);
 
-        // ADR-0046: Refresh's own first step — the PUT /load-order that follows is then an
+        // ADR-0014: Refresh's own first step — the PUT /load-order that follows is then an
         // ordinary cold load. Refuses exactly as PUT /load-order does when another window holds
         // the file.
         app.MapPost("/index/rebuild", PostRebuildIndex)
@@ -116,7 +116,7 @@ public static class LoadOrderEndpoints
         return Results.Problem(ex.Message, statusCode: 400);
     }
 
-    // ADR-0001 point 6: another Modbench window holds this instance's index. 423 Locked, distinct
+    // ADR-0009 point 5: another Modbench window holds this instance's index. 423 Locked, distinct
     // from a failed reconcile (500) and a superseded snapshot (409): nothing is wrong, the
     // instance is simply in use.
     private static IResult IndexHeldElsewhere(ILogger logger, IndexHeldElsewhereException ex)
@@ -141,7 +141,7 @@ public static class LoadOrderEndpoints
         }
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
-        // ADR-0001: the MO2 instance root is what the index file is keyed on, so a snapshot
+        // ADR-0009: the MO2 instance root is what the index file is keyed on, so a snapshot
         // that cannot name one has nowhere to keep its rows — a bad request, not a degraded reconcile.
         if (!Directory.Exists(req.InstanceRoot))
             return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
@@ -154,13 +154,13 @@ public static class LoadOrderEndpoints
             return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400);
 
         // A copy whose file is gone by the time the snapshot arrives is not a bad request but a
-        // row in an error state (ADR-0044).
+        // row in an error state (ADR-0013).
         try
         {
             var entries = req.Plugins
                 .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled!.Value, p.Winning!.Value))
                 .ToList();
-            // ADR-0046 invariant 11: the state lands in the shared kernel first, so a reader asking
+            // ADR-0013 invariant 4: the state lands in the shared kernel first, so a reader asking
             // "which copy wins" during the reconcile is answered by the snapshot, not by the Index.
             var snapshot = ForcedPlugins.Snapshot(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
             var previous = holder.Current;

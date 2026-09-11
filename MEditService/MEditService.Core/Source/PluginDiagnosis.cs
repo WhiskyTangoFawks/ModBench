@@ -12,7 +12,7 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     /// the actual defect from the plugin's own bytes.</summary>
     public const string UnknownClass = "unknown";
 
-    // Kind A (ADR-0043): legitimate data Mutagen cannot round-trip, matched by message substring since
+    // Kind A (ADR-0006): legitimate data Mutagen cannot round-trip, matched by message substring since
     // Mutagen's exceptions carry no error code. The second message is UnmappableFormIDException's generic
     // one for any unresolvable master, so its tail says "likely".
     private static readonly (string MessageContains, string Tail)[] KindATable =

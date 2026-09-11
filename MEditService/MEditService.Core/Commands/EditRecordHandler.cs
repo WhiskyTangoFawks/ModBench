@@ -12,7 +12,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Edit gesture's handler (ADR-0046 invariant 3). The target, the pre-write gate and
+/// <summary>The Edit gesture's handler (ADR-0014 invariant 3). The target, the pre-write gate and
 /// the rename on an EditorID change are <see cref="WriteTargets"/>'s, so nothing here re-derives
 /// one.</summary>
 public sealed class EditRecordHandler
@@ -38,7 +38,7 @@ public sealed class EditRecordHandler
             (targets, loadOrder, resolvers, codec, schemaReflector, logger);
     }
 
-    /// <summary>The single write path (ADR-0041): one envelope, patched onto the record's document
+    /// <summary>The single write path (ADR-0007): one envelope, patched onto the record's document
     /// by <see cref="DocumentEdit"/>, landed here as a working-tree change. This method owns only
     /// the IO around that.</summary>
     public RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope)
@@ -152,7 +152,7 @@ public sealed class EditRecordHandler
 
     // Reflection makes child slots, Cell.Grid and placed Position ordinary writable columns; writing
     // one would desynchronize the side tables, which nothing here re-derives. Refusing is why no
-    // SetPlacement-style write-back exists; containment is the path (ADR-0041).
+    // SetPlacement-style write-back exists; containment is the path (ADR-0007).
     private static RecordEditResult? RefuseIfContainmentField(
         string recordType, IReadOnlyList<PathHop> path, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
     {
@@ -168,7 +168,7 @@ public sealed class EditRecordHandler
             return RecordEditResult.Refused(
                 RecordEditRefusal.FieldReadOnly,
                 $"'{fieldPath}' holds {recordType}'s child records, and containment is expressed by the " +
-                "source tree's own structure rather than by a field (ADR-0041). Adding, removing or " +
+                "source tree's own structure rather than by a field (ADR-0007). Adding, removing or " +
                 "reordering a container's children is a structural gesture, not a field edit.");
         }
 

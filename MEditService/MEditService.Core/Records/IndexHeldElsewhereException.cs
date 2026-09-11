@@ -1,6 +1,6 @@
 namespace MEditService.Core.Records;
 
-/// <summary>The instance's index file is open in another process (ADR-0001 point 6). Refused by
+/// <summary>The instance's index file is open in another process (ADR-0009 point 5). Refused by
 /// name rather than read-only, waited on, or given a second file; distinct from a corrupt file,
 /// which is rebuilt.</summary>
 public sealed class IndexHeldElsewhereException : Exception

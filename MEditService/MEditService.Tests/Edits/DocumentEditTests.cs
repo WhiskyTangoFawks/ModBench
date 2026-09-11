@@ -14,7 +14,7 @@ using static MEditService.Tests.TestSupport.Envelopes;
 namespace MEditService.Tests.Edits;
 
 /// <summary>Document text, envelope and metadata in; document text or one refusal out, no index
-/// and no disk (ADR-0032). Every gesture is asserted as whole-document equality: the output is the
+/// and no disk (ADR-0005). Every gesture is asserted as whole-document equality: the output is the
 /// input with exactly the edited path changed.</summary>
 public sealed class DocumentEditTests
 {

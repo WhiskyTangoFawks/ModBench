@@ -16,7 +16,7 @@ export async function resolveCompileTarget(
   deps: ResolveCompileTargetDeps,
 ): Promise<CompileTarget | undefined> {
   if (nodePluginName !== undefined) {
-    // A tree row carries no origin, so it is resolved rather than read off the row (ADR-0036).
+    // A tree row carries no origin, so it is resolved rather than read off the row (ADR-0012).
     const origin = await deps.resolveOrigin(nodePluginName);
     if (!origin) {
       deps.onError(`Could not resolve which mod "${nodePluginName}" belongs to.`);

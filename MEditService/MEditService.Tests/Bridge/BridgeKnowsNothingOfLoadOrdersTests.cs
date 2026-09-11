@@ -1,7 +1,7 @@
 namespace MEditService.Tests.Bridge;
 
 /// <summary>Scans source text rather than the assembly: reflection sees only types the bridge uses, so a
-/// reference optimized away or in an uncalled method would pass silently (ADR-0041).</summary>
+/// reference optimized away or in an uncalled method would pass silently (ADR-0007).</summary>
 public sealed class BridgeKnowsNothingOfLoadOrdersTests
 {
     private static readonly string[] ForbiddenNamespaces =

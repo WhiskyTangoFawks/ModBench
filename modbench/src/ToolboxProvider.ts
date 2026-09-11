@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-/** The Instance fields the Toolbox's rows render (ADR-0047), and nothing else — MO2's top bar
+/** The Instance fields the Toolbox's rows render (ADR-0015), and nothing else — MO2's top bar
  *  as a tree, reading the one read model. */
 export interface ToolboxState {
   activeProfile: string;
@@ -29,7 +29,7 @@ function deploymentRow(deployed: boolean): vscode.TreeItem {
 }
 
 // An unread instance names no profile yet, which reads as the same em-dash an unreadable one
-// does: ADR-0026's background tier degrades a readout inline rather than toasting.
+// does: ADR-0019's background tier degrades a readout inline rather than toasting.
 function profileRow(activeProfile: string): vscode.TreeItem {
   const row = new vscode.TreeItem('Profile');
   row.description = activeProfile || '—';

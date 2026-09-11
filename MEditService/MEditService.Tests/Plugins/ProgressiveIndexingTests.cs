@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Fallout4;
 namespace MEditService.Tests.Plugins;
 
 /// <summary>Each test drives a load to a known point with <see cref="GatedIndexRepositoryFactory"/>
-/// and asserts at that instant: no sleeps, no timing assumptions (ADR-0035).</summary>
+/// and asserts at that instant: no sleeps, no timing assumptions (ADR-0013).</summary>
 public sealed class ProgressiveIndexingTests
 {
     private static (IndexProjector Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
@@ -238,7 +238,7 @@ public sealed class ProgressiveIndexingTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => first);
         await second;
 
-        // ADR-0044: the same instance is reconciled in place, one index rather than a second replacing the
+        // ADR-0013: the same instance is reconciled in place, one index rather than a second replacing the
         // first. What the superseded reconcile landed stays, and its successor finishes the set.
         var index = Assert.Single(gate.Created);
         Assert.False(index.Disposed);

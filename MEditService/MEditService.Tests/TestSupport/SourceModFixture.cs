@@ -11,7 +11,7 @@ namespace MEditService.Tests.TestSupport;
 
 /// <summary>A mod folder holding whatever record shape a suite needs, and the write service over
 /// it: the caller fills the plugin, this writes, registers and tracks it. No index and no store
-/// (ADR-0046 invariant 7).</summary>
+/// (ADR-0015 invariant 5).</summary>
 internal sealed class SourceModFixture : IDisposable
 {
     private readonly string _instanceRoot;

@@ -24,7 +24,7 @@ function fakeDecorationProvider(): RecordDecorationProvider {
   return { refresh: vi.fn() } as unknown as RecordDecorationProvider;
 }
 
-// `hasMatchingRecords` (ADR-0035 amending ADR-0018) needs a re-derive on every edit, since a
+// `hasMatchingRecords` (plugins.md) needs a re-derive on every edit, since a
 // field edit can change which records match the active filter.
 describe('makeOnRecordEdited — record-filter-match refresh', () => {
   it('calls the injected refreshMatchingPlugins on every edit', () => {
@@ -103,9 +103,9 @@ function fakeActiveRecordTracker() {
   };
 }
 
-// ADR-0046 invariant 5: the write's own callback is silent; the stream is the panel's only
+// ADR-0015 invariant 3: the write's own callback is silent; the stream is the panel's only
 // re-read trigger. Spans the port's notification wiring and Editor's own write callback.
-describe('a write and the stream, together (ADR-0046 invariant 5)', () => {
+describe('a write and the stream, together (ADR-0015 invariant 3)', () => {
   it('after a write, the panel re-reads exactly once, on rows-changed', () => {
     const meditClient = new InMemoryMEditClient();
     const panel = fakePanel();

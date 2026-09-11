@@ -86,7 +86,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
 
     // --- filter affects GET /plugins ---
 
-    // ADR-0035: a record filter never prunes a plugin row, because this tree is also the load
+    // plugins.md: a record filter never prunes a plugin row, because this tree is also the load
     // order and hiding a plugin mid-filter would make it unreorderable.
     [Fact]
     public async Task PostFilter_MatchingNoRecords_KeepsPluginInGetPluginsButFlagsNoMatch()

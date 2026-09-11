@@ -17,7 +17,7 @@ internal static class ExternalChangeLoadOrderHook
         // load order does not hold would keep re-indexing itself into it.
         watcher.UnwatchAllIndexed();
         var offers = new List<CrashRepairOffer>();
-        // Grouped by mod folder: the classifier runs once per mod (ADR-0041 amendment), covering
+        // Grouped by mod folder: the classifier runs once per mod (ADR-0003), covering
         // every tracked plugin the mod holds in one pass, exactly as the live watcher's settle does.
         var byModFolder = new Dictionary<string, List<(string Name, string Origin, string Path, byte[] Bytes)>>(StringComparer.Ordinal);
         // A mod with a plugin nobody could hash has no whole verdict, so nothing of its is cleared.
@@ -28,7 +28,7 @@ internal static class ExternalChangeLoadOrderHook
             var key = plugin.Key;
             if (ModFolders.TrackedOf(order, key) is not { } modFolder)
             {
-                // ADR-0001: every other indexed binary, the game's Data/ masters included, gets an
+                // ADR-0009: every other indexed binary, the game's Data/ masters included, gets an
                 // indexed-binary watch: a write by another tool is answered by re-reading it, not by
                 // asking the user. No indexed hash, nothing to compare against.
                 if (index.IndexedContentHash(key) is { } contentHash)
@@ -78,7 +78,7 @@ internal static class ExternalChangeLoadOrderHook
                     }
                     break;
                 case null when !unreadable.Contains(modFolder):
-                    // The classifier is the authority and the marker only its cache (ADR-0041
+                    // The classifier is the authority and the marker only its cache (ADR-0007
                     // amendment): a question whose change is gone is not asked again, or kept.
                     ExternalChangeDeferral.Clear(modFolder);
                     break;

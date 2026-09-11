@@ -3,7 +3,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0044's participation and winner rules, on the immutable value the shared kernel holds. No
+// ADR-0013's participation and winner rules, on the immutable value the shared kernel holds. No
 // DuckDB and no disk: a snapshot goes in, participation and winners come out.
 public sealed class LoadOrderTests
 {
@@ -121,7 +121,7 @@ public sealed class LoadOrderTests
         Assert.Equal(["A.esp"], order.Copies.Select(c => c.Name));
     }
 
-    // ADR-0041: created before any plugins.txt line names it, so the gesture that follows sees it.
+    // ADR-0007: created before any plugins.txt line names it, so the gesture that follows sees it.
     [Fact]
     public void With_AddsACreatedCopy_AndReplacesTheOneAlreadyUnderThatIdentity()
     {
@@ -133,8 +133,8 @@ public sealed class LoadOrderTests
         Assert.False(replaced.Participates(new PluginKey("New.esp", "ModA")));
     }
 
-    // ADR-0041's counterpart: a create that could not write its file takes its registration back,
-    // and only that one — two copies of one filename are two identities (ADR-0036).
+    // ADR-0007's counterpart: a create that could not write its file takes its registration back,
+    // and only that one — two copies of one filename are two identities (ADR-0012).
     [Fact]
     public void Without_RemovesOnlyTheCopyUnderThatIdentity()
     {

@@ -1,10 +1,11 @@
 # Target architecture: how to read the diagrams
 
 mEdit is the C# service in `MEditService/`; Modbench is the VS Code extension in `modbench/`.
-The invariants are stated in
-[ADR-0046](../adr/0046-ports-and-adapters-with-a-write-side-a-read-side-and-one-way-data-flow.md)
-for mEdit and [ADR-0047](../adr/0047-the-extension-mirrors-the-backends-shape-one-read-model-built-only-by-watching.md)
-for Modbench; this file says how to read the pictures.
+The decisions the pictures draw are
+[ADR-0014](../adr/0014-modules-are-layered-and-call-adjacent-layers-through-ports.md) (the
+layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md)
+(how a change flows) and [ADR-0013](../adr/0013-mod-management-hands-editing-the-load-order.md)
+(what crosses between the two processes); this file says how to read the pictures.
 
 ## The set
 
@@ -12,7 +13,7 @@ for Modbench; this file says how to read the pictures.
   layers, two columns for the processes, so each mEdit layer sits beside its Modbench twin and
   means the same thing: who drives it, the driving adapters, the core with its write and read
   sides, the kernel both sides read, the driven adapters, the systems of record. The Instance is
-  Modbench's Index and the mEdit client is Modbench's write side for editing. A box is a module
+  Modbench's record index and the mEdit client is Modbench's write side for editing. A box is a module
   and carries its interface and what it hides. A cylinder is a store; purple is
   a system of record, green is derived from what sits beside it and can be rebuilt. It has no
   arrows.
@@ -31,7 +32,7 @@ for Modbench; this file says how to read the pictures.
 ## Why the two columns match
 
 Each process has its own systems of record and one read model over them, built only by
-watching: the Index over the plugin files and the source tree, the Instance over MO2's files. A
+watching: the record index over the plugin files and the source tree, the Instance over MO2's files. A
 command writes a file and forgets, so a change from another tool and a change from Modbench are
 the same signal in both, which is what [a-change-from-another-tool](traces/a-change-from-another-tool.d2)
 draws. The two meet at one value, the load order snapshot, and one stream. mEdit is always
@@ -50,7 +51,7 @@ names a game; a source scan holds it. Mods, Downloads and Toolbox never see a re
 
 ## What is left out
 
-Deliberately absent, so that every arrow drawn stays legible: the repair engine (ADR-0043), and
+Deliberately absent, so that every arrow drawn stays legible: the repair engine ([medit-repair.md](../specs/medit-repair.md)), and
 MO2's own UI beyond the trees Modbench renders.
 
 ## Rendering

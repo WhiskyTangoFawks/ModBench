@@ -116,7 +116,7 @@ describe('resolveGameDirectory', () => {
     expect(resolved).toEqual({ root: gameRoot, dataFolder: join(gameRoot, 'Data') });
   });
 
-  // ADR-0047: the Instance reads ModOrganizer.ini once and hands the text on, so this and
+  // ADR-0015: the Instance reads ModOrganizer.ini once and hands the text on, so this and
   // activeProfile/gameRelease share one generation. The on-disk file names an unresolvable
   // path — only the injected text can produce a match.
   it('reads the ini through an injected reader instead of the file, when one is supplied', async () => {

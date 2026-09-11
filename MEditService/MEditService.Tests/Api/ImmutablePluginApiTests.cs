@@ -46,7 +46,7 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         Assert.True(File.Exists(Path.Combine(modFolder, "NewMod.esp")));
     }
 
-    // ADR-0046 invariants 1 and 4: the created plugin reaches the Index through the snapshot Mod
+    // ADR-0015 invariants 1 and 2: the created plugin reaches the Index through the snapshot Mod
     // Management sends once plugins.txt names it, the door any newly installed plugin arrives by.
     [Fact]
     public async Task CreatePlugin_IsQueryable_OnceTheNextSnapshotNamesIt()
@@ -106,7 +106,7 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
     }
 
     // Creating into an untracked destination Tracks it as part of the same gesture — a
-    // created plugin must be editable immediately, and editing requires tracking (ADR-0041).
+    // created plugin must be editable immediately, and editing requires tracking (ADR-0007).
     [Fact]
     public async Task CreatePlugin_UntrackedDestination_TracksIt()
     {

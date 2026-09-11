@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
 
-/// <summary>The shape a persistent file's rows were written under (ADR-0001); a mismatch at open
+/// <summary>The shape a persistent file's rows were written under (ADR-0009); a mismatch at open
 /// rebuilds the whole file. Four parts: format version, game release, Mutagen assembly version,
 /// and a digest of the reflected schema.</summary>
 internal static class IndexVersion

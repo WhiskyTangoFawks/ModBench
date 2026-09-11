@@ -105,7 +105,7 @@ public class GetDocumentsTests
         Assert.Equal(2, recordsFromB.Count);
         Assert.All(recordsFromB, d => Assert.Equal("ModB", d.Plugin.Origin));
 
-        // ADR-0036: the header is per-copy too — one each, each carrying its own origin, never one
+        // ADR-0012: the header is per-copy too — one each, each carrying its own origin, never one
         // shared row keyed on the filename the two copies have in common.
         Assert.Equal("ModA", Assert.Single(fromA, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);
         Assert.Equal("ModB", Assert.Single(fromB, d => d.RecordType == PluginHeader.RecordType).Plugin.Origin);

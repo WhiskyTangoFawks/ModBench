@@ -33,7 +33,7 @@ internal readonly record struct CellPlacement(
 public sealed partial class SourceRepository
 {
     // One repository is one operation, so both live and die with it: the next Track, compile or edit
-    // looks at the tree again (ADR-0001 — never a file timestamp).
+    // looks at the tree again (ADR-0009 — never a file timestamp).
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EmbeddedOwners> _ownersBySourceRoot = new(StringComparer.Ordinal);
 
@@ -233,7 +233,7 @@ public sealed partial class SourceRepository
 
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. The block levels are directories, which is why only the repository reads them back
-    /// (ADR-0046 invariant 9).</summary>
+    /// (ADR-0014 invariant 5).</summary>
     internal CellPlacement? CellPlacementOf(PluginKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return null;
@@ -373,7 +373,7 @@ public sealed partial class SourceRepository
         }
 
         // Every answer is checked against the document's current text, so an entry the tree does not
-        // bear out is absence, never a stale owner. Read again at most once per repository (ADR-0001).
+        // bear out is absence, never a stale owner. Read again at most once per repository (ADR-0009).
         internal OwnerDocument? DocumentHolding(string formKey)
         {
             if (_byChild.TryGetValue(formKey, out var owner) && StillCarries(owner.FullPath, formKey)) return owner;

@@ -6,8 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Copy as New Record gesture's handler (ADR-0046 invariant 3): xEdit's "Copy as New
-/// Record Into…" — the codec's duplicate under a freshly allocated FormKey (ADR-0041).</summary>
+/// <summary>The Copy as New Record gesture's handler (ADR-0014 invariant 3): xEdit's "Copy as New
+/// Record Into…" — the codec's duplicate under a freshly allocated FormKey (ADR-0007).</summary>
 public sealed class CopyRecordAsNewRecordHandler
 {
     private readonly WriteTargets _targets;

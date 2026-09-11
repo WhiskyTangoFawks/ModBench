@@ -179,7 +179,7 @@ public sealed class InjectedChildTests
             var injectorPath = Path.Combine(_injectorModFolder, InjectorPluginName);
             var injectorMod = new Fallout4Mod(ModKey.FromFileName(InjectorPluginName), Fallout4Release.Fallout4);
             // The override carries the base's own FormKey, which is what makes InjectionBase.esm a
-            // master (ADR-0038: masters are lifecycle-derived, never declared).
+            // master (ADR-0008: masters are lifecycle-derived, never declared).
             var questOverride = new Quest(Quest, Fallout4Release.Fallout4) { EditorID = "BaseQuest" };
             var topicOverride = new DialogTopic(BaseTopic, Fallout4Release.Fallout4) { EditorID = "BaseTopic" };
             var injectedResponse = new DialogResponses(injectorMod) { EditorID = "InjectedResponse" };

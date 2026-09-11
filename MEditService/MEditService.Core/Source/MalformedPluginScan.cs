@@ -2,7 +2,7 @@ using System.Text;
 
 namespace MEditService.Core.Source;
 
-/// <summary>Kind B detectors (ADR-0043): byte-level scans naming a defect class from the plugin's
+/// <summary>Kind B detectors (ADR-0006): byte-level scans naming a defect class from the plugin's
 /// original bytes alone, with no Mutagen. Expected values come from vanilla binaries, not a
 /// reference's comments.</summary>
 public static class MalformedPluginScan

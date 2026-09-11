@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>Which records link a FormKey, asked of the load order rather than the Index (ADR-0046
+/// <summary>Which records link a FormKey, asked of the load order rather than the Index (ADR-0014
 /// invariant 7): a tracked copy answers from its working tree through the collector, an untracked
 /// one from its binary's own links.</summary>
 internal sealed class ReferencerScan(

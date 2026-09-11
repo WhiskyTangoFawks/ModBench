@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046: a copy writes trees and nothing else, so what the Index serves afterwards is
+/// <summary>ADR-0014: a copy writes trees and nothing else, so what the Index serves afterwards is
 /// what a projection of those trees made of it. Read here, never in the copy suites.</summary>
 public sealed class IndexAfterACopyTests : IDisposable
 {

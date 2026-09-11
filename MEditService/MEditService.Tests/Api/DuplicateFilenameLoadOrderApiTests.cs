@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0036 through the real load path, so bugs at the joins between phases are reachable. Both
+// ADR-0012 through the real load path, so bugs at the joins between phases are reachable. Both
 // copies need real mod-folder origins: ColumnKey.Of elides the reserved DataDirectory one, so a
 // default-origin fixture passes either way.
 [Collection(WebHostCollection.Name)]
@@ -32,7 +32,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        // ADR-0044: both copies travel in the one snapshot, ModB as the losing copy at the same
+        // ADR-0013: both copies travel in the one snapshot, ModB as the losing copy at the same
         // slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
@@ -111,7 +111,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var columns = compare.GetProperty("overrides").EnumerateArray()
             .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
 
-        // ADR-0036: the grid is xEdit parity, the in-game resolution stack. The game loads exactly
+        // ADR-0012: the grid is xEdit parity, the in-game resolution stack. The game loads exactly
         // one file named Shared.esp, so the discarded copy stays indexed and browsable but never
         // columns.
         var column = Assert.Single(columns);
@@ -130,7 +130,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         using var fx = BuildTwoCopies();
         await PutBothCopies(fx);
 
-        // ADR-0044: a copy absent from the snapshot is unregistered, while the copy that wins is
+        // ADR-0013: a copy absent from the snapshot is unregistered, while the copy that wins is
         // untouched, because a reconcile is not a reload.
         var without = await _client.PutAsJsonAsync("/load-order", new
         {
@@ -182,8 +182,8 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
         var shadowed = plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModB");
 
-        // ADR-0036: read-only, because an edit to a file the game does not load produces no
-        // observable change anywhere. ADR-0035: non-participating, so it can never take a winner
+        // ADR-0012: read-only, because an edit to a file the game does not load produces no
+        // observable change anywhere. ADR-0013: non-participating, so it can never take a winner
         // from the copy that shadows it.
         Assert.True(shadowed.GetProperty("isImmutable").GetBoolean());
         Assert.False(shadowed.GetProperty("participates").GetBoolean());

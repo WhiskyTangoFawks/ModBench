@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>ADR-0032 rule 2 bans the live-object namespaces outside the codec and the Plugin
+/// <summary>ADR-0005 rule 2 bans the live-object namespaces outside the codec and the Plugin
 /// adapter. This pins the exemption list, its order, and the severity Roslyn computes from
 /// it.</summary>
 public sealed class BannedApiScopeTests
@@ -93,7 +93,7 @@ public sealed class BannedApiScopeTests
 
         Assert.Equal(BannedNamespaces, banned);
         Assert.All(lines, line => Assert.EndsWith(
-            "a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0032 rule 2).",
+            "a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).",
             line, StringComparison.Ordinal));
     }
 

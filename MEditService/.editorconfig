@@ -393,7 +393,7 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator = 
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
-# ADR-0032 rule 2: a live Mutagen object reaches nothing but the codec and the Plugin adapter.
+# ADR-0005 rule 2: a live Mutagen object reaches nothing but the codec and the Plugin adapter.
 # RS0030 reads BannedSymbols.txt beside this file, and the sections below are the whole exemption
 # list — codec, adapter and tests — pinned by BannedApiScopeTests.
 [*.cs]

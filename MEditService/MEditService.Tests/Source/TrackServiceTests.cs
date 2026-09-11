@@ -130,7 +130,7 @@ public sealed class TrackServiceTests
             var roundTripped = await codec.DeserializeAsync(sourceFile1, GameRelease.Fallout4, "npc_");
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
-            // Spriggit has no role in v1 (ADR-0042) — the root document holds the mod
+            // Spriggit has no role in v1 (ADR-0006) — the root document holds the mod
             // header's own fields only, no package stamp, and Track writes no sidecar beside the
             // tree.
             Assert.False(File.Exists(Path.Combine(sourceRoot, ".spriggit")));
@@ -161,7 +161,7 @@ public sealed class TrackServiceTests
         }
     }
 
-    // The pinned trailer set (Upstream-Version, Binary-SHA256, Meta-SHA256 — ADR-0041 amendment)
+    // The pinned trailer set (Upstream-Version, Binary-SHA256, Meta-SHA256 — ADR-0003)
     // must ship all three.
     [Fact]
     public async Task TrackAsync_WithAMetaIniBesideThePlugin_WritesItsSha256AsATrailer()
@@ -198,7 +198,7 @@ public sealed class TrackServiceTests
     }
 
     // Positive control's index: no meta.ini beside the plugin (an authored/manually-installed
-    // mod, ADR-0041 amendment) means no Meta-SHA256 trailer at all — every TrackProvenance field
+    // mod, ADR-0003) means no Meta-SHA256 trailer at all — every TrackProvenance field
     // is optional, this must not fabricate one.
     [Fact]
     public async Task TrackAsync_WithNoMetaIni_WritesNoMetaSha256Trailer()
@@ -353,7 +353,7 @@ public sealed class TrackServiceTests
         }
     }
 
-    // ADR-0042 decision 2: the gate runs at Track over every record of the plugin. A wrapper that
+    // ADR-0006 decision 2: the gate runs at Track over every record of the plugin. A wrapper that
     // deserializes for real but counts its calls is what shows the gate genuinely ran, which Track
     // merely succeeding would not.
     [Fact]
@@ -393,7 +393,7 @@ public sealed class TrackServiceTests
         }
     }
 
-    // ADR-0042 decision 2: a plugin that does not round-trip is refused, with the failing record
+    // ADR-0006 decision 2: a plugin that does not round-trip is refused, with the failing record
     // named.
     [Fact]
     public async Task TrackAsync_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()

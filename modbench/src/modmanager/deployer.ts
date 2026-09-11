@@ -69,7 +69,7 @@ async function linkWinner(
 ): Promise<'linked' | 'skipped' | 'cross-volume'> {
   const existing = await statOrNull(target);
   if (existing) {
-    // A vanilla/foreign file occupies this path — never overwrite it (ADR-0026
+    // A vanilla/foreign file occupies this path — never overwrite it (ADR-0019
     // integrity tier: this mod's file silently failing to apply must not be silent).
     if (!wasPreviouslyLinked) return 'skipped';
     // Our own prior link. Leave it alone if it already points at this winner;
@@ -354,7 +354,7 @@ async function relocateStrayFiles(
       await mkdir(dirname(to), { recursive: true });
       await moveFile(from, to, renameFn);
     } catch (err) {
-      // ADR-0026 integrity: a file left in Data/ must not be silent.
+      // ADR-0019 integrity: a file left in Data/ must not be silent.
       unmoved.push(`${relativePath}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }

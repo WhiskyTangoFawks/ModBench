@@ -81,7 +81,7 @@ describe('HttpMEditClient — the process is the client\'s own', () => {
   });
 });
 
-// ADR-0046 invariant 12: the notification stream follows the status, and only this module drives
+// ADR-0014 invariant 2: the notification stream follows the status, and only this module drives
 // it — scripted here through the injected `fetch`, the same seam production wires to `undici`.
 describe('HttpMEditClient — the notification stream follows the status', () => {
   beforeEach(() => { vi.resetAllMocks(); });
@@ -125,7 +125,7 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
   });
 });
 
-// ADR-0026: the adapter's own logic — transport, timeouts and error mapping — with the per-verb
+// ADR-0019: the adapter's own logic — transport, timeouts and error mapping — with the per-verb
 // wiring left to the backend's own handler tests. Every case here is named in fix-826's ticket.
 describe('HttpMEditClient — write-gate contention', () => {
   it('says the write is retryable, not that the load order went away', async () => {

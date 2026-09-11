@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0001: one persistent file per MO2 instance, validating itself against the disk by content,
+// ADR-0009: one persistent file per MO2 instance, validating itself against the disk by content,
 // never by clock. Two assertions reach past the seam through `Connection`: unregistered rows and a
 // version this build cannot produce have no other witness.
 public class PersistentIndexTests : IDisposable
@@ -97,7 +97,7 @@ public class PersistentIndexTests : IDisposable
     [Fact]
     public void ReopeningTheSameFile_KeepsTheLastRegistrations_UntilTheSnapshotCorrectsThem()
     {
-        // ADR-0001 point 4 as amended by ADR-0044: the registrations a file carries are the last known load
+        // ADR-0013: the registrations a file carries are the last known load
         // order, kept on open so a restart with an identical snapshot costs nothing; the first reconcile
         // corrects them.
         var alpha = WritePlugin("Alpha.esp", "NpcAlpha");
@@ -219,7 +219,7 @@ public class PersistentIndexTests : IDisposable
     }
 
     // DuckDB.NET shares one database instance per path in a process, so a second open here joins
-    // the first rather than contending; the cross-process refusal (ADR-0001 point 6) is out of reach.
+    // the first rather than contending; the cross-process refusal (ADR-0009 point 5) is out of reach.
     [Fact]
     public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
     {

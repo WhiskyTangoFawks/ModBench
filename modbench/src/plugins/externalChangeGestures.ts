@@ -4,7 +4,7 @@ import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../
 import type { ExternalChangeCoordinatorDeps } from '../medit/externalChangeCoordinator';
 
 // The coordinator decides *when* to call this; this decides what each dialog answer does — Absorb
-// or Keep, origin-scoped (ADR-0041 amendment), so several plugins in one group share one call.
+// or Keep, origin-scoped (ADR-0003), so several plugins in one group share one call.
 export async function handleUnanswered(deps: ExternalChangeCoordinatorDeps, unanswered: UnansweredExternalChange[]): Promise<void> {
   const outcomes = await runExternalChangeDialogs(unanswered, deps.showDialog);
   const dispatched = new Set<string>();
@@ -24,7 +24,7 @@ function refreshAfterWrite(deps: Pick<ExternalChangeCoordinatorDeps, 'refreshTre
 
 // A typed refusal rides a 200 (`succeeded: false`), which each dispatcher's own WriteRefused
 // check never sees — unsurfaced it leaves the mod unchanged and still read-only with nothing
-// saying why (ADR-0026).
+// saying why (ADR-0019).
 function reportTypedRefusal(
   deps: Pick<ExternalChangeCoordinatorDeps, 'log' | 'showError'>,
   callName: string, origin: string, summary: string, refusalReason: string | null | undefined,

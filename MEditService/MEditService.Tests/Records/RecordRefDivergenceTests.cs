@@ -184,7 +184,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
     {
         using var repo = LoadedRepository();
         // What a created record is once the projector has re-read the tree: an Effective row no
-        // committed ref holds (ADR-0041), which is the state ingest marks rather than a verb of its own.
+        // committed ref holds (ADR-0007), which is the state ingest marks rather than a verb of its own.
         var newFormKey = NpcCreatedInTheWorkingTree(repo);
 
         var effectiveCount = repo.At(RecordRef.Effective).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;

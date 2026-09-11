@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Serialization;
 
-/// <summary>A live mod read as the documents its source tree would hold (ADR-0041). The one place a
+/// <summary>A live mod read as the documents its source tree would hold (ADR-0007). The one place a
 /// getter becomes text, so every caller downstream of it holds documents.</summary>
 internal static class ModDocuments
 {
@@ -140,7 +140,7 @@ internal sealed class MutagenModDocuments(
     }
 
     // The GRUP facts, attached whether or not the codec read the record: a cell the codec refuses
-    // still belongs somewhere and still holds what it holds (ADR-0023).
+    // still belongs somewhere and still holds what it holds (ADR-0005).
     private PluginDocument Placed(PluginDocument document, string formKey) =>
         _cells.Value.TryGetValue(formKey, out var cell)
             ? document with { Cell = cell.Structure, Contents = cell.Placed }
@@ -154,7 +154,7 @@ internal sealed class MutagenModDocuments(
         catch (Exception) { return null; }
     }
 
-    // ADR-0023: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords flattens away and no
+    // ADR-0005: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords flattens away and no
     // document carries. Reflects on Mutagen's property names, the same across every game.
     internal static Dictionary<string, CellRecord> CellsIn(IModGetter mod)
     {

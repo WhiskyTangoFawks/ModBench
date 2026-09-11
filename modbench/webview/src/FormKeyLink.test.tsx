@@ -10,7 +10,7 @@ const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: '
 const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-// ADR-0031: the label is the composite "EditorID [FormKey]", never the EditorID alone — the
+// ADR-0005: the label is the composite "EditorID [FormKey]", never the EditorID alone — the
 // format a reference is chosen in and the format it is read back in must agree.
 describe('FormKeyLink — label', () => {
   it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
@@ -67,7 +67,7 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
     expect(link.style.cursor).toBe('pointer');
   });
 
-  // ADR-0034: DiskCell sets `grab` on the parent <td> and the cell is a drag source throughout,
+  // ADR-0018: DiskCell sets `grab` on the parent <td> and the cell is a drag source throughout,
   // so an inline `cursor: 'default'` here would paint an arrow over the one gesture always
   // available on the cell.
   it('does not mask the parent drag cursor with its own cursor style at rest', () => {

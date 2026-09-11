@@ -47,13 +47,13 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(TestPluginFixture.RecordCount, plugins[0].RecordCount);
     }
 
-    // ADR-0037: a plugin whose master is absent from the whole load order is flagged on the
+    // ADR-0012: a plugin whose master is absent from the whole load order is flagged on the
     // wire, not just detected in-memory — this is what lets the tree render it.
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
     {
         var holder = new LoadOrderHolder();
-        // ADR-0038: masters are lifecycle-derived from the live object graph, never
+        // ADR-0008: masters are lifecycle-derived from the live object graph, never
         // user-declared — a bare ModHeader.MasterReferences.Add is discarded on write. A genuine
         // reference into the (never-built) master is what makes Mutagen record it for real.
         using var fx = new PluginFixtureBuilder("rqs-missing-master")
@@ -75,7 +75,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // ADR-0037 end to end: a whole load order built via LoadOrder/IndexProjector rather than a
+    // ADR-0012 end to end: a whole load order built via LoadOrder/IndexProjector rather than a
     // hand-fed index, where the referenced master is not part of the load order at all, with no
     // plugins.txt line and no file.
     [Fact]
@@ -246,7 +246,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Null(detail);
     }
 
-    // ADR-0046 invariant 4: the query path never opens a file under a mod folder, so a hand edit
+    // ADR-0015 invariant 2: the query path never opens a file under a mod folder, so a hand edit
     // stays invisible until RefreshByKeys — the door the Source watcher calls — lands it.
     [Fact]
     public void GetRecord_NeverReadsSourceItself_AHandEditStaysInvisibleUntilTheStoreIsRefreshed()
@@ -291,7 +291,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.NotEmpty(compare.Diffs);
     }
 
-    // ADR-0035: a FormKey present in one enabled and one disabled plugin is not a conflict —
+    // ADR-0013: a FormKey present in one enabled and one disabled plugin is not a conflict —
     // the disabled override is indexed and browsable, but excluded from conflict classification.
     [Fact]
     public void GetCompare_FormKeyInEnabledAndDisabledPlugin_ReturnsOnlyOne_NotConflict()
@@ -318,7 +318,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
-    // ADR-0035. A third plugin makes this a two-participant NoConflict, not the OnlyOne shortcut;
+    // ADR-0013. A third plugin makes this a two-participant NoConflict, not the OnlyOne shortcut;
     // only the disabled last plugin differs, which an unfiltered winner pass would escalate.
     [Fact]
     public void GetCompare_VmadDiffersOnlyInDisabledPlugin_ReturnsNoConflict()
@@ -522,7 +522,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_EquivalentGenericFieldAndVmadPropertyConflictLoss_ClassifyToSameConflictThis()
     {
-        // ADR-0016: a generic field and a VMAD property in the same conflict shape (Mid overridden
+        // ADR-0018: a generic field and a VMAD property in the same conflict shape (Mid overridden
         // by Top) must classify to the same ConflictThis per plugin — pins parity across the two classifiers.
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("rqs-parity-conflict-loses")
@@ -594,7 +594,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
-    // GetCompare's memoized resolveFormKey (ADR-0031) reaches a condition's Form parameter through
+    // GetCompare's memoized resolveFormKey (ADR-0005) reaches a condition's Form parameter through
     // the same nested-leaf path every other reflected formKey leaf uses — this proves the wiring at
     // the actual call site.
     [Fact]
@@ -856,7 +856,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         return new RecordQueryService(manager, new LoadOrderHolder(), reflector, new ConflictClassifier());
     }
 
-    // --- GetPlugins: HasMatchingRecords, never row pruning (ADR-0035 amending ADR-0018) ---
+    // --- GetPlugins: HasMatchingRecords, never row pruning (plugins.md) ---
 
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
@@ -871,7 +871,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         finally { _manager.ClearFilter(); }
     }
 
-    // ADR-0035: a record filter prunes records and record types, never a plugin row, because this tree
+    // plugins.md: a record filter prunes records and record types, never a plugin row, because this tree
     // is also the load order and hiding a plugin mid-filter would make it unreorderable.
     [Fact]
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()

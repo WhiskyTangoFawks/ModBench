@@ -12,7 +12,7 @@ public readonly record struct CellLocationRow(
     string CellFormKey, string? ParentWorldspace,
     int? BlockX, int? BlockY, int? SubX, int? SubY, int? GridX, int? GridY, bool IsInterior);
 
-/// <summary>The worldspace-tree side tables (ADR-0023) read off documents: a cell's grid and a
+/// <summary>The worldspace-tree side tables (ADR-0005) read off documents: a cell's grid and a
 /// placed object's position out of their own text, the block coordinates out of the structure
 /// handed over beside them.</summary>
 internal static class PlacementWalker

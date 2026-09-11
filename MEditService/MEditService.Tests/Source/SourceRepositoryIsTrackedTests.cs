@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>Tracked is the presence of <c>.git</c> in the mod folder and nothing broader
-/// (ADR-0041): a folder that merely exists is not tracked.</summary>
+/// (ADR-0007): a folder that merely exists is not tracked.</summary>
 public sealed class SourceRepositoryIsTrackedTests
 {
     [Fact]

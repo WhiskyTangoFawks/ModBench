@@ -19,7 +19,7 @@ public sealed class IndexedModFixture : IDisposable
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
 
-    // The MO2 instance this mod folder lives in (ADR-0001), also the fixture's cleanup root.
+    // The MO2 instance this mod folder lives in (ADR-0009), also the fixture's cleanup root.
     public string InstanceRoot { get; }
 
     public string ModFolder { get; }
@@ -91,7 +91,7 @@ public sealed class IndexedModFixture : IDisposable
         new(track: true, PluginName, preset: SourcePreset.Everything, beforeTrack: beforeTrack);
 
     /// <summary>Tracked, with every projection the index publishes recorded: what a watcher's signal
-    /// reaches the front end as (ADR-0046).</summary>
+    /// reaches the front end as (ADR-0014).</summary>
     public static IndexedModFixture Tracked(INotificationPublisher notifications) =>
         new(track: true, PluginName, notifications: notifications);
 

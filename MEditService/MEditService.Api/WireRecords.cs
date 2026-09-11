@@ -8,16 +8,16 @@ namespace MEditService.Api;
 public record FilterRequest(string Sql);
 public record FilterResponse(string? Sql);
 
-/// <summary>ADR-0046: the answer to "did the projection reach at least N?" — Sequence is the value
+/// <summary>ADR-0014: the answer to "did the projection reach at least N?" — Sequence is the value
 /// observed at the moment of that answer, not necessarily equal to the awaited bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);
 
 // CrashRepairOffers: tracked plugins found stale/missing against Modbench's own record, surfaced
-// the same structured way Failures is (ADR-0026), never a second endpoint or poller: either
+// the same structured way Failures is (ADR-0019), never a second endpoint or poller: either
 // condition can only appear through a compile this process drives or a restart.
 public record LoadOrderResponse(
     string Status, IReadOnlyList<PluginLoadFailure> Failures, IReadOnlyList<CrashRepairOffer> CrashRepairOffers);
-// ADR-0044: Mod Management's snapshot. InstanceRoot (ADR-0001) must be the MO2 instance rather
+// ADR-0013: Mod Management's snapshot. InstanceRoot (ADR-0009) must be the MO2 instance rather
 // than anything wider, because Origin is a mod folder name unique only within one.
 public record LoadOrderRequest(
     IReadOnlyList<LoadOrderPlugin> Plugins, string GameDirectory, string InstanceRoot, string GameRelease = "Fallout4");
@@ -26,12 +26,12 @@ public record LoadOrderRequest(
 // making every copy non-participating.
 public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
 
-// ADR-0046: the Refresh rebuild's own request — same instance-keying reasoning as LoadOrderRequest.
+// ADR-0014: the Refresh rebuild's own request — same instance-keying reasoning as LoadOrderRequest.
 public record RebuildIndexRequest(string InstanceRoot, string GameRelease = "Fallout4");
 
 public record HealthResponse(string Status);
 
-// ADR-0041: one edit on one plugin's copy, as the one envelope (ADR-0032). Value is a raw
+// ADR-0007: one edit on one plugin's copy, as the one envelope (ADR-0005). Value is a raw
 // JsonElement: a value is whatever its schema says, so typing it here would re-declare the
 // schema on the wire.
 public record RecordEditRequest(
@@ -43,7 +43,7 @@ public record RecordEditRequest(
 
 /// <summary>The success shape for an applied edit. A refusal is ProblemDetails carrying refusal
 /// and path extensions instead, so an HTTP client's ordinary success check is also the correct
-/// check (ADR-0026).</summary>
+/// check (ADR-0019).</summary>
 public record RecordEditResponse(bool Applied, string FormKey, string Path);
 
 // The three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
@@ -69,8 +69,8 @@ public record RecordRenumberResponse(bool Applied, string OldFormKey, string New
 /// <summary>The Renumber gesture's FormID input box's suggested default (<c>PeekNextFreeFormKeyHandler.PeekNextFreeFormKey</c>).</summary>
 public record NextFreeFormKeyResponse(string FormKey);
 
-// ADR-0041: xEdit's "Copy as Override Into…" / "Copy as New Record Into…". The route's {formKey}
-// names the record copied; both plugins travel as ADR-0036 compound identities.
+// ADR-0007: xEdit's "Copy as Override Into…" / "Copy as New Record Into…". The route's {formKey}
+// names the record copied; both plugins travel as ADR-0012 compound identities.
 
 public record RecordCopyAsOverrideRequest(string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin);
 

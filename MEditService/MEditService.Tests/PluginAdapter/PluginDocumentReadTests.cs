@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.PluginAdapter;
 
-/// <summary>ADR-0032 rule 2's document-shaped read verb: the adapter opens the plugin, the codec
+/// <summary>ADR-0005 rule 2's document-shaped read verb: the adapter opens the plugin, the codec
 /// serializes each record, and what leaves the pair is text under the schema's own table name.</summary>
 public sealed class PluginDocumentReadTests
 {
@@ -63,7 +63,7 @@ public sealed class PluginDocumentReadTests
         Assert.DoesNotContain(documents.Records, d => d.RecordType == PluginHeader.RecordType);
     }
 
-    // ADR-0032 rule 5: a record the codec cannot read is indexed read-only with its diagnosis,
+    // ADR-0005 rule 5: a record the codec cannot read is indexed read-only with its diagnosis,
     // never dropped, so the diagnosis has to leave the codec/adapter pair beside the record.
     [Fact]
     public void OpenDocuments_YieldsARecordTheCodecCannotRead_AsItsIdentityAndItsDiagnosis()
@@ -99,7 +99,7 @@ public sealed class PluginDocumentReadTests
         Assert.Equal(new CellStructure("000800:Documents.esp", 3, 4, 1, 2, IsInterior: false), cell.Cell);
     }
 
-    // ADR-0023: the two placement groups are the GRUP's answer, not the codec's, so they travel
+    // ADR-0005: the two placement groups are the GRUP's answer, not the codec's, so they travel
     // beside a cell's document rather than only inside it.
     [Fact]
     public void OpenDocuments_GivesACellTheRefsItsGrupGroupsHold()

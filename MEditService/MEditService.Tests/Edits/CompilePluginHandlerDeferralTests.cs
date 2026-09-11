@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Compile enters the same door as the record gestures (ADR-0041 amendment): an unanswered
+/// <summary>Compile enters the same door as the record gestures (ADR-0003): an unanswered
 /// question refuses it with the same kind and message, so upstream's bytes are never overwritten
 /// before it is answered.</summary>
 public sealed class CompilePluginHandlerDeferralTests : IDisposable

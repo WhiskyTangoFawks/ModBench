@@ -12,7 +12,7 @@ using Noggog;
 namespace MEditService.Tests.Edits;
 
 /// <summary>The container counterpart to <see cref="SourceEditFixture"/>, which holds only flat
-/// records and cannot exercise a container at all. No index anywhere in it (ADR-0046 invariant
+/// records and cannot exercise a container at all. No index anywhere in it (ADR-0014 invariant
 /// 7).</summary>
 public sealed class ContainerModFixture : IDisposable
 {

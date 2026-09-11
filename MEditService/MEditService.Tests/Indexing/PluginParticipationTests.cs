@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// ADR-0035: UpdateWinners() and form_lookup's own winner sweep carry a participation
+// ADR-0013: UpdateWinners() and form_lookup's own winner sweep carry a participation
 // predicate — an indexed-but-non-participating plugin's row can never be a winner, regardless of
 // its load_order_idx.
 public class PluginParticipationTests

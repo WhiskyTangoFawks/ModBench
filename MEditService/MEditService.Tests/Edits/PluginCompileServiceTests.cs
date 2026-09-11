@@ -146,7 +146,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     }
 
     // The previous layout minted a group document the reader now skips silently. A file the codec
-    // would not regenerate is a divergence named by path; re-Track is the recovery (ADR-0042).
+    // would not regenerate is a divergence named by path; re-Track is the recovery (ADR-0006).
     [Fact]
     public void Compile_OfATreeInThePreviousLayout_RefusesNamingTheLeftoverAndReTrack()
     {
@@ -162,7 +162,7 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains("Re-Track", result.RefusalReason, StringComparison.Ordinal);
     }
 
-    // Every write backs up the target plugin first (ADR-0008) — compile is a new write
+    // Every write backs up the target plugin first; compile is a new write
     // path, not a new exemption from it.
     [Fact]
     public void Compile_LeavesATimestampedBackupBesideTheBinary()

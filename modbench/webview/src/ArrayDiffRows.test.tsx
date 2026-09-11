@@ -398,7 +398,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   });
 
   // The webview posts what the user asked for; a move off either end is the backend's to refuse
-  // by name (ADR-0032), not a boundary this side answers.
+  // by name (ADR-0005), not a boundary this side answers.
   it('Ctrl+ArrowUp on the first element still posts the move, to the position before it', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
@@ -473,7 +473,7 @@ function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) 
   const row = screen.getByText(rowLabel).closest('tr')!;
   const cells = row.querySelectorAll('td');
   const cell = cells[cells.length - 1];
-  // xEdit's own gesture (ADR-0034): a double click opens the editor on a resting cell.
+  // xEdit's own gesture (ADR-0018): a double click opens the editor on a resting cell.
   fireEvent.doubleClick(within(cell as HTMLElement).getByText(shownValue));
   const input = (cell as HTMLElement).querySelector('input')!;
   fireEvent.change(input, { target: { value: typed } });

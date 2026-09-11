@@ -32,4 +32,4 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 
 ## Rules that matter
 - Generalize across Bethesda games — FO4-concrete paths/tests are a fixture choice, not a platform lock; each bounded context enforces this independently.
-- Never assume exclusive ownership of a file on disk. MO2, xEdit, other tools and the user can create, edit, move or delete any mod file or plugin outside Modbench at any time. Anything that tracks disk-derived state (indexes, hashes, hidden repos, caches) must detect and recover from the file having changed without Modbench's knowledge.
+- Never assume exclusive ownership of a file on disk (ADR-0003). Anything that holds disk-derived state must detect that the file changed without Modbench's knowledge and recover.

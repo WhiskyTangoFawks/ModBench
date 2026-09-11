@@ -40,7 +40,7 @@ function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCo
 
 
 // The backend launches with the extension: the DB-file-backed session made startup cheap enough
-// that lifecycle stopped being a user decision (ADR-0022). A config change is the only gesture
+// that lifecycle stopped being a user decision (ADR-0002). A config change is the only gesture
 // that can mean "try again".
 function wireAutoLaunch(
   session: ExtensionSession, client: HttpMEditClient, context: vscode.ExtensionContext,
@@ -84,7 +84,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(loadDiagnostics);
   session.loadDiagnostics = loadDiagnostics;
 
-  // The mEdit client (ADR-0022): built once here, owning the backend process and every call
+  // The mEdit client (ADR-0002): built once here, owning the backend process and every call
   // across the seam; nothing outside this module constructs the generated client, `openapi-fetch`
   // or the notification stream.
   const meditClient = new HttpMEditClient({ backend: backendOptions(port, outputChannel), log });
@@ -96,7 +96,7 @@ export function activate(context: vscode.ExtensionContext) {
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
   const { scriptsPath, filterProvider } = setupScripts(meditConfig());
 
-  // ADR-0046 invariant 12: one subscription for the whole session, opened and closed with the
+  // ADR-0014 invariant 2: one subscription for the whole session, opened and closed with the
   // backend by the mEdit client itself.
   context.subscriptions.push(
     { dispose: subscribeTreeToNotifications(meditClient, treeProvider) },
@@ -107,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Fires on every completed reconcile and on a landed Track: tells every open record panel to
   // refetch its comparison, and (re-)registers every tracked mod's repo with `vscode.git`
-  // (ADR-0041 — the one reliable point to do so).
+  // (ADR-0007 — the one reliable point to do so).
   const notifyConflictsComputed = () => {
     for (const panel of recordPanels) void panel.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
     void registerHeldTrackedRepositories(meditClient, outputChannel, (repos) => { session.pluginRepositories = repos; });
@@ -116,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
   // The onCountChanged callback closes over `referencedByTreeView` before its `const` line runs —
   // safe because VS Code never calls getChildren until createTreeView returns.
   const referencedByTreeProvider = new ReferencedByTreeProvider(meditClient, log, (count) => {
-    // The runtime count badge keeps the declared "Plugins - Referenced By" prefix (ADR-0035).
+    // The runtime count badge keeps the declared "Plugins - Referenced By" prefix (ADR-0013).
     referencedByTreeView.title = count === undefined ? 'Plugins - Referenced By' : `Plugins - Referenced By (${count})`;
   });
   const referencedByTreeView = vscode.window.createTreeView('modbench.referencedByTree', {

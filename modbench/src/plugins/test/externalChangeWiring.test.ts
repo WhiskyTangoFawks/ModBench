@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// `showError` must go through the injected reporter (ADR-0026) — the log line and the toast
+// `showError` must go through the injected reporter (ADR-0019) — the log line and the toast
 // come from the same call, not a raw `vscode.window.showErrorMessage`.
 const { showErrorMessage, showWarningMessage, subscribeExternalChangePending } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),

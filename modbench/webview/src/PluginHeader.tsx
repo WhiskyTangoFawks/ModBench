@@ -5,14 +5,14 @@ import { columnStatus, type ColumnStatus } from './recordUtils';
 interface PluginHeaderProps {
   override: RecordDetail;
   isImmutable: boolean;
-  // ADR-0035: whether the effective load order names this copy — distinct from isImmutable (a
+  // ADR-0013: whether the effective load order names this copy — distinct from isImmutable (a
   // shadowed copy is immutable *because* this is false). Dimming is applied once at the header
   // cell; CSS opacity multiplies on nesting.
   inLoadOrder: boolean;
-  // ADR-0041: checked after the two flags above — an immutable plugin's read-only-ness is not
+  // ADR-0007: checked after the two flags above — an immutable plugin's read-only-ness is not
   // something tracking can lift, so its own reason wins.
   isTracked: boolean;
-  // ADR-0036: origin appears inline in the header only when two copies share a filename — decided
+  // ADR-0012: origin appears inline in the header only when two copies share a filename — decided
   // by the caller over the compare response's own overrides, never recomputed here.
   showOriginInline: boolean;
   collapsed: boolean;
@@ -21,7 +21,7 @@ interface PluginHeaderProps {
   // `contributes.menus["webview/context"]` gates the header's Copy Into… commands on, computed by
   // the caller rather than derived here.
   vscodeContext?: string;
-  // ADR-0041: the record editor has one write path, so this component only reports the gesture.
+  // ADR-0007: the record editor has one write path, so this component only reports the gesture.
   // The header write is what clears the flag, so it cannot be gated on the state it exists to
   // change.
   onTogglePartialForm: (next: boolean) => void;
@@ -54,7 +54,7 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
       + 'nothing anywhere. Whether this file loads, and which copy, is decided in the Mods and '
       + 'Plugins views.',
   },
-  // The friction is deliberate (ADR-0041): editing someone else's plugin is the community's
+  // The friction is deliberate (ADR-0007): editing someone else's plugin is the community's
   // anti-pattern. The label still says it is one command deep — a read-only column with no stated
   // way out reads as a defect.
   untracked: {
@@ -70,7 +70,7 @@ const STATUS_TEXT: Record<ColumnStatus, { label: string; title: string }> = {
   },
 };
 
-// ADR-0038: nothing may declare a master directly — the masters field renders through the
+// ADR-0008: nothing may declare a master directly — the masters field renders through the
 // ordinary compare-grid rows, read-only. The text quotes CONTEXT.md's Partial Form glossary entry
 // rather than paraphrasing it.
 const PARTIAL_FORM_TITLE =
@@ -92,7 +92,7 @@ export function PluginHeader({
   const canWrite = status === 'tracked' && inLoadOrder;
   return (
     <div data-vscode-context={vscodeContext}>
-      {/* Left-click the plugin-name chip collapses/expands this column. ADR-0036:
+      {/* Left-click the plugin-name chip collapses/expands this column. ADR-0012:
           origin is never what the user reads by default — always in the tooltip, inline in the
           label only when a second loaded copy shares this filename (showOriginInline). */}
       <div

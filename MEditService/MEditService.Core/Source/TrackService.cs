@@ -10,17 +10,17 @@ namespace MEditService.Core.Source;
 
 /// <summary>The Track gesture end to end: deep-parses each plugin under one origin (the load order's
 /// overlay is not always structurally faithful), serializes through the whole-mod door, and
-/// commits. A designated door (ADR-0041).</summary>
+/// commits. A designated door (ADR-0007).</summary>
 public sealed class TrackService(ILogger<TrackService> logger, INotificationPublisher? notifications = null)
 {
     // Read concurrently while a track is in flight. Snapshots are replaced wholesale, never
     // mutated, so Volatile.Read/Write suffices and no lock is needed.
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
-    // ADR-0046: null in every test that does not care, and nothing is published when it is.
+    // ADR-0014: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
 
-    /// <summary>ADR-0046: raised with the mod folder and origin of a repository that now exists, so
+    /// <summary>ADR-0014: raised with the mod folder and origin of a repository that now exists, so
     /// the Source watcher starts on a tracked mod with no restart.</summary>
     public Action<string, string>? RepositoryCreated { get; set; }
 
@@ -114,7 +114,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
                 var pluginPristineFiles = tree.Files;
 
-                // ADR-0042 decision 2: the gate refuses before a single byte of any plugin in this Track is
+                // ADR-0006 decision 2: the gate refuses before a single byte of any plugin in this Track is
                 // committed, leaving the folder exactly as untracked as it was. Same Serializing phase — no new
                 // TrackPhase.
                 if (await VerifyRoundTrip(
@@ -160,7 +160,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
         }
     }
 
-    // ADR-0042 decision 2's gate: the tree is read back, recompiled and reparsed; refuses unless every
+    // ADR-0006 decision 2's gate: the tree is read back, recompiled and reparsed; refuses unless every
     // record is model-identical. Reparse, not the pre-write object: only written bytes show what the
     // writer does.
     private static async Task<string?> VerifyRoundTrip(
@@ -186,7 +186,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
-                // ADR-0038's content-derived master pass prunes a master this write still needs when the only
+                // ADR-0008's content-derived master pass prunes a master this write still needs when the only
                 // reference lives in a VMAD struct-list property Mutagen never walks (upstream issue 688). Never
                 // widen this catch.
                 var diagnosis = PluginDiagnosis.FromWriteException(ex);
@@ -217,13 +217,13 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 return $"{pluginName} does not round-trip through its own tracked source: {divergence.Describe()}";
             }
 
-            // Model-identical but not byte-identical: an encoding-only difference ADR-0042 decision 2
+            // Model-identical but not byte-identical: an encoding-only difference ADR-0006 decision 2
             // documents rather than gates. Reported, never a refusal.
             if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.LogInformation(
                     "{Plugin} is model-identical to its own tracked source but not byte-identical — " +
-                    "Save & Compile will not reproduce this plugin's exact bytes (ADR-0042 decision 2).",
+                    "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006 decision 2).",
                     pluginName);
             }
         }

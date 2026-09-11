@@ -75,7 +75,7 @@ async function installArchive(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (installed) {
-      // ADR-0026: integrity/silent-wrong-state (partial save) — the mod IS
+      // ADR-0019: integrity/silent-wrong-state (partial save) — the mod IS
       // installed, only its Downloads bookkeeping failed. Must not read as
       // "install failed", or the user may retry and get a duplicate mod.
       log(`[DownloadsPanel] "${name}" installed but updating its Downloads status failed: ${message}`);
@@ -84,14 +84,14 @@ async function installArchive(
       );
     } else {
       log(`[DownloadsPanel] installing "${name}" failed: ${message}`);
-      // ADR-0026: explicit user action failed -> error notification + log.
+      // ADR-0019: explicit user action failed -> error notification + log.
       void vscode.window.showErrorMessage(`Modbench: Failed to install "${name}".`);
     }
   }
 }
 
 // Every nav action can reject — a `.meta` raced away, an OS with no handler — so none may be
-// fire-and-forget. Failure surfacing is ADR-0026.
+// fire-and-forget. Failure surfacing is ADR-0019.
 async function runRowAction(
   label: string,
   name: string,
@@ -127,7 +127,7 @@ async function trashOneArchive(
     },
     reportFailure: (message) => {
       log(`[DownloadsPanel] deleting "${name}" failed: ${message}`);
-      // ADR-0026: explicit user action failed -> error notification + log.
+      // ADR-0019: explicit user action failed -> error notification + log.
       void vscode.window.showErrorMessage(`Modbench: Failed to delete "${name}".`);
     },
   });

@@ -11,11 +11,11 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Renumber gesture's handler (ADR-0046 invariant 3): the record's FormKey moves, and
-/// every FormLink pointing at it moves with it (ADR-0041).</summary>
+/// <summary>The Renumber gesture's handler (ADR-0014 invariant 3): the record's FormKey moves, and
+/// every FormLink pointing at it moves with it (ADR-0007).</summary>
 public sealed class RenumberRecordHandler
 {
-    // The write side's shared concerns (ADR-0046): the renumber resolves its edit target behind the
+    // The write side's shared concerns (ADR-0014): the renumber resolves its edit target behind the
     // pre-write gate and draws its new FormKey, both through this one module.
     private readonly WriteTargets _targets;
     private readonly LoadOrderHolder _loadOrder;
@@ -40,7 +40,7 @@ public sealed class RenumberRecordHandler
 
     /// <summary>A delete+create pair in source terms plus a reference cascade. Native records only; an
     /// untracked referencer refuses before any write. Computed whole, then written through a
-    /// <see cref="SourceTransaction"/> that restores every tree on failure (ADR-0045).</summary>
+    /// <see cref="SourceTransaction"/> that restores every tree on failure (ADR-0007).</summary>
     public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
@@ -83,7 +83,7 @@ public sealed class RenumberRecordHandler
             is { } refusedSelf) return refusedSelf;
 
         // Phase two: everything that can still fail is genuine I/O, recorded in one transaction
-        // (ADR-0045).
+        // (ADR-0007).
         var transaction = new SourceTransaction();
         try
         {
@@ -107,7 +107,7 @@ public sealed class RenumberRecordHandler
         return RecordEditResult.Success(targetFormKey);
     }
 
-    // Only the trees are put back (ADR-0045); the Source watcher lands the restored files. Paths
+    // Only the trees are put back (ADR-0007); the Source watcher lands the restored files. Paths
     // are relative to the mod folder, the form the Source Control panel lists.
     private string RollBackFailedRenumber(
         SourceTransaction transaction, PluginKey plugin, IReadOnlyList<ComputedRewrite> rewrites,

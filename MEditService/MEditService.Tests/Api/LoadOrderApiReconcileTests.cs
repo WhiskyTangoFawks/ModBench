@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0044: the three registration facts are Mod Management's to state, so they travel on
+// ADR-0013: the three registration facts are Mod Management's to state, so they travel on
 // the wire the same way Origin does, and participation comes back derived.
 [Collection(WebHostCollection.Name)]
 public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixture> loaded) : IClassFixture<LoadedApiFixture<TestPluginFixture>>
@@ -46,7 +46,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
     }
 
     // A bool defaulting to false would leave the conflict picture empty but well-formed: the
-    // silent-wrong-state class ADR-0026 exists to stop.
+    // silent-wrong-state class ADR-0019 exists to stop.
     [Theory]
     [InlineData("enabled")]
     [InlineData("winning")]
@@ -101,7 +101,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
         Assert.True(status.GetProperty("conflictsComputed").GetBoolean());
     }
 
-    // ADR-0037: a missing master is detection and display (MasterResolution), never a
+    // ADR-0012: a missing master is detection and display (MasterResolution), never a
     // change to participation — a plugin enabled in plugins.txt with a missing master keeps
     // competing for winner exactly as it would without the flag.
     [Fact]

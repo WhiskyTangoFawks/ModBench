@@ -62,7 +62,7 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
 // leaves plain click free to mean "edit this cell"; plain click is the caller's to define.
 
 // The underline-and-pointer affordance appears only while Ctrl is held over a resolvable
-// reference (ADR-0031), mirroring xEdit's vstViewCheckHotTrack: a link you cannot follow must not
+// reference (ADR-0005), mirroring xEdit's vstViewCheckHotTrack: a link you cannot follow must not
 // look like one.
 
 // The label is the composite, never the bare EditorID: a FormKey is the identity and the EditorID
@@ -72,7 +72,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
   value: string;
   onOpen: (fk: string) => void;
   onPlainClick?: () => void;
-  // ADR-0034: both optional — a caller with no mutable open gesture omits them.
+  // ADR-0018: both optional — a caller with no mutable open gesture omits them.
   onDoubleClick?: () => void;
   openTrigger?: boolean;
   resolution?: FormKeyResolution;
@@ -97,7 +97,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
         background: 'none',
         border: 'none',
         color: 'var(--vscode-textLink-foreground, #3794ff)',
-        // ADR-0034: no resting cursor override — the parent DiskCell's `grab` is this cell's
+        // ADR-0018: no resting cursor override — the parent DiskCell's `grab` is this cell's
         // resting affordance, since it is a drag source the whole time. `pointer` is asserted only
         // while the reference is hot-tracked.
         cursor: hot ? 'pointer' : undefined,

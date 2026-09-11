@@ -11,7 +11,7 @@ public sealed class PreparedPluginSave(
     private readonly IReadOnlyList<(string TempPath, string FinalPath)> _stringsFiles = stringsFiles ?? [];
     private string? _rollbackPath;
 
-    /// <summary>The timestamped user-facing <c>.bak</c> this attempt created (ADR-0008).</summary>
+    /// <summary>The timestamped user-facing <c>.bak</c> this attempt created.</summary>
     public string BackupPath => backupPath;
 
     public void Commit()

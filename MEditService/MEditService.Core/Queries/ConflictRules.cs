@@ -2,11 +2,11 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Queries;
 
-// Single owner of the ADR-0016 two-axis model's decision rules, so a rule change cannot drift
+// Single owner of the ADR-0018 two-axis model's decision rules, so a rule change cannot drift
 // between the sites that fold per-plugin values through them.
 public static class ConflictRules
 {
-    // ADR-0035: a non-participating plugin never contributes to conflict classification — filtered
+    // plugins.md: a non-participating plugin never contributes to conflict classification — filtered
     // out before any diff/winner/cell-state computation, not masked in the result. Null
     // pluginParticipates means every plugin participates (absent key: fail-open).
     public static IReadOnlyList<T> FilterParticipating<T>(

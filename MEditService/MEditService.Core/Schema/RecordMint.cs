@@ -16,7 +16,7 @@ internal static class RecordMint
         RecordTextCodec codec, RecordTableSchema schema, GameRelease release, string formKey, string? editorId, bool partialForm)
     {
         var members = new JsonObject();
-        // ADR-0041's discriminator policy: a path-ambiguous document leads with its concrete type.
+        // ADR-0007's discriminator policy: a path-ambiguous document leads with its concrete type.
         if (RecordTypeDispatch.For(release).IsPathAmbiguous(schema.TableName)
             && ReflectedTypes.GetSetterType(schema.RecordType) is { } concrete)
         {

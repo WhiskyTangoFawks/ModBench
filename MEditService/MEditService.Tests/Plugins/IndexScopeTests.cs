@@ -66,7 +66,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             Assert.Throws<InvalidOperationException>(() =>
                 manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4));
 
-            // ADR-0044: nothing is torn down — what landed stays held, honestly reported as not
+            // ADR-0013: nothing is torn down — what landed stays held, honestly reported as not
             // yet settled, for the next snapshot to finish.
             Assert.NotNull(manager.Reads);
             Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
@@ -150,7 +150,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        // ADR-0044: a snapshot for the same instance reconciles in place — nothing is replaced.
+        // ADR-0013: a snapshot for the same instance reconciles in place — nothing is replaced.
         Assert.Same(firstRepo, manager.Reads);
     }
 
@@ -375,7 +375,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var oldRepo = manager.Reads;
 
-        // ADR-0044: only a snapshot for another instance replaces what is held; the same instance
+        // ADR-0013: only a snapshot for another instance replaces what is held; the same instance
         // reconciles in place (Reconcile_SameInstance_KeepsTheRepositoryAndLoadOrder).
         var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);

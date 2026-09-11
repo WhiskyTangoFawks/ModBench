@@ -95,7 +95,7 @@ public class RecordIndexFactoryTests : IDisposable
         Assert.Null(second.IndexedContentHash(key));
     }
 
-    // ADR-0046: the rebuild endpoint's whole job — every trace of what the old file held is gone,
+    // ADR-0014: the rebuild endpoint's whole job — every trace of what the old file held is gone,
     // not merely re-validated, because a rebuild must fix a row no hash-validate can (a wrong but
     // still self-consistent body).
     [Fact]
@@ -112,7 +112,7 @@ public class RecordIndexFactoryTests : IDisposable
         Assert.Empty(rebuilt.At(RecordRef.Effective).GetDocuments(key));
     }
 
-    // ADR-0046: the process may already have answered a caller with a sequence value the fresh
+    // ADR-0014: the process may already have answered a caller with a sequence value the fresh
     // file's own table (seeded at 0) does not know about; the rebuild must never let Sequence
     // regress within one process.
     [Fact]
@@ -134,7 +134,7 @@ public class RecordIndexFactoryTests : IDisposable
             $"rebuilt sequence {rebuilt.Sequence} regressed below the prior process value {priorSequence}");
     }
 
-    // ADR-0001 point 6: the same refusal PutLoadOrder answers with, at the seam that actually
+    // ADR-0009 point 5: the same refusal PutLoadOrder answers with, at the seam that actually
     // guards it — deleting an open file succeeds on POSIX and destroys a live index.
     [ForeignIndexHolderFact]
     public void Rebuild_RefusesAndNeverDeletes_WhenAnotherProcessHoldsTheFile()

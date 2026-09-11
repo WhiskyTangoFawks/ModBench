@@ -12,7 +12,7 @@ using Noggog;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0001: registration is visibility. An unregistered plugin's rows stay physically in the
+// ADR-0009: registration is visibility. An unregistered plugin's rows stay physically in the
 // `mirror` schema and answer nothing anywhere; re-registering makes them answer again with no re-
 // index.
 public class RegistrationScopingTests

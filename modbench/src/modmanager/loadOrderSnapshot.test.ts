@@ -6,7 +6,7 @@ import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex'
 import { buildLoadOrderSnapshot, resolvePluginPaths } from './loadOrderSnapshot';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
-// to produce them: those are a wire contract (ADR-0036), and asserting against the same symbol
+// to produce them: those are a wire contract (ADR-0012), and asserting against the same symbol
 // would pass even if its value changed.
 
 type Provider = { winner: string; winnerMod: string; providers?: string[] };
@@ -67,7 +67,7 @@ describe('buildLoadOrderSnapshot', () => {
     ]);
   });
 
-  // ADR-0044: the losing copy is in the snapshot too — at the name's slot, carrying the line's
+  // ADR-0013: the losing copy is in the snapshot too — at the name's slot, carrying the line's
   // own `*`, and not winning. Editing registers it beside the winner; only the winner participates.
   it('a file-level loser of a listed name is sent at that slot, enabled as its line says, not winning', async () => {
     const dataFolder = join(await root(), 'game', 'Data');

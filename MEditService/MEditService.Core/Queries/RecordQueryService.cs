@@ -23,7 +23,7 @@ public sealed class RecordQueryService(
         // The rows and their order are the load order's; the facts reading the file yielded are the
         // Index's. A copy the Index has not opened has none of the latter and is not a row.
         var rows = _loadOrder.Require().Copies.Where(c => opened.ContainsKey(c.Key)).ToList();
-        // ADR-0037: classified once per call, and only once the projection is complete: a partial
+        // ADR-0012: classified once per call, and only once the projection is complete: a partial
         // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
         // reports no issues rather than inventing a third state.
         var status = _index.Status;
@@ -40,7 +40,7 @@ public sealed class RecordQueryService(
         if (_index.FilterSql is null)
             return [.. rows.Select(c => ToResponse(c, hasMatchingRecords: true))];
 
-        // ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
+        // plugins.md: a record filter prunes records and record types, never
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
         // a caller decides expandability from, not row presence.
         var matchingPlugins = reads.GetPluginsWithMatchingRecords(RequireSchemas().Keys);
@@ -80,7 +80,7 @@ public sealed class RecordQueryService(
     public CompareResult? GetCompare(string formKey)
     {
         var reads = RequireReads();
-        // ADR-0031: one memoizing cache per response — a FormKey repeated across sibling
+        // ADR-0005: one memoizing cache per response — a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
         var resolveFormKey = FormKeyResolutionCache.Memoize(reads.Resolve);
 
@@ -88,7 +88,7 @@ public sealed class RecordQueryService(
         if (stack == null) return null;
 
         var copies = _loadOrder.Require().Copies;
-        // ADR-0036: the grid is the record's in-game resolution stack, so a file-level loser is
+        // ADR-0012: the grid is the record's in-game resolution stack, so a file-level loser is
         // not a column. Winning alone, never Participates — a disabled copy still columns.
         // Fail-open on a copy the load order lacks.
         var pluginWinning = copies.ToDictionary(c => ColumnKey.Of(c.Name, c.Origin), c => c.Winning);
@@ -97,17 +97,17 @@ public sealed class RecordQueryService(
             .Select(e => ToRecordDetail(e.Effective))
             .ToList();
 
-        // ADR-0036: keyed by the compound column identity — with a second copy of one filename
+        // ADR-0012: keyed by the compound column identity — with a second copy of one filename
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
         var pluginMasters = reads.OpenedCopies.ToDictionary(
             kv => ColumnKey.Of(kv.Key.Name, kv.Key.Origin!), kv => kv.Value.Masters);
-        // ADR-0035: a non-participating plugin's override is indexed and browsable but
+        // ADR-0013: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
         var pluginParticipates = copies.ToDictionary(
             c => ColumnKey.Of(c.Name, c.Origin), c => c.Registration.Participates);
         var (classification, conflictAll) =
             ClassifyStack(committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
-        // ADR-0036: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
+        // ADR-0012: PluginStates is keyed by ColumnKey.Of, so a bare-plugin lookup would miss for
         // any non-Data-origin column and silently default ConflictThis to OnlyOne.
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(

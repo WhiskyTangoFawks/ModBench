@@ -1,4 +1,4 @@
-/** ADR-0044: the one path by which the Plugin load order reaches Editing, coalesced — a burst of
+/** ADR-0013: the one path by which the Plugin load order reaches Editing, coalesced — a burst of
  *  triggers becomes one snapshot, and a request arriving mid-PUT becomes exactly one more PUT
  *  after it, never a race of two. */
 export interface LoadOrderSyncDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown, TFailure = unknown>
@@ -107,7 +107,7 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
     try {
       await deps.withProgress(async () => { outcome = await sequencer.reconcile(); });
     } catch (e) {
-      // The sequencer's own steps report their failures (ADR-0026's explicit-action tier lives
+      // The sequencer's own steps report their failures (ADR-0019's explicit-action tier lives
       // there); this is the backstop so a throw can never wedge every request queued after it.
       deps.log(`[loadOrderSync] sending the load order snapshot threw: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -214,8 +214,8 @@ export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown,
       deps.logInfo('[loadOrderSync] the load order snapshot was abandoned; leaving the one that replaced it alone');
       return 'abandoned';
     }
-    // ADR-0044: a failed PUT tore nothing down — the backend still holds whatever it held — so
-    // the view stays as it is, the error already surfaced (ADR-0026 "explicit action failed").
+    // ADR-0013: a failed PUT tore nothing down — the backend still holds whatever it held — so
+    // the view stays as it is, the error already surfaced (ADR-0019 "explicit action failed").
     if (result.outcome === 'failed') return 'failed';
     await deps.syncFilterState();
     await deps.applyReconciled(result.failures, treeProgress.lastTotalPlugins());

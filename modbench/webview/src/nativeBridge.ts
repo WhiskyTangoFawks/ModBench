@@ -57,7 +57,7 @@ export function copyToClipboard(value: string): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value });
 }
 
-// ADR-0041: fire-and-forget — the answer to "what does the record say now" is a re-read, never
+// ADR-0007: fire-and-forget — the answer to "what does the record say now" is a re-read, never
 // this call's return. Refusals surface as a native notification, so this crosses the bridge, not
 // the backend.
 export function editField(formKey: string, plugin: string, origin: string, envelope: RecordEditEnvelope): void {

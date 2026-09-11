@@ -149,7 +149,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         Assert.Equal(Origin, pending.GetProperty("origin").GetString());
     }
 
-    // ADR-0046: one watcher per mod routes all three signals — a hand edit under source, a commit
+    // ADR-0014: one watcher per mod routes all three signals — a hand edit under source, a commit
     // moving HEAD, and a plugin overwrite — to the seams they reach today, in one pass over the
     // same temporary tracked mod.
     [Fact]

@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>Wired the way the composition root wires it (ADR-0001); what is asserted is what the
+/// <summary>Wired the way the composition root wires it (ADR-0009); what is asserted is what the
 /// load order answers afterwards, while the backend runs, with no reload anywhere.</summary>
 public sealed class BinaryChangeApplierTests
 {
@@ -63,7 +63,7 @@ public sealed class BinaryChangeApplierTests
         Assert.Contains("ArrivedExternally", EditorIds(fixture, fixture.Plugin));
     }
 
-    // ADR-0046: the plugin watcher's own re-index is exactly "whenever the plugin watcher
+    // ADR-0014: the plugin watcher's own re-index is exactly "whenever the plugin watcher
     // re-indexes a binary" — the trigger this notification names.
     [Fact]
     public void AnUntrackedPluginChangedMidReconcile_PublishesPluginChanged()

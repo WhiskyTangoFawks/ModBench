@@ -1,7 +1,7 @@
 namespace MEditService.Core.Source;
 
 /// <summary>An unanswered external-change question refuses every write to the mod, compile included
-/// (ADR-0041 amendment). The marker caches the classifier's verdict, which alone decides: a present
+/// (ADR-0003). The marker caches the classifier's verdict, which alone decides: a present
 /// marker is classified again, and nothing found clears it.</summary>
 public static class ExternalChangeDeferral
 {

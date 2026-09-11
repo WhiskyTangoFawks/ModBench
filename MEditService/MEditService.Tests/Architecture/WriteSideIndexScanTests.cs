@@ -3,7 +3,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>The write side names no Index type (ADR-0046 invariants 1, 4, 5 and 7): it writes
+/// <summary>The write side names no Index type (ADR-0015 invariants 1, 2, 3 and 5): it writes
 /// source text, and what the Index holds is asked for on the read side. Counted against an
 /// allowlist that stays empty.</summary>
 public sealed class WriteSideIndexScanTests

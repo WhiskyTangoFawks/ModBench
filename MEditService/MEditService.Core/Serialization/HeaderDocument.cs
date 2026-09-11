@@ -9,7 +9,7 @@ using Noggog.WorkEngine;
 namespace MEditService.Core.Serialization;
 
 /// <summary>The header's source document — the whole-mod door's root <c>RecordData.json</c>
-/// (ADR-0041) — produced and read back through that same door, never a second implementation of
+/// (ADR-0007) — produced and read back through that same door, never a second implementation of
 /// its dialect, without touching the disk.</summary>
 internal static class HeaderDocument
 {

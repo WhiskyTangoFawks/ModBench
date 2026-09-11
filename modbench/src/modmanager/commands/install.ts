@@ -1,4 +1,4 @@
-// A new target is one rename (ADR-0047 point 6); an upgrade is never renamed away, so its
+// A new target is one rename (ADR-0015 invariant 2); an upgrade is never renamed away, so its
 // identity and every watcher armed on it survive the release.
 
 import { access, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile, cp } from 'node:fs/promises';

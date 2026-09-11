@@ -72,13 +72,13 @@ export type DownloadsTreeNode = DownloadNode | ErrorNode;
 export interface DownloadsProviderOptions {
   instanceRoot: string;
   /** downloads/ rows, `.meta` sidecars folded in — the row provider's only row input
-   *  (ADR-0047). */
+   *  (ADR-0015). */
   instance: InstanceView;
   reporter?: Reporter;
 }
 
 /** Flat: downloads have no grouping or reorder concept, so every row is a leaf. One row per
- *  archive, read entirely from the Instance value (ADR-0047); this provider owns no cache or
+ *  archive, read entirely from the Instance value (ADR-0015); this provider owns no cache or
  *  watcher over downloads/ itself. */
 export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsTreeNode>, vscode.Disposable {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<DownloadsTreeNode | undefined>();

@@ -12,7 +12,7 @@ internal static class ParseFailedDocument
     internal static byte[] For(IMajorRecordGetter record, string? editorId, GameRelease release)
     {
         var members = new List<string>();
-        // ADR-0041's discriminator policy, from the same RecordTypeDispatch fact the codec's two
+        // ADR-0007's discriminator policy, from the same RecordTypeDispatch fact the codec's two
         // directions agree on: a path-ambiguous document leads with its concrete type, and without
         // it the reader has nothing to dispatch on.
         var dispatch = RecordTypeDispatch.For(release);

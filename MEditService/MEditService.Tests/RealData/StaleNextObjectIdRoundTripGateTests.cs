@@ -109,7 +109,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         return (overlay.ModHeader.Stats.NextFormID, overlay.ModHeader.Stats.NumRecords);
     }
 
-    // Empty master stubs: compile orders the master list from the load order (ADR-0038), which needs
+    // Empty master stubs: compile orders the master list from the load order (ADR-0008), which needs
     // the names present, not their content.
     private sealed class TrackedScratch : IDisposable
     {

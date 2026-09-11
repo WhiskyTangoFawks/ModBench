@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046: a renumber writes trees and nothing else, so what the Index serves afterwards
+/// <summary>ADR-0014: a renumber writes trees and nothing else, so what the Index serves afterwards
 /// is what a projection of those trees made of it. Read here, never in the renumber suites.</summary>
 public sealed class IndexAfterARenumberTests
 {
@@ -101,7 +101,7 @@ public sealed class IndexAfterARenumberTests
         Assert.Contains(listing.Items, r => r.FormKey == result.NewFormKey);
     }
 
-    // ADR-0045: the referencer's rewrite is rolled back with everything else, so a filter
+    // ADR-0007: the referencer's rewrite is rolled back with everything else, so a filter
     // re-materialized after the failure shows the restored tree.
     [Fact]
     public void AfterARolledBackRenumber_AFilterOverTheReferenceGraphStillMatchesNothing()
@@ -128,7 +128,7 @@ public sealed class IndexAfterARenumberTests
             Assert.Contains("back as it was", ex.Message, StringComparison.Ordinal);
             Assert.DoesNotContain(RenumberTwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
 
-            // ADR-0045's path rule, asked of the one fault here that is a genuine OS error: the message
+            // ADR-0007's path rule, asked of the one fault here that is a genuine OS error: the message
             // names the path it failed on, and no absolute path reaches the author.
             Assert.DoesNotContain(two.TargetModFolder, ex.Message, StringComparison.Ordinal);
             Assert.Contains(

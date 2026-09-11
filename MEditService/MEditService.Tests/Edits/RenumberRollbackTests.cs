@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>A renumber that fails part-way leaves the working trees as they were (ADR-0045). The
+/// <summary>A renumber that fails part-way leaves the working trees as they were (ADR-0007). The
 /// faults are real I/O: its second phase writes files and nothing else.</summary>
 public sealed class RenumberRollbackTests
 {

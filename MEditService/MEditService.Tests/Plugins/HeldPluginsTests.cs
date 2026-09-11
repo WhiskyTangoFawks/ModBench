@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0044: `HeldPlugins` is the held set of plugin copies — opened one at a time from the copies a
+// ADR-0013: `HeldPlugins` is the held set of plugin copies — opened one at a time from the copies a
 // snapshot registers, and mutated in place as copies arrive, leave, or move.
 public sealed class HeldPluginsTests
 {

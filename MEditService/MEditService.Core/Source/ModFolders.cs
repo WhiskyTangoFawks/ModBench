@@ -3,7 +3,7 @@ using MEditService.Core.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>The one place the mod-folder rule for a plugin lives. Nothing is cached: tracked is the
-/// presence of <c>.git</c> (ADR-0041), re-derived every call because MO2 can replace the folder at
+/// presence of <c>.git</c> (ADR-0007), re-derived every call because MO2 can replace the folder at
 /// any time.</summary>
 public static class ModFolders
 {
@@ -35,7 +35,7 @@ public static class ModFolders
     public static IReadOnlyList<RegisteredCopy> PluginsOfOrigin(LoadOrder loadOrder, string origin) =>
         [.. loadOrder.Copies.Where(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))];
 
-    /// <summary>"Editing requires tracking; viewing never does" (ADR-0041).</summary>
+    /// <summary>"Editing requires tracking; viewing never does" (ADR-0007).</summary>
     public static bool IsEditable(string origin, string pluginPath) =>
         Of(origin, pluginPath) is { } modFolder && SourceRepository.IsTracked(modFolder);
 

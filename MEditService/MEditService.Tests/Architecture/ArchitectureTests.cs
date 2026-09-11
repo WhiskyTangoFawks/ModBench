@@ -21,7 +21,7 @@ public sealed class ArchitectureTests
         (typeof(RecordEditRequest).Assembly, "MEditService.Api"),
     ];
 
-    // ADR-0036: a bare filename compiles and passes single-copy tests, then misidentifies.
+    // ADR-0012: a bare filename compiles and passes single-copy tests, then misidentifies.
     [Fact]
     public void PluginIdentity_TravelsAsNameAndOriginTogether_OnEverySeamMemberAndDto()
     {
@@ -61,7 +61,7 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0001: the index validates itself by content hash; an mtime shortcut passes the
+    // ADR-0009: the index validates itself by content hash; an mtime shortcut passes the
     // persistence tests, which rewrite files, and then trusts a file another tool touched.
     [Fact]
     public void DiskDerivedState_NeverReadsLastWriteTime()
@@ -101,13 +101,13 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0044: PUT /load-order is the only arrival; a second reconciler makes the Index's Status
+    // ADR-0013: PUT /load-order is the only arrival; a second reconciler makes the Index's Status
     // lie, and a writer outside the API makes the shared kernel disagree with the index.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheApiEndpoints()
     {
         var root = SolutionDirectory();
-        // The reconcile request is the load-order endpoint's alone. ADR-0041's created copy is
+        // The reconcile request is the load-order endpoint's alone. ADR-0007's created copy is
         // registered by the create endpoint and reaches the Index through the next snapshot, so
         // create writes the kernel and never reconciles.
         string[] reconcilers = ["LoadOrderEndpoints.cs"];
@@ -132,7 +132,7 @@ public sealed class ArchitectureTests
 
     private static readonly string LoadOrderFolder = Path.Combine("MEditService.Core", "Plugins");
 
-    // ADR-0046 invariant 11: the load order value is built from what Mod Management sent. An
+    // ADR-0013 invariant 4: the load order value is built from what Mod Management sent. An
     // adapter type here is a disk read on its construction path.
     [Fact]
     public void TheLoadOrderValue_NamesNoPluginAdapterType()
@@ -213,7 +213,7 @@ public sealed class ArchitectureTests
             DeadAllowances(["Applies.cs", "Registers.cs", "Stale.cs"], ["P/Applies.cs"], ["P/Registers.cs"]));
     }
 
-    // ADR-0046 invariant 3: Queries are the Index's only readers, so a member no query service
+    // ADR-0014 invariant 3: Queries are the Index's only readers, so a member no query service
     // calls is a widening nobody asked for — and every implementer, the projector and each query
     // test's stub alike, pays for it.
     [Fact]
@@ -233,7 +233,7 @@ public sealed class ArchitectureTests
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
-    // ADR-0046 invariant 11: one load order, the kernel's. An Index that hands one out is a second
+    // ADR-0013 invariant 4: one load order, the kernel's. An Index that hands one out is a second
     // answer to "which copy wins". As a parameter it is the snapshot going in, the allowed
     // direction.
     [Fact]
@@ -277,7 +277,7 @@ public sealed class ArchitectureTests
     private static bool IsALoadOrder(Type? type) =>
         type is not null && (type == typeof(LoadOrder) || type == typeof(LoadOrderHolder));
 
-    // ADR-0044: participation is derived — enabled, winning, and named by a plugins.txt line — and
+    // ADR-0013: participation is derived — enabled, winning, and named by a plugins.txt line — and
     // the load order value is the one place that rule is spelled. A second spelling is how two
     // answers start disagreeing.
     [Fact]
@@ -314,8 +314,8 @@ public sealed class ArchitectureTests
     // The codec asks the factory for the release's mod type; nothing else opens or mints a mod.
     private static readonly string[] ModFactoryCallers = ["MutagenPluginAdapter.cs", "RecordTypeDispatch.cs"];
 
-    // ADR-0032 rule 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
-    // where ADR-0008's backup-first discipline then sits.
+    // ADR-0005 rule 2: bytes become a mod, and a mod becomes bytes, in the adapter alone — which is
+    // where the backup-first discipline then sits.
     [Fact]
     public void APluginBinary_IsOpenedAndWrittenOnlyByThePluginAdapter()
     {
@@ -370,7 +370,7 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0008: the adapter's write verb lays bytes down with neither backup nor rename, so who
+    // The adapter's write verb lays bytes down with neither backup nor rename, so who
     // calls it is the whole of the backup discipline.
     [Fact]
     public void ThePluginAdapterWriteVerb_IsCalledOnlyByThePluginWriterAndTheGesturesWithNothingToBackUp()
@@ -387,7 +387,7 @@ public sealed class ArchitectureTests
 
         var offenders = Unallowed(writes, writers).ToList();
         Assert.True(offenders.Count == 0,
-            "ADR-0008: a plugin binary is backed up before it is written, and the adapter's write verb makes "
+            "A plugin binary is backed up before it is written, and the adapter's write verb makes "
             + "no backup. Only PluginWriter (which backs up first), PluginTrees (which writes a scratch "
             + "copy) and the create gesture (which writes a file with no existing binary) may call it. It "
             + "is called in:\n" + string.Join("\n", offenders));

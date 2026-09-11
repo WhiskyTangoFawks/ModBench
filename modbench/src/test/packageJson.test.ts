@@ -69,7 +69,7 @@ describe('package.json Toolbox view', () => {
 
 // VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
 // only available way to say Referenced By is sub-functionality of the one Plugins tree, not a
-// sibling of equal standing (ADR-0035).
+// sibling of equal standing (ADR-0017).
 describe('package.json "Plugins - …" naming for Referenced By', () => {
   it('names the Referenced By view "Plugins - Referenced By"', () => {
     const referencedByViews = pkg.contributes.views.modbenchReferencedBy as { id: string; name: string }[];
@@ -345,7 +345,7 @@ describe('package.json command titles and categories', () => {
     'modbench.array.remove',
     'modbench.array.moveUp',
     'modbench.array.moveDown',
-    // ADR-0039: each needs the clicked cell's or VMAD row's own identity from its
+    // ADR-0018: each needs the clicked cell's or VMAD row's own identity from its
     // data-vscode-context — no ambient fallback, same posture as the array ops above.
     'modbench.field.openExtended',
     'modbench.downloads.install',
@@ -423,7 +423,7 @@ describe('package.json record-row context menu — renumber gated to native trac
   // lookup cannot read it; it is pinned by exact equality below.
 });
 
-// Origin drift is absorbed automatically by the reconcile verb (ADR-0044) — there is nothing for
+// Origin drift is absorbed automatically by the reconcile verb (ADR-0013) — there is nothing for
 // a plugin row to be, or offer, beyond the two contextValues `PluginsTreeProvider` itself produces
 // (`plugin`, `pluginImplicit`); there is no manual re-read gesture.
 describe('package.json plugin-row context menu', () => {
@@ -443,7 +443,7 @@ describe('package.json plugin-row context menu', () => {
   });
 });
 
-// ADR-0041: the Track gesture's own menu contribution.
+// ADR-0007: the Track gesture's own menu contribution.
 describe('package.json per-plugin Track', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
 
@@ -453,7 +453,7 @@ describe('package.json per-plugin Track', () => {
     expect(entry!.group).toBe('pluginActions@2');
   });
 
-  // No icon: Track is a one-time, deliberately weighty gesture (ADR-0041: "deliberate friction"),
+  // No icon: Track is a one-time, deliberately weighty gesture (ADR-0007: "deliberate friction"),
   // not a quick inline action.
   it('never appears as an inline or navigation icon', () => {
     const inline = contextMenus().filter((e) => e.command === 'modbench.pluginListTree.track' && e.group === 'inline');

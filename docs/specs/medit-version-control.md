@@ -4,7 +4,7 @@
 external-change handling, the editor gesture inventory, the lifecycle gestures,
 record-row Modified/Added badges, crash recovery, and New Plugin have all shipped.
 This is the Track/Compile surface spec of the git-native model
-([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)).
+([ADR-0007](../adr/0007-plugin-edits-are-git-working-tree-changes.md)).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **tracked mods**
 (glossary: Tracked mod, Track, Source, Edit branch, Baseline, Save & Compile, Working-tree
@@ -12,13 +12,13 @@ change — [CONTEXT.md](../../CONTEXT.md)). "Tracked mod" is deliberately admitt
 vocabulary: tracking is a property of the mod *folder* (where `.git` lives), while every
 other gesture here operates on plugins and records.
 
-**The UX reference is git and VS Code, not xEdit** (ADR-0034's recorded exception — xEdit
+**The UX reference is git and VS Code, not xEdit** (ADR-0018's recorded exception — xEdit
 has no staged-edit model). Where a gesture exists in VS Code's own git experience, this
 surface copies it; Modbench invents nothing the platform already renders.
 
 ## Problem Statement
 
-ADR-0041 makes editing a git-native workflow: a mod is tracked by an explicit gesture, its
+ADR-0007 makes editing a git-native workflow: a mod is tracked by an explicit gesture, its
 records live as per-record JSON text in an in-folder repository, edits are working-tree
 changes, and the plugin binary is a compiled artifact. That model needs a user-facing
 surface for exactly four moments: deciding to track, reviewing and committing changes,
@@ -41,7 +41,7 @@ review work:
 ## The workflows
 
 The point of this surface is to express mod editing in terms of git workflows that
-already exist. Nothing below is enforced, stored, or branched on (ADR-0041:
+already exist. Nothing below is enforced, stored, or branched on (ADR-0007:
 Track is uniform; Authored vs Modified is workflow, not a mode) — each is an ordinary git
 topology the user drives with ordinary git gestures, and drifting between them is just
 using git.
@@ -111,8 +111,8 @@ using git.
   gesture (`modbench.modList.newEmptyMod`, [mods.md](mods.md)), then targets it as an
   existing mod.
 - **Creation is Editing's job, participation is Mod Management's** (an implication of
-  ADR-0035 — the two contexts still never share a payload beyond origin + path,
-  ADR-0036). The backend writes the binary, Tracks the destination under the **Edits** preset
+  CONTEXT.md — the two contexts still never share a payload beyond origin + path,
+  ADR-0012). The backend writes the binary, Tracks the destination under the **Edits** preset
   if it is not already tracked (silently — no second preset prompt; the destination QuickPick's
   one-keystroke framing rules out one, and Edits is Track's own default. A user wanting a
   different preset deletes `.git` and re-Tracks by hand, the same gesture Track always offered),
@@ -124,7 +124,7 @@ using git.
   its index entry are already real.
 - **A created plugin is ordinary working-tree text on its destination mod's edit branch** — no
   Authored mode, no provenance flag. "Authored" is what merging to `main` at will already means
-  (ADR-0041); a created plugin arrives no differently than any other tracked edit.
+  (ADR-0007); a created plugin arrives no differently than any other tracked edit.
 
 ### Track
 
@@ -133,7 +133,7 @@ using git.
 - **Preset QuickPick**: **Edits** (default — everything ignored except `source/**`, the
   one root folder holding every tracked plugin's own tree)
   or **Everything** (authoring — assets tracked too). Plugin binaries are ignored in both;
-  the `.gitignore` is generated once and then owned by the user (ADR-0041).
+  the `.gitignore` is generated once and then owned by the user (ADR-0007).
 - **Progress**: eager, complete serialization is progress-reported (typically sub-second;
   ~21 s worst-case mega-plugin). On completion the repo exists with the pristine baseline
   on `main` (provenance trailers: `Upstream-Version`, `Binary-SHA256`, `Meta-SHA256`, all
@@ -146,7 +146,7 @@ using git.
   named ref). No other gesture creates or deletes the folder or a plugin's tree inside
   it — untracking is deleting `.git` by hand, which leaves the folder exactly where it
   is (never assume exclusive ownership); there is no separate cleanup or migration step.
-- **Track is uniform** (ADR-0041): no Authored/Modified mode is chosen or
+- **Track is uniform** (ADR-0007): no Authored/Modified mode is chosen or
   stored. "Authored" is the workflow of merging into `main` at will.
 - **Untrack is not a command** — deleting the `.git` folder is the gesture (git itself
   has no registry either). The mod reads as untracked at the next look, no residue, no
@@ -171,8 +171,8 @@ using git.
   (a failed prepare never touches the real `Strings/` files) and moved into place only by the
   same commit step that renames the plugin. The move step is per-file, not a cross-file
   transaction — a crash mid-commit can still pair a committed plugin with partially-updated
-  strings, a documented residual gap (full atomicity was rejected as overengineering in
-  ADR-0008's single-file case already). No `.bak` is taken for strings files; ADR-0008's
+  strings, a documented residual gap (full atomicity was rejected as overengineering for
+  the single-file case already). No `.bak` is taken for strings files; the
   backup discipline stays scoped to the target plugin.
 
 ### Review & commit: the native Source Control panel
@@ -184,14 +184,14 @@ using git.
   provider, resource groups, decorations, or diff commands of its own here — the retired
   aggregate SCM provider has no shim.
 - Everything the panel offers is git's own: staging, commit, discard, branch switching,
-  history. Commit is ungated (ADR-0041) — no closure checks, no prompts, no vocabulary of
+  history. Commit is ungated (ADR-0007) — no closure checks, no prompts, no vocabulary of
   ours on the panel.
 - Source diffs are readable by construction: canonical JSON formatting (stable key
   order, fixed indentation) means a one-field edit is a one-line diff.
 - **A structural edit is as small in the panel as it is in meaning.** Deleting one record
   from an ordered container shows **one deletion and one changed parent document** — never
   a rename of every later sibling. Child files are named by identity alone; their order is
-  a list in the parent's own document (ADR-0042 decision 4), so an insert is one file plus
+  a list in the parent's own document (ADR-0006 decision 4), so an insert is one file plus
   one line and a reorder is a parent-document diff on its own. This is a property of the
   format, not of the panel: it holds the same in the terminal, in a merge, and in a
   reviewer's diff. The superseded scheme numbered child filenames, which made a
@@ -229,7 +229,7 @@ using git.
   can be foreseen is a typed refusal preceding the first write (an untracked referencer,
   an override, a collision, FormKey-space exhaustion, a reference the typed remap cannot
   rewrite), and a failure in the writes themselves restores every affected working tree
-  rather than leaving partial damage to be reverted by hand (ADR-0045).
+  rather than leaving partial damage to be reverted by hand (ADR-0007).
 - Untracked plugins are hard read-only with signposting (`Modbench: Track…`, or the
   patch-plugin path for vanilla masters).
 
@@ -273,14 +273,14 @@ using git.
   backend being unreachable — reports a clear Modbench-authored
   error and ends quietly, never VS Code's raw "fetch failed" toast.
 - **Behavior**: serialize the plugin's working tree to the binary
-  through the journaled pipeline (timestamped `.bak` per ADR-0008; per-repo `.git` journal
+  through the journaled pipeline (timestamped `.bak`; per-repo `.git` journal
   markers, batch of one, `UnfinishedBatch` readable). Masters are derived
   from content and written in current plugin load order; container structure is assembled
   from the index (`container_child` + placement). Semantic breakage (dangling
   FormLinks and kin) compiles *successfully* with diagnostics published to the Problems
   panel against the source files; only structurally unemittable states refuse, as a typed
   message naming the reason — including states that cannot be emitted without changing
-  FormKeys (no silent renumber; ADR-0041).
+  FormKeys (no silent renumber; ADR-0007).
 - **Compile at `main`**: compiling at ref `main` (no checkout — the edit branch and its
   dirt are untouched) writes the binary as `main` has it, behind one confirmation. In the
   Modified workflow that is the pristine restore; in the Authored workflow it rebuilds
@@ -309,7 +309,7 @@ to Crash recovery.
   that no version change was observed.
 - **Buttons**: `Commit to main as new baseline` / `Apply to working tree on edit` / Esc.
   Order carries the default — VS Code's modal focuses the first — never a separate flag
-  (ADR-0041): baseline leads when the tell fired (meta.ini's version moved against the
+  (ADR-0007): baseline leads when the tell fired (meta.ini's version moved against the
   baseline trailer), apply leads otherwise; the human always answers. The dialog is uniform
   across workflows: for an authored mod's own xEdit load order the tell doesn't fire and the
   default is already `Apply to working tree on edit`.
@@ -344,7 +344,7 @@ to Crash recovery.
   bytes restored by hand, a re-Track or a later settle that finds nothing end the question without
   an answer at the next write, settle or load.
 - A destroyed repo (MO2 Replace install) is **not** this dialog — the mod reads as
-  untracked, per ADR-0041.
+  untracked, per ADR-0007.
 
 ### Crash recovery
 
@@ -359,10 +359,10 @@ read failure a running load order would already have hit once. An unfinished `Co
 one event, checked at the classifier itself before any hash compare. A tracked plugin's binary
 that cannot be read at all (deleted, moved, or torn, while the mod folder and its repo
 survive — distinct from the repo itself being destroyed, which reads as untracked per
-ADR-0041 and is a different path entirely) is caught directly, with nothing to classify
+ADR-0007 and is a different path entirely) is caught directly, with nothing to classify
 against. Both surface identically to the extension as `CrashRepairOffer`s riding
 `PUT /load-order`'s own response (`LoadOrderResponse.CrashRepairOffers`,
-the same structured-failures posture `Failures` already has, ADR-0026) — no second endpoint,
+the same structured-failures posture `Failures` already has, ADR-0019) — no second endpoint,
 no poller: a reconcile already observes both triggers.
 
 One native modal per offer, sequential, run once right after a completed load settles the
@@ -389,9 +389,9 @@ plugins are never probed at all.
   byte-equality invariant depends on it); identity fallback and `commit.gpgsign` handling
   are the repo layer's own decisions.
 - **`meta.ini` is a source, never content**: read for trailer values at baseline moments,
-  never committed (ADR-0041 — never track a file that changes for non-content
+  never committed (ADR-0007 — never track a file that changes for non-content
   reasons).
-- **No list carries order, and hand edits are ordinary edits** (ADR-0042 decision 4). A
+- **No list carries order, and hand edits are ordinary edits** (ADR-0006 decision 4). A
   flat group's or block level's child is a file or directory named by identity and never
   position, and nothing records the order: the reader's directory enumeration decides it.
   **Deleting a child file is a deletion** and **adding one is an addition**; the git-native
@@ -419,7 +419,7 @@ plugins are never probed at all.
   Mutagen-free) compares the original and recompiled binaries' subrecord signatures per record;
   any signature occurring fewer times in the rewrite is refused naming the record type, FormID
   and dropped signature(s) (more occurrences — a canonical marker insertion — is not a refusal).
-  One exemption: a TES4 record's `MAST`/`DATA` pair dropping is ADR-0038's sanctioned
+  One exemption: a TES4 record's `MAST`/`DATA` pair dropping is ADR-0008's sanctioned
   master-list pruning, not a loss — Mutagen unconditionally re-derives the header's master list
   from live content on every write, so this exact signature pair is excluded from the check (72%
   of all real Track refusals in the one available real-world corpus, before this exemption). The
@@ -437,7 +437,7 @@ plugins are never probed at all.
   tracked mods (including the mega fixture) measured for the steady-state
   `openRepository` cost.
 
-### ADR-0041 gates — standing state
+### ADR-0007 gates — standing state
 
 - **Filter probe verdict** — a real-corpus
   probe found the generated `json_extract` views comfortably fast once the filter is
@@ -467,6 +467,6 @@ plugins are never probed at all.
 
 ## Further Notes
 
-- ADR-0002 stands amended for tracked mods only: text is the working source, the binary
+- ADR-0006 stands for tracked mods: text is the working source, the binary
   remains the interchange truth with external tools — which is exactly why the dialog
   exists.

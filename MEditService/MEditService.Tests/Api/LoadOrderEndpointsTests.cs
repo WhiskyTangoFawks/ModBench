@@ -105,7 +105,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         Assert.Empty(ok.Value!.CrashRepairOffers);
     }
 
-    // ADR-0001 point 6: 423 names the cause, so a client can tell "another window holds this
+    // ADR-0009 point 5: 423 names the cause, so a client can tell "another window holds this
     // instance" from a failed reconcile (500) and from a superseded snapshot (409).
     [ForeignIndexHolderFact]
     public void PutLoadOrder_Answers423NamingTheOtherWindow_WhenAnotherProcessHoldsTheInstance()
@@ -127,7 +127,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         Assert.Equal(LoadOrderState.None, thisWindow.Status.State);
     }
 
-    // ADR-0046: the rebuild endpoint's own refusal, at the handler seam — mirrors PutLoadOrder's
+    // ADR-0014: the rebuild endpoint's own refusal, at the handler seam — mirrors PutLoadOrder's
     // 423 above.
     [ForeignIndexHolderFact]
     public void PostRebuildIndex_Answers423NamingTheOtherWindow_WhenAnotherProcessHoldsTheInstance()

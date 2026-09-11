@@ -50,7 +50,7 @@ describe('buildColumns', () => {
     expect(cols.map(c => c.override.plugin)).toEqual(['Fallout4.esm', 'Patch.esp', 'MyMod.esp']);
   });
 
-  // ADR-0036: two loaded copies sharing a filename are two columns with distinct keys — the
+  // ADR-0012: two loaded copies sharing a filename are two columns with distinct keys — the
   // compound (plugin, origin) identity is minted here, once, for every consumer.
   it('keys same-filename columns by compound identity', () => {
     const cols = buildColumns([
@@ -66,7 +66,7 @@ describe('buildColumns', () => {
   });
 });
 
-// ADR-0044: `immutableSet` alone can't tell a vanilla master from a copy the load order does
+// ADR-0013: `immutableSet` alone can't tell a vanilla master from a copy the load order does
 // not name, and the header needs both facts to word the tooltip and decide whether to dim.
 describe('columnStatus', () => {
   it('is "tracked" for a mutable, tracked column, regardless of inLoadOrder', () => {
@@ -82,7 +82,7 @@ describe('columnStatus', () => {
     expect(columnStatus(true, false)).toBe('notInLoadOrder');
   });
 
-  // ADR-0041: editing requires tracking, viewing never does. This status earns its own value
+  // ADR-0007: editing requires tracking, viewing never does. This status earns its own value
   // because each names a different way out, and offering the wrong one is worse than none.
   it('is "untracked" for an otherwise editable column whose mod has no repository', () => {
     expect(columnStatus(false, true, false)).toBe('untracked');
@@ -100,7 +100,7 @@ describe('columnStatus', () => {
   });
 });
 
-// ADR-0036: origin inline only on collision, computed from the overrides one compare response
+// ADR-0012: origin inline only on collision, computed from the overrides one compare response
 // already carries, never from the load order's whole plugin list.
 describe('collidingFilenames', () => {
   it('is empty when every override has a distinct filename', () => {
@@ -359,7 +359,7 @@ describe('headerCellContext', () => {
   });
 });
 
-// ADR-0039: the string-cell right-click menu's own identity — the extended editor's only
+// ADR-0018: the string-cell right-click menu's own identity — the extended editor's only
 // trigger, since no left-click gesture reaches it.
 describe('stringValueContext', () => {
   const NAME_PATH: PathHop[] = [{ kind: 'member', name: 'Name' }];

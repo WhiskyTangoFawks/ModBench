@@ -74,7 +74,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IReadOnlyList<string>? masterOrder = null,
         string? stringsFolder = null)
     {
-        // ADR-0042: the header's stored NextObjectID and record count are written as stored, never
+        // ADR-0006: the header's stored NextObjectID and record count are written as stored, never
         // recomputed. Mutagen's Iterate defaults re-derive both, and real override plugins routinely
         // carry stored values that match neither.
         var writeBuilder = plugin.BeginWrite
@@ -94,8 +94,8 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
                 encodingProvider: MutagenEncoding.Default));
         }
 
-        // ADR-0038: masters are ordered explicitly from the load order when supplied, so the written
-        // file's master list matches what xEdit shows (ADR-0034 at the file level).
+        // ADR-0008: masters are ordered explicitly from the load order when supplied, so the written
+        // file's master list matches what xEdit shows (ADR-0018 at the file level).
         if (masterOrder != null)
             writeBuilder = writeBuilder.WithMastersListOrdering(masterOrder.Select(name => ModKey.FromFileName(name)));
 

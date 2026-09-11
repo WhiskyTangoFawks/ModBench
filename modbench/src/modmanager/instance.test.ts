@@ -401,7 +401,7 @@ describe('Instance — a value that survives a bad read', () => {
   });
 
   // The failure a tree hears about before anything has landed, so its first render can settle on
-  // an error node instead of a spinner that never ends (ADR-0026).
+  // an error node instead of a spinner that never ends (ADR-0019).
   it('reports a failed first read to failure subscribers, holds the sequence at 0, and lands the next successful read at sequence 1', async () => {
     const { root, instance } = await realInstance();
     const ini = join(root, 'ModOrganizer.ini');
@@ -699,7 +699,7 @@ async function minimalInstance(): Promise<{
 
 describe('Instance — per-mod status and the overwrite count', () => {
   // The value carries no verdict about a plugin's declared masters at all: that fact is the
-  // backend's, reported per plugin on the Plugins rows (ADR-0021).
+  // backend's, reported per plugin on the Plugins rows (ADR-0016).
   it('has no status kind derived from a plugin file, whatever the plugin declares', async () => {
     const { root, instance } = await minimalInstance();
     await writeFile(join(root, 'mods', 'Consumer', 'Child.esp'), 'TES4 masters: NoSuchMaster.esm');
@@ -765,7 +765,7 @@ describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
   });
 });
 
-// ADR-0044: the snapshot the sync PUTs, read straight from the value rather than a fresh walk.
+// ADR-0013: the snapshot the sync PUTs, read straight from the value rather than a fresh walk.
 describe('loadOrderSnapshotOf', () => {
   const GAME_DIRECTORY = { root: '/game', dataFolder: '/game/Data' };
   const resolved: LoadOrderPlugin = { name: 'a.esp', path: '/mods/A/a.esp', origin: 'ModA', slot: 0, enabled: true, winning: true };
@@ -787,7 +787,7 @@ describe('loadOrderSnapshotOf', () => {
   });
 });
 
-// ADR-0044: the one path from a landed recompute to a PUT — no gesture, command or view calls
+// ADR-0013: the one path from a landed recompute to a PUT — no gesture, command or view calls
 // `request()` itself (asserted by a scan elsewhere); this is the sole wiring that does.
 describe('firstReadOf', () => {
   // The Instance as a tree constructed at any moment sees it: a failure may already be held.

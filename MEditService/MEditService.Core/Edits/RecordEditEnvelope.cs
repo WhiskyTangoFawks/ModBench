@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace MEditService.Core.Edits;
 
 /// <summary>One hop of a write's path: a member by name, an element by position, or an element by
-/// key in a keyed array (ADR-0032).</summary>
+/// key in a keyed array (ADR-0005).</summary>
 public sealed record PathHop(string Kind, string? Name = null, int? Index = null, string? Key = null)
 {
     public const string MemberKind = "member";
@@ -16,7 +16,7 @@ public sealed record PathHop(string Kind, string? Name = null, int? Index = null
     public static PathHop ByKey(string key) => new(KeyKind, Key: key);
 }
 
-/// <summary>The one write shape (ADR-0032): set puts the value at the path (null clears); add
+/// <summary>The one write shape (ADR-0005): set puts the value at the path (null clears); add
 /// appends the value, or the element's default; remove drops the element; move places it at the
 /// index the value names.</summary>
 public sealed record RecordEditEnvelope(string Op, IReadOnlyList<PathHop> Path, JsonElement? Value = null)

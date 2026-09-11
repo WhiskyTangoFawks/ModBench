@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>The write side's shared concerns (ADR-0046): target resolution, its pre-write refusals,
+/// <summary>The write side's shared concerns (ADR-0014): target resolution, its pre-write refusals,
 /// rename on an EditorID change, and FormKey allocation. An internal seam, tested through the
 /// gestures.</summary>
 internal sealed class WriteTargets(
@@ -30,7 +30,7 @@ internal sealed class WriteTargets(
     internal readonly record struct EditTarget(
         GameRelease Release, RecordIdentity Identity, SourceUnit Unit, SourceRepository Repository);
 
-    // The working tree is the only thing asked (ADR-0046 invariant 7): a second edit builds on the
+    // The working tree is the only thing asked (ADR-0015 invariant 5): a second edit builds on the
     // first, and no document comes from the Index. The copy gestures read the source instead.
     internal RecordEditResult? ResolveEditTarget(PluginKey plugin, string formKey, out EditTarget target)
     {
@@ -136,7 +136,7 @@ internal sealed class WriteTargets(
         (modFolder, repository) = (folder, opened);
 
         // Checked before anything else, so the source file is never reached. The marker caches the
-        // classifier's last verdict (ADR-0041 amendment): present means classify again, and a verdict
+        // classifier's last verdict (ADR-0003): present means classify again, and a verdict
         // of nothing drops it and lets the write through.
         if (ExternalChangeDeferral.Unanswered(folder) is not { } question) return null;
 
@@ -220,7 +220,7 @@ internal sealed class WriteTargets(
             own.Native, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
-    // Both refs from the tree alone (ADR-0046 invariant 7): the working tree, plus HEAD, whose IDs a
+    // Both refs from the tree alone (ADR-0015 invariant 5): the working tree, plus HEAD, whose IDs a
     // working-tree deletion has not freed until the plugin is compiled.
     internal Allocator AllocatorOver(SourceRepository repository, PluginKey plugin) =>
         AllocatorOver(
@@ -288,7 +288,7 @@ internal sealed class WriteTargets(
             eslContradiction);
     }
 
-    // The header document in the working tree is the truth (ADR-0041), so a flag flipped this session
+    // The header document in the working tree is the truth (ADR-0007), so a flag flipped this session
     // caps minting immediately.
     private static bool IsLightByRemovableFlag(SourceRepository repository, PluginKey plugin)
     {
@@ -380,7 +380,7 @@ internal sealed class WriteTargets(
             : null;
     }
 
-    // Parse status is not a precondition (ADR-0046 invariant 7): the codec is asked at edit time, and
+    // Parse status is not a precondition (ADR-0015 invariant 5): the codec is asked at edit time, and
     // its own words are the reason.
     internal static RecordEditResult RefuseUnreadable(string formKey, string why, string? spelled = null) =>
         new(false, RecordEditRefusal.RecordParseFailed,

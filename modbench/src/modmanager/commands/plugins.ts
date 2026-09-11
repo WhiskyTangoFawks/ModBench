@@ -1,5 +1,5 @@
 // Every write to a profile's plugins.txt. Commands return applied-or-refusal, never throw
-// (ADR-0046), and never read the Instance — its watcher is how a write comes back (ADR-0047).
+// (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -64,7 +64,7 @@ export function reorderPlugins(
 }
 
 /** The New Plugin gesture's line, enabled, at the winning end; the file already exists on disk
- *  by the time this runs (ADR-0041). Refuses a name that already has a line. */
+ *  by the time this runs (ADR-0007). Refuses a name that already has a line. */
 export function appendPlugin(
   instanceRoot: string, profile: string, pluginName: string,
 ): Promise<PluginsCommandResult> {
@@ -132,7 +132,7 @@ function providedPlugins(
 
 /** Answers the plugins this install loads with no plugins.txt line, or `undefined` when the
  *  backend that knows them cannot be reached. Only the backend can answer it: deriving the set
- *  here would mean parsing plugin headers (ADR-0021). */
+ *  here would mean parsing plugin headers (ADR-0016). */
 export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
 
 /** plugins.txt is the complete inventory the Plugins tree reads, so when disk disagrees the file

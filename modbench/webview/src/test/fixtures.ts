@@ -43,7 +43,7 @@ export interface PanelOpts {
 // `compare` is a thunk so a test that edits and reloads gets the new document on the second load.
 export function panelClient(compare: () => unknown, opts: PanelOpts = {}): RecordPanelClient {
   const plugins = opts.plugins ?? [];
-  // ADR-0036: compound keying, so a fake keyed by bare filename cannot pass a same-filename case.
+  // ADR-0012: compound keying, so a fake keyed by bare filename cannot pass a same-filename case.
   const columnsWhere = (p: (plugin: FixturePlugin) => boolean) =>
     new Set(plugins.filter(p).map(x => columnKey(x.name, x.origin ?? null)));
   return {
@@ -51,7 +51,7 @@ export function panelClient(compare: () => unknown, opts: PanelOpts = {}): Recor
       ok: true,
       result: compare(),
       immutableSet: columnsWhere(p => p.isImmutable === true),
-      // ADR-0035/ADR-0041: an unstated plugin is in the load order, and untracked.
+      // ADR-0013/ADR-0007: an unstated plugin is in the load order, and untracked.
       notInLoadOrderSet: columnsWhere(p => p.inLoadOrder === false),
       trackedSet: columnsWhere(p => p.isTracked === true),
       conflictsComputed: opts.conflictsComputed ?? true,

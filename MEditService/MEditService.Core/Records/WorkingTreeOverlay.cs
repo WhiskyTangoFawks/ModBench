@@ -149,7 +149,7 @@ internal sealed class WorkingTreeOverlay
     // about creation.
     private void InsertNewWorkingTreeRow(PluginKey key, string formKey, string recordType, string body)
     {
-        // ADR-0001: no load_order_idx to carry into the row; this check only refuses a plugin the
+        // ADR-0009: no load_order_idx to carry into the row; this check only refuses a plugin the
         // registration doesn't know.
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
@@ -255,7 +255,7 @@ internal sealed class WorkingTreeOverlay
     {
         if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
 
-        // ADR-0001: same refusal as InsertNewWorkingTreeRow's.
+        // ADR-0009: same refusal as InsertNewWorkingTreeRow's.
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
@@ -318,7 +318,7 @@ internal sealed class WorkingTreeOverlay
         cmd.ExecuteNonQuery();
     }
 
-    // ADR-0041: the extracted tables are derived from the document, never written independently of
+    // ADR-0007: the extracted tables are derived from the document, never written independently of
     // it. Rebuilt for one record through the same collectors ingest uses, so an edit cannot leave
     // derived answers describing bytes that are gone.
     private void RederiveIndexRowsForRecord(PluginKey key, string formKey, string body, ICollection<string> touched)

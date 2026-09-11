@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
 
-/// <summary>The read path answers from the index alone (ADR-0041): no surface reconstructs a second
+/// <summary>The read path answers from the index alone (ADR-0007): no surface reconstructs a second
 /// answer on the way out.</summary>
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class CommittedOnlyReadPathTests : IDisposable

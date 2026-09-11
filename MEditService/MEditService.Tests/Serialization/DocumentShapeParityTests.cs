@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Serialization.Newtonsoft;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>Zero normalization: codec bytes and the whole-mod door's file are the same bytes
-/// (ADR-0041). Linux only — that door indents with <c>Environment.NewLine</c>. Tests-side because
+/// (ADR-0007). Linux only — that door indents with <c>Environment.NewLine</c>. Tests-side because
 /// Core's guard keeps the mixin out.</summary>
 public sealed class DocumentShapeParityTests
 {

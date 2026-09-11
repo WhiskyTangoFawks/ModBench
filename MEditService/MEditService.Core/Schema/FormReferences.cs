@@ -7,7 +7,7 @@ namespace MEditService.Core.Schema;
 internal readonly record struct FormReference(string TargetFormKey, string FieldPath);
 
 /// <summary>Which FormKeys a document references, answered by the schema for its record type
-/// (ADR-0046 invariant 10). Over the document and the schema alone: no index, no plugin, no path
+/// (ADR-0014 invariant 5). Over the document and the schema alone: no index, no plugin, no path
 /// on disk.</summary>
 internal static class FormReferences
 {

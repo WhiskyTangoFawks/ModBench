@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046: the projection sequence advances exactly once per row-changing write,
+/// <summary>ADR-0014: the projection sequence advances exactly once per row-changing write,
 /// whichever collaborator did the writing, and never for a call that changed nothing.</summary>
 public sealed class ProjectionSequenceTests : IDisposable
 {

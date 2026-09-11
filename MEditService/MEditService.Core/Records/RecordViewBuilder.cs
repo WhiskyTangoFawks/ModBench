@@ -6,7 +6,7 @@ using MEditService.Core.Schema;
 namespace MEditService.Core.Records;
 
 /// <summary>One <c>json_extract</c> view per record type over <c>records</c>, for the SQL door only
-/// (ADR-0041). Scalar leaves only, decided by <see cref="ColumnSpec.IsViewable"/>: no column over
+/// (ADR-0007). Scalar leaves only, decided by <see cref="ColumnSpec.IsViewable"/>: no column over
 /// one with broken semantics.</summary>
 internal static class RecordViewBuilder
 {

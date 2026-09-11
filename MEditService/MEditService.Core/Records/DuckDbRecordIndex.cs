@@ -28,7 +28,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private static readonly string[] PlacedTableNames = ["refr", "achr"];
     private bool _filterActive;
 
-    // ADR-0041: the per-record source codec. Constructed rather than injected: it is stateless apart
+    // ADR-0007: the per-record source codec. Constructed rather than injected: it is stateless apart
     // from static reflection caches, and every construction site would otherwise learn a dependency
     // it has no say in.
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
@@ -55,7 +55,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private readonly TableDdlBuilder _ddlBuilder;
     private bool _recordTypeViewsCreated;
 
-    // ADR-0046: null in every test that does not care, so this stays additive over the 55 direct
+    // ADR-0014: null in every test that does not care, so this stays additive over the 55 direct
     // constructions across the suite.
     private readonly INotificationPublisher? _notifications;
 
@@ -73,7 +73,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _indexStore = new IndexStore(logger, databasePath);
     }
 
-    // The SQL door's per-type views, created on the first filter rather than at Initialize (ADR-0005).
+    // The SQL door's per-type views, created on the first filter rather than at Initialize (ADR-0011).
     internal void CreateRecordTypeViews()
     {
         if (_recordTypeViewsCreated) return;
@@ -108,7 +108,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             Unindex(key);
     }
 
-    // ADR-0046: the rebuild endpoint's whole job on an already-opened index — construction already
+    // ADR-0014: the rebuild endpoint's whole job on an already-opened index — construction already
     // refused (IndexHeldElsewhereException) if another process held the file, so nothing here
     // re-checks that. atLeastSequence keeps Sequence monotonic within this process across the drop.
     internal void RebuildEmpty(GameRelease release, long atLeastSequence)
@@ -135,7 +135,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.Announce"/>.</summary>
     public void Announce(Action publish) => _indexStore.Announce(publish);
 
-    // ADR-0036: origin is threaded into every per-plugin delete/upsert/append so a plugin is
+    // ADR-0012: origin is threaded into every per-plugin delete/upsert/append so a plugin is
     // identified by (origin, plugin) together, never filename alone.
     private void Index(
         IPluginDocuments documents, Registration registration, string plugin, string origin, string? filePath)
@@ -147,7 +147,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // deletes and appender flushes roll back together on Dispose-without-Commit.
         using var tx = Connection.BeginTransaction();
 
-        // One `registrations` row per indexed plugin, in the same transaction as its rows: ADR-0001
+        // One `registrations` row per indexed plugin, in the same transaction as its rows: ADR-0009
         // makes registration visibility, so rows arriving without it would answer nothing.
         UpsertRegistration(plugin, origin, registration);
         // And the disk claim these rows are about, replaced with them rather than beside them.
@@ -197,7 +197,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // ADR-0035: one row per registered copy. ADR-0044: participation is derived from the three facts
+    // ADR-0013: one row per registered copy. ADR-0013: participation is derived from the three facts
     // here by Registration.Participates, never a column.
     private void UpsertRegistration(string plugin, string origin, Registration registration)
     {
@@ -212,7 +212,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
-    // ADR-0001: registration is visibility. Every public relation is a view over its `mirror.` table
+    // ADR-0009: registration is visibility. Every public relation is a view over its `mirror.` table
     // joined to this row, so writing or deleting the row makes a plugin's rows answer or fall
     // silent; neither verb touches a data row.
     public void Register(PluginKey key, Registration registration)
@@ -279,7 +279,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // ADR-0044: replaced whole, never diffed. The rule that decided membership ran in the load order
+    // ADR-0013: replaced whole, never diffed. The rule that decided membership ran in the load order
     // value (Registration.Participates); nothing here re-asks it.
     private void ReplaceParticipating(IReadOnlyList<RegisteredCopy> participating)
     {
@@ -302,7 +302,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
         // Effective, one relation: the header is an ordinary `records` row, swept here by
-        // construction. form_lookup gets no branch: ADR-0031 keeps one lookup row per Effective
+        // construction. form_lookup gets no branch: ADR-0005 keeps one lookup row per Effective
         // record row, so `records`' winners are form_lookup's.
         InsertWinners(RecordRef.Effective, "SELECT form_key, plugin, origin FROM mirror.records");
 
@@ -349,7 +349,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             tx.Commit();
         }
 
-        // ADR-0046: after the commit, so a subscriber re-reading on receipt sees the rows this
+        // ADR-0014: after the commit, so a subscriber re-reading on receipt sees the rows this
         // names — embedded children included, since a record panel open on a placed ref inside a
         // refreshed cell has no other signal.
         _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
@@ -374,7 +374,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
         _workingTreeOverlay.MarkWorkingTreeOnly(key, formKeys);
         // Effective is untouched, but Head just lost a row per FormKey, which can promote the next
-        // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0001).
+        // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0009).
         UpdateWinnersCore();
         _indexStore.BumpSequence();
         tx.Commit();
@@ -492,11 +492,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             ResweepWinners();
         }
 
-        // ADR-0046: too many rows to name, exactly as the plugin watcher's own re-index reports it.
+        // ADR-0014: too many rows to name, exactly as the plugin watcher's own re-index reports it.
         _indexStore.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, Sequence)));
     }
 
-    // The three facts the copy's registration row carries (ADR-0044), read back for a re-ingest that
+    // The three facts the copy's registration row carries (ADR-0013), read back for a re-ingest that
     // must not change what the load order said about this copy.
     private Registration? RegistrationOf(PluginKey key)
     {
@@ -563,7 +563,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     internal void PublishRowsChanged(PluginKey key, IReadOnlyList<string> formKeys) =>
         _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
-    // ADR-0001's load-time check, asked of one copy: the stored hash against the bytes on disk. A
+    // ADR-0009's load-time check, asked of one copy: the stored hash against the bytes on disk. A
     // binary has no smaller unit, so a mismatch is a rebuild the caller owns.
     private ValidationReport ValidateAgainstBinary(PluginKey key)
     {
@@ -1032,7 +1032,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
             using var connection = owner.OpenRead();
 
-            // ADR-0041: the placed ref's base form comes out of the document rather than a `base`
+            // ADR-0007: the placed ref's base form comes out of the document rather than a `base`
             // column; json_extract_string unquotes the stored FormLink text, and a placed ref with no
             // base reads NULL.
             var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
@@ -1106,7 +1106,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 ReadWorkingTreeState(reader), reader.GetBoolean(8),
                 reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetBoolean(10));
 
-        // origin (ADR-0036): nullable and independent of plugin — a *filter*, not an identity field.
+        // origin (ADR-0012): nullable and independent of plugin — a *filter*, not an identity field.
         // Defaults to "no constraint" so a plugin-only or filter-less call returns every origin's rows.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, bool filterActive = false, string? origin = null,
@@ -1170,7 +1170,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
         private static List<ReferenceResult> GetReferences(DuckDBConnection connection, string targetFormKey)
         {
-            // ADR-0041: WorkingTreeOverlay keeps form_references rewritten as the working tree
+            // ADR-0007: WorkingTreeOverlay keeps form_references rewritten as the working tree
             // changes, so this already sees every edit without applying anything itself.
             const string sql = """
                 SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
@@ -1198,7 +1198,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return results;
         }
 
-        // ── Worldspace tree reads (ADR-0023) ────────────────────────────────────────
+        // ── Worldspace tree reads (ADR-0005) ────────────────────────────────────────
 
         private static PlacementRow? GetPlacement(DuckDBConnection connection, string formKey, string plugin, string origin)
         {
@@ -1323,7 +1323,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // The construction half of ReadDocumentFromBody, split out so the bulk read can build documents
     // from rows materialized before reading any. The fields are the document's own nodes at each
-    // column's path (ADR-0032): nothing is reconstituted.
+    // column's path (ADR-0005): nothing is reconstituted.
     private RecordDocument DocumentFromBody(
         string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
         string? editorId, string body, RecordTableSchema schema,

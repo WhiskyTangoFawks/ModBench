@@ -54,3 +54,4 @@ DevListStarfield/
 
 # Pinned Vale binary, fetched by .claude/skills/validate/install-vale.sh
 /tools/
+.scratch/

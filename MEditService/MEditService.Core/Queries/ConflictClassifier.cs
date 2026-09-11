@@ -11,9 +11,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 {
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    // resolveFormKey (ADR-0031): the O(1) lookup, batched once per Classify so every formKey leaf's
+    // resolveFormKey (ADR-0005): the O(1) lookup, batched once per Classify so every formKey leaf's
     // Resolutions is populated in this pass; null leaves Resolutions empty. pluginParticipates
-    // (ADR-0035) is keyed by ColumnKey.Of; null means every plugin participates.
+    // (ADR-0013) is keyed by ColumnKey.Of; null means every plugin participates.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
@@ -21,7 +21,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
-        // ADR-0035: a non-participating plugin's override never contributes to conflict
+        // ADR-0013: a non-participating plugin's override never contributes to conflict
         // classification — filtered out before OnlyOne/winner/diff computation below, not just
         // masked in the result, so it can't leak into pluginMasters/IsInjected either.
         conflictingRecords = ConflictRules.FilterParticipating(
@@ -57,7 +57,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
 
-        // ADR-0036: keyed by the compound column identity, not the bare plugin — two overrides
+        // ADR-0012: keyed by the compound column identity, not the bare plugin — two overrides
         // sharing a filename but differing in origin must land as two independent entries here,
         // not collide (ToDictionary would throw on a literal duplicate key).
         var pluginConflictThis = conflictingRecords.ToDictionary(
@@ -76,7 +76,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
     private const int MaxArrayChildCount = 500;
 
-    // MasterColumn (ADR-0036) is the compound ColumnKey.Of identity, so no plain-plugin comparison
+    // MasterColumn (ADR-0012) is the compound ColumnKey.Of identity, so no plain-plugin comparison
     // can match the wrong column.
     private sealed record DiffContext(
         string MasterColumn,
@@ -130,7 +130,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var diffs = new List<FieldDiff>();
         foreach (var member in memberMeta.Values)
         {
-            // A Partial Form override's fields are excluded as if null (ADR-0016), so they fall
+            // A Partial Form override's fields are excluded as if null (ADR-0018), so they fall
             // through to the previous non-partial override with no new state.
             var values = records.ToDictionary(Column, r => r.IsPartialForm ? null : MemberValue(r, member.Name));
             if (values.Values.All(v => v == null)) continue;
@@ -204,7 +204,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             shapes, absentMeansDefault: false, ctx))];
     }
 
-    // ADR-0031: Resolutions are a scalar formKey node's alone, never aggregated up from Children, so
+    // ADR-0005: Resolutions are a scalar formKey node's alone, never aggregated up from Children, so
     // a dangling sibling can't hide a live hyperlink beside it. A check error is the node's whole
     // subtree's.
     private static (Dictionary<string, FormKeyResolution>? Resolutions, Dictionary<string, string>? CheckErrors) LinkFacts(
@@ -216,7 +216,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         var checkErrors = new Dictionary<string, string>();
         foreach (var (column, value) in values)
         {
-            // A Partial Form override asserts nothing about the fields it omits (ADR-0016), so its
+            // A Partial Form override asserts nothing about the fields it omits (ADR-0018), so its
             // absent value is not an unset link to report.
             if (ctx.PartialFormColumns.Contains(column)) continue;
             var meta = shapes[column];

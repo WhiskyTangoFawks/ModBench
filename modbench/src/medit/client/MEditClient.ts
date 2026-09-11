@@ -12,7 +12,7 @@ import type { RecordEditEnvelope } from '../messages';
 export type BackendStatus = 'starting' | 'attached' | 'disconnected' | 'stopped';
 
 /** A write verb's outright refusal — non-2xx, a thrown request, or write-gate contention.
- *  `message` is the ready-to-show toast (ADR-0026); a 200 typed refusal lives on the success arm. */
+ *  `message` is the ready-to-show toast (ADR-0019); a 200 typed refusal lives on the success arm. */
 export interface WriteRefused {
   readonly refused: true;
   readonly message: string;
@@ -86,7 +86,7 @@ export type RecordCopyAsOverrideResponse = components['schemas']['RecordCopyAsOv
 export type RecordCopyAsNewRecordResponse = components['schemas']['RecordCopyAsNewRecordResponse'];
 export type ReferenceResult = components['schemas']['ReferenceResult'];
 
-/** The extension's side of the backend seam (ADR-0022; target-architecture.d2's "mEdit client"
+/** The extension's side of the backend seam (ADR-0002; target-architecture.d2's "mEdit client"
  *  box), hiding whichever adapter is wired in and the process itself. Names nothing HTTP, no
  *  port number, no generated client. */
 export interface MEditClient {
@@ -144,7 +144,7 @@ export interface MEditClient {
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
 
-  // Subscribe by kind (ADR-0046 invariant 12) — today's signature, unchanged.
+  // Subscribe by kind (ADR-0014 invariant 2) — today's signature, unchanged.
   subscribe(kind: NotificationKind, listener: (event: NotificationEvent) => void): () => void;
 
   // The load-order snapshot — today's own signature and return, unchanged.

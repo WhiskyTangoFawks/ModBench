@@ -12,7 +12,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
 {
     private readonly SchemaReflector _reflector = reflector;
 
-    // ADR-0001: physical tables live in `mirror`; the public names in `main` are views scoped by
+    // ADR-0009: physical tables live in `mirror`; the public names in `main` are views scoped by
     // registration. Every writer names `mirror.` explicitly, and a write against a view fails
     // loudly, so the database enforces the split.
     internal const string MirrorSchema = "mirror";
@@ -23,7 +23,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     private readonly record struct RegisteredRelation(
         string Table, string PluginColumn, string OriginColumn, bool DerivesLoadOrder, bool DerivesWinner);
 
-    // ADR-0001: `load_order_idx` and `is_winner` live on no mirror table — one is a fact about the
+    // ADR-0009: `load_order_idx` and `is_winner` live on no mirror table — one is a fact about the
     // registration, the other about the registered stack — so the views derive them by joining
     // `registrations` and `winners`, at Effective. `records_head` joins at Head.
     private static readonly RegisteredRelation[] RegisteredRelations =
@@ -42,12 +42,12 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
     /// state, not a file mirror: it lives in <c>main</c> beside <c>registrations</c>.</summary>
     internal const string WinnersRelation = "winners";
 
-    /// <summary>One row per physical plugin copy the load order holds, carrying ADR-0044's three
-    /// facts. Registration is visibility (ADR-0001): every registered view joins it. Participation
+    /// <summary>One row per physical plugin copy the load order holds, carrying ADR-0013's three
+    /// facts. Registration is visibility (ADR-0009): every registered view joins it. Participation
     /// is never a column here.</summary>
     internal const string RegistrationsRelation = "registrations";
 
-    /// <summary>ADR-0044: who competes for winner, as the load order value answered it, with each
+    /// <summary>ADR-0013: who competes for winner, as the load order value answered it, with each
     /// copy's slot so the sweep can order by it. Load-order-owned state, so it lives in
     /// <c>main</c>.</summary>
     internal const string ParticipatingRelation = "participating";
@@ -85,7 +85,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
         CreateHeadView(connection);
     }
 
-    // ADR-0046: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional, and this
+    // ADR-0014: a plain table, not DuckDB's SEQUENCE — nextval() is not transactional, and this
     // count must roll back with the rows it describes. The seed is a no-op past the first open.
     private static void CreateSequenceTable(DuckDBConnection connection)
     {
@@ -100,14 +100,14 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0041: one json_extract VIEW over the registered `records` per record type, header included.
-    // Apart from CreateTables because only user filter SQL reads them (ADR-0005).
+    // ADR-0007: one json_extract VIEW over the registered `records` per record type, header included.
+    // Apart from CreateTables because only user filter SQL reads them (ADR-0011).
     public void CreateRecordTypeViews(DuckDBConnection connection, GameRelease release) =>
         RecordViewBuilder.CreateViews(connection, _reflector.GetSchemas(release));
 
-    // ADR-0001: the one "registered" predicate — a row answers iff a registrations row names its
+    // ADR-0009: the one "registered" predicate — a row answers iff a registrations row names its
     // (plugin, origin) — so C# reads and the SQL door cannot scope differently. Registered, not
-    // participating: a losing or disabled copy stays visible (ADR-0044).
+    // participating: a losing or disabled copy stays visible (ADR-0013).
     private static void CreateRegisteredViews(DuckDBConnection connection)
     {
         foreach (var relation in RegisteredRelations)
@@ -214,7 +214,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0044: replaced whole by each sweep, never diffed — the load order value decides who is in
+    // ADR-0013: replaced whole by each sweep, never diffed — the load order value decides who is in
     // it, and this table only remembers the answer for the re-sweeps a working-tree write triggers.
     private static void CreateParticipatingTable(DuckDBConnection connection) =>
         Execute(connection, $"""
@@ -226,7 +226,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    // ADR-0001: winning is a function of registration alone. No PRIMARY KEY on any appended table:
+    // ADR-0009: winning is a function of registration alone. No PRIMARY KEY on any appended table:
     // re-index is delete-then-append, and the ART index across the rebuild measured 6x the sweep.
     private static void CreateWinnersTable(DuckDBConnection connection)
     {
@@ -240,8 +240,8 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0044: one row per physical plugin copy, carrying the three facts participation derives
-    // from; participation itself is never a column here. ADR-0001: not cleared at open — the first
+    // ADR-0013: one row per physical plugin copy, carrying the three facts participation derives
+    // from; participation itself is never a column here. ADR-0009: not cleared at open — the first
     // reconcile corrects these rows.
     private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
@@ -255,7 +255,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             )
             """);
 
-    /// <summary>ADR-0001: what the index believes is on disk. Separate from <c>registrations</c>:
+    /// <summary>ADR-0009: what the index believes is on disk. Separate from <c>registrations</c>:
     /// those rows come and go with every reconcile, and storing the hash there would lose it at
     /// the first unregister (a profile switch).</summary>
     internal static void CreateFilesTable(DuckDBConnection connection) =>
@@ -289,7 +289,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0031: global form_key -> (record type, EditorID) lookup, one row per (form_key, plugin),
+    // ADR-0005: global form_key -> (record type, EditorID) lookup, one row per (form_key, plugin),
     // extracted in the same ingest pass that writes the `records` row, so CheckErrorBuilder and the
     // compare resolvers resolve a FormKey in O(1).
     internal static void CreateFormLookupTable(DuckDBConnection connection)
@@ -309,7 +309,7 @@ internal sealed class TableDdlBuilder(SchemaReflector reflector)
             """);
     }
 
-    // ADR-0023: side tables for the worldspace tree. Parentage is structural (GRUP nesting), so it
+    // ADR-0005: side tables for the worldspace tree. Parentage is structural (GRUP nesting), so it
     // lives here rather than in the record document, keeping placement read-only by construction.
     internal static void CreatePlacementTables(DuckDBConnection connection)
     {

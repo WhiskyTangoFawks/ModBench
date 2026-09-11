@@ -49,7 +49,7 @@ public sealed partial class SourceRepository
     public static string RootIn(string modFolder, string pluginFileName) =>
         Path.Combine(modFolder, RootFor(pluginFileName));
 
-    /// <summary>The mod folder's git internals for the watcher (ADR-0046): the directory, and the ref
+    /// <summary>The mod folder's git internals for the watcher (ADR-0014): the directory, and the ref
     /// paths whose change means a commit, checkout or reset.</summary>
     public static GitWatchPaths GitWatchPathsIn(string modFolder)
     {

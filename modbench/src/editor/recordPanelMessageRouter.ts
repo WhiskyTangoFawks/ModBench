@@ -12,7 +12,7 @@ export interface RouteRecordPanelMessageDeps extends RecordWriteDeps {
   // message text, this is a pure level→method forward.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
   // A rejected clipboard write (headless windows, missing Linux clipboard tooling, Wayland
-  // permissions) is "explicit action failed" per ADR-0026 — the user pressed Ctrl+C — so it needs
+  // permissions) is "explicit action failed" per ADR-0019 — the user pressed Ctrl+C — so it needs
   // a notification, not a silent swallow.
   reporter: Reporter;
   // `reply` must post back to the one panel that asked, never a broadcast, so this bundle is
@@ -145,7 +145,7 @@ async function replyFormKeyPicked(
 }
 
 // The webview's inline and keyboard edits reach the same host-side write path the right-click
-// menus call directly (ADR-0041).
+// menus call directly (ADR-0007).
 function editField(
   deps: RouteRecordPanelMessageDeps,
   m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }>,

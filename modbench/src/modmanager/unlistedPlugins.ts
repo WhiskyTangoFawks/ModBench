@@ -1,4 +1,4 @@
-// The plugin files the effective load order does not point at (ADR-0035). Scope is the enabled
+// The plugin files the effective load order does not point at (ADR-0013). Scope is the enabled
 // mods' own folders: a disabled mod is not deployed into the game's view, and
 // buildFileConflictIndex doesn't walk it either.
 
@@ -6,7 +6,7 @@ import { foldPath, type FileConflictIndex } from './fileConflictIndex';
 import { isPluginFile } from './pluginFile';
 
 /** A plugin file the load order does not hold, addressed the way the backend addresses every
- *  plugin: (origin, filename) plus the physical path to read it from (ADR-0036). */
+ *  plugin: (origin, filename) plus the physical path to read it from (ADR-0012). */
 export interface UnlistedPlugin {
   name: string;
   path: string;
@@ -14,7 +14,7 @@ export interface UnlistedPlugin {
   origin: string;
 }
 
-/** The (origin, filename) pairs the editing backend already holds (ADR-0036). */
+/** The (origin, filename) pairs the editing backend already holds (ADR-0012). */
 export interface LoadedPlugin {
   name: string;
   origin: string;

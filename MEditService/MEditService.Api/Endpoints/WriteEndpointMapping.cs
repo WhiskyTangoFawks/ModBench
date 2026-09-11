@@ -16,7 +16,7 @@ internal static class WriteEndpointMapping
         new(Uri.UnescapeDataString(routePlugin), origin);
 
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
-    /// exactly which, so nobody matches on prose (ADR-0026). eslContradiction marks the one
+    /// exactly which, so nobody matches on prose (ADR-0019). eslContradiction marks the one
     /// refusal a header edit can resolve.</summary>
     internal static IResult Refusal(RecordEditResult result) => Results.Problem(
         detail: result.Message,
@@ -39,7 +39,7 @@ internal static class WriteEndpointMapping
         });
 
     /// <summary>Track's own refusal-to-status map, the same posture the record edits' has: the status
-    /// says what kind of problem, the refusal extension says exactly which (ADR-0026).</summary>
+    /// says what kind of problem, the refusal extension says exactly which (ADR-0019).</summary>
     internal static IResult Refusal(TrackResult result) => Results.Problem(
         detail: result.Message,
         statusCode: result.Refusal switch
@@ -66,7 +66,7 @@ internal static class WriteEndpointMapping
 
     /// <summary>503, not 500: the write was never attempted, so nothing is half-applied and the right
     /// response is a retry. The writeGateTimeout extension tells it apart from
-    /// <see cref="NoLoadOrder"/>, which wants a reload instead (ADR-0026).</summary>
+    /// <see cref="NoLoadOrder"/>, which wants a reload instead (ADR-0019).</summary>
     internal static IResult WriteGateBusy(IndexWriteGateTimeoutException ex) => Results.Problem(
         detail: ex.Message,
         statusCode: 503,

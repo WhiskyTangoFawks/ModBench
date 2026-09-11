@@ -13,14 +13,14 @@ namespace MEditService.Tests.Query;
 
 /// <summary>Master issues derive from the whole loaded set, so mid-load they are wrong, not merely
 /// incomplete: a healthy plugin whose master is not yet opened would read as missing (the same
-/// class of error ADR-0035 names).</summary>
+/// class of error ADR-0013 names).</summary>
 public sealed class MasterIssuesDuringLoadTests
 {
     [Fact]
     public async Task GetPlugins_MidLoad_DoesNotFlagAMasterThatSimplyHasNotBeenOpenedYet()
     {
         var holder = new LoadOrderHolder();
-        // ADR-0038: a genuine FormKey reference is what makes Mutagen record a master. Later.esm is
+        // ADR-0008: a genuine FormKey reference is what makes Mutagen record a master. Later.esm is
         // sequenced after the plugin depending on it, the transient state every ordinary load passes
         // through, held still here by the gate.
         using var fx = new PluginFixtureBuilder("mi-midload")

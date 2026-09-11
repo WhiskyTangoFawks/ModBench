@@ -9,7 +9,7 @@ namespace MEditService.Core.Serialization;
 internal readonly record struct NamedDocument(string Text, string? EditorId);
 
 /// <summary>A record's own identity and links changed as documents: the codec reads the text, edits
-/// the graph it built, and writes the text back, so no caller holds the record (ADR-0032
+/// the graph it built, and writes the text back, so no caller holds the record (ADR-0005
 /// rule 2).</summary>
 internal static class RecordDocumentEdits
 {

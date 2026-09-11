@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Edits;
 
-/// <summary>ADR-0041's Save &amp; Compile: source (working tree or a named git ref) to binary. Reads
+/// <summary>ADR-0007's Save &amp; Compile: source (working tree or a named git ref) to binary. Reads
 /// the source's own bytes, never the DB index; refuses only what it structurally cannot emit, and
 /// the rest becomes diagnostics.</summary>
 public sealed class PluginCompileService(
@@ -110,7 +110,7 @@ public sealed class PluginCompileService(
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
                 // A struct-list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
-                // (Mutagen issue 688), so the content-derived master pass (ADR-0038) prunes a
+                // (Mutagen issue 688), so the content-derived master pass (ADR-0008) prunes a
                 // master this write still needs. Every other write failure propagates raw.
                 writeRefusal = $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}";
                 return false;
@@ -134,8 +134,8 @@ public sealed class PluginCompileService(
         return CompileResult.Success(diagnostics, masters);
     }
 
-    // ADR-0046 invariant 1: the write side never reads the Index, so the masters content requires
-    // (ADR-0038) and the check errors the editor shows come from the records here, through the
+    // ADR-0015 invariant 1: the write side never reads the Index, so the masters content requires
+    // (ADR-0008) and the check errors the editor shows come from the records here, through the
     // same collector, schema and link resolver.
     private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
         CompiledTree tree, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
@@ -255,7 +255,7 @@ public sealed class PluginCompileService(
     private static bool EmbeddedInATrackedPlugin(
         string formKey, PluginKey plugin, LoadOrder loadOrder, Dictionary<string, SourceRepository?> trackedTrees)
     {
-        // The same chain the resolver walks, participation included (ADR-0044): a copy the game does
+        // The same chain the resolver walks, participation included (ADR-0013): a copy the game does
         // not load holds nothing this link points at, so its tree is not an answer either.
         if (IsNative(formKey, plugin)
             || PluginNameIn(formKey) is not { } owner
@@ -276,7 +276,7 @@ public sealed class PluginCompileService(
     private static string? PluginNameIn(string formKey) =>
         FormKey.TryFactory(formKey, out var parsed) ? parsed.ModKey.FileName.String : null;
 
-    // Whatever is wrong with the source, the remedy is re-Track (ADR-0042), so the catch is
+    // Whatever is wrong with the source, the remedy is re-Track (ADR-0006), so the catch is
     // deliberately unfiltered and the message uniform.
     private (CompiledTree? Tree, string? RefusalReason) DeserializeSource(
         string treeRoot, string pluginName, GameRelease release)
@@ -297,7 +297,7 @@ public sealed class PluginCompileService(
         }
     }
 
-    // ADR-0042: the generated deserializer skips an unrecognized property or file without throwing,
+    // ADR-0006: the generated deserializer skips an unrecognized property or file without throwing,
     // so a successful parse proves nothing. The check is self-consistency in both directions: a
     // document the regeneration does not produce is content the parse dropped.
 

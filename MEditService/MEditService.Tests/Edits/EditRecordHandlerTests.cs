@@ -10,7 +10,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Edits;
 
 /// <summary>Asserted against a real git repo through the real CLI, because "visible in the Source
-/// Control panel" is a claim about what <c>git status</c> says (ADR-0041).</summary>
+/// Control panel" is a claim about what <c>git status</c> says (ADR-0007).</summary>
 public sealed class EditRecordHandlerTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -153,7 +153,7 @@ public sealed class EditRecordHandlerTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
-    // ---- parse status is the codec's, asked at edit time (ADR-0046 invariant 7) ----
+    // ---- parse status is the codec's, asked at edit time (ADR-0015 invariant 5) ----
 
     [Fact]
     public void EditField_OfADocumentTheCodecCannotRead_RefusesWithTheCodecsOwnMessage()

@@ -1,4 +1,4 @@
-// ADR-0044: an Instance recompute and a client connect are the only triggers for a load-order
+// ADR-0013: an Instance recompute and a client connect are the only triggers for a load-order
 // PUT. No gesture, command or view may call `request()` on the sync itself.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join, extname } from 'node:path';
 
 // The one legitimate caller: `wireLoadOrderSyncToInstance` in the Instance module, which is the
-// wiring ADR-0044 names, not a gesture, command or view.
+// wiring ADR-0013 names, not a gesture, command or view.
 const ALLOWED = join('modmanager', 'instance.ts');
 
 const REQUEST_CALL = /\.request\s*\(/;

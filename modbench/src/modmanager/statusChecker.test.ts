@@ -86,7 +86,7 @@ describe('computeModStatuses', () => {
   });
 
   // No status kind here is a fact about a plugin's contents: those are the backend's, reported
-  // per plugin on the Plugins rows (ADR-0021).
+  // per plugin on the Plugins rows (ADR-0016).
   it('never reports a status derived from a plugin file, however malformed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-garbage-'));
     try {

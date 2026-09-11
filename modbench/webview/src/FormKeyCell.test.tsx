@@ -48,7 +48,7 @@ describe('FormKeyCell — read-only column', () => {
   });
 });
 
-// ADR-0034: a mutable column's plain click opens the native QuickPick, so selection and Ctrl+V
+// ADR-0018: a mutable column's plain click opens the native QuickPick, so selection and Ctrl+V
 // are the platform's; an immutable column opens nothing and copies with Ctrl+C.
 describe('FormKeyCell — immutable column opens nothing', () => {
   afterEach(() => { pickFormKey.mockClear(); });
@@ -173,7 +173,7 @@ describe('FormKeyCell — editable column', () => {
   });
 });
 
-// ADR-0034: same open-gate as ScalarCell/FlagCell — second click on the
+// ADR-0018: same open-gate as ScalarCell/FlagCell — second click on the
 // already-focused cell, F2 (via DiskCell's data-open-trigger dispatch), or a double click.
 describe('FormKeyCell — mutable column gates opening on the focus check', () => {
   afterEach(() => { pickFormKey.mockClear(); });
@@ -264,7 +264,7 @@ describe('FormKeyCell — Ctrl-hover link affordance', () => {
   });
 });
 
-// ADR-0031: the affordance and label key off the leaf's own resolution signal — checkError
+// ADR-0005: the affordance and label key off the leaf's own resolution signal — checkError
 // drives the warning icon but never gates the link.
 describe('FormKeyCell — resolution-driven label and affordance', () => {
   afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });

@@ -10,8 +10,8 @@ grid-gap: 24
 me1: "MEDIT · Front end — its clients" {
   class: band; grid-rows: 1
   modbench: "Modbench\nthe right column" {class: driving}
-  panel: "Record panel\nthe webview; its own read client (ADR-0041)" {class: driving}
-  scripts: "Python scripts\na second HTTP client (ADR-0024)" {class: driving}
+  panel: "Record panel\nthe webview; its own read client (ADR-0007)" {class: driving}
+  scripts: "Python scripts\na second HTTP client" {class: driving}
 }
 mb1: "MODBENCH · The user — in VS Code's trees, panels and palette" {
   class: band; grid-rows: 1
@@ -21,7 +21,7 @@ mb1: "MODBENCH · The user — in VS Code's trees, panels and palette" {
 me2: "MEDIT · API — driving adapters" {
   class: band; grid-rows: 1
   http: "HTTP endpoints\nand the notification stream, the port's SSE adapter" {class: driving}
-  watcher: "Mod watcher\none per mod in the load order, recursive; the Source repository names its paths (#813)\nroutes: plugin bytes → Index · source → Index · git refs → committed view · anything else in a tracked mod → external change" {class: driving}
+  watcher: "Mod watcher\none per mod in the load order, recursive; the Source repository names its paths (#813)\nroutes: plugin bytes → record index · source → record index · git refs → committed view · anything else in a tracked mod → external change" {class: driving}
 }
 mb2: "MODBENCH · Views — driving adapters: read a value, fire a command" {
   class: band; grid-rows: 1
@@ -44,7 +44,7 @@ mb3: "MODBENCH · Core — one command per gesture, beside the codec of the file
   pluginscmd: "plugins commands\nenable, reorder, reconcile against disk" {class: core}
   instance: "instance commands\nswitch profile" {class: core}
   install: "install\nnew mod: staging, then one rename into mods/\nupgrade: replace the folder's contents in place around .git" {class: core}
-  client: "mEdit client\ninterface: commands, one per handler → applied or refusal · queries · subscribe by kind · put load order · start, stop, status\nhides: HTTP adapter and in-memory adapter; the process (ADR-0022)" {class: core}
+  client: "mEdit client\ninterface: commands, one per handler → applied or refusal · queries · subscribe by kind · put load order · start, stop, status\nhides: HTTP adapter and in-memory adapter; the process (ADR-0002)" {class: core}
 }
 
 me4: "MEDIT · Shared kernel — read by both sides and by the adapters" {
@@ -61,9 +61,9 @@ mb4: "MODBENCH · Shared kernel — pure; parse and byte-faithful splice, one mo
   tables: "per-release tables\ngame paths · load-order file destination" {class: core}
 }
 
-me5: "MEDIT · Access — driven adapters; the Index is a view over the two beside it" {
+me5: "MEDIT · Access — driven adapters; the record index is a view over the two beside it" {
   class: band; grid-rows: 1
-  index: "Index — one deep module, rebuildable" {
+  index: "Record index — one deep module, rebuildable" {
     proj: "Projector\nrefresh keys, validate by hash, sequence\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB" {class: derived}
   }

@@ -27,8 +27,8 @@ treats a plugin the way an IDE treats a program:
   everything else see. Modbench never assumes exclusive ownership of any file — external changes
   are detected and handled through one dialog (upstream update, or your own edit).
 
-The decisions behind this are [ADR-0041](docs/adr/0041-manual-git-tracking-compile-from-text.md)
-and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
+The decisions behind this are [ADR-0007](docs/adr/0007-plugin-edits-are-git-working-tree-changes.md)
+and [ADR-0006](docs/adr/0006-the-plugin-is-the-source-of-truth.md).
 
 ## What works today
 
@@ -54,11 +54,11 @@ modbench/          VS Code extension (TypeScript) + React webview for the compar
   src/modmanager/    Mod Management — pure TS/Node, reads and writes the MO2 instance in place,
                      never calls the backend
   src/plugins/       Plugins view — the one tree, rows from the Instance and records from the
-                     mEdit client, and every plugin gesture (ADR-0035)
+                     mEdit client, and every plugin gesture (ADR-0017)
   src/editor/        Editor view — the record panel, its message router, the active record and
                      Referenced By; imports the mEdit client and nothing from the MO2 side
   src/medit/         The mEdit client — one port over the backend's commands, queries,
-                     notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0046)
+                     notifications and lifecycle, with an HTTP and an in-memory adapter (ADR-0014)
 MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
   MEditService.Core/   Mutagen for plugin I/O; DuckDB as an index over per-record JSON documents;
                        the source codec, Track, compile and git layer
@@ -67,16 +67,14 @@ MEditService/      Local C# service (ASP.NET Core minimal API on localhost:5172)
 
 Two bounded contexts with an enforced language boundary — **Mod Management** speaks mods, modlists
 and files; **Editing** speaks plugins, records and FormKeys — meet at exactly one object: a plugin
-file at a physical path. [CONTEXT-MAP.md](CONTEXT-MAP.md) is the map;
-[CONTEXT.md](CONTEXT.md) and [modbench/src/modmanager/CONTEXT.md](modbench/src/modmanager/CONTEXT.md)
-are the glossaries. The extension spawns and owns the backend for a load order
-([ADR-0022](docs/adr/0022-extension-owns-backend-lifecycle.md)); the MO2 side works with no
+file at a physical path. [CONTEXT.md](CONTEXT.md) is the glossary, both contexts in one file. The extension spawns and owns the backend for a load order
+([ADR-0002](docs/adr/0002-mod-management-and-editing-are-one-tool.md)); the MO2 side works with no
 backend at all.
 
 The UX rules are borrowed, not invented: Mod Management follows MO2, record editing follows xEdit
-([ADR-0034](docs/adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)), and every
+([ADR-0018](docs/adr/0018-xedit-is-the-reference-for-record-editing.md)), and every
 interaction uses the native VS Code surface that already does the job
-([ADR-0027](docs/adr/0027-mo2-surfaces-map-to-native-vscode-views.md)). Decisions live in
+([ADR-0017](docs/adr/0017-mo2-is-the-reference-for-mod-management.md)). Decisions live in
 [docs/adr/](docs/adr/); numbering gaps are reversed decisions, whose story is in the
 *Alternatives rejected* section of whatever replaced them.
 
@@ -136,9 +134,8 @@ The repo is set up to be worked on by people and coding agents alike:
 
 The editing backend is agent-friendly by construction: a discoverable OpenAPI surface, typed
 request/response for every operation, an index you can query with SQL, and edits that land as git
-working-tree changes a human can review before anything touches the binary. Scripts — plain
-Python HTTP clients of the same API — are decided but not yet built
-([ADR-0024](docs/adr/0024-python-scripts-are-http-clients.md)).
+working-tree changes a human can review before anything touches the binary. Scripts, plain HTTP
+clients of the same API in any language, are planned but not yet built.
 
 ## References
 

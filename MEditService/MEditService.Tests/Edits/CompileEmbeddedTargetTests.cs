@@ -112,7 +112,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
     }
 
-    // ADR-0044: a registered copy the game does not load is not where the link points, so its tree
+    // ADR-0013: a registered copy the game does not load is not where the link points, so its tree
     // carrying the record proves nothing and the link is dangling like any other.
     [Fact]
     public void Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()

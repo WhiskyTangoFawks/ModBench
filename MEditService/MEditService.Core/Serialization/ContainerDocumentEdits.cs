@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Serialization;
 
 /// <summary>A container's child slots changed as documents: the codec reads the text, edits the
-/// graph it built, and writes the text back, so no caller holds the record (ADR-0032 rule 2).</summary>
+/// graph it built, and writes the text back, so no caller holds the record (ADR-0005 rule 2).</summary>
 internal static class ContainerDocumentEdits
 {
     /// <summary>The record's own fields alone, every child slot cleared — what an own-fields copy

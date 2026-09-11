@@ -89,7 +89,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
     }
 
     // xEdit's own CanAssignInternal (wbImplementation.pas:9905-9914) explicitly allows
-    // EDID assignment on a Partial Form record — ADR-0034 makes that binding. EditorID is an
+    // EDID assignment on a Partial Form record — ADR-0018 makes that binding. EditorID is an
     // ordinary, already-writable field (RecordFieldWriter.EditorIdFieldPath), so it needs no
     // header write path.
     [Fact]

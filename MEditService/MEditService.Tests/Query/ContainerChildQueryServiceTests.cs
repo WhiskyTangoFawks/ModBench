@@ -160,7 +160,7 @@ public class ContainerChildQueryServiceTests
     }
 
     // Explicit origin overrides load-order resolution, the same shape every other
-    // spatial-tree read already has (ADR-0036).
+    // spatial-tree read already has (ADR-0012).
     [Fact]
     public void GetChildren_ExplicitOrigin_OverridesResolvedOrigin()
     {

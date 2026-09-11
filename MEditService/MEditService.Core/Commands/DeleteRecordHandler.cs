@@ -5,9 +5,9 @@ using Microsoft.Extensions.Logging;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Delete gesture's handler (ADR-0046 invariant 3): a working-tree deletion, gone at
+/// <summary>The Delete gesture's handler (ADR-0014 invariant 3): a working-tree deletion, gone at
 /// Effective, still served at Head until compiled. No reference cascade — a dangling FormLink
-/// surfaces as an ordinary compile diagnostic (ADR-0041).</summary>
+/// surfaces as an ordinary compile diagnostic (ADR-0007).</summary>
 public sealed class DeleteRecordHandler
 {
     private readonly WriteTargets _targets;

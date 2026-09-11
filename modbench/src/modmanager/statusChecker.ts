@@ -1,6 +1,6 @@
 // Turns a FileConflictIndex into per-mod status badges: conflict/override counts and missing mod
 // folders. Pure over ModlistEntry[] + instanceRoot + a precomputed FileConflictIndex; no vscode
-// import, and no plugin file is opened — master facts are the backend's (ADR-0021).
+// import, and no plugin file is opened — master facts are the backend's (ADR-0016).
 
 import { stat } from 'node:fs/promises';
 import { join } from 'node:path';

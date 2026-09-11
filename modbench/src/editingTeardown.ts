@@ -22,7 +22,7 @@ export function say(session: TeardownSession, message: string | undefined): void
 }
 
 /** Takes the backend down. Nothing else: mEdit runs for the extension's whole lifetime, so no
- *  view has a shape to revert to and a disconnect is a status they surface (ADR-0022). */
+ *  view has a shape to revert to and a disconnect is a status they surface (ADR-0002). */
 export function exitEditing(session: TeardownSession, client: { stop(): Promise<void> }): void {
   // Abandon any reconcile still in flight *first*: it aborts the PUT, so the reconcile returns
   // 'abandoned' rather than reporting a killed backend to the user as a network failure.

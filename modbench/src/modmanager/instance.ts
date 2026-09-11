@@ -1,4 +1,4 @@
-// The Instance: one read model over the MO2 instance directory's files (ADR-0047). It owns the
+// The Instance: one read model over the MO2 instance directory's files (ADR-0015). It owns the
 // MO2-side watchers, holds one whole value, and is built only by watching.
 
 import type * as vscode from 'vscode';
@@ -43,7 +43,7 @@ export interface InstanceValue {
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
   readonly filesByMod: ReadonlyMap<string, readonly { relativePath: string; absolutePath: string }[]>;
-  /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0044). A listed
+  /** Every physical plugin copy, with origin, slot, enabled and winning (ADR-0013). A listed
    *  name neither a mod nor overwrite/ provides is still a row — a line-only one, `path`
    *  undefined — when the game directory is unresolved. */
   readonly plugins: readonly (LoadOrderPlugin | LoadOrderPluginLine)[];
@@ -58,7 +58,7 @@ export interface InstanceValue {
   /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
   readonly deployed: boolean;
   /** Each mod's conflict/override/missing-mod status, keyed by mod name — the Mods tree's
-   *  badges (ADR-0047). */
+   *  badges (ADR-0015). */
   readonly modStatuses: ReadonlyMap<string, ModStatusResult>;
   /** File count under overwrite/, recursive; 0 when the folder is absent or empty. */
   readonly overwriteFileCount: number;
@@ -326,7 +326,7 @@ export class Instance implements vscode.Disposable {
 }
 
 /** A tree's first-render gate: `settled` resolves on the first landed value or the first failed
- *  read — never "nothing here" before a read (ADR-0035), never an endless spinner (ADR-0026).
+ *  read — never "nothing here" before a read (ADR-0002), never an endless spinner (ADR-0019).
  *  `failure` holds until a value lands. */
 export interface FirstRead extends vscode.Disposable {
   readonly settled: Promise<void>;
@@ -368,7 +368,7 @@ export function firstReadOf(
   };
 }
 
-/** ADR-0044's snapshot, read from the current value (ADR-0047) rather than a fresh walk.
+/** ADR-0013's snapshot, read from the current value (ADR-0015) rather than a fresh walk.
  *  `undefined` — no PUT — when the game directory has not resolved. The filter states a
  *  resolved game directory's own guarantee, never an unchecked cast. */
 export function loadOrderSnapshotOf(
@@ -381,7 +381,7 @@ export function loadOrderSnapshotOf(
   };
 }
 
-/** ADR-0044: a landed recompute is the sole trigger for a PUT — never a gesture, command or
+/** ADR-0013: a landed recompute is the sole trigger for a PUT — never a gesture, command or
  *  view calling `request()` directly. */
 export function wireLoadOrderSyncToInstance(
   instance: Pick<Instance, 'subscribe'>, sync: { request(): void },

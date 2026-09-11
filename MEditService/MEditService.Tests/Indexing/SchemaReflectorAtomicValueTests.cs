@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Indexing;
 
 /// <summary>A Color is one text leaf the codec spells as "#AARRGGBB". Whether the alpha byte is the
-/// field's to edit is decided per field, not per type (ADR-0034): xEdit renders most as RGB, four
+/// field's to edit is decided per field, not per type (ADR-0018): xEdit renders most as RGB, four
 /// as RGBA.</summary>
 public class SchemaReflectorAtomicValueTests
 {

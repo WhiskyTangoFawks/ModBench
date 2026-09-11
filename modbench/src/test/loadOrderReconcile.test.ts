@@ -22,7 +22,7 @@ function makeSyncDeps(over: Partial<LoadOrderSyncDeps> = {}): LoadOrderSyncDeps 
   };
 }
 
-// ADR-0044: every instance change becomes "recompute the snapshot, PUT it", one PUT per settled
+// ADR-0013: every instance change becomes "recompute the snapshot, PUT it", one PUT per settled
 // change, never a race of two. `putLoadOrder` stands in for the whole reconcile as the one call
 // every send assertion spies on.
 describe('createLoadOrderSync', () => {
@@ -217,7 +217,7 @@ describe('createLoadOrderSync — arm/abandon', () => {
   });
 });
 
-// ADR-0044: one reconcile — recompute the snapshot, PUT it, hand the backend's answer to the
+// ADR-0013: one reconcile — recompute the snapshot, PUT it, hand the backend's answer to the
 // tree — driven entirely by injected steps so the branching and the tail-chained single-flight
 // guarantee are testable without a VS Code harness.
 describe('createReconcileSequencer', () => {

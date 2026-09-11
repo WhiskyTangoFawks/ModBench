@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { PluginMetadata } from './client';
 
-// ADR-0041: tracked *is* the presence of `.git` — a filesystem check, no registry, no backend.
+// ADR-0007: tracked *is* the presence of `.git` — a filesystem check, no registry, no backend.
 function isTracked(modFolder: string): boolean {
   return fs.existsSync(path.join(modFolder, '.git'));
 }
@@ -40,7 +40,7 @@ export async function registerTrackedRepositories<T>(
 
 /** Reindexed by filename because a field edit knows the plugin it edited, never the folder.
  *  Filename is unique among plugins an edit can reach: a file-level loser is read-only
- *  (ADR-0036). */
+ *  (ADR-0012). */
 export function pluginRepositoriesOf<T>(
   plugins: readonly Pick<PluginMetadata, 'name' | 'path'>[],
   folderRepositories: ReadonlyMap<string, T>,

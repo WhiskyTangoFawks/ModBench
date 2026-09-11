@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>Documents by identity over one tracked mod folder (ADR-0046 invariant 9), and ADR-0041's
+/// <summary>Documents by identity over one tracked mod folder (ADR-0014 invariant 5), and ADR-0007's
 /// git verbs beneath them. Every verb tolerates the folder having vanished since last observed —
 /// MO2's Replace install shell-deletes mod folders.</summary>
 public sealed partial class SourceRepository
@@ -267,7 +267,7 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>Re-parks the last-compile ref at the tree just compiled from, without moving HEAD, branch
-    /// or index (ADR-0041). Null <paramref name="atRef"/> snapshots the working tree; a ref name
+    /// or index (ADR-0007). Null <paramref name="atRef"/> snapshots the working tree; a ref name
     /// snapshots that ref's tree.</summary>
     internal static void ParkCompileSnapshot(
         string modFolder, string plugin, string? atRef, string binarySha256)
@@ -352,7 +352,7 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>Stages every changed tracked file on the real repo — index matches working tree —
-    /// so the same bytes cannot re-raise the question once answered (ADR-0041 amendment).</summary>
+    /// so the same bytes cannot re-raise the question once answered (ADR-0003).</summary>
     internal static void StageTrackedFileChanges(string modFolder, IReadOnlyList<TrackedFileChange> changes)
     {
         if (changes.Count == 0) return;
@@ -374,7 +374,7 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>The edit branch replayed onto main's new tip. Refuses over dirt in the source tree;
-    /// a tracked file outside it rides `--autostash` (ADR-0041 amendment). Mid-rebase delegates to
+    /// a tracked file outside it rides `--autostash` (ADR-0003). Mid-rebase delegates to
     /// <see cref="ContinueRebase"/>.</summary>
     public static RebaseResult RebaseEditBranch(string modFolder)
     {
@@ -453,7 +453,7 @@ public sealed partial class SourceRepository
     internal static IReadOnlyList<string> WorkingTreeStatus(string modFolder) =>
         [.. ParseStatus(modFolder).Select(e => e.Path)];
 
-    /// <summary>"Changed tracked files" (ADR-0041 amendment): git status against the edit branch,
+    /// <summary>"Changed tracked files" (ADR-0003): git status against the edit branch,
     /// restricted to paths outside the source root. Empty under Edits by construction; lists
     /// assets under Everything.</summary>
     public static IReadOnlyList<TrackedFileChange> ChangedTrackedFilesOutsideSource(string modFolder)
@@ -520,7 +520,7 @@ public sealed partial class SourceRepository
     }
 
     /// <summary>The trailers off main's tip — explicitly refs/heads/main, never HEAD, since the edit
-    /// branch is what is checked out (ADR-0041). Per-plugin for the binary hash; folder-wide otherwise.
+    /// branch is what is checked out (ADR-0007). Per-plugin for the binary hash; folder-wide otherwise.
     /// Null when untracked.</summary>
     internal static BaselineTrailers? LatestBaselineTrailers(string modFolder, string plugin)
     {
@@ -621,7 +621,7 @@ public sealed partial class SourceRepository
             GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
     }
 
-    // meta.ini is never tracked content (ADR-0041 amendment) and plugin binaries are the compiled
+    // meta.ini is never tracked content (ADR-0003) and plugin binaries are the compiled
     // artifact; both are ignored in every preset.
     private static string GitignoreContent(SourcePreset preset) => preset switch
     {
@@ -665,7 +665,7 @@ public enum SourceRemoval
 public readonly record struct RecordIdentity(string FormKey, string RecordType, string? EditorId);
 
 /// <summary>One record as the Source tree holds it: its identity and its own text, byte for byte
-/// (ADR-0041).</summary>
+/// (ADR-0007).</summary>
 public sealed record SourceDocument(string FormKey, string RecordType, string? EditorId, string Body);
 
 /// <summary>The provenance main's tip carries right now, the read counterpart of
@@ -673,7 +673,7 @@ public sealed record SourceDocument(string FormKey, string RecordType, string? E
 public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
 
 /// <summary>One tracked file outside the source root that git status finds dirty — the asset half of
-/// an external change (ADR-0041 amendment). <see cref="StagedAlready"/> is Keep's own collision
+/// an external change (ADR-0003). <see cref="StagedAlready"/> is Keep's own collision
 /// signal: a path a prior answer already staged.</summary>
 public sealed record TrackedFileChange(string RelativePath, TrackedFileChangeKind Kind, bool StagedAlready);
 

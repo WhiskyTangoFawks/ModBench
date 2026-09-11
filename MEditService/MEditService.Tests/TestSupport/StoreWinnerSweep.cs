@@ -3,7 +3,7 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests;
 
-/// <summary>ADR-0044: the sweep is handed who participates. A store-level test's load order is the
+/// <summary>ADR-0013: the sweep is handed who participates. A store-level test's load order is the
 /// registrations it writes, so this reads them back and applies
 /// <see cref="Registration.Participates"/> rather than restating the set per call.</summary>
 internal static class StoreWinnerSweep

@@ -3,7 +3,7 @@ using MEditService.Tests.Edits;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046 invariant 4, end to end: the cascade writes three source trees and returns, and
+/// <summary>ADR-0015 invariant 2, end to end: the cascade writes three source trees and returns, and
 /// the Source watcher lands every rewritten reference. A failed renumber's restore reaches the Index
 /// the same way.</summary>
 public sealed class RenumberCascadeWatchTests

@@ -6,7 +6,7 @@ import { ScalarCell } from './ScalarCell';
 import type { FieldMetadata } from './types';
 import { fieldMeta } from './test/fixtures';
 
-// ADR-0034: a click focuses, it does not edit, and a column that cannot be written stays inert
+// ADR-0018: a click focuses, it does not edit, and a column that cannot be written stays inert
 // under every open trigger — nothing opens that has nowhere to write.
 const meta = (over: Partial<FieldMetadata> = {}): FieldMetadata =>
   fieldMeta({ name: 'value', type: 'string', ...over });
@@ -121,9 +121,9 @@ describe('ScalarCell — committing', () => {
   });
 });
 
-// ADR-0039: a genuine mouse click on an already-focused string cell opens the inline editor
+// ADR-0018: a genuine mouse click on an already-focused string cell opens the inline editor
 // synchronously — no left click may cost latency waiting to see whether a second is coming.
-describe('ScalarCell — string cell has no debounce (ADR-0039)', () => {
+describe('ScalarCell — string cell has no debounce (ADR-0018)', () => {
   it('a genuine second click on an already-focused string cell opens the inline editor immediately', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable isFocused onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('Dogmeat'), { detail: 1 });
@@ -137,9 +137,9 @@ describe('ScalarCell — string cell has no debounce (ADR-0039)', () => {
   });
 });
 
-// ADR-0039: an immutable string cell is unaffected by any left-click gesture; its only read
+// ADR-0018: an immutable string cell is unaffected by any left-click gesture; its only read
 // path for a long value is the right-click menu.
-describe('ScalarCell — immutable string cell (ADR-0039)', () => {
+describe('ScalarCell — immutable string cell (ADR-0018)', () => {
   it('opens nothing on double click', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} isFocused={false} onCommit={vi.fn()} />);
     fireEvent.doubleClick(screen.getByText('Dogmeat'));

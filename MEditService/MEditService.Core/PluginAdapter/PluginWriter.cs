@@ -8,14 +8,14 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.PluginAdapter;
 
 /// <summary>Replaces a plugin binary: sibling temp file, commit by rename, timestamped <c>.bak</c>
-/// beside it (ADR-0008), oldest pruned. Mechanism only, no edit semantics.</summary>
+/// beside it, oldest pruned. Mechanism only, no edit semantics.</summary>
 public sealed class PluginWriter(ILogger<PluginWriter> logger)
 {
     private const int MaxBackups = 5;
 
     private readonly ILogger<PluginWriter> _logger = logger;
 
-    /// <summary><paramref name="loadOrder"/> orders the written master list explicitly (ADR-0038,
+    /// <summary><paramref name="loadOrder"/> orders the written master list explicitly (ADR-0008,
     /// xEdit's canonical form) rather than leaving it to Mutagen's undefined default.</summary>
     public static Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,

@@ -34,7 +34,7 @@ interface RenderCellExtras {
   rowCollapsed?: boolean;
 }
 
-// ADR-0041: leaves render read-only unless the caller supplies `onCommit` — the presence of
+// ADR-0007: leaves render read-only unless the caller supplies `onCommit` — the presence of
 // somewhere to write *is* the editability signal, so a call site that has no write path cannot
 // accidentally ask for an editor.
 function renderCell(
@@ -108,7 +108,7 @@ export interface RowContext {
   depth: number;
 }
 
-// ADR-0034: identifies one cell panel-wide, so one cell is focused at a time. ADR-0036: `plugin`
+// ADR-0018: identifies one cell panel-wide, so one cell is focused at a time. ADR-0012: `plugin`
 // is this column's compound identity, not the bare filename — two columns sharing a filename must
 // not both read as focused.
 export interface FocusedCell {
@@ -133,7 +133,7 @@ interface DiffRowProps {
   // up and can never render against a shape the panel did not choose.
   meta: FieldMetadata;
   columns: Column[];
-  // ADR-0035/ADR-0036: the columns that render at reduced weight, as one set the panel computes,
+  // ADR-0013/ADR-0012: the columns that render at reduced weight, as one set the panel computes,
   // so the header and every cell under it can never disagree.
   dimmedColumns: Set<ColumnKey>;
   collapsedColumns: Set<ColumnKey>;
@@ -161,7 +161,7 @@ interface DiffRowProps {
   // entry for this row's own schema leaf — a condition reads as its xEdit prose rather than "{…}".
   collapsedSummary?: Record<string, string>;
   // Whether this column holds the object this row is a member of. A member of nothing reads as
-  // nothing; a member its owner omits reads as its default (ADR-0032). Absent means every owner is
+  // nothing; a member its owner omits reads as its default (ADR-0005). Absent means every owner is
   // present.
   ownerPresent?: (column: ColumnKey) => boolean;
   // Per column, the shape of a member whose type varies by the owner's leaf: the variant that
@@ -210,7 +210,7 @@ export function DiffRow({
 
   return (
     <tr style={{ backgroundColor: rowBg, ...(isRowFocused ? focusedRowStyle : undefined) }}>
-      {/* ADR-0034: double-clicking the label column expands/collapses the node, the same action
+      {/* ADR-0018: double-clicking the label column expands/collapses the node, the same action
           the toggle button performs. For a row with no children the flip lands in
           expandedStructs, an entry nothing reads. */}
       <td
@@ -226,11 +226,11 @@ export function DiffRow({
       </td>
       {columns.map(col => {
         const { key, override } = col;
-        // ADR-0034: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`
+        // ADR-0018: no `userSelect: 'text'` — the cell is `draggable` at rest and `draggable`
         // consumes the mousedown that would start a selection, so adding it would tell the next
         // reader selection works here.
 
-        // ADR-0036: every per-column lookup below is keyed by `key` (this column's ColumnKey),
+        // ADR-0012: every per-column lookup below is keyed by `key` (this column's ColumnKey),
         // matching how the backend keys its own dictionaries — `[o.plugin]` would be wrong the
         // moment a non-Data-origin column exists.
 
@@ -251,12 +251,12 @@ export function DiffRow({
         const hasElement = rowIsStructural
           || ((ownerPresent?.(key) ?? true) && columnHasNode(cellMeta, diff.values[key]));
         const shown = hasElement ? diff.values[key] ?? defaultOf(cellMeta) : undefined;
-        // ADR-0034: the string Ctrl+C copies for this cell, computed once so the
+        // ADR-0018: the string Ctrl+C copies for this cell, computed once so the
         // struct/array-summary branch and the leaf branch below hand DiskCell the same value.
         const copyText = displayValue(shown, cellMeta, diff.resolutions?.[key]);
         // Array ops are offered only on a writable column.
         const arrayEditable = !!onArrayOp && editableColumns.has(key) && (isArrayParentRow || isArrayElementRow);
-        // ADR-0039: a `string` cell always carries its own right-click context, mutable or
+        // ADR-0018: a `string` cell always carries its own right-click context, mutable or
         // immutable alike — a read-only tab is still the only way to read a long immutable
         // value in full.
         const offersMenu = arrayEditable || meta.type === 'string';

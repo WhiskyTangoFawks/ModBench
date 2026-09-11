@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>Resuming the rebase a <c>Conflicted</c> outcome left mid-flight (ADR-0046 invariant 3).
+/// <summary>Resuming the rebase a <c>Conflicted</c> outcome left mid-flight (ADR-0014 invariant 3).
 /// Origin-scoped, like the rebase it continues.</summary>
 public sealed class ContinueRebaseEditBranchHandler
 {

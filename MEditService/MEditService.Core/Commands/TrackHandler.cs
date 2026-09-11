@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Core.Commands;
 
-/// <summary>The Track gesture's handler (ADR-0046 invariant 3). Parsing, serializing, the round-trip
+/// <summary>The Track gesture's handler (ADR-0014 invariant 3). Parsing, serializing, the round-trip
 /// gate, the commit and its own progress notifications stay on <see cref="TrackService"/>.</summary>
 public sealed class TrackHandler
 {

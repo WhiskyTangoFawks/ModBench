@@ -12,7 +12,7 @@ namespace MEditService.Core.Records;
 internal static class HeaderIndexer
 {
     /// <summary>Appends the header row and returns its <c>form_lookup</c> row rather than writing it,
-    /// so ADR-0031's one-lookup-row-per-record-row invariant is a property of a single flush.</summary>
+    /// so the one-lookup-row-per-record-row invariant is a property of a single flush.</summary>
     public static (string FormKey, string RecordType, string? EditorId) Index(
         PluginDocument header, string plugin, string origin, DuckDBAppender documentAppender)
     {

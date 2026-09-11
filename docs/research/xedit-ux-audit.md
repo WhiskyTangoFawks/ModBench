@@ -168,3 +168,15 @@ and the keys are accelerators onto it.
 > move its value, `F2` or a second click edits it in place, `Delete`/`Insert`/`Ctrl+Arrow` restructure
 > its list. Double click opens the fullest editor the type has. Ctrl turns references into links.
 > Drag copies values between columns. Nothing is activated by a single click.
+
+## Summary composition, ruled rather than read
+
+`wbDefinitionsFO4.pas` calls `SetSummaryKey` 74 times and `SetSummaryPassthroughMaxLength` twice,
+but `Core/wbInterface.pas` declares no `Summary` member and `Core/wbImplementation.pas` has no
+`SetSummaryKey`, `SetSummaryDelimiter` or `SetSummaryPassthroughMaxDepth`. The definitions are
+facts about the format; the machinery that consumes them is absent from the clone. One
+composition rule was ruled from the definitions alone: a `wbStructSK([n])`'s sort-key member leads
+its summary unless the definition sets `dfSummaryNoSortKey`, and a definition sets that flag
+exactly when member `n` already appears inside its own `SetSummaryKey`. Eight sites carry the flag
+in `wbDefinitionsFO4.pas` and all eight hold. It is why a script reads under its own name and a
+script object binding, whose sort key is already in its summary key, does not.

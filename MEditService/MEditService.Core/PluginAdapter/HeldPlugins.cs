@@ -9,12 +9,12 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.PluginAdapter;
 
-/// <summary>The copies the Index has open (ADR-0044), keyed by identity: what it read out of each
+/// <summary>The copies the Index has open (ADR-0013), keyed by identity: what it read out of each
 /// file. Not a load order — who wins and who participates is the kernel's value. Reconcile mutates
 /// it in place.</summary>
 internal sealed class HeldPlugins : IDisposable
 {
-    // ADR-0036: keyed by the compound (origin, filename) identity — two copies of one filename are
+    // ADR-0012: keyed by the compound (origin, filename) identity — two copies of one filename are
     // ordinarily held at once, and a filename-keyed dictionary would silently drop one. Joined into
     // one string so a single OrdinalIgnoreCase comparer covers both halves.
     private readonly Dictionary<string, ILoadedMod> _modsByKey = new(StringComparer.OrdinalIgnoreCase);
@@ -37,7 +37,7 @@ internal sealed class HeldPlugins : IDisposable
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0001: the MO2 instance root the index file is keyed on, because <c>origin</c>
+    /// <summary>ADR-0009: the MO2 instance root the index file is keyed on, because <c>origin</c>
     /// is a mod folder name and so is unique only within one instance. Null asks for an in-memory
     /// index.</summary>
     public string? InstanceRoot { get; }
@@ -96,7 +96,7 @@ internal sealed class HeldPlugins : IDisposable
         ILoadedMod? mod = null;
         try
         {
-            // The binary path — the "binary is for untracked plugins" overlay (ADR-0041
+            // The binary path — the "binary is for untracked plugins" overlay (ADR-0007
             // amendment) — needs the same explicit strings parameters Track does, or a Localized
             // untracked plugin throws instead of opening.
             var importTimer = Stopwatch.StartNew();

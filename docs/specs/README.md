@@ -30,6 +30,6 @@ Rules:
 
 - A spec describes **current behavior** plus clearly-marked planned sections. It is the source of truth for its surface: before building new UI on a surface, read its spec; when an initiative changes intended behavior, **update the spec first**.
 - When an initiative's slices ship, **fold the outcome back into the surface spec** — a spec that lags the product is a bug.
-- Specs use the vocabulary of their bounded context (see [CONTEXT-MAP.md](../../CONTEXT-MAP.md)); the "why" behind structural choices lives in [docs/adr/](../adr/), not here.
+- Specs use the vocabulary of their bounded context (see [CONTEXT.md](../../CONTEXT.md)); the "why" behind structural choices lives in [docs/adr/](../adr/), not here.
 
 The roadmap is the [GitHub Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) epic board — each milestone is an epic, its issues are the slices.

@@ -2,7 +2,7 @@ using Mutagen.Bethesda.Serialization.Customizations;
 
 namespace MEditService.Core.Serialization;
 
-/// <summary>Filename numbering is off (ADR-0042 decision 4): no list carries order, and a numbered
+/// <summary>Filename numbering is off (ADR-0006 decision 4): no list carries order, and a numbered
 /// name would carry one. No Omit* call exists: decision 3 admits no exception, and Omit*Data drops
 /// real fields.</summary>
 public sealed class RecordTextCodecCustomization : ICustomize

@@ -2,20 +2,17 @@
 
 Mod Management context — operates on mods and files, never on records or FormKeys. The
 mEdit-context vocabulary ("record", "FormKey") is absent here by construction
-([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary:
-[modmanager CONTEXT.md](../../modbench/src/modmanager/CONTEXT.md)).
+([CONTEXT.md](../../CONTEXT.md)).
 
 Architecture is fixed by four ADRs:
 
-- [ADR-0021](../adr/0021-mod-manager-in-extension.md) — the mod manager lives in the
+- [ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md) — the mod manager lives in the
   extension, not the backend.
-- [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) — the extension owns the
-  editing backend's lifecycle; MO2 compatibility is by file import, not VFS.
-- [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — MO2's
-  Mods/Plugins/Downloads panels map to native VS Code views and editor tabs, not a
-  custom panel switcher.
-- [ADR-0021](../adr/0021-mod-manager-in-extension.md)
-  — the modlist format **is** MO2's format, behind a source adapter.
+- [ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md) — mod management and
+  editing are one tool: no VFS, no running MO2, the extension owns the editing backend.
+- [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md) — MO2 is the
+  reference: its files are Modbench's files, worked on in place, and its panels map to native
+  VS Code views.
 
 Sibling surfaces: Editing ([medit.md](medit.md)); the Downloads tree
 ([downloads.md](downloads.md)); the Plugins load-order tree
@@ -171,7 +168,7 @@ requires a deploy.**
 - The mod manager is a subsystem of the VS Code extension (`modbench/src/modmanager/`). It
   is file/HTTP/JSON work and **never parses plugin binaries** beyond the tiny TES4-header
   master read; the C# backend stays a pure Mutagen + DuckDB record-editing service
-  ([ADR-0021](../adr/0021-mod-manager-in-extension.md)).
+  ([ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md)).
 - The **Plugin load-order** tree is a *separate* Mod-Management surface, specified in
   [plugins.md](plugins.md) — not a mode of this view.
 
@@ -185,7 +182,7 @@ requires a deploy.**
   persistent `viewsWelcome` content — "this isn't an MO2 instance, open the folder
   containing `ModOrganizer.ini`" — instead of an error tree. A real instance
   with a genuinely corrupt or unreadable `modlist.txt` still reports as an error
-  ([ADR-0026](../adr/0026-error-surfacing-policy.md)): while the Instance's first read has
+  ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)): while the Instance's first read has
   failed and nothing has landed, the tree is one error node carrying the read's reason, and the
   injected reporter is told once; the next landed value replaces it with rows. That distinction
   is structural presence vs. content, not "did a read fail."
@@ -195,7 +192,7 @@ requires a deploy.**
   reads as "no welcome" rather than as a false "not an instance".
 - Modbench edits mod files in place and MO2 deploys them on its next run, so the two
   **coexist at the filesystem level** — no process handoff, no VFS
-  ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)).
+  ([ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)).
 
 ### Editing vs deploying — the central decoupling
 
@@ -204,7 +201,7 @@ Two independent operations against the same physical mod files:
 - **Deploy (Build)** exists to let the *game* run. It hardlinks enabled mods' files into
   the game directory's `Data/`. It never needs an editing backend.
 - **Edit** exists to inspect/modify *records*. The backend loads plugins by physical path
-  (the load-order snapshot, ADR-0044) and writes them in place, reading vanilla masters
+  (the load-order snapshot, ADR-0013) and writes them in place, reading vanilla masters
   from the game directory. It never needs a deployed `Data/`.
 
 Because edits write to the physical mod file directly — which a hardlink in `Data/` would
@@ -255,8 +252,8 @@ the configured game directory's `Data/`.
 ### Modlist format & source adapters
 
 - Modbench does not invent a modlist format — its format **is** MO2's
-  ([ADR-0021](../adr/0021-mod-manager-in-extension.md)). The **Instance** reads it
-  ([ADR-0047](../adr/0047-the-extension-mirrors-the-backends-shape-one-read-model-built-only-by-watching.md))
+  ([ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md)). The **Instance** reads it
+  ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md))
   and the free-function commands in `modmanager/commands/` write it; there is no adapter object
   between them and the files.
 - **MO2 layout** (first-class): read/written in place — `mods/<name>/`, the
@@ -275,22 +272,22 @@ the configured game directory's `Data/`.
   active profile comes from `ModOrganizer.ini` (`[General] selected_profile`); the user
   switches via a quick pick and the choice is persisted back. The **load order is the active
   profile's** — switching profiles sends the new profile's snapshot to a running backend as the
-  next reconcile (ADR-0044); nothing tears down.
+  next reconcile (ADR-0013); nothing tears down.
 
 ### Backend lifecycle (editing integration)
 
 The extension owns the editing backend process
-([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)):
+([ADR-0002](../adr/0002-mod-management-and-editing-are-one-tool.md)):
 
 - **Spawn** — at activation (a launch that found no game
   directory retries when `modbench.mods.gameDirectory` changes).
-- **Load order** — sent whole as the `PUT /load-order` snapshot (ADR-0044): every physical
+- **Load order** — sent whole as the `PUT /load-order` snapshot (ADR-0013): every physical
   plugin copy in the instance as `(name, path, origin, slot, enabled, winning)` — disabled
-  entries included (ADR-0035) — with vanilla masters prepended by the backend. One backend,
-  one load order — a second load on the same instance is refused (ADR-0001 point 6).
+  entries included (ADR-0013) — with vanilla masters prepended by the backend. One backend,
+  one load order — a second load on the same instance is refused (ADR-0009 point 5).
 - **Teardown** — closing the workspace; there is no Close command. Restarted on crash. **Switching profile or modlist is not a
   teardown** — it sends the new profile's snapshot to the running backend as the next
-  reconcile (ADR-0044); the backend keeps running (see *Profiles* above and *Profile
+  reconcile (ADR-0013); the backend keeps running (see *Profiles* above and *Profile
   selector* below, and `extension.ts`'s own comment: "a profile switch is the next
   snapshot, not a teardown").
 
@@ -312,7 +309,7 @@ The extension owns the editing backend process
   (triangle icon, mirroring MO2's clickable sortable column) flips the entire tree — root
   block order and the mods within each separator — to **winning-at-top** (raw `modlist.txt`
   file order). View order only — it never changes which mod wins a conflict (see
-  [modmanager/CONTEXT.md](../../modbench/src/modmanager/CONTEXT.md), "View order"). The toggle
+  [CONTEXT.md](../../CONTEXT.md), "View order"). The toggle
   is transient (not persisted across windows), matching the Filter/grouping toggle's
   behavior. A pinned **Overwrite** row (see *Overwrite folder* below) sits below everything
   when `overwrite/` is non-empty, outside all separator grouping.
@@ -349,7 +346,7 @@ The extension owns the editing backend process
     not by a third title-bar icon. That is the cost of the toggle template, weighed and accepted —
     a third slot-1-adjacent icon is what rule 2 of [containers.md](containers.md) exists to prevent.
   - **No matches** shows a message naming the term rather than a bare empty tree, which reads as
-    "there is nothing here". Rows that survive filtering by design — an ADR-0026 error row, this
+    "there is nothing here". Rows that survive filtering by design — an ADR-0019 error row, this
     tree's pinned Overwrite row — are content: the message asks the provider what is *showing*,
     not whether the term matched.
   - **Lifetime**: durable within the load order, across tree refreshes and underlying data changes;
@@ -360,7 +357,7 @@ The extension owns the editing backend process
   not this tree — switching profile swaps the modlist *and* `plugins.txt` *and* invalidates
   any running editing backend's load order, so its scope is the workspace. It opens a quick pick
   of directories under `profiles/`; selecting one persists `selected_profile`, refreshes the tree
-  and asks the load-order sync for the next snapshot (ADR-0044) — a running backend reconciles
+  and asks the load-order sync for the next snapshot (ADR-0013) — a running backend reconciles
   to the new profile rather than tearing down.
 - **Context menus**: a **mod** offers Open in Explorer, Add Separator Below, Move to
   Separator (quick pick of separators + "Ungrouped", moving the mod to the end of the
@@ -370,10 +367,10 @@ The extension owns the editing backend process
   separator).
 - **Write behavior**: every mutation (enable/disable, drag-reorder, separator ops, Move to
   Separator, Uninstall, New Empty Mod) writes to `modlist.txt` immediately, through the
-  free-function command for that gesture (`modmanager/commands/modlist.ts`, ADR-0047 point 6).
+  free-function command for that gesture (`modmanager/commands/modlist.ts`, ADR-0015 invariant 2).
   There is **no save/discard flow** in this
   view — unlike the Editing surface, whose edits land as working-tree source changes reviewed
-  and committed in the native Source Control panel (ADR-0041, medit-version-control.md).
+  and committed in the native Source Control panel (ADR-0007, medit-version-control.md).
 
 ### New empty mod
 
@@ -439,7 +436,7 @@ The extension owns the editing backend process
   also provide; **missing mod** when `modlist.txt` references a folder absent on disk; and
   **update available** (*planned*) when the Nexus version exceeds the installed `meta.ini`
   version. No status here is a fact about a plugin's contents: the extension parses no plugin
-  binary (ADR-0021), so master verdicts are the backend's and land on the Plugins rows
+  binary (ADR-0016), so master verdicts are the backend's and land on the Plugins rows
   ([plugins.md](plugins.md)).
 - The hover tooltip lists the conflicting files and the winner. File-level conflicts here
   are distinct from record-level conflicts (the Editing context's `ConflictClassifier`) —
@@ -452,7 +449,7 @@ the hardlink/manifest/purge core in `modmanager/deployer.ts`), offering deploy, 
 status (the manifest's presence) — one strategy, hardlinks, with no strategy interface: the
 symlink fallback stays a requirement, not a second implementation, until it actually ships.
 
-- **Deploy**: winners come from the Instance's own `files` value (ADR-0047), never a fresh
+- **Deploy**: winners come from the Instance's own `files` value (ADR-0015), never a fresh
   walk of `mods/`, so a deploy can never disagree with what the Mods tree shows or what the
   backend's load order sync last sent. Verify same-volume (else the stock-folder /
   symlink-fallback prompt); `fs.link` each winner into `Data/<relativePath>`, skipping
@@ -505,7 +502,7 @@ Everything in this section is a decision, not current behavior: today the
 
 Launching is a **VS Code task**, not a button. Tasks are the native "run a program" mechanism
 — a picker, user-editable configuration, terminal output, exit codes — and per
-[ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) the native capability is
+[ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md) the native capability is
 used rather than rebuilt. `launch.json` / `DebugConfigurationProvider` is *not* the right
 native mechanism despite the name: it is a debug-adapter contract, and there is no built-in
 "just run this executable" debug type, so it would mean writing a debug adapter whose only
@@ -567,7 +564,7 @@ The entry supplies *what* to run; the platform decides *how*:
   back to a prefix that is wrong.
 - **Never `steam -applaunch`** — it launches the Steam library copy regardless of the entry's
   binary, so a stock-folder loadout would run a game *without* the deployed mods: precisely
-  the silently-wrong-state failure [ADR-0026](../adr/0026-error-surfacing-policy.md) forbids.
+  the silently-wrong-state failure [ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md) forbids.
   It also returns immediately, so it cannot report anything about the run.
 
 Modbench runs natively on the host, so this is strictly more capable than MO2-under-Proton,
@@ -616,7 +613,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
   `modlist.txt` entry — so it never enables/disables, reorders, moves to a separator, or
   uninstalls like a mod.
 - **Visibility**: shown **only when the folder holds ≥1 file** (counted recursively; empty
-  subdirectories don't count), read from the Instance's `overwriteFileCount` field (ADR-0047).
+  subdirectories don't count), read from the Instance's `overwriteFileCount` field (ADR-0015).
   Driven **live** by the Instance's own watcher on `overwrite/` — the row appears the instant
   purge deposits files and disappears the instant they're cleared, with **no manual refresh**
   in the workflow (the Mods tree's existing general Refresh remains only as the universal
@@ -656,7 +653,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
   command** in `modmanager/commands/modlist.ts`, splicing through the `modlist.txt` kernel:
   it takes the instance root, the active profile and the gesture's own inputs, and returns
   `{ applied: true; wrote: boolean }` or `{ applied: false; refusal: string }` — never a
-  throw, never a read of the Instance, never a refresh or sync request (ADR-0047 point 6). A
+  throw, never a read of the Instance, never a refresh or sync request (ADR-0015 invariant 2). A
   scan test (`modmanager/commands/instanceScan.test.ts`, generic over the whole folder) and
   a small per-file one enforce the latter, in the style of `formatLiteralScan.test.ts`.
 - Install, profile switch, deploy and purge are free-function commands beside the

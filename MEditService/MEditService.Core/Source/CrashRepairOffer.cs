@@ -16,7 +16,7 @@ public enum CrashRepairReason
     /// never an external tool's doing.</summary>
     InterruptedCompile,
 
-    /// <summary>The binary could not be read while its mod folder and repo survive — ADR-0041's
+    /// <summary>The binary could not be read while its mod folder and repo survive — ADR-0007's
     /// "reads as untracked" case.</summary>
     MissingOrUnreadableBinary,
 }

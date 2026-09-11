@@ -1,11 +1,11 @@
 
 namespace MEditService.Core.Plugins;
 
-// One physical plugin copy the load order holds (ADR-0044). Participation and load-order
+// One physical plugin copy the load order holds (ADR-0013). Participation and load-order
 // membership are derived from LoadOrderIndex/Enabled/Winning, never stored, so a reconcile that
 // moves a flag cannot leave a cached verdict behind.
 
-// Origin (ADR-0036) is opaque here, never interpreted; record tables key on (form_key, origin,
+// Origin (ADR-0012) is opaque here, never interpreted; record tables key on (form_key, origin,
 // plugin), and every construction site must say which origin this is rather than fall back
 // silently.
 
@@ -44,7 +44,7 @@ public record PluginMetadata(
 /// once when the copy is opened; a copy that never opened has none.</summary>
 public sealed record PluginContent(bool IsLight, bool IsMaster, IReadOnlyList<string> Masters, int RecordCount);
 
-/// <summary>A copy that could not be opened is a row in an error state (ADR-0044): the rest of the
+/// <summary>A copy that could not be opened is a row in an error state (ADR-0013): the rest of the
 /// load order is unaffected, and the reason is reported here rather than as a failed
 /// reconcile.</summary>
 public record PluginLoadFailure(string Name, string Origin, string Reason)

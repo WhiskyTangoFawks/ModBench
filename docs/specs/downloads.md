@@ -9,9 +9,9 @@ Nexus API integration remain out of scope (see Nexus login below).
 
 Mod Management context — operates on downloads and mods; never on records.
 The mEdit-context vocabulary ("record", "FormKey") is absent here by construction
-([CONTEXT-MAP.md](../../CONTEXT-MAP.md)).
+([CONTEXT.md](../../CONTEXT.md)).
 
-Placement: [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) — a native
+Placement: [ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md) — a native
 sidebar `TreeView` (`modbench.downloads`), third in the `modbench` container
 below Mods and Plugins, registered collapsed by default. Downloads is occasional/rich
 rather than something referenced mid-navigation, so it doesn't compete with Mods and
@@ -46,7 +46,7 @@ that a user can alternate between MO2 and Modbench on the same instance, while f
 MO2's one UX wart — batch cleanup actions are kept out of the per-row context menu, and
 apply to a multi-selection instead. The row's right-click menu is VS Code's own native
 `view/item/context` menu (see
-[ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)), not a rendered
+[ADR-0017](../adr/0017-mo2-is-the-reference-for-mod-management.md)), not a rendered
 overlay.
 
 The tree reads the per-download `.meta` sidecar MO2 already writes: it derives each
@@ -160,7 +160,7 @@ bookkeeping.
 
 - The tree views the MO2 instance's shared `downloads/` folder
   (`<instanceRoot>/downloads/`), per
-  [ADR-0021](../adr/0021-mod-manager-in-extension.md).
+  [ADR-0016](../adr/0016-mod-management-lives-in-the-extension.md).
   Not a Modbench-private location — a user must be able to alternate between MO2 and
   Modbench on the same instance with no divergence.
 - Retention (keep vs. purge downloads after install) is **not a Downloads-tree decision**:
@@ -184,7 +184,7 @@ bookkeeping.
 Each `.meta`-suppressed file in `downloads/` becomes one `DownloadNode` `TreeItem`
 (`DownloadsProvider.ts`). While the Instance's first read has failed and nothing has landed, the
 tree is instead one error node carrying the read's reason, and the injected reporter is told
-once ([ADR-0026](../adr/0026-error-surfacing-policy.md)); the next landed value replaces it
+once ([ADR-0019](../adr/0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)); the next landed value replaces it
 with rows.
 
 - **Label** — `.meta` `name` when present and non-empty, else the raw filename (never
@@ -252,7 +252,7 @@ with rows.
 
 ### Live updates
 
-- The **Instance** (ADR-0047) owns the one watcher over `downloads/`: downloads (and
+- The **Instance** (ADR-0015) owns the one watcher over `downloads/`: downloads (and
   `.meta` changes) added, removed, or modified on disk land in its next recomputed value,
   and `DownloadsProvider` re-renders from that value on every landing — no user action and
   no manual Refresh (see *Toolbar* above). Events are debounced (200ms) so a single logical
@@ -300,7 +300,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
     row per candidate (label: mod name and version; description: "File ID match" when
     that candidate matched, named and sorted first, which is what makes it the QuickPick's
     default-highlighted row) plus a trailing "Install as a new mod…" row. Choosing a
-    candidate yields an upgrade of that mod's folder, replaced in place (ADR-0047 point 6);
+    candidate yields an upgrade of that mod's folder, replaced in place (ADR-0015 invariant 2);
     choosing "new mod" yields a new mod, which reaches the name prompt. **Esc** yields
     nothing at all and installs nothing.
   - **Visit on Nexus** — open `https://www.nexusmods.com/{gameSlug}/mods/{modID}`, where
@@ -348,7 +348,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   nothing of the tree. This mirrors the existing pure-logic layer
   (`statusChecker.ts`, `metaIni.ts`, `modlistText.ts`).
 - **`DownloadsProvider` / `DownloadNode`** (`DownloadsProvider.ts`) is a thin
-  `TreeDataProvider` reading the Instance's `downloads` field (ADR-0047): it owns no scan
+  `TreeDataProvider` reading the Instance's `downloads` field (ADR-0015): it owns no scan
   and no watcher of its own, runs the pure model over the Instance's rows to build
   render-ready ones, turns each into a `TreeItem` (see *Row rendering*), and holds the
   toolbar's transient view state (`showHidden`, `sortColumn`, `sortDescending` — reset on
@@ -376,7 +376,7 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   seam the upgrade pick is built on: an `InstanceValue` and a download's `modID`/`fileID`
   in, ordered `UpgradeCandidate[]` out, no `vscode` import. `DownloadsPanel.ts`'s
   `upgradePickItems` is the one place that turns a candidate into a `QuickPickItem`.
-- **`downloadsWatcher.ts`** is the Instance's own watcher over `downloads/` (ADR-0047); the
+- **`downloadsWatcher.ts`** is the Instance's own watcher over `downloads/` (ADR-0015); the
   tree has no watcher of its own and there is no manual Refresh — see *Toolbar*.
 - **`HiddenDownloadDecorationProvider`** dims hidden rows: a stateless
   `FileDecorationProvider` keyed on `resourceUri`, reading `DownloadsProvider.hiddenNames()`
@@ -482,6 +482,6 @@ tree lives beside the workspace's own Explorer, so an in-tree reveal action is r
   manual Refresh (a name filter exists — Slot 1 above — this is about the absence of a
   data-refresh control). Live entirely off `downloadsWatcher.ts` and the pure `downloads` model
   in `mo2/downloads.ts`.
-- Consequence of ADR-0027: this surface's shape — sidebar tree, collapsed by
+- Consequence of ADR-0017: this surface's shape — sidebar tree, collapsed by
   default, status-bar item deferred to Nexus integration — is resolved; downloads
   directory, endorsements and retention are closed by the Implementation Decisions above.

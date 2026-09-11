@@ -15,7 +15,7 @@ namespace MEditService.Tests.RealData;
 
 /// <summary>Order damage measured against the tree Track actually wrote, deserialized the way
 /// <see cref="MEditService.Core.Edits.PluginCompileService"/> does, against the original binary's
-/// own GRUP order. Expected 0 and 0 (ADR-0042 decision 4).</summary>
+/// own GRUP order. Expected 0 and 0 (ADR-0006 decision 4).</summary>
 public sealed class DialogueOrderDamageTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;

@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Api;
 
 /// <summary>"Typed" is the load-bearing word: an agent must branch on which refusal it got without
-/// matching on prose, so the refusal travels as a ProblemDetails extension (ADR-0026).</summary>
+/// matching on prose, so the refusal travels as a ProblemDetails extension (ADR-0019).</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
@@ -42,7 +42,7 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         return records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
     }
 
-    // The one envelope: an operation, a path of hops and a value (ADR-0032).
+    // The one envelope: an operation, a path of hops and a value (ADR-0005).
     private Task<HttpResponseMessage> PostEdit(string formKey, string member, object value) =>
         _client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/edit",
@@ -81,7 +81,7 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         var before = await _client.GetFromJsonAsync<long>("/load-order/sequence");
         (await PostEdit(formKey, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
-        // ADR-0046 invariant 5: read-your-writes belongs to the read side. The write leaves the
+        // ADR-0015 invariant 3: read-your-writes belongs to the read side. The write leaves the
         // edit for the Source watcher to project; the caller awaits the sequence before it reads.
         var awaited = await _client.GetAsync(
             new Uri($"/load-order/sequence/await?atLeast={before + 1}&timeoutMs=15000", UriKind.Relative));
@@ -171,7 +171,7 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         var response = await PostEdit(formKey, "HeightMax", 0.75);
 
         // A shaped ProblemDetails, not an empty 500. The tree is the only thing asked, so a document
-        // that cannot be read is a record the plugin does not hold (ADR-0046 invariant 7).
+        // that cannot be read is a record the plugin does not hold (ADR-0015 invariant 5).
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));

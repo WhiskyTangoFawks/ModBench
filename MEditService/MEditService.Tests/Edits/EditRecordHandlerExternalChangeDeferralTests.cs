@@ -8,7 +8,7 @@ using MEditService.Tests.TestSupport;
 namespace MEditService.Tests.Edits;
 
 /// <summary>An unanswered external-change question refuses every gesture on the single write path
-/// (ADR-0041), checked once ahead of anything the write would touch.</summary>
+/// (ADR-0003), checked once ahead of anything the write would touch.</summary>
 public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -103,7 +103,7 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     }
 
     // The rival this guards: scoping the marker per plugin again, which would let a second plugin's
-    // own deferral leave this one editable — ADR-0041 amendment makes the mod folder the one key.
+    // own deferral leave this one editable — ADR-0003 makes the mod folder the one key.
     [Fact]
     public void EditField_InADifferentMod_IsUnaffectedByThatModsDeferral()
     {

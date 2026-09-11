@@ -45,7 +45,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0044): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Blocks until the sweep has run; poll GET /load-order/status alongside for progress. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Blocks until the sweep has run; poll GET /load-order/status alongside for progress. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -224,7 +224,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates a new plugin at the given path/origin (ADR-0041), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer per ADR-0024) is responsible for that. */
+        /** @description Creates a new plugin at the given path/origin (ADR-0007), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer) is responsible for that. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -455,7 +455,7 @@ export interface paths {
         put?: never;
         /**
          * Delete a record as a working-tree change.
-         * @description Deletes the record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0041), the same as any other dangling link.
+         * @description Deletes the record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other dangling link.
          */
         post: operations["DeleteRecord"];
         delete?: never;
@@ -495,7 +495,7 @@ export interface paths {
         put?: never;
         /**
          * Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.
-         * @description Serializes the source record's own text, verbatim, into the destination plugin's working tree under the identical FormKey — no Mutagen deserialization, since a record's stored document is already byte-identical to its source file. The destination's master dependency on the record's origin is derived at compile from the bytes it now carries (ADR-0038); no copy-specific master handling happens here.
+         * @description Serializes the source record's own text, verbatim, into the destination plugin's working tree under the identical FormKey — no Mutagen deserialization, since a record's stored document is already byte-identical to its source file. The destination's master dependency on the record's origin is derived at compile from the bytes it now carries (ADR-0008); no copy-specific master handling happens here.
          */
         post: operations["CopyRecordAsOverride"];
         delete?: never;

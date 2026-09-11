@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
 import { findUnlistedPlugins } from './unlistedPlugins';
 
-// The plugin files the effective load order does not point at (ADR-0035): a copy shadowed by
+// The plugin files the effective load order does not point at (ADR-0013): a copy shadowed by
 // a winning mod, or a file plugins.txt never names.
 
 // Discovery reads filesByMod only; the load-order set is passed in already resolved.

@@ -12,7 +12,7 @@ using Noggog;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0036: plugin identity is (origin, filename), not filename alone. These tests exercise
+// ADR-0012: plugin identity is (origin, filename), not filename alone. These tests exercise
 // the DuckDbRecordIndex seam directly with two independently-built Fallout4Mods that share a
 // filename.
 public class CompoundPluginIdentityTests
@@ -56,7 +56,7 @@ public class CompoundPluginIdentityTests
         Assert.Contains(overrides, o => o.Effective.EditorId == "FromModB");
     }
 
-    // ADR-0036: GetRecord's plugin filter must pick one origin's copy over the other's.
+    // ADR-0012: GetRecord's plugin filter must pick one origin's copy over the other's.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecord_ScopesToRequestedOrigin()
     {
@@ -73,7 +73,7 @@ public class CompoundPluginIdentityTests
         Assert.Equal("ModA", record.Plugin.Origin);
     }
 
-    // ADR-0036: without origin scoping, two same-filename origins' counts silently sum into one.
+    // ADR-0012: without origin scoping, two same-filename origins' counts silently sum into one.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_CountRecordsForPlugin_CountsRequestedOriginOnly()
     {
@@ -89,7 +89,7 @@ public class CompoundPluginIdentityTests
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
-    // ADR-0036: GetNativeFormKeys must not filter by plugin filename alone. The origins need genuinely
+    // ADR-0012: GetNativeFormKeys must not filter by plugin filename alone. The origins need genuinely
     // different FormKey sets, or a filter bug looks like a working one, so ModB carries a second NPC
     // and an origin-scoped read sees fewer keys.
     [Fact]
@@ -114,7 +114,7 @@ public class CompoundPluginIdentityTests
         Assert.Contains(secondKey.ToString(), modBKeys);
     }
 
-    // ADR-0036: a listing scoped to one filename must not silently merge both origins' rows.
+    // ADR-0012: a listing scoped to one filename must not silently merge both origins' rows.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
     {
@@ -202,7 +202,7 @@ public class CompoundPluginIdentityTests
         Assert.Equal(2L, (long)refCmd.ExecuteScalar()!);
     }
 
-    // ADR-0036: GetReferences never filters by plugin, so its rows must carry Origin, or two
+    // ADR-0012: GetReferences never filters by plugin, so its rows must carry Origin, or two
     // same-filename sources referencing one target cannot be told apart by any caller.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow()

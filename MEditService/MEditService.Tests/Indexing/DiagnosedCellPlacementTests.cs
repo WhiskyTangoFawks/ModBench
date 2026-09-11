@@ -10,8 +10,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>ADR-0023's side tables come from the GRUP hierarchy, read without the codec, so a cell
-/// whose document the codec refuses still lists and still holds its contents.</summary>
+/// <summary>The placement side tables come from the GRUP hierarchy (ADR-0005), read without the
+/// codec, so a cell whose document the codec refuses still lists and still holds its contents.</summary>
 public sealed class DiagnosedCellPlacementTests
 {
     private const string Plugin = "Diagnosed.esp";

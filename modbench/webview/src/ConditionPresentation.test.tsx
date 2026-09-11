@@ -468,7 +468,7 @@ describe('a condition shows one row per parameter slot in use', () => {
   });
 });
 
-// The cascade is the writer's (ADR-0032): a change to a governing member posts that one leaf, and
+// The cascade is the writer's (ADR-0005): a change to a governing member posts that one leaf, and
 // the backend clears the slots the new value idles from the document it holds.
 describe('a governing member posts its own value and nothing else', () => {
   it('changing Run On away from Reference posts one set of Run On', async () => {

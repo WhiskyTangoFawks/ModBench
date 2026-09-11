@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>A mod with two plugins is one deferral (ADR-0041 amendment): the marker names the mod
+/// <summary>A mod with two plugins is one deferral (ADR-0003): the marker names the mod
 /// folder, not a plugin, so an unanswered question refuses edits on every plugin the mod holds.</summary>
 public sealed class TwoPluginModDeferralTests : IDisposable
 {

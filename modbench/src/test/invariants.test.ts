@@ -7,7 +7,7 @@ import { join } from 'node:path';
 const SRC = join(__dirname, '..');
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
-// ADR-0021: a write verb is a surgical edit of one MO2 text file, and the corpus tests are what
+// ADR-0017: a write verb is a surgical edit of one MO2 text file, and the corpus tests are what
 // prove it touched nothing else. A verb without one is unproven.
 describe('every MO2 text-file write command has a corpus test', () => {
   const WRITERS = ['modmanager/commands/modlist.ts', 'modmanager/commands/plugins.ts', 'modmanager/commands/profile.ts'];
@@ -27,7 +27,7 @@ describe('every MO2 text-file write command has a corpus test', () => {
 });
 
 // A verb is an exported function whose signature answers with a result — `applied` inline, or
-// one of the named `…Result` types every gesture returns (ADR-0047 point 6).
+// one of the named `…Result` types every gesture returns (ADR-0015 invariant 2).
 function commandVerbs(source: string): string[] {
   return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
     .filter((m) => /applied|Result>/.test(m[2]))
@@ -57,7 +57,7 @@ describe('title-bar rule 7: showCollapseAll marks exactly the hierarchical trees
   });
 });
 
-// ADR-0035: read-only-for-editing is a tooltip; a contextValue for it would grow a second menu.
+// ADR-0017: read-only-for-editing is a tooltip; a contextValue for it would grow a second menu.
 describe('no contextValue encodes read-only', () => {
   it.each(sourceFiles())('%s', (file) => {
     expect(readOnlyContextValues(read(file))).toEqual([]);

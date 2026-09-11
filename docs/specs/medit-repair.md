@@ -1,17 +1,17 @@
 # Repair — Surface Specification (malformed-plugin repair)
 
-**Status: Specced — not built.** Decision recorded in [ADR-0043](../adr/0043-malformed-plugins-are-repaired-by-a-byte-level-table-driven-engine.md). Depends on the diagnosis floor, which splits into three pieces of work: the `PluginDiagnosis` core and Kind A tail; the Kind B per-class detector tables; and the Problems-panel/reconcile surface (blocked on the detectors). Survey evidence: the 684-plugin LitR round-trip survey; harness `MEditService.Tests/RealData/RoundTripSurvey.cs`.
+**Status: Specced — not built.** The ruling is [ADR-0006](../adr/0006-the-plugin-is-the-source-of-truth.md) invariant 7; the engine's design is this spec. Depends on the diagnosis floor, which splits into three pieces of work: the `PluginDiagnosis` core and Kind A tail; the Kind B per-class detector tables; and the Problems-panel/reconcile surface (blocked on the detectors). Survey evidence: the 684-plugin LitR round-trip survey; harness `MEditService.Tests/RealData/RoundTripSurvey.cs`.
 
 Editing context — operates on plugins, records and subrecords; never on mods or downloads
-([CONTEXT-MAP.md](../../CONTEXT-MAP.md)). Vocabulary: **Diagnosis**, **Malformed plugin**,
+([CONTEXT.md](../../CONTEXT.md)). Vocabulary: **Diagnosis**, **Malformed plugin**,
 **Repair** (lossless / lossy) in [CONTEXT.md](../../CONTEXT.md); journal replay after an
 interrupted write is *Crash recovery* there, so "repair" is unambiguous.
 
-xEdit reference ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)):
+xEdit reference ([ADR-0018](../adr/0018-xedit-is-the-reference-for-record-editing.md)):
 xEdit's answer to a malformed plugin is *tolerance* — it loads what it can, shows the rest as
 unknown/hidden (`wbEPF2DontShow`, unresolved references), and **Check for Errors** reports;
 the fix is manual or a Pascal script, and saving re-serializes in definition order. Repair is
-therefore an opt-in power-user addition xEdit never had (permitted by the ADR-0034 amendment —
+therefore an opt-in power-user addition xEdit never had (permitted by the ADR-0018 amendment —
 baseline, not ceiling), not a redefinition of any xEdit gesture. Its *target* is xEdit's: what
 the Creation Kit would have written.
 
@@ -98,7 +98,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   written before this returns.
 - **Write**: the repaired binary replaces the plugin file **in the mod folder**, through the
   same prepare/commit path Save & Compile uses (`PluginWriter`: journal markers,
-  `UnfinishedBatch`, and the ADR-0008 timestamped `<plugin>.bak` beside the file, pruned to
+  `UnfinishedBatch`, and the timestamped `<plugin>.bak` beside the file, pruned to
   five) — no repair-specific backup file. MO2 recognises plugins by `.esp/.esm/.esl` suffix
   only, so the `.bak` is invisible to its plugin list. Header `HEDR.NumRecords`/`NextObjectID`
   untouched; record and GRUP sizes recomputed by the engine, which is the only
@@ -122,7 +122,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   diagnosis.
 - **Row decoration**: a plugin carrying a Kind B diagnosis gets a plugin-row decoration
   through the existing load-order-derived decoration mechanism (`PluginsTreeProvider`'s own
-  `TreeItem` description/tooltip, the same one ADR-0037's master/load-failure decorations use;
+  `TreeItem` description/tooltip, the same one the master and load-failure decorations use;
   badge-priority rule in [plugins.md](plugins.md)) — no new
   mechanism. Later, in the Diagnostics & code actions milestone, the diagnosis is a
   lightbulb whose fix action is this gesture.
@@ -156,7 +156,7 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
 - MSWP differing `FNAM` (Mutagen upstream issue 687 — the version gate is dead code).
 - FormLinks inside `ScriptStructListProperty` (Mutagen upstream issue 688 — master pruned on write).
 - Region "second same-type `RDAT`" — not a defect; the real defect was R2.
-- Anything model-identity (ADR-0042's gate) or encoding-class (`-0.0`, float colours, zlib level).
+- Anything model-identity (ADR-0006's gate) or encoding-class (`-0.0`, float colours, zlib level).
 
 ## Requirements
 
@@ -176,7 +176,7 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
    item and confirming the modal that names it — are the consent; no per-record prompt.
 6. **Never silent, never implicit.** No load path, Track, or Compile repairs anything.
    Repair is a named command with a modal.
-7. **Backup and journal.** The ADR-0008 `.bak` and the journaled `PluginWriter` path, exactly
+7. **Backup and journal.** The timestamped `.bak` and the journaled `PluginWriter` path, exactly
    as Save & Compile; a failed verification rolls back from the `.bak`.
 8. **Ownership.** The plugin file may be changed by MO2/xEdit/the user between diagnosis and
    write; the engine re-reads and re-diagnoses at write time and refuses if the bytes moved.
@@ -229,3 +229,13 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
 - Modlist-wide batch repair; scheduled or automatic repair.
 - xEdit script generation or any Pascal.
 - Changing what Track/Compile refuse or how the diagnosis is worded.
+
+## Alternatives rejected
+
+- **Ask Mutagen for lenient parsing.** Its typed model has nowhere to put a surplus list entry or
+  a junk subrecord; order tolerance might be accepted, shape tolerance would not, and every
+  upstream fix arrives bundled with an upgrade. It does not serve the user who has the plugin
+  today. Upstream effort goes to Kind A, where Mutagen is wrong.
+- **xEdit as the mechanism.** Right by construction, but it breaks the flow: a Windows or Wine
+  round trip mid-Track, no automation, no CI, a second language to maintain. Kept as the escape
+  hatch the diagnosis points at, and as the parity oracle for the detector table.

@@ -66,7 +66,7 @@ function elementContext(path: ArrayElementContext['path']): ArrayElementContext 
   };
 }
 
-// ADR-0041: the right-click gesture writes from the host, so the observable is the port call
+// ADR-0007: the right-click gesture writes from the host, so the observable is the port call
 // — one envelope per gesture, never a message back into the panel.
 describe('right-click array ops write one envelope from the host', () => {
   it('Add lands an add envelope at a nested array\'s own path', async () => {
@@ -120,7 +120,7 @@ describe('right-click array ops write one envelope from the host', () => {
   });
 
   // The webview posts what the user asked for; a move off either end is refused by name at the
-  // backend (ADR-0032), never silently dropped here.
+  // backend (ADR-0005), never silently dropped here.
   it('Move Up on the first element still lands the move, to the position before it', async () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
@@ -163,7 +163,7 @@ describe('right-click array ops write one envelope from the host', () => {
   });
 });
 
-// ADR-0039: right-click is the extended editor's only trigger, and the host opens the tab from the
+// ADR-0018: right-click is the extended editor's only trigger, and the host opens the tab from the
 // context it is handed rather than asking the panel for anything.
 describe('the extended editor opens and saves from the host', () => {
   function openedWith(): { params: OpenExtendedFieldEditorParams; deps: ExtendedFieldEditorDeps } {

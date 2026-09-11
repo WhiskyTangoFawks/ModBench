@@ -17,7 +17,7 @@ export function registerRevealInExplorerCommand(
     const name = node.plugin.name;
     const filePath = await pluginsTree.resolvePluginPath(name);
     if (!filePath) {
-      // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
+      // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
       revealReporter.report('error', `Could not resolve a file location for "${name}".`);
       return;
     }
@@ -54,7 +54,7 @@ function promptPluginName(): Thenable<string | undefined> {
   });
 }
 
-// ADR-0041: only once Editing's create endpoint has actually succeeded does Mod Management's
+// ADR-0007: only once Editing's create endpoint has actually succeeded does Mod Management's
 // `appendPlugin` add the load-order line — never the other way around, so the load order can
 // never name a file that does not exist.
 async function appendCreatedPluginToLoadOrder(

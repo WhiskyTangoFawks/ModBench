@@ -10,7 +10,7 @@ using Noggog;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>The in-memory bytes must be the source file's bytes (ADR-0041), so they are asserted
+/// <summary>The in-memory bytes must be the source file's bytes (ADR-0007), so they are asserted
 /// against the committed golden and against what <see cref="RecordTextCodec.SerializeAsync"/>
 /// writes for a dense real record, never against themselves.</summary>
 public class RecordTextCodecInMemoryTests

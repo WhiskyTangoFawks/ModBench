@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>The friction is deliberate (ADR-0041), which is why the refusal must name the way
+/// <summary>The friction is deliberate (ADR-0007), which is why the refusal must name the way
 /// out.</summary>
 public sealed class UntrackedReadOnlyTests
 {

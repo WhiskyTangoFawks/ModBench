@@ -58,7 +58,7 @@ public sealed class SourceRepositoryLatestBaselineTrailersTests
     [Fact]
     public void LatestBaselineTrailers_ReadsMainEvenWithTheEditBranchCheckedOut()
     {
-        // Track always leaves the edit branch checked out (ADR-0041) — this is the normal state of
+        // Track always leaves the edit branch checked out (ADR-0007) — this is the normal state of
         // a tracked mod's working tree at every point after Track returns, so reading "main" here
         // must not silently mean "whatever's checked out".
         var modFolder = NewModFolder();

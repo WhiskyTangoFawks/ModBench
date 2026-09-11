@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-/// <summary>ADR-0046 invariant 6: the projector validates at load, before the load order answers. A
+/// <summary>ADR-0015 invariant 4: the projector validates at load, before the load order answers. A
 /// tracked copy whose documents moved while nothing ran is corrected there, not on the next
 /// read.</summary>
 public sealed class ValidateAtLoadTests

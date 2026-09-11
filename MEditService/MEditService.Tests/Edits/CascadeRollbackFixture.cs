@@ -56,7 +56,7 @@ public sealed class CascadeRollbackFixture : IDisposable
     public FormKey FirstNpc { get; }
     public FormKey SecondNpc { get; }
 
-    /// <summary>ADR-0046 invariant 4: with the Source watcher wired the way the composition root
+    /// <summary>ADR-0015 invariant 2: with the Source watcher wired the way the composition root
     /// wires it, a write reaches the Index the one way production allows.</summary>
     public static CascadeRollbackFixture Watched() => new(watched: true);
 

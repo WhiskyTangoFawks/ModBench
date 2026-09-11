@@ -11,7 +11,7 @@ import { makeReporter } from '../reporter';
 // lives in medit/externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —
 // importing back from here would cycle the two modules.
 
-/** ADR-0046 invariant 12: the plugin watcher's signal drives the one dialog directly — no poll,
+/** ADR-0014 invariant 2: the plugin watcher's signal drives the one dialog directly — no poll,
  *  no health gate, since `client.subscribe` already follows the backend's lifecycle. Returns the
  *  unsubscribe. */
 export function wireExternalChangePending(

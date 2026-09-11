@@ -79,7 +79,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
         await work.WaitAsync(Generous);
     }
 
-    // --- The Source watcher's own timer-driven index write (ADR-0046 invariant 4) ---
+    // --- The Source watcher's own timer-driven index write (ADR-0015 invariant 2) ---
 
     [Fact]
     public async Task RefreshKeys_WaitsForAnInFlightWriteToRelease()

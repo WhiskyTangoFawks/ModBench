@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Masters are derived from content (ADR-0038) and written in the current load order,
+/// <summary>Masters are derived from content (ADR-0008) and written in the current load order,
 /// never Mutagen's alphabetical default or the plugin's own prior header.</summary>
 public sealed class PluginCompileServiceMastersTests : IDisposable
 {
@@ -99,7 +99,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         CompileServices.Over(_loadOrder);
 
     // The set the Index's masters read computed from its references table, now derived by running the
-    // collector over the same records (ADR-0038).
+    // collector over the same records (ADR-0008).
     [Fact]
     public void Compile_ReportsTheEffectiveMasters_InLoadOrder()
     {
@@ -122,7 +122,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     }
 
     // The other half of the Index's masters rule: a plugin whose record this one overrides is a
-    // master whether or not anything here references it (ADR-0038).
+    // master whether or not anything here references it (ADR-0008).
     [Fact]
     public void Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
     {
@@ -192,7 +192,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         var masterNames = overlay.MasterReferences.Select(m => m.Master.FileName.String).ToList();
         Assert.Contains(DeltaName, masterNames);
         // Load order (Charlie, Bravo, Delta all precede MastersHost), not the order the edit listed
-        // FormKeys in: the same ADR-0038 claim, against a master this edit makes effective.
+        // FormKeys in: the same ADR-0008 claim, against a master this edit makes effective.
         Assert.Equal([CharlieName, BravoName, DeltaName], masterNames);
     }
 }

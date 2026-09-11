@@ -55,7 +55,7 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     diff: effectiveDiff,
     meta: strMeta,
     columns: [diskColumn(master), diskColumn(mod)],
-    // ADR-0035/ADR-0036: dimming is the panel's one answer; immutability alone is not part of it.
+    // ADR-0013/ADR-0012: dimming is the panel's one answer; immutability alone is not part of it.
     dimmedColumns: new Set(),
     collapsedColumns: new Set(),
     // Empty by default — editability is opt-in per fixture, never something a test inherits
@@ -100,7 +100,7 @@ describe('DiffRow — top-level scalar row', () => {
     expect(screen.getByText('▼')).toBeInTheDocument();
   });
 
-  // ADR-0041: with no editable columns wired, no cell opens an editor on any gesture.
+  // ADR-0007: with no editable columns wired, no cell opens an editor on any gesture.
   it('a value cell opens no editor on click, second click or double click', () => {
     renderRow({ meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
     const cell = screen.getAllByText('5')[1]; // MyMod.esp
@@ -152,7 +152,7 @@ describe('DiffRow — dimmed columns', () => {
 
 describe('DiffRow — drag affordance on leaf cells', () => {
 
-  // ADR-0034: no `grab` on any value cell — the grid rests on the
+  // ADR-0018: no `grab` on any value cell — the grid rests on the
   // default arrow, and drag is simply unadvertised (as in xEdit) rather than shown by the cursor.
   it('shows no grab cursor at rest on a leaf cell', () => {
     renderRow();
@@ -162,7 +162,7 @@ describe('DiffRow — drag affordance on leaf cells', () => {
 });
 
 
-// ADR-0034: focus identity lives above DiffRow, which reports the clicked row and plugin and
+// ADR-0018: focus identity lives above DiffRow, which reports the clicked row and plugin and
 // reflects back the `focusedCell` it was given.
 describe('DiffRow — cell focus', () => {
   it('clicking a value cell reports its row and plugin to onFocusCell', () => {
@@ -214,7 +214,7 @@ describe('DiffRow — cell focus', () => {
     expect(document.body).toHaveFocus();
   });
 
-  // ADR-0036: two columns sharing a filename but differing in origin must focus independently.
+  // ADR-0012: two columns sharing a filename but differing in origin must focus independently.
   // A bare-string FocusedCell.plugin would read both as focused.
   it('focusing one of two same-filename, different-origin columns does not focus the other (AC5)', () => {
     const colA = override('Shared.esp', { origin: 'ModA' });
@@ -232,7 +232,7 @@ describe('DiffRow — cell focus', () => {
   });
 });
 
-// ADR-0031: the affordance keys off the leaf's own `diff.resolutions` entry, not the parent
+// ADR-0005: the affordance keys off the leaf's own `diff.resolutions` entry, not the parent
 // field's aggregate `checkError` — a dangling sibling must not hide a live link beside it.
 describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
   const fkMeta = fieldMeta({ name: '', type: 'formKey' });
@@ -503,9 +503,9 @@ describe('DiffRow — formKey cell wiring', () => {
   });
 });
 
-// ADR-0039: the extended editor's only trigger is the string cell's right-click menu, driven by
+// ADR-0018: the extended editor's only trigger is the string cell's right-click menu, driven by
 // the `data-vscode-context` attribute DiskCell carries; no left-click gesture reaches it.
-describe('DiffRow — string cell right-click menu (ADR-0039)', () => {
+describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
   function stringContext(text: string, index = 0): Record<string, unknown> {
     const td = screen.getAllByText(text)[index].closest('td');
     const attr = td?.getAttribute('data-vscode-context');
@@ -703,7 +703,7 @@ describe('DiffRow — a collapsed container row, per column', () => {
     expect(cellText(1)).toBe('');
   });
 
-  // ADR-0032: a non-nullable struct has no unset, so the column omitting it holds its default.
+  // ADR-0005: a non-nullable struct has no unset, so the column omitting it holds its default.
   it('shows the placeholder in every column for a non-nullable struct one column omits', () => {
     renderContainer(
       { 'Fallout4.esm': { aliasId: 5 }, 'MyMod.esp': null },
@@ -754,7 +754,7 @@ describe('DiffRow — a collapsed container row, per column', () => {
 });
 
 // A labelled enum's values are Mutagen class names, so the cell speaks its label everywhere —
-// including Ctrl+C, which ADR-0034 binds to the one string the cell displays.
+// including Ctrl+C, which ADR-0018 binds to the one string the cell displays.
 describe('DiffRow — an enum whose values are wire tokens', () => {
   const kindMeta = fieldMeta({
     name: 'MutagenObjectType', type: 'enum',

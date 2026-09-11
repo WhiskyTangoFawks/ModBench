@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>A tracked plugin's read model is seeded from its source, never the compiled artifact
-/// (ADR-0041 amendment). The tree reads as documents, so tracked and untracked plugins share one
+/// (ADR-0003). The tree reads as documents, so tracked and untracked plugins share one
 /// indexing call.</summary>
 internal static class SourceIngest
 {
@@ -68,7 +68,7 @@ internal static class SourceIngest
         var deletedInWorkingTree = new List<(string FormKey, string RecordType, string Body)>();
         var needsStructuralFallback = false;
 
-        // Which plugin's subtree a dirty path sits under — not a container-path grammar (ADR-0041 amendment).
+        // Which plugin's subtree a dirty path sits under — not a container-path grammar (ADR-0003).
         var ownTreePrefix = $"{SourceRepository.RootFor(key.Name)}{Path.DirectorySeparatorChar}";
 
         foreach (var gitPath in dirty)
@@ -127,7 +127,7 @@ internal static class SourceIngest
             if (!File.Exists(fullPath))
             {
                 // Deleted in the working tree: gone at Effective, but it must keep answering at Head so the user
-                // can see, diff or revert it (ADR-0041).
+                // can see, diff or revert it (ADR-0007).
                 if (headText != null)
                 {
                     var goneFormKey = SourceRepository.RootStringIn(headText, FormKeyMember)
@@ -172,7 +172,7 @@ internal static class SourceIngest
     }
 
     // Diffs HEAD's documents against the working tree's by FormKey, needing no path identity
-    // (ADR-0041 amendment). A schema-unpublished type is skipped on the deletion side only: a
+    // (ADR-0003). A schema-unpublished type is skipped on the deletion side only: a
     // Head-only row for it could never be read back.
     private static void ReconcileHeadStructurally(
         string modFolder, PluginKey key, GameRelease gameRelease,

@@ -24,7 +24,7 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_IncludesPlacedRecordTypes()
     {
-        // ADR-0023: placed objects are indexed as normal records so the worldspace tree,
+        // ADR-0011: placed objects are indexed as normal records so the worldspace tree,
         // record editor, and agent queries are uniform DuckDB reads.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         Assert.True(schemas.ContainsKey("refr"));

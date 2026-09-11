@@ -97,7 +97,7 @@ const fkCompareResult = {
       values: { 'Fallout4.esm': '00013918:Fallout4.esm' },
       winnerColumn: 'Fallout4.esm',
       cellStates: {},
-      // ADR-0031: the backend carries a resolution signal per FormKey value; an unresolved
+      // ADR-0005: the backend carries a resolution signal per FormKey value; an unresolved
       // default would exercise no affordance at all.
       resolutions: { 'Fallout4.esm': { state: 'ResolvedValidType', recordType: 'race', editorId: 'HumanRace' } },
     },
@@ -358,7 +358,7 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  // ADR-0041: writing the binary is the separate Save & Compile gesture, scoped to a whole
+  // ADR-0007: writing the binary is the separate Save & Compile gesture, scoped to a whole
   // plugin, never a per-plugin control on this panel.
   it('offers no per-plugin Save — writing the binary is Save & Compile, not this panel', async () => {
     renderPanel(compareResult);
@@ -366,7 +366,7 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('Save')).not.toBeInTheDocument();
   });
 
-  // ADR-0034: a cell in an immutable column opens no input at all, however it is clicked —
+  // ADR-0018: a cell in an immutable column opens no input at all, however it is clicked —
   // nothing ever reaches a write from here.
   it('a cell in an immutable column opens nothing when clicked', async () => {
     renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
@@ -379,13 +379,13 @@ describe('RecordPanel', () => {
 });
 
 
-// ADR-0036: two columns sharing a filename but differing in origin — display never changes, so
+// ADR-0012: two columns sharing a filename but differing in origin — display never changes, so
 // only the compound (plugin, origin) identity can tell them apart.
 
 describe('RecordPanel — same-filename, different-origin columns', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // ADR-0036: filename in the header, origin inline only on collision. The rule is
+  // ADR-0012: filename in the header, origin inline only on collision. The rule is
   // response-driven — whatever same-filename pair arrives must render unambiguously.
   it('renders origin inline in both columns\' headers when two copies share a filename', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -435,7 +435,7 @@ describe('RecordPanel — column header native right-click menu', () => {
   });
 });
 
-describe('RecordPanel — a copy the load order does not name (ADR-0035)', () => {
+describe('RecordPanel — a copy the load order does not name (ADR-0013)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it('renders the column header dimmed and labeled distinctly from a vanilla master', async () => {
@@ -726,7 +726,7 @@ describe('RecordPanel — struct sub-rows', () => {
   });
 });
 
-describe('RecordPanel — incomplete-comparison banner (ADR-0035)', () => {
+describe('RecordPanel — incomplete-comparison banner (ADR-0013)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
@@ -1139,7 +1139,7 @@ describe('RecordPanel — an abstract union\'s leaf is an editable field', () =>
   });
 });
 
-// Absent means default (ADR-0032): the document omits a member equal to its default, and the grid
+// Absent means default (ADR-0005): the document omits a member equal to its default, and the grid
 // reads it back as that default. "—" is kept for a member whose metadata says null is a value.
 describe('RecordPanel — an absent member reads as its default', () => {
   const statsMeta: FieldMetadata = fieldMeta({
@@ -1324,7 +1324,7 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   });
 });
 
-// ADR-0032: absent means default. A non-nullable struct has no "unset", so the column that omits
+// ADR-0005: absent means default. A non-nullable struct has no "unset", so the column that omits
 // it holds that struct at its defaults, member by member.
 describe('RecordPanel — an absent non-nullable struct reads as its default members', () => {
   const sizeMeta: FieldMetadata = fieldMeta({
@@ -1495,7 +1495,7 @@ describe('RecordPanel — a column whose record failed to parse', () => {
     expect(arraySections('Good.esp')).not.toEqual([]);
   });
 
-  // ADR-0039 keeps Open in Editor… on a read-only column — it is the only way to read a long
+  // ADR-0018 keeps Open in Editor… on a read-only column — it is the only way to read a long
   // value in full — so what has to be pinned is that it cannot write.
   it('marks the extended editor read-only on its string cells, where the readable column does not', async () => {
     const { container } = renderPanel(compare, { plugins });

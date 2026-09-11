@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>The parked ref points at the baseline commit's own SHA (no second commit object) since
-/// the tree is literally the same content at Track time (ADR-0041).</summary>
+/// the tree is literally the same content at Track time (ADR-0003).</summary>
 public sealed class SourceRepositoryTrackParkedRefTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-parkedref-").FullName;

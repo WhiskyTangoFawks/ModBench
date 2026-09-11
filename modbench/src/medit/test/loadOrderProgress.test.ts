@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { makeReconcileProgressHandler, recordPanelIncompleteMessage } from '../loadOrderProgress';
 import type { LoadOrderProgress } from '../client';
 
-// ADR-0035: an absent conflict badge is indistinguishable from "no conflict", so the statement
+// ADR-0013: an absent conflict badge is indistinguishable from "no conflict", so the statement
 // names both facts. Gated on `conflictsComputed` alone — the whole-set sweep leaves a Ready
 // load order with stale winners until it re-runs.
 describe('recordPanelIncompleteMessage', () => {

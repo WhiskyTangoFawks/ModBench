@@ -4,7 +4,7 @@ using MEditService.Tests.TestSupport;
 namespace MEditService.Tests.Architecture;
 
 /// <summary>The write side's four shared concerns have one implementation each, in the module the
-/// gestures share (ADR-0046). A gesture resolving its own target, deferral, rename or FormKey fails
+/// gestures share (ADR-0014). A gesture resolving its own target, deferral, rename or FormKey fails
 /// here.</summary>
 public sealed class SharedConcernScanTests
 {
@@ -52,7 +52,7 @@ public sealed class SharedConcernScanTests
         Assert.Empty(Concerns.Where(c => Regex.Count(module, c.Needle) == 0).Select(c => $"{c.Concern}: {c.Needle}"));
     }
 
-    // ADR-0046's testing decision: the module is internal and has no suite of its own, so the
+    // ADR-0014's testing decision: the module is internal and has no suite of its own, so the
     // gestures are its tests. A suite naming it is one testing it directly.
     [Fact]
     public void NoTestFile_NamesTheSharedModule()

@@ -24,7 +24,7 @@ internal static class ModHeaderSchema
     [
         ("Author", SchemaRefusals.HeaderNoWritePathReason),
         ("Flags", SchemaRefusals.HeaderNoWritePathReason),
-        // Masters are read-only: content-derived at compile time (ADR-0038), so a write reaching
+        // Masters are read-only: content-derived at compile time (ADR-0008), so a write reaching
         // them is refused FieldReadOnly.
         (PluginHeader.MastersFieldName, "masters are wholly content-derived at compile time"),
     ];

@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.PluginAdapter;
 
-// ADR-0032 rule 2: the four verbs a plugin's bytes reach a live Mutagen mod through, and go back to
+// ADR-0005 rule 2: the four verbs a plugin's bytes reach a live Mutagen mod through, and go back to
 // bytes through. Every one takes the release, so nothing here names a game to do its work.
 public sealed class PluginAdapterTests
 {
@@ -67,7 +67,7 @@ public sealed class PluginAdapterTests
         Assert.Empty(mod.EnumerateMajorRecords());
     }
 
-    // ADR-0042: the header's stored NextObjectID is written as stored. Mutagen's own write default
+    // ADR-0006: the header's stored NextObjectID is written as stored. Mutagen's own write default
     // re-derives it, and for a record-less new plugin that derivation is zero.
     [Fact]
     public async Task CreateEmpty_ThenWritten_IsAPluginTheReadVerbOpens_CarryingItsStoredNextFormId()
@@ -91,7 +91,7 @@ public sealed class PluginAdapterTests
         }
     }
 
-    // ADR-0038: the caller's order is the written order, not Mutagen's undefined default.
+    // ADR-0008: the caller's order is the written order, not Mutagen's undefined default.
     [Fact]
     public async Task WriteAsync_WithAMasterOrder_WritesTheMasterListInThatOrder()
     {

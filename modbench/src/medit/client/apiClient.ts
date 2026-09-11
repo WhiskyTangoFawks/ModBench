@@ -10,7 +10,7 @@ type Schemas = components['schemas'];
 // only as a genuine transform (LoadOrderStatus).
 
 /** `GET /plugins`. Two held copies can share a filename, so name-keyed hand-offs read
- *  `inLoadOrder` rather than matching on the name (ADR-0044). */
+ *  `inLoadOrder` rather than matching on the name (ADR-0013). */
 export type PluginMetadata = Schemas['PluginResponse'];
 export type PluginDiagnosisReport = Schemas['PluginDiagnosisReport'];
 
@@ -27,7 +27,7 @@ export type CompileResult = Schemas['CompileResult'];
 export type CompileDiagnostic = Schemas['CompileDiagnostic'];
 
 /** One mod's queued question. `plugins`/`trackedFiles` can each be empty; `metaChanged` only
- *  informs the dialog's default button, never acts (ADR-0041). */
+ *  informs the dialog's default button, never acts (ADR-0007). */
 export interface UnansweredExternalChange {
   origin: string;
   plugins: string[];
@@ -37,11 +37,11 @@ export interface UnansweredExternalChange {
   newVersion: string | null;
 }
 
-/** ADR-0044: names the copy that failed — two copies of one name are two registrations. */
+/** ADR-0013: names the copy that failed — two copies of one name are two registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
 /** Rides `PUT /load-order`'s own response: either reason can newly arise only from a compile this
- *  process drives, or from a restart, and every reconcile observes both (ADR-0026). */
+ *  process drives, or from a restart, and every reconcile observes both (ADR-0019). */
 export type CrashRepairReason = Schemas['CrashRepairReason'];
 export type CrashRepairOffer = Schemas['CrashRepairOffer'];
 
@@ -75,7 +75,7 @@ export type WorldspaceSubBlock = Schemas['WorldspaceSubBlockDto'];
 export type WorldspaceBlock = Schemas['WorldspaceBlockDto'];
 export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
 
-/** `GET /notifications/stream`'s one wire shape for every kind (ADR-0046 invariant 12). `kind` is
+/** `GET /notifications/stream`'s one wire shape for every kind (ADR-0014 invariant 2). `kind` is
  *  a plain `string` on the schema — it is a discriminator, not a C# enum. */
 export type NotificationEvent = Schemas['NotificationEvent'];
 
@@ -94,7 +94,7 @@ export interface LoadOrderStatus {
    *  same as "no conflicts" — the distinction this whole endpoint exists to make. */
   conflictsComputed: boolean;
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
-   *  the reconcile finishes (ADR-0026). */
+   *  the reconcile finishes (ADR-0019). */
   failures: PluginLoadFailure[];
 }
 

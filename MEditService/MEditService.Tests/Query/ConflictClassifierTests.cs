@@ -132,7 +132,7 @@ public class ConflictClassifierTests
         Assert.Contains("000001:Test.esp", ex.Message);
     }
 
-    // ADR-0036: two columns sharing a filename, differing in origin. Bare-plugin
+    // ADR-0012: two columns sharing a filename, differing in origin. Bare-plugin
     // dictionary keys (o.Plugin) would collide here — ToDictionary throws on the literal duplicate
     // key "Shared.esp".
     [Fact]
@@ -242,7 +242,7 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
     }
 
-    // --- Participation (ADR-0035) ---
+    // --- Participation (ADR-0013) ---
 
     [Fact]
     public void Classify_OneEnabledOneDisabled_ReturnsOnlyOne_NotConflict()
@@ -271,7 +271,7 @@ public class ConflictClassifierTests
         Assert.Empty(result.Diffs);
     }
 
-    // ADR-0044: a losing copy of one filename is registered beside the winner and reaches the
+    // ADR-0013: a losing copy of one filename is registered beside the winner and reaches the
     // classifier as a second column with the same name. Keyed by ColumnKey, so the two are distinct
     // and the loser is filtered out first.
     [Fact]
@@ -1004,7 +1004,7 @@ public class ConflictClassifierTests
         Assert.False(yChild!.CellStates.ContainsKey("B.esp")); // JSON null → treated as absent
     }
 
-    // --- Resolutions (ADR-0031) ---
+    // --- Resolutions (ADR-0005) ---
 
     [Fact]
     public void Classify_ScalarFormKeyField_PopulatesResolutionPerPlugin()
@@ -1081,7 +1081,7 @@ public class ConflictClassifierTests
         Assert.Null(children.First(c => c.FieldName == "Rank").CheckErrors);
     }
 
-    // ADR-0016: a Partial Form override's own fields are excluded as if absent, and an exclusion is
+    // ADR-0018: a Partial Form override's own fields are excluded as if absent, and an exclusion is
     // not the record saying the link is unset, so its column reports no check error of its own.
     [Fact]
     public void Classify_PartialFormColumn_ReportsNoUnsetLinkCheckError()

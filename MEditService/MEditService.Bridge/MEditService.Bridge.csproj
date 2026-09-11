@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- ADR-0041: its own assembly so that knowing nothing of load orders or the DB is structural,
+    <!-- ADR-0007: its own assembly so that knowing nothing of load orders or the DB is structural,
          not a discipline someone has to remember. -->
   </PropertyGroup>
 

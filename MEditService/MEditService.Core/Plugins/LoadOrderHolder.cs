@@ -1,7 +1,7 @@
 namespace MEditService.Core.Plugins;
 
 /// <summary>Where the shared kernel keeps the current load order. The load-order and create-plugin
-/// endpoints are the only callers of <see cref="Apply"/> (ADR-0044: one arrival); everything else
+/// endpoints are the only callers of <see cref="Apply"/> (ADR-0013: one arrival); everything else
 /// reads Current.</summary>
 public sealed class LoadOrderHolder
 {

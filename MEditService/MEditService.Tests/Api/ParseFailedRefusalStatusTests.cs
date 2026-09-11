@@ -19,7 +19,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
     private readonly CopyFixture _mod = CopyFixture.Create(trackSource: true);
     private readonly IndexWriteGate _gate = new();
 
-    // Parse status comes from the codec at edit time (ADR-0046 invariant 7), so the record every
+    // Parse status comes from the codec at edit time (ADR-0015 invariant 5), so the record every
     // door here refuses is one whose document on disk the codec cannot read.
     public ParseFailedRefusalStatusTests()
     {

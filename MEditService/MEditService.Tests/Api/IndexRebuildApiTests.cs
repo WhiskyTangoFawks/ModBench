@@ -11,7 +11,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0046's Refresh rebuild, over its transport. The store is corrupted by hand, the
+/// <summary>ADR-0014's Refresh rebuild, over its transport. The store is corrupted by hand, the
 /// same reasoning as <see cref="ReconcileApiTests"/>: nothing else can make the index disagree
 /// with a system of record no other door has touched.</summary>
 [Collection(WebHostCollection.Name)]

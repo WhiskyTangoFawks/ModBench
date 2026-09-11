@@ -50,7 +50,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         }
 
         // No plugins.txt is written: the ordered snapshot is the load order. `Listed` puts a plugin
-        // in it and `Enabled` is the `*` prefix; every copy wins (ADR-0044) unless a test says so.
+        // in it and `Enabled` is the `*` prefix; every copy wins (ADR-0013) unless a test says so.
         var explicitPlugins = _plugins
             .Where(p => p.Listed)
             .Select((p, slot) => new LoadOrderEntry(p.Name, Path.Combine(dataFolder, p.Name), p.Origin, slot, p.Enabled, Winning: true))
@@ -120,7 +120,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 public sealed record PluginFixtureData(
     string DataFolder, IReadOnlyList<LoadOrderEntry> Plugins, string CleanupRoot) : IDisposable
 {
-    // The MO2 instance root this fixture stands in for (ADR-0001): the temp directory the Data
+    // The MO2 instance root this fixture stands in for (ADR-0009): the temp directory the Data
     // folder sits under, never the Data folder itself.
     public string InstanceRoot => CleanupRoot;
 
@@ -140,7 +140,7 @@ public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPlugin
 public sealed record ScatteredFixtureData(
     string Root, string GameDirectory, IReadOnlyList<LoadOrderEntry> Plugins) : IDisposable
 {
-    // The MO2 instance root this fixture stands in for (ADR-0001), also its cleanup root.
+    // The MO2 instance root this fixture stands in for (ADR-0009), also its cleanup root.
     public string InstanceRoot => Root;
 
     public void Dispose() => Directory.Delete(Root, recursive: true);

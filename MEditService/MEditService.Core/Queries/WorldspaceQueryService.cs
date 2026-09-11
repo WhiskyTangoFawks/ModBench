@@ -7,7 +7,7 @@ namespace MEditService.Core.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // ADR-0036: origin — stated by a caller that knows which copy of `plugin` it's
+    // ADR-0012: origin — stated by a caller that knows which copy of `plugin` it's
     // browsing (a tree row does; it was built from one), else resolved from the load order.
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null);
@@ -16,7 +16,7 @@ public interface IWorldspaceQueryService
 }
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner.
-/// See ADR-0023.</summary>
+/// See ADR-0005.</summary>
 public sealed class WorldspaceQueryService(
     IQueryIndex index, LoadOrderHolder loadOrder, ILogger<WorldspaceQueryService>? logger = null)
     : IWorldspaceQueryService

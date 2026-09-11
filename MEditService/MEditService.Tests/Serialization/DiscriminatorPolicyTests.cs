@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Serialization;
 
-/// <summary>A discriminator is written only when the group element type is abstract (ADR-0041); otherwise
+/// <summary>A discriminator is written only when the group element type is abstract (ADR-0007); otherwise
 /// the type identity is the index's <c>record_type</c>.</summary>
 public sealed class DiscriminatorPolicyTests
 {

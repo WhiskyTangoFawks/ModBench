@@ -2,7 +2,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>Against a real git repo in a scratch mod folder, never a mocked git (ADR-0041).</summary>
+/// <summary>Against a real git repo in a scratch mod folder, never a mocked git (ADR-0007).</summary>
 public sealed class SourceRepositoryTrackTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-").FullName;

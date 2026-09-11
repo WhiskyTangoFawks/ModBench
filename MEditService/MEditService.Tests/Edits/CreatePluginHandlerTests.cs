@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Edits;
 
-// ADR-0041: the destination is a caller-resolved (path, origin), a mod folder or overwrite/, never
+// ADR-0007: the destination is a caller-resolved (path, origin), a mod folder or overwrite/, never
 // implicitly Data, and the gesture never touches plugins.txt: that append is the caller's job.
 public sealed class CreatePluginHandlerTests : IDisposable
 {
@@ -114,7 +114,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.True(File.Exists(Path.Combine(modFolder, "New.esp")));
     }
 
-    // Editing requires tracking (ADR-0041), so an untracked destination is tracked in this same
+    // Editing requires tracking (ADR-0007), so an untracked destination is tracked in this same
     // gesture rather than left for a second one.
     [Fact]
     public async Task CreatePlugin_UntrackedDestination_TracksIt()

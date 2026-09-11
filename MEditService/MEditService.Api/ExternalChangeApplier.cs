@@ -6,7 +6,7 @@ using MEditService.Core.Records;
 
 namespace MEditService.Api;
 
-/// <summary>ADR-0046: the plugin watcher's external-change signals become notifications and a
+/// <summary>ADR-0014: the plugin watcher's external-change signals become notifications and a
 /// validate. The watcher carries only the bare mod folder; origin is resolved here.</summary>
 internal sealed class ExternalChangeApplier(
     IndexProjector index, LoadOrderHolder holder, INotificationPublisher notifications, ILogger logger)
@@ -22,7 +22,7 @@ internal sealed class ExternalChangeApplier(
             classification.MetaChanged, classification.OldVersion, classification.NewVersion));
     }
 
-    /// <summary>ADR-0046 invariant 6: an OS overflow on the classification watch, the same
+    /// <summary>ADR-0015 invariant 4: an OS overflow on the classification watch, the same
     /// overflow-to-validate shape <see cref="SourceChangeApplier"/> has for the Source side.</summary>
     internal void ApplyOverflow(string modFolder, string pluginName)
     {

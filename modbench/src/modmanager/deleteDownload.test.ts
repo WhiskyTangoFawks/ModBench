@@ -40,7 +40,7 @@ describe('deleteDownload', () => {
     expect(d.reportFailure).not.toHaveBeenCalled();
   });
 
-  it('surfaces the error (ADR-0026) when a trash operation fails', async () => {
+  it('surfaces the error (ADR-0019) when a trash operation fails', async () => {
     const d = deps({ trash: vi.fn(() => Promise.reject(new Error('EPERM'))) });
     await deleteDownload(d);
     expect(d.reportFailure).toHaveBeenCalledWith('EPERM');

@@ -6,7 +6,7 @@ using MEditService.Core.Plugins;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>The one envelope, spelled once for the tests: every gesture is an operation, a path of
-/// hops and an optional value (ADR-0032).</summary>
+/// hops and an optional value (ADR-0005).</summary>
 internal static class Envelopes
 {
     internal static PathHop Member(string name) => PathHop.Member(name);
@@ -16,7 +16,7 @@ internal static class Envelopes
     internal static RecordEditEnvelope SetAt(JsonElement value, params PathHop[] path) =>
         new(RecordEditEnvelope.Set, path, value);
 
-    /// <summary>A set of JSON null: the member is cleared and reads as its default (ADR-0032).</summary>
+    /// <summary>A set of JSON null: the member is cleared and reads as its default (ADR-0005).</summary>
     internal static RecordEditEnvelope Clear(params PathHop[] path) =>
         new(RecordEditEnvelope.Set, path, JsonDocument.Parse("null").RootElement);
 

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { PluginsTreeProvider, PluginsTreeNode } from './plugins/PluginsTreeProvider';
 import { makeReporter } from './reporter';
 
-/** ADR-0026: a failed toggle must surface and resync, never leave the checkbox disagreeing with
+/** ADR-0019: a failed toggle must surface and resync, never leave the checkbox disagreeing with
  *  plugins.txt. At the composition root because the event is the `TreeView`'s, not the
  *  provider's. */
 export async function onPluginCheckboxChanged(

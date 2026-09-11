@@ -44,7 +44,7 @@ export function recordTypeIdentity(arg: unknown): RecordTypeIdentity | undefined
   return { plugin: n.plugin, origin: n.origin, recordType: n.recordType };
 }
 
-// A node's own `origin` when the row already carries it (ADR-0036), else derived from
+// A node's own `origin` when the row already carries it (ADR-0012), else derived from
 // `getPlugins()`; reports and returns undefined when neither answers.
 function makeResolveOriginOrReport(
   client: Pick<MEditClient, 'getPlugins'>, outputChannel: vscode.LogOutputChannel,
@@ -65,7 +65,7 @@ type RecordLifecycleClient = Pick<MEditClient,
   // of its own.
   | 'editRecord'>;
 
-/** ADR-0034: xEdit hosts Add/Remove/Change FormID in its tree's context menu, not the grid, and
+/** ADR-0018: xEdit hosts Add/Remove/Change FormID in its tree's context menu, not the grid, and
  *  the titles match its captions exactly. No ambient fallback is worth a QuickPick, so all three
  *  are palette-gated. */
 export function registerRecordLifecycleCommands(
@@ -74,7 +74,7 @@ export function registerRecordLifecycleCommands(
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(client, outputChannel);
   // A create/delete/renumber landed: the same re-derive every write in this file needs
-  // (ADR-0035 amending ADR-0018) — a changed record can start or stop matching the active filter.
+  // (plugins.md) — a changed record can start or stop matching the active filter.
   const onWritten = () => { treeSync.refresh(); refreshMatchingPlugins(); };
 
   return [
@@ -129,7 +129,7 @@ export function registerRecordLifecycleCommands(
       try {
         suggested = await client.peekNextFreeFormKey(identity.plugin, origin);
       } catch (e) {
-        // Background/recoverable (ADR-0026): the input box still works with no prefill, so this is
+        // Background/recoverable (ADR-0019): the input box still works with no prefill, so this is
         // a log line, not a toast — the command is not blocked on it.
         outputChannel.warn(`[recordLifecycleCommands] record.renumber could not fetch a suggested FormKey: ${e instanceof Error ? e.message : String(e)}`);
       }

@@ -3,7 +3,7 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Tests.Query;
 
-// ADR-0037: a plugin declaring a master absent from the load order is flagged, distinguishing a
+// ADR-0012: a plugin declaring a master absent from the load order is flagged, distinguishing a
 // directly-missing master from one that is itself unloadable.
 public class MasterResolutionTests
 {

@@ -16,7 +16,7 @@ public interface ILoadedMod : IDisposable
 /// native to it, which is what an allocator may not draw again.</summary>
 public readonly record struct PluginFormIds(string HeaderText, IReadOnlySet<string> Native);
 
-/// <summary>Bytes to a live Mutagen mod and back (ADR-0032 rule 2). The game release is a parameter
+/// <summary>Bytes to a live Mutagen mod and back (ADR-0005 rule 2). The game release is a parameter
 /// of every verb, so no caller names a game to open or write a plugin.</summary>
 public interface IPluginAdapter
 {
@@ -25,7 +25,7 @@ public interface IPluginAdapter
     /// plugin.</summary>
     ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
 
-    /// <summary>The same plugin as the documents its source tree would hold (ADR-0041), for callers
+    /// <summary>The same plugin as the documents its source tree would hold (ADR-0007), for callers
     /// outside the codec/adapter pair. Owns the open until the result is disposed.</summary>
     IPluginDocuments OpenDocuments(
         ModPath modPath,
@@ -41,7 +41,7 @@ public interface IPluginAdapter
         IReadOnlyDictionary<string, RecordTableSchema> schemas);
 
     /// <summary>What a plugin's own binary says about the FormIDs it holds: its header as a document
-    /// (ADR-0041), and every FormKey native to it. No record becomes a document.</summary>
+    /// (ADR-0007), and every FormKey native to it. No record becomes a document.</summary>
     PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease);
 
     /// <summary>Whether any record in the plugin links <paramref name="target"/>,
@@ -63,8 +63,8 @@ public interface IPluginAdapter
     Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster);
 
     /// <summary>Bytes at <paramref name="destinationPath"/>, with neither backup nor rename — what
-    /// <see cref="PluginWriter"/> adds to replace a plugin in place (ADR-0008). Null takes Mutagen's
-    /// own master order (ADR-0038) and strings folder.</summary>
+    /// <see cref="PluginWriter"/> adds to replace a plugin in place. Null takes Mutagen's
+    /// own master order (ADR-0008) and strings folder.</summary>
     Task WriteAsync(
         IMod plugin,
         string destinationPath,

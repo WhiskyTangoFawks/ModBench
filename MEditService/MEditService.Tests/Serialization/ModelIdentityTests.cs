@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>Tested directly, not only through <c>TrackService</c>, so a regression in the mask
-/// reflection or the exclusion list fails at its own boundary (ADR-0042 decision 2).</summary>
+/// reflection or the exclusion list fails at its own boundary (ADR-0006 decision 2).</summary>
 public sealed class ModelIdentityTests
 {
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
@@ -89,7 +89,7 @@ public sealed class ModelIdentityTests
     }
 
     // Block, sub-block and cell order under a worldspace is encoding: the tree carries none, so the
-    // reader's directory enumeration decides it (ADR-0042 decision 4).
+    // reader's directory enumeration decides it (ADR-0006 decision 4).
     [Fact]
     public void FindFirst_WhenAWorldspacesBlockLevelsAreInAnotherOrder_ReturnsNull()
     {

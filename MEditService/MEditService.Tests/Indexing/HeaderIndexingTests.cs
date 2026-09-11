@@ -218,7 +218,7 @@ public class HeaderIndexingTests
         Assert.Equal("PluginB.esp", overridesB[0].Plugin.Name);
     }
 
-    // ADR-0036: two origins loading the same physical filename — a filename-only delete step would
+    // ADR-0012: two origins loading the same physical filename — a filename-only delete step would
     // make indexing ModB's copy of a shared-filename plugin silently delete ModA's header row before
     // inserting ModB's.
     [Fact]

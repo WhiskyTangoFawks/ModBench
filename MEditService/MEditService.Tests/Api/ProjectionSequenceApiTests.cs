@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0046's read side: a plain read of the sequence, and a bounded await that answers
+/// <summary>ADR-0014's read side: a plain read of the sequence, and a bounded await that answers
 /// whether a projection landed rather than sleeping the caller.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class ProjectionSequenceApiTests : IDisposable

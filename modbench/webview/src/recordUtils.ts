@@ -9,8 +9,8 @@ export function toStr(v: unknown): string {
   return JSON.stringify(v);
 }
 
-// ADR-0036: `key` is this column's compound identity, minted once here rather than re-derived, so
-// two same-filename columns stop colliding. ADR-0041/ADR-0019: one column per override — the
+// ADR-0012: `key` is this column's compound identity, minted once here rather than re-derived, so
+// two same-filename columns stop colliding. ADR-0007/ADR-0018: one column per override — the
 // record's full in-game resolution stack.
 export type Column = { key: ColumnKey; override: CompareOverride };
 
@@ -21,7 +21,7 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
 }
 
 // `immutableSet` says only that a column is immutable, which is ambiguous: a vanilla master is
-// immutable and named by the load order, while a copy the load order doesn't name (ADR-0036) is
+// immutable and named by the load order, while a copy the load order doesn't name (ADR-0012) is
 // immutable *because* it isn't.
 export type ColumnStatus =
   'parseFailure' | 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 'tracked';
@@ -37,7 +37,7 @@ export function columnStatus(
   return isTracked ? 'tracked' : 'untracked';
 }
 
-// ADR-0036: origin appears inline in the header only when two copies share a filename — computed
+// ADR-0012: origin appears inline in the header only when two copies share a filename — computed
 // from the overrides this compare response carries, never the load order's plugin list. Two rows
 // can never share both plugin and origin.
 export function collidingFilenames(overrides: CompareOverride[]): Set<string> {
@@ -118,7 +118,7 @@ export function headerCellContext(formKey: string, plugin: string, origin: strin
   return { webviewSection: 'recordHeader', formKey, plugin, origin, preventDefaultContextMenuItems: true };
 }
 
-// ADR-0039: a `string` cell's right-click entry is the extended editor's only trigger, since no
+// ADR-0018: a `string` cell's right-click entry is the extended editor's only trigger, since no
 // left-click gesture may reach it. Offered on immutable cells too — `readOnly` is what the
 // command's `when` clause acts on.
 export function stringValueContext(
@@ -182,7 +182,7 @@ export function wirePath(rootField: string, path: readonly PathSegment[], docume
   return hops;
 }
 
-// Absent means default (ADR-0032): the metadata names the default where it is not the type's
+// Absent means default (ADR-0005): the metadata names the default where it is not the type's
 // zero. A link, a struct and the text-encoded leaves have no default here, so they keep the
 // grid's "no value" rendering.
 export function defaultOf(meta: FieldMetadata): unknown {
@@ -196,7 +196,7 @@ export function defaultOf(meta: FieldMetadata): unknown {
   }
 }
 
-/** Whether a column holds this node. Absent means default (ADR-0032), and a non-nullable
+/** Whether a column holds this node. Absent means default (ADR-0005), and a non-nullable
  *  struct's default is that struct; a nullable one has an "unset" for its absence to mean. */
 export function columnHasNode(meta: FieldMetadata, value: unknown): boolean {
   return value != null || !(meta.type === 'struct' && meta.allowsNull);

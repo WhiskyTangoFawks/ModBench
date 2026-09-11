@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0046 invariant 6's reconcile request, over its transport. The store is corrupted by
+/// <summary>ADR-0015 invariant 4's reconcile request, over its transport. The store is corrupted by
 /// hand because nothing else can make the index disagree with a system of record no other door has
 /// touched.</summary>
 [Collection(WebHostCollection.Name)]

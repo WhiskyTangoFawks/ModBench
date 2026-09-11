@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0044: both holder writers are the API's, so a snapshot and a create landing at once
+/// <summary>ADR-0013: both holder writers are the API's, so a snapshot and a create landing at once
 /// compose rather than overwrite each other.</summary>
 [Collection(WebHostCollection.Name)]
 public sealed class CreateDuringReconcileApiTests

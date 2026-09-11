@@ -337,7 +337,7 @@ describe('RecordNode', () => {
   });
 
   // resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
-  // (plugin, origin, formKey) identity ADR-0036 already requires everywhere a record row is
+  // (plugin, origin, formKey) identity ADR-0012 already requires everywhere a record row is
   // addressed, via the synthetic medit-record: scheme (recordResourceUri.ts).
   it('carries a medit-record: resourceUri identifying (plugin, origin, formKey)', () => {
     const record = makeRecord(0);
@@ -401,7 +401,7 @@ describe('markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () =>
 
 // ── record rows carry their copy identity ─────────────────────────────────────
 // A record-scoped command acts on the clicked row's own copy, so the row says which copy it is
-// ((plugin, origin), ADR-0036); rows whose plugin cannot be edited hide Remove.
+// ((plugin, origin), ADR-0012); rows whose plugin cannot be edited hide Remove.
 
 describe('record rows carry their copy identity', () => {
   it('RecordNode carries the browsed origin, threaded from its RecordTypeNode', async () => {
@@ -681,7 +681,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 });
 
-// ── Fetch failures render an error node instead of an empty list (ADR-0026) ──
+// ── Fetch failures render an error node instead of an empty list (ADR-0019) ──
 
 describe('PluginTreeProvider fetch failures', () => {
   // The merged Plugins tree's rows are Mod Management's, not this provider's, so it needs a
@@ -801,7 +801,7 @@ describe('headerFormKeyFor', () => {
   });
 });
 
-// ── spatial node chain carries origin (ADR-0036) ───────────────────────────────
+// ── spatial node chain carries origin (ADR-0012) ───────────────────────────────
 // Every node in the chain must carry the origin its row was built with, or a deep node silently
 // reverts to browsing the load-order winner instead of the copy the user opened.
 
@@ -914,7 +914,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
   });
 });
 
-// ── browsing a specific copy of a filename (ADR-0036) ──────────────────────────
+// ── browsing a specific copy of a filename (ADR-0012) ──────────────────────────
 
 describe('PluginTreeProvider.getPluginChildren (origin)', () => {
   it('asks the repository for the copy the row stands for', async () => {

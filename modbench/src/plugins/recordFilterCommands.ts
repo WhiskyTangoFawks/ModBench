@@ -15,7 +15,7 @@ export interface FilterCommandDeps {
   client: Pick<MEditClient, 'setFilter' | 'clearFilter'>;
   treeProvider: PluginTreeProvider;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
-   *  unexpandable (ADR-0035). */
+   *  unexpandable (plugins.md). */
   refreshMatchingPlugins: () => void;
   /** The record filter's single writer — the context key, the code lens's active SQL, and the
    *  Plugins tree's readout. */
@@ -27,7 +27,7 @@ export interface FilterCommandDeps {
 export function registerFilterCommands(deps: FilterCommandDeps): vscode.Disposable[] {
   const { scriptsPath, client, treeProvider, refreshMatchingPlugins, setFilterActive } = deps;
 
-  // Symmetric on purpose (ADR-0035): a set and a clear both re-derive the same two things.
+  // Symmetric on purpose (plugins.md): a set and a clear both re-derive the same two things.
   const refreshAfterFilterChange = (): void => {
     treeProvider.refresh();
     refreshMatchingPlugins();

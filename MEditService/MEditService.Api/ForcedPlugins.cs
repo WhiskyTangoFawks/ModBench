@@ -6,7 +6,7 @@ using LoadOrder = MEditService.Core.Plugins.LoadOrder;
 
 namespace MEditService.Api;
 
-/// <summary>The plugins an install loads with no plugins.txt line of their own (ADR-0044). The one
+/// <summary>The plugins an install loads with no plugins.txt line of their own (ADR-0013). The one
 /// place a game directory is read for them: the load-order snapshot and the implicit-masters
 /// answer both come from here.</summary>
 public static class ForcedPlugins

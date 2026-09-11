@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSyn
 import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
 
-// ADR-0035/ADR-0036: Mods, Downloads, Toolbox and the Instance key a plugin by filename and
+// CONTEXT.md/ADR-0012: Mods, Downloads, Toolbox and the Instance key a plugin by filename and
 // origin, never by FormKey, and never reach the backend. The Plugins view is excluded — it
 // browses records by design.
 
@@ -283,7 +283,7 @@ describe('composition-root modules import from neither context', () => {
     expect(imports).toEqual(['vscode']);
   });
 
-  // ADR-0044: the sync is the one path by which Mod Management's snapshot reaches Editing.
+  // ADR-0013: the sync is the one path by which Mod Management's snapshot reaches Editing.
   // Importing `LoadOrderPlugin` rather than keeping the snapshot opaque would be a one-word change
   // that quietly makes this module part of Mod Management.
   it('the load-order sync imports from neither context', () => {

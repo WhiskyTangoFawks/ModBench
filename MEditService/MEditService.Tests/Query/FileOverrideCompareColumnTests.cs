@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Query;
 
-// ADR-0036: the compare grid is xEdit parity, the record's in-game resolution stack. A file-level
+// ADR-0012: the compare grid is xEdit parity, the record's in-game resolution stack. A file-level
 // loser is a file the game never loads, so it is not a column, though it stays indexed and
 // browsable.
 public sealed class FileOverrideCompareColumnTests
@@ -31,7 +31,7 @@ public sealed class FileOverrideCompareColumnTests
             holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        // ADR-0044: the snapshot carries both copies — plugins.txt names the filename once, so
+        // ADR-0013: the snapshot carries both copies — plugins.txt names the filename once, so
         // both share its slot, and only ModA is the copy the Mod override order resolves it to.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var snapshot = fx.Plugins

@@ -3,7 +3,7 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>ADR-0046 invariant 4: a write reaches the Index through the projector, never a push, so
+/// <summary>ADR-0015 invariant 2: a write reaches the Index through the projector, never a push, so
 /// a test that writes and then reads asks for the projection first. The reconcile is the channel
 /// with no timer in it.</summary>
 internal static class ProjectedReads

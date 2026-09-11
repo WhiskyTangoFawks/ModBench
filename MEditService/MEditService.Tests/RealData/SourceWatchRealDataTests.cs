@@ -96,7 +96,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
     }
 }
 
-/// <summary>ADR-0046 invariant 4 on real data: Track and a burst wider than any batch are each one
+/// <summary>ADR-0015 invariant 2 on real data: Track and a burst wider than any batch are each one
 /// projection of the plugin, and every row is right afterwards.</summary>
 public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture, ITestOutputHelper output)
     : IClassFixture<SourceWatchRealDataFixture>

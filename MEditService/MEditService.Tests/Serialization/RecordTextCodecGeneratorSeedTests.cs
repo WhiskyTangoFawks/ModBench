@@ -35,7 +35,7 @@ public class RecordTextCodecGeneratorSeedTests
 
     // The reflection check above sees only a public signature naming a mod type, never a call, so this
     // scans source text: the mixin's type name may appear only inside this whitelist of designated
-    // doors (ADR-0041).
+    // doors (ADR-0007).
     [Fact]
     public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
     {

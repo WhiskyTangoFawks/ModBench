@@ -13,7 +13,7 @@ using Noggog;
 namespace MEditService.Tests.Source;
 
 /// <summary>The repository's document verbs for the records no path names: a container's own
-/// directory, and a child inlined in another record's document. No index anywhere (ADR-0046
+/// directory, and a child inlined in another record's document. No index anywhere (ADR-0014
 /// invariant 9).</summary>
 public sealed class SourceRepositoryEmbeddedTests : IDisposable
 {

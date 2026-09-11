@@ -11,7 +11,7 @@ const TEST_PORT = 15172;
 let mockBackend: http.Server;
 let ext: vscode.Extension<unknown> | undefined;
 
-// The Instance's own read model (ADR-0047): a test that writes plugins.txt and then reads the
+// The Instance's own read model (ADR-0015): a test that writes plugins.txt and then reads the
 // Plugins tree awaits past a sequence with this, rather than assuming the write is visible the
 // instant the write call returns.
 interface InstanceLike {
@@ -74,7 +74,7 @@ const MOCK_PLUGINS: MockPlugin[] = [
   // A plugins.txt line the backend reports read-only for editing, exercising the composite's
   // tooltip decoration end-to-end — distinct from ImplicitMasterNode's own lock icon.
   mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true }),
-  // ADR-0037: a plugin the backend flags with a directly-missing master. Every other entry carries
+  // ADR-0017: a plugin the backend flags with a directly-missing master. Every other entry carries
   // an empty `masterIssues`, which is what the backend sends when all masters resolved.
   mockPlugin({
     name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
@@ -91,7 +91,7 @@ let mockPluginsOverride: MockPlugin[] | null = null;
 // GET /implicit-masters: the plugins this install loads with no plugins.txt line. Empty by
 // default, so a suite's Data/ stubs are presence without being forced on.
 let mockImplicitMasters: string[] = [];
-// Makes the next PUT /load-order fail the way a bad game directory would. ADR-0044's contract
+// Makes the next PUT /load-order fail the way a bad game directory would. ADR-0013's contract
 // disposes the previous scope first, so the mock must not set loadOrderHeld on this path.
 let putLoadOrderShouldFail = false;
 // Makes the next POST /index/rebuild fail the way another window holding the index would (423).
@@ -120,7 +120,7 @@ let holdPutLoadOrder = false;
 let releaseHealth: (() => void) | null = null;
 let holdHealth = false;
 
-// ADR-0046 invariant 12: the mock's SSE half. Pushed only where the real backend would publish
+// ADR-0014 invariant 2: the mock's SSE half. Pushed only where the real backend would publish
 // (the PUT /load-order handler below), never on connect, which would reach no listener yet.
 const sseClients: http.ServerResponse[] = [];
 
@@ -192,7 +192,7 @@ function createMockBackend(): http.Server {
     if (method === 'PUT' && url === '/load-order') {
       req.on('data', () => {}); // drain the body so 'end' fires
       req.on('end', () => {
-        // ADR-0044: a failed PUT leaves whatever the backend already held in place — nothing is
+        // ADR-0013: a failed PUT leaves whatever the backend already held in place — nothing is
         // torn down — so `loadOrderHeld` is not touched here.
         if (putLoadOrderShouldFail) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -262,7 +262,7 @@ function createMockBackend(): http.Server {
       return;
     }
     // Answered from the game directory alone, with no load order held — the Plugins rows and the
-    // plugins.txt reconcile both ask it before any PUT (ADR-0021).
+    // plugins.txt reconcile both ask it before any PUT (ADR-0016).
     if (url.startsWith('/implicit-masters')) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(mockImplicitMasters));
@@ -606,7 +606,7 @@ describe('modbench.downloads tree', () => {
     assert.ok(provider(), 'activate() should return { downloadsProvider } for the open workspace');
   });
 
-  // Rows come from the Instance value (ADR-0047): written through writeAndAwaitInstance and
+  // Rows come from the Instance value (ADR-0015): written through writeAndAwaitInstance and
   // read back with no direct call to the provider's own invalidate().
   it('renders one row per archive, .meta sidecars suppressed', async () => {
     await writeAndAwaitInstance(() => {
@@ -667,7 +667,7 @@ describe('Overwrite row', () => {
   });
 
   it('shows a pinned Overwrite row (last, outside grouping) when overwrite/ is non-empty', async () => {
-    // The count is a field of the Instance value now (ADR-0047) — awaited past a sequence,
+    // The count is a field of the Instance value now (ADR-0015) — awaited past a sequence,
     // rather than assuming a fresh disk read the instant invalidate() is called.
     await writeAndAwaitInstance(() => {
       fs.mkdirSync(overwriteDir, { recursive: true });
@@ -699,7 +699,7 @@ describe('Overwrite row', () => {
 
 // ── Notification stream lifecycle is gated on the backend ────────────────────
 
-// ADR-0046 invariant 12: every notification kind rides this one stream, proven once here.
+// ADR-0014 invariant 2: every notification kind rides this one stream, proven once here.
 // Placed first — the suite activates once — so "no connection before launch" is provable only
 // at the one point in the run where that is still true.
 describe('Notification stream connects only while the backend is up', () => {
@@ -914,7 +914,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 });
 
 // ── The Plugin load-order rows expand into records ────────────────────────────
-// Rows are collapsible from launch (ADR-0035): mEdit is always running, so a chevron encodes no
+// Rows are collapsible from launch (ADR-0002): mEdit is always running, so a chevron encodes no
 // absence. Launch/close changes a row's content on expand, never its collapsibleState.
 
 interface PluginsTreeLike {
@@ -969,7 +969,7 @@ describe('Plugin load-order rows expand into records', () => {
     assert.ok(pluginsTree(), 'activate() should return { pluginsTree } for the open workspace');
   });
 
-  // The extension parses no plugin binary (ADR-0021), so the forced-on rows can only be the
+  // The extension parses no plugin binary (ADR-0016), so the forced-on rows can only be the
   // backend's answer — nothing here discovers them from the Data folder.
   it('renders the implicit masters the backend names, ahead of the plugins.txt rows', async () => {
     const tree = pluginsTree()!;
@@ -1055,7 +1055,7 @@ describe('Plugin load-order rows expand into records', () => {
     assert.deepStrictEqual((await tree.getChildren(other)).map((c) => (c as vscode.TreeItem).label), ['Weapon']);
   });
 
-  // ADR-0022: the view has no shape to revert to, so a backend that goes takes nothing with it —
+  // ADR-0002: the view has no shape to revert to, so a backend that goes takes nothing with it —
   // the row's own content is what reports the absence, on the expand that asks for it.
   it('keeps every row and its chevron when mEdit closes', async () => {
     const tree = pluginsTree()!;
@@ -1077,7 +1077,7 @@ describe('Plugin load-order rows expand into records', () => {
   });
 });
 
-// ADR-0035: read-only-for-editing is a tooltip, never an icon, and is known only once a load
+// ADR-0017: read-only-for-editing is a tooltip, never an icon, and is known only once a load
 // order says so — before launch a plugin row carries no opinion about it at all.
 describe('A read-only plugin\'s tooltip says so once the backend is running', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -1124,7 +1124,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
   });
 });
 
-// ADR-0037: a plugin flagged with a missing master is decorated through the real wiring.
+// ADR-0017: a plugin flagged with a missing master is decorated through the real wiring.
 // MOCK_PLUGINS sends raw JSON no PluginMetadata-typed fixture could produce, so TestMod.esp,
 // with no `masterIssues` key, proves an absent field degrades to undecorated.
 describe('A plugin with a missing master is flagged, never deactivated', () => {
@@ -1142,7 +1142,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     // The mock reports both with origin 'Data', so the Data folder must actually hold them, or
     // reconcile concludes their names resolve to nothing and decorates every row with a load
-    // failure instead (ADR-0044).
+    // failure instead (ADR-0013).
     for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
       fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     }
@@ -1191,9 +1191,9 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
 
 });
 
-// ADR-0044: an instance change through the real wiring — the plugins.txt watcher, the load-order
+// ADR-0013: an instance change through the real wiring — the plugins.txt watcher, the load-order
 // sync, `PUT /load-order`, and the tree hand-off that follows.
-describe('An instance change sends a fresh load order snapshot (ADR-0044)', () => {
+describe('An instance change sends a fresh load order snapshot (ADR-0013)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
@@ -1270,7 +1270,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
   });
 
   // If matchingPlugins were refreshed only by setFilter/clearFilter, a suppressed plugin would
-  // stay suppressed through a reconcile with no filter at all. Under ADR-0035 such a plugin has
+  // stay suppressed through a reconcile with no filter at all. Under plugins.md such a plugin has
   // no row, so absence is what is asserted.
   it('hides a plugin a filter suppresses, and restores it once a reconcile comes up with no filter', async () => {
     const tree = pluginsTree()!;
@@ -1291,7 +1291,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
       'a reconcile that comes up with no filter must restore a row an earlier filter hid, not leave it permanently gone');
   });
 
-  // ADR-0044: a failed PUT tears nothing down — the backend still holds what it held — so the
+  // ADR-0013: a failed PUT tears nothing down — the backend still holds what it held — so the
   // tree keeps its chevrons rather than tearing editing down.
   it('keeps the rows expandable, without throwing, when the reconcile itself fails', async () => {
     const tree = pluginsTree()!;
@@ -1309,7 +1309,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
     const after = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(after).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'a failed reconcile leaves the load order the backend already holds in place, so the rows stay expandable');
-    // ADR-0044: the failed PUT tore nothing down, so the row expands into the records the backend
+    // ADR-0013: the failed PUT tore nothing down, so the row expands into the records the backend
     // still holds. "Still indexing" would promise a completion that is not coming.
     const children = await tree.getChildren(after);
     assert.strictEqual(children.length, 1, 'expanding after a failed reconcile answers exactly one node');
@@ -1318,7 +1318,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0044)', () =
   });
 });
 
-// ADR-0022: mEdit runs for the extension's whole lifetime, so a status change is news the views
+// ADR-0002: mEdit runs for the extension's whole lifetime, so a status change is news the views
 // report — none of them has a shape to revert to. Driven through the real status transition, not
 // its extracted wiring in isolation.
 describe('a client that reports stopped outside exitEditing leaves the Plugins tree\'s shape alone', () => {
@@ -1391,7 +1391,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 });
 
-// ADR-0046: Refresh rebuilds the Index (drops and reopens it empty) and then resends the load
+// ADR-0014: Refresh rebuilds the Index (drops and reopens it empty) and then resends the load
 // order exactly as a cold load does, so the reconcile that follows re-indexes everything.
 describe('Refresh rebuilds the index, then resends the load order', () => {
   beforeEach(() => resetMockBackend());
@@ -1420,7 +1420,7 @@ describe('Refresh rebuilds the index, then resends the load order', () => {
   });
 });
 
-// ── ADR-0035: progressive load ──────────────────────────────────────────────────
+// ── ADR-0013: progressive load ──────────────────────────────────────────────────
 // Rows land as each plugin finishes indexing: a plugin the load has not reached stays a leaf.
 // Every assertion is about the window during the load POST, which is why the mock holds it open.
 

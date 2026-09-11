@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>A tracked plugin's tree read as the documents it already holds (ADR-0041 amendment):
+/// <summary>A tracked plugin's tree read as the documents it already holds (ADR-0003):
 /// each file as it stands, plus the children a container's document embeds. Nothing is deserialized
 /// into a mod.</summary>
 internal sealed class SourceTreeDocuments : IPluginDocuments
@@ -156,7 +156,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
         foreach (var child in Embedded(recordType, formKey, text)) yield return child;
     }
 
-    // ADR-0023: what a cell's two placement groups hold. Read off its own document, since the tree
+    // ADR-0005: what a cell's two placement groups hold. Read off its own document, since the tree
     // files a placed record inside its cell rather than beside it.
     private IReadOnlyList<PlacedInCell>? ContentsOf(string recordType, string text)
     {

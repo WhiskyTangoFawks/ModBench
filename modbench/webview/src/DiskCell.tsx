@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef } from 'react';
 import { focusedCellStyle } from './gridStyles';
 
-// ADR-0034: `tabIndex` plus the effect below make the focused cell a really focused DOM element,
+// ADR-0018: `tabIndex` plus the effect below make the focused cell a really focused DOM element,
 // not just painted state — Ctrl+C needs `keydown` to land on a real focused element.
 const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
   cell !== null && (document.activeElement === cell || cell.contains(document.activeElement));
@@ -22,7 +22,7 @@ export function DiskCell({
   style: React.CSSProperties;
   isFocused: boolean;
   onFocusCell: () => void;
-  // ADR-0034: Ctrl+C on the focused cell. A plain thunk, not a value: the cell doesn't need to
+  // ADR-0018: Ctrl+C on the focused cell. A plain thunk, not a value: the cell doesn't need to
   // know *what* it copies, only *when*.
   onCopy: () => void;
   // Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu offers,
@@ -54,7 +54,7 @@ export function DiskCell({
           onCopy();
           return;
         }
-        // ADR-0034: F2 is xEdit's only keyboard "open the editor" trigger. Dispatched at the
+        // ADR-0018: F2 is xEdit's only keyboard "open the editor" trigger. Dispatched at the
         // cell's own editable element, so a cell with nothing editable renders no
         // `data-open-trigger` and F2 is inert there by construction.
         if (e.key === 'F2') {

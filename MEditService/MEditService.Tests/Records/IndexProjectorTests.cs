@@ -18,7 +18,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0046 invariants 10 and 11, at the Index's own seam: a load order value in,
+/// <summary>ADR-0015 invariant 3 and ADR-0013 invariant 4, at the Index's own seam: a load order value in,
 /// registration rows and one sequence advance out, over a real DuckDB.</summary>
 public sealed class IndexProjectorTests
 {
@@ -98,7 +98,7 @@ public sealed class IndexProjectorTests
     private static string? WinnerOf(IndexProjector projector, string formKey) =>
         projector.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
 
-    // ADR-0046 invariant 11: the sweep is handed the kernel's load order. The holder alone takes the
+    // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
     // next snapshot here, so the copies the Index has open still carry the old winner: a projector
     // reading them answers B.esp.
     [Fact]

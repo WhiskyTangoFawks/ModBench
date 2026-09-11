@@ -6,7 +6,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;
 
-// Origin-scoped (ADR-0041): the repo, not any one plugin inside it, is the unit of baselines and
+// Origin-scoped (ADR-0003): the repo, not any one plugin inside it, is the unit of baselines and
 // rebase, and the load order is where the write side asks which folder that is.
 public sealed class RebaseHandlerTests : IDisposable
 {

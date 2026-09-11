@@ -20,7 +20,7 @@ public record PluginDiagnosisReport(
 public record PluginResponse(
     string Name,
     string Path,
-    // ADR-0044: the plugins.txt slot past the forced masters, or null when no line names this
+    // ADR-0013: the plugins.txt slot past the forced masters, or null when no line names this
     // copy; record-level LoadOrderIndex values are sort keys and put such a copy last.
     int? LoadOrderIndex,
     bool IsLight,
@@ -28,25 +28,25 @@ public record PluginResponse(
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
-    // Participates (ADR-0044): Registration.Participates, as the wire sees it — the only copies
+    // Participates (ADR-0013): Registration.Participates, as the wire sees it — the only copies
     // that compete for winner or count in a conflict.
     bool Participates,
     string Origin,
-    // MasterIssues (ADR-0037): this plugin's own unresolvable masters, never a transitive fact.
+    // MasterIssues (ADR-0012): this plugin's own unresolvable masters, never a transitive fact.
     // Empty rather than null when every master resolved.
     IReadOnlyList<MasterIssue> MasterIssues,
-    // InLoadOrder (ADR-0035, ADR-0044): derived — the winning copy of a listed name, enabled
+    // InLoadOrder (ADR-0013, ADR-0013): derived — the winning copy of a listed name, enabled
     // or not. False for a losing copy or an unlisted file. See PluginMetadata.InLoadOrder.
     bool InLoadOrder,
-    // Enabled / Winning (ADR-0044): the two registration facts beside the slot, as Mod Management
+    // Enabled / Winning (ADR-0013): the two registration facts beside the slot, as Mod Management
     // stated them — what lets a row say *why* it does not participate (disabled, or overridden).
     bool Enabled,
     bool Winning,
-    // HasMatchingRecords (ADR-0035 amending ADR-0018): a record filter prunes records, never a
+    // HasMatchingRecords (plugins.md): a record filter prunes records, never a
     // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
     // to true: only the plugin listing answers inside a filter.
     bool HasMatchingRecords = true,
-    // IsTracked (ADR-0041): whether the mod folder holds a git directory, which editing requires
+    // IsTracked (ADR-0007): whether the mod folder holds a git directory, which editing requires
     // and viewing never does. False with no mod folder at all (IsImmutable tells the two apart).
     // Derived on every read: the directory can vanish outside Modbench.
     bool IsTracked = false,
@@ -55,7 +55,7 @@ public record PluginResponse(
     bool HasParseFailure = false)
 {
     /// <summary>One row: its registration from the load order's copy, what reading the file told
-    /// the Index from <paramref name="content"/> (ADR-0044).</summary>
+    /// the Index from <paramref name="content"/> (ADR-0013).</summary>
     public static PluginResponse Of(
         RegisteredCopy copy, PluginContent content, IReadOnlyList<MasterIssue>? masterIssues = null,
         bool hasMatchingRecords = true, bool hasParseFailure = false)
@@ -74,7 +74,7 @@ public record PluginResponse(
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum WorkingTreeState { None, Modified, Added }
 
-// Origin (ADR-0036): additive alongside Plugin; without it two same-filename plugins listed
+// Origin (ADR-0012): additive alongside Plugin; without it two same-filename plugins listed
 // together are indistinguishable rows.
 public record RecordSummary(
     string FormKey,
@@ -109,7 +109,7 @@ public record RecordDetail(
     bool IsWinner,
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
-    // Origin (ADR-0036): paired with Plugin, never encoded into it. Required so every construction
+    // Origin (ADR-0012): paired with Plugin, never encoded into it. Required so every construction
     // says which origin; it precedes the defaulted fields only because C# requires that.
     string Origin,
     // The schema table name; "Copy as New Record" must supply it to CreateRecord up front. Defaults
@@ -149,10 +149,10 @@ public record FieldDiff(
     string WinnerColumn,
     [property: ColumnKeyed] IReadOnlyDictionary<string, ConflictThis> CellStates,
     // This subtree's own aggregate, distinct from the record-wide ClassifyResult.ConflictAll; drives
-    // the compare grid's per-row background (ADR-0016): a struct's aggregate while collapsed.
+    // the compare grid's per-row background (ADR-0018): a struct's aggregate while collapsed.
     ConflictAll ConflictAll,
     IReadOnlyList<FieldDiff>? Children = null,
-    // ADR-0031: only on a scalar formKey leaf, keyed like Values; never aggregated up from Children,
+    // ADR-0005: only on a scalar formKey leaf, keyed like Values; never aggregated up from Children,
     // so a dangling sibling can't hide a live hyperlink on the leaf next to it.
     [property: ColumnKeyed] IReadOnlyDictionary<string, FormKeyResolution>? Resolutions = null,
     // This node's own subtree's link check, per column — a struct row states the errors under it
@@ -173,6 +173,6 @@ public record CompareResult(
 // the failure prefix from the page it has instead of walking children.
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure);
 
-// Origin (ADR-0036): additive alongside Plugin; without it two same-filename sources referencing
+// Origin (ADR-0012): additive alongside Plugin; without it two same-filename sources referencing
 // the same target are indistinguishable.
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);

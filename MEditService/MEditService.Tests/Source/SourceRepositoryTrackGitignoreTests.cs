@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>Plugin binaries are ignored in both presets (compiled artifacts); <c>meta.ini</c> too
-/// (ADR-0041: never track a file that changes for non-content reasons).</summary>
+/// (ADR-0007: never track a file that changes for non-content reasons).</summary>
 public sealed class SourceRepositoryTrackGitignoreTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-gitignore-").FullName;

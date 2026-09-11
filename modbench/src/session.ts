@@ -14,7 +14,7 @@ export type Own = <T extends vscode.Disposable>(disposable: T) => T;
 // field; every reader treats "not yet built" and "no live workspace" alike.
 export interface ExtensionSession {
   pluginsTree?: PluginsTreeProvider;
-  /** ADR-0044: the one path by which the Plugin load order reaches Editing. */
+  /** ADR-0013: the one path by which the Plugin load order reaches Editing. */
   loadOrderSync?: LoadOrderSync;
   /** The same view, as a `TreeView` — carries the load's own progress and incompleteness
    *  statement (`TreeView.message`, via `say`). */
@@ -33,7 +33,7 @@ export interface ExtensionSession {
   loadDiagnostics?: vscode.DiagnosticCollection;
 }
 
-// ADR-0035: one progress indicator, in the view whose contents are loading — not a per-command
+// ADR-0002: one progress indicator, in the view whose contents are loading — not a per-command
 // `ProgressLocation.Notification`. The message clears on every exit path, so no failure leaves
 // the view claiming a load that is not running.
 export function withPluginsViewProgress(session: ExtensionSession, work: () => Promise<void>): Promise<void> {

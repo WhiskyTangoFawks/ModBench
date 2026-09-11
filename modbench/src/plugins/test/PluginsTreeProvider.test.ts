@@ -53,7 +53,7 @@ function valueOf(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceVa
 }
 
 // The double the provider's row contract needs: `.value` plus `.subscribe`, structurally
-// compatible with `Instance` without ever constructing one (ADR-0047's watchers are Instance's
+// compatible with `Instance` without ever constructing one (ADR-0015's watchers are Instance's
 // concern).
 class FakeInstance {
   value: InstanceValue;
@@ -294,7 +294,7 @@ describe('leading slot — rows outside the load order render neither checkbox n
 });
 
 // Every master verdict is the backend's, applied over these rows: a row carries no badge of its
-// own (ADR-0021).
+// own (ADR-0016).
 describe('PluginNode', () => {
   it('renders a plain row — no icon, no description', () => {
     const node = new PluginNode({ name: 'A.esp', enabled: true });
@@ -302,7 +302,7 @@ describe('PluginNode', () => {
     expect(node.description).toBeUndefined();
   });
 
-  it('carries the origin of the copy the row stands for (ADR-0036)', () => {
+  it('carries the origin of the copy the row stands for (ADR-0012)', () => {
     expect(new PluginNode({ name: 'A.esp', enabled: true }, 'WinnerMod').origin).toBe('WinnerMod');
   });
 });
@@ -354,7 +354,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite']);
   });
 
-  // A losing copy of a listed name carries the same slot as the winning one (ADR-0044) — it
+  // A losing copy of a listed name carries the same slot as the winning one (ADR-0013) — it
   // must not become a second row for that name.
   it('a losing copy of a listed name renders no row of its own', async () => {
     const { tree } = makeTree([
@@ -432,7 +432,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   });
 
   // The event carries the only source of truth the composition root has for which plugin and
-  // which state, so it must match exactly what was written (ADR-0035).
+  // which state, so it must match exactly what was written (ADR-0017).
   it('setPluginEnabled fires onDidChangeParticipation with the plugin and its new state', async () => {
     const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0 })]);
     const seen: { plugin: string; enabled: boolean }[] = [];
@@ -500,7 +500,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
-  // that threw spinning forever — no row, no error node, no toast (ADR-0026).
+  // that threw spinning forever — no row, no error node, no toast (ADR-0019).
   it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
     const reports: { severity: string; message: string; detail?: string }[] = [];
@@ -747,7 +747,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   });
 
   // A drop position comes from the full plugins.txt order, never the displayed row list: a name
-  // filter narrows which rows show, not the load order they belong to (ADR-0035).
+  // filter narrows which rows show, not the load order they belong to (plugins.md).
   it('produces the same load-order position with a name filter hiding a row between the drag and its target, as with no filter at all', async () => {
     const NAMES = ['M1.esp', 'M2.esp', 'X1.esp', 'M3.esp', 'X2.esp'];
 
@@ -770,7 +770,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
   });
 
-  it('surfaces a write failure via the reporter and resyncs the tree (ADR-0026)', async () => {
+  it('surfaces a write failure via the reporter and resyncs the tree (ADR-0019)', async () => {
     const source = new FakeSource();
     source.reorderPluginsError = new Error('disk full');
     const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
@@ -873,7 +873,7 @@ describe('PluginsTreeProvider — resolvePluginPath (Reveal in Explorer)', () =>
 });
 
 // Implicit masters render as forced-on rows ahead of plugins.txt lines. The backend names
-// them (ADR-0021); this tree only places them.
+// them (ADR-0016); this tree only places them.
 describe('PluginsTreeProvider — implicit master rows', () => {
   const DATA = '/game/Data';
   // `null` stands for the absence in both slots: a backend that could not answer, and an
@@ -1003,7 +1003,7 @@ describe('PluginsTreeProvider — implicit master drop-index mapping', () => {
   });
 });
 
-// ── rows are always collapsible; content decides on expand (ADR-0035) ────────
+// ── rows are always collapsible; content decides on expand (ADR-0002) ────────
 
 const A_ROW = () => plugin({ name: 'A.esp', slot: 0, origin: 'SomeMod' });
 const B_ROW = () => plugin({ name: 'B.esp', slot: 1, origin: 'SomeMod' });
@@ -1106,7 +1106,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
   });
 
   // A row on an unindexed plugin opening onto an empty list would read as "this plugin has no
-  // records" rather than "this plugin isn't indexed yet" (ADR-0026).
+  // records" rather than "this plugin isn't indexed yet" (ADR-0019).
   it('a plugin the load order does not hold yet expands to a "still indexing" node', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp')]); // B.esp is never held
@@ -1129,7 +1129,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
     expect(callCount(h.client, 'getPlugins')).toBe(0);
   });
 
-  // ADR-0044: a PUT that never lands tears nothing down, so the row reports the read that failed.
+  // ADR-0013: a PUT that never lands tears nothing down, so the row reports the read that failed.
   // "Still indexing" would promise a completion that is not coming.
   it('expanding after a load order was held and the client then refuses answers with one error node', async () => {
     const h = makeTree([A_ROW()]);
@@ -1208,7 +1208,7 @@ describe('PluginsTreeProvider — reconcile and clear keep row identity, and sti
   });
 });
 
-// ADR-0035: mEdit is always running, so a disconnect is an error the tree surfaces, not a mode
+// ADR-0002: mEdit is always running, so a disconnect is an error the tree surfaces, not a mode
 // (target-architecture.md).
 describe('PluginsTreeProvider with the client reporting disconnected', () => {
   // Guards against the vacuous form of every test below: this actually drives the reconcile
@@ -1270,7 +1270,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
   });
 });
 
-// ── the record filter hides a plugin with no matches (ADR-0035 §Filters) ──────
+// ── the record filter hides a plugin with no matches (plugins.md) ──────
 
 describe('PluginsTreeProvider — a record filter hides a plugin with no matches', () => {
   it('omits a plugin with no matching records from the row set entirely', async () => {
@@ -1512,7 +1512,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     expect(h.tree.getTreeItem(recordType).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
-  // The record browser answers a failed fetch with an error node (ADR-0026) — the merged tree
+  // The record browser answers a failed fetch with an error node (ADR-0019) — the merged tree
   // must not turn that into an empty list on its way through.
   it('renders whatever the record browser returns for a failed fetch, rather than swallowing it', async () => {
     const client = makeClient();
@@ -1556,7 +1556,7 @@ async function rowItem(h: Harness, index = 0): Promise<vscode.TreeItem> {
   return h.tree.getTreeItem(rows[index]);
 }
 
-// ADR-0035: read-only-for-editing is never an icon; it is the absent actions and this note.
+// ADR-0017: read-only-for-editing is never an icon; it is the absent actions and this note.
 describe('PluginsTreeProvider — read-only tooltip', () => {
   // Read-only-for-editing is the load order's answer, so a row carries no opinion about it until
   // one has landed — an absent tooltip means "not asked", never "editable".
@@ -1617,9 +1617,9 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
   });
 });
 
-// ADR-0037: a plugin declaring a master absent from the load order is flagged and stays fully
+// ADR-0017: a plugin declaring a master absent from the load order is flagged and stays fully
 // browsable — never deactivated, excluded or hidden.
-describe('PluginsTreeProvider — master-issue decoration (ADR-0037 AC1/AC2/AC4)', () => {
+describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)', () => {
   const withIssues = (h: Harness, issues: { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' }[]) =>
     reconcile(h, [held('A.esp', { masterIssues: issues })]);
 
@@ -1723,9 +1723,9 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0037 AC1/AC2/AC4)
   });
 });
 
-// ADR-0037: a plugin that fails to open or parse still has a row — rows come from plugins.txt,
+// ADR-0017: a plugin that fails to open or parse still has a row — rows come from plugins.txt,
 // not from the load order — so this decorates an existing row with its recorded reason.
-describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () => {
+describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () => {
   it('flags a row whose plugin failed to load, with the reason', async () => {
     const h = makeTree([A_ROW()]);
     // The reason can be a multi-line exception-chain summary (LoadOrder.PluginLoadFailure
@@ -1742,7 +1742,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0037 AC7)', () =>
   });
 
   // A plugin the load order gave up on is never reached by a later tick, so "still indexing"
-  // would promise a completion that never comes (ADR-0026) — it answers the error node instead.
+  // would promise a completion that never comes (ADR-0019) — it answers the error node instead.
   it('never abandons the row: it stays collapsible, but expands to the error node — it will never be indexed', async () => {
     const h = makeTree([A_ROW()]);
     await reconcile(h, [], [{ name: 'A.esp', origin: 'SomeMod', reason: 'Malformed record' }]);
@@ -1921,7 +1921,7 @@ describe('PluginsTreeProvider — decoration precedence', () => {
   });
 });
 
-// A change to which file a plugin name resolves to is absorbed by the reconcile verb (ADR-0044),
+// A change to which file a plugin name resolves to is absorbed by the reconcile verb (ADR-0013),
 // so `contextValue: 'plugin'` is the only value a healthy row carries.
 describe('PluginsTreeProvider applies no decoration of its own to a healthy plugin row', () => {
   it('renders every plugin row plainly, whatever the load order state', async () => {
@@ -1955,9 +1955,9 @@ describe('PluginsTreeProvider fact refresh', () => {
   });
 });
 
-// ── the origin join (ADR-0036) ───────────────────────────────────────────────
+// ── the origin join (ADR-0012) ───────────────────────────────────────────────
 
-// Two held copies can share a filename (ADR-0044), so a name-only join answers about whichever
+// Two held copies can share a filename (ADR-0013), so a name-only join answers about whichever
 // copy the reply lists last. Every fixture below lists the row's own copy first.
 describe('PluginsTreeProvider — a name under two origins joins to the row own origin', () => {
   const SHARED_ROW = () => plugin({ name: 'Shared.esp', slot: 0, origin: 'ModA' });
@@ -2124,7 +2124,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
     expect(callCount(h.client, 'getPlugins')).toBe(2);
   });
 
-  // ADR-0026: a failed read is an error and a failed background scan is a warning, so the two
+  // ADR-0019: a failed read is an error and a failed background scan is a warning, so the two
   // cannot arrive at the same channel level.
   it('reports a failed plugin read at error, naming the reason once', async () => {
     const h = makeTree([A_ROW()]);

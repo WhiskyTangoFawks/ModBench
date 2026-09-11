@@ -11,7 +11,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>A member the union's leaves shape differently is written through the leaf the
 /// document names, a record-level scalar and an OMOD property value alike; the result is the
-/// codec's own document (ADR-0032).</summary>
+/// codec's own document (ADR-0005).</summary>
 public sealed class UnionVariantEditTests
 {
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =

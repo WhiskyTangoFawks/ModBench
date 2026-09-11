@@ -6,7 +6,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Api;
 
-/// <summary>ADR-0046 invariant 4's runtime half: the Source watcher's signals become projections.
+/// <summary>ADR-0015 invariant 2's runtime half: the Source watcher's signals become projections.
 /// The gate arrives separately from the Index because a batch is one write across several of the
 /// Index's own gated doors.</summary>
 internal sealed class SourceChangeApplier(
@@ -41,21 +41,21 @@ internal sealed class SourceChangeApplier(
             watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
     }
 
-    /// <summary>ADR-0046: the watcher hands over every plugin it settled together. Held under one
+    /// <summary>ADR-0014: the watcher hands over every plugin it settled together. Held under one
     /// gate acquisition, so another writer cannot land between two plugins of the same batch.</summary>
     internal void Apply(IReadOnlyList<SourceChangeEvent> batch)
     {
         try
         {
             using var _ = writeGate.Enter();
-            // ADR-0046: the batch is one logical write, so it is one sequence advance — a client
+            // ADR-0014: the batch is one logical write, so it is one sequence advance — a client
             // that awaits once cannot land between two of its plugins.
             using var projection = index.BeginProjection();
             foreach (var change in batch) ApplyOne(change);
         }
         catch (IndexWriteGateTimeoutException ex)
         {
-            // ADR-0026: never swallowed. The timer callback has no caller to propagate to, so the
+            // ADR-0019: never swallowed. The timer callback has no caller to propagate to, so the
             // whole batch is logged rather than lost; it is re-checked the same way a single
             // plugin's own catch below re-checks its.
             var plugins = string.Join(", ", batch.Select(c => $"{c.PluginName} ({c.Origin})"));
@@ -103,7 +103,7 @@ internal sealed class SourceChangeApplier(
             foreach (var failure in report.Failures)
                 logger.LogWarning("Validating {Plugin} after a source change: {Failure}", key.Name, failure);
 
-            // ADR-0046: a re-derived copy has too many rows to name, so this names the plugin.
+            // ADR-0014: a re-derived copy has too many rows to name, so this names the plugin.
             // Announced rather than published, so its sequence is the one the batch landed on.
             if (report.NeedsRebuild)
                 index.Announce(() => notifications.Publish(new PluginChangedNotification(key, index.Sequence)));

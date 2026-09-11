@@ -31,7 +31,7 @@ export type FieldMetadata =
 
 export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };
 
-// ADR-0036: a column is (plugin, origin), not plugin alone — two columns can share a filename.
+// ADR-0012: a column is (plugin, origin), not plugin alone — two columns can share a filename.
 // The brand makes comparing one against a bare plugin string a compile error; a mapped type
 // erases it.
 export type ColumnKey = string & { readonly __col: unique symbol };

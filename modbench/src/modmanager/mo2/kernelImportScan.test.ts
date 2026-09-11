@@ -1,4 +1,4 @@
-// ADR-0047 §7: each MO2 file's format lives in its own kernel module under mo2/, self-contained
+// ADR-0015 invariant 3: each MO2 file's format lives in its own kernel module under mo2/, self-contained
 // enough that a kernel project could compile alone.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';

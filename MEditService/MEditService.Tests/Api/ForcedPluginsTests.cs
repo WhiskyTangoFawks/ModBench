@@ -4,7 +4,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0044: the forced plugins are the service's one directory read for a snapshot, and the
+// ADR-0013: the forced plugins are the service's one directory read for a snapshot, and the
 // composition that puts them ahead of the entries Mod Management sent.
 public sealed class ForcedPluginsTests
 {

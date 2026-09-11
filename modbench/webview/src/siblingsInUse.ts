@@ -2,7 +2,7 @@ import type { FieldMetadata } from './types';
 
 // FieldMetadata.siblingsInUse: an enum member whose value decides which sibling members carry
 // data. Answers which rows to show, over metadata alone so no game is named here; what a change
-// idles is the writer's to clear (ADR-0032).
+// idles is the writer's to clear (ADR-0005).
 
 function governing(structMeta: FieldMetadata): FieldMetadata[] {
   return (structMeta.fields ?? []).filter(f => f.siblingsInUse != null);

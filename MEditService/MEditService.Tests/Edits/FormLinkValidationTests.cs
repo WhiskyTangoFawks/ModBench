@@ -78,7 +78,7 @@ public sealed class FormLinkValidationTests : IDisposable
     {
         var result = SetKeywords("ABCDEF:NoSuchPlugin.esp");
 
-        // ADR-0026: a refusal the user cannot act on is dead UI. The message has to name the value,
+        // ADR-0019: a refusal the user cannot act on is dead UI. The message has to name the value,
         // not merely report that something was invalid.
         Assert.Contains("ABCDEF:NoSuchPlugin.esp", result.Message, StringComparison.OrdinalIgnoreCase);
     }

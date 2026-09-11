@@ -99,7 +99,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal("Bad.esp", failure.Name);
     }
 
-    // ADR-0044: two copies of one name are two rows, so a failure that named only the file would
+    // ADR-0013: two copies of one name are two rows, so a failure that named only the file would
     // land on whichever row the reader looked up first.
     [Fact]
     public async Task PutLoadOrder_LosingCopyUnparseable_TheFailureNamesTheLosingOrigin()
@@ -144,7 +144,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // ADR-0001: the instance root is what the index file is keyed on, so a load that cannot
+    // ADR-0009: the instance root is what the index file is keyed on, so a load that cannot
     // name a real one has nowhere to keep its rows — a bad request, not a load that degrades to
     // some other home.
     [Fact]

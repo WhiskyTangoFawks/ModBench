@@ -19,7 +19,7 @@ export interface ConfigLike {
 export type DetectPaths = () => Promise<{ dataFolder: string; pluginsTxt: string } | null>;
 
 /** ModOrganizer.ini's text. Defaults to reading the file; a caller already holding the same
- *  generation's text (the Instance, ADR-0047) injects it instead, so the ini is read once. */
+ *  generation's text (the Instance, ADR-0015) injects it instead, so the ini is read once. */
 export type ReadIniText = () => Promise<string>;
 
 /** The Proton prefix root (`.../compatdata/<appid>/pfx`), or null if undeterminable. Injected

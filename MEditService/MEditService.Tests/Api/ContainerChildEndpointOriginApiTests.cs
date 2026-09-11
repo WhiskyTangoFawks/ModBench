@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-// ADR-0036: a load order holding two physical files of one filename, so a route that resolved a
+// ADR-0012: a load order holding two physical files of one filename, so a route that resolved a
 // Quest's children through the wrong copy shows in the assertion, not just in the row count.
 [Collection(WebHostCollection.Name)]
 public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
@@ -42,7 +42,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        // ADR-0044: both copies travel in the one snapshot, ModB as the losing copy at the same
+        // ADR-0013: both copies travel in the one snapshot, ModB as the losing copy at the same
         // slot; only the winning, enabled, listed one participates.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var plugins = fx.Plugins.Select(p => p.Origin == "ModB"

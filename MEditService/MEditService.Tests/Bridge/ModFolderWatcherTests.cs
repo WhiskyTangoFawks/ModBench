@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Bridge;
 
-/// <summary>ADR-0046: one recursive watcher per mod folder, tracked or not — classification,
+/// <summary>ADR-0014: one recursive watcher per mod folder, tracked or not — classification,
 /// the indexed-binary route and per-mod batching, retired from ExternalChangeWatcherTests,
 /// IndexedBinaryWatchTests and SourceChangeWatcherTests respectively.</summary>
 public sealed class ModFolderWatcherTests
@@ -473,7 +473,7 @@ public sealed class ModFolderWatcherTests
         }
     }
 
-    // ---- per-mod batching: retired from SourceChangeWatcherTests. ADR-0046: each mod folder
+    // ---- per-mod batching: retired from SourceChangeWatcherTests. ADR-0014: each mod folder
     // settles on its own quiet and bounding timers, so a batch is per mod. ----
 
     private static string NewSourceRoot(string modFolder, string pluginName)

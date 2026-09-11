@@ -2,7 +2,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Plugins;
 
-/// <summary>One registered plugin copy (ADR-0044): a physical file, its <c>plugins.txt</c> slot —
+/// <summary>One registered plugin copy (ADR-0013): a physical file, its <c>plugins.txt</c> slot —
 /// null when no line names it — and the booleans Mod Management resolves for it. IsForced: loaded
 /// regardless of that list.</summary>
 public sealed record RegisteredCopy(
@@ -12,7 +12,7 @@ public sealed record RegisteredCopy(
 
     public Registration Registration => new(Slot, Enabled, Winning);
 
-    /// <summary>Read-only for editing: a forced master (ADR-0036 — the game's own files are never
+    /// <summary>Read-only for editing: a forced master (ADR-0012 — the game's own files are never
     /// a write target), or a copy the load order does not name, where editing changes nothing.
     /// </summary>
     public bool IsImmutable => IsForced || !Registration.InLoadOrder;
@@ -22,8 +22,8 @@ public sealed record RegisteredCopy(
             entry.Slot is { } slot ? slotOffset + slot : null, entry.Enabled, entry.Winning);
 }
 
-/// <summary>ADR-0046 invariant 11: the load order is state, sent by Mod Management, held in the
-/// shared kernel with ADR-0044's rules, read by both sides. Immutable — nothing here opens, holds or
+/// <summary>ADR-0013 invariant 4: the load order is state, sent by Mod Management, held in the
+/// shared kernel with ADR-0013's rules, read by both sides. Immutable — nothing here opens, holds or
 /// disposes a plugin file.</summary>
 public sealed class LoadOrder : IEquatable<LoadOrder>
 {
@@ -32,13 +32,13 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
 
     public string DataFolderPath { get; }
 
-    /// <summary>ADR-0001: the MO2 instance root the index file is keyed on, because <c>origin</c> is
+    /// <summary>ADR-0009: the MO2 instance root the index file is keyed on, because <c>origin</c> is
     /// a mod folder name and so is unique only within one instance.</summary>
     public string? InstanceRoot { get; }
 
     public GameRelease GameRelease { get; }
 
-    /// <summary>Every physical copy in the instance, in the order it was given (ADR-0044: losing
+    /// <summary>Every physical copy in the instance, in the order it was given (ADR-0013: losing
     /// and unlisted copies are registered like any other).</summary>
     public IReadOnlyList<RegisteredCopy> Copies { get; }
 
@@ -52,7 +52,7 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
         Copies = [.. copies];
     }
 
-    /// <summary>ADR-0044: participation is derived, never stored — enabled, winning, and named by a
+    /// <summary>ADR-0013: participation is derived, never stored — enabled, winning, and named by a
     /// <c>plugins.txt</c> line. Only a participating copy competes for winner or counts in a
     /// conflict.</summary>
     public bool Participates(PluginKey key) => Copy(key)?.Registration.Participates ?? false;
@@ -70,17 +70,17 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
     public Registration? Registration(PluginKey key) => Copy(key)?.Registration;
 
     /// <summary>This load order with one more registered copy, replacing any copy already
-    /// registered under the same identity (ADR-0041: a created plugin is a member at once).</summary>
+    /// registered under the same identity (ADR-0007: a created plugin is a member at once).</summary>
     public LoadOrder With(RegisteredCopy copy) =>
         new(DataFolderPath, InstanceRoot, GameRelease, [.. Copies.Where(c => !SameKey(c, copy.Key)), copy]);
 
     /// <summary>This load order without the copy registered under <paramref name="key"/>, unchanged
-    /// when none is (ADR-0041: a create that could not write its file takes its registration back).
+    /// when none is (ADR-0007: a create that could not write its file takes its registration back).
     /// </summary>
     public LoadOrder Without(PluginKey key) =>
         new(DataFolderPath, InstanceRoot, GameRelease, [.. Copies.Where(c => !SameKey(c, key))]);
 
-    /// <summary>ADR-0036: origin is required, not optional — the load order can register two copies
+    /// <summary>ADR-0012: origin is required, not optional — the load order can register two copies
     /// of one filename, so the filename alone does not say which.</summary>
     public RegisteredCopy? Copy(PluginKey key) => Copies.FirstOrDefault(c => SameKey(c, key));
 

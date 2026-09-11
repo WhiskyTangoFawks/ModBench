@@ -15,7 +15,7 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>Real plugins whose bytes trip the walker's master-pruning false positive must Track (ADR-0038);
+/// <summary>Real plugins whose bytes trip the walker's master-pruning false positive must Track (ADR-0008);
 /// SpaDia_AMR is refused, since Mutagen-#688 hides its real use of a master.</summary>
 public sealed class MasterPruningRoundTripGateTests
 {
@@ -78,7 +78,7 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.Equal(DeclaredMasters, deepParsed.MasterReferences.Select(master => master.Master.FileName.String));
 
         // ...and the rewrite prunes DLCRobot.esm precisely because nothing in the file names it, by record
-        // or by link. The other three are referenced and survive: content-derived pruning (ADR-0038).
+        // or by link. The other three are referenced and survive: content-derived pruning (ADR-0008).
         var referenced = deepParsed.EnumerateMajorRecords().Select(record => record.FormKey.ModKey)
             .Concat(deepParsed.EnumerateFormLinks().Select(link => link.FormKey.ModKey))
             .ToHashSet();

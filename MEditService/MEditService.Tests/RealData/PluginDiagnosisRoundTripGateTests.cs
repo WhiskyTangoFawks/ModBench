@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.RealData;
 
 /// <summary>Two real survey fixtures: one whose malformed PERK carries full identity at the top level, and
-/// a Kind A defect (ADR-0043) carrying none, proving no identity is fabricated.</summary>
+/// a Kind A defect (ADR-0006) carrying none, proving no identity is fabricated.</summary>
 public sealed class PluginDiagnosisRoundTripGateTests
 {
     [Fact]

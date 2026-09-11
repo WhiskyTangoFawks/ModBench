@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0046 invariant 12, the first transport: the same rows-changed notification
+/// <summary>ADR-0014 invariant 2, the first transport: the same rows-changed notification
 /// <see cref="MEditService.Tests.Records.RowsChangedNotificationTests"/> observes through the
 /// in-memory recorder, here observed through a real HTTP client on the SSE stream.</summary>
 [Collection(WebHostCollection.Name)]
@@ -86,7 +86,7 @@ public sealed class NotificationStreamApiTests : IDisposable
             new { plugin = Plugin, origin = Origin, op = "set", path = new[] { new { kind = "member", name = "HeightMax" } }, value = 0.75 });
         edit.EnsureSuccessStatusCode();
 
-        // The event comes first and the sequence is read after it: ADR-0046 makes the write and its
+        // The event comes first and the sequence is read after it: ADR-0014 makes the write and its
         // projection two events, so a read taken before the projection lands would name the sequence
         // as it stood before the rows changed.
         var (kind, data) = await ReadOneEventAsync(reader, TimeSpan.FromSeconds(10));

@@ -47,12 +47,12 @@ public class TableDdlBuilderTests
         TableDdlBuilder.CreateTables(conn);
 
         var cols = GetColumns(conn, "registrations");
-        // ADR-0044: the three facts a registration carries, and no `participates`, which is derived
+        // ADR-0013: the three facts a registration carries, and no `participates`, which is derived
         // from them.
         Assert.Equal(["plugin", "origin", "load_order_idx", "enabled", "winning"], cols);
     }
 
-    // ADR-0001: the file-mirror half — what the index believes is on disk, kept apart from
+    // ADR-0009: the file-mirror half — what the index believes is on disk, kept apart from
     // the registration so that unregistering a plugin never throws away the hash that makes
     // re-registering it cheap.
     [Fact]
@@ -116,7 +116,7 @@ public class TableDdlBuilderTests
         Assert.NotEmpty(GetColumns(conn, "npc_"));
     }
 
-    // ADR-0001: load order lives only on `registrations`. The mirror record-shaped
+    // ADR-0009: load order lives only on `registrations`. The mirror record-shaped
     // tables carry file-derived facts only; `load_order_idx` reaches a reader exclusively through
     // the registered view's join to `registrations` (TableDdlBuilder.CreateRegisteredViews), never
     // as a stored column.
@@ -150,7 +150,7 @@ public class TableDdlBuilderTests
         Assert.Contains("load_order_idx", cols);
     }
 
-    // ADR-0001: the same split for `is_winner`.
+    // ADR-0009: the same split for `is_winner`.
     [Theory]
     [InlineData("records")]
     [InlineData("records_committed")]

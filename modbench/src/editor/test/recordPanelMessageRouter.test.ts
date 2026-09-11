@@ -150,7 +150,7 @@ describe('routeRecordPanelMessage', () => {
 });
 
 // The router carries no panel identity, so "two panels" is two independently-built deps bundles.
-// No PASTE message exists to route: Ctrl+V lands in a plain <input> (ADR-0034) and committing it
+// No PASTE message exists to route: Ctrl+V lands in a plain <input> (ADR-0018) and committing it
 // is the ordinary EDIT_FIELD write.
 describe('cross-panel copy/paste — two independently-opened panels share this router unmodified', () => {
   beforeEach(() => {
@@ -162,7 +162,7 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
     const panelADeps = makeDeps(); // "panel A", open on Record1
     const panelBDeps = makeDeps(); // "panel B", open on a different record — its own independent deps bundle
 
-    // Ctrl+C in panel A: the webview has already read the focused cell's model value (ADR-0034);
+    // Ctrl+C in panel A: the webview has already read the focused cell's model value (ADR-0018);
     // this is that value on its way to the OS clipboard.
     await routeRecordPanelMessage(
       { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'CopiedNPC [000001:Fallout4.esm]' }, panelADeps);
@@ -188,7 +188,7 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
   });
 });
 
-// ADR-0041: the one write the panel can ask for. Routed through the host rather than posted
+// ADR-0007: the one write the panel can ask for. Routed through the host rather than posted
 // to the backend from the webview precisely so a refusal can become a native notification — which
 // is what these cases are really pinning.
 describe('routeRecordPanelMessage — EDIT_FIELD', () => {

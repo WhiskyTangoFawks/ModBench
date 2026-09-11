@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// ADR-0041: the webview writes through exactly one message, EDIT_FIELD, from one module — an
+// ADR-0007: the webview writes through exactly one message, EDIT_FIELD, from one module — an
 // edit travels through the extension host so a refusal can become a native notification, a
 // surface only the host has.
 describe('the record editor webview writes through exactly one path', () => {

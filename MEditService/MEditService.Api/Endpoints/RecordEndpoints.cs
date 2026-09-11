@@ -69,7 +69,7 @@ public static class RecordEndpoints
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(500);
 
-        // ADR-0041: the single write path's one door. Scripts and agents (ADR-0024) reach the same
+        // ADR-0007: the single write path's one door. Scripts and agents reach the same
         // handler the UI does, which is why the untracked refusal is expressible here.
         app.MapPost("/records/{formKey}/edit", (
             string formKey, RecordEditRequest request, EditRecordHandler edits, IndexWriteGate gate) =>
@@ -97,7 +97,7 @@ public static class RecordEndpoints
             "Deletes the record's source file — a git-native, null-Body working-tree change: " +
             "gone at Effective, still served at Head until the deletion is committed and " +
             "compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes " +
-            "dangling and surfaces as an ordinary compile diagnostic (ADR-0041), the same as any other " +
+            "dangling and surfaces as an ordinary compile diagnostic (ADR-0007), the same as any other " +
             "dangling link.")
         .WithTags("Records")
         .Produces<RecordDeleteResponse>()
@@ -125,11 +125,11 @@ public static class RecordEndpoints
         .ProducesProblem(409)
         .ProducesProblem(422)
         // A rolled-back cascade surfaces here too — same shape as every other write path's I/O
-        // failure, with a richer message naming what the rollback deliberately left standing (ADR-0045).
+        // failure, with a richer message naming what the rollback deliberately left standing (ADR-0007).
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // ADR-0041: the source record's own bytes land under the same FormKey in the destination.
+        // ADR-0007: the source record's own bytes land under the same FormKey in the destination.
         app.MapPost("/records/{formKey}/copy-as-override", (
             string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, IndexWriteGate gate) =>
             CopyRecordAsOverride(formKey, request, edits, gate, logger))
@@ -139,7 +139,7 @@ public static class RecordEndpoints
             "Serializes the source record's own text, verbatim, into the destination plugin's working " +
             "tree under the identical FormKey — no Mutagen deserialization, since a record's stored " +
             "document is already byte-identical to its source file. The destination's master dependency " +
-            "on the record's origin is derived at compile from the bytes it now carries (ADR-0038); no " +
+            "on the record's origin is derived at compile from the bytes it now carries (ADR-0008); no " +
             "copy-specific master handling happens here.")
         .WithTags("Records")
         .Produces<RecordCopyAsOverrideResponse>()
@@ -150,7 +150,7 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // ADR-0041: Copy as New Record Into… — the source record itself under a fresh FormKey, via
+        // ADR-0007: Copy as New Record Into… — the source record itself under a fresh FormKey, via
         // Mutagen's own Duplicate. A top-level record's child slots are cleared; an embedded
         // child's whole subtree rides along under fresh FormKeys.
         app.MapPost("/records/{formKey}/copy-as-new-record", (
@@ -284,7 +284,7 @@ public static class RecordEndpoints
             onWriteFailure: ex =>
             {
                 // A rolled-back cascade lands here too, with the richer message
-                // RenumberRecordHandler already built naming the paths it left standing (ADR-0045) —
+                // RenumberRecordHandler already built naming the paths it left standing (ADR-0007) —
                 // ex.Message goes straight through, unwrapped, unlike every sibling's own
                 // onWriteFailure here.
                 logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);

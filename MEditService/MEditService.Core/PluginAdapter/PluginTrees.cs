@@ -45,7 +45,7 @@ internal static class PluginTrees
         SerializeToPristineFiles(OpenFor(pluginName, pluginPath, gameRelease, strings), pluginName, cancel);
 
     /// <summary>A plugin's binary as every record's own document plus the identity a source tree
-    /// files it by. The mod is held here, so the caller never has one (ADR-0032 rule 2).</summary>
+    /// files it by. The mod is held here, so the caller never has one (ADR-0005 rule 2).</summary>
     internal static IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
         string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings,
         RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
@@ -124,7 +124,7 @@ internal static class PluginTrees
     }
 
     /// <summary>The tree at <paramref name="treeRoot"/> read into the mod it compiles to, held here
-    /// so the compile itself holds documents (ADR-0032 rule 2).</summary>
+    /// so the compile itself holds documents (ADR-0005 rule 2).</summary>
     internal static async Task<CompiledTree> ReadTreeAsync(
         string treeRoot, RecordTextCodec codec, GameRelease gameRelease, CancellationToken cancel = default) =>
         new(await DeserializeTree(treeRoot, cancel), codec, gameRelease);
@@ -175,7 +175,7 @@ internal sealed class CompiledTree(IMod mod, RecordTextCodec codec, GameRelease 
         PluginTrees.SerializeToPristineFiles(mod, pluginName);
 
     /// <summary>The mod handed straight to the write, through the backup-and-rename discipline
-    /// every plugin replacement shares (ADR-0008).</summary>
+    /// every plugin replacement shares.</summary>
     internal Task<string> SaveThroughAsync(PluginWriter writer, string pluginPath, IReadOnlyList<string> loadOrder) =>
         writer.SaveFromModAsync(mod, pluginPath, loadOrder);
 }
