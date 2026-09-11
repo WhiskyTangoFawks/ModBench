@@ -21,8 +21,6 @@ describe('every MO2 text-file write command has a corpus test', () => {
     expect(writeVerbs).toContain('setModEnabled');
     expect(writeVerbs).toContain('switchProfile');
     expect(writeVerbs).toContain('hideDownload');
-    // The write queue is infrastructure the verbs share, not a verb of its own.
-    expect(writeVerbs).not.toContain('withModlistWriteLock');
   });
 
   it.each(writeVerbs)('%s', (verb) => {

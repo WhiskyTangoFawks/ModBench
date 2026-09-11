@@ -20,8 +20,10 @@ import { readGameName, readSelectedProfile } from './mo2/modOrganizerIni';
 import { parseModlist, unlistedModNames } from './mo2/modlistText';
 import { parsePlugins } from './mo2/pluginsText';
 import { parseMetaIni } from './mo2/metaIni';
-import { resolveGameDirectory, type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory } from './gameDirectory';
-import type { OnConfigChange } from './gameDirectoryResolver';
+import {
+  resolveGameDirectory,
+  type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory, type OnConfigChange,
+} from './gameDirectory';
 import { isDeployed } from './deployer';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
@@ -395,12 +397,4 @@ export function loadOrderSnapshotOf(
     dataFolder: value.gameDirectory.dataFolder,
     plugins: value.plugins.filter((p): p is LoadOrderPlugin => p.path !== undefined),
   };
-}
-
-/** ADR-0013: a landed recompute is the sole trigger for a PUT — never a gesture, command or
- *  view calling `request()` directly. */
-export function wireLoadOrderSyncToInstance(
-  instance: Pick<Instance, 'subscribe'>, sync: { request(): void },
-): vscode.Disposable {
-  return instance.subscribe(() => sync.request());
 }

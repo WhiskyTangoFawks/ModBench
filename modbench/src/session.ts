@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { MinimalRepository } from './plugins/pluginRowCommands';
 import type { PluginsTreeNode, PluginsTreeProvider } from './plugins/PluginsTreeProvider';
-import type { LoadOrderSync } from './loadOrderReconcile';
+import type { LoadOrderSender } from './medit/client';
 import type { NameFilter } from './nameFilter';
 import { say } from './editingTeardown';
 
@@ -15,7 +15,7 @@ export type Own = <T extends vscode.Disposable>(disposable: T) => T;
 export interface ExtensionSession {
   pluginsTree?: PluginsTreeProvider;
   /** ADR-0013: the one path by which the Plugin load order reaches Editing. */
-  loadOrderSync?: LoadOrderSync;
+  loadOrderSender?: LoadOrderSender;
   /** The same view, as a `TreeView` — carries the load's own progress and incompleteness
    *  statement (`TreeView.message`, via `say`). */
   pluginsTreeView?: vscode.TreeView<PluginsTreeNode>;

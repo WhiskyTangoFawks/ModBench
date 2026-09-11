@@ -19,6 +19,15 @@ export interface ConfigLike {
 
 export type DetectPaths = () => Promise<{ dataFolder: string; pluginsTxt: string } | null>;
 
+/** Minimal stand-in for vscode's `ConfigurationChangeEvent`. */
+export interface ConfigChangeEvent {
+  affectsConfiguration(section: string): boolean;
+}
+
+/** Matches `vscode.workspace.onDidChangeConfiguration`'s single-listener-arg overload exactly, so
+ *  the composition root can pass it straight through with no adapter. */
+export type OnConfigChange = (listener: (e: ConfigChangeEvent) => void) => { dispose(): void };
+
 /** ModOrganizer.ini's text. Defaults to reading the file; a caller already holding the same
  *  generation's text (the Instance, ADR-0015) injects it instead, so the ini is read once. */
 export type ReadIniText = () => Promise<string>;

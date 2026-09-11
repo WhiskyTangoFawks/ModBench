@@ -3,7 +3,7 @@ import { exitEditing, refreshMatchingPlugins, say } from '../editingTeardown';
 
 function makeSession(facts: { name: string; hasMatchingRecords: boolean }[] = []) {
   return {
-    loadOrderSync: { abandon: vi.fn() },
+    loadOrderSender: { abandon: vi.fn() },
     pluginsTree: { refreshFacts: vi.fn().mockResolvedValue(facts) },
     pluginsTreeView: { message: 'loading…' as string | undefined },
     pluginsNameFilter: { refresh: vi.fn() },
@@ -19,7 +19,7 @@ describe('exitEditing', () => {
 
     exitEditing(session, client);
 
-    expect(session.loadOrderSync.abandon).toHaveBeenCalled();
+    expect(session.loadOrderSender.abandon).toHaveBeenCalled();
     expect(client.stop).toHaveBeenCalled();
   });
 
