@@ -2,7 +2,6 @@ using System.Text.Json;
 using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Core.Edits;
-using MEditService.Core.Records;
 using MEditService.Tests.Edits;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -17,7 +16,6 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
     private const int RefusedStatus = 422;
 
     private readonly CopyFixture _mod = CopyFixture.Create(trackSource: true);
-    private readonly IndexWriteGate _gate = new();
 
     // Parse status comes from the codec at edit time (ADR-0015 invariant 5), so the record every
     // door here refuses is one whose document on disk the codec cannot read.
@@ -40,7 +38,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             [PathHop.Member("HeightMax")], JsonDocument.Parse("0.75").RootElement);
 
         var result = RecordEndpoints.EditRecord(
-            _mod.SourceNpc.ToString(), request, _mod.EditHandler, _gate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.EditHandler, NullLogger.Instance);
 
         AssertRefused(result);
     }
@@ -53,7 +51,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             CopyFixture.DestinationPluginName, CopyFixture.DestinationOrigin);
 
         var result = RecordEndpoints.CopyRecordAsOverride(
-            _mod.SourceNpc.ToString(), request, _mod.CopyAsOverrideHandler, _gate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.CopyAsOverrideHandler, NullLogger.Instance);
 
         AssertRefused(result);
         Assert.Empty(_mod.DestinationGitStatus());
@@ -67,7 +65,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             CopyFixture.DestinationPluginName, CopyFixture.DestinationOrigin, RequestedFormKey: null);
 
         var result = RecordEndpoints.CopyRecordAsNewRecord(
-            _mod.SourceNpc.ToString(), request, _mod.CopyAsNewHandler, _gate, NullLogger.Instance);
+            _mod.SourceNpc.ToString(), request, _mod.CopyAsNewHandler, NullLogger.Instance);
 
         AssertRefused(result);
         Assert.Empty(_mod.DestinationGitStatus());

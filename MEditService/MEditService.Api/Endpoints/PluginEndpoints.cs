@@ -316,13 +316,11 @@ public static class PluginEndpoints
     // server-side either way. logReceived is null on purpose: no PluginEndpoints handler logs on
     // entry, UseSerilogRequestLogging's per-request summary covers it.
     internal static IResult CreateRecord(
-        string plugin, RecordCreateRequest req, CreateRecordHandler edits, IndexWriteGate gate,
-        ILoggerFactory loggerFactory)
+        string plugin, RecordCreateRequest req, CreateRecordHandler edits, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
         return WriteEndpointMapping.Execute(
-            gate,
             logReceived: null,
             validate: () =>
             {

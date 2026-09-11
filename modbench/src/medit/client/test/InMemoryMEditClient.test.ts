@@ -83,12 +83,12 @@ describe('InMemoryMEditClient — a queued once-form script', () => {
 describe('InMemoryMEditClient — a scripted command failure', () => {
   it('rejects every call with the scripted error until re-scripted', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandFailure('compile', new Error('write gate busy'));
+    client.setCommandFailure('compile', new Error('the compile step failed'));
 
-    await expect(client.compile('MyMod.esp', 'MyMod', 'HEAD')).rejects.toThrow('write gate busy');
+    await expect(client.compile('MyMod.esp', 'MyMod', 'HEAD')).rejects.toThrow('the compile step failed');
 
     client.setCommandResult('compile', undefined);
-    await expect(client.compile('MyMod.esp', 'MyMod', 'HEAD')).rejects.toThrow('write gate busy');
+    await expect(client.compile('MyMod.esp', 'MyMod', 'HEAD')).rejects.toThrow('the compile step failed');
   });
 });
 

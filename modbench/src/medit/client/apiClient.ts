@@ -135,16 +135,3 @@ export function errorText(error: unknown): string {
   return JSON.stringify(error);
 }
 
-/** Read off the ProblemDetails extension, never the status code: 503 alone cannot tell a busy
- *  write gate from a vanished load order, and the two want opposite responses — retry versus
- *  reload. */
-export function isWriteGateTimeout(error: unknown): boolean {
-  return (error as { writeGateTimeout?: boolean } | undefined)?.writeGateTimeout === true;
-}
-
-/** Deliberately not the backend's own detail, which names an implementation and a timeout: the
- *  actionable facts are that nothing was written (the gate is taken around the write) and that
- *  repeating the gesture is the way out. */
-export function writeGateBusyMessage(failMsg: string): string {
-  return `${failMsg} — another change is still being written. Try again in a moment.`;
-}
