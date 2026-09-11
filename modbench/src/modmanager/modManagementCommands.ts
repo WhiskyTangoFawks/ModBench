@@ -321,11 +321,9 @@ export function registerDownloadsView(
   instance: InstanceView,
   outputChannel: vscode.LogOutputChannel,
 ): DownloadsProvider {
-  // A shim for collaborators still taking a flat `(msg) => void`, built here at the boundary so
-  // the flat shape stops at them rather than one level higher.
-  const log = (msg: string) => outputChannel.info(msg);
+  const reporter = makeReporter(outputChannel, 'downloadList');
   const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
-    instanceRoot, instance, reporter: makeReporter(outputChannel, 'downloadList'),
+    instanceRoot, instance, reporter,
   }));
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
@@ -344,8 +342,8 @@ export function registerDownloadsView(
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, log),
-    ...registerDownloadsMultiRowCommands(instanceRoot, log),
+    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter),
+    ...registerDownloadsMultiRowCommands(instanceRoot, reporter),
   ]) own(disposable);
   return downloadsProvider;
 }

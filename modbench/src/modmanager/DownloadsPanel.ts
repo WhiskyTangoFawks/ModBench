@@ -1,23 +1,31 @@
 import * as vscode from 'vscode';
-import { readFile, writeFile } from 'node:fs/promises';
-import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadSortColumn } from './mo2/downloads';
-import { downloadFile, downloadSidecarFile, settingsFile } from './mo2/layout';
-import { deleteDownload } from './deleteDownload';
-import { readGameName } from './mo2/modOrganizerIni';
+import type { DownloadRow, DownloadSortColumn } from './mo2/downloads';
+import { downloadFile, downloadSidecarFile } from './mo2/layout';
+import {
+  deleteDownload,
+  hideDownload,
+  markDownloadInstalled,
+  unhideDownload,
+  type DownloadCommandResult,
+} from './commands/downloads';
 import { nexusSlugForGame } from './mo2/gamePaths';
 import type { InstallChoice } from './commands/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { Instance } from './instance';
+import type { Reporter } from '../reporter';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
 
-// A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.
-async function readMetaText(path: string): Promise<string | undefined> {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-    throw err;
-  }
+// The host's trash, the one capability a command cannot hold itself.
+const trashFile = async (path: string): Promise<void> => {
+  await vscode.workspace.fs.delete(vscode.Uri.file(path), { useTrash: true });
+};
+
+const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+// A refusal becomes a throw, so one catch-and-report path serves a rejected promise and an
+// `{ applied: false }` result alike.
+function applyOrThrow(outcome: DownloadCommandResult): void {
+  if (!outcome.applied) throw new Error(outcome.refusal);
 }
 
 interface UpgradePickItem extends vscode.QuickPickItem {
@@ -49,17 +57,14 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
 }
 
 // Pre-supplying the archive path keeps the install command's file-picker from appearing. The
-// `.meta` write is what the file-watcher turns into a Status refresh, so none is issued here.
+// row's own mod id, file id and version are what it is told: the view re-reads no sidecar.
 async function installArchive(
-  instanceRoot: string, name: string, instance: Pick<Instance, 'value'>, log: (msg: string) => void,
+  instanceRoot: string, row: DownloadRow, instance: Pick<Instance, 'value'>, reporter: Reporter,
 ): Promise<void> {
-  const archivePath = downloadFile(instanceRoot, name);
-  const metaPath = downloadSidecarFile(instanceRoot, name);
+  const { name } = row;
   let installed = false;
   try {
-    const metaText = (await readMetaText(metaPath)) ?? '';
-    const { modID, fileID, version } = parseDownloadMeta(metaText);
-    const candidates = selectUpgradeCandidates(instance.value, { modID, fileID });
+    const candidates = selectUpgradeCandidates(instance.value, row);
     let choice: InstallChoice = { kind: 'new' };
     if (candidates.length > 0) {
       const picked = await pickUpgradeChoice(name, candidates);
@@ -68,26 +73,24 @@ async function installArchive(
     }
     installed = (await vscode.commands.executeCommand<boolean | undefined>(
       'modbench.modList.installFromArchive',
-      archivePath, modID, fileID, version, choice,
+      downloadFile(instanceRoot, name), row.modID, row.fileID, row.version, choice,
     )) ?? false;
-    if (!installed) return;
-    await writeFile(metaPath, setInstalledInText(metaText), 'utf8');
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (installed) {
-      // ADR-0019: integrity/silent-wrong-state (partial save) — the mod IS
-      // installed, only its Downloads bookkeeping failed. Must not read as
-      // "install failed", or the user may retry and get a duplicate mod.
-      log(`[DownloadsPanel] "${name}" installed but updating its Downloads status failed: ${message}`);
-      void vscode.window.showWarningMessage(
-        `Modbench: "${name}" was installed, but its Downloads status could not be updated — see the Modbench output log.`,
-      );
-    } else {
-      log(`[DownloadsPanel] installing "${name}" failed: ${message}`);
-      // ADR-0019: explicit user action failed -> error notification + log.
-      void vscode.window.showErrorMessage(`Modbench: Failed to install "${name}".`);
-    }
+    // ADR-0019: explicit user action failed -> error notification + log.
+    reporter.report('error', `Failed to install "${name}".`, message(err));
+    return;
   }
+  if (!installed) return;
+  const marked = await markDownloadInstalled(instanceRoot, name);
+  if (marked.applied) return;
+  // ADR-0019: integrity/silent-wrong-state (partial save) — the mod IS installed, only its
+  // Downloads bookkeeping failed. Must not read as "install failed", or the user may retry and
+  // get a duplicate mod.
+  reporter.report(
+    'warning',
+    `"${name}" was installed, but its Downloads status could not be updated — see the Modbench output log.`,
+    marked.refusal,
+  );
 }
 
 // Every nav action can reject — a `.meta` raced away, an OS with no handler — so none may be
@@ -95,46 +98,33 @@ async function installArchive(
 async function runRowAction(
   label: string,
   name: string,
-  log: (msg: string) => void,
+  reporter: Reporter,
   action: () => Promise<void>,
 ): Promise<void> {
   try {
     await action();
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    log(`[DownloadsPanel] ${label} for "${name}" failed: ${message}`);
-    void vscode.window.showErrorMessage(`Modbench: ${label} for "${name}" failed.`);
+    reporter.report('error', `${label} for "${name}" failed.`, message(err));
   }
 }
 
 // The caller supplies `confirm`, so a batch delete can ask once for the whole selection instead
-// of once per file. Never touches the installed mod.
+// of once per file. Cancel is a silent no-op.
 async function trashOneArchive(
   instanceRoot: string,
   name: string,
-  log: (msg: string) => void,
+  reporter: Reporter,
   confirm: () => Promise<boolean>,
 ): Promise<void> {
-  const archivePath = downloadFile(instanceRoot, name);
-  const metaPath = downloadSidecarFile(instanceRoot, name);
-  await deleteDownload({
-    archivePath,
-    metaPath,
-    confirm,
-    metaExists: async () => (await readMetaText(metaPath)) !== undefined,
-    trash: async (path) => {
-      await vscode.workspace.fs.delete(vscode.Uri.file(path), { useTrash: true });
-    },
-    reportFailure: (message) => {
-      log(`[DownloadsPanel] deleting "${name}" failed: ${message}`);
-      // ADR-0019: explicit user action failed -> error notification + log.
-      void vscode.window.showErrorMessage(`Modbench: Failed to delete "${name}".`);
-    },
-  });
+  if (!(await confirm())) return;
+  const outcome = await deleteDownload(instanceRoot, name, trashFile);
+  if (outcome.applied) return;
+  // ADR-0019: explicit user action failed -> error notification + log.
+  reporter.report('error', `Failed to delete "${name}".`, outcome.refusal);
 }
 
-async function deleteArchive(instanceRoot: string, name: string, log: (msg: string) => void): Promise<void> {
-  await trashOneArchive(instanceRoot, name, log, async () =>
+async function deleteArchive(instanceRoot: string, name: string, reporter: Reporter): Promise<void> {
+  await trashOneArchive(instanceRoot, name, reporter, async () =>
     (await vscode.window.showWarningMessage(
       `Delete "${name}"? The archive and its .meta file (if any) will be moved to the system trash.`,
       { modal: true },
@@ -144,9 +134,9 @@ async function deleteArchive(instanceRoot: string, name: string, log: (msg: stri
 
 /** Confirms once for the whole selection: an N-file selection must not stack N modal dialogs.
  *  Cancel is a silent no-op for the whole batch, matching the single-file contract. */
-export async function deleteArchives(instanceRoot: string, names: string[], log: (msg: string) => void): Promise<void> {
+export async function deleteArchives(instanceRoot: string, names: string[], reporter: Reporter): Promise<void> {
   if (names.length === 1) {
-    await deleteArchive(instanceRoot, names[0], log);
+    await deleteArchive(instanceRoot, names[0], reporter);
     return;
   }
   const confirmed = (await vscode.window.showWarningMessage(
@@ -155,45 +145,37 @@ export async function deleteArchives(instanceRoot: string, names: string[], log:
     'Delete',
   )) === 'Delete';
   if (!confirmed) return;
-  for (const name of names) await trashOneArchive(instanceRoot, name, log, () => Promise.resolve(true));
+  for (const name of names) await trashOneArchive(instanceRoot, name, reporter, () => Promise.resolve(true));
 }
 
-// A no-op without a mod id; the native menu's `hasModID` `when` clause is the other guard.
-async function visitOnNexus(instanceRoot: string, name: string): Promise<void> {
-  const metaText = await readMetaText(downloadSidecarFile(instanceRoot, name));
-  const modID = metaText ? parseDownloadMeta(metaText).modID : undefined;
-  if (!modID) return;
-  const slug = nexusSlugForGame(readGameName(await readFile(settingsFile(instanceRoot), 'utf8')));
+// The game and the mod id both come from the value, which holds them already.
+async function visitOnNexus(gameRelease: string, modID: string): Promise<void> {
+  const slug = nexusSlugForGame(gameRelease);
   await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${modID}`));
-}
-
-// `removed` is a separate axis from the Uninstalled Status, so this never touches Status. A
-// metaless download gets a fresh minimal `.meta`, matching MO2's own QSettings auto-create.
-async function setArchiveHidden(instanceRoot: string, name: string, hidden: boolean): Promise<void> {
-  const metaPath = downloadSidecarFile(instanceRoot, name);
-  const metaText = (await readMetaText(metaPath)) ?? '';
-  await writeFile(metaPath, setHiddenInText(metaText, hidden), 'utf8');
 }
 
 /** Clicked row only, ignoring the rest of any multi-selection: MO2 does not batch Install
  *  either, and batching the navigational actions is "open five browser tabs". VS Code's
  *  `(clickedItem, selectedItems[])` selection argument is unused here. */
 export function registerDownloadsSingleRowCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, log: (msg: string) => void,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(instanceRoot, node.row.name, instance, log);
+      if (node?.row.name) void installArchive(instanceRoot, node.row, instance, reporter);
     }),
+    // A no-op without a mod id; the native menu's `hasModID` `when` clause is the other guard.
     vscode.commands.registerCommand('modbench.downloads.visitNexus', (node?: DownloadNode) => {
-      const name = node?.row.name;
-      if (name) void runRowAction('Visit on Nexus', name, log, () => visitOnNexus(instanceRoot, name));
+      const row = node?.row;
+      if (!row?.modID) return;
+      const modID = row.modID;
+      void runRowAction('Visit on Nexus', row.name, reporter, () => visitOnNexus(instance.value.gameRelease, modID));
     }),
     // OS-open the archive in the system's associated application.
     vscode.commands.registerCommand('modbench.downloads.openFile', (node?: DownloadNode) => {
       const name = node?.row.name;
       if (!name) return;
-      void runRowAction('Open File', name, log, async () => {
+      void runRowAction('Open File', name, reporter, async () => {
         await vscode.env.openExternal(vscode.Uri.file(downloadFile(instanceRoot, name)));
       });
     }),
@@ -201,7 +183,7 @@ export function registerDownloadsSingleRowCommands(
     vscode.commands.registerCommand('modbench.downloads.openMeta', (node?: DownloadNode) => {
       const name = node?.row.name;
       if (!name) return;
-      void runRowAction('Open Meta File', name, log, async () => {
+      void runRowAction('Open Meta File', name, reporter, async () => {
         await vscode.window.showTextDocument(vscode.Uri.file(downloadSidecarFile(instanceRoot, name)));
       });
     }),
@@ -217,27 +199,27 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
 
 /** Acts on the whole selection. The `when` clause can only inspect the clicked row, so a mixed
  *  selection applies that row's action to all of them, as MO2's "Hide All" does. */
-export function registerDownloadsMultiRowCommands(instanceRoot: string, log: (msg: string) => void): vscode.Disposable[] {
+export function registerDownloadsMultiRowCommands(instanceRoot: string, reporter: Reporter): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       const names = selectionNames(clicked, selected);
-      if (names.length > 0) void deleteArchives(instanceRoot, names, log);
+      if (names.length > 0) void deleteArchives(instanceRoot, names, reporter);
     }),
     vscode.commands.registerCommand('modbench.downloads.hide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Hide', name, log, () => setArchiveHidden(instanceRoot, name, true));
+        void runRowAction('Hide', name, reporter, async () => applyOrThrow(await hideDownload(instanceRoot, name)));
       }
     }),
     vscode.commands.registerCommand('modbench.downloads.unhide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
-        void runRowAction('Unhide', name, log, () => setArchiveHidden(instanceRoot, name, false));
+        void runRowAction('Unhide', name, reporter, async () => applyOrThrow(await unhideDownload(instanceRoot, name)));
       }
     }),
   ];
 }
 
 // Sorting and hidden-row filtering already happen inside DownloadsProvider's load(), so these
-// take the provider rather than instanceRoot/log as the per-archive commands above do.
+// take the provider rather than the instance root as the per-archive commands above do.
 
 // Filetime descending, last, is the default DownloadsProvider already starts at, so leaving it
 // unpicked changes nothing.
