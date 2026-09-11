@@ -54,11 +54,16 @@ public sealed partial class SourceRepository
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
     /// alone and minting the levels above it. A record another document carries is replaced at its
     /// own slot, every other byte untouched.</summary>
-    public void Put(PluginKey plugin, SourceDocument document)
+    public void Put(PluginKey plugin, SourceDocument document) => Put(plugin, document, placement: null);
+
+    /// <summary>The put of an exterior cell, the one record whose directory sits inside another
+    /// record's: <paramref name="placement"/> names the worldspace holding it and its block numbers.
+    /// Every other record is placed from its identity alone.</summary>
+    internal void Put(PluginKey plugin, SourceDocument document, CellPlacement? placement)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
         var unit = Locate(plugin, identity)
-                   ?? PlaceNewDocument(plugin, identity)
+                   ?? PlaceNewDocument(plugin, identity, placement)
                    ?? throw NoPlaceInTheTree(plugin, identity);
 
         if (unit.IsEmbedded)
