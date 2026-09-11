@@ -305,4 +305,46 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
 
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString()));
     }
+
+    // The container rule two levels deep: the topic already in the tree has no document of its own,
+    // so the second response lands inside the quest document's own topic subtree, after the first.
+    [Fact]
+    public void CopyRecordAsOverride_OnAResponse_WhenDestinationAlreadyHoldsItsTopicEmbeddedInTheQuest_AppendsAtTheEndOfTheResponsesSlot()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        var service = fixture.CopyAsOverrideHandler;
+        Assert.True(service.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin).Applied);
+
+        var questFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response2EditorId);
+        var before = JsonDocument.Parse(File.ReadAllText(questFile)).RootElement;
+
+        var result = service.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var after = JsonDocument.Parse(File.ReadAllText(questFile)).RootElement;
+
+        foreach (var property in before.EnumerateObject())
+        {
+            if (property.NameEquals("DialogTopics")) continue;
+            Assert.Equal(property.Value.GetRawText(), after.GetProperty(property.Name).GetRawText());
+        }
+        Assert.Equal(before.EnumerateObject().Count(), after.EnumerateObject().Count());
+
+        var topicBefore = Assert.Single(before.GetProperty("DialogTopics").EnumerateArray());
+        var topicAfter = Assert.Single(after.GetProperty("DialogTopics").EnumerateArray());
+        foreach (var property in topicBefore.EnumerateObject())
+        {
+            if (property.NameEquals("Responses")) continue;
+            Assert.Equal(property.Value.GetRawText(), topicAfter.GetProperty(property.Name).GetRawText());
+        }
+        Assert.Equal(topicBefore.EnumerateObject().Count(), topicAfter.EnumerateObject().Count());
+
+        // Response2 landed first, by the earlier mint; Response1 lands second — at the slot's end.
+        Assert.Equal(
+            [fixture.Response2.ToString(), fixture.Response1.ToString()],
+            topicAfter.GetProperty("Responses").EnumerateArray()
+                .Select(response => response.GetProperty("FormKey").GetString()!).ToArray());
+    }
 }
