@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Captures every registerCommand(id, handler) so a row's handler can be invoked directly — the
 // same idiom recordPanelContextCommands.test.ts and pluginRowCommands.test.ts already establish.
-const {
-  handlers, registerCommand, showWarningMessage, showErrorMessage, showInformationMessage, showInputBox, showQuickPick,
-} = vi.hoisted(() => {
+// The three message APIs are deliberately absent from the mock: this module surfaces through the
+// injected reporter and dialog, so a reintroduced direct call throws here instead of passing.
+const { handlers, registerCommand, showInputBox, showQuickPick } = vi.hoisted(() => {
   const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
   return {
     handlers,
@@ -12,9 +12,6 @@ const {
       handlers.set(command, handler);
       return { dispose: vi.fn() };
     }),
-    showWarningMessage: vi.fn(),
-    showErrorMessage: vi.fn(),
-    showInformationMessage: vi.fn(),
     showInputBox: vi.fn(),
     showQuickPick: vi.fn(),
   };
@@ -22,7 +19,7 @@ const {
 
 vi.mock('vscode', () => ({
   commands: { registerCommand },
-  window: { showWarningMessage, showErrorMessage, showInformationMessage, showInputBox, showQuickPick },
+  window: { showInputBox, showQuickPick },
 }));
 
 import {
@@ -377,7 +374,7 @@ describe('registerRecordCopyCommands', () => {
   it('reports a failed destination lookup at error, with the gesture as the log detail', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', [{ name: 'MyPatch.esp', origin: 'ModA' } as any]);
-    client.setQueryAnswer('getRecordOverridePlugins', Promise.reject(new Error('backend down')) as any);
+    client.setQueryFailure('getRecordOverridePlugins', new Error('backend down'));
     const { reporter } = invoke(client);
 
     await handlers.get('modbench.record.copyAsOverride')!(RECORD_NODE);

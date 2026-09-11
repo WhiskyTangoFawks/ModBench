@@ -132,7 +132,7 @@ export function registerRecordLifecycleCommands(
       } catch (e) {
         // Background/recoverable (ADR-0019): the input box still works with no prefill, so this is
         // a log line, not a toast — the command is not blocked on it.
-        outputChannel.warn(`[recordLifecycleCommands] record.renumber could not fetch a suggested FormKey: ${e instanceof Error ? e.message : String(e)}`);
+        outputChannel.warn(`[recordLifecycle] record.renumber could not fetch a suggested FormKey: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       const input = await vscode.window.showInputBox({
@@ -150,7 +150,7 @@ export function registerRecordLifecycleCommands(
         confirmMessage = renumberConfirmMessage(
           identity.formKey, input || suggested || '(next free)', await client.getReferences(identity.formKey));
       } catch (e) {
-        outputChannel.warn(`[recordLifecycleCommands] record.renumber could not fetch referencers for the confirm: ${e instanceof Error ? e.message : String(e)}`);
+        outputChannel.warn(`[recordLifecycle] record.renumber could not fetch referencers for the confirm: ${e instanceof Error ? e.message : String(e)}`);
         confirmMessage = `Change FormID of ${identity.formKey}? Its references could not be counted — ` +
           'every referencing record in a tracked plugin will be updated with it.';
       }
