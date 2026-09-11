@@ -1,3 +1,4 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
@@ -7,9 +8,9 @@ using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>Track writes a block level's directory through the whole-mod serializer and the spatial
-/// mint places one from the repository's own spelling; a tree the two spell differently holds two
-/// directories for one block.</summary>
+/// <summary>Track writes a block level's directory through the whole-mod serializer and a put places
+/// one from the repository's own spelling; a tree the two spell differently holds two directories
+/// for one block.</summary>
 public sealed class BlockLevelNameParityTests
 {
     private const GameRelease Release = GameRelease.Fallout4;
@@ -22,7 +23,7 @@ public sealed class BlockLevelNameParityTests
     private const short SubY = -1;
 
     [Fact]
-    public async Task TheDirectoriesTheWholeModSerializerWrites_AreNamedAsTheRepositoryPlacesThem()
+    public async Task TheDirectoriesTheWholeModSerializerWrites_AreNamedAsAPutPlacesThem()
     {
         var scratch = Directory.CreateTempSubdirectory("medit-block-name-parity-").FullName;
         try
@@ -35,14 +36,15 @@ public sealed class BlockLevelNameParityTests
             var writtenSubBlock = Directory.EnumerateDirectories(writtenBlock).Single();
             var writtenCell = Directory.EnumerateDirectories(writtenSubBlock).Single();
 
-            var placed = SourceRepository.ExteriorCellSubtreeFor(
-                Plugin, "wrld", WorldspaceFormKey, worldspaceEditorId: null, CellFormKey, cellEditorId: null,
-                new CellPlacement(WorldspaceFormKey, BlockX, BlockY, SubX, SubY, IsInterior: false), Release);
+            var placedWorldspace = WorldspaceDirectoryAPutOfOneExteriorCellLeaves(scratch);
+            var placedBlock = Directory.EnumerateDirectories(placedWorldspace).Single();
+            var placedSubBlock = Directory.EnumerateDirectories(placedBlock).Single();
+            var placedCell = Directory.EnumerateDirectories(placedSubBlock).Single();
 
-            Assert.Equal(Path.GetFileName(writtenWorldspace), Path.GetFileName(placed.WorldspaceDirectory));
-            Assert.Equal(Path.GetFileName(writtenBlock), DirectoryOf(placed.BlockGroupDocument));
-            Assert.Equal(Path.GetFileName(writtenSubBlock), DirectoryOf(placed.SubBlockGroupDocument));
-            Assert.Equal(Path.GetFileName(writtenCell), DirectoryOf(placed.CellDocument));
+            Assert.Equal(Path.GetFileName(writtenWorldspace), Path.GetFileName(placedWorldspace));
+            Assert.Equal(Path.GetFileName(writtenBlock), Path.GetFileName(placedBlock));
+            Assert.Equal(Path.GetFileName(writtenSubBlock), Path.GetFileName(placedSubBlock));
+            Assert.Equal(Path.GetFileName(writtenCell), Path.GetFileName(placedCell));
         }
         finally
         {
@@ -50,8 +52,24 @@ public sealed class BlockLevelNameParityTests
         }
     }
 
-    private static string DirectoryOf(SourcePlacement placement) =>
-        Path.GetFileName(Path.GetDirectoryName(placement.RelativePath)!);
+    private static string WorldspaceDirectoryAPutOfOneExteriorCellLeaves(string scratch)
+    {
+        var modFolder = Directory.CreateDirectory(Path.Combine(scratch, "put")).FullName;
+        var key = new PluginKey(Plugin);
+        var repository = SourceRepository.Over(modFolder, Release);
+
+        repository.Put(key, new SourceDocument(WorldspaceFormKey, "wrld", null, Body(WorldspaceFormKey)));
+        repository.Put(
+            key,
+            new SourceDocument(CellFormKey, "cell", null, Body(CellFormKey)),
+            new CellPlacement(WorldspaceFormKey, BlockX, BlockY, SubX, SubY, IsInterior: false));
+
+        return Directory
+            .EnumerateDirectories(Path.Combine(SourceRepository.RootIn(modFolder, Plugin), "Worldspaces"))
+            .Single();
+    }
+
+    private static string Body(string formKey) => $"{{\n  \"FormKey\": \"{formKey}\"\n}}";
 
     private static Fallout4Mod OneExteriorCell()
     {
