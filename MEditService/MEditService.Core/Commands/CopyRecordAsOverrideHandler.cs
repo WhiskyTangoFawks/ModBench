@@ -107,26 +107,15 @@ public sealed class CopyRecordAsOverrideHandler
         // A plain Copy as Override is own-fields-only, so a container's inline children are stripped.
         if (isContainer) body = StripEmbeddedChildrenForShallowCopy(body, identity.RecordType, release);
 
-        // A Cell's block bucket is the one thing resolved first, because it is chosen (or minted)
-        // rather than derived.
-        var written = SourceRepository.PlacementFor(
-            destinationPlugin.Name, identity.RecordType, formKey, identity.EditorId, release,
-            isCell
-                ? SourceRepository.EnsureInteriorCellBlockPath(destination.ModFolder, destinationPlugin.Name, release)
-                : null);
-        SourceRepository.WriteAt(destination.ModFolder, written, path =>
-        {
-            SourceRepository.WriteTextAtomic(path, body);
-            return body;
-        });
+        destination.Repository.Put(
+            destinationPlugin, new SourceDocument(formKey, identity.RecordType, identity.EditorId, body));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — new working-tree source file at {SourcePath}",
-                formKey, source.Plugin.Name, source.Plugin.Origin, destinationPlugin.Name, destinationPlugin.Origin,
-                written.RelativePath);
+                "({DestinationOrigin}) — new working-tree source document",
+                formKey, source.Plugin.Name, source.Plugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
         }
         // An override echoes the caller's own FormKey back, so NewFormKey stays null.
         return RecordEditResult.Success();
@@ -139,12 +128,12 @@ public sealed class CopyRecordAsOverrideHandler
         CopySource source, RecordIdentity identity, string body, RecordIdentity existingTarget,
         RecordCopy.Destination destination, GameRelease release)
     {
-        var unit = destination.Repository.Locate(destination.Plugin, existingTarget)
+        var existing = destination.Repository.Get(destination.Plugin, existingTarget)
             ?? throw new InvalidOperationException(
                 $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
 
         var replacement = ContainerDocumentEdits.WithOwnFieldsReplaced(
-            _codec, unit.FullPath, unit.OwnerRecordType, body, identity.RecordType, release);
+            _codec, existing.Body, existing.RecordType, body, identity.RecordType, release);
 
         // Move first, then write: a crash between leaves the leaf at its new name with old content,
         // still findable by FormKey. The reverse order leaves two units claiming one FormKey.
