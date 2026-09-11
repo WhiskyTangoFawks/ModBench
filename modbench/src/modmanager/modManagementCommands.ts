@@ -9,7 +9,8 @@ import type { Instance, InstanceView } from './instance';
 import { nexusSlugForGame } from './mo2/gamePaths';
 import { OVERWRITE_DIR_NAME, modDir } from './mo2/layout';
 import type { Own } from '../session';
-import { makeReporter } from '../reporter';
+import type { Reporter } from '../reporter';
+import type { AskQuestion } from '../dialog';
 import { registerNameFilter } from '../nameFilter';
 import { setMo2InstanceContext } from '../workspaceConfig';
 import {
@@ -115,8 +116,9 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
   ];
 }
 export function registerModContextCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, outputChannel: vscode.LogOutputChannel,
+  instanceRoot: string, instance: Pick<Instance, 'value'>,
   runModAction: (label: string, failMessage: string, action: () => Promise<void>) => Promise<void>,
+  ask: AskQuestion,
 ): vscode.Disposable[] {
   return [
       vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode | undefined) => {
@@ -149,7 +151,7 @@ export function registerModContextCommands(
       }),
       vscode.commands.registerCommand('modbench.modList.mod.uninstall', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
-        const answer = await vscode.window.showWarningMessage(
+        const answer = await ask(
           `Uninstall "${node.mod.name}"? This will permanently delete the mod folder from disk.`,
           { modal: true },
           'Uninstall',
@@ -228,7 +230,7 @@ export function registerCreateEmptyModCommand(
  *  count come from the Instance's value (ADR-0015), which already recomputes on `overwrite/`. */
 export function registerOverwriteView(
   instanceRoot: string,
-  outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter,
 ): vscode.Disposable[] {
   return [
     // Tint the pinned Overwrite row reddish. Stateless: keyed on the
@@ -239,7 +241,7 @@ export function registerOverwriteView(
       try {
         await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
       } catch (err) {
-        makeReporter(outputChannel, 'overwrite.reveal').report(
+        reporter.report(
           'error', 'Failed to reveal the overwrite folder in the Explorer.', err instanceof Error ? err.message : String(err));
       }
     }),
@@ -296,9 +298,9 @@ export function registerDownloadsView(
   own: Own,
   instanceRoot: string,
   instance: InstanceView,
-  outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter,
+  ask: AskQuestion,
 ): DownloadsProvider {
-  const reporter = makeReporter(outputChannel, 'downloadList');
   const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
     instanceRoot, instance, reporter,
   }));
@@ -320,7 +322,7 @@ export function registerDownloadsView(
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
     ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter),
-    ...registerDownloadsMultiRowCommands(instanceRoot, reporter),
+    ...registerDownloadsMultiRowCommands(instanceRoot, reporter, ask),
   ]) own(disposable);
   return downloadsProvider;
 }

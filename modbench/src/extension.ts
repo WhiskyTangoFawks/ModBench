@@ -151,6 +151,8 @@ export function activate(context: vscode.ExtensionContext) {
   // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
     outputChannel, session, client: meditClient,
+    reporterFor: (tag) => makeReporter(outputChannel, tag),
+    ask: askQuestion,
     recordBrowser: treeProvider,
     pluginFacts: meditClient,
     showCrashRepairOffers,

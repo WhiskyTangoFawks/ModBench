@@ -101,3 +101,23 @@ function walk(dir: string): string[] {
     return d.isDirectory() ? (d.name === 'generated' ? [] : walk(p)) : [p];
   });
 }
+
+// ADR-0019 invariant 3: surfacing goes through the injected reporter and the dialog. Anywhere
+// but the two adapter modules, a raw window message call is a surface no test can read.
+describe('the message APIs live only in the reporter and the dialog', () => {
+  it('exactly the two adapters call one', () => {
+    expect(sourceFiles().filter((file) => messageApiCalls(read(file)).length > 0).sort())
+      .toEqual(['dialog.ts', 'reporter.ts']);
+  });
+
+  // Rivals this catches: a module toasting directly, and one aliasing `vscode.window` first.
+  it('flags a raw call wherever it is planted', () => {
+    expect(messageApiCalls("void vscode.window.showWarningMessage('careful');")).toEqual(['showWarningMessage']);
+    expect(messageApiCalls("const { showErrorMessage } = vscode.window;")).toEqual(['showErrorMessage']);
+    expect(messageApiCalls("reporter.report('warning', 'careful');")).toEqual([]);
+  });
+});
+
+function messageApiCalls(source: string): string[] {
+  return [...source.matchAll(/show(?:Information|Warning|Error)Message/g)].map((m) => m[0]);
+}

@@ -13,6 +13,7 @@ import type { InstallChoice } from './commands/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { Instance } from './instance';
 import type { Reporter } from '../reporter';
+import type { AskQuestion } from '../dialog';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
 
 // The host's trash, the one capability a command cannot hold itself.
@@ -123,9 +124,11 @@ async function trashOneArchive(
   reporter.report('error', `Failed to delete "${name}".`, outcome.refusal);
 }
 
-async function deleteArchive(instanceRoot: string, name: string, reporter: Reporter): Promise<void> {
+async function deleteArchive(
+  instanceRoot: string, name: string, reporter: Reporter, ask: AskQuestion,
+): Promise<void> {
   await trashOneArchive(instanceRoot, name, reporter, async () =>
-    (await vscode.window.showWarningMessage(
+    (await ask(
       `Delete "${name}"? The archive and its .meta file (if any) will be moved to the system trash.`,
       { modal: true },
       'Delete',
@@ -134,12 +137,14 @@ async function deleteArchive(instanceRoot: string, name: string, reporter: Repor
 
 /** Confirms once for the whole selection: an N-file selection must not stack N modal dialogs.
  *  Cancel is a silent no-op for the whole batch, matching the single-file contract. */
-export async function deleteArchives(instanceRoot: string, names: string[], reporter: Reporter): Promise<void> {
+export async function deleteArchives(
+  instanceRoot: string, names: string[], reporter: Reporter, ask: AskQuestion,
+): Promise<void> {
   if (names.length === 1) {
-    await deleteArchive(instanceRoot, names[0], reporter);
+    await deleteArchive(instanceRoot, names[0], reporter, ask);
     return;
   }
-  const confirmed = (await vscode.window.showWarningMessage(
+  const confirmed = (await ask(
     `Delete ${names.length} items? Each archive and its .meta file (if any) will be moved to the system trash.`,
     { modal: true },
     'Delete',
@@ -199,11 +204,13 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
 
 /** Acts on the whole selection. The `when` clause can only inspect the clicked row, so a mixed
  *  selection applies that row's action to all of them, as MO2's "Hide All" does. */
-export function registerDownloadsMultiRowCommands(instanceRoot: string, reporter: Reporter): vscode.Disposable[] {
+export function registerDownloadsMultiRowCommands(
+  instanceRoot: string, reporter: Reporter, ask: AskQuestion,
+): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.delete', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       const names = selectionNames(clicked, selected);
-      if (names.length > 0) void deleteArchives(instanceRoot, names, reporter);
+      if (names.length > 0) void deleteArchives(instanceRoot, names, reporter, ask);
     }),
     vscode.commands.registerCommand('modbench.downloads.hide', (clicked?: DownloadNode, selected?: DownloadNode[]) => {
       for (const name of selectionNames(clicked, selected)) {
