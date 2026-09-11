@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
@@ -12,6 +13,25 @@ namespace MEditService.Core.Source;
 /// in.</summary>
 public sealed partial class SourceRepository
 {
+    /// <summary>The document whose root carries <paramref name="identity"/>, whole: itself when it has
+    /// a document of its own, else the document embedding it — a container may itself be
+    /// embedded.</summary>
+    public SourceDocument? Carrier(
+        PluginKey plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
+        var text = Encoding.UTF8.GetString(StripUtf8Bom(File.ReadAllBytes(unit.FullPath)));
+
+        if (!unit.IsEmbedded)
+            return new SourceDocument(identity.FormKey, identity.RecordType, identity.EditorId, text);
+
+        var owner = IdentityOf(plugin, unit.OwnerFormKey, schemas)
+            ?? throw new InvalidOperationException(
+                $"{unit.RelativePath} carries {identity.FormKey}, but {unit.OwnerFormKey} names no " +
+                "document of its own.");
+        return new SourceDocument(owner.FormKey, owner.RecordType, owner.EditorId, text);
+    }
+
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>
