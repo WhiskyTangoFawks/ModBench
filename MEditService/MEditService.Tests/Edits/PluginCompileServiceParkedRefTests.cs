@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -83,7 +84,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
-        const string scratchPrefix = "medit-compile-ref-";
+        var scratchPrefix = PluginTrees.ReadScratchPrefix;
         var sourceRoot = SourceRepository.RootFor(CompileFixture.PluginName);
 
         // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever
@@ -104,8 +105,8 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
             if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
         }
 
-        // The scratch directory's owning IDisposable must exist before the directory is populated: a
-        // throw during populate happens before `using` binds, so Dispose never runs and it leaks.
+        // The door materialises the ref's files in a scratch folder of its own, and a write that throws
+        // partway through leaves that folder behind unless the cleanup covers the populate.
         var before = Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*").ToHashSet(StringComparer.Ordinal);
 
         Assert.ThrowsAny<IOException>(

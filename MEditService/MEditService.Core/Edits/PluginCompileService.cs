@@ -32,16 +32,29 @@ public sealed class PluginCompileService(
         if (ModFolders.TrackedOf(loadOrder, plugin) is not { } modFolder)
             return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
 
-        // A compile at a named ref reads that ref's tree onto disk first, so both cases below are the
-        // same "read this directory" call.
-        using var checkout = SourceCheckout.Of(modFolder, plugin, source, loadOrder.GameRelease);
-        if (!Directory.Exists(checkout.TreeRoot))
+        // One repository for the whole pass, so the tree it answers from is read once: everything below
+        // asks it for the same source, the working tree or a named ref.
+        var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
+        var repository = SourceRepository.Over(modFolder, loadOrder.GameRelease);
+        var sourceFiles = repository.FilesOf(plugin, atRef);
+
+        // A document the read could not open is content this compile does not have, and compiling the
+        // rest would write a binary missing that record with nothing left to notice it (ADR-0003).
+        if (sourceFiles.Unreadable is { } unreadable)
         {
             return CompileResult.Refused(
-                $"{plugin.Name} has no source tree at {checkout.Description}, so there is nothing to compile.");
+                $"{plugin.Name} could not be read from its source: {unreadable} could not be opened. " +
+                "Another program may be holding it; close it and compile again.");
         }
 
-        var (parsedTree, deserializeRefusal) = DeserializeSource(checkout.TreeRoot, plugin.Name, loadOrder.GameRelease);
+        var files = sourceFiles.Files;
+        if (files.Count == 0)
+        {
+            return CompileResult.Refused(
+                $"{plugin.Name} has no source tree at {atRef ?? "the working tree"}, so there is nothing to compile.");
+        }
+
+        var (parsedTree, deserializeRefusal) = DeserializeSource(files, plugin.Name, loadOrder.GameRelease);
         if (deserializeRefusal != null)
             return CompileResult.Refused(deserializeRefusal);
         var tree = parsedTree!;
@@ -74,9 +87,7 @@ public sealed class PluginCompileService(
         // Two source units claiming one FormKey can only become one binary record, so refuse rather
         // than pick a winner. Asked of the files: the reader's group cache has already resolved a
         // same-folder collision before the tree is read.
-        var collidingFormKeys = SourceRepository
-            .Over(checkout.ResolverRoot, loadOrder.GameRelease)
-            .FormKeysWithMoreThanOneDocument(plugin, tree.FormKeys);
+        var collidingFormKeys = repository.CollidingFormKeys(plugin, tree.FormKeys, atRef);
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
@@ -84,11 +95,11 @@ public sealed class PluginCompileService(
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
-        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(tree, plugin.Name, checkout.ResolverRoot);
+        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(tree, plugin.Name, files);
         if (roundTripRefusal != null)
             return CompileResult.Refused(roundTripRefusal);
 
-        var (diagnostics, masters) = ContentFacts(tree, plugin, loadOrder, checkout.ResolverRoot);
+        var (diagnostics, masters) = ContentFacts(tree, plugin, loadOrder, repository, atRef);
 
         var loadOrderNames = loadOrder.Copies
             .Where(c => c.Registration.InLoadOrder)
@@ -99,7 +110,6 @@ public sealed class PluginCompileService(
         // A crash mid-flight is what the journal marker is for: only the unmappable-FormID shape is
         // caught, so any other throw leaves it crash-shaped. PluginWriter never touches the plugin
         // until Commit(), so refusing is safe.
-        var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
         string? writeRefusal = null;
         CompileJournal.RunBatch(modFolder, [plugin.Name], _ =>
         {
@@ -119,8 +129,8 @@ public sealed class PluginCompileService(
             // The parked snapshot advances only after the binary write has landed. An AtRef compile
             // parks too: otherwise the parked trailer still names the old working-tree hash and
             // Modbench's own write reads as an external change.
-            var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(copy.Path)));
-            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef, binarySha256);
+            SourceRepository.ParkCompileSnapshot(
+                modFolder, plugin.Name, atRef, PluginBinaryHash.TrailerFormOfFile(copy.Path));
             return true;
         });
         if (writeRefusal != null)
@@ -138,7 +148,7 @@ public sealed class PluginCompileService(
     // (ADR-0008) and the check errors the editor shows come from the records here, through the
     // same collector, schema and link resolver.
     private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
-        CompiledTree tree, PluginKey plugin, LoadOrder loadOrder, string resolverRoot)
+        CompiledTree tree, PluginKey plugin, LoadOrder loadOrder, SourceRepository repository, string? atRef)
     {
         // One walk, and the record type is the one RecordTableName gives, so what compile files a
         // record under and what the tree calls it cannot differ. A type no schema claims has no
@@ -175,9 +185,6 @@ public sealed class PluginCompileService(
         bool AnswersFor(string formKey) =>
             resolve(formKey) is not null || !EmbeddedInATrackedPlugin(formKey, plugin, loadOrder, trackedTrees);
 
-        // One repository for the pass, so its listing memo spans it: resolving per record against a
-        // fresh tree scan dominated.
-        var repository = SourceRepository.Over(resolverRoot, loadOrder.GameRelease);
         var diagnostics = new List<CompileDiagnostic>();
         var masters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (recordType, schema, record, editorId) in typed)
@@ -199,8 +206,8 @@ public sealed class PluginCompileService(
             // Only records with something to report pay for resolution, which keeps a container's
             // subtree scan off the common path.
             var relativePath = repository
-                .Locate(plugin, new RecordIdentity(formKey, recordType, editorId))
-                ?.RelativePath ?? string.Empty;
+                .RelativePathOf(plugin, new RecordIdentity(formKey, recordType, editorId), atRef)
+                ?? string.Empty;
             diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }
 
@@ -279,22 +286,15 @@ public sealed class PluginCompileService(
     // Whatever is wrong with the source, the remedy is re-Track (ADR-0006), so the catch is
     // deliberately unfiltered and the message uniform.
     private (CompiledTree? Tree, string? RefusalReason) DeserializeSource(
-        string treeRoot, string pluginName, GameRelease release)
+        IReadOnlyList<PristineFile> files, string pluginName, GameRelease release)
     {
-        try
-        {
-            return (PluginTrees.ReadTreeAsync(treeRoot, codec, release).GetAwaiter().GetResult(), null);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "{Plugin} could not be read from its source", pluginName);
+        var read = PluginTrees.ReadTreeAsync(files, pluginName, codec, release).GetAwaiter().GetResult();
+        if (read.Tree is { } tree) return (tree, null);
 
-            // A JSON-tree deserialize never touches Mutagen's binary parser, so it never throws a
-            // RecordException; the real exception is FilePathedException, whose only identity is the
-            // source file path, which FromSourceReadException anchors to.
-            var diagnosis = PluginDiagnosis.FromSourceReadException(ex, treeRoot);
-            return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} Re-Track to regenerate the source.");
-        }
+        logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
+        return (null,
+            $"{pluginName} could not be read from its source: {read.Diagnosis!.Describe()} " +
+            "Re-Track to regenerate the source.");
     }
 
     // ADR-0006: the generated deserializer skips an unrecognized property or file without throwing,
@@ -303,27 +303,28 @@ public sealed class PluginCompileService(
 
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
-    private static string? RefuseIfSourceDoesNotRoundTrip(CompiledTree tree, string pluginName, string resolverRoot)
+    private static string? RefuseIfSourceDoesNotRoundTrip(
+        CompiledTree tree, string pluginName, IReadOnlyList<PristineFile> sourceFiles)
     {
         var regeneratedFiles = tree.SerializeToPristineFilesAsync(pluginName).GetAwaiter().GetResult();
-        var treeRoot = SourceRepository.RootFor(pluginName);
-        var rootHeaderPath = Path.Combine(treeRoot, SourceRepository.RecordDataFileName);
+        var headerDocument = SourceRepository.HeaderDocumentFor(pluginName);
+        var read = sourceFiles.ToDictionary(file => file.RelativePath, file => file.Content, StringComparer.Ordinal);
 
         foreach (var file in regeneratedFiles)
         {
-            var onDiskPath = Path.Combine(resolverRoot, file.RelativePath);
-            if (File.Exists(onDiskPath) && File.ReadAllBytes(onDiskPath).AsSpan().SequenceEqual(file.Content))
+            if (read.TryGetValue(file.RelativePath, out var content)
+                && content.AsSpan().SequenceEqual(file.Content))
+            {
                 continue;
+            }
 
-            var offender = file.RelativePath == rootHeaderPath ? "the plugin header" : file.RelativePath;
+            var offender = file.RelativePath == headerDocument ? "the plugin header" : file.RelativePath;
             return $"{pluginName} does not round-trip through its own source: {offender} does not match " +
                 "what the current codec would produce from it. Re-Track to regenerate the source.";
         }
 
         var regeneratedPaths = regeneratedFiles.Select(f => f.RelativePath).ToHashSet(StringComparer.Ordinal);
-        var unproduced = Directory
-            .EnumerateFiles(Path.Combine(resolverRoot, treeRoot), "*.json", SearchOption.AllDirectories)
-            .Select(f => Path.GetRelativePath(resolverRoot, f))
+        var unproduced = read.Keys
             .Where(relativePath => !regeneratedPaths.Contains(relativePath))
             .Order(StringComparer.Ordinal)
             .FirstOrDefault();
@@ -335,62 +336,5 @@ public sealed class PluginCompileService(
         }
 
         return null;
-    }
-}
-
-/// <summary>Where a plugin's source tree is read from: the working tree's files, or a named ref's
-/// blobs written to a same-layout scratch directory, so the whole-mod reader never needs a git
-/// checkout.</summary>
-internal sealed class SourceCheckout : IDisposable
-{
-    private readonly string? _scratchRoot;
-
-    private SourceCheckout(string treeRoot, string resolverRoot, string description, string? scratchRoot) =>
-        (TreeRoot, ResolverRoot, Description, _scratchRoot) = (treeRoot, resolverRoot, description, scratchRoot);
-
-    /// <summary>The <c>source/&lt;plugin&gt;/</c> directory itself — what the whole-mod reader takes.</summary>
-    internal string TreeRoot { get; }
-
-    /// <summary>The parent of <see cref="TreeRoot"/>. Diagnostic paths are stated relative to this, so
-    /// they are mod-folder-relative for either source and join cleanly into a Problems-panel URI.</summary>
-    internal string ResolverRoot { get; }
-
-    /// <summary>What to call this source in a refusal message.</summary>
-    internal string Description { get; }
-
-    internal static SourceCheckout Of(string modFolder, PluginKey plugin, CompileSource source, GameRelease release)
-    {
-        var treeName = SourceRepository.RootFor(plugin.Name);
-
-        if (source is CompileSource.AtRef atRef)
-        {
-            // The owner is constructed before a byte is written and populating happens under its own
-            // disposal: a throw mid-populate would otherwise happen before the caller's `using` has
-            // anything to bind, and the scratch directory would leak.
-            var scratchRoot = Directory.CreateTempSubdirectory("medit-compile-ref-").FullName;
-            var checkout = new SourceCheckout(
-                Path.Combine(scratchRoot, treeName), scratchRoot, atRef.Ref, scratchRoot);
-            try
-            {
-                SourceRepository.Open(modFolder, release)?.MaterializeAtRef(plugin, atRef.Ref, scratchRoot);
-            }
-            catch
-            {
-                checkout.Dispose();
-                throw;
-            }
-            return checkout;
-        }
-
-        return new SourceCheckout(
-            Path.Combine(modFolder, treeName), modFolder, "the working tree", scratchRoot: null);
-    }
-
-    public void Dispose()
-    {
-        if (_scratchRoot == null) return;
-        try { Directory.Delete(_scratchRoot, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
     }
 }
