@@ -36,12 +36,12 @@ public sealed class CreatePluginHandler
             ModKey.FromFileName(copy.Name), copy.Path, loadOrder.GameRelease,
             smallMaster: Path.GetExtension(copy.Name).Equals(".esp", StringComparison.OrdinalIgnoreCase));
 
-        if (SourceRepository.IsTracked(destination)) return new PluginCreateResult(copy, null);
+        if (SourceRepository.IsTracked(destination)) return new PluginCreateResult(null);
 
         // Held by construction: this gesture wrote the file, so Track's own "which copies are
         // readable" filter must count it alongside whatever the Index already holds.
         var track = await _track.TrackAsync(
             loadOrder, [.. heldCopies, copy.Key], copy.Origin, SourcePreset.Edits);
-        return new PluginCreateResult(copy, track);
+        return new PluginCreateResult(track);
     }
 }

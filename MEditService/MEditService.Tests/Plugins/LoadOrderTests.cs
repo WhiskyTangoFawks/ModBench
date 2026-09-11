@@ -133,6 +133,19 @@ public sealed class LoadOrderTests
         Assert.False(replaced.Participates(new PluginKey("New.esp", "ModA")));
     }
 
+    // ADR-0041's counterpart: a create that could not write its file takes its registration back,
+    // and only that one — two copies of one filename are two identities (ADR-0036).
+    [Fact]
+    public void Without_RemovesOnlyTheCopyUnderThatIdentity()
+    {
+        var order = Order(Copy("A.esp", "ModA", slot: 0), Copy("A.esp", "ModB", slot: 1));
+
+        var left = order.Without(new PluginKey("A.esp", "ModB"));
+
+        Assert.Equal(["ModA"], left.Copies.Select(c => c.Origin));
+        Assert.Equal(order.Copies, order.Without(new PluginKey("Absent.esp", "ModA")).Copies);
+    }
+
     // The entries are the whole of the snapshot: the path they carry names no directory that
     // exists, and the value resolves participation and the winner without one.
     [Fact]

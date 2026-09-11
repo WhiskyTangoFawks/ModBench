@@ -211,22 +211,28 @@ public static class PluginEndpoints
         }
         catch (ArgumentException ex)
         {
-            holder.Apply(previous);
+            // Mutagen refuses the filename the request passed the extension check with.
+            holder.Apply(Unregistered(holder.Current, previous, copy.Key));
             logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 400);
         }
         catch (System.IO.IOException ex)
         {
-            // No file was created, so the kernel goes back to the value it had — the same revert
-            // the load-order endpoint makes when its reconcile fails.
-            holder.Apply(previous);
+            holder.Apply(Unregistered(holder.Current, previous, copy.Key));
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
         }
     }
 
-    // Every refusal that precedes the holder write, so a request that can never create a file
-    // registers no copy.
+    // No file was created, so the registration goes; only it, because a snapshot may have landed
+    // meanwhile, and the copy this one displaced under the same identity goes back.
+    internal static LoadOrder Unregistered(LoadOrder current, LoadOrder previous, PluginKey key) =>
+        previous.Copy(key) is { } displaced
+            ? current.Without(key).With(displaced)
+            : current.Without(key);
+
+    // The refusals a malformed request earns, taken before the holder is written so a name that
+    // could never be a plugin file registers no copy.
     private static IResult? Malformed(CreatePluginRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Name))

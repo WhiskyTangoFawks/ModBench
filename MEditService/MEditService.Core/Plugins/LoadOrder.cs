@@ -74,6 +74,12 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
     public LoadOrder With(RegisteredCopy copy) =>
         new(DataFolderPath, InstanceRoot, GameRelease, [.. Copies.Where(c => !SameKey(c, copy.Key)), copy]);
 
+    /// <summary>This load order without the copy registered under <paramref name="key"/>, unchanged
+    /// when none is (ADR-0041: a create that could not write its file takes its registration back).
+    /// </summary>
+    public LoadOrder Without(PluginKey key) =>
+        new(DataFolderPath, InstanceRoot, GameRelease, [.. Copies.Where(c => !SameKey(c, key))]);
+
     /// <summary>ADR-0036: origin is required, not optional — the load order can register two copies
     /// of one filename, so the filename alone does not say which.</summary>
     public RegisteredCopy? Copy(PluginKey key) => Copies.FirstOrDefault(c => SameKey(c, key));

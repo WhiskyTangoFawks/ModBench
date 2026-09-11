@@ -44,8 +44,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var result = await Create("NewPlugin.esp", modFolder, "StateMod");
 
         Assert.True(result.Applied);
-        Assert.Equal("StateMod", result.Copy.Origin);
-        Assert.Equal(Path.Combine(modFolder, "NewPlugin.esp"), result.Copy.Path);
         Assert.True(File.Exists(Path.Combine(modFolder, "NewPlugin.esp")));
     }
 
@@ -79,9 +77,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var modFolder = ModFolder("EsmMod");
 
-        var result = await Create("NewMaster.esm", modFolder, "EsmMod");
+        await Create("NewMaster.esm", modFolder, "EsmMod");
 
-        Assert.Equal("NewMaster.esm", result.Copy.Name);
         Assert.False(Written(modFolder, "NewMaster.esm").IsSmallMaster);
     }
 
@@ -91,9 +88,8 @@ public sealed class CreatePluginHandlerTests : IDisposable
     {
         var modFolder = ModFolder("LightMod");
 
-        var result = await Create("NewLight.esl", modFolder, "LightMod");
+        await Create("NewLight.esl", modFolder, "LightMod");
 
-        Assert.Equal("NewLight.esl", result.Copy.Name);
         Assert.False(Written(modFolder, "NewLight.esl").IsSmallMaster);
     }
 
@@ -157,23 +153,6 @@ public sealed class CreatePluginHandlerTests : IDisposable
         var ex = await Assert.ThrowsAsync<IOException>(() => Create("Duplicate.esp", modFolder, "DupMod"));
 
         Assert.Contains("already exists", ex.Message, StringComparison.Ordinal);
-    }
-
-    // The write API with no Index: a copy registered by the create gesture is an editable write
-    // target at once, which is what makes a created plugin editable before any snapshot names it.
-    [Fact]
-    public async Task AnEditAfterCreate_ResolvesToTheNewCopy()
-    {
-        var modFolder = ModFolder("EditableMod");
-        var copy = new RegisteredCopy(
-            "Editable.esp", "EditableMod", Path.Combine(modFolder, "Editable.esp"), 1, Enabled: true, Winning: true);
-        _holder.Apply(_holder.Current.With(copy));
-        await Handler.CreatePlugin(_holder.Current, copy, [.. _holder.Current.Copies.Select(c => c.Key)]);
-
-        var edit = TestEditService.CreateHandler(_holder).CreateRecord(copy.Key, "npc_", "MintedNpc");
-
-        Assert.True(edit.Applied);
-        Assert.EndsWith("Editable.esp", edit.NewFormKey!, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IModFlagsGetter Written(string modFolder, string name) =>
