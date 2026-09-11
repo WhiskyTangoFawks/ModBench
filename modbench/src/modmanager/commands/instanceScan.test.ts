@@ -37,3 +37,28 @@ describe('commands never read the Instance', () => {
     expect(importsOf(planted).filter((s) => s.includes(READ_MODEL))).toEqual(['../instance']);
   });
 });
+
+// ADR-0015 invariant 1: the value carries the merged view, so a command is handed the winners
+// it needs. One walking mods/ itself doubles the recompute's walk and re-spells overwrite-wins.
+const WALKERS = ['buildFileConflictIndex', 'overwriteDir'];
+
+const walkersIn = (source: string): string[] =>
+  WALKERS.filter((name) => new RegExp(`\\b${name}\\b`).test(source));
+
+describe('commands never walk the instance', () => {
+  it('no command module builds the file-conflict index or lists overwrite/ itself', () => {
+    const offenders: Record<string, string[]> = {};
+    for (const path of commandModules()) {
+      const found = walkersIn(readFileSync(path, 'utf8'));
+      if (found.length > 0) offenders[path] = found;
+    }
+    expect(offenders).toEqual({});
+  });
+
+  // Rival this catches: the plugins reconcile rebuilding the index and re-reading overwrite/
+  // instead of taking the value's winners as an argument.
+  it('flags a module that builds the index or reads overwrite/ itself', () => {
+    const planted = "const index = await buildFileConflictIndex(entries, root, log);\nawait readdir(overwriteDir(root));\n";
+    expect(walkersIn(planted)).toEqual(['buildFileConflictIndex', 'overwriteDir']);
+  });
+});

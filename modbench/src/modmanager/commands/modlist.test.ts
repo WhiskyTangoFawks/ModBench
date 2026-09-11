@@ -20,7 +20,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, readFile };
 });
 
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readdir, readFile, rm, stat, utimes } from 'node:fs/promises';
 import {
   createEmptyMod,
   deleteSeparator,
@@ -28,7 +28,7 @@ import {
   moveModToSeparator,
   renameSeparator,
   reorderMod,
-  reconcileMods,
+  adoptMods,
   reorderSeparatorBlock,
   setModEnabled,
   uninstallMod,
@@ -235,103 +235,63 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 });
 
-describe('reconcileMods — modlist.txt converges on what mods/ holds', () => {
+describe('adoptMods — the unlisted folders it is handed get a modlist.txt line', () => {
   let dir: string;
   const modlistPath = () => join(dir, 'profiles', 'Default', 'modlist.txt');
   const readModlist = async () => parseModlist(await readFile(modlistPath(), 'utf8'));
-  const reconcile = () => reconcileMods(dir, 'Default');
+  const adopt = (folders: string[]) => adoptMods(dir, 'Default', folders);
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'modlist-reconcile-'));
+    dir = await mkdtemp(join(tmpdir(), 'modlist-adopt-'));
     await cp(fixture, dir, { recursive: true });
-    // The fixture ships one listed-but-folderless entry, which every test here would otherwise
-    // prune on top of its own arranged delta.
-    await mkdir(join(dir, 'mods', '[NODELETE] Radfall'));
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('adds a disabled winning-end entry for an untracked mods/ folder, preserving every registered line', async () => {
-    await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
+  it('adds a disabled winning-end line for the folder it is handed, preserving every registered line', async () => {
     const before = await readFile(modlistPath(), 'utf8');
 
-    expect(await reconcile()).toEqual({ applied: true, added: ['Hand Extracted Mod'], pruned: [] });
+    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: true, added: ['Hand Extracted Mod'] });
 
     const entries = await readModlist();
     expect(entries.at(0)).toMatchObject({ kind: 'mod', name: 'Hand Extracted Mod', enabled: false });
     expect(await readFile(modlistPath(), 'utf8')).toContain(before.split('\r\n').slice(1).join('\r\n'));
   });
 
-  it('skips the overwrite folder and separator marker folders', async () => {
-    await mkdir(join(dir, 'mods', 'overwrite'));
-
-    expect(await reconcile()).toEqual({ applied: true, added: [], pruned: [] });
-  });
-
-  it('is idempotent — a second run registers nothing new', async () => {
-    await mkdir(join(dir, 'mods', 'Hand Extracted Mod'));
-    await reconcile();
-
-    expect(await reconcile()).toEqual({ applied: true, added: [], pruned: [] });
-  });
-
-  it('registers multiple new folders in sorted order top-to-bottom (winning-most first)', async () => {
-    await mkdir(join(dir, 'mods', 'Zeta Mod'));
-    await mkdir(join(dir, 'mods', 'Alpha Mod'));
-
-    expect(await reconcile()).toEqual({ applied: true, added: ['Alpha Mod', 'Zeta Mod'], pruned: [] });
+  it('writes a batch ascending top-to-bottom, winning-most first', async () => {
+    expect(await adopt(['Zeta Mod', 'Alpha Mod'])).toEqual({ applied: true, added: ['Alpha Mod', 'Zeta Mod'] });
     expect((await readModlist()).slice(0, 2).map((e) => e.name)).toEqual(['Alpha Mod', 'Zeta Mod']);
   });
 
-  it('ignores a stray file directly in mods/, not just directories', async () => {
-    await writeFile(join(dir, 'mods', 'Thumbs.db'), '');
+  // The value is a generation old by the time a write lands, so two landed values can hand the
+  // same folder over twice. The line the file already carries is the one that stands.
+  it('never writes a second line for a folder the file already lists', async () => {
+    await adopt(['Hand Extracted Mod']);
+    const afterFirst = await readFile(modlistPath(), 'utf8');
 
-    expect(await reconcile()).toEqual({ applied: true, added: [], pruned: [] });
+    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: true, added: [] });
+    expect(await readFile(modlistPath(), 'utf8')).toBe(afterFirst);
   });
 
-  it('prunes the entry of a mod whose folder was deleted, byte-faithfully', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
-    await rm(join(dir, 'mods', 'Harder VATS'), { recursive: true, force: true });
-
-    expect(await reconcile()).toEqual({ applied: true, added: [], pruned: ['Harder VATS'] });
-
-    // Exactly that one line gone; every other byte identical.
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS\r\n', ''));
-  });
-
-  it('writes nothing when every entry still has its folder and every folder a line', async () => {
+  it('handed nothing, writes nothing at all', async () => {
     const before = await readFile(modlistPath(), 'utf8');
 
-    expect(await reconcile()).toEqual({ applied: true, added: [], pruned: [] });
+    expect(await adopt([])).toEqual({ applied: true, added: [] });
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
-  // A dead separator is not a dead mod: prune is scoped to mods, so deleting a separator's
-  // marker folder must not remove the separator entry.
-  it('never prunes a separator entry, whose folder is the _separator marker', async () => {
-    await rm(join(dir, 'mods', 'Unassigned (Modlist Development)_separator'), { recursive: true, force: true });
-
-    expect(await reconcile()).toEqual({ applied: true, added: [], pruned: [] });
-    expect(await readFile(modlistPath(), 'utf8')).toContain('Unassigned (Modlist Development)_separator');
-  });
-
-  // Only a listing that actually answered can say a folder is gone: a missing mods/ must not
-  // read as a mass delete.
-  it('reconciles nothing when mods/ itself is missing — a malformed workspace', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
+  // ADR-0015 invariant 1: the folders arrive from the Instance value, so the command has no
+  // reason to look at mods/ and must not fail when it cannot.
+  it('adopts what it is handed with no mods/ directory on disk at all', async () => {
     await rm(join(dir, 'mods'), { recursive: true, force: true });
 
-    expect(await reconcile()).toEqual({ applied: true, added: [], pruned: [] });
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: true, added: ['Hand Extracted Mod'] });
+    expect((await readModlist()).map((e) => e.name)).toContain('Hand Extracted Mod');
   });
 
-  // Only ENOENT means "no mods/ yet"; any other listing failure is a real one.
-  it('refuses when mods/ exists but is not a directory — not silently "nothing to do"', async () => {
-    const before = await readFile(modlistPath(), 'utf8');
-    await rm(join(dir, 'mods'), { recursive: true, force: true });
-    await writeFile(join(dir, 'mods'), 'not a directory');
+  it('refuses when modlist.txt cannot be read, rather than throwing', async () => {
+    await rm(modlistPath());
 
-    expect(await reconcile()).toEqual({ applied: false, refusal: expect.any(String) });
-    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: false, refusal: expect.stringContaining('ENOENT') });
   });
 });
 

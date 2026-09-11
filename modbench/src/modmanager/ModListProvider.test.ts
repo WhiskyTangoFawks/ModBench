@@ -156,6 +156,18 @@ describe('ModListProvider', () => {
     expect(labels).toEqual(['Aardvark', 'Zed']);
   });
 
+  // Adoption is the gesture that adds a mod, so a folder the value carries as unlisted has no
+  // row until its modlist line exists. Rival: a tree that renders both fields.
+  it('renders no row for a folder the value carries as unlisted', async () => {
+    const value = { ...valueOf([mod('Listed')]), unlistedFolders: ['Dropped In'] } as InstanceValue;
+    const provider = makeProvider([], { instance: new FakeInstance(value) });
+
+    const labels = (await provider.getChildren()).map((n) => n.label);
+
+    expect(labels).toContain('Listed');
+    expect(labels).not.toContain('Dropped In');
+  });
+
   it('returns a separator’s mods as ModNodes with checkbox, version, tooltip', async () => {
     // The separator's members are the entries preceding it.
     const provider = makeProvider([

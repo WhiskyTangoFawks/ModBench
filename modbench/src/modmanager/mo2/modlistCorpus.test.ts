@@ -7,7 +7,7 @@ import {
   deleteSeparator,
   insertSeparator,
   moveModToSeparator,
-  reconcileMods,
+  adoptMods,
   renameSeparator,
   reorderMod,
   reorderSeparatorBlock,
@@ -143,18 +143,16 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     expect(entry.enabled).toBe(false);
   });
 
-  // The fixture ships one unlisted folder and one folderless entry. Rival: a reconcile that
-  // also writes into the folder it adopts, or rewrites the entries it keeps.
-  it('reconcileMods adopts the one unlisted folder and drops the one folderless entry, touching only modlist.txt', async () => {
+  // The fixture ships one unlisted folder. Rival: an adoption that also writes into the folder
+  // it adopts, or rewrites the entries it keeps.
+  it('adoptMods appends the line for the folder it is handed, touching only modlist.txt', async () => {
     const before = await snapshotTree(dir);
-    const outcome = await reconcileMods(dir, PROFILE);
+    const outcome = await adoptMods(dir, PROFILE, ['DragIn Manual Extract']);
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
-    expect(outcome).toEqual({ applied: true, added: ['DragIn Manual Extract'], pruned: ['[NODELETE] Radfall'] });
+    expect(outcome).toEqual({ applied: true, added: ['DragIn Manual Extract'] });
     expect(after.has('mods/DragIn Manual Extract/textures/dummy.dds')).toBe(true);
-    const names = (await readModlistEntries(dir)).map((e) => e.name);
-    expect(names).toContain('DragIn Manual Extract');
-    expect(names).not.toContain('[NODELETE] Radfall');
+    expect((await readModlistEntries(dir)).map((e) => e.name)).toContain('DragIn Manual Extract');
   });
 });

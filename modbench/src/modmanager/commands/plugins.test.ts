@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendPlugin, pluginLinesDelta, reconcilePlugins, reorderPlugins, setPluginEnabled } from './plugins';
+import { providedPluginsIn } from '../test/corpusFixture';
 
 const PROFILE = 'Default';
 const INITIAL = '# header\r\n*Base.esp\r\nOther.esp\r\n';
@@ -135,12 +136,12 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
   const logs: string[] = [];
   // `null` stands for both unknowables — an unresolved game directory and a backend that could
   // not answer. An explicit `undefined` would select the default rather than the absence.
-  const run = (
+  const run = async (
     dataFolder: string | null = join(dir, 'Game', 'Data'),
     implicit: readonly string[] | null = [],
   ) => reconcilePlugins(
-    dir, PROFILE, dataFolder ?? undefined, () => Promise.resolve(implicit ?? undefined),
-    (m) => logs.push(m));
+    dir, PROFILE, await providedPluginsIn(dir, PROFILE, dataFolder ?? undefined), dataFolder ?? undefined,
+    () => Promise.resolve(implicit ?? undefined), (m) => logs.push(m));
 
   beforeEach(async () => {
     logs.length = 0;
@@ -221,14 +222,6 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
 
     expect(await run()).toEqual({ applied: false, refusal: expect.stringContaining('ENOENT') });
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
-  });
-
-  it('a modlist that cannot be read refuses rather than reading as "every mod vanished"', async () => {
-    await writeFile(pluginsPath(), '*Base.esp\r\n');
-    await rm(join(dir, 'profiles', PROFILE, 'modlist.txt'));
-
-    expect(await run()).toEqual({ applied: false, refusal: expect.stringContaining('ENOENT') });
-    expect(await plugins()).toBe('*Base.esp\r\n');
   });
 
   it('with the game directory unresolved, still appends but prunes nothing', async () => {

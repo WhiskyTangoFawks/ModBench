@@ -23,8 +23,8 @@ import { registerNameFilter, type NameFilter } from './nameFilter';
 import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './modmanager/commands/plugins';
-import { reconcileMods } from './modmanager/commands/modlist';
-import { registerModsReconcile } from './modmanager/modsReconcileTrigger';
+import { adoptMods } from './modmanager/commands/modlist';
+import { registerModAdoption } from './modmanager/modAdoptionTrigger';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
@@ -396,9 +396,11 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     implicitMastersFrom(client, folder, gameReleaseForGame(gameName));
   // plugins.txt converges on what disk provides; the write reaches the Plugins tree and Editing's
   // Plugin load order sync through the plugins.txt watcher.
-  const runPluginsReconcile = async (profile: string, folder: string | undefined, gameName: string) => {
+  const runPluginsReconcile = async (
+    profile: string, provided: ReadonlyMap<string, string>, folder: string | undefined, gameName: string,
+  ) => {
     const result = await reconcilePlugins(
-      instanceRoot, profile, folder, () => implicitMastersIn(folder, gameName),
+      instanceRoot, profile, provided, folder, () => implicitMastersIn(folder, gameName),
       (msg) => outputChannel.debug(msg));
     if (!result.applied) {
       outputChannel.error(`[modmanager] Plugins reconcile failed: ${result.refusal}`);
@@ -448,8 +450,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
   ownAll(own, registerOverwriteView(instanceRoot, outputChannel));
-  own(registerModsReconcile(
-    instance, (profile) => reconcileMods(instanceRoot, profile),
+  own(registerModAdoption(
+    instance, (profile, unlistedFolders) => adoptMods(instanceRoot, profile, unlistedFolders),
     () => modListProvider.invalidate(), outputChannel));
   own(registerPluginsReconcile(instance, runPluginsReconcile));
   const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, outputChannel);
