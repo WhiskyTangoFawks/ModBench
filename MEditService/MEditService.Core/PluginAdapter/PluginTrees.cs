@@ -159,7 +159,11 @@ internal static class PluginTrees
         }
         finally
         {
-            Directory.Delete(scratchDir, recursive: true);
+            // Best-effort: a scratch folder that will not delete must not turn a compile that has
+            // already read its mod into a throw.
+            try { Directory.Delete(scratchDir, recursive: true); }
+            catch (IOException) { /* scratch, best-effort */ }
+            catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
         }
     }
 

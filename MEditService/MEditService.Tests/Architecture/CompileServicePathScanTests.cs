@@ -10,10 +10,12 @@ public sealed class CompileServicePathScanTests
 {
     private const string CompileServiceFile = "MEditService.Core/Edits/PluginCompileService.cs";
 
-    // Neither a member named RelativePath nor a property reached as edit.Path is a BCL call: only
-    // the three types as their own unqualified identifiers are operations.
-    private static readonly Regex Operation =
-        new(@"(?<![\w.])(Path|File|Directory)\.([A-Za-z]+)", RegexOptions.Compiled);
+    // Neither a member named RelativePath nor a property reached as edit.Path is a BCL call, and the
+    // System.IO. spelling of one is: the qualifier decides, not the dot before the type.
+    private static readonly Regex Operation = new(
+        @"(?:(?<![\w.])|(?<=\bSystem\.IO\.))(Path|File|Directory)\.[A-Za-z]+"
+        + @"|(?<![\w.])new\s+(?:System\.IO\.)?(?:FileInfo|DirectoryInfo|FileStream|FileSystemWatcher)\b",
+        RegexOptions.Compiled);
 
     [Fact]
     public void TheCompileService_NamesNoPathFileOrDirectoryOperation()
@@ -34,11 +36,15 @@ public sealed class CompileServicePathScanTests
             File.WriteAllText(
                 planted,
                 "var tree = Path.Combine(modFolder, root);\n"
-                + "var held = File.ReadAllBytes(unit.FullPath);\n"
+                + "var held = System.IO.File.ReadAllBytes(unit.FullPath);\n"
+                + "var entry = new FileInfo(tree);\n"
+                + "var folder = new System.IO.DirectoryInfo(tree);\n"
                 + "var anchored = file.RelativePath.Equals(other.RelativePath);\n"
                 + "if (edit.Path.Count == 0) return;\n");
 
-            Assert.Equal(["Path.Combine", "File.ReadAllBytes"], OperationsIn(root, CompileServiceFile));
+            Assert.Equal(
+                ["Path.Combine", "File.ReadAllBytes", "new FileInfo", "new System.IO.DirectoryInfo"],
+                OperationsIn(root, CompileServiceFile));
         }
         finally
         {

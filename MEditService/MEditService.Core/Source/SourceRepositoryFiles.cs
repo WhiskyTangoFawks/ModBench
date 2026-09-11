@@ -6,6 +6,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
+/// <summary>A plugin's whole source tree, and the file the read stopped at. Files is empty when one
+/// is named: half a tree compiles to a binary missing records.</summary>
+public sealed record PluginSourceFiles(IReadOnlyList<PristineFile> Files, string? Unreadable);
+
 /// <summary>A plugin's source as files rather than as documents, and the two questions asked of that
 /// same tree. Each answers at the working tree or at a named ref, and a ref needs no
 /// checkout.</summary>
@@ -13,13 +17,12 @@ public sealed partial class SourceRepository
 {
     // One repository is one operation, so a tree is read once and a ref costs one git pass: the next
     // compile looks again (ADR-0009 — never a file timestamp).
-    private readonly Dictionary<string, IReadOnlyList<PristineFile>> _filesByPluginAndRef =
-        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PluginSourceFiles> _filesByPluginAndRef = new(StringComparer.Ordinal);
 
     /// <summary>Every file one plugin's source tree holds, relative to the mod folder — the carrier
     /// Track hands in, handed back out. Null <paramref name="gitRef"/> asks the working tree; empty
     /// when there is no source there.</summary>
-    public IReadOnlyList<PristineFile> FilesOf(PluginKey plugin, string? gitRef)
+    public PluginSourceFiles FilesOf(PluginKey plugin, string? gitRef)
     {
         var key = $"{plugin.Name}\n{gitRef}";
         if (!_filesByPluginAndRef.TryGetValue(key, out var files))
@@ -34,7 +37,7 @@ public sealed partial class SourceRepository
         PluginKey plugin, IEnumerable<FormKey> formKeys, string? gitRef)
     {
         var entriesByTail = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var name in EntryNamesIn(FilesOf(plugin, gitRef), RootFor(plugin.Name)))
+        foreach (var name in EntryNamesIn(FilesOf(plugin, gitRef).Files, RootFor(plugin.Name)))
         {
             foreach (var tail in TailsCarriedBy(name))
                 entriesByTail[tail] = entriesByTail.GetValueOrDefault(tail) + 1;
@@ -61,7 +64,7 @@ public sealed partial class SourceRepository
         // the tree carries that key; its document is the tree root's own.
         if (identity.RecordType == PluginHeader.RecordType) return HeaderDocumentFor(plugin.Name);
 
-        var candidates = FilesOf(plugin, gitRef)
+        var candidates = FilesOf(plugin, gitRef).Files
             .Select(file => (file.RelativePath, Text: Text(file)))
             .Where(candidate => candidate.Text.Contains(identity.FormKey, StringComparison.Ordinal))
             .ToList();
@@ -85,21 +88,29 @@ public sealed partial class SourceRepository
     internal static string HeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), RecordDataFileName);
 
-    private IReadOnlyList<PristineFile> Read(PluginKey plugin, string? gitRef) =>
-        [.. (gitRef == null ? WorkingTreeFiles(plugin) : CommittedFiles(plugin, gitRef))
-            .OrderBy(file => file.RelativePath, StringComparer.Ordinal)];
+    private PluginSourceFiles Read(PluginKey plugin, string? gitRef) =>
+        gitRef == null
+            ? WorkingTreeFiles(plugin)
+            : new PluginSourceFiles(Ordered(CommittedFiles(plugin, gitRef)), null);
 
-    private IEnumerable<PristineFile> WorkingTreeFiles(PluginKey plugin)
+    private PluginSourceFiles WorkingTreeFiles(PluginKey plugin)
     {
         var root = RootIn(_modFolder, plugin.Name);
-        if (!Directory.Exists(root)) yield break;
+        if (!Directory.Exists(root)) return new PluginSourceFiles([], null);
 
+        var files = new List<PristineFile>();
         foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
-            if (RawBytesOrNull(path) is { } content)
-                yield return new PristineFile(Path.GetRelativePath(_modFolder, path), content);
+            var relativePath = Path.GetRelativePath(_modFolder, path);
+            if (RawBytesOrNull(path) is not { } content)
+                return new PluginSourceFiles([], relativePath);
+            files.Add(new PristineFile(relativePath, content));
         }
+        return new PluginSourceFiles(Ordered(files), null);
     }
+
+    private static IReadOnlyList<PristineFile> Ordered(IEnumerable<PristineFile> files) =>
+        [.. files.OrderBy(file => file.RelativePath, StringComparer.Ordinal)];
 
     private IEnumerable<PristineFile> CommittedFiles(PluginKey plugin, string gitRef) =>
         BlobsAtRef(plugin.Name, gitRef)

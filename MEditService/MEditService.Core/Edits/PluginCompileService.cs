@@ -36,7 +36,18 @@ public sealed class PluginCompileService(
         // asks it for the same source, the working tree or a named ref.
         var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
         var repository = SourceRepository.Over(modFolder, loadOrder.GameRelease);
-        var files = repository.FilesOf(plugin, atRef);
+        var sourceFiles = repository.FilesOf(plugin, atRef);
+
+        // A document the read could not open is content this compile does not have, and compiling the
+        // rest would write a binary missing that record with nothing left to notice it (ADR-0003).
+        if (sourceFiles.Unreadable is { } unreadable)
+        {
+            return CompileResult.Refused(
+                $"{plugin.Name} could not be read from its source: {unreadable} could not be opened. " +
+                "Another program may be holding it; close it and compile again.");
+        }
+
+        var files = sourceFiles.Files;
         if (files.Count == 0)
         {
             return CompileResult.Refused(

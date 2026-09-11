@@ -2,7 +2,10 @@ using System.Text;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
@@ -27,7 +30,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     [Fact]
     public void FilesOf_AtTheWorkingTree_AnswersEveryFileUnderThePluginsSourceRoot_WithItsOwnBytes()
     {
-        var files = Repository.FilesOf(_mod.Plugin, gitRef: null);
+        var files = Repository.FilesOf(_mod.Plugin, gitRef: null).Files;
 
         Assert.Equal(PathsOnDisk(), [.. files.Select(f => f.RelativePath).Order(StringComparer.Ordinal)]);
         var npc = files.Single(f => f.RelativePath == Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile));
@@ -41,8 +44,8 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
         var npcRelativePath = Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile);
         File.WriteAllText(_mod.NpcSourceFile, "{ not valid json");
 
-        var atRef = Repository.FilesOf(_mod.Plugin, "HEAD");
-        var workingTree = Repository.FilesOf(_mod.Plugin, gitRef: null);
+        var atRef = Repository.FilesOf(_mod.Plugin, "HEAD").Files;
+        var workingTree = Repository.FilesOf(_mod.Plugin, gitRef: null).Files;
 
         Assert.Equal(committed, atRef.Single(f => f.RelativePath == npcRelativePath).Content);
         Assert.Equal(
@@ -53,12 +56,46 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
             [.. atRef.Select(f => f.RelativePath).Order(StringComparer.Ordinal)]);
     }
 
+    // One repository spans a write and the reads around it, so the file memo a write leaves behind
+    // would answer about the tree as it stood.
+    [Fact]
+    public void FilesOf_AfterAPutThroughTheSameRepository_AnswersTheTreeAsItNowStands()
+    {
+        var repository = Repository;
+        var before = repository.FilesOf(_mod.Plugin, gitRef: null).Files.Count;
+
+        SourceEdits.Write(
+            repository,
+            _mod.Plugin,
+            new Npc(FormKey.Factory($"000950:{CompileFixture.PluginName}"), Fallout4Release.Fallout4)
+            {
+                EditorID = "MemoNpc",
+            },
+            CompileFixture.NpcRecordType,
+            GameRelease.Fallout4);
+
+        Assert.Equal(before + 1, repository.FilesOf(_mod.Plugin, gitRef: null).Files.Count);
+    }
+
+    // Half a tree is the one answer that must not escape: a caller cannot tell it from a smaller tree,
+    // and compiling it writes a binary missing records.
+    [Fact]
+    public void FilesOf_WhenAFileCannotBeRead_NamesThatFile_AndAnswersNoFiles()
+    {
+        using var held = new FileStream(_mod.NpcSourceFile, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var files = Repository.FilesOf(_mod.Plugin, gitRef: null);
+
+        Assert.Equal(Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile), files.Unreadable);
+        Assert.Empty(files.Files);
+    }
+
     [Fact]
     public void FilesOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty_AtEitherSource()
     {
         var stranger = new PluginKey("Stranger.esp", CompileFixture.Origin);
 
-        Assert.Empty(Repository.FilesOf(stranger, gitRef: null));
-        Assert.Empty(Repository.FilesOf(stranger, "HEAD"));
+        Assert.Empty(Repository.FilesOf(stranger, gitRef: null).Files);
+        Assert.Empty(Repository.FilesOf(stranger, "HEAD").Files);
     }
 }

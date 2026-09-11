@@ -264,8 +264,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         var result = CompileService().Compile(_plugin, new CompileSource.AtRef("HEAD"));
 
         Assert.True(result.Succeeded, result.RefusalReason);
-        var diagnostic = Assert.Single(
-            result.Diagnostics.Where(d => d.FormKey == _cellATemporaryRef.ToString()).Take(1));
+        var diagnostic = result.Diagnostics.First(d => d.FormKey == _cellATemporaryRef.ToString());
         Assert.Equal(
             Path.Combine(Path.GetRelativePath(_modFolder, cellDirectory), "RecordData.json"),
             diagnostic.SourceRelativePath);
