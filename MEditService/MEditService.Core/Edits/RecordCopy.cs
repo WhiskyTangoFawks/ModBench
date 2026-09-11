@@ -63,17 +63,18 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         if (Identity(destination, containerFormKey, release) is not { } destinationContainer)
             return MintContainerAround(source, container, child, destination, release);
 
-        // The container may itself be embedded (a topic inside its quest's document): the file read
-        // and written is the document's root, and the container is found inside it.
-        var containerUnit = Locate(destination, destinationContainer);
-        var ownerText = File.ReadAllText(containerUnit.FullPath);
+        // The container may itself be embedded (a topic inside its quest's document); its container
+        // document is whichever file's root actually holds it.
+        var containerDocument = destination.Repository.ContainerDocument(
+                destination.Plugin, destinationContainer, schemaReflector.GetSchemas(release))
+            ?? throw NoDocumentCarries(destination.Plugin, containerFormKey);
         var withChild = ContainerDocumentEdits.WithChildAppended(
-                codec, ownerText, release, containerUnit.OwnerRecordType, containerFormKey, container.SlotName,
-                child.Body, child.RecordType)
+                codec, containerDocument.Body, release, containerDocument.RecordType, containerFormKey,
+                container.SlotName, child.Body, child.RecordType)
             ?? throw new InvalidOperationException(
-                $"{containerUnit.RelativePath} was found holding {containerFormKey}, but its own text does not carry it.");
+                $"{containerDocument.FormKey} was found holding {containerFormKey}, but its own text does not carry it.");
 
-        SourceRepository.WriteTextAtomic(containerUnit.FullPath, withChild);
+        destination.Repository.Put(destination.Plugin, containerDocument with { Body = withChild });
         return RecordEditResult.Success();
     }
 
@@ -109,35 +110,29 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
         return minted;
     }
 
-    // ReplaceInSlot keeps the child at its exact slot position; append-after-remove would silently
-    // reorder the GRUP. The destination's own children of the replaced record are transplanted onto
-    // the replacement, so an own-fields copy can never delete them.
+    // A GRUP's element order is binary-format position, so a replace must land at the record's
+    // exact slot; xEdit's copy-into never drops a child the destination's copy already carries.
     private RecordEditResult ReplaceEmbeddedChildInPlace(
         PluginKey sourcePlugin, RecordIdentity existing, SourceDocument replacement,
         Destination destination, GameRelease release)
     {
-        var unit = Locate(destination, existing);
-        if (!unit.IsEmbedded)
-        {
-            throw new InvalidOperationException(
-                $"{destination.Plugin.Name} holds {existing.FormKey} but no container document of its own carries it.");
-        }
+        var existingDocument = destination.Repository.Get(destination.Plugin, existing)
+            ?? throw NoDocumentCarries(destination.Plugin, existing.FormKey);
 
-        var replaced = ContainerDocumentEdits.WithChildReplaced(
-                codec, File.ReadAllText(unit.FullPath), release, unit.OwnerRecordType, existing.FormKey,
-                replacement.Body, replacement.RecordType)
-            ?? throw new InvalidOperationException(
-                $"{unit.RelativePath} was found holding {existing.FormKey}, but its own text does not carry it.");
+        var withOwnFields = ContainerDocumentEdits.WithOwnFieldsReplaced(
+            codec, existingDocument.Body, existing.RecordType, replacement.Body, replacement.RecordType, release);
 
-        SourceRepository.WriteTextAtomic(unit.FullPath, replaced);
+        destination.Repository.Put(
+            destination.Plugin,
+            new SourceDocument(existing.FormKey, existing.RecordType, withOwnFields.EditorId, withOwnFields.Text));
 
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — replaced the existing embedded copy in {ContainerFormKey} at its own slot",
+                "({DestinationOrigin}) — replaced the existing embedded copy in place",
                 existing.FormKey, sourcePlugin.Name, sourcePlugin.Origin, destination.Plugin.Name,
-                destination.Plugin.Origin, unit.OwnerFormKey);
+                destination.Plugin.Origin);
         }
         return RecordEditResult.Success();
     }
@@ -240,12 +235,10 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
     internal RecordIdentity? Identity(Destination destination, string formKey, GameRelease release) =>
         destination.Repository.IdentityOf(destination.Plugin, formKey, schemaReflector.GetSchemas(release));
 
-    // The destination is tracked by the time any copy writes to it, so a record its own tree names is
-    // in that tree.
-    private static SourceUnit Locate(Destination destination, RecordIdentity identity) =>
-        destination.Repository.Locate(destination.Plugin, identity)
-        ?? throw new InvalidOperationException(
-            $"{destination.Plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
+    // The destination's own IdentityOf named this FormKey, so a document ought to carry it; only a
+    // concurrent external edit to the tree closes that gap.
+    private static InvalidOperationException NoDocumentCarries(PluginKey plugin, string formKey) =>
+        new($"{plugin.Name} holds {formKey}, but no document in its source tree carries it.");
 
     // Bare fields, no EditorID is xEdit parity (AddIfMissingInternal's Assign() runs only under
     // `if aDeepCopy`, hardcoded False for ancestors).

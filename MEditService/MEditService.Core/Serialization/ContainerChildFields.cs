@@ -134,19 +134,6 @@ internal static class ContainerChildFields
         }
     }
 
-    /// <summary>In-place swap: the child must keep its exact position — an append-after-remove
-    /// would silently reorder the cell's GRUP.</summary>
-    internal static void ReplaceInSlot(IMajorRecordGetter parent, string slotName, int slotIndex, IMajorRecord child)
-    {
-        var property = parent.GetType().GetProperty(slotName)
-            ?? throw new InvalidOperationException(
-                $"{parent.GetType().Name} has no property '{slotName}' to replace a child in — its child members are the assembly's own.");
-
-        var value = property.GetValue(parent);
-        if (value is IMajorRecordGetter) property.SetValue(parent, child);
-        else ((dynamic)value!)[slotIndex] = (dynamic)child;
-    }
-
     // Reflection plus dynamic so one path cannot drift from the derived members; RemoveAt resolves against the
     // slot's runtime list type.
     private static void RemoveFromSlot(IMajorRecordGetter parent, string slotName, int slotIndex)

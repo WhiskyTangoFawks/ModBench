@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using MEditService.Core.Edits;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
@@ -304,5 +305,35 @@ public sealed class CopyRecordAsOverrideHandlerContainerTests
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
 
         Assert.NotNull(fixture.Document(fixture.DestinationPlugin, fixture.PersistentRef.ToString()));
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_OnAResponse_WhenDestinationAlreadyHoldsItsTopicEmbeddedInTheQuest_LandsAfterTheExistingResponseWithEveryOtherQuestByteUntouched()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        var service = fixture.CopyAsOverrideHandler;
+        Assert.True(service.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.Response2.ToString(), fixture.DestinationPlugin).Applied);
+
+        var questFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.Response2EditorId);
+        var before = JsonNode.Parse(File.ReadAllText(questFile))!;
+        var topicBefore = Assert.Single(before["DialogTopics"]!.AsArray())!.AsObject();
+        var existingResponse = topicBefore["Responses"]![0]!.ToJsonString();
+        topicBefore.Remove("Responses");
+
+        var result = service.CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var after = JsonNode.Parse(File.ReadAllText(questFile))!;
+        var topicAfter = Assert.Single(after["DialogTopics"]!.AsArray())!.AsObject();
+        var responsesAfter = topicAfter["Responses"]!.AsArray();
+
+        Assert.Equal(2, responsesAfter.Count);
+        Assert.Equal(existingResponse, responsesAfter[0]!.ToJsonString());
+        Assert.Equal(fixture.Response1.ToString(), responsesAfter[1]!["FormKey"]!.GetValue<string>());
+
+        topicAfter.Remove("Responses");
+        Assert.Equal(before.ToJsonString(), after.ToJsonString());
     }
 }

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 
@@ -87,6 +88,29 @@ public sealed class CopyOverwriteTests : IDisposable
         Assert.Equal(RecordEditRefusal.UnderrideDestination, result.Refusal);
         Assert.Null(underrideFixture.Document(
             underrideFixture.DestinationPlugin, underrideFixture.FlatNpc.ToString()));
+    }
+
+    // The embedded-child half of the same rule: the topic has no document of its own, and the
+    // response already appended into it survives the topic's own re-copy.
+    [Fact]
+    public void CopyAsOverride_OnATopicTheDestinationAlreadyHoldsEmbedded_ReplacesOwnFields_KeepingItsResponse()
+    {
+        var service = CopyHandler();
+        Assert.True(service.CopyRecordAsOverride(
+            _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin).Applied);
+        Assert.True(service.CopyRecordAsOverride(
+            _fixture.SourcePlugin, _fixture.Response1.ToString(), _fixture.DestinationPlugin).Applied);
+
+        var result = service.CopyRecordAsOverride(
+            _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var topic = _fixture.Document(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString());
+        Assert.NotNull(topic);
+        Assert.Equal(
+            _fixture.Response1.ToString(),
+            Assert.Single(JsonDocument.Parse(topic!.Body).RootElement.GetProperty("Responses").EnumerateArray())
+                .GetProperty("FormKey").GetString());
     }
 
     [Fact]

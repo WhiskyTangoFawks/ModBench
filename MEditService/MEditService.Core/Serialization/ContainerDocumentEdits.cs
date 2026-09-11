@@ -33,22 +33,6 @@ internal static class ContainerDocumentEdits
         return codec.SerializeToText(owner, release);
     }
 
-    /// <summary>The owner's text with the child <paramref name="formKey"/> names replaced at its own
-    /// slot position, keeping that child's own children. Null when the text carries no such
-    /// child.</summary>
-    internal static string? WithChildReplaced(
-        RecordTextCodec codec, string ownerText, GameRelease release, string? ownerRecordType,
-        string formKey, string replacementText, string? replacementRecordType)
-    {
-        var owner = codec.Deserialize(ownerText, release, ownerRecordType);
-        if (ContainerChildFields.FindEmbeddedChild(owner, formKey) is not { } found) return null;
-
-        var replacement = codec.Deserialize(replacementText, release, replacementRecordType);
-        ContainerChildFields.TransplantChildSlots(found.Child, replacement);
-        ContainerChildFields.ReplaceInSlot(found.Parent, found.SlotName, found.SlotIndex, replacement);
-        return codec.SerializeToText(owner, release);
-    }
-
     /// <summary><paramref name="destinationText"/> with its own fields replaced by
     /// <paramref name="replacementText"/>'s, keeping the children it already carries. A child with a
     /// document of its own is not one of them: it stays where it is.</summary>
