@@ -175,17 +175,16 @@ export async function createEmptyMod(instanceRoot: string, profile: string, name
   return spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
 }
 
-/** The Instance value's unlisted folders get a line each, disabled, at the winning end, in one
- *  write. Nothing here reads `mods/`: which folders need a line is the value's answer, not a
- *  command's (ADR-0015 invariants 1 and 2). */
+/** The value's unlisted folders get a line each, disabled, at the winning end, in one write.
+ *  Which folders need one is the value's answer, never a command's (ADR-0015 invariant 1). */
 export async function adoptMods(
   instanceRoot: string, profile: string, folderNames: readonly string[],
 ): Promise<{ applied: true; added: string[] } | { applied: false; refusal: string }> {
   let added: string[] = [];
   const outcome = await spliceModlist(instanceRoot, profile, (text) => {
     // Read off the text about to be spliced, inside the write lock: two landed values can hand
-    // the same folder over before the first write comes back, and only this can refuse the
-    // second line. Separators are excluded, as `unlistedModNames` excludes them.
+    // the same folder over before the first write comes back, and only this refuses the second
+    // line.
     const listed = new Set(parseModlist(text).filter((e) => e.kind !== 'separator').map((e) => e.name));
     added = [...folderNames].filter((name) => !listed.has(name)).sort((a, b) => a.localeCompare(b));
     // insertModAtWinningEnd always lands its new line above whatever is currently first, so

@@ -153,10 +153,9 @@ export function downloadContextValue(row: DownloadRow): string {
 // folded: a Windows filename is case-insensitive.
 const archiveKey = (filename: string): string => filename.toLowerCase();
 
-/** Which mods each download was installed into, keyed by the download's folded filename — the
- *  reverse of every mod's meta.ini `installationFile`. Many to many: one download can back
- *  several mods. A mod naming no file claims nothing, so it is never evidence that a download
- *  is uninstalled (#60). */
+/** Which mods each download was installed into, keyed by the download's folded filename: the
+ *  reverse of every mod's meta.ini `installationFile`, many to many. A mod naming no file
+ *  claims nothing, which is unknown rather than an uninstall. */
 export function modsByInstallationFile(
   mods: readonly { name: string; archiveFilename?: string }[],
 ): Map<string, string[]> {
@@ -169,10 +168,9 @@ export function modsByInstallationFile(
   return byFile;
 }
 
-/** Hidden rows are built and flagged, never filtered — filtering is a view
- *  concern. Sidecars do not become rows of their own. `installedInto` is what makes a row
- *  Installed: the sidecar's own flag is MO2's, and a mod uninstalled outside Modbench leaves it
- *  claiming an install that is gone (#60). */
+/** Hidden rows are built and flagged, never filtered — filtering is a view concern. Sidecars do
+ *  not become rows of their own. `installedInto` is what makes a row Installed: the sidecar's
+ *  own flag outlives the mod it claims. */
 export function buildDownloadRows(
   entries: DownloadEntry[], installedInto: ReadonlyMap<string, readonly string[]>,
 ): DownloadRow[] {
@@ -182,8 +180,8 @@ export function buildDownloadRows(
       const { status: sidecarStatus, hidden, modID, fileID, name, version, modName, gameName, author } = parseDownloadMeta(
         e.metaText ?? '',
       );
-      // Installed is the mods' answer; the sidecar keeps its other two, which say nothing about
-      // whether a mod stands on disk.
+      // Installed is the mods' answer; the sidecar keeps its other two, which say nothing
+      // about whether a mod stands on disk.
       const status: DownloadStatus = installedInto.has(archiveKey(e.name))
         ? 'Installed'
         : (sidecarStatus === 'Installed' ? 'Downloaded' : sidecarStatus);

@@ -590,8 +590,8 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     expect(instance.value.deployed).toBe(true);
   });
 
-  // Issue #60: the fixture's sidecar claims `installed=true`, and only the Unofficial Patch
-  // mod's own meta.ini makes that claim true. Rival: reading Status off the sidecar alone.
+  // The fixture's sidecar claims `installed=true`, and only the Unofficial Patch mod's own
+  // meta.ini makes that claim true. Rival: reading Status off the sidecar alone.
   it('drops a download\u2019s Installed row once the mod that named it is gone, sidecar claim and all', async () => {
     const { root, instance } = await realInstance();
     const archive = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';

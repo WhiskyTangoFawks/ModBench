@@ -107,10 +107,9 @@ async function rootLevelPlugins(folder: string): Promise<Map<string, string>> {
  *  here would mean parsing plugin headers (ADR-0016). */
 export type ImplicitMasterSource = () => Promise<readonly string[] | undefined>;
 
-/** plugins.txt is the complete inventory the Plugins tree reads, so when disk disagrees the file
- *  is updated (docs/specs/plugins.md). `provided` is the Instance value's own winners
- *  (ADR-0015): this walks neither mods/ nor overwrite/. A failure to enumerate the Data folder
- *  refuses the whole run — an errored walk must never read as "everything vanished". */
+/** plugins.txt is the inventory the Plugins tree reads, so when disk disagrees the file is
+ *  updated (docs/specs/plugins.md). `provided` is the value's winners (ADR-0015); a failed
+ *  Data-folder walk refuses the whole run. */
 export async function reconcilePlugins(
   instanceRoot: string, profile: string, provided: ReadonlyMap<string, string>,
   dataFolder: string | undefined, implicitMasters: ImplicitMasterSource, log: (msg: string) => void,

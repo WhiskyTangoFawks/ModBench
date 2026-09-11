@@ -384,8 +384,8 @@ describe('buildDownloadRows', () => {
   });
 });
 
-// Issue #60: a download is installed when a mod says so, never when the sidecar says so —
-// uninstall a mod outside Modbench and its `.meta` still claims `installed=true`.
+// A download is installed when a mod says so, never when the sidecar says so: uninstall a mod
+// outside Modbench and its `.meta` still claims `installed=true`.
 describe('modsByInstallationFile — which mods each download was installed into', () => {
   it('keys a mod under the download its meta.ini names, case-folded', () => {
     expect(modsByInstallationFile([{ name: 'UFO4P', archiveFilename: 'UFO4P-4598.7z' }]))

@@ -40,8 +40,8 @@ export interface InstanceValue {
   /** Mods and separators in Mod override order, winning-first, with `enabled`. */
   readonly mods: readonly ModlistEntry[];
   /** Every directory under mods/ the active profile's modlist.txt has no line for, sorted.
-   *  Disjoint from `mods`, and rendered by no tree: it is what the adoption command is handed
-   *  so that no command walks the instance itself (ADR-0015 invariants 1 and 2). */
+   *  Disjoint from `mods` and rendered by no tree: it is what adoption is handed, so that no
+   *  command walks the instance (ADR-0015 invariant 1). */
   readonly unlistedFolders: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;

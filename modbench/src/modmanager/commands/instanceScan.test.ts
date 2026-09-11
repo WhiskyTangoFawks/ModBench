@@ -38,9 +38,8 @@ describe('commands never read the Instance', () => {
   });
 });
 
-// ADR-0015 invariant 1: the value already carries the effective merged view, so a command is
-// handed the winners it needs. One walking mods/ itself would double every recompute's walk and
-// re-spell the overwrite-wins rule beside the value's own.
+// ADR-0015 invariant 1: the value carries the merged view, so a command is handed the winners
+// it needs. One walking mods/ itself doubles the recompute's walk and re-spells overwrite-wins.
 const WALKERS = ['buildFileConflictIndex', 'overwriteDir'];
 
 const walkersIn = (source: string): string[] =>

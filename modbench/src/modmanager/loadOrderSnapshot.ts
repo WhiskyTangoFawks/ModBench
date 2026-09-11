@@ -54,9 +54,8 @@ export function originFolder(
   return copy?.path === undefined ? undefined : dirname(copy.path);
 }
 
-/** The plugin files this instance provides, keyed case-folded to the winning copy's own on-disk
- *  name — the Mod override order's answer, overwrite/ included, read off the value's rows so
- *  that no caller walks mods/ or re-spells the rule (ADR-0015). A Data-folder copy is presence,
+/** The plugin files this instance provides, keyed case-folded to the winning copy's on-disk
+ *  name: the Mod override order's answer, overwrite/ included. A Data-folder copy is presence,
  *  not provision, and is left out. */
 export function providedPluginsOf(
   plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'name' | 'origin' | 'path' | 'winning'>[],
