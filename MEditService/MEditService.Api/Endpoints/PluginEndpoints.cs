@@ -262,13 +262,18 @@ public static class PluginEndpoints
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(
-        TrackRequest req, IndexProjector index, LoadOrderHolder holder, TrackHandler trackHandler, ILoggerFactory loggerFactory)
+        TrackRequest req, IndexProjector index, LoadOrderHolder holder, TrackHandler trackHandler,
+        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
             return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
+
+        // ADR-0015 invariant 2: before the write, so the tree Track commits comes back through the
+        // watch instead of waiting for a client to reconcile.
+        watcher.WatchSourceOf(req.Origin);
 
         try
         {

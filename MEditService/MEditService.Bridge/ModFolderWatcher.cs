@@ -66,6 +66,10 @@ public sealed class ModFolderWatcher : IDisposable
         foreach (var plugin in order.Copies)
         {
             var key = plugin.Key;
+            // Before anything under it is registered: a registration then upgrades a watch that is
+            // already running, which is what lets Track's own tree land under one.
+            if (ModFolders.Of(plugin.Origin, plugin.Path) is { } folder) WatchModFolder(folder);
+
             if (ModFolders.TrackedOf(order, key) is not { } modFolder)
             {
                 // ADR-0009: every other indexed binary, the game's Data/ masters included, gets an
@@ -137,12 +141,22 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>Track's own start: every loaded copy in the folder being tracked is watched only
-    /// after the tree is written and committed, so Track's burst is projected like any other.</summary>
-    public void WatchTracking(string modFolder, string origin)
+    /// <summary>Registration as tracked, before Track writes a byte: every loaded copy under
+    /// <paramref name="origin"/> gets its source root, upgrading the mod's watch to the subtree the
+    /// tree and the commit ending it both land in.</summary>
+    public void WatchSourceOf(string origin)
     {
-        foreach (var copy in ModFolders.PluginsOfOrigin(_holder.Current, origin))
+        var order = _holder.Current;
+        if (ModFolders.OfOrigin(order, origin) is not { } modFolder) return;
+        foreach (var copy in ModFolders.PluginsOfOrigin(order, origin))
             Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
+    }
+
+    // Top level only: the folder is watched before it is known to hold anything worth recursing
+    // into, and every registration upgrades rather than replaces.
+    private void WatchModFolder(string modFolder)
+    {
+        lock (_gate) ModEntryFor(modFolder, recursive: false);
     }
 
     /// <summary>Registers <paramref name="pluginName"/> for classification: self-echo, crash recovery
