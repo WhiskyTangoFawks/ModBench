@@ -13,10 +13,10 @@ namespace MEditService.Core.Source;
 /// in.</summary>
 public sealed partial class SourceRepository
 {
-    /// <summary>The document whose root carries <paramref name="identity"/>, whole: itself when it has
-    /// a document of its own, else the document embedding it — a container may itself be
+    /// <summary>The container document of <paramref name="identity"/>: its own when it has a file of
+    /// its own, else the document of the container it is embedded in — a container may itself be
     /// embedded.</summary>
-    public SourceDocument? Carrier(
+    public SourceDocument? ContainerDocument(
         PluginKey plugin, RecordIdentity identity, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
