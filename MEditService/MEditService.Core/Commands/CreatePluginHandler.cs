@@ -21,22 +21,15 @@ public sealed class CreatePluginHandler
     public async Task<PluginCreateResult> CreatePlugin(
         LoadOrder loadOrder, RegisteredCopy copy, IReadOnlyCollection<PluginKey> heldCopies)
     {
-        var destination = Path.GetDirectoryName(copy.Path)!;
-
-        // Never-assume-exclusive-ownership: the destination may be a mod folder nothing has written
-        // into yet — a brand-new mod, or overwrite/ before its first file.
-        Directory.CreateDirectory(destination);
-        if (File.Exists(copy.Path))
-            throw new IOException($"Plugin file already exists: {copy.Name}");
-
         // A new plugin defaults to an ESL-flagged ESP, silently; the flag is an ordinary editable
         // header field afterward. An explicit .esl is already light, an explicit .esm asked for a
         // full master.
+        var modKey = ModKey.FromFileName(copy.Name);
         await MutagenPluginAdapter.Instance.CreateAndWriteAsync(
-            ModKey.FromFileName(copy.Name), copy.Path, loadOrder.GameRelease,
-            smallMaster: Path.GetExtension(copy.Name).Equals(".esp", StringComparison.OrdinalIgnoreCase));
+            modKey, copy.Path, loadOrder.GameRelease, smallMaster: modKey.Type == ModType.Plugin);
 
-        if (SourceRepository.IsTracked(destination)) return new PluginCreateResult(null);
+        var modFolder = ModFolders.Of(copy.Origin, copy.Path);
+        if (modFolder is null || SourceRepository.IsTracked(modFolder)) return new PluginCreateResult(null);
 
         // Held by construction: this gesture wrote the file, so Track's own "which copies are
         // readable" filter must count it alongside whatever the Index already holds.
