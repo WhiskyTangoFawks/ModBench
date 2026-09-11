@@ -34,7 +34,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     public void PutLoadOrder_RestoresThePreviousSnapshot_WhenTheReconcileFails()
     {
         var holder = new LoadOrderHolder();
-        var previous = LoadOrder.From(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, []);
+        var previous = new LoadOrder(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([]));
         holder.Apply(previous);
 
         var result = LoadOrderEndpoints.PutLoadOrder(

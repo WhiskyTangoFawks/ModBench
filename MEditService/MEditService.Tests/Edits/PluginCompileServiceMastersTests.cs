@@ -68,14 +68,14 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         });
         (_npc, _bravoKeyword, _charlieKeyword) = (npc.FormKey, bravoKeyword.FormKey, charlieKeyword.FormKey);
 
-        _loadOrder = LoadOrder.From(
+        _loadOrder = new LoadOrder(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
-            [
+            SnapshotCopies.Of([
                 new LoadOrderEntry(CharlieName, charliePath, "Data", Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(BravoName, bravoPath, "Data", Slot: 1, Enabled: true, Winning: true),
                 new LoadOrderEntry(DeltaName, deltaPath, "Data", Slot: 2, Enabled: true, Winning: true),
                 new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin!, Slot: 3, Enabled: true, Winning: true),
-            ]);
+            ]));
 
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(_loadOrder, [_plugin], _plugin.Origin!, SourcePreset.Edits)

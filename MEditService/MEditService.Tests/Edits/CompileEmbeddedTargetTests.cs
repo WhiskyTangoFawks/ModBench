@@ -58,12 +58,12 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.Iterate,
         });
 
-        _loadOrder = LoadOrder.From(
+        _loadOrder = new LoadOrder(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
-            [
+            SnapshotCopies.Of([
                 Target(enabled: true),
                 Referrer,
-            ]);
+            ]));
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance);
         trackService.TrackAsync(_loadOrder, [new PluginKey(TargetName, TargetOrigin)], TargetOrigin, SourcePreset.Edits)
@@ -117,8 +117,8 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     [Fact]
     public void Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
-        var notLoaded = LoadOrder.From(
-            _gameDirectory, _instanceRoot, GameRelease.Fallout4, [Target(enabled: false), Referrer]);
+        var notLoaded = new LoadOrder(
+            _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([Target(enabled: false), Referrer]));
 
         var result = CompileServices.Over(notLoaded).Compile(_referrer, new CompileSource.WorkingTree());
 

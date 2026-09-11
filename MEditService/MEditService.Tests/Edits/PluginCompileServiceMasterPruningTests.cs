@@ -48,7 +48,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         }
         inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-        _loadOrder = LoadOrder.From(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
+        _loadOrder = new LoadOrder(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
 
         // Track directly (bypassing TrackService.TrackAsync's own round-trip gate — see class doc comment).
         var deepParsed = ModFactory.ImportSetter(

@@ -1,3 +1,4 @@
+using MEditService.Api;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using Microsoft.Extensions.Logging;
@@ -7,8 +8,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0044: `HeldPlugins` is the held set of plugin copies — resolved from a snapshot (forced masters
-// first), opened one at a time, and mutated in place as copies arrive, leave, or move.
+// ADR-0044: `HeldPlugins` is the held set of plugin copies — opened one at a time from the copies a
+// snapshot registers, and mutated in place as copies arrive, leave, or move.
 public sealed class HeldPluginsTests
 {
     private const string UserPlugin = "UserMod.esp";
@@ -16,186 +17,9 @@ public sealed class HeldPluginsTests
     private static HeldPlugins Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILogger? logger = null)
     {
         var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4, logger);
-        foreach (var plugin in HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, entries ?? data.Plugins))
+        foreach (var plugin in ForcedPlugins.Prepend(data.DataFolder, GameRelease.Fallout4, entries ?? data.Plugins))
             loadOrder.Open(plugin);
         return loadOrder;
-    }
-
-    // ── Resolve: forced masters and Creation Club content ───────────────────────
-
-    [Fact]
-    public void Resolve_ImplicitMaster_IsForcedFirst_AndSnapshotSlotsAreOffsetPastIt()
-    {
-        using var data = new PluginFixtureBuilder("lo-implicit")
-            .WithPlugin("Fallout4.esm", listed: false)
-            .WithPlugin(UserPlugin)
-            .Build();
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
-
-        var fo4 = resolved.Single(p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-        var user = resolved.Single(p => p.Name == UserPlugin);
-        Assert.True(fo4.IsForced);
-        Assert.Equal(PluginOrigin.DataDirectory, fo4.Origin);
-        Assert.True(fo4.Registration.Participates);
-        Assert.False(user.IsForced);
-        Assert.Equal(0, fo4.Registration.LoadOrderIndex);
-        Assert.Equal(1, user.Registration.LoadOrderIndex);
-    }
-
-    [Fact]
-    public void Resolve_ImplicitMasterAlsoInSnapshot_IsHeldOnce_ForcedOn()
-    {
-        using var data = new PluginFixtureBuilder("lo-dedup")
-            .WithPlugin("Fallout4.esm")
-            .Build();
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
-
-        var fo4 = Assert.Single(resolved, p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-        Assert.True(fo4.IsForced);
-    }
-
-    [Fact]
-    public void Resolve_ImplicitMasterMissingFromDisk_IsNotResolved()
-    {
-        using var data = new PluginFixtureBuilder("lo-missing-implicit")
-            .WithPlugin("Fallout4.esm", listed: false)
-            .WithPlugin(UserPlugin)
-            .Build();
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
-
-        Assert.DoesNotContain(resolved, p => p.Name.Equals("DLCRobot.esm", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void Resolve_CreationClubOnlyPlugin_IsForcedAfterImplicitMastersAndBeforeTheSnapshot()
-    {
-        using var data = new PluginFixtureBuilder("lo-ccc")
-            .WithPlugin("Fallout4.esm", listed: false)
-            .WithPlugin("ccTest.esl", listed: false)
-            .WithPlugin(UserPlugin)
-            .WithCreationClubCatalog("ccTest.esl")
-            .Build();
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
-
-        var implicitMaster = resolved.Single(p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-        var cc = resolved.Single(p => p.Name == "ccTest.esl");
-        var user = resolved.Single(p => p.Name == UserPlugin);
-        Assert.True(cc.IsForced);
-        Assert.True(cc.Registration.Participates);
-        Assert.Equal(PluginOrigin.DataDirectory, cc.Origin);
-        Assert.True(implicitMaster.Registration.LoadOrderIndex < cc.Registration.LoadOrderIndex);
-        Assert.True(cc.Registration.LoadOrderIndex < user.Registration.LoadOrderIndex);
-    }
-
-    [Fact]
-    public void Resolve_CreationClubPluginAlsoInSnapshot_IsHeldOnce_ForcedOn()
-    {
-        using var data = new PluginFixtureBuilder("lo-ccc-dedup")
-            .WithPlugin("ccDup.esl")
-            .WithCreationClubCatalog("ccDup.esl")
-            .Build();
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
-
-        var cc = Assert.Single(resolved, p => p.Name == "ccDup.esl");
-        Assert.True(cc.IsForced);
-    }
-
-    [Fact]
-    public void Resolve_CreationClubCatalogOrder_IsPreservedRegardlessOfName()
-    {
-        using var data = new PluginFixtureBuilder("lo-ccc-order")
-            .WithPlugin("ccZebra.esl", listed: false)
-            .WithPlugin("ccAlpha.esl", listed: false)
-            .WithCreationClubCatalog("ccZebra.esl", "ccAlpha.esl")
-            .Build();
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
-
-        var zebra = resolved.Single(p => p.Name == "ccZebra.esl");
-        var alpha = resolved.Single(p => p.Name == "ccAlpha.esl");
-        Assert.True(zebra.Registration.LoadOrderIndex < alpha.Registration.LoadOrderIndex);
-    }
-
-    [Fact]
-    public void Resolve_SnapshotFacts_CarryThrough()
-    {
-        using var data = new PluginFixtureBuilder("lo-facts")
-            .WithPlugin("A.esp")
-            .Build();
-        var entries = new List<LoadOrderEntry>
-        {
-            new("A.esp", Path.Combine(data.DataFolder, "A.esp"), "ModA", Slot: 3, Enabled: false, Winning: true),
-            new("A.esp", Path.Combine(data.DataFolder, "A.esp"), "ModB", Slot: null, Enabled: true, Winning: false),
-        };
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, entries);
-
-        var a = resolved.Single(p => p.Origin == "ModA");
-        var b = resolved.Single(p => p.Origin == "ModB");
-        Assert.Equal(new Registration(3, Enabled: false, Winning: true), a.Registration);
-        Assert.Equal(new Registration(null, Enabled: true, Winning: false), b.Registration);
-    }
-
-    // ── ForcedNames ─────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void ForcedNames_AreTheImplicitMastersOnDisk_ThenTheCreationClubCatalog()
-    {
-        using var data = new PluginFixtureBuilder("forced-names")
-            .WithPlugin("Fallout4.esm", listed: false)
-            .WithPlugin("ccTest.esl", listed: false)
-            .WithPlugin(UserPlugin)
-            .WithCreationClubCatalog("ccTest.esl")
-            .Build();
-
-        var names = HeldPlugins.ForcedNames(data.DataFolder, GameRelease.Fallout4);
-
-        Assert.Equal(["Fallout4.esm", "ccTest.esl"], names);
-    }
-
-    // A plugin sitting in Data is not thereby forced: only the release's implicit list and the
-    // Creation Club catalog put a name here, so a mod-deployed file still needs its line.
-    [Fact]
-    public void ForcedNames_OmitAPluginNeitherSourceClaims()
-    {
-        using var data = new PluginFixtureBuilder("forced-names-unclaimed")
-            .WithPlugin(UserPlugin, listed: false)
-            .Build();
-
-        Assert.DoesNotContain(UserPlugin, HeldPlugins.ForcedNames(data.DataFolder, GameRelease.Fallout4));
-    }
-
-    [Fact]
-    public void ForcedNames_OmitAnImplicitMasterMissingFromDisk()
-    {
-        using var data = new PluginFixtureBuilder("forced-names-missing")
-            .WithPlugin("Fallout4.esm", listed: false)
-            .Build();
-
-        Assert.Equal(["Fallout4.esm"], HeldPlugins.ForcedNames(data.DataFolder, GameRelease.Fallout4));
-    }
-
-    // Resolve concatenated the two forced sources without deduping; ForcedNames distincts, which
-    // is what Resolve's own "held exactly once" already promised. Pinned so the extraction cannot
-    // quietly change what Resolve answers.
-    [Fact]
-    public void Resolve_NameBothForcedSourcesClaim_IsHeldExactlyOnce()
-    {
-        using var data = new PluginFixtureBuilder("forced-both-sources")
-            .WithPlugin("Fallout4.esm", listed: false)
-            .WithCreationClubCatalog("Fallout4.esm")
-            .Build();
-
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins);
-
-        var fo4 = Assert.Single(resolved, p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-        Assert.True(fo4.IsForced);
-        Assert.Equal(0, fo4.Registration.LoadOrderIndex);
     }
 
     // ── Open ────────────────────────────────────────────────────────────────────
@@ -266,7 +90,7 @@ public sealed class HeldPluginsTests
         File.WriteAllBytes(loser.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
         using var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, fx.GameDirectory, null, GameRelease.Fallout4);
 
-        foreach (var plugin in HeldPlugins.Resolve(fx.GameDirectory, GameRelease.Fallout4, [winner, loser]))
+        foreach (var plugin in ForcedPlugins.Prepend(fx.GameDirectory, GameRelease.Fallout4, [winner, loser]))
             loadOrder.Open(plugin);
 
         Assert.Equal("ModA", Assert.Single(loadOrder.Plugins).Origin);
@@ -283,7 +107,7 @@ public sealed class HeldPluginsTests
             .Build();
         var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4);
         using var _ = loadOrder;
-        var resolved = HeldPlugins.Resolve(data.DataFolder, GameRelease.Fallout4, data.Plugins).Single();
+        var resolved = ForcedPlugins.Prepend(data.DataFolder, GameRelease.Fallout4, data.Plugins).Single();
         var missing = resolved with { Path = Path.Combine(data.DataFolder, "Elsewhere.esp") };
 
         Assert.Null(loadOrder.Open(missing));

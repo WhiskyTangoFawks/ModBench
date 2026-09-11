@@ -1,5 +1,4 @@
 using MEditService.Bridge;
-using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -163,7 +162,9 @@ public static class LoadOrderEndpoints
                 .ToList();
             // ADR-0046 invariant 11: the state lands in the shared kernel first, so a reader asking
             // "which copy wins" during the reconcile is answered by the snapshot, not by the Index.
-            var snapshot = LoadOrder.From(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
+            var snapshot = new LoadOrder(
+                req.GameDirectory, req.InstanceRoot, gameRelease,
+                ForcedPlugins.Prepend(req.GameDirectory, gameRelease, entries));
             var previous = holder.Current;
             holder.Apply(snapshot);
             try
@@ -247,7 +248,7 @@ public static class LoadOrderEndpoints
         if (!Directory.Exists(gameDirectory))
             return Results.Problem($"Game directory not found: {gameDirectory}", statusCode: 400);
         if (ParseGameRelease(gameRelease, out var release) is { } releaseErr) return releaseErr;
-        return Results.Ok(HeldPlugins.ForcedNames(gameDirectory, release));
+        return Results.Ok(ForcedPlugins.Names(gameDirectory, release));
     }
 
     private static async Task<IResult> AwaitSequence(IndexProjector index, long atLeast, int timeoutMs = 5000)

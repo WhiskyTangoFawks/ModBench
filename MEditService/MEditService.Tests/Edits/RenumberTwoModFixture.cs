@@ -69,7 +69,7 @@ public sealed class RenumberTwoModFixture : IDisposable
             new LoadOrderEntry(TargetPluginName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
             new LoadOrderEntry(ReferencerPluginName, referencerPath, ReferencerOrigin, Slot: 1, Enabled: true, Winning: true),
         ];
-        LoadOrder = LoadOrder.From(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
+        LoadOrder = new LoadOrder(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         Track(TargetOrigin, TargetPlugin);
         if (trackReferencer) Track(ReferencerOrigin, ReferencerPlugin);

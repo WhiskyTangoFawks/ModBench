@@ -136,6 +136,25 @@ public sealed class LoadOrderTests
         Assert.False(holder.Current.Participates(new PluginKey("New.esp", "ModA")));
     }
 
+    // The entries are the whole of the snapshot: the path they carry names no directory that
+    // exists, and the value resolves participation and the winner without one.
+    [Fact]
+    public void AValueBuiltFromEntriesAlone_WithNoDirectoryPresent_ParticipatesAndWins()
+    {
+        var absent = Path.Combine(Path.GetTempPath(), $"medit-no-such-data-{Guid.NewGuid():N}");
+        LoadOrderEntry Entry(string origin, bool winning) =>
+            new("A.esp", Path.Combine(absent, origin, "A.esp"), origin, Slot: 0, Enabled: true, winning);
+        LoadOrderEntry[] entries = [Entry("LowPriorityMod", winning: false), Entry("HighPriorityMod", winning: true)];
+
+        var order = new LoadOrder(
+            absent, null, GameRelease.Fallout4, [.. entries.Select(entry => RegisteredCopy.Of(entry))]);
+
+        Assert.False(Directory.Exists(absent));
+        Assert.Equal("HighPriorityMod", order.WinningCopy("A.esp")!.Origin);
+        Assert.Equal([new PluginKey("A.esp", "HighPriorityMod")], order.Participating.Select(c => c.Key));
+        Assert.False(order.Participates(new PluginKey("A.esp", "LowPriorityMod")));
+    }
+
     [Fact]
     public void ACopyIsIdentifiedByOriginAndName_NotByNameAlone()
     {

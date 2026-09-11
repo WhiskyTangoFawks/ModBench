@@ -19,7 +19,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
 
     public CreatePluginHandlerTests() =>
-        _holder.Apply(LoadOrder.From(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, _data.Plugins));
+        _holder.Apply(new LoadOrder(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins)));
 
     public void Dispose() => _data.Dispose();
 

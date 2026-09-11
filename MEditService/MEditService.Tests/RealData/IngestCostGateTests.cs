@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MEditService.Api;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -85,7 +86,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             "MEDIT_SMOKE=1 was set but no supported game install was discovered to smoke-test.");
         var (gameRelease, dataDir) = discovered!.Value;
 
-        var masterNames = HeldPlugins.ForcedNames(dataDir.Path, gameRelease);
+        var masterNames = ForcedPlugins.Names(dataDir.Path, gameRelease);
         Assert.NotEmpty(masterNames);
 
         var ddl = new TableDdlBuilder(reflector);

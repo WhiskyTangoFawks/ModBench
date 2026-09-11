@@ -759,7 +759,7 @@ overflow, then native **Collapse All** last.
   `vscode` import — same seam class as `modlistText.ts`/`metaIni.ts`/`downloads.ts`.
 - **Implicit masters**: `GET /implicit-masters` (`gameDirectory`, `gameRelease`) → the filenames
   this install loads with no `plugins.txt` line, in load order: the release's implicit masters
-  present in that folder, then its Creation Club catalog. `HeldPlugins.ForcedNames`, the same
+  present in that folder, then its Creation Club catalog. `ForcedPlugins.Names`, the same
   list a `PUT /load-order` prepends, answered with no load order held. `gameRelease` is Mutagen's
   own name, translated from `ModOrganizer.ini`'s `gameName` by `mo2/gamePaths.ts`'s
   `gameReleaseForGame` — the two vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no

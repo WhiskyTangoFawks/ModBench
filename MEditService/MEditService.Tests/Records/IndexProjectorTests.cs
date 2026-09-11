@@ -65,7 +65,7 @@ public sealed class IndexProjectorTests
             .BuildScattered();
 
     private static LoadOrder Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
-        LoadOrder.From(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, plugins ?? fx.Plugins);
+        new LoadOrder(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
 
     private static IReadOnlyList<RegisteredCopy> RegistrationRows(IndexProjector projector)
     {

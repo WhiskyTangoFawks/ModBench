@@ -133,6 +133,47 @@ public sealed class ArchitectureTests
             + string.Join("\n", dead));
     }
 
+    private static readonly string LoadOrderFolder = Path.Combine("MEditService.Core", "Plugins");
+
+    // ADR-0046 invariant 11: the load order value is built from what Mod Management sent. An
+    // adapter type here is a disk read on its construction path.
+    [Fact]
+    public void TheLoadOrderValue_NamesNoPluginAdapterType()
+    {
+        var offenders = Offenders(
+            SolutionDirectory(), [LoadOrderFolder], "MEditService.Core.PluginAdapter", allowedFiles: []);
+
+        Assert.True(offenders.Count == 0,
+            "The load order folder reaches into the Plugin adapter in:\n" + string.Join("\n", offenders));
+    }
+
+    // The value is what Mod Management sent, so a disk read here answers from the instance rather
+    // than from the snapshot — and the two disagree the moment another tool touches a file.
+    [Fact]
+    public void TheLoadOrderValue_ReadsNoFileOrDirectory()
+    {
+        var offenders = Offenders(SolutionDirectory(), [LoadOrderFolder], "File.", allowedFiles: [])
+            .Concat(Offenders(SolutionDirectory(), [LoadOrderFolder], "Directory.", allowedFiles: []))
+            .Distinct()
+            .ToList();
+
+        Assert.True(offenders.Count == 0,
+            "The load order folder reads the disk in:\n" + string.Join("\n", offenders));
+    }
+
+    // Zero offenders and an empty folder read the same: a path that scanned nothing would still
+    // pass the assertions above.
+    [Fact]
+    public void TheLoadOrderValueScan_WalksTheLoadOrderFolder()
+    {
+        var walked = SourceTree.CSharpFiles(Path.Combine(SolutionDirectory(), LoadOrderFolder))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.Contains("LoadOrder.cs", walked);
+        Assert.Contains("Registration.cs", walked);
+    }
+
     private static IEnumerable<string> Unallowed(List<string> named, string[] allowed) =>
         named.Where(f => !allowed.Contains(Path.GetFileName(f)));
 
