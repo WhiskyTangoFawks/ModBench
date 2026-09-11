@@ -1,4 +1,5 @@
 import type { UnansweredExternalChange } from '../medit/client';
+import type { AskQuestion } from '../dialog';
 
 /** The glossary's Edit branch entry: the fixed branch name every Track creates, matching the
  *  backend's `SourceRepository.EditBranchName` — never derived per repository. */
@@ -34,13 +35,6 @@ export function messageFor(change: UnansweredExternalChange): { message: string;
   return { message: change.origin, detail: lines.join('\n') };
 }
 
-/** The one shape this module needs from `vscode.window.showWarningMessage` — injected so the
- *  sequencing below is testable without a VS Code host, same idiom `reporter.ts`/`backendLog.ts`
- *  already establish. */
-export type ShowExternalChangeDialog = (
-  message: string, options: { modal: true; detail: string }, ...buttons: string[]
-) => Thenable<string | undefined> | Promise<string | undefined>;
-
 export interface ExternalChangeDialogOutcome {
   change: UnansweredExternalChange;
   answer: ExternalChangeDialogAnswer;
@@ -50,7 +44,7 @@ export interface ExternalChangeDialogOutcome {
  *  grouping step is needed here. */
 export async function runExternalChangeDialogs(
   unanswered: readonly UnansweredExternalChange[],
-  show: ShowExternalChangeDialog,
+  show: AskQuestion,
 ): Promise<ExternalChangeDialogOutcome[]> {
   const outcomes: ExternalChangeDialogOutcome[] = [];
   for (const change of unanswered) {

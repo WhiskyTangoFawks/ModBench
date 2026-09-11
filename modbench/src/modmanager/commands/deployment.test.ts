@@ -7,14 +7,10 @@ import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deployMods, purgeMods, DEPLOY_CONFIRM_BUTTON } from './deployment';
 import { makeDeployerFixture, makeIndex, type DeployerFixture } from '../test/deployerFixture';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 const PROFILE = 'Default';
 const MANIFEST = join('mods', '.medit-manifest.json');
-
-function fakeReporter() {
-  const reports: { severity: string; message: string; detail?: string }[] = [];
-  return { reports, report: (severity: string, message: string, detail?: string) => reports.push({ severity, message, detail }) };
-}
 
 // Never asked: used by every test whose fixture already has a manifest, or that predates the
 // prompt existing — a call here is itself a failure of "asks only on an absent manifest".
@@ -34,7 +30,7 @@ describe('deployMods / purgeMods', () => {
     const files = makeIndex({ 'textures/foo.dds': source }).files;
 
     const outcome = await deployMods(
-      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
+      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(true);
@@ -50,7 +46,7 @@ describe('deployMods / purgeMods', () => {
     await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'modlist.txt'), '-ModB\n');
     const files = makeIndex({ 'textures/bar.dds': winner }).files;
 
-    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
+    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
 
     // modlist.txt disables ModB; a rebuild would deploy nothing. The handed-in `files` wins.
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/bar.dds'))).toBe(true);
@@ -62,7 +58,7 @@ describe('deployMods / purgeMods', () => {
     await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'plugins.txt'), '*Foo.esp\n');
     const target = join(fx.gameDirectory.root, 'plugins.txt');
 
-    await deployMods(fx.instanceRoot, PROFILE, makeIndex({}).files, fx.gameDirectory, target, fakeReporter(), accept);
+    await deployMods(fx.instanceRoot, PROFILE, makeIndex({}).files, fx.gameDirectory, target, recordingReporter(), accept);
 
     expect(await exists(target)).toBe(true);
   });
@@ -73,7 +69,7 @@ describe('deployMods / purgeMods', () => {
     fx = await makeDeployerFixture();
 
     const outcome = await deployMods(
-      fx.instanceRoot, PROFILE, makeIndex({}).files, undefined, undefined, fakeReporter(), neverAsk);
+      fx.instanceRoot, PROFILE, makeIndex({}).files, undefined, undefined, recordingReporter(), neverAsk);
 
     expect(outcome).toMatchObject({ applied: false });
     expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(false);
@@ -89,7 +85,7 @@ describe('deployMods / purgeMods', () => {
       const showWarning = vi.fn().mockResolvedValue(DEPLOY_CONFIRM_BUTTON);
 
       const outcome = await deployMods(
-        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), showWarning);
+        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), showWarning);
 
       expect(showWarning).toHaveBeenCalledOnce();
       expect(outcome).toEqual({ applied: true, wrote: true });
@@ -103,7 +99,7 @@ describe('deployMods / purgeMods', () => {
       const files = makeIndex({ 'a.esp': source }).files;
 
       const outcome = await deployMods(
-        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), decline);
+        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), decline);
 
       expect(outcome).toMatchObject({ applied: false });
       expect(await exists(join(fx.gameDirectory.dataFolder, 'a.esp'))).toBe(false);
@@ -117,10 +113,10 @@ describe('deployMods / purgeMods', () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'a.esp', 'BYTES');
     const files = makeIndex({ 'a.esp': source }).files;
-    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
+    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
 
     const outcome = await deployMods(
-      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), neverAsk);
+      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), neverAsk);
 
     expect(outcome).toEqual({ applied: true, wrote: true });
   });
@@ -130,7 +126,7 @@ describe('deployMods / purgeMods', () => {
   it('purge reports it wrote nothing when there is no manifest', async () => {
     fx = await makeDeployerFixture();
 
-    const outcome = await purgeMods(fx.instanceRoot, fx.gameDirectory, fakeReporter());
+    const outcome = await purgeMods(fx.instanceRoot, fx.gameDirectory, recordingReporter());
 
     expect(outcome).toEqual({ applied: true, wrote: false });
   });
@@ -139,9 +135,9 @@ describe('deployMods / purgeMods', () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
     const files = makeIndex({ 'textures/foo.dds': source }).files;
-    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept);
+    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
 
-    const outcome = await purgeMods(fx.instanceRoot, fx.gameDirectory, fakeReporter());
+    const outcome = await purgeMods(fx.instanceRoot, fx.gameDirectory, recordingReporter());
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(false);
@@ -156,8 +152,8 @@ describe('deployMods / purgeMods', () => {
     const files = makeIndex({ 'textures/foo.dds': source }).files;
 
     const [deployed, purged] = await Promise.all([
-      deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, fakeReporter(), accept),
-      purgeMods(fx.instanceRoot, fx.gameDirectory, fakeReporter()),
+      deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept),
+      purgeMods(fx.instanceRoot, fx.gameDirectory, recordingReporter()),
     ]);
 
     expect(deployed).toEqual({ applied: true, wrote: true });

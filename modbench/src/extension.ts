@@ -13,6 +13,7 @@ import { ReferencedByTreeProvider } from './editor/ReferencedByTreeProvider';
 import { EXTENSION_TO_WEBVIEW } from './medit/messages';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { makeReporter } from './reporter';
+import { askQuestion } from './dialog';
 import { registerEditorCommands, ActiveRecordTracker } from './editor';
 import { exitEditing, refreshMatchingPlugins } from './editingTeardown';
 import { createToolbox } from './toolbox';
@@ -140,7 +141,7 @@ export function activate(context: vscode.ExtensionContext) {
   // reason can newly arise.
   const showCrashRepairOffers = (offers: CrashRepairOffer[]) => presentCrashRepairOffers(
     offers,
-    (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
+    askQuestion,
     (offer, atRef) => compileAndReport(
       meditClient, compileDiagnostics, pluginRowDeps.originFolder, { name: offer.plugin, origin: offer.origin }, atRef,
     ),
@@ -161,6 +162,7 @@ export function activate(context: vscode.ExtensionContext) {
       dispose: wireExternalChangePending(
         meditClient, outputChannel, treeProvider,
         () => { void refreshMatchingPlugins(session); },
+        askQuestion,
       ),
     },
     referencedByTreeView,

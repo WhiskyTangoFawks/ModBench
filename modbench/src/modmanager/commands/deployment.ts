@@ -7,6 +7,7 @@ import type { Reporter } from '../../reporter';
 import type { FileWinners } from '../fileConflictIndex';
 import type { GameDirectory } from '../gameDirectory';
 import { createWriteQueue } from './writeQueue';
+import type { AskQuestion } from '../../dialog';
 
 /** `wrote` is false when a precondition aborted the run, or when purge found nothing deployed —
  *  in both cases Data/ and the manifest are exactly as they were. */
@@ -19,17 +20,11 @@ const NO_GAME_DIRECTORY =
 
 const DEPLOY_DECLINED = 'Deploy declined — Modbench was not confirmed as the deployer; nothing was written.';
 
-/** The `vscode.window.showWarningMessage` slice the confirm below needs, injected so it is
- *  testable without a VS Code host — `eslFlagRemovalPrompt.ts`'s idiom. */
-export type ShowFirstDeployPrompt = (
-  message: string, options: { modal: true }, ...buttons: string[]
-) => Thenable<string | undefined> | Promise<string | undefined>;
-
 export const DEPLOY_CONFIRM_BUTTON = 'Deploy';
 
 // Keyed on the manifest's absence, so a directory that already has one never asks again.
-async function confirmFirstDeploy(showWarning: ShowFirstDeployPrompt): Promise<boolean> {
-  const choice = await showWarning(
+async function confirmFirstDeploy(ask: AskQuestion): Promise<boolean> {
+  const choice = await ask(
     'Modbench has never deployed into this game directory. Deploying now hardlinks your enabled ' +
       'mods into Data/ and makes Modbench the deployer — if MO2 or another tool also deploys here, ' +
       'the two will conflict. Continue?',
@@ -58,11 +53,11 @@ export function deployMods(
   gameDirectory: GameDirectory | undefined,
   loadOrderTarget: string | undefined,
   reporter: Reporter,
-  showWarning: ShowFirstDeployPrompt,
+  ask: AskQuestion,
 ): Promise<DeploymentCommandResult> {
   return withDeploymentLock(instanceRoot, async (): Promise<DeploymentCommandResult> => {
     if (!gameDirectory) return { applied: false, refusal: NO_GAME_DIRECTORY };
-    if (!(await isDeployed(instanceRoot)) && !(await confirmFirstDeploy(showWarning))) {
+    if (!(await isDeployed(instanceRoot)) && !(await confirmFirstDeploy(ask))) {
       return { applied: false, refusal: DEPLOY_DECLINED };
     }
     try {

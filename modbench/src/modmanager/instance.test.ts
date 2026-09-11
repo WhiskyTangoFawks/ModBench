@@ -927,7 +927,7 @@ describe('firstReadOf', () => {
   }
   const reporterSpy = () => {
     const reports: string[] = [];
-    return { reports, reporter: { report: (_severity: string, _message: string, detail?: string) => { reports.push(detail ?? ''); } } };
+    return { reports, reporter: { report: (_severity: string, _message: string, detail?: string) => { reports.push(detail ?? ''); }, landed: () => {} } };
   };
 
   it('settles at once, with the failure and one report, when the first read failed before the tree subscribed', async () => {

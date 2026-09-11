@@ -27,6 +27,7 @@ import {
   SubBlockNode, CellNode, InteriorCellsNode, InteriorLoadMoreNode, IndexingNode,
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../../errorNode';
+import { recordingReporter } from '../../test/surfacingDoubles';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -503,11 +504,8 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   // that threw spinning forever — no row, no error node, no toast (ADR-0019).
   it('settles a failed first read on one error node naming the reason, reports once, then renders rows when a value lands', async () => {
     const instance = new FakeInstance(valueOf([]), 0);
-    const reports: { severity: string; message: string; detail?: string }[] = [];
-    const { tree } = makeTree([], {
-      instance,
-      reporter: { report: (severity, message, detail) => { reports.push({ severity, message, detail }); } },
-    });
+    const reporter = recordingReporter();
+    const { tree } = makeTree([], { instance, reporter });
 
     const pending = tree.getChildren();
     instance.fail('EISDIR: illegal operation on a directory, read plugins.txt');
@@ -516,7 +514,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
     expect(rows[0].label).toBe('⚠ Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
-    expect(reports).toEqual([
+    expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EISDIR: illegal operation on a directory, read plugins.txt' },
     ]);
 
@@ -524,7 +522,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const after = await within(tree.getChildren(), 500);
 
     expect(after.map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
-    expect(reports).toHaveLength(1);
+    expect(reporter.reports).toHaveLength(1);
   });
 
   // A genuinely empty plugins.txt (sequence already past 0) is not "not read yet" — it must
@@ -637,11 +635,11 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   const node = (name: string) => new PluginNode({ name, enabled: true });
 
   async function drag(source: FakeSource, moved: string[], target: string | undefined, names: string[] = ORDER) {
-    const reports: { severity: string; message: string }[] = [];
+    const reporter = recordingReporter();
     const tree = new PluginsTreeProvider({
       instance: new FakeInstance(valueOf(fixturePlugins(names))),
       source,
-      reporter: { report: (severity, message) => reports.push({ severity, message }) },
+      reporter,
     });
     await tree.getChildren(); // populate the cached order
     let fired = false;
@@ -650,7 +648,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const dt = new FakeDataTransfer();
     tree.handleDrag(moved.map(node), dt as never, NONE);
     await tree.handleDrop(target === undefined ? undefined : node(target), dt as never, NONE);
-    return { reports, fired };
+    return { reports: reporter.reports, fired };
   }
 
   it('handleDrag serialises the whole selection, not just the grabbed row', () => {
