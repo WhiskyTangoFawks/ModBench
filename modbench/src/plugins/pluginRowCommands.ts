@@ -11,7 +11,8 @@ import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
 import { trackProgressMessage } from '../medit/trackProgress';
 import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
-import { makeReporter } from '../reporter';
+import type { Reporter } from '../reporter';
+import type { AskQuestion } from '../dialog';
 import { withPluginsViewProgress, type ExtensionSession } from '../session';
 import { say } from '../editingTeardown';
 
@@ -24,7 +25,7 @@ type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compil
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
   session: ExtensionSession, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
-  treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
+  reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
@@ -32,7 +33,7 @@ export function registerTrackCommand(
     const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
     if (!origin) {
       // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
-      makeReporter(outputChannel, 'pluginListTree.track').report('error', `Could not resolve which mod "${name}" belongs to.`);
+      reporter.report('error', `Could not resolve which mod "${name}" belongs to.`);
       return;
     }
 
@@ -50,11 +51,11 @@ export function registerTrackCommand(
       const result = await client.track(origin, choice.label as 'Edits' | 'Everything', {
         onProgress: (status) => say(session, trackProgressMessage(origin, status)),
       });
-      if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+      if (isRefused(result)) { reporter.report('error', result.message); return; }
       // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track
       // menu entry's opposite. Not the filter-match set: tracking changes no record.
       treeProvider.refresh();
-      void vscode.window.showInformationMessage(`Modbench: Tracked "${origin}".`);
+      reporter.landed(`Tracked "${origin}".`);
       await onTracked();
     });
   });
@@ -65,7 +66,7 @@ export function registerTrackCommand(
 // this same command both starts a rebase and resumes one left conflicted.
 export function registerRebaseCommand(
   client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>,
-  outputChannel: vscode.LogOutputChannel,
+  outputChannel: vscode.LogOutputChannel, reporter: Reporter,
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.rebase', async (node?: PluginListNode) => {
@@ -73,25 +74,26 @@ export function registerRebaseCommand(
     const name = node.plugin.name;
     const origin = await resolveOrigin(client, name, (msg) => outputChannel.info(msg));
     if (!origin) {
-      makeReporter(outputChannel, 'pluginListTree.rebase').report('error', `Could not resolve which mod "${name}" belongs to.`);
+      reporter.report('error', `Could not resolve which mod "${name}" belongs to.`);
       return;
     }
 
     const result = await runRebase({
       client, openMergeEditor: makeMergeEditorOpener(client, outputChannel),
-      showError: (message) => void vscode.window.showErrorMessage(message),
+      showError: (message) => reporter.report('error', message),
       refreshTree: () => treeProvider.refresh(),
       refreshMatchingPlugins,
     }, origin);
     if (!result) return; // transport failure or refusal already surfaced by runRebase
 
     if (result.outcome === 'Refused') {
-      void vscode.window.showWarningMessage(`Modbench: ${result.refusalReason ?? 'Rebase refused.'}`);
+      reporter.report('warning', result.refusalReason ?? 'Rebase refused.');
     } else if (result.outcome === 'Clean') {
-      void vscode.window.showInformationMessage(`Modbench: Rebased "${origin}" onto the updated baseline.`);
+      reporter.landed(`Rebased "${origin}" onto the updated baseline.`);
     } else {
-      void vscode.window.showWarningMessage(
-        `Modbench: Rebasing "${origin}" hit conflicts — resolve them in the opened merge editor(s), ` +
+      reporter.report(
+        'warning',
+        `Rebasing "${origin}" hit conflicts — resolve them in the opened merge editor(s), ` +
           'then run "Modbench: Rebase onto Updated Baseline" again to continue.',
       );
     }
@@ -107,6 +109,7 @@ export function registerSaveAndCompileCommand(
   // the one reader it needs — the active panel's own FormKey.
   activeRecordTracker: { current(): string | undefined },
   outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter, ask: AskQuestion,
   diagnostics: vscode.DiagnosticCollection,
   originFolder: OriginFolder,
 ): vscode.Disposable {
@@ -117,7 +120,7 @@ export function registerSaveAndCompileCommand(
       {
         resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
         getRecordOwner: (formKey) => client.getRecordOwner(formKey),
-        onError: (message) => reportCompileTargetError(outputChannel, 'saveAndCompile', message),
+        onError: (message) => reporter.report('error', message),
         pickPlugin: async () => {
           const plugins = await client.getPlugins();
           const choice = await vscode.window.showQuickPick(
@@ -126,7 +129,7 @@ export function registerSaveAndCompileCommand(
           );
           if (!choice) return undefined;
           if (!choice.description) {
-            reportCompileTargetError(outputChannel, 'saveAndCompile', `"${choice.label}" has no mod folder to compile into.`);
+            reporter.report('error', `"${choice.label}" has no mod folder to compile into.`);
             return undefined;
           }
           return { name: choice.label, origin: choice.description };
@@ -135,7 +138,7 @@ export function registerSaveAndCompileCommand(
     );
     if (!target) return;
 
-    await compileAndReport(client, diagnostics, originFolder, target, undefined);
+    await compileAndReport(client, diagnostics, originFolder, reporter, ask, target, undefined);
   });
 }
 
@@ -143,7 +146,8 @@ export function registerSaveAndCompileCommand(
 // (ADR-0007). Tree-row only: naming a ref with no plugin in hand isn't worth a QuickPick.
 export function registerCompileAtRefCommand(
   client: CompileClient,
-  outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
+  outputChannel: vscode.LogOutputChannel, reporter: Reporter, ask: AskQuestion,
+  diagnostics: vscode.DiagnosticCollection,
   originFolder: OriginFolder,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
@@ -151,12 +155,12 @@ export function registerCompileAtRefCommand(
     const target = await resolveCompileTarget(node.plugin.name, undefined, {
       resolveOrigin: (name) => resolveOrigin(client, name, (msg) => outputChannel.info(msg)),
       getRecordOwner: () => Promise.resolve(undefined),
-      onError: (message) => reportCompileTargetError(outputChannel, 'compileAtMain', message),
+      onError: (message) => reporter.report('error', message),
       pickPlugin: () => Promise.resolve(undefined),
     });
     if (!target) return;
 
-    const confirmed = await vscode.window.showWarningMessage(
+    const confirmed = await ask(
       `Compile "${target.name}" at ref "main"?`,
       {
         modal: true,
@@ -167,7 +171,7 @@ export function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    await compileAndReport(client, diagnostics, originFolder, target, 'main');
+    await compileAndReport(client, diagnostics, originFolder, reporter, ask, target, 'main');
   });
 }
 
@@ -183,36 +187,33 @@ export function registerOpenHeaderCommand(): vscode.Disposable {
   });
 }
 
-export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, command: string, message: string): void {
-  makeReporter(outputChannel, command).report('error', message);
-}
-
 /** Nothing re-reads `GET /plugins` after a compile: a compiled binary changes only bytes on
  *  disk, which the index's own mirror watch re-reads. */
 export async function compileAndReport(
   client: CompileClient, diagnostics: vscode.DiagnosticCollection, originFolder: OriginFolder,
+  reporter: Reporter, ask: AskQuestion,
   target: { name: string; origin: string }, atRef: string | undefined,
 ): Promise<void> {
   const result = await client.compile(target.name, target.origin, atRef);
   if (!result) return;
-  if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+  if (isRefused(result)) { reporter.report('error', result.message); return; }
 
   publishCompileDiagnostics(diagnostics, originFolder(target.origin), result);
 
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
     if (result.eslContradiction
-        && await promptEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', client)) {
-      await compileAndReport(client, diagnostics, originFolder, target, atRef);
+        && await promptEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', client, ask)) {
+      await compileAndReport(client, diagnostics, originFolder, reporter, ask, target, atRef);
       return;
     }
-    void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
+    reporter.report('error', `Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
     return;
   }
-  void vscode.window.showInformationMessage(
+  reporter.landed(
     result.diagnostics.length > 0
-      ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
-      : `Modbench: Compiled "${target.name}"${refSuffix}.`,
+      ? `Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
+      : `Compiled "${target.name}"${refSuffix}.`,
   );
 }
 

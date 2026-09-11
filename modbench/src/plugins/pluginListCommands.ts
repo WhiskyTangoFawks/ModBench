@@ -5,27 +5,26 @@ import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider'
 import { OVERWRITE_DIR_NAME } from '../modmanager/mo2/layout';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
 import { appendPlugin } from '../modmanager/commands/plugins';
-import { makeReporter } from '../reporter';
+import type { Reporter } from '../reporter';
 
 // The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin copy
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
 export function registerRevealInExplorerCommand(
-  pluginsTree: PluginsTreeProvider, outputChannel: vscode.LogOutputChannel,
+  pluginsTree: PluginsTreeProvider, reporter: Reporter,
 ): vscode.Disposable {
-  const revealReporter = makeReporter(outputChannel, 'pluginListTree.revealInExplorer');
   return vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
     const name = node.plugin.name;
     const filePath = await pluginsTree.resolvePluginPath(name);
     if (!filePath) {
       // ADR-0019: an explicit user action failed — notify + log, never a silent no-op.
-      revealReporter.report('error', `Could not resolve a file location for "${name}".`);
+      reporter.report('error', `Could not resolve a file location for "${name}".`);
       return;
     }
     try {
       await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(filePath));
     } catch (err) {
-      revealReporter.report('error', `Failed to reveal "${name}" in Explorer.`, err instanceof Error ? err.message : String(err));
+      reporter.report('error', `Failed to reveal "${name}" in Explorer.`, err instanceof Error ? err.message : String(err));
     }
   });
 }
@@ -60,27 +59,26 @@ function promptPluginName(): Thenable<string | undefined> {
 // never name a file that does not exist.
 async function appendCreatedPluginToLoadOrder(
   instanceRoot: string, instance: Instance, pluginsTree: PluginsTreeProvider,
-  pluginName: string, outputChannel: vscode.LogOutputChannel,
+  pluginName: string, reporter: Reporter,
 ): Promise<void> {
   const result = await appendPlugin(instanceRoot, instance.value.activeProfile, pluginName);
   pluginsTree.invalidate();
   if (!result.applied) {
-    makeReporter(outputChannel, 'newPlugin').report(
+    reporter.report(
       'error',
       `Created "${pluginName}", but could not add it to the load order — add it manually in the Plugins tree.`,
       result.refusal,
     );
     return;
   }
-  void vscode.window.showInformationMessage(`Modbench: Created "${pluginName}".`);
+  reporter.landed(`Created "${pluginName}".`);
 }
 
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin'>,
   mo2: { instance: Instance; instanceRoot: string; pluginsTree: PluginsTreeProvider } | undefined,
-  outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter,
 ): vscode.Disposable {
-  const reporter = makeReporter(outputChannel, 'newPlugin');
   return vscode.commands.registerCommand('modbench.newPlugin', async () => {
     if (!mo2) {
       reporter.report('error', 'New Plugin needs an open MO2 instance workspace.');
@@ -94,8 +92,8 @@ export function registerCreatePluginCommand(
     if (!destination) return; // user cancelled a prompt
 
     const result = await client.createPlugin(name, destination.path, destination.origin);
-    if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
+    if (isRefused(result)) { reporter.report('error', result.message); return; }
 
-    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginsTree, result.name, outputChannel);
+    await appendCreatedPluginToLoadOrder(mo2.instanceRoot, mo2.instance, mo2.pluginsTree, result.name, reporter);
   });
 }
