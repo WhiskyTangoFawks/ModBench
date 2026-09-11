@@ -21,6 +21,10 @@ internal sealed class SourceChangeApplier(
         // does not hold would keep validating itself into it.
         watcher.UnwatchAll();
 
+        // A closed Index arms nothing: this same announcement fires on Close, and a watch over a
+        // store that is gone can only log its own refusal until the next snapshot.
+        if (index.Status.State is LoadOrderState.None) return;
+
         var order = holder.Current;
         foreach (var copy in order.Copies)
         {

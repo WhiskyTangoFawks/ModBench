@@ -26,7 +26,6 @@ public sealed class SourceWatchTests : IDisposable
 
     public SourceWatchTests()
     {
-        var holder = new LoadOrderHolder();
         _mod = IndexedModFixture.Tracked(_notifications);
         _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         var sourceChanges = new SourceChangeApplier(_mod.Index, _mod.Holder, _mod.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
@@ -34,7 +33,7 @@ public sealed class SourceWatchTests : IDisposable
         _mod.Index.Reconciled = sourceChanges.RefreshWatches;
         // The watch set arrives the way it does in the composition root: the Index announces the
         // load order it now holds, and every tracked copy in it is watched.
-        _mod.Index.Reconcile(holder, _mod.GameDirectory, [_mod.Entry], GameRelease.Fallout4);
+        _mod.Index.Reconcile(_mod.Holder, _mod.GameDirectory, [_mod.Entry], GameRelease.Fallout4);
     }
 
     public void Dispose()
@@ -76,6 +75,26 @@ public sealed class SourceWatchTests : IDisposable
 
     private IReadOnlyList<RowsChangedNotification> RowsChanged() =>
         [.. _notifications.Notifications.OfType<RowsChangedNotification>()];
+
+    // Close raises the same announcement a reconcile does, and the kernel keeps its load order
+    // across it: a watch armed from that value would fire into a store that is gone.
+    [Fact]
+    public void AfterClose_TheAnnouncementArmsNoWatch()
+    {
+        var entries = new List<LogEntry>();
+        using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
+        var sourceChanges = new SourceChangeApplier(
+            _mod.Index, _mod.Holder, _mod.Index.WriteGate, watcher, _notifications, new CollectingLogger(entries));
+        watcher.SourceChanged = sourceChanges.Apply;
+
+        _mod.Index.Close();
+        sourceChanges.RefreshWatches();
+        RenameTheNpcByHand("RenamedAfterClose");
+        WaitOutTheWatcher();
+
+        // The applier logs whatever it could not project, so a watch that fired says so here.
+        Assert.Empty(entries);
+    }
 
     [Fact]
     public async Task AHandEditToASourceDocument_LandsInTheIndex_AndNamesItsKeyOnTheRecorder()

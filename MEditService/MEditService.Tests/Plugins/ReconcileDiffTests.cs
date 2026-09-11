@@ -1,3 +1,4 @@
+using DuckDB.NET.Data;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -47,6 +48,22 @@ public sealed class ReconcileDiffTests
         var reflector = SharedSchemaReflector.Instance;
         var counts = new CountingFactory(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         return (new IndexProjector(holder, MutagenPluginAdapter.Instance, counts), counts);
+    }
+
+    // What the Index registered, read from its own rows: asserting the snapshot back off the holder
+    // would say only that the test applied what it applied.
+    private static Registration RegistrationOf(IndexProjector index, string plugin, string origin)
+    {
+        var connection = DelegatingRecordIndex.DuckDbUnder(index.Store!).Connection;
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT load_order_idx, enabled, winning FROM registrations WHERE plugin = ? AND origin = ?";
+        cmd.Parameters.Add(new DuckDBParameter(plugin));
+        cmd.Parameters.Add(new DuckDBParameter(origin));
+        using var reader = cmd.ExecuteReader();
+        Assert.True(reader.Read(), $"no registration row for {plugin} ({origin})");
+        return new Registration(
+            reader.IsDBNull(0) ? null : reader.GetInt32(0), reader.GetBoolean(1), reader.GetBoolean(2));
     }
 
     // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack every winner assertion
@@ -129,10 +146,10 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
         Assert.Equal(indexed, counts.Indexed);
-        var b = holder.Current.Copies.Single(c => c.Name == "B.esp");
-        Assert.False(b.Registration.Participates);
-        Assert.True(b.Registration.InLoadOrder);
-        Assert.False(b.IsImmutable);
+        var b = RegistrationOf(index, "B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
+        Assert.False(b.Enabled);
+        Assert.False(b.Participates);
+        Assert.True(b.InLoadOrder);
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
@@ -159,11 +176,12 @@ public sealed class ReconcileDiffTests
 
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var copies = holder.Current.Copies.Where(c => c.Name == "Shared.esp").ToDictionary(c => c.Origin);
-        Assert.True(copies["ModA"].Registration.Participates);
-        Assert.False(copies["ModB"].Registration.Participates);
-        Assert.True(copies["ModB"].IsImmutable);
-        Assert.Equal(copies["ModA"].Slot, copies["ModB"].Slot);
+        var modA = RegistrationOf(index, "Shared.esp", "ModA");
+        var modB = RegistrationOf(index, "Shared.esp", "ModB");
+        Assert.True(modA.Participates);
+        Assert.False(modB.Participates);
+        Assert.False(modB.InLoadOrder);
+        Assert.Equal(modA.LoadOrderIndex, modB.LoadOrderIndex);
 
         var stack = index.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
         Assert.Equal(2, stack.Count);
@@ -178,7 +196,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
         stack = index.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
         Assert.True(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
-        Assert.False(holder.Current.Copies.Single(c => c.Origin == "ModA").Registration.InLoadOrder);
+        Assert.False(RegistrationOf(index, "Shared.esp", "ModA").InLoadOrder);
     }
 
     // Uninstall: a copy absent from the snapshot is unregistered, its rows kept for its return.

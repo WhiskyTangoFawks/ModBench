@@ -107,7 +107,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     public IRecordReads? Reads { get { lock (_lock) return _index?.At(RecordRef.Effective); } }
     /// <summary>The store the projections land in. Internal: ADR-0046 invariant 10 makes the Index
-    /// one module, and the rows behind this are its own. Null with no load order held.</summary>
+    /// one module, and the rows behind this are its own. Null until a reconcile opens one.</summary>
     internal IRecordIndex? Store { get { lock (_lock) return _index; } }
 
     /// <summary>Whether the store registers this copy — an endpoint's 404 question, answered without
@@ -148,8 +148,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: with no load order held the
-    /// Index has opened no store to read.</summary>
+    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
+    /// the Index has opened no store to read.</summary>
     public IRecordReads RequireReads() => RequireScopeCore().Index.At(RecordRef.Effective);
 
     // The concrete HeldPlugins and write-capable IRecordIndex the projection methods need, wider
@@ -869,9 +869,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0046's Refresh: closes what is held, drops the instance's index file and
-    /// reopens it empty, flooring the new file's sequence at what this process has already handed
-    /// out. The next reconcile fills it.</summary>
+    /// <summary>ADR-0046's Refresh: closes the scope, drops the instance's index file and reopens
+    /// it empty, flooring the new file's sequence at what this process has already handed out. The
+    /// next reconcile fills it.</summary>
     public void RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
@@ -879,8 +879,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         using var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence);
     }
 
-    /// <summary>Drops everything held: the load order and the store's connection. Cancels an
-    /// in-flight reconcile and waits for it to stop first.</summary>
+    /// <summary>Drops the scope: the copies it has open and the store's connection. Cancels an
+    /// in-flight reconcile and waits for it to stop first. The kernel's load order is its own and
+    /// is untouched.</summary>
     public void Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything —
@@ -896,7 +897,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     public void Dispose()
     {
-        // Guarded because Dispose owns a semaphore as well as the load order: a second call would
+        // Guarded because Dispose owns a semaphore as well as the scope: a second call would
         // otherwise wait on a disposed gate. Double disposal is a supported call pattern here.
         lock (_lock)
         {

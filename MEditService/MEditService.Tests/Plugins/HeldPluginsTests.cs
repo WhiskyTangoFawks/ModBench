@@ -16,10 +16,10 @@ public sealed class HeldPluginsTests
 
     private static HeldPlugins Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILogger? logger = null)
     {
-        var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4, logger);
+        var held = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4, logger);
         foreach (var plugin in ForcedPlugins.Prepend(data.DataFolder, GameRelease.Fallout4, entries ?? data.Plugins))
-            loadOrder.Open(plugin);
-        return loadOrder;
+            held.Open(plugin);
+        return held;
     }
 
     // ── Open ────────────────────────────────────────────────────────────────────
@@ -32,14 +32,14 @@ public sealed class HeldPluginsTests
             .WithPlugin(UserPlugin)
             .Build();
 
-        using var loadOrder = Open(data);
+        using var held = Open(data);
 
-        var fo4 = loadOrder.Plugins.Single(p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-        var user = loadOrder.Plugins.Single(p => p.Name == UserPlugin);
+        var fo4 = held.Plugins.Single(p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
+        var user = held.Plugins.Single(p => p.Name == UserPlugin);
         Assert.True(fo4.IsForced);
         Assert.False(user.IsForced);
         Assert.True(fo4.LoadOrderIndex < user.LoadOrderIndex);
-        Assert.Equal(GameRelease.Fallout4, loadOrder.GameRelease);
+        Assert.Equal(GameRelease.Fallout4, held.GameRelease);
     }
 
     [Fact]
@@ -52,11 +52,11 @@ public sealed class HeldPluginsTests
             "NonExistent.esp", Path.Combine(data.DataFolder, "NonExistent.esp"),
             PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
 
-        using var loadOrder = Open(data, entries);
+        using var held = Open(data, entries);
 
-        Assert.Contains(loadOrder.Plugins, p => p.Name == "Present.esp");
-        Assert.DoesNotContain(loadOrder.Plugins, p => p.Name == "NonExistent.esp");
-        Assert.Contains(loadOrder.Failures, f => f.Name == "NonExistent.esp");
+        Assert.Contains(held.Plugins, p => p.Name == "Present.esp");
+        Assert.DoesNotContain(held.Plugins, p => p.Name == "NonExistent.esp");
+        Assert.Contains(held.Failures, f => f.Name == "NonExistent.esp");
     }
 
     [Fact]
@@ -70,11 +70,11 @@ public sealed class HeldPluginsTests
         var entries = data.Plugins.Append(new LoadOrderEntry(
             "Bad.esp", badPath, PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
 
-        using var loadOrder = Open(data, entries);
+        using var held = Open(data, entries);
 
-        Assert.Contains(loadOrder.Plugins, p => p.Name == "Good.esp");
-        Assert.DoesNotContain(loadOrder.Plugins, p => p.Name == "Bad.esp");
-        var failure = Assert.Single(loadOrder.Failures);
+        Assert.Contains(held.Plugins, p => p.Name == "Good.esp");
+        Assert.DoesNotContain(held.Plugins, p => p.Name == "Bad.esp");
+        var failure = Assert.Single(held.Failures);
         Assert.Equal("Bad.esp", failure.Name);
     }
 
@@ -88,13 +88,13 @@ public sealed class HeldPluginsTests
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
         File.WriteAllBytes(loser.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
-        using var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, fx.GameDirectory, null, GameRelease.Fallout4);
+        using var held = new HeldPlugins(MutagenPluginAdapter.Instance, fx.GameDirectory, null, GameRelease.Fallout4);
 
         foreach (var plugin in ForcedPlugins.Prepend(fx.GameDirectory, GameRelease.Fallout4, [winner, loser]))
-            loadOrder.Open(plugin);
+            held.Open(plugin);
 
-        Assert.Equal("ModA", Assert.Single(loadOrder.Plugins).Origin);
-        var failure = Assert.Single(loadOrder.Failures);
+        Assert.Equal("ModA", Assert.Single(held.Plugins).Origin);
+        var failure = Assert.Single(held.Failures);
         Assert.Equal("Shared.esp", failure.Name);
         Assert.Equal("ModB", failure.Origin);
     }
@@ -105,16 +105,16 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-recover")
             .WithPlugin("Fixed.esp")
             .Build();
-        var loadOrder = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4);
-        using var _ = loadOrder;
+        var held = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4);
+        using var _ = held;
         var resolved = ForcedPlugins.Prepend(data.DataFolder, GameRelease.Fallout4, data.Plugins).Single();
         var missing = resolved with { Path = Path.Combine(data.DataFolder, "Elsewhere.esp") };
 
-        Assert.Null(loadOrder.Open(missing));
-        Assert.Single(loadOrder.Failures);
+        Assert.Null(held.Open(missing));
+        Assert.Single(held.Failures);
 
-        Assert.NotNull(loadOrder.Open(resolved));
-        Assert.Empty(loadOrder.Failures);
+        Assert.NotNull(held.Open(resolved));
+        Assert.Empty(held.Failures);
     }
 
     [Theory]
@@ -124,9 +124,9 @@ public sealed class HeldPluginsTests
     public void Open_ExtensionFlags(string name, bool isLight, bool isMaster)
     {
         using var data = new PluginFixtureBuilder("lo-ext").WithPlugin(name).Build();
-        using var loadOrder = Open(data);
+        using var held = Open(data);
 
-        var plugin = loadOrder.Plugins.Single(p => p.Name == name);
+        var plugin = held.Plugins.Single(p => p.Name == name);
         Assert.Equal(isLight, plugin.IsLight);
         Assert.Equal(isMaster, plugin.IsMaster);
     }
@@ -140,10 +140,10 @@ public sealed class HeldPluginsTests
             .WithPlugin("EslFlagged.esp", mod => mod.IsSmallMaster = true)
             .WithPlugin("EsmFlagged.esp", mod => mod.IsMaster = true)
             .Build();
-        using var loadOrder = Open(data);
+        using var held = Open(data);
 
-        Assert.True(loadOrder.Plugins.Single(p => p.Name == "EslFlagged.esp").IsLight);
-        Assert.True(loadOrder.Plugins.Single(p => p.Name == "EsmFlagged.esp").IsMaster);
+        Assert.True(held.Plugins.Single(p => p.Name == "EslFlagged.esp").IsLight);
+        Assert.True(held.Plugins.Single(p => p.Name == "EsmFlagged.esp").IsMaster);
     }
 
     [Fact]
@@ -157,21 +157,21 @@ public sealed class HeldPluginsTests
                 mod.Npcs.AddNew("Npc3");
             })
             .Build();
-        using var loadOrder = Open(data);
+        using var held = Open(data);
 
-        Assert.Equal(3, loadOrder.Plugins.Single(p => p.Name == "WithRecords.esp").RecordCount);
+        Assert.Equal(3, held.Plugins.Single(p => p.Name == "WithRecords.esp").RecordCount);
     }
 
     [Fact]
     public void GetMod_IsCaseInsensitive_AndNullForAnUnknownCopy()
     {
         using var data = new PluginFixtureBuilder("lo-getmod").WithPlugin("CaseMod.esp").Build();
-        using var loadOrder = Open(data);
+        using var held = Open(data);
 
-        Assert.NotNull(loadOrder.GetMod("CASEMOD.ESP", PluginOrigin.DataDirectory));
-        Assert.NotNull(loadOrder.GetMod("casemod.esp", PluginOrigin.DataDirectory));
-        Assert.Null(loadOrder.GetMod("Unknown.esp", PluginOrigin.DataDirectory));
-        Assert.Null(loadOrder.GetMod("CaseMod.esp", "SomeOtherOrigin"));
+        Assert.NotNull(held.GetMod("CASEMOD.ESP", PluginOrigin.DataDirectory));
+        Assert.NotNull(held.GetMod("casemod.esp", PluginOrigin.DataDirectory));
+        Assert.Null(held.GetMod("Unknown.esp", PluginOrigin.DataDirectory));
+        Assert.Null(held.GetMod("CaseMod.esp", "SomeOtherOrigin"));
     }
 
     // ── Mutation in place ───────────────────────────────────────────────────────
@@ -180,17 +180,17 @@ public sealed class HeldPluginsTests
     public void Update_MovesTheRegistration_AndTheDerivedFactsFollow()
     {
         using var data = new PluginFixtureBuilder("lo-update").WithPlugin("A.esp").Build();
-        using var loadOrder = Open(data);
-        var held = loadOrder.Plugins.Single();
-        Assert.True(held.Participates);
+        using var held = Open(data);
+        var copy = held.Plugins.Single();
+        Assert.True(copy.Participates);
 
-        var updated = loadOrder.Update(held, Registration.Disabled(0));
+        var updated = held.Update(copy, Registration.Disabled(0));
 
         Assert.False(updated.Participates);
         Assert.True(updated.InLoadOrder);
-        Assert.False(loadOrder.Plugins.Single().Participates);
+        Assert.False(held.Plugins.Single().Participates);
 
-        var losing = loadOrder.Update(updated, Registration.Losing(0));
+        var losing = held.Update(updated, Registration.Losing(0));
         Assert.False(losing.InLoadOrder);
     }
 
@@ -198,23 +198,23 @@ public sealed class HeldPluginsTests
     public void Remove_DropsTheCopy_AndItsOverlay()
     {
         using var data = new PluginFixtureBuilder("lo-remove").WithPlugin("A.esp").WithPlugin("B.esp").Build();
-        using var loadOrder = Open(data);
+        using var held = Open(data);
 
-        Assert.True(loadOrder.Remove(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.True(held.Remove(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
 
-        Assert.Equal(["B.esp"], loadOrder.Plugins.Select(p => p.Name));
-        Assert.Null(loadOrder.GetMod("A.esp", PluginOrigin.DataDirectory));
-        Assert.False(loadOrder.Remove(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.Equal(["B.esp"], held.Plugins.Select(p => p.Name));
+        Assert.Null(held.GetMod("A.esp", PluginOrigin.DataDirectory));
+        Assert.False(held.Remove(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
     [Fact]
     public void Dispose_CalledTwice_DoesNotThrow()
     {
         using var data = new PluginFixtureBuilder("lo-dispose").WithPlugin("DisposeTest.esp").Build();
-        var loadOrder = Open(data);
-        loadOrder.Dispose();
+        var held = Open(data);
+        held.Dispose();
 
-        Assert.Null(Record.Exception(() => loadOrder.Dispose()));
+        Assert.Null(Record.Exception(() => held.Dispose()));
     }
 
     [Fact]
@@ -223,7 +223,7 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-logger").WithPlugin("LogTest.esp").Build();
         var logger = new CapturingLogger();
 
-        using var loadOrder = Open(data, logger: logger);
+        using var held = Open(data, logger: logger);
 
         Assert.True(logger.WasCalled);
     }

@@ -181,15 +181,19 @@ public sealed class ArchitectureTests
             .Where(f => CallsHolder(File.ReadAllText(f), verb))
             .Select(f => Path.GetRelativePath(root, f))];
 
+    // A declaration, or an assignment from anything naming the type — construction, a DI resolve,
+    // a property. The name is all that is wanted; over-capturing costs a receiver nobody calls the
+    // verb on, while under-capturing loses the write.
     private static readonly Regex HolderReceiver = new(
-        @"LoadOrderHolder\??\s+(\w+)|(\w+)\s*=\s*new LoadOrderHolder\b", RegexOptions.Compiled);
+        @"LoadOrderHolder\??\s+(\w+)|(\w+)\s*=(?!>)[^;]*\bLoadOrderHolder\b", RegexOptions.Compiled);
 
     private static bool CallsHolder(string text, string verb) =>
         HolderReceiver.Matches(text)
             .SelectMany(m => new[] { m.Groups[1].Value, m.Groups[2].Value })
             .Where(name => name.Length > 0)
             .Distinct(StringComparer.Ordinal)
-            .Any(name => text.Contains($"{name}.{verb}(", StringComparison.Ordinal));
+            // Bounded, or a receiver named `holder` answers for `placeholder.Apply(`.
+            .Any(name => Regex.IsMatch(text, $@"\b{Regex.Escape(name)}\.{verb}\("));
 
     private static IEnumerable<string> Unallowed(List<string> named, string[] allowed) =>
         named.Where(f => !allowed.Contains(Path.GetFileName(f)));
@@ -237,7 +241,8 @@ public sealed class ArchitectureTests
     public void TheIndexSurface_HandsOutNoLoadOrder()
     {
         var offenders = new[] { typeof(IndexProjector), typeof(IQueryIndex), typeof(IRecordReads) }
-            .SelectMany(type => type.GetMembers().Select(member => (Type: type, Member: member)))
+            .SelectMany(type => type.GetMembers(EveryMember).Select(member => (Type: type, Member: member)))
+            .Where(m => VisibleOutsideItsType(m.Member))
             .Where(m => m.Member.Name == "LoadOrder" || ReturnsALoadOrder(m.Member))
             .Select(m => $"{m.Type.Name}.{m.Member.Name}")
             .Order(StringComparer.Ordinal)
@@ -246,6 +251,20 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0,
             "The Index hands out a load order:\n" + string.Join("\n", offenders));
     }
+
+    private const BindingFlags EveryMember =
+        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
+    // Internal counts, private does not: the projector reads the kernel through a private field,
+    // and the rule is about what it hands out.
+    private static bool VisibleOutsideItsType(MemberInfo member) => member switch
+    {
+        PropertyInfo property =>
+            property.GetMethod?.IsPrivate == false || property.SetMethod?.IsPrivate == false,
+        FieldInfo field => !field.IsPrivate,
+        MethodBase method => !method.IsPrivate,
+        _ => true,
+    };
 
     private static bool ReturnsALoadOrder(MemberInfo member) =>
         IsALoadOrder(member switch
