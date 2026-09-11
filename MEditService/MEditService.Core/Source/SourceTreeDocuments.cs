@@ -3,7 +3,6 @@ using System.Text;
 using System.Text.Json;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -18,7 +17,6 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
     private readonly string _pluginFileName;
     private readonly GameRelease _release;
     private readonly ContainerDocuments _containers;
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
     private readonly string _root;
     private readonly string _headerRelativePath;
 
@@ -194,11 +192,18 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             children = [.. _containers.ChildrenOf(ownerRecordType, document.RootElement)];
 
         var containerType = _containers.ContainerTypeOf(ownerRecordType);
+        var ownerBytes = Encoding.UTF8.GetBytes(ownerText);
         foreach (var child in children)
         {
             if (!ContainerMembers.Derived.EmbeddedSlots.Contains((containerType, child.SlotName))) continue;
 
-            var text = _containers.TextOf(_codec, child);
+            // ADR-0003: the tree is the system of record for a record's content, so a hand edit the
+            // codec would respell reaches the index as the file spells it.
+            var text = EmbeddedChildSplice.TextOf(ownerBytes, containerType, child.FormKey, _release)
+                ?? throw new UnreadableSourceDocumentException(
+                    "A child an embedded slot names has its own span in its owner's text. " +
+                    $"'{ownerFormKey}' names '{child.FormKey}' in its '{child.SlotName}', and no " +
+                    "span of that document carries it.");
             // The one embedded cell: a worldspace's top cell, outside every exterior block grid.
             var cell = _containers.IsCell(child.RecordType)
                 ? new CellStructure(ownerFormKey, null, null, null, null, IsInterior: false)
