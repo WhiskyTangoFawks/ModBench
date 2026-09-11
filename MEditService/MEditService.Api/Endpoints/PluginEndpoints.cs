@@ -191,8 +191,6 @@ public static class PluginEndpoints
             return Results.Problem(ex.Message, statusCode: 503);
         }
 
-        // After the registration and before the Track inside this gesture, for the same reason the
-        // Track route does it: the destination's tree comes back through the watch.
         watcher.WatchSourceOf(req.Origin);
 
         try
@@ -209,8 +207,8 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refused);
             }
 
-            // ADR-0015 invariants 1 and 2: the write is done. The Index has never held this copy, so
-            // it learns of it from the next snapshot, as it does for any newly installed plugin.
+            // A destination folder this gesture made itself was not on disk to be watched above.
+            watcher.WatchSourceOf(req.Origin);
             return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot));
         }
         catch (ArgumentException ex)

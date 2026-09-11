@@ -790,6 +790,40 @@ public sealed class ModFolderWatcherTests
         }
     }
 
+    // A mod folder the gesture registering it is about to create has nothing to watch yet, so that
+    // tree's own burst is lost; the rival this pins is registering once and never again.
+    [Fact]
+    public void RegisteringAModFolderNotOnDiskYet_ArmsNothing_UntilItIsRegisteredAgain()
+    {
+        var modFolder = Path.Combine(Path.GetTempPath(), $"medit-modwatch-{Guid.NewGuid():N}");
+        try
+        {
+            var holder = new LoadOrderHolder();
+            holder.Apply(new LoadOrder(modFolder, modFolder, GameRelease.Fallout4,
+                [new RegisteredCopy("Tracked.esp", "TrackedMod", Path.Combine(modFolder, "Tracked.esp"),
+                    Slot: 0, Enabled: true, Winning: true)]));
+            var index = new RecordingRefreshIndex();
+            using var watcher = TestWatcher.Over(
+                holder, index, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(200), TimeSpan.FromSeconds(30));
+            watcher.WatchSourceOf("TrackedMod");
+
+            Directory.CreateDirectory(modFolder);
+            TrackTree(modFolder, "Tracked.esp");
+            Thread.Sleep(600);
+            Assert.Empty(index.Projections);
+
+            watcher.WatchSourceOf("TrackedMod");
+            Write(SourceRepository.RootIn(modFolder, "Tracked.esp"));
+
+            WaitUntil(() => index.Of("validate").Count > 0, TimeSpan.FromSeconds(5));
+            Assert.Equal(["Tracked.esp"], ValidatedIn(index, 1));
+        }
+        finally
+        {
+            if (Directory.Exists(modFolder)) Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
     private static LoadOrderHolder HoldingUntracked(string modFolder, string plugin, string origin)
     {
         var pluginPath = Path.Combine(modFolder, plugin);

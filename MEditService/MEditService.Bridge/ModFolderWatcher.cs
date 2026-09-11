@@ -68,7 +68,7 @@ public sealed class ModFolderWatcher : IDisposable
             var key = plugin.Key;
             // Before anything under it is registered: a registration then upgrades a watch that is
             // already running, which is what lets Track's own tree land under one.
-            if (ModFolders.Of(plugin.Origin, plugin.Path) is { } folder) WatchModFolder(folder);
+            if (ModFolders.Of(plugin.Origin, plugin.Path) is { } folder) WatchTopLevelOf(folder);
 
             if (ModFolders.TrackedOf(order, key) is not { } modFolder)
             {
@@ -152,9 +152,9 @@ public sealed class ModFolderWatcher : IDisposable
             Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
     }
 
-    // Top level only: the folder is watched before it is known to hold anything worth recursing
-    // into, and every registration upgrades rather than replaces.
-    private void WatchModFolder(string modFolder)
+    // No subtree: the folder is watched before it is known to hold anything worth recursing into,
+    // and every registration upgrades rather than replaces.
+    private void WatchTopLevelOf(string modFolder)
     {
         lock (_gate) ModEntryFor(modFolder, recursive: false);
     }
