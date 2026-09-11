@@ -1,0 +1,3 @@
+# Every path, file or directory operation named in Commands or Edits, as file, operation and
+# count. Ask the Source repository for the path or the Plugin adapter for the bytes instead: this
+# list is empty and stays empty.

@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Core.Notifications;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;

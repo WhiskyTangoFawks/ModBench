@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using MEditService.Core.Edits;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
@@ -45,7 +44,7 @@ public sealed class KeepExternalChangeHandler
             .ToList();
         if (colliding.Count > 0 || stagedAlready.Count > 0)
         {
-            return ExternalChangeLandResult.Refused(CollisionMessage(modFolder, colliding, stagedAlready));
+            return ExternalChangeLandResult.Refused(CollisionMessage(plugins, colliding, stagedAlready));
         }
 
         var landed = new List<string>();
@@ -65,7 +64,7 @@ public sealed class KeepExternalChangeHandler
 
             // The working tree now corresponds to this binary — atRef: null snapshots it as it stands,
             // as Save & Compile parks.
-            var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(plugin.Path)));
+            var binarySha256 = PluginBinaryHash.TrailerFormOfFile(plugin.Path);
             SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef: null, binarySha256);
         }
 
@@ -77,7 +76,10 @@ public sealed class KeepExternalChangeHandler
         return ExternalChangeLandResult.Success(landed);
     }
 
-    private static string CollisionMessage(string modFolder, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
+    // The mod's own name travels on RegisteredCopy.Origin already (ADR-0009): every copy in
+    // plugins shares it, so nothing here re-derives a name from the folder path.
+    private static string CollisionMessage(
+        IReadOnlyList<RegisteredCopy> plugins, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
     {
         var parts = new List<string>();
         if (colliding.Count > 0)
@@ -85,7 +87,7 @@ public sealed class KeepExternalChangeHandler
         if (stagedAlready.Count > 0)
             parts.Add($"tracked file(s) already dirty in the index — {string.Join(", ", stagedAlready.Select(c => c.RelativePath))}");
 
-        return $"{Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar))} has uncommitted working-tree changes on " +
+        return $"{plugins[0].Origin} has uncommitted working-tree changes on " +
             $"{string.Join(" and ", parts)}. Commit or revert them, then answer the external-change question again.";
     }
 

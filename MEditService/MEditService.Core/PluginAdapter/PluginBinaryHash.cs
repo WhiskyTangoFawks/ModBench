@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace MEditService.Core.Source;
+namespace MEditService.Core.PluginAdapter;
 
 /// <summary>The content hash of a plugin binary (ADR-0009: validity by content, never by clock).
 /// Sits in the one namespace both the index and the runtime watches may reference, so their two
@@ -27,5 +27,18 @@ public static class PluginBinaryHash
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream));
+    }
+
+    /// <summary>Every byte of the file, for a caller that hashes several plugins as one classification
+    /// pass rather than one at a time. Null on the same no-evidence terms as <see cref="OfFile"/>.
+    /// </summary>
+    public static byte[]? BytesOfFile(string path)
+    {
+        try
+        {
+            return File.ReadAllBytes(path);
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
     }
 }

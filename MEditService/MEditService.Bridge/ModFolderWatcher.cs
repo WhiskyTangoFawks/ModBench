@@ -1,4 +1,5 @@
 using System.Timers;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Source;
 using Timer = System.Timers.Timer;
 

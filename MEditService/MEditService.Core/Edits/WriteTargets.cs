@@ -166,14 +166,8 @@ internal sealed class WriteTargets(
         foreach (var copy in loadOrder.Current.Copies)
         {
             if (!string.Equals(ModFolders.Of(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal)) continue;
-            try
-            {
-                plugins.Add((copy.Name, File.ReadAllBytes(copy.Path)));
-            }
-            catch (IOException)
-            {
-                return null;
-            }
+            if (PluginBinaryHash.BytesOfFile(copy.Path) is not { } bytes) return null;
+            plugins.Add((copy.Name, bytes));
         }
         return plugins;
     }
