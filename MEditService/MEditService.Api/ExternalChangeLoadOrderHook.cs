@@ -11,14 +11,11 @@ namespace MEditService.Api;
 internal static class ExternalChangeLoadOrderHook
 {
     internal static IReadOnlyList<CrashRepairOffer> RunAfterReconcile(
-        IndexProjector index, ModFolderWatcher watcher, ILogger logger)
+        IndexProjector index, LoadOrder order, ModFolderWatcher watcher, ILogger logger)
     {
         // A watch must never outlive the load order that asked for it, or a plugin the
         // load order does not hold would keep re-indexing itself into it.
         watcher.UnwatchAllIndexed();
-        if (index.LoadOrder is not { } loadOrder) return [];
-
-        var order = LoadOrder.From(loadOrder);
         var offers = new List<CrashRepairOffer>();
         // Grouped by mod folder: the classifier runs once per mod (ADR-0041 amendment), covering
         // every tracked plugin the mod holds in one pass, exactly as the live watcher's settle does.
@@ -26,9 +23,9 @@ internal static class ExternalChangeLoadOrderHook
         // A mod with a plugin nobody could hash has no whole verdict, so nothing of its is cleared.
         var unreadable = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var plugin in loadOrder.Plugins)
+        foreach (var plugin in order.Copies)
         {
-            var key = new PluginKey(plugin.Name, plugin.Origin);
+            var key = plugin.Key;
             if (ModFolders.TrackedOf(order, key) is not { } modFolder)
             {
                 // ADR-0001: every other indexed binary, the game's Data/ masters included, gets an

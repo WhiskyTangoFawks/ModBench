@@ -17,6 +17,7 @@ public sealed class ValidateAtLoadTests
     [Fact]
     public void AHandEditMadeWhileStopped_IsInTheLoadOrdersAnswer_WithoutReIndexingTheWholePlugin()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.TrackedPersistent();
         var formKey = mod.Npc.ToString();
         var text = File.ReadAllText(mod.NpcSourceFile);
@@ -31,11 +32,12 @@ public sealed class ValidateAtLoadTests
         });
         var reflector = SharedSchemaReflector.Instance;
         using var restarted = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)),
             loggerFactory.CreateLogger<IndexProjector>());
 
-        restarted.Reconcile(
+        restarted.Reconcile(holder,
             mod.GameDirectory, [mod.Entry], GameRelease.Fallout4, mod.InstanceRoot);
 
         Assert.Equal(

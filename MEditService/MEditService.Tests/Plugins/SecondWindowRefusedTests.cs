@@ -11,10 +11,10 @@ namespace MEditService.Tests.Plugins;
 // window, so a second window is refused plainly, with no read-only mode and no second file.
 public sealed class SecondWindowRefusedTests
 {
-    private static IndexProjector MakeIndex()
+    private static IndexProjector MakeIndex(LoadOrderHolder holder)
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        return new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
     }
 
     // One story, because the three assertions are one lifecycle: refused while the first
@@ -22,20 +22,21 @@ public sealed class SecondWindowRefusedTests
     [ForeignIndexHolderFact]
     public void ASecondWindowOnTheSameInstance_IsRefusedByName_StaysNone_AndLoadsOnceTheFirstCloses()
     {
+        var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("second-window")
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .Build();
         // The file exists with real rows before the other window takes it, so the final load is warm.
-        using (var earlier = MakeIndex()) earlier.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var earlier = MakeIndex(holder)) earlier.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         var indexPath = IndexFile.For(data.InstanceRoot);
         var indexDir = Path.GetDirectoryName(indexPath)!;
 
         using var otherWindow = ForeignIndexHolder.Hold(indexPath);
         var filesWhileHeld = Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList();
 
-        using var index = MakeIndex();
+        using var index = MakeIndex(holder);
         var ex = Assert.Throws<IndexHeldElsewhereException>(() =>
-            index.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot));
+            index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot));
 
         // Refused by name, and nothing held.
         Assert.Contains("another Modbench window", ex.Message, StringComparison.Ordinal);
@@ -47,7 +48,7 @@ public sealed class SecondWindowRefusedTests
 
         // The other window closing admits this one — warm, over the rows the file already had.
         otherWindow.Dispose();
-        index.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.NotEmpty(index.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }

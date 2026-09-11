@@ -52,6 +52,7 @@ public sealed class SourceEditFixture : IDisposable
 
     private SourceEditFixture(bool track, string pluginName, bool isLight)
     {
+        var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
         Plugin = new PluginKey(pluginName, ModFolderOrigin);
         InstanceRoot = Directory.CreateTempSubdirectory("medit-source-edit-").FullName;
@@ -81,7 +82,6 @@ public sealed class SourceEditFixture : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);

@@ -22,11 +22,13 @@ public sealed class IndexedContainerFixture : IDisposable
 
     public IndexedContainerFixture(INotificationPublisher? notifications = null)
     {
+        var holder = new LoadOrderHolder();
         Index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(
                 SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
-        Holder = Index.Reconcile(_source.GameDirectory, _source.Entries, GameRelease.Fallout4);
+        Holder = Index.Reconcile(holder, _source.GameDirectory, _source.Entries, GameRelease.Fallout4);
         _source.Track();
     }
 

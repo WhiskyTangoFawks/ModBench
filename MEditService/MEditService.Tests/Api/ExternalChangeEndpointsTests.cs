@@ -54,7 +54,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.AbsorbExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
-            _mod.Index, TestEditService.AbsorbHandler(), watcher, loggerFactory);
+            _mod.Holder, TestEditService.AbsorbHandler(), watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.True(ok.Value!.Succeeded);
@@ -68,7 +68,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.AbsorbExternalChange(new ExternalChangeActionRequest("NoSuchOrigin"),
-            _mod.Index, TestEditService.AbsorbHandler(), new ModFolderWatcher(), loggerFactory);
+            _mod.Holder, TestEditService.AbsorbHandler(), new ModFolderWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);
@@ -88,7 +88,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.AbsorbExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
-            _mod.Index, TestEditService.AbsorbHandler(), watcher, loggerFactory);
+            _mod.Holder, TestEditService.AbsorbHandler(), watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.False(ok.Value!.Succeeded);
@@ -99,7 +99,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     [Fact]
     public void KeepExternalChange_RefusalTravelsAsA200_NamingTheCollidingRecord()
     {
-        var editService = MEditService.Tests.TestSupport.TestEditService.EditHandler(_mod.Index);
+        var editService = MEditService.Tests.TestSupport.TestEditService.EditHandler(_mod.Holder);
         editService.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax",
             System.Text.Json.JsonDocument.Parse("0.5").RootElement);
         WriteExternalBinaryChange(0.9f);
@@ -107,7 +107,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.KeepExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
-            _mod.Index, TestEditService.KeepHandler(), new ModFolderWatcher(), loggerFactory);
+            _mod.Holder, TestEditService.KeepHandler(), new ModFolderWatcher(), loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.False(ok.Value!.Succeeded);
@@ -121,7 +121,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.Rebase(
-            new RebaseRequest("NoSuchOrigin"), TestEditService.RebaseHandler(_mod.Index), loggerFactory);
+            new RebaseRequest("NoSuchOrigin"), TestEditService.RebaseHandler(_mod.Holder), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(404, problem.StatusCode);
@@ -134,7 +134,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.ContinueRebase(
-            new RebaseRequest("NoSuchOrigin"), TestEditService.ContinueRebaseHandler(_mod.Index), loggerFactory);
+            new RebaseRequest("NoSuchOrigin"), TestEditService.ContinueRebaseHandler(_mod.Holder), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(404, problem.StatusCode);
@@ -147,7 +147,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         using var _disposeLogger = loggerFactory;
 
         var result = PluginEndpoints.Rebase(
-            new RebaseRequest(IndexedModFixture.ModFolderOrigin), TestEditService.RebaseHandler(_mod.Index),
+            new RebaseRequest(IndexedModFixture.ModFolderOrigin), TestEditService.RebaseHandler(_mod.Holder),
             loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<RebaseResponse>>(result);

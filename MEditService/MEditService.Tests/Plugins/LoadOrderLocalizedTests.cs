@@ -18,6 +18,7 @@ public sealed class LoadOrderLocalizedTests
     [Fact]
     public void Load_ALocalizedPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()
     {
+        var holder = new LoadOrderHolder();
         FormKey doorFormKey = default;
         var data = new PluginFixtureBuilder("load-order-localized")
             .WithPlugin("Fixture.esp", mod =>
@@ -36,8 +37,8 @@ public sealed class LoadOrderLocalizedTests
             File.WriteAllBytes(Path.Combine(data.DataFolder, "UnrelatedMod - Main.ba2"), []);
 
             var reflector = SharedSchemaReflector.Instance;
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             // Asserted directly, not just implied by GetDocument coming back null below: a
             // silently-skipped plugin is the precise shape the defect takes here.

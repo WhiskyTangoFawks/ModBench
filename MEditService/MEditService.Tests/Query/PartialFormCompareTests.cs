@@ -41,6 +41,7 @@ public sealed class PartialFormCompareTests : IDisposable
 
     public PartialFormCompareTests()
     {
+        var holder = new LoadOrderHolder();
         FormKey refKey = default;
 
         _fixture = new PluginFixtureBuilder("partial-form-compare")
@@ -74,8 +75,8 @@ public sealed class PartialFormCompareTests : IDisposable
         RefKey = refKey;
 
         var reflector = SharedSchemaReflector.Instance;
-        _manager = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        var holder = _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 

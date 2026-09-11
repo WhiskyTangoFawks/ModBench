@@ -15,7 +15,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private ProjectingEditService Service() => ProjectingEditService.Over(_mod.Index);
+    private ProjectingEditService Service() => ProjectingEditService.Over(_mod.Index, _mod.Holder);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

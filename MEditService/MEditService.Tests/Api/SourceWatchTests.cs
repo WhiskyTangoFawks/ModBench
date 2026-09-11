@@ -26,14 +26,15 @@ public sealed class SourceWatchTests : IDisposable
 
     public SourceWatchTests()
     {
+        var holder = new LoadOrderHolder();
         _mod = IndexedModFixture.Tracked(_notifications);
         _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceChanges = new SourceChangeApplier(_mod.Index, _mod.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
+        var sourceChanges = new SourceChangeApplier(_mod.Index, _mod.Holder, _mod.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
-        _mod.Index.LoadOrderChanged = sourceChanges.RefreshWatches;
+        _mod.Index.Reconciled = sourceChanges.RefreshWatches;
         // The watch set arrives the way it does in the composition root: the Index announces the
         // load order it now holds, and every tracked copy in it is watched.
-        _mod.Index.Reconcile(_mod.GameDirectory, [_mod.Entry], GameRelease.Fallout4);
+        _mod.Index.Reconcile(holder, _mod.GameDirectory, [_mod.Entry], GameRelease.Fallout4);
     }
 
     public void Dispose()
@@ -126,7 +127,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task AWriteThroughTheWriteApi_LandsThroughTheWatcher_AndChangesNoRowASecondTime()
     {
-        var service = TestEditService.EditHandler(_mod.Index);
+        var service = TestEditService.EditHandler(_mod.Holder);
         var before = _mod.Index.Sequence;
 
         var edit = service.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
@@ -178,7 +179,7 @@ public sealed class SourceWatchTests : IDisposable
     [Fact]
     public async Task DiscardingAWorkingTreeChangeThroughGit_RestoresTheCommittedValue()
     {
-        var service = TestEditService.EditHandler(_mod.Index);
+        var service = TestEditService.EditHandler(_mod.Holder);
         var before = _mod.Index.Sequence;
         Assert.True(service.Set(
             _mod.Plugin, _mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement).Applied);

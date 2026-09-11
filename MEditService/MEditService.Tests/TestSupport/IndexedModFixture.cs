@@ -44,6 +44,7 @@ public sealed class IndexedModFixture : IDisposable
         INotificationPublisher? notifications = null, SourcePreset preset = SourcePreset.Edits,
         Action<string>? beforeTrack = null)
     {
+        var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
         Plugin = new PluginKey(pluginName, ModFolderOrigin);
         InstanceRoot = Directory.CreateTempSubdirectory("medit-edit-instance-").FullName;
@@ -62,10 +63,11 @@ public sealed class IndexedModFixture : IDisposable
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
         Index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(
                 SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
-        Holder = Index.Reconcile(
+        Holder = Index.Reconcile(holder,
             GameDirectory,
             [Entry],
             GameRelease.Fallout4,
@@ -75,7 +77,7 @@ public sealed class IndexedModFixture : IDisposable
         {
             beforeTrack?.Invoke(ModFolder);
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Index, ModFolderOrigin, preset)
+                .TrackAsync(Index, Holder, ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }
     }

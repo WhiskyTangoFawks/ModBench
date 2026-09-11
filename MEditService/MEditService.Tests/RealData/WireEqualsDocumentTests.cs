@@ -25,9 +25,10 @@ public sealed class CutDownPluginCompareFixture : IDisposable
 
     public CutDownPluginCompareFixture()
     {
+        var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
-        Index = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        var holder = Index.Reconcile(
+        Index = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        Index.Reconcile(holder,
             _gameDirectory,
             [new LoadOrderEntry(
                 CutDownPluginFixture.PluginFileName, CutDownPluginFixture.PluginPath, Origin,

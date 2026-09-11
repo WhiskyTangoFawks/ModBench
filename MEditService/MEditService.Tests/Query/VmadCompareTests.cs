@@ -26,6 +26,7 @@ public sealed class VmadCompareTests : IDisposable
 
     public VmadCompareTests()
     {
+        var holder = new LoadOrderHolder();
         _fixture = new PluginFixtureBuilder("compare-vmad")
             .WithPlugin("Base.esm", mod =>
             {
@@ -58,8 +59,8 @@ public sealed class VmadCompareTests : IDisposable
             .Build();
 
         var reflector = SharedSchemaReflector.Instance;
-        _manager = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        var holder = _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 

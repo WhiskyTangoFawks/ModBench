@@ -23,10 +23,11 @@ public sealed class RecordQueryServiceTests : IDisposable
 
     public RecordQueryServiceTests(TestPluginFixture fixture)
     {
+        var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-        var holder = _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        _manager.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 
@@ -51,6 +52,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
     {
+        var holder = new LoadOrderHolder();
         // ADR-0038: masters are lifecycle-derived from the live object graph, never
         // user-declared — a bare ModHeader.MasterReferences.Add is discarded on write. A genuine
         // reference into the (never-built) master is what makes Mutagen record it for real.
@@ -59,9 +61,10 @@ public sealed class RecordQueryServiceTests : IDisposable
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
         using var manager = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        var holder = manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var plugins = svc.GetPlugins();
@@ -78,6 +81,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
     {
+        var holder = new LoadOrderHolder();
         FormKey npcFormKey = default;
         using var fx = new PluginFixtureBuilder("rqs-absent-master-ref")
             .WithPlugin("Patch.esp", mod =>
@@ -88,9 +92,10 @@ public sealed class RecordQueryServiceTests : IDisposable
             })
             .Build();
         using var manager = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        var holder = manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var detail = svc.GetRecord(npcFormKey.ToString());
@@ -291,6 +296,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_FormKeyInEnabledAndDisabledPlugin_ReturnsOnlyOne_NotConflict()
     {
+        var holder = new LoadOrderHolder();
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("rqs-participation")
             .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNPC").FormKey)
@@ -301,8 +307,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-            var holder = manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
@@ -351,6 +357,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_RecordIdenticalExceptVmad_ClassifiesAsConflict()
     {
+        var holder = new LoadOrderHolder();
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("rqs-vmad-conflict")
             .WithPlugin("Base.esp", mod => npcKey = MakeScriptedNpc(mod, 10))
@@ -363,8 +370,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-            var holder = manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
@@ -629,10 +636,11 @@ public sealed class RecordQueryServiceTests : IDisposable
 
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
+        var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-        var holder = manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
         test(new RecordQueryService(manager, holder, reflector, new ConflictClassifier()));
     }
 
@@ -746,6 +754,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetRecords_AllTypes_ReturnsSortedByEditorId()
     {
+        var holder = new LoadOrderHolder();
         var data = new PluginFixtureBuilder("rqs-sort-records")
             .WithPlugin("SortTest.esp", mod =>
             {
@@ -757,8 +766,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-            var holder = manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
@@ -776,6 +785,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetRecord_PluginHeaderFormKey_ReturnsAuthorFlagsMasters()
     {
+        var holder = new LoadOrderHolder();
         var data = new PluginFixtureBuilder("rqs-header-record")
             .WithPlugin("HeaderQuery.esp", mod =>
             {
@@ -795,8 +805,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-            var holder = manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
 
             var detail = svc.GetRecord("000000:HeaderQuery.esp");
@@ -816,6 +826,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_PluginHeaderFormKey_ReturnsSingleOverride()
     {
+        var holder = new LoadOrderHolder();
         var data = new PluginFixtureBuilder("rqs-header-compare")
             .WithPlugin("CompareA.esp")
             .WithPlugin("CompareB.esp")
@@ -824,8 +835,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-            var holder = manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, holder, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare("000000:CompareA.esp");
@@ -838,9 +849,10 @@ public sealed class RecordQueryServiceTests : IDisposable
 
     private static RecordQueryService MakeUnloadedService()
     {
+        var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
+        var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
         return new RecordQueryService(manager, new LoadOrderHolder(), reflector, new ConflictClassifier());
     }
 

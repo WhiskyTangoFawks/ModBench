@@ -53,14 +53,14 @@ public sealed class AbsorbRebaseTests : IDisposable
         using var _dispose = loggerFactory;
         var result = PluginEndpoints.AbsorbExternalChange(
             new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
-            _mod.Index, TestEditService.AbsorbHandler(), watcher, loggerFactory);
+            _mod.Holder, TestEditService.AbsorbHandler(), watcher, loggerFactory);
         return Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
     }
 
     [Fact]
     public void CleanEditBranch_IsRebasedOntoTheNewBaseline()
     {
-        TestEditService.EditHandler(_mod.Index).Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        TestEditService.EditHandler(_mod.Holder).Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         CommitOnEditBranch("my own edit");
         WriteExternalRelease();
 
@@ -79,7 +79,7 @@ public sealed class AbsorbRebaseTests : IDisposable
     [Fact]
     public void UncommittedDirt_CommitsTheBaselineButRefusesTheRebase_LeavingTheBranchUntouched()
     {
-        TestEditService.EditHandler(_mod.Index).Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        TestEditService.EditHandler(_mod.Holder).Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         // Never committed — plain working-tree dirt.
         var headBefore = RunGit("rev-parse", "HEAD").Trim();
         var mainBefore = RunGit("rev-parse", "refs/heads/main").Trim();
@@ -98,7 +98,7 @@ public sealed class AbsorbRebaseTests : IDisposable
     [Fact]
     public void ConflictingEdit_ReturnsConflictedWithThePaths_LeavingAbsorbSucceeded()
     {
-        TestEditService.EditHandler(_mod.Index).Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
+        TestEditService.EditHandler(_mod.Holder).Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.3"));
         CommitOnEditBranch("my own edit");
         WriteExternalRelease(npcHeightMax: 0.7f);
 

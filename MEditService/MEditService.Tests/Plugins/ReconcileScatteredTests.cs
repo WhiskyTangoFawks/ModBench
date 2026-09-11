@@ -15,26 +15,26 @@ namespace MEditService.Tests.Plugins;
 
 public sealed class ReconcileScatteredTests
 {
-    private static IndexProjector MakeManager()
+    private static IndexProjector MakeManager(LoadOrderHolder holder)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(MutagenPluginAdapter.Instance, factory);
+        return new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
     }
 
     [Fact]
     public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()
     {
+        var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit")
             .WithPlugin("Fallout4.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        using var manager = MakeManager();
-        manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.NotNull(manager.LoadOrder);
         Assert.NotNull(manager.Reads);
         Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("A.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
@@ -45,6 +45,7 @@ public sealed class ReconcileScatteredTests
     [Fact]
     public void Reconcile_CrossPluginOverride_WinnerIsHighestOrderPlugin()
     {
+        var holder = new LoadOrderHolder();
         FormKey shared = default;
         using var fx = new PluginFixtureBuilder("sm-explicit-winner")
             .WithPlugin("Base.esm", mod => shared = mod.Npcs.AddNew("SharedNPC").FormKey)
@@ -55,8 +56,8 @@ public sealed class ReconcileScatteredTests
             })
             .BuildScattered();
 
-        using var manager = MakeManager();
-        manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         var winner = manager.Reads!.GetDocument(shared.ToString());
         Assert.NotNull(winner);
@@ -67,15 +68,16 @@ public sealed class ReconcileScatteredTests
     [Fact]
     public void Reconcile_SameInstance_ReconcilesInPlace()
     {
+        var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-replace")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .BuildScattered();
 
-        using var manager = MakeManager();
-        manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var firstRepo = manager.Reads;
 
-        manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Same(firstRepo, manager.Reads);
         Assert.NotEmpty(firstRepo!.GetRecordTypeCounts(new PluginKey("A.esp", "Data")));
@@ -85,6 +87,7 @@ public sealed class ReconcileScatteredTests
     [Fact]
     public void Reconcile_OnePluginFailsToIndex_OthersStillLoadAndFailureIsReported()
     {
+        var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-index-failure")
             .WithPlugin("Fallout4.esm")
             .WithPlugin("Good.esp", mod => mod.Npcs.AddNew("FromGood"))
@@ -94,11 +97,10 @@ public sealed class ReconcileScatteredTests
         var reflector = SharedSchemaReflector.Instance;
         var innerFactory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var factory = new ThrowingOnIndexRepositoryFactory(innerFactory, "Bad.esp");
-        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
+        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
 
-        manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.NotNull(manager.LoadOrder);
         Assert.Contains(manager.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);

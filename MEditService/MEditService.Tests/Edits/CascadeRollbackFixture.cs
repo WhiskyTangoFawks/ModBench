@@ -66,6 +66,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
     private CascadeRollbackFixture(bool watched)
     {
+        var holder = new LoadOrderHolder();
         FormKey race = default;
         FormKey home = default;
         FormKey first = default;
@@ -107,23 +108,23 @@ public sealed class CascadeRollbackFixture : IDisposable
                 .GetAwaiter().GetResult();
         }
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);
 
         if (!watched) return;
 
         Index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        Index.Reconcile(_data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
+        Index.Reconcile(holder, _data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
 
         // Short, because a test waits on the projection rather than on the clock; the composition
         // root's own window is 300 ms.
         _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceChanges = new SourceChangeApplier(Index, Index.WriteGate, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
+        var sourceChanges = new SourceChangeApplier(Index, holder, Index.WriteGate, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
-        Index.LoadOrderChanged = sourceChanges.RefreshWatches;
+        Index.Reconciled = sourceChanges.RefreshWatches;
         sourceChanges.RefreshWatches();
     }
 

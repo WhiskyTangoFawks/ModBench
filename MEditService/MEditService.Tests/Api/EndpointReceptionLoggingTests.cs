@@ -33,6 +33,7 @@ public sealed class EndpointReceptionLoggingTests
     [Fact]
     public void PutLoadOrder_ValidRequest_LogsReceivedWithGameDirectory()
     {
+        var holder = new LoadOrderHolder();
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var tempDir = Directory.CreateTempSubdirectory("medit-215-").FullName;
@@ -40,7 +41,7 @@ public sealed class EndpointReceptionLoggingTests
         {
             var req = new LoadOrderRequest([], tempDir, tempDir, "Fallout4");
 
-            using var index = new IndexProjector(MutagenPluginAdapter.Instance, new RefusingIndexFactory());
+            using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, new RefusingIndexFactory());
             LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ModFolderWatcher(), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
@@ -54,12 +55,13 @@ public sealed class EndpointReceptionLoggingTests
     [Fact]
     public void PutLoadOrder_GameDirectoryMissing_StillLogsReceived()
     {
+        var holder = new LoadOrderHolder();
         // The reception line fires on every call, including ones that go on to fail — this
         // request fails validation (400) before the Index is asked to project anything.
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var factory = new RefusingIndexFactory();
-        using var index = new IndexProjector(MutagenPluginAdapter.Instance, factory);
+        using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
         var req = new LoadOrderRequest([], "Z:\\does-not-exist", "Z:\\does-not-exist", "Fallout4");
 
         var result = LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), new ModFolderWatcher(), loggerFactory);

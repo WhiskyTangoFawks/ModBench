@@ -570,6 +570,7 @@ public sealed class VmadEditTests : IDisposable
 
         public VmadFixture()
         {
+            var holder = new LoadOrderHolder();
             var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
@@ -632,7 +633,6 @@ public sealed class VmadEditTests : IDisposable
                 .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
 
-            var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
             EditHandler = TestEditService.EditHandler(holder);
         }

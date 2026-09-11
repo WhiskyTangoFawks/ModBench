@@ -9,10 +9,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.PluginAdapter;
 
-/// <summary>The plugin copies Editing holds (ADR-0044). Mutated in place by reconcile — a copy
-/// arrives, leaves, or has its registration moved — and never torn down as a whole for a change in
-/// what it holds.</summary>
-public sealed class HeldPlugins : ILoadOrder
+/// <summary>The copies the Index has open (ADR-0044): the projector's own cache of what it read
+/// out of each file, keyed by identity. Not a load order — which copy wins and who participates is
+/// the kernel's value, never answered from here. Mutated in place by reconcile as a copy arrives,
+/// leaves or has its registration moved.</summary>
+internal sealed class HeldPlugins : IDisposable
 {
     // ADR-0036: keyed by the compound (origin, filename) identity — two copies of one filename are
     // ordinarily held at once, and a filename-keyed dictionary would silently drop one. Joined into
@@ -26,7 +27,7 @@ public sealed class HeldPlugins : ILoadOrder
     private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
     private static string KeyOf(PluginKey key) => KeyOf(key.Origin!, key.Name);
 
-    // The load order is read while it is being reconciled, so readers see an immutable snapshot.
+    // What is open is read while it is being reconciled, so readers see an immutable snapshot.
     // Copy-on-write, not copy-on-read: opens are a few hundred per cold reconcile, while reads walk
     // these lists on every request.
     private readonly Lock _mutation = new();
@@ -36,8 +37,15 @@ public sealed class HeldPlugins : ILoadOrder
     private PluginLoadFailure[] _loadFailuresSnapshot = [];
 
     public string DataFolderPath { get; }
+
+    /// <summary>ADR-0001: the MO2 instance root the index file is keyed on, because <c>origin</c>
+    /// is a mod folder name and so is unique only within one instance. Null asks for an in-memory
+    /// index.</summary>
     public string? InstanceRoot { get; }
+
     public GameRelease GameRelease { get; }
+
+    /// <summary>The metadata of every copy currently open, in the order they were opened.</summary>
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
 
     /// <summary>What reading each open copy told the Index, for the reads to hand out.</summary>

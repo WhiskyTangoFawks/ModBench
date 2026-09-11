@@ -263,7 +263,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var before = CompileRoundTripGateFixture.ReadSourceTree(scope.ModFolder);
         Assert.Contains(expectedPath, before.Keys);
 
-        var edit = ProjectingEditService.Over(scope.Index)
+        var edit = ProjectingEditService.Over(scope.Index, scope.Holder)
             .Set(scope.Plugin, npc.FormKey, "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
@@ -299,7 +299,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
 
         using var scope = new MutationScope(fixture);
 
-        var edit = ProjectingEditService.Over(scope.Index)
+        var edit = ProjectingEditService.Over(scope.Index, scope.Holder)
             .Set(scope.Plugin, responseToRename.FormKey.ToString(), "EditorID",
                 JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
@@ -323,6 +323,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     // another fact.
     private sealed class MutationScope : IDisposable
     {
+        internal LoadOrderHolder Holder { get; } = new();
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;
         public IndexProjector Index { get; }
         public PluginKey Plugin { get; }
@@ -333,16 +334,17 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             Plugin = fixture.Plugin;
 
             Index = new IndexProjector(
+                Holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            Index.Reconcile(
+            Index.Reconcile(Holder,
                 fixture.GameDirectory,
                 [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
         }
 
         public PluginCompileService CompileService() =>
-            CompileServices.Over(Index);
+            CompileServices.Over(Holder.Current);
 
         public void Dispose()
         {

@@ -18,20 +18,22 @@ public sealed class IndexAfterARenumberTests
     // renumbered file's leaf name is nameable before the write.
     private const string NewRaceFormKey = "000F00:Target.esp";
 
-    private static IndexProjector MirrorOver(string gameDirectory, IReadOnlyList<LoadOrderEntry> entries)
+    private static IndexProjector MirrorOver(LoadOrderHolder holder, string gameDirectory, IReadOnlyList<LoadOrderEntry> entries)
     {
         var index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        index.Reconcile(gameDirectory, entries, GameRelease.Fallout4);
+        index.Reconcile(holder, gameDirectory, entries, GameRelease.Fallout4);
         return index;
     }
 
     [Fact]
     public void ARenumberedRecord_IsGoneAtEffective_StillAtHead_AndItsNewKeyIsAbsentAtHead()
     {
+        var holder = new LoadOrderHolder();
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
-        using var index = MirrorOver(two.GameDirectory, two.Entries);
+        using var index = MirrorOver(holder, two.GameDirectory, two.Entries);
         var oldFormKey = two.TargetRace.ToString();
 
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, oldFormKey);
@@ -48,8 +50,9 @@ public sealed class IndexAfterARenumberTests
     [Fact]
     public void ARenumberedRecord_AppearsUnderItsNewFormKeyInAnActiveFilteredListing()
     {
+        var holder = new LoadOrderHolder();
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
-        using var index = MirrorOver(two.GameDirectory, two.Entries);
+        using var index = MirrorOver(holder, two.GameDirectory, two.Entries);
         index.SetFilter($"SELECT form_key FROM race WHERE editor_id = '{RenumberTwoModFixture.TargetRaceEditorId}'");
         var query = new RecordQuery(RecordTypes: ["race"], Limit: 10, Offset: 0);
         Assert.Equal(1, index.SettledReads().Search(query).Total);
@@ -65,8 +68,9 @@ public sealed class IndexAfterARenumberTests
     [Fact]
     public void ARenumberedReferencersRewrittenLink_ShowsInTheReferenceGraphUnderTheNewFormKey()
     {
+        var holder = new LoadOrderHolder();
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
-        using var index = MirrorOver(two.GameDirectory, two.Entries);
+        using var index = MirrorOver(holder, two.GameDirectory, two.Entries);
 
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
         Assert.True(result.Applied, result.Message);
@@ -79,8 +83,9 @@ public sealed class IndexAfterARenumberTests
     [Fact]
     public void ANeverCommittedRecordsRenumber_DropsItsOldFormKeyAtTheQueryLayer()
     {
+        var holder = new LoadOrderHolder();
         using var mod = SourceEditFixture.Tracked();
-        using var index = MirrorOver(mod.GameDirectory, mod.Entries);
+        using var index = MirrorOver(holder, mod.GameDirectory, mod.Entries);
         const string oldFormKey = "800000:Fixture.esp";
         var seeded = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
         Assert.True(seeded.Applied, seeded.Message);
@@ -101,8 +106,9 @@ public sealed class IndexAfterARenumberTests
     [Fact]
     public void AfterARolledBackRenumber_AFilterOverTheReferenceGraphStillMatchesNothing()
     {
+        var holder = new LoadOrderHolder();
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
-        using var index = MirrorOver(two.GameDirectory, two.Entries);
+        using var index = MirrorOver(holder, two.GameDirectory, two.Entries);
         const string requestedTarget = "900000:Base.esm";
 
         // Matches nothing yet: form_references still points every source at TargetRace's *old*
@@ -144,8 +150,9 @@ public sealed class IndexAfterARenumberTests
     [Fact]
     public void AfterARolledBackCascade_TheReferenceGraphStillNamesTheOldFormKey()
     {
+        var holder = new LoadOrderHolder();
         using var fixture = new CascadeRollbackFixture();
-        using var index = MirrorOver(fixture.GameDirectory, fixture.Entries);
+        using var index = MirrorOver(holder, fixture.GameDirectory, fixture.Entries);
         var race = fixture.Race.ToString();
 
         // The renumbered record's own destination, which no document occupies yet: blocking a
@@ -166,8 +173,9 @@ public sealed class IndexAfterARenumberTests
     [Fact]
     public void AfterARolledBackContainerRenumber_TheIndexAnswersTheOldIdentityAndNothingAtTheNewOne()
     {
+        var holder = new LoadOrderHolder();
         using var fixture = new SourceContainerFixture();
-        using var index = MirrorOver(fixture.GameDirectory, fixture.Entries);
+        using var index = MirrorOver(holder, fixture.GameDirectory, fixture.Entries);
         var worldspace = fixture.Worldspace.ToString();
         const string newWorldspaceFormKey = "000F00:SourceContainer.esp";
 

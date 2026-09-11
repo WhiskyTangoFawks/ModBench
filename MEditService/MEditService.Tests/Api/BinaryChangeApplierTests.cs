@@ -32,7 +32,7 @@ public sealed class BinaryChangeApplierTests
         var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         var index = new BinaryChangeApplier(fixture.Index, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
         watcher.IndexedBinaryChanged = index.Apply;
-        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
+        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, fixture.Holder.Current, watcher, NullLogger.Instance);
         return watcher;
     }
 
@@ -105,7 +105,7 @@ public sealed class BinaryChangeApplierTests
         var reindexed = new List<IndexedBinaryEvent>();
         using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
         watcher.IndexedBinaryChanged = e => { lock (reindexed) reindexed.Add(e); return true; };
-        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, watcher, NullLogger.Instance);
+        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, fixture.Holder.Current, watcher, NullLogger.Instance);
 
         RewriteBinaryWithExtraNpc(fixture, "ChangedByXEdit");
 
@@ -122,11 +122,12 @@ public sealed class BinaryChangeApplierTests
     [Fact]
     public void RunAfterReconcile_WatchesNothing_WhenThereIsNoLoadOrder()
     {
+        var holder = new LoadOrderHolder();
         using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
 
-        using var noLoadOrder = new IndexProjector(MutagenPluginAdapter.Instance, SharedSchemaReflector.Instance);
+        using var noLoadOrder = new IndexProjector(holder, MutagenPluginAdapter.Instance, SharedSchemaReflector.Instance);
 
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(noLoadOrder, watcher, NullLogger.Instance);
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(noLoadOrder, holder.Current, watcher, NullLogger.Instance);
 
         Assert.Empty(offers);
         Assert.Empty(watcher.Unanswered());

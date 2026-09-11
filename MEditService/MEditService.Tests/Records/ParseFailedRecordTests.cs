@@ -220,6 +220,7 @@ public sealed class ParseFailedRecordTests
     // not their content.
     private sealed class Scratch : IDisposable
     {
+        internal LoadOrderHolder Holder { get; } = new();
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-parsefail-game-").FullName;
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 
@@ -257,10 +258,11 @@ public sealed class ParseFailedRecordTests
             if (corruptWholeFile) File.WriteAllBytes(pluginPath, [0x54, 0x45, 0x53, 0x34, 0xFF]);
 
             Index = new IndexProjector(
+                Holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            var holder = Index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
-            Query = new RecordQueryService(Index, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
+            Index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
+            Query = new RecordQueryService(Index, Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
         }
 
         public void Dispose()

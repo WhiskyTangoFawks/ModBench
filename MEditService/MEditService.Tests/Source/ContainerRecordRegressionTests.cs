@@ -28,7 +28,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_fixture.Index);
+        ProjectingEditService.Over(_fixture.Index, _fixture.Holder);
 
     private IRecordQueryService Reads() =>
         new RecordQueryService(_fixture.Index, _fixture.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
@@ -186,7 +186,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var beforeMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
         TestEditService.AbsorbHandler().Absorb(
-            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), LoadOrder.From(_fixture.Index.LoadOrder!));
+            _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), _fixture.Holder.Current);
 
         var afterMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);

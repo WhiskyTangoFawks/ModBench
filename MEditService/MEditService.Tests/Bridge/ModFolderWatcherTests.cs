@@ -258,9 +258,9 @@ public sealed class ModFolderWatcherTests
             using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
             watcher.Watch(mod.ModFolder, IndexedModFixture.PluginName, pluginPath);
 
-            var editService = ProjectingEditService.Over(mod.Index);
+            var editService = ProjectingEditService.Over(mod.Index, mod.Holder);
             editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
-            var compileService = CompileServices.Over(mod.Index);
+            var compileService = CompileServices.Over(mod.Holder.Current);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 

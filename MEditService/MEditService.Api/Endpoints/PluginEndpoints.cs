@@ -207,10 +207,10 @@ public static class PluginEndpoints
         }
     }
 
-    // Which registered copies Editing actually holds. A copy the Index could not open is
-    // registered like any other but has no bytes to read.
+    // Which registered copies Editing actually holds: the copies the Index has open. A copy it
+    // could not open is registered like any other but has no bytes to read.
     private static IReadOnlyCollection<PluginKey> HeldCopies(IndexProjector index) =>
-        [.. (index.LoadOrder?.Plugins ?? []).Select(p => p.Key)];
+        [.. index.RequireReads().OpenedCopies.Keys];
 
     // ADR-0041: the Track gesture. Origin names the mod folder (every loaded plugin sharing
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
@@ -226,9 +226,8 @@ public static class PluginEndpoints
 
         try
         {
-            // RequireReads for the refusal only: which copies this origin registers is the load
-            // order's answer, read from the shared kernel rather than from the Index.
-            index.RequireReads();
+            // Which copies this origin registers is the load order's answer, read from the shared
+            // kernel; which of them opened is the Index's, and only that reaches HeldCopies.
             var result = await trackHandler.TrackAsync(holder.Current, HeldCopies(index), req.Origin, preset);
             if (result.Applied)
                 return Results.Ok(new TrackResponse(req.Origin));
@@ -323,14 +322,14 @@ public static class PluginEndpoints
     // Absorb, origin-scoped: every plugin the mod holds is re-parsed together, so
     // the baseline it commits covers the whole mod in one go.
     internal static IResult AbsorbExternalChange(
-        ExternalChangeActionRequest req, IndexProjector index, AbsorbExternalChangeHandler handler,
+        ExternalChangeActionRequest req, LoadOrderHolder holder, AbsorbExternalChangeHandler handler,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(index, req.Origin, logger);
+        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(holder, req.Origin, logger);
         if (modFolder is null)
             return Results.Problem($"'{req.Origin}' is not a tracked mod in the load order.", statusCode: 503);
 
@@ -352,14 +351,14 @@ public static class PluginEndpoints
     // Keep, origin-scoped. A collision (a record or an already-staged tracked file) is a
     // typed refusal, not an exception — it travels through as a 200, same posture as Compile's own.
     internal static IResult KeepExternalChange(
-        ExternalChangeActionRequest req, IndexProjector index, KeepExternalChangeHandler handler,
+        ExternalChangeActionRequest req, LoadOrderHolder holder, KeepExternalChangeHandler handler,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(index, req.Origin, logger);
+        var (plugins, loadOrder, modFolder) = ResolveTrackedMod(holder, req.Origin, logger);
         if (modFolder is null)
             return Results.Problem($"'{req.Origin}' is not a tracked mod in the load order.", statusCode: 503);
 
@@ -380,9 +379,9 @@ public static class PluginEndpoints
     // Every plugin the origin's mod folder holds; null ModFolder means untracked or unknown, the
     // caller's single refusal path for both.
     private static (IReadOnlyList<RegisteredCopy> Plugins, LoadOrder LoadOrder, string? ModFolder) ResolveTrackedMod(
-        IndexProjector index, string origin, ILogger logger)
+        LoadOrderHolder holder, string origin, ILogger logger)
     {
-        var loadOrder = index.LoadOrder is { } held ? LoadOrder.From(held) : LoadOrder.Empty;
+        var loadOrder = holder.Current;
         var plugins = ModFolders.PluginsOfOrigin(loadOrder, origin);
         if (plugins.Count == 0)
         {

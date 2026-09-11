@@ -28,6 +28,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
 
     public TwoPluginModDeferralTests()
     {
+        var holder = new LoadOrderHolder();
         _instanceRoot = Directory.CreateTempSubdirectory("medit-twoplugin-").FullName;
         _modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
         var gameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
@@ -53,7 +54,6 @@ public sealed class TwoPluginModDeferralTests : IDisposable
             .TrackAsync(loadOrder, [new PluginKey(PluginA, Origin), new PluginKey(PluginB, Origin)], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
-        var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
         _editHandler = TestEditService.EditHandler(holder);
         _compileHandler = TestEditService.CompileHandler(holder);

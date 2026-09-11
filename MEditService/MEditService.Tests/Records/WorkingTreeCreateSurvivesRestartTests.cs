@@ -18,15 +18,17 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     [Fact]
     public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterARestart()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
-        var created = ProjectingEditService.Over(mod.Index)
+        var created = ProjectingEditService.Over(mod.Index, mod.Holder)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
         Assert.True(created.Applied, created.Message);
 
         using var reloaded = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(holder,
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -44,14 +46,16 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     [Fact]
     public void ARecordCreated_IsWinner_AfterARestart()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
-        var created = ProjectingEditService.Over(mod.Index)
+        var created = ProjectingEditService.Over(mod.Index, mod.Holder)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
 
         using var reloaded = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(holder,
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);

@@ -25,19 +25,21 @@ public sealed class DialogueOrderDamageTests : IDisposable
 
     public DialogueOrderDamageTests()
     {
+        var holder = new LoadOrderHolder();
         var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
         _index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        _index.Reconcile(
+        _index.Reconcile(holder,
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_index, _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_index, holder, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

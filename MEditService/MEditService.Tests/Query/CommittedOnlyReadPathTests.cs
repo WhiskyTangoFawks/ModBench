@@ -20,10 +20,11 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
 
     public CommittedOnlyReadPathTests(TestPluginFixture fixture)
     {
+        var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-        var holder = _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        _manager.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 
@@ -52,7 +53,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
     [Fact]
     public void GetCompare_OverrideCarriesTheCommittedFieldValue()
     {
-        var formKey = _manager.LoadOrder!.Plugins.Count > 0
+        var formKey = _manager.Reads!.OpenedCopies.Count > 0
             ? _svc.GetRecords("npc_", TestPluginFixture.PluginName, "TestNPC01", 1, 0).Items[0].FormKey
             : throw new InvalidOperationException("fixture did not load");
 
@@ -79,10 +80,11 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
 
     public CommittedOnlyReferencesTests()
     {
+        var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-        var holder = _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        _manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 

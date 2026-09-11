@@ -25,7 +25,7 @@ public sealed class HeldPluginsTests
     // ── Open ────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Open_ForcedMaster_IsImmutable_AndSnapshotPlugin_IsNot()
+    public void Open_ForcedMaster_IsForced_AndLoadsBeforeTheSnapshotPlugin()
     {
         using var data = new PluginFixtureBuilder("lo-open")
             .WithPlugin("Fallout4.esm", listed: false)
@@ -36,8 +36,8 @@ public sealed class HeldPluginsTests
 
         var fo4 = loadOrder.Plugins.Single(p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
         var user = loadOrder.Plugins.Single(p => p.Name == UserPlugin);
-        Assert.True(fo4.IsImmutable);
-        Assert.False(user.IsImmutable);
+        Assert.True(fo4.IsForced);
+        Assert.False(user.IsForced);
         Assert.True(fo4.LoadOrderIndex < user.LoadOrderIndex);
         Assert.Equal(GameRelease.Fallout4, loadOrder.GameRelease);
     }
@@ -188,12 +188,10 @@ public sealed class HeldPluginsTests
 
         Assert.False(updated.Participates);
         Assert.True(updated.InLoadOrder);
-        Assert.False(updated.IsImmutable);
         Assert.False(loadOrder.Plugins.Single().Participates);
 
         var losing = loadOrder.Update(updated, Registration.Losing(0));
         Assert.False(losing.InLoadOrder);
-        Assert.True(losing.IsImmutable);
     }
 
     [Fact]

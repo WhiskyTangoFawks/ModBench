@@ -14,12 +14,17 @@ namespace MEditService.Tests.Records;
 public sealed class IndexAfterACopyTests : IDisposable
 {
     private readonly ContainerCopyFixture _fixture = ContainerCopyFixture.Create();
-    private readonly IndexProjector _index = new(
-        MutagenPluginAdapter.Instance,
-        new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+    private readonly LoadOrderHolder _holder = new();
+    private readonly IndexProjector _index;
 
-    public IndexAfterACopyTests() =>
-        _index.Reconcile(_fixture.GameDirectory, _fixture.Entries, GameRelease.Fallout4);
+    public IndexAfterACopyTests()
+    {
+        _index = new IndexProjector(
+            _holder,
+            MutagenPluginAdapter.Instance,
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Entries, GameRelease.Fallout4);
+    }
 
     public void Dispose()
     {
@@ -27,7 +32,7 @@ public sealed class IndexAfterACopyTests : IDisposable
         _fixture.Dispose();
     }
 
-    private ProjectingEditService Service() => ProjectingEditService.Over(_index);
+    private ProjectingEditService Service() => ProjectingEditService.Over(_index, _holder);
 
     // A brand-new row must be evaluated against an active filter's one-shot snapshot, or the copy
     // lands and the listing never shows it.

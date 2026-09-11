@@ -37,24 +37,17 @@ internal static class TestEditService
     internal static EditRecordHandler EditHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<EditRecordHandler>();
 
-    internal static EditRecordHandler EditHandler(IndexProjector index) => EditHandler(HolderOver(index));
-
     internal static DeleteRecordHandler DeleteHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<DeleteRecordHandler>();
 
     internal static CreateRecordHandler CreateHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CreateRecordHandler>();
 
-    internal static CreateRecordHandler CreateHandler(IndexProjector index) => CreateHandler(HolderOver(index));
-
     internal static CopyRecordAsOverrideHandler CopyAsOverrideHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CopyRecordAsOverrideHandler>();
 
     internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CopyRecordAsNewRecordHandler>();
-
-    internal static CopyRecordAsNewRecordHandler CopyAsNewHandler(IndexProjector index) =>
-        CopyAsNewHandler(HolderOver(index));
 
     internal static CompilePluginHandler CompileHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CompilePluginHandler>();
@@ -68,13 +61,8 @@ internal static class TestEditService
     internal static RebaseEditBranchHandler RebaseHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<RebaseEditBranchHandler>();
 
-    internal static RebaseEditBranchHandler RebaseHandler(IndexProjector index) => RebaseHandler(HolderOver(index));
-
     internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<ContinueRebaseEditBranchHandler>();
-
-    internal static ContinueRebaseEditBranchHandler ContinueRebaseHandler(IndexProjector index) =>
-        ContinueRebaseHandler(HolderOver(index));
 
     internal static CreatePluginHandler PluginCreateHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<CreatePluginHandler>();
@@ -84,22 +72,4 @@ internal static class TestEditService
 
     internal static RenumberRecordHandler RenumberHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<RenumberRecordHandler>();
-
-    /// <summary>The same handler for a test holding the Index: its held copies are the load order
-    /// value the write side reads, and the Index itself never reaches the handler.</summary>
-    internal static RenumberRecordHandler RenumberHandler(IndexProjector index) => RenumberHandler(HolderOver(index));
-
-    /// <summary>A holder carrying whatever <paramref name="index"/> holds right now — reapplied per
-    /// gesture, since a test can register a copy mid-run.</summary>
-    internal static LoadOrderHolder HolderOver(IndexProjector index)
-    {
-        var holder = new LoadOrderHolder();
-        Sync(holder, index);
-        return holder;
-    }
-
-    internal static void Sync(LoadOrderHolder holder, IndexProjector index)
-    {
-        if (index.LoadOrder is { } held) holder.Apply(LoadOrder.From(held));
-    }
 }

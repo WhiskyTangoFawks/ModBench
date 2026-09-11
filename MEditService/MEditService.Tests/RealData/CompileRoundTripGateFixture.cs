@@ -12,6 +12,7 @@ namespace MEditService.Tests.RealData;
 
 public sealed class CompileRoundTripGateFixture : IDisposable
 {
+    public LoadOrderHolder Holder { get; } = new();
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
     // Snapshotted after Track and before any Compile: the two Compile facts overwrite ModFolder's
     // plugin binary with non-Track bytes, so mutating facts copy this instead of Tracking again.
@@ -27,15 +28,16 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
         Index = new IndexProjector(
+            Holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        Index.Reconcile(
+        Index.Reconcile(Holder,
             GameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Index, Plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(Index, Holder, Plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         CopyDirectory(ModFolder, TrackedTemplateFolder);
@@ -50,7 +52,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     }
 
     public PluginCompileService CompileService() =>
-        CompileServices.Over(Index);
+        CompileServices.Over(Holder.Current);
 
     public string SourceRoot => SourceRootFor(ModFolder);
 

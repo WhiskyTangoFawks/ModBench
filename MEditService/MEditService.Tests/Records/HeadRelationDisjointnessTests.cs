@@ -20,7 +20,7 @@ public sealed class HeadRelationDisjointnessTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        var edited = ProjectingEditService.Over(mod.Index)
+        var edited = ProjectingEditService.Over(mod.Index, mod.Holder)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
@@ -56,7 +56,7 @@ public sealed class HeadRelationDisjointnessTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        var edited = ProjectingEditService.Over(mod.Index)
+        var edited = ProjectingEditService.Over(mod.Index, mod.Holder)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.8").RootElement);
         Assert.True(edited.Applied, edited.Message);
 

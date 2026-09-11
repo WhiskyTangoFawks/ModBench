@@ -44,13 +44,13 @@ public sealed class IndexProjectorTests
         }
     }
 
-    private static IndexProjector MakeProjector() =>
-        new(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
+    private static IndexProjector MakeProjector(LoadOrderHolder holder) =>
+        new(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
 
-    private static (IndexProjector Projector, CountingFactory Counts) MakeCountingProjector()
+    private static (IndexProjector Projector, CountingFactory Counts) MakeCountingProjector(LoadOrderHolder holder)
     {
         var counts = new CountingFactory(new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
-        return (new IndexProjector(MutagenPluginAdapter.Instance, counts), counts);
+        return (new IndexProjector(holder, MutagenPluginAdapter.Instance, counts), counts);
     }
 
     // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack the winner assertions read.
@@ -66,6 +66,13 @@ public sealed class IndexProjectorTests
 
     private static LoadOrder Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
         new LoadOrder(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
+
+    // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
+    private static void Reconcile(IndexProjector projector, LoadOrderHolder holder, LoadOrder snapshot)
+    {
+        holder.Apply(snapshot);
+        projector.Reconcile(snapshot);
+    }
 
     private static IReadOnlyList<RegisteredCopy> RegistrationRows(IndexProjector projector)
     {
@@ -91,15 +98,37 @@ public sealed class IndexProjectorTests
     private static string? WinnerOf(IndexProjector projector, string formKey) =>
         projector.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
 
+    // ADR-0046 invariant 11: the winner sweep is handed the kernel's load order. Here the holder
+    // alone takes the next snapshot, so the copies the Index has open still carry the old winner —
+    // a projector reading them answers B.esp and this fails.
+    [Fact]
+    public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromTheCopiesItHasOpen()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = TwoProviders("projector-winners-from-holder");
+        var projector = MakeProjector(holder);
+        using var _1 = projector;
+        Reconcile(projector, holder, Snapshot(fx));
+        var npc = SharedNpc(projector);
+        Assert.Equal("B.esp", WinnerOf(projector, npc));
+
+        var b = fx.Plugins.Single(p => p.Name == "B.esp");
+        holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
+        await projector.ReindexPlugin(new PluginKey("B.esp", b.Origin));
+
+        Assert.Equal("A.esm", WinnerOf(projector, npc));
+    }
+
     [Fact]
     public void Reconcile_MakesTheRegistrationRowsEqualTheLoadOrdersCopies()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-registrations");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
         var snapshot = Snapshot(fx);
 
-        projector.Reconcile(snapshot);
+        Reconcile(projector, holder, snapshot);
 
         // Path is not a registration fact, so the rows are compared on the five that are.
         Assert.Equal(
@@ -112,12 +141,13 @@ public sealed class IndexProjectorTests
     [Fact]
     public void TheReads_CarryTheContentFactsOfEveryCopyTheIndexOpened()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-opened-content");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
         var snapshot = Snapshot(fx);
 
-        projector.Reconcile(snapshot);
+        Reconcile(projector, holder, snapshot);
 
         var opened = projector.RequireReads().OpenedCopies;
         var patch = opened[snapshot.Copies.Single(c => c.Name == "B.esp").Key];
@@ -132,13 +162,14 @@ public sealed class IndexProjectorTests
     [Fact]
     public void TheReads_OmitACopyTheIndexCouldNotOpen()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-unopenable-content");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
         var gone = new LoadOrderEntry("Gone.esp", Path.Combine(fx.GameDirectory, "Gone.esp"), "SomeMod", 9, true, true);
         var snapshot = Snapshot(fx, [.. fx.Plugins, gone]);
 
-        projector.Reconcile(snapshot);
+        Reconcile(projector, holder, snapshot);
 
         var opened = projector.RequireReads().OpenedCopies;
         Assert.DoesNotContain(new PluginKey("Gone.esp", "SomeMod"), opened.Keys);
@@ -148,13 +179,14 @@ public sealed class IndexProjectorTests
     [Fact]
     public void ACopyDroppedFromTheSnapshot_LosesItsRegistrationRow_OnTheNextReconcile()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-registrations-drop");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
 
         var withoutB = fx.Plugins.Where(p => p.Name != "B.esp").ToList();
-        projector.Reconcile(Snapshot(fx, withoutB));
+        Reconcile(projector, holder, Snapshot(fx, withoutB));
 
         Assert.Equal(["A.esm"], RegistrationRows(projector).Select(r => r.Name));
     }
@@ -162,16 +194,17 @@ public sealed class IndexProjectorTests
     [Fact]
     public void ACopyThatStopsParticipating_LosesItsWinners_OnTheNextReconcile_WithNoReindex()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-stops-participating");
-        var (projector, counts) = MakeCountingProjector();
+        var (projector, counts) = MakeCountingProjector(holder);
         using var _1 = projector;
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
         var npc = SharedNpc(projector);
         Assert.Equal("B.esp", WinnerOf(projector, npc));
         var indexed = counts.Indexed;
 
         var bDisabled = fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Enabled = false } : p).ToList();
-        projector.Reconcile(Snapshot(fx, bDisabled));
+        Reconcile(projector, holder, Snapshot(fx, bDisabled));
 
         Assert.Equal("A.esm", WinnerOf(projector, npc));
         Assert.Equal(indexed, counts.Indexed);
@@ -180,13 +213,14 @@ public sealed class IndexProjectorTests
     [Fact]
     public void AnIdenticalSnapshot_IsANoOp_BySequence()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-identical");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
         var settled = projector.Sequence;
 
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
 
         Assert.Equal(settled, projector.Sequence);
     }
@@ -194,10 +228,11 @@ public sealed class IndexProjectorTests
     [Fact]
     public async Task AWholePluginProjection_AdvancesTheSequenceExactlyOnce()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-one-advance");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
         var before = projector.Sequence;
 
         await projector.ReindexPlugin(new PluginKey("B.esp", PluginOrigin.DataDirectory));
@@ -225,10 +260,11 @@ public sealed class IndexProjectorTests
     [Fact]
     public async Task ASettledBatchNamingSeveralPlugins_AdvancesTheSequenceOnce()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-batch");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
         var before = projector.Sequence;
 
         using (projector.BeginProjection())
@@ -298,7 +334,7 @@ public sealed class IndexProjectorTests
         using var fixture = IndexedModFixture.Tracked(notifications);
         var index = (IndexProjector)fixture.Index;
         using var watcher = new ModFolderWatcher();
-        var sourceChanges = new SourceChangeApplier(fixture.Index, index.WriteGate, watcher, notifications, NullLogger.Instance);
+        var sourceChanges = new SourceChangeApplier(fixture.Index, fixture.Holder, index.WriteGate, watcher, notifications, NullLogger.Instance);
 
         var otherNpcSource = fixture.SourceFileFor(
             fixture.OtherNpc, "npc_", IndexedModFixture.OtherNpcEditorId);
@@ -329,13 +365,14 @@ public sealed class IndexProjectorTests
     [Fact]
     public void AnArrivingCopy_ReappliesTheFilter_SoItsRowsAnswerThroughIt()
     {
+        var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-arriving-filter");
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
-        projector.Reconcile(Snapshot(fx, [fx.Plugins[0]]));
+        Reconcile(projector, holder, Snapshot(fx, [fx.Plugins[0]]));
         projector.SetFilter("SELECT form_key FROM records");
 
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
 
         var arrived = fx.Plugins[1];
         var rows = projector.Reads!.Search(new RecordQuery(
@@ -367,19 +404,20 @@ public sealed class IndexProjectorTests
     [Fact]
     public void AFilteredReadAfterAProjection_ReflectsTheFilter_WithNoCallerReapplyingIt()
     {
+        var holder = new LoadOrderHolder();
         // C.esp holds its own NPC rather than an override of A's, so its FormKey is one the filter
         // could not already have listed when it was first materialized.
         using var fx = new PluginFixtureBuilder("projector-filter")
             .WithPlugin("A.esm", mod => mod.Npcs.AddNew("AlphaNpc"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("CharlieNpc"))
             .BuildScattered();
-        var projector = MakeProjector();
+        var projector = MakeProjector(holder);
         using var _1 = projector;
         var onlyA = fx.Plugins.Where(p => p.Name == "A.esm").ToList();
-        projector.Reconcile(Snapshot(fx, onlyA));
+        Reconcile(projector, holder, Snapshot(fx, onlyA));
         projector.SetFilter("SELECT form_key FROM npc_");
 
-        projector.Reconcile(Snapshot(fx));
+        Reconcile(projector, holder, Snapshot(fx));
 
         var matched = projector.Reads!
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("C.esp", PluginOrigin.DataDirectory), Limit: 10, Offset: 0));

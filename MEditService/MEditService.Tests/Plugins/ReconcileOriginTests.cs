@@ -12,27 +12,28 @@ namespace MEditService.Tests.Plugins;
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.
 public sealed class ReconcileOriginTests
 {
-    private static IndexProjector MakeManager()
+    private static IndexProjector MakeManager(LoadOrderHolder holder)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(MutagenPluginAdapter.Instance, factory);
+        return new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
     }
 
     [Fact]
     public void Reconcile_WithOrigin_PluginCarriesCallerSuppliedOrigin()
     {
+        var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-origin")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeManager();
+        using var manager = MakeManager(holder);
         IndexProjector index = manager;
-        index.Reconcile(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var plugin = manager.LoadOrder!.Plugins.Single(p => p.Name == "A.esp");
-        Assert.Equal("SomeMod", plugin.Origin);
+        var opened = manager.Reads!.OpenedCopies.Keys.Single(k => k.Name == "A.esp");
+        Assert.Equal("SomeMod", opened.Origin);
     }
 
     // ADR-0036: PluginMetadata.Origin alone (asserted above) is not enough — the indexed row
@@ -40,14 +41,15 @@ public sealed class ReconcileOriginTests
     [Fact]
     public void Reconcile_WithOrigin_IndexedRecordCarriesRealOrigin()
     {
+        var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-explicit-origin-indexed")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .BuildScattered();
         var withOrigin = fx.Plugins.Select(p => p with { Origin = "SomeMod" }).ToList();
 
-        using var manager = MakeManager();
+        using var manager = MakeManager(holder);
         IndexProjector index = manager;
-        index.Reconcile(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
+        index.Reconcile(holder, fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
         var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esp"), Limit: 10, Offset: 0));
 

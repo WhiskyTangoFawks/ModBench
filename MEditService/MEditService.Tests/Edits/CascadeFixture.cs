@@ -33,6 +33,7 @@ public sealed class CascadeFixture : IDisposable
 
     private CascadeFixture(Action<Fallout4Mod, CascadeFixture> seed)
     {
+        var holder = new LoadOrderHolder();
         ModFolder = Directory.CreateTempSubdirectory("medit-cascade-mod-").FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-cascade-game-").FullName;
 
@@ -47,7 +48,6 @@ public sealed class CascadeFixture : IDisposable
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);
     }

@@ -84,7 +84,7 @@ public sealed class InjectedChildTests
         using var fixture = new TwoPlugins();
         var (container, child, _) = fixture.Case(injection);
         fixture.TrackBoth();
-        var service = ProjectingEditService.Over(fixture.Index);
+        var service = ProjectingEditService.Over(fixture.Index, fixture.Holder);
 
         var edit = service.Set(
             fixture.Injector, child.ToString(), "EditorID", JsonDocument.Parse("\"Renamed\"").RootElement);
@@ -135,6 +135,7 @@ public sealed class InjectedChildTests
     // whose overrides of the quest and the topic hold only the children it adds itself.
     private sealed class TwoPlugins : IDisposable
     {
+        internal LoadOrderHolder Holder { get; } = new();
         public const string BasePluginName = "InjectionBase.esm";
         public const string BaseOrigin = "InjectionBaseMod";
         public const string InjectorPluginName = "InjectionInjector.esp";
@@ -196,9 +197,10 @@ public sealed class InjectedChildTests
                 (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
             Index = new IndexProjector(
+                Holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            _holder = Index.Reconcile(
+            _holder = Index.Reconcile(Holder,
                 _gameDirectory,
                 [
                     new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
@@ -223,12 +225,12 @@ public sealed class InjectedChildTests
         {
             var track = new TrackService(NullLogger<TrackService>.Instance);
             foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
-                track.TrackAsync(Index, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+                track.TrackAsync(Index, Holder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
         }
 
         public IModDisposeGetter CompileAndReimport(PluginKey plugin)
         {
-            var result = CompileServices.Over(Index)
+            var result = CompileServices.Over(Holder.Current)
                 .Compile(plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 

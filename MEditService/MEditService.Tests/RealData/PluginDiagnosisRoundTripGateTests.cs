@@ -65,6 +65,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     // names present, not their content.
     private sealed class RealFixtureScratch : IDisposable
     {
+        internal LoadOrderHolder Holder { get; } = new();
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-diagnosis-game-").FullName;
         private readonly IndexProjector _index;
         private const string Origin = "DiagnosisFixtureMod";
@@ -91,13 +92,14 @@ public sealed class PluginDiagnosisRoundTripGateTests
             inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
             _index = new IndexProjector(
+                Holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Holder, Origin, SourcePreset.Edits);
 
         public void Dispose()
         {
