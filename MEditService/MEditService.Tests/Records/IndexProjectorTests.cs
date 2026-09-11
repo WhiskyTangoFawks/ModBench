@@ -98,9 +98,9 @@ public sealed class IndexProjectorTests
     private static string? WinnerOf(IndexProjector projector, string formKey) =>
         projector.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
 
-    // ADR-0046 invariant 11: the winner sweep is handed the kernel's load order. Here the holder
-    // alone takes the next snapshot, so the copies the Index has open still carry the old winner —
-    // a projector reading them answers B.esp and this fails.
+    // ADR-0046 invariant 11: the sweep is handed the kernel's load order. The holder alone takes the
+    // next snapshot here, so the copies the Index has open still carry the old winner: a projector
+    // reading them answers B.esp.
     [Fact]
     public async Task ASweepBetweenSnapshots_TakesItsWinnersFromTheHolder_NotFromTheCopiesItHasOpen()
     {

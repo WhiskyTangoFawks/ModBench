@@ -172,10 +172,9 @@ public sealed class ArchitectureTests
         Assert.Contains("Registration.cs", walked);
     }
 
-    // Every file calling <paramref name="verb"/> on a receiver declared as a
-    // <see cref="LoadOrderHolder"/>. Typed by the receiver rather than by a token the whole file
-    // shares: the Index holds a holder to read from and calls the store's own Register beside it,
-    // and "this file names both" cannot tell the two verbs apart.
+    // Typed by the receiver, not by a token the whole file shares: the Index holds a holder to read
+    // from and calls the store's own Register beside it, which "this file names both" cannot tell
+    // apart.
     internal static List<string> HolderWrites(string root, string[] projects, string verb) =>
         [.. projects
             .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
@@ -231,9 +230,9 @@ public sealed class ArchitectureTests
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
-    // ADR-0046 invariant 11: one load order, the kernel's value, read from the holder. An Index
-    // that hands one out is a second answer to "which copy wins", able to disagree mid-reconcile.
-    // A load order as a parameter is the snapshot going in, which is the one direction allowed.
+    // ADR-0046 invariant 11: one load order, the kernel's. An Index that hands one out is a second
+    // answer to "which copy wins". As a parameter it is the snapshot going in, the allowed
+    // direction.
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()
     {

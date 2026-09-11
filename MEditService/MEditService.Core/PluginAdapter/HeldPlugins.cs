@@ -9,10 +9,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.PluginAdapter;
 
-/// <summary>The copies the Index has open (ADR-0044): the projector's own cache of what it read
-/// out of each file, keyed by identity. Not a load order — which copy wins and who participates is
-/// the kernel's value, never answered from here. Mutated in place by reconcile as a copy arrives,
-/// leaves or has its registration moved.</summary>
+/// <summary>The copies the Index has open (ADR-0044), keyed by identity: what it read out of each
+/// file. Not a load order — who wins and who participates is the kernel's value. Reconcile mutates
+/// it in place.</summary>
 internal sealed class HeldPlugins : IDisposable
 {
     // ADR-0036: keyed by the compound (origin, filename) identity — two copies of one filename are
