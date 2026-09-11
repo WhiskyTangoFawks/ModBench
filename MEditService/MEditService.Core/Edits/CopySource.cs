@@ -67,14 +67,14 @@ internal sealed class CopySource(
     {
         if (RecordTypeDispatch.For(_release).IsCell(identity.RecordType)) return null;
         if (_tree == null) return Loaded()?.ContainmentOf(identity.FormKey);
+        if (_tree.Locate(plugin, identity) is not { IsEmbedded: true }) return null;
 
-        if (_tree.Locate(plugin, identity) is not { IsEmbedded: true } unit) return null;
-        var owner = File.ReadAllBytes(unit.FullPath);
-        using var document = JsonDocument.Parse(owner);
-        return _containers.Value.ContainmentOf(
-            _containers.Value.TypeNameOf(unit.OwnerRecordType ?? string.Empty, owner),
-            document.RootElement,
-            identity.FormKey);
+        var carrier = _tree.Carrier(plugin, identity, _schemas)
+            ?? throw new InvalidOperationException(
+                $"{plugin.Name} holds {identity.FormKey}, but no document in its source tree carries it.");
+
+        using var document = JsonDocument.Parse(carrier.Body);
+        return _containers.Value.ContainmentOf(carrier.RecordType, document.RootElement, identity.FormKey);
     }
 
     /// <summary>Where this plugin puts the cell <paramref name="identity"/> names, or null when it is
