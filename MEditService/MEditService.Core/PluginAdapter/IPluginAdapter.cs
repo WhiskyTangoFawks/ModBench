@@ -57,8 +57,8 @@ public interface IPluginAdapter
     /// header.</summary>
     IMod CreateEmpty(ModKey modKey, GameRelease gameRelease);
 
-    /// <summary>A brand-new plugin at <paramref name="destinationPath"/>, header and nothing else,
-    /// so no caller holds the empty mod between making it and laying it down.
+    /// <summary>A brand-new plugin at <paramref name="destinationPath"/>, header and nothing else.
+    /// Creates a missing destination folder and refuses an existing file.
     /// <paramref name="smallMaster"/> adds the removable ESL header flag.</summary>
     Task CreateAndWriteAsync(ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster);
 
