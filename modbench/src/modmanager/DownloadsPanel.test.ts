@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { executeCommand, registerCommand, showWarningMessage, showErrorMessage, showTextDocument, showQuickPick, openExternal, fsDelete } = vi.hoisted(() => ({
+const { executeCommand, registerCommand, showErrorMessage, showTextDocument, showQuickPick, openExternal, fsDelete } = vi.hoisted(() => ({
   executeCommand: vi.fn(),
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
-  showWarningMessage: vi.fn(),
   showErrorMessage: vi.fn(),
   showTextDocument: vi.fn(),
   showQuickPick: vi.fn(),
@@ -13,7 +12,7 @@ const { executeCommand, registerCommand, showWarningMessage, showErrorMessage, s
 
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
-  window: { showWarningMessage, showErrorMessage, showTextDocument, showQuickPick },
+  window: { showErrorMessage, showTextDocument, showQuickPick },
   env: { openExternal },
   workspace: { fs: { delete: fsDelete } },
   Uri: {
@@ -36,6 +35,7 @@ import {
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadRow } from './mo2/downloads';
 import type { Instance, InstanceValue } from './instance';
+import { scriptedDialog } from '../test/surfacingDoubles';
 
 // The panel's one surfacing channel (ADR-0019): a test reads the report, never the toast.
 const reporter = () => ({ report: vi.fn(), landed: vi.fn() });
@@ -405,7 +405,7 @@ describe('registerDownloadsMultiRowCommands', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('registers Delete / Hide / Unhide', () => {
-    registerDownloadsMultiRowCommands('/instance', reporter());
+    registerDownloadsMultiRowCommands('/instance', reporter(), scriptedDialog());
     const ids = registerCommand.mock.calls.map((c) => c[0]);
     expect(ids).toEqual(expect.arrayContaining([
       'modbench.downloads.delete',
@@ -419,7 +419,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const metaA = await writeMeta(root, 'a.7z');
     const metaB = await writeMeta(root, 'b.7z');
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), scriptedDialog());
     invoke('modbench.downloads.hide', node('a.7z'), [node('a.7z'), node('b.7z')]);
 
     await vi.waitFor(async () => {
@@ -433,7 +433,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const already = await writeMeta(root, 'already-hidden.7z', '[General]\r\nremoved=true\r\n');
     const visible = await writeMeta(root, 'visible.7z');
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), scriptedDialog());
     invoke('modbench.downloads.hide', node('visible.7z'), [node('already-hidden.7z'), node('visible.7z')]);
 
     await vi.waitFor(async () => {
@@ -448,7 +448,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const hidden = await writeMeta(root, 'hidden.7z', '[General]\r\nremoved=true\r\n');
     const already = await writeMeta(root, 'already-visible.7z');
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), scriptedDialog());
     invoke('modbench.downloads.unhide', node('hidden.7z'), [node('hidden.7z'), node('already-visible.7z')]);
 
     await vi.waitFor(async () => {
@@ -462,7 +462,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z');
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), scriptedDialog());
     invoke('modbench.downloads.hide', node('foo.7z'));
 
     await vi.waitFor(async () => {
@@ -474,7 +474,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     const root = await makeInstanceRoot();
     const meta = await writeMeta(root, 'foo.7z', '[General]\r\nremoved=true\r\n');
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), scriptedDialog());
     invoke('modbench.downloads.unhide', node('foo.7z'));
 
     await vi.waitFor(async () => {
@@ -485,17 +485,15 @@ describe('registerDownloadsMultiRowCommands', () => {
   it('delete falls back to the clicked row alone when no selection array is passed', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
-    showWarningMessage.mockResolvedValueOnce('Delete');
+    const ask = scriptedDialog('Delete');
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), ask);
     invoke('modbench.downloads.delete', node('foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
-    expect(showWarningMessage).toHaveBeenCalledWith(
-      expect.stringContaining('"foo.7z"'),
-      { modal: true },
-      'Delete',
-    );
+    expect(ask.asked).toEqual([
+      { message: expect.stringContaining('"foo.7z"'), detail: undefined, buttons: ['Delete'] },
+    ]);
   });
 
   // The negative case on a destructive operation — the single most valuable assertion in this
@@ -503,12 +501,12 @@ describe('registerDownloadsMultiRowCommands', () => {
   it('delete: on confirm-cancel, does not trash anything', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
-    showWarningMessage.mockResolvedValueOnce(undefined); // user dismissed, not "Delete"
+    const ask = scriptedDialog(undefined); // user dismissed, not "Delete"
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), ask);
     invoke('modbench.downloads.delete', node('foo.7z'));
 
-    await vi.waitFor(() => expect(showWarningMessage).toHaveBeenCalled());
+    await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
     await new Promise((r) => setTimeout(r, 50));
     expect(fsDelete).not.toHaveBeenCalled();
   });
@@ -517,9 +515,8 @@ describe('registerDownloadsMultiRowCommands', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
-    showWarningMessage.mockResolvedValueOnce('Delete');
 
-    registerDownloadsMultiRowCommands(root, reporter());
+    registerDownloadsMultiRowCommands(root, reporter(), scriptedDialog('Delete'));
     invoke('modbench.downloads.delete', node('foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
@@ -537,16 +534,13 @@ describe('deleteArchives', () => {
     const a = await writeArchive(root, 'a.7z');
     const b = await writeArchive(root, 'b.7z');
     await writeMeta(root, 'a.7z');
-    showWarningMessage.mockResolvedValueOnce('Delete');
+    const ask = scriptedDialog('Delete');
 
-    await deleteArchives(root, ['a.7z', 'b.7z'], reporter());
+    await deleteArchives(root, ['a.7z', 'b.7z'], reporter(), ask);
 
-    expect(showWarningMessage).toHaveBeenCalledTimes(1);
-    expect(showWarningMessage).toHaveBeenCalledWith(
-      expect.stringContaining('2 items'),
-      { modal: true },
-      'Delete',
-    );
+    expect(ask.asked).toEqual([
+      { message: expect.stringContaining('2 items'), detail: undefined, buttons: ['Delete'] },
+    ]);
     const trashedPaths = fsDelete.mock.calls.map((c) => (c[0] as { fsPath: string }).fsPath);
     expect(trashedPaths).toEqual(expect.arrayContaining([a, b]));
   });
@@ -555,9 +549,7 @@ describe('deleteArchives', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'a.7z');
     await writeArchive(root, 'b.7z');
-    showWarningMessage.mockResolvedValueOnce(undefined);
-
-    await deleteArchives(root, ['a.7z', 'b.7z'], reporter());
+    await deleteArchives(root, ['a.7z', 'b.7z'], reporter(), scriptedDialog(undefined));
 
     expect(fsDelete).not.toHaveBeenCalled();
   });
@@ -565,15 +557,13 @@ describe('deleteArchives', () => {
   it('a single-item batch reuses the singular per-file confirmation text', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
-    showWarningMessage.mockResolvedValueOnce('Delete');
+    const ask = scriptedDialog('Delete');
 
-    await deleteArchives(root, ['foo.7z'], reporter());
+    await deleteArchives(root, ['foo.7z'], reporter(), ask);
 
-    expect(showWarningMessage).toHaveBeenCalledWith(
-      expect.stringContaining('"foo.7z"'),
-      { modal: true },
-      'Delete',
-    );
+    expect(ask.asked).toEqual([
+      { message: expect.stringContaining('"foo.7z"'), detail: undefined, buttons: ['Delete'] },
+    ]);
   });
 });
 

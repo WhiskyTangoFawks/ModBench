@@ -20,7 +20,17 @@ const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
 
 vi.mock('./commands/install', () => ({ installFromArchive, installFromFolder }));
 
-import { registerModInstallCommands, type ModInstallDeps } from './modManagementCommands';
+const { uninstallMod } = vi.hoisted(() => ({ uninstallMod: vi.fn() }));
+
+vi.mock('./commands/modlist', () => ({
+  createEmptyMod: vi.fn(), deleteSeparator: vi.fn(), insertSeparator: vi.fn(),
+  moveModToSeparator: vi.fn(), renameSeparator: vi.fn(), uninstallMod,
+}));
+
+import { registerModContextCommands, registerModInstallCommands, type ModInstallDeps } from './modManagementCommands';
+import type { ModNode } from './ModListProvider';
+import type { Instance } from './instance';
+import { scriptedDialog } from '../test/surfacingDoubles';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
@@ -114,5 +124,40 @@ describe('registerModInstallCommands: the install target', () => {
     expect(installFromFolder).toHaveBeenCalledWith(
       '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files',
     );
+  });
+});
+
+
+// Uninstall is the Mods tree's one destructive gesture, so the modal it asks and what a cancel
+// leaves untouched are the behaviour worth pinning (ADR-0019's dialog seam).
+describe('registerModContextCommands: the uninstall confirmation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const instance = { value: { activeProfile: 'Default', mods: [] } } as unknown as Pick<Instance, 'value'>;
+  const modNode = { kind: 'mod', mod: { name: 'My Mod', archiveFilename: 'my-mod.7z' } } as unknown as ModNode;
+  const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
+
+  it('asks one modal naming the mod, then deletes the folder once it is confirmed', async () => {
+    uninstallMod.mockResolvedValueOnce({ applied: true });
+    const ask = scriptedDialog('Uninstall');
+
+    registerModContextCommands('/instance', instance, runModAction, ask);
+    await invoke('modbench.modList.mod.uninstall', modNode);
+
+    expect(ask.asked).toEqual([{
+      message: 'Uninstall "My Mod"? This will permanently delete the mod folder from disk.',
+      detail: undefined,
+      buttons: ['Uninstall'],
+    }]);
+    expect(uninstallMod).toHaveBeenCalledWith('/instance', 'Default', 'My Mod', 'my-mod.7z');
+  });
+
+  it('uninstalls nothing when the modal is dismissed', async () => {
+    uninstallMod.mockResolvedValue({ applied: true }); // so a lost guard would get all the way through
+
+    registerModContextCommands('/instance', instance, runModAction, scriptedDialog(undefined));
+    await invoke('modbench.modList.mod.uninstall', modNode);
+
+    expect(uninstallMod).not.toHaveBeenCalled();
   });
 });

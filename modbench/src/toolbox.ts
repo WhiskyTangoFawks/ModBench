@@ -13,8 +13,8 @@ import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider } from './modmanager/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
-import { makeReporter, type Reporter } from './reporter';
-import { askQuestion } from './dialog';
+import type { Reporter } from './reporter';
+import type { AskQuestion } from './dialog';
 import { originFolder } from './modmanager/loadOrderSnapshot';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
@@ -29,10 +29,9 @@ import { registerModAdoption } from './modmanager/modAdoptionTrigger';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerModListCoreCommands } from './modmanager/modManagementCommands';
-import { deployMods, purgeMods, type DeploymentCommandResult } from './modmanager/commands/deployment';
-import { listProfiles, switchProfile } from './modmanager/commands/profile';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, makeDetectWinePrefix, setMo2InstanceContext } from './workspaceConfig';
+import { registerToolboxCommands } from './toolboxCommands';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
 import { registerRevealInExplorerCommand, registerCreatePluginCommand } from './plugins/pluginListCommands';
 
@@ -62,6 +61,11 @@ export interface ToolboxDeps {
   /** Fires on every completed reconcile and on a landed Track: every open record panel refetches
    *  its comparison, and every tracked mod's repo (re-)registers with `vscode.git`. */
   notifyConflictsComputed: () => void;
+  /** ADR-0019 surfacing: built per tag, so nothing below the entry point constructs an adapter
+   *  and every gesture still names itself in the log. */
+  reporterFor: (tag: string) => Reporter;
+  /** ADR-0019 surfacing: the one modal question every gesture below here asks through. */
+  ask: AskQuestion;
 }
 
 /** The Toolbox: the view of the instance, and the MO2 side's composition root. Everything below
@@ -98,7 +102,7 @@ interface PluginListDeps {
   own: Own;
   session: ExtensionSession;
   outputChannel: vscode.LogOutputChannel;
-  reporter: Reporter;
+  reporterFor: (tag: string) => Reporter;
   instanceRoot: string;
   // A getter over the Instance value's own resolution, not a Promise settled once. Undefined
   // when nothing resolved, which leaves an implicit row without a file to point at.
@@ -119,12 +123,12 @@ interface PluginListDeps {
 // ADR-0002: one tree, one owner — rows from the Instance, children from the record browser,
 // every badge from the facts the provider pulls itself.
 function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
-  const { own, session, outputChannel, reporter, instanceRoot, dataFolder, implicitMasters, instance } = deps;
+  const { own, session, outputChannel, reporterFor, instanceRoot, dataFolder, implicitMasters, instance } = deps;
   // The tree states its own severity (ADR-0019); this routes it to the matching channel level.
   const log = (level: 'info' | 'warn' | 'error', msg: string) => outputChannel[level](msg);
   const source = pluginListSource(instanceRoot, instance);
   const pluginsTree = own(new PluginsTreeProvider({
-    instance, source, log, reporter, dataFolder, implicitMasters,
+    instance, source, log, reporter: reporterFor('pluginList'), dataFolder, implicitMasters,
     records: deps.recordBrowser,
     client: deps.pluginFacts,
     publishDiagnoses: (reports) => publishLoadDiagnoses(
@@ -148,7 +152,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     new ImplicitMasterDecorationProvider(dataFolder, () => pluginsTree.implicitMasterNames()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginsTree, outputChannel)));
-  own(registerRevealInExplorerCommand(pluginsTree, makeReporter(outputChannel, 'pluginListTree.revealInExplorer')));
+  own(registerRevealInExplorerCommand(pluginsTree, reporterFor('pluginListTree.revealInExplorer')));
   return pluginsTree;
 }
 
@@ -180,16 +184,16 @@ interface ReconcileDeps {
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
   setStatusText: (text: string) => void;
   notifyConflictsComputed: () => void;
+  reporter: Reporter;
 }
 
-// Not `makeReporter`: its "Modbench: " prefix would double up on the message `syncActiveFilter`
-// already builds.
 function applySyncedFilterState(
   client: Pick<MEditClient, 'getActiveFilter'>, session: ExtensionSession, outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter,
 ): Promise<void> {
   return syncActiveFilter(() => client.getActiveFilter(), {
     log: (m) => outputChannel.info(`[toolbox] ${m}`),
-    warn: (m) => void vscode.window.showWarningMessage(m),
+    warn: (m) => reporter.report('warning', m),
     setFilterActive: (active, sql, label) => session.setFilterActive?.(active, sql, label),
   });
 }
@@ -199,7 +203,7 @@ function applySyncedFilterState(
 function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
   const {
     session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
-    setStatusText, notifyConflictsComputed,
+    setStatusText, notifyConflictsComputed, reporter,
   } = deps;
   const run = async (): Promise<void> => {
     const snapshot = loadOrderSnapshotOf(instance.value);
@@ -220,13 +224,13 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
     }, { onProgress: treeProgress.onProgress });
     await applyLoadOrderOutcome(plugins, result, treeProgress.lastTotalPlugins(), {
       log: (m) => outputChannel.info(`[toolbox] ${m}`),
-      warn: (m) => void vscode.window.showWarningMessage(m),
-      error: (m) => void vscode.window.showErrorMessage(m),
+      warn: (m) => reporter.report('warning', m),
+      error: (m) => reporter.report('error', m),
       setStatusText,
       refreshTree: () => recordBrowser.refresh(),
       notifyConflictsComputed,
-      syncFilterState: () => applySyncedFilterState(client, session, outputChannel),
-      applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, totalPlugins),
+      syncFilterState: () => applySyncedFilterState(client, session, outputChannel, reporter),
+      applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, reporter, totalPlugins),
       presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
     });
   };
@@ -242,6 +246,7 @@ async function applyLoadOrderToTree(
   session: ExtensionSession,
   failures: PluginLoadFailure[],
   outputChannel: vscode.LogOutputChannel,
+  reporter: Reporter,
   // Carried in only to be logged next to what reached the tree. Deliberately not `plugins.length`
   // from the caller's snapshot: that omits the implicit masters the backend prepends, so every
   // healthy reconcile would read as short.
@@ -252,8 +257,9 @@ async function applyLoadOrderToTree(
     // Leaving every row a leaf is a safe *render* but not an honest one: the reconcile did land,
     // so the tree would claim editing is unavailable with nothing on screen to say why (ADR-0019).
     outputChannel.error('[toolbox] the reconciled load order did not reach the tree; plugin rows will not expand');
-    void vscode.window.showWarningMessage(
-      'Modbench: The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records. Close and relaunch mEdit to retry.',
+    reporter.report(
+      'warning',
+      'The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records. Close and relaunch mEdit to retry.',
     );
     return;
   }
@@ -286,12 +292,21 @@ function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
   outputChannel.info('[toolbox] the reconcile was abandoned before it landed; leaving the closed view alone');
 }
 
+interface EnterEditingDeps {
+  session: ExtensionSession;
+  instance: Instance;
+  sender: LoadOrderSender;
+  client: ToolboxClient;
+  outputChannel: vscode.LogOutputChannel;
+  reporter: Reporter;
+  revealLog: () => void;
+  reconcile: () => Promise<void>;
+}
+
 // ADR-0002: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
-function makeEnterEditing(
-  session: ExtensionSession, instance: Instance, sender: LoadOrderSender, client: ToolboxClient,
-  outputChannel: vscode.LogOutputChannel, revealLog: () => void, reconcile: () => Promise<void>,
-): () => Promise<void> {
+function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
+  const { session, instance, sender, client, outputChannel, reporter, revealLog, reconcile } = deps;
   const enter = async (): Promise<void> => {
     const { abandoned } = sender.arm();
     // Overlaps with the backend starting below, same as the tree's own first-value wait: the
@@ -306,15 +321,16 @@ function makeEnterEditing(
     if (abandoned()) { reportAbandoned(outputChannel); return; }
     if (client.status !== 'attached') {
       exitEditing(session, client); // tear down the half-started backend
-      void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
+      reporter.report('error', 'Backend failed to start — see the Modbench output for details.');
       return;
     }
     await instanceReady;
     // No game directory means no snapshot to hand over — don't strand the UI in an empty editing
     // view. This is the one path that asked for a load order, so this is where it is reported.
     if (!loadOrderSnapshotOf(instance.value)) {
-      void vscode.window.showErrorMessage(
-        'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
+      reporter.report(
+        'error',
+        'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
       );
       exitEditing(session, client);
       return;
@@ -322,103 +338,6 @@ function makeEnterEditing(
     await reconcile();
   };
   return () => withPluginsViewProgress(session, enter);
-}
-
-
-// The task type the Launch… command picks from. Nothing contributes one yet, so the pick is
-// empty until a task provider or a tasks.json entry declares this type.
-const LAUNCH_TASK_TYPE = 'modbench';
-
-interface ToolboxCommandDeps {
-  instanceRoot: string;
-  /** ADR-0015: the profile, the game directory and the file winners all come from the value. */
-  instance: Pick<Instance, 'value'>;
-  outputChannel: vscode.LogOutputChannel;
-  updateProfileDescription: () => Promise<void>;
-}
-
-// `wrote` false means the command reported its own abort, so the success message is withheld
-// rather than announcing a deployment that did not happen.
-async function runDeployment(
-  reporter: Reporter, failure: string, success: string, command: () => Promise<DeploymentCommandResult>,
-): Promise<void> {
-  let outcome: DeploymentCommandResult;
-  try {
-    outcome = await command();
-  } catch (err) {
-    outcome = { applied: false, refusal: err instanceof Error ? err.message : String(err) };
-  }
-  if (!outcome.applied) {
-    reporter.report('error', failure, outcome.refusal);
-    return;
-  }
-  if (!outcome.wrote) return;
-  // The manifest lands under mods/, which the Instance watches — its own recompute is what moves
-  // the Toolbox's deployment row, never this command.
-  void vscode.window.showInformationMessage(success);
-}
-
-// The four instance-wide gestures the Toolbox view owns (docs/specs/containers.md rule 1),
-// registered from the box that draws them.
-function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
-  const { instanceRoot, instance, outputChannel, updateProfileDescription } = deps;
-  const detectPaths = makeDetectPaths(instanceRoot);
-  const deployReporter = makeReporter(outputChannel, 'deploy');
-  const loadOrderTarget = async (): Promise<string | undefined> =>
-    meditConfig().get('game.pluginsTxtPath') || (await detectPaths())?.pluginsTxt;
-
-  return [
-    vscode.commands.registerCommand('modbench.toolbox.switchProfile', async () => {
-      const active = instance.value.activeProfile;
-      const profiles = await listProfiles(instanceRoot);
-      const picked = await vscode.window.showQuickPick(
-        profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined })),
-        { placeHolder: 'Switch profile' },
-      );
-      if (!picked || picked.label === active) return;
-      const outcome = await switchProfile(instanceRoot, picked.label);
-      if (!outcome.applied) {
-        makeReporter(outputChannel, 'switchProfile').report('error', 'Failed to switch profile.', outcome.refusal);
-        return;
-      }
-      void updateProfileDescription();
-      // ADR-0013/ADR-0015: the write lands in ModOrganizer.ini, which the Instance already
-      // watches — its own recompute reaches the load order and the Toolbox's profile row.
-    }),
-    vscode.commands.registerCommand('modbench.toolbox.deploy', () =>
-      runDeployment(deployReporter, 'Deploy failed.', 'Modbench: Mods deployed.', async () =>
-        deployMods(
-          instanceRoot,
-          instance.value.activeProfile,
-          instance.value.files,
-          instance.value.gameDirectory,
-          await loadOrderTarget(),
-          deployReporter,
-          askQuestion,
-        ))),
-    vscode.commands.registerCommand('modbench.toolbox.purge', () =>
-      runDeployment(deployReporter, 'Purge failed.', 'Modbench: Deployed mods purged.', () =>
-        purgeMods(instanceRoot, instance.value.gameDirectory, deployReporter))),
-    // One affordance however many executables exist, because MO2's registry decides what is
-    // launchable. Tasks are read at invocation, so an executable added in MO2 appears without a
-    // reload; resolving a binary here would lock the command to one game.
-    vscode.commands.registerCommand('modbench.toolbox.launch', async () => {
-      const tasks = await vscode.tasks.fetchTasks({ type: LAUNCH_TASK_TYPE });
-      if (tasks.length === 0) {
-        outputChannel.info('[toolbox] Launch…: no launchable tasks contributed');
-        void vscode.window.showInformationMessage(
-          'Modbench: No launch targets — add an executable to MO2\'s executables list and it appears here.',
-        );
-        return;
-      }
-      const picked = await vscode.window.showQuickPick(
-        tasks.map((task) => ({ label: task.name, task })),
-        { placeHolder: 'Launch' },
-      );
-      if (!picked) return;
-      await vscode.tasks.executeTask(picked.task);
-    }),
-  ];
 }
 
 
@@ -437,7 +356,7 @@ interface Mo2Side {
 function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   const {
     outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics, showCrashRepairOffers,
-    setStatusText, notifyConflictsComputed,
+    setStatusText, notifyConflictsComputed, reporterFor, ask,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
   const log = (msg: string) => outputChannel.info(msg);
@@ -457,7 +376,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     return undefined;
   }
   setMo2InstanceContext(true);
-  const modListReporter = makeReporter(outputChannel, 'modList');
+  const modListReporter = reporterFor('modList');
   const detectPaths = makeDetectPaths(instanceRoot);
   const detectWinePrefix = makeDetectWinePrefix(instanceRoot);
   // ADR-0015: the one Instance over MO2's files, its own watchers and its game-directory
@@ -483,7 +402,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   session.loadOrderSender = sender;
   const reconcile = makeReconcile({
     session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
-    setStatusText, notifyConflictsComputed,
+    setStatusText, notifyConflictsComputed, reporter: reporterFor('loadOrder'),
   });
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
@@ -510,7 +429,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     }
   };
   const pluginsTree = registerPluginListView({
-    own, session, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder,
+    own, session, outputChannel, reporterFor, instanceRoot, dataFolder,
     implicitMasters: async () => implicitMastersIn(await dataFolder(), instance.value.gameRelease),
     instance, recordBrowser, pluginFacts, loadDiagnostics,
   });
@@ -520,21 +439,25 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
       await action();
       modListProvider.invalidate();
     } catch (err) {
-      makeReporter(outputChannel, logLabel).report('error', failMessage, err instanceof Error ? err.message : String(err));
+      reporterFor(logLabel).report('error', failMessage, err instanceof Error ? err.message : String(err));
     }
   };
   const promptModName = (defaultName: string, validateInput?: (value: string) => string | undefined) =>
     vscode.window.showInputBox({ prompt: 'Mod name', value: defaultName, validateInput });
   const warnIfFomod = (name: string, isFomod: boolean) => {
     if (isFomod)
-      void vscode.window.showWarningMessage(
-        `Modbench: "${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
+      reporterFor('install').report(
+        'warning',
+        `"${name}" is a FOMOD installer — its files were copied as-is and need manual ` +
           `arrangement; Modbench does not run the installer's own install steps.`,
       );
   };
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
-    makeEnterEditing(session, instance, sender, client, outputChannel, () => outputChannel.show(true), reconcile),
+    makeEnterEditing({
+      session, instance, sender, client, outputChannel, reporter: reporterFor('enterEditing'),
+      revealLog: () => outputChannel.show(true), reconcile,
+    }),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
   // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture. A throw
@@ -544,24 +467,24 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   own(modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)));
   ownAll(own, registerModListCoreCommands(modListProvider));
   ownAll(own, registerToolboxCommands({
-    instanceRoot, instance, outputChannel, updateProfileDescription,
+    instanceRoot, instance, outputChannel, updateProfileDescription, reporterFor, ask,
   }));
   ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
-  ownAll(own, registerModContextCommands(instanceRoot, instance, outputChannel, runModAction));
+  ownAll(own, registerModContextCommands(instanceRoot, instance, runModAction, ask));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
   own(registerCreateEmptyModCommand(instanceRoot, instance, runModAction));
-  ownAll(own, registerOverwriteView(instanceRoot, outputChannel));
+  ownAll(own, registerOverwriteView(instanceRoot, reporterFor('overwrite.reveal')));
   own(registerModAdoption(
     instance, (profile, unlistedFolders) => adoptMods(instanceRoot, profile, unlistedFolders),
     () => modListProvider.invalidate(), outputChannel));
   own(registerPluginsReconcile(instance, runPluginsReconcile));
-  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, outputChannel);
+  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask);
   // ADR-0014: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
-  // a rebuild failure is reported through makeReporter, never a bare toast (modbench/CLAUDE.md).
+  // a rebuild failure is reported through the injected reporter, never a bare toast (modbench/CLAUDE.md).
   const refreshAll = makeRefreshAll({
     rebuildIndex: () => rebuildIndexVia(
       client, instanceRoot,
-      (message, detail) => makeReporter(outputChannel, 'refresh').report('error', message, detail),
+      (message, detail) => reporterFor('refresh').report('error', message, detail),
       gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
     ),
     sendLoadOrder: () => reconcile(),
@@ -582,7 +505,7 @@ const ownAll = (own: Own, disposables: vscode.Disposable[]): void => {
 };
 
 export function createToolbox(deps: ToolboxDeps): Toolbox {
-  const { outputChannel, client } = deps;
+  const { client, reporterFor } = deps;
   const owned: vscode.Disposable[] = [];
   const own: Own = (disposable) => {
     owned.push(disposable);
@@ -604,7 +527,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     await mo2?.refreshAll();
     provider.refresh();
   }));
-  own(registerCreatePluginCommand(client, mo2, makeReporter(outputChannel, 'newPlugin')));
+  own(registerCreatePluginCommand(client, mo2, reporterFor('newPlugin')));
 
   return {
     modListProvider: mo2?.modListProvider,
