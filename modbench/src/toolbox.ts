@@ -148,7 +148,7 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     new ImplicitMasterDecorationProvider(dataFolder, () => pluginsTree.implicitMasterNames()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginsTree, outputChannel)));
-  own(registerRevealInExplorerCommand(pluginsTree, outputChannel));
+  own(registerRevealInExplorerCommand(pluginsTree, makeReporter(outputChannel, 'pluginListTree.revealInExplorer')));
   return pluginsTree;
 }
 
@@ -604,7 +604,7 @@ export function createToolbox(deps: ToolboxDeps): Toolbox {
     await mo2?.refreshAll();
     provider.refresh();
   }));
-  own(registerCreatePluginCommand(client, mo2, outputChannel));
+  own(registerCreatePluginCommand(client, mo2, makeReporter(outputChannel, 'newPlugin')));
 
   return {
     modListProvider: mo2?.modListProvider,

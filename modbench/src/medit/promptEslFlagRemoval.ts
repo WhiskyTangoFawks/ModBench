@@ -1,16 +1,17 @@
 import * as vscode from 'vscode';
 import { offerEslFlagRemoval, type EslFlagRemovalTarget } from './eslFlagRemovalPrompt';
 import type { MEditClient } from './client';
-import { askQuestion } from '../dialog';
+import type { AskQuestion } from '../dialog';
 
-/** Binds `offerEslFlagRemoval` to `vscode.window`; the core (eslFlagRemovalPrompt.ts) stays
- *  `vscode`-free and testable. Shared by Editing's create/copy-as-new and the Plugins view's
- *  compile retry — one binder, not a copy per caller. */
+/** Binds only the refusal report to `vscode.window`; the question comes from the caller's own
+ *  dialog seam (ADR-0019), so the core (eslFlagRemovalPrompt.ts) stays `vscode`-free. One binder
+ *  for create, copy-as-new and the compile retry. */
 export async function promptEslFlagRemoval(
   target: EslFlagRemovalTarget, refusalReason: string, verb: string, repository: Pick<MEditClient, 'editRecord'>,
+  ask: AskQuestion,
 ): Promise<boolean> {
   return offerEslFlagRemoval(
-    target, refusalReason, verb, repository, askQuestion,
+    target, refusalReason, verb, repository, ask,
     message => void vscode.window.showErrorMessage(message),
   );
 }

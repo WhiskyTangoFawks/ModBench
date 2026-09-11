@@ -5,6 +5,7 @@ import { resolveOrigin } from '../medit/resolveOrigin';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
 import { renumberConfirmMessage } from './renumberConfirm';
 import { makeReporter } from '../reporter';
+import { askQuestion } from '../dialog';
 import type { RecordTreeSync } from './onRecordEdited';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
@@ -88,7 +89,7 @@ export function registerRecordLifecycleCommands(
 
       const result = await client.createRecord(
         identity.plugin, origin, identity.recordType, undefined, undefined,
-        message => promptEslFlagRemoval({ name: identity.plugin, origin }, message, 'Create the Record', client),
+        message => promptEslFlagRemoval({ name: identity.plugin, origin }, message, 'Create the Record', client, askQuestion),
       );
       if (!result) return; // the ESL prompt was declined — nothing happened
       if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
@@ -223,7 +224,7 @@ async function runCopyRecordCommand(
   } else {
     const result = await client.copyRecordAsNewRecord(
       identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin, undefined,
-      message => promptEslFlagRemoval(destination, message, 'Copy the Record', client),
+      message => promptEslFlagRemoval(destination, message, 'Copy the Record', client, askQuestion),
     );
     if (!result) return; // the ESL prompt was declined — nothing happened
     if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }

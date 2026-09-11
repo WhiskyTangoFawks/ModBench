@@ -143,7 +143,9 @@ export function activate(context: vscode.ExtensionContext) {
     offers,
     askQuestion,
     (offer, atRef) => compileAndReport(
-      meditClient, compileDiagnostics, pluginRowDeps.originFolder, { name: offer.plugin, origin: offer.origin }, atRef,
+      meditClient, compileDiagnostics, pluginRowDeps.originFolder,
+      makeReporter(outputChannel, 'crashRepair'), askQuestion,
+      { name: offer.plugin, origin: offer.origin }, atRef,
     ),
   );
   // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
@@ -228,15 +230,20 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
-      session, client, outputChannel, treeProvider,
+      session, client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
       async () => {
         await registerHeldTrackedRepositories(client, outputChannel, (repos) => { session.pluginRepositories = repos; });
         notifyConflictsComputed();
       },
     ),
-    registerSaveAndCompileCommand(client, activeRecordTracker, outputChannel, compileDiagnostics, originFolder),
-    registerCompileAtRefCommand(client, outputChannel, compileDiagnostics, originFolder),
-    registerRebaseCommand(client, outputChannel, treeProvider, refreshMatchingPluginsFor),
+    registerSaveAndCompileCommand(
+      client, activeRecordTracker, outputChannel, makeReporter(outputChannel, 'saveAndCompile'), askQuestion,
+      compileDiagnostics, originFolder),
+    registerCompileAtRefCommand(
+      client, outputChannel, makeReporter(outputChannel, 'compileAtMain'), askQuestion,
+      compileDiagnostics, originFolder),
+    registerRebaseCommand(
+      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.rebase'), treeProvider, refreshMatchingPluginsFor),
     registerOpenHeaderCommand(),
   ];
 }
