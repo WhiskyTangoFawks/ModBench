@@ -9,9 +9,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>ADR-0015 invariant 2: a record gesture writes its system of record and returns, so it
-/// never queues behind the Index's own projections. One door stands for all six, because every
-/// record gesture reaches its handler through <c>WriteEndpointMapping.Execute</c>.</summary>
+/// <summary>ADR-0015 invariant 2: a record gesture writes its system of record and returns, never
+/// queuing behind the Index's projections. One door stands for all six: they share
+/// <c>WriteEndpointMapping.Execute</c>.</summary>
 public sealed class RecordWriteDoesNotWaitOnTheIndexTests : IDisposable
 {
     private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
