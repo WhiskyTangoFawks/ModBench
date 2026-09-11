@@ -26,10 +26,10 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
 
-    private static IndexProjector MakeManager()
+    private static IndexProjector MakeManager(LoadOrderHolder holder)
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        return new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
     }
 
     private string AnInstance(string name, string editorId)
@@ -57,19 +57,20 @@ public sealed class InstanceScopedIndexTests : IDisposable
     [Fact]
     public void TwoInstancesWithSameNamedModFolders_NeverSeeEachOthersRows()
     {
+        var holder = new LoadOrderHolder();
         var gameDirectory = GameDirectory;
         var a = AnInstance("instance-a", "NpcFromA");
         var b = AnInstance("instance-b", "NpcFromB");
 
-        using (var first = MakeManager()) first.Reconcile(gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
-        using (var second = MakeManager()) second.Reconcile(gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
+        using (var first = MakeManager(holder)) first.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using (var second = MakeManager(holder)) second.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
 
-        using var warmB = MakeManager();
-        warmB.Reconcile(gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
+        using var warmB = MakeManager(holder);
+        warmB.Reconcile(holder, gameDirectory, OrderIn(b), GameRelease.Fallout4, b);
         Assert.Equal(["NpcFromB"], EditorIdsIn(warmB));
 
-        using var warmA = MakeManager();
-        warmA.Reconcile(gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using var warmA = MakeManager(holder);
+        warmA.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
         Assert.Equal(["NpcFromA"], EditorIdsIn(warmA));
     }
 
@@ -78,13 +79,14 @@ public sealed class InstanceScopedIndexTests : IDisposable
     [Fact]
     public void TheSameInstanceLoadedTwice_KeepsItsIndexBetweenLaunches()
     {
+        var holder = new LoadOrderHolder();
         var gameDirectory = GameDirectory;
         var a = AnInstance("instance-warm", "NpcFromA");
 
-        using (var cold = MakeManager()) cold.Reconcile(gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using (var cold = MakeManager(holder)) cold.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
 
-        using var warm = MakeManager();
-        warm.Reconcile(gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
+        using var warm = MakeManager(holder);
+        warm.Reconcile(holder, gameDirectory, OrderIn(a), GameRelease.Fallout4, a);
         Assert.Equal(["NpcFromA"], EditorIdsIn(warm));
     }
 }

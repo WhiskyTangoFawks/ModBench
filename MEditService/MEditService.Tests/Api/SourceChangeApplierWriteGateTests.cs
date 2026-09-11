@@ -17,18 +17,19 @@ public sealed class SourceChangeApplierWriteGateTests
     [Fact]
     public async Task Apply_LogsRatherThanLosesTheBatch_WhenAnotherWriterHoldsTheGate()
     {
+        var holder = new LoadOrderHolder();
         var gate = new IndexWriteGate(TimeSpan.FromMilliseconds(100));
         var entries = new List<LogEntry>();
         // The Index is never reached: the gate refuses before the first plugin in the batch is
         // projected, which is the whole of what this asserts.
-        using var index = new IndexProjector(MutagenPluginAdapter.Instance, new RefusingIndexFactory());
+        using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, new RefusingIndexFactory());
         var sourceChanges = new SourceChangeApplier(
-            index, gate, new ModFolderWatcher(), new InMemoryNotificationPublisher(),
+            index, holder, gate, new ModFolderWatcher(), new InMemoryNotificationPublisher(),
             new CollectingLogger(entries));
 
         using var held = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
-        var holder = Task.Run(() =>
+        var otherWriter = Task.Run(() =>
         {
             using var _ = gate.Enter();
             held.Set();
@@ -40,7 +41,7 @@ public sealed class SourceChangeApplierWriteGateTests
         var thrown = Record.Exception(() => sourceChanges.Apply([change]));
 
         release.Set();
-        await holder.WaitAsync(TimeSpan.FromSeconds(10));
+        await otherWriter.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Null(thrown);
         Assert.Contains(entries, e => e.Level == LogLevel.Warning

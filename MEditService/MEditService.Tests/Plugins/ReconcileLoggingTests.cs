@@ -26,6 +26,7 @@ public sealed class ReconcileLoggingTests
     [Fact]
     public void Reconcile_PerPluginLinesAtInfo_PipelineStepsAtDebug()
     {
+        var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("s216")
             .WithPlugin("A.esp")
             .WithPlugin("B.esp")
@@ -34,10 +35,11 @@ public sealed class ReconcileLoggingTests
         using var _ = loggerFactory;
         var reflector = SharedSchemaReflector.Instance;
         using var index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), loggerFactory.CreateLogger<IndexProjector>());
 
-        index.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+        index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
         foreach (var plugin in new[] { "A.esp", "B.esp" })
         {

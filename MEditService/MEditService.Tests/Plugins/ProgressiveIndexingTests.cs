@@ -13,12 +13,12 @@ namespace MEditService.Tests.Plugins;
 /// and asserts at that instant: no sleeps, no timing assumptions (ADR-0035).</summary>
 public sealed class ProgressiveIndexingTests
 {
-    private static (IndexProjector Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(string gateBefore)
+    private static (IndexProjector Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
     {
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var gate = new GatedIndexRepositoryFactory(inner, gateBefore);
-        var manager = new IndexProjector(MutagenPluginAdapter.Instance, gate);
+        var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, gate);
         return (manager, gate);
     }
 
@@ -32,17 +32,17 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task MidLoad_AnAlreadyIndexedPluginIsQueryable_WhileLaterPluginsAreStillLoading()
     {
+        var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-queryable");
-        var (manager, gate) = MakeGatedManager(gateBefore: "B.esp");
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // Parked before B.esp is indexed: the load order exists, and A.esp — indexed one step ago — is
         // fully queryable — not published only after the whole load order has been indexed and swept.
-        Assert.NotNull(manager.LoadOrder);
         Assert.NotNull(manager.Reads);
         Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
@@ -60,14 +60,15 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task Status_ReportsTheLoadWhileItRuns_AndSettlesWhenTheSweepCompletes()
     {
+        var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-status");
-        var (manager, gate) = MakeGatedManager(gateBefore: "B.esp");
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
 
         Assert.Equal(LoadOrderState.None, manager.Status.State);
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         var loading = manager.Status;
@@ -94,6 +95,7 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task Status_ReportsAPluginFailure_WhileTheLoadIsStillRunning()
     {
+        var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-progressive-failure")
             .WithPlugin("Fallout4.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
@@ -104,9 +106,9 @@ public sealed class ProgressiveIndexingTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp", poisonPlugin: "A.esp");
-        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, gate);
+        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, gate);
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // A.esp failed one step ago and C.esp has not been reached: the failure is reported when it
@@ -127,12 +129,13 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task Status_IndexedPluginsCarryOrigin_NotJustAFilename()
     {
+        var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-status-origin");
-        var (manager, gate) = MakeGatedManager(gateBefore: "B.esp");
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
         gate.Release();
         await load;
@@ -145,6 +148,7 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task MidLoad_EnumeratingThePluginList_SurvivesTheLoadAppendingToIt()
     {
+        var holder = new LoadOrderHolder();
         // A plugin is appended when it is opened, one step before it is indexed, so parking before
         // B's index leaves only C.esp still to be appended.
         using var fx = new PluginFixtureBuilder("sm-progressive-enumeration")
@@ -153,17 +157,17 @@ public sealed class ProgressiveIndexingTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
             .BuildScattered();
-        var (manager, gate) = MakeGatedManager(gateBefore: "B.esp");
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // Interleaved exactly rather than raced: begin an enumeration, let the load open one more plugin,
         // then keep enumerating, which is the shape that throws on a plain List<T>, deterministically.
-        var plugins = manager.LoadOrder!.Plugins;
-        using var enumerator = plugins.GetEnumerator();
+        var opened = manager.Reads!.OpenedCopies;
+        using var enumerator = opened.GetEnumerator();
         Assert.True(enumerator.MoveNext());
 
         gate.Release();
@@ -185,12 +189,13 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task UnloadMidLoad_StopsTheLoad_AndLeavesNoLoadOrderBehind()
     {
+        var holder = new LoadOrderHolder();
         using var fx = FourPlugins("sm-progressive-unload");
-        var (manager, gate) = MakeGatedManager(gateBefore: "B.esp");
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // Unload must wait for the load to stop touching the repository before disposing it: disposing a
@@ -204,7 +209,6 @@ public sealed class ProgressiveIndexingTests
         await unload;
         await Assert.ThrowsAsync<OperationCanceledException>(() => load);
 
-        Assert.Null(manager.LoadOrder);
         Assert.Null(manager.Reads);
         Assert.Equal(LoadOrderState.None, manager.Status.State);
         // The load stopped where it was told to rather than running to completion first.
@@ -215,17 +219,18 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task ASecondLoadMidLoad_DrainsTheFirst_AndTheSurvivorIsWhollyTheSecond()
     {
+        var holder = new LoadOrderHolder();
         using var fx = FourPlugins("sm-progressive-supersede");
-        var (manager, gate) = MakeGatedManager(gateBefore: "B.esp");
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
 
-        var first = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // A second snapshot while a reconcile is running is an ordinary event (a watcher firing
         // during activation), not an edge case.
-        var second = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var second = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         var premature = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500)));
         Assert.NotSame(second, premature); // the second reconcile waited for the first to stop
 
@@ -248,12 +253,13 @@ public sealed class ProgressiveIndexingTests
     [Fact]
     public async Task MidLoad_ReadsAreServed_RatherThanBlockingUntilTheLoadFinishes()
     {
+        var holder = new LoadOrderHolder();
         using var fx = ThreePlugins("sm-progressive-nonblocking");
-        var (manager, gate) = MakeGatedManager(gateBefore: "B.esp");
+        var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // A load holding the load order lock end to end returns nothing at all until the whole load order

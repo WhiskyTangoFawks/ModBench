@@ -72,6 +72,7 @@ try
     // ADR-0046 invariant 10: one Index for the whole process, so the two sides never project into
     // two stores. ADR-0001: which file it opens comes from the load request, not from here.
     builder.Services.AddSingleton(sp => new IndexProjector(
+        sp.GetRequiredService<LoadOrderHolder>(),
         sp.GetRequiredService<IPluginAdapter>(),
         sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILoggerFactory>(),
@@ -106,6 +107,7 @@ try
     // re-subscribing would stack a handler per reconcile. Which plugins are watched is re-decided
     // per reconcile instead.
     var index = app.Services.GetRequiredService<IndexProjector>();
+    var holder = app.Services.GetRequiredService<LoadOrderHolder>();
     var watcher = app.Services.GetRequiredService<ModFolderWatcher>();
     var binaryChanges = new BinaryChangeApplier(
         index,
@@ -117,6 +119,7 @@ try
     // ADR-0046: the mod watcher's own external-change signals, subscribed once for the same reason.
     var externalChanges = new ExternalChangeApplier(
         index,
+        holder,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ExternalChangeApplier)));
     watcher.ExternalChangeReported = externalChanges.ApplyPending;
@@ -125,11 +128,11 @@ try
     // ADR-0046: the same watcher's source-routing half. The Index announces each reconcile and
     // Track the repository it has created, so a watch starts with no restart.
     var sourceChanges = new SourceChangeApplier(
-        index, app.Services.GetRequiredService<IndexWriteGate>(), watcher,
+        index, holder, app.Services.GetRequiredService<IndexWriteGate>(), watcher,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceChangeApplier)));
     watcher.SourceChanged = sourceChanges.Apply;
-    index.LoadOrderChanged = sourceChanges.RefreshWatches;
+    index.Reconciled = sourceChanges.RefreshWatches;
     app.Services.GetRequiredService<TrackService>().RepositoryCreated = sourceChanges.WatchTracking;
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure

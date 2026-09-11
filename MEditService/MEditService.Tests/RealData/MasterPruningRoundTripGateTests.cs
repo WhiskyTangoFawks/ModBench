@@ -152,6 +152,7 @@ public sealed class MasterPruningRoundTripGateTests
     // fixtures test.
     private sealed class PrunedMasterScratch : IDisposable
     {
+        internal LoadOrderHolder Holder { get; } = new();
         private readonly string _fixtureFileName;
         private readonly string _origin;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masterprune-game-").FullName;
@@ -181,13 +182,14 @@ public sealed class MasterPruningRoundTripGateTests
             inputs.Add(new LoadOrderEntry(_fixtureFileName, pluginPath, _origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
             _index = new IndexProjector(
+                Holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, _origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Holder, _origin, SourcePreset.Edits);
 
         public void Dispose()
         {

@@ -35,6 +35,7 @@ public sealed class SourceContainerFixture : IDisposable
 
     public SourceContainerFixture()
     {
+        var holder = new LoadOrderHolder();
         var instanceRoot = Directory.CreateTempSubdirectory("medit-source-container-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(instanceRoot, "mods", Origin)).FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(instanceRoot, "game")).FullName;
@@ -62,7 +63,6 @@ public sealed class SourceContainerFixture : IDisposable
             .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);
         _instanceRoot = instanceRoot;

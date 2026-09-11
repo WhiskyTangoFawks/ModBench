@@ -16,6 +16,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
     [Fact]
     public void Reconcile_SourceTreeWhosePluginIsGone_IsLeftExactlyWhereItIs()
     {
+        var holder = new LoadOrderHolder();
         var root = Directory.CreateTempSubdirectory("medit-leave-source-origin-").FullName;
         var originFolder = Path.Combine(root, "ModA");
         Directory.CreateDirectory(originFolder);
@@ -36,10 +37,10 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
 
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
             IndexProjector index = manager;
 
-            index.Reconcile(
+            index.Reconcile(holder,
                 gameDir,
                 [new LoadOrderEntry("StillHere.esp", stillHerePath, "ModA", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);

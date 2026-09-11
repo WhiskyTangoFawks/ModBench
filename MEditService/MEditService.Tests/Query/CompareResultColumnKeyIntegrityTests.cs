@@ -130,6 +130,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
     [Fact]
     public void GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
+        var holder = new LoadOrderHolder();
         // Perk, not Npc: a record type carrying both a script adapter and a top-level Conditions field, so
         // one record reaches every column-keyed dictionary this guards as well as the nested condition
         // subtree.
@@ -181,7 +182,6 @@ public sealed class CompareResultColumnKeyIntegrityTests
         repo.UpdateWinners();
 
         var index = new FakeIndex(repo.At(RecordRef.Effective));
-        var holder = new LoadOrderHolder();
         holder.Apply(new LoadOrder(
             @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4,
             [new RegisteredCopy("Shared.esp", "Data", "", Slot: 0, Enabled: true, Winning: true)]));

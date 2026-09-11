@@ -10,7 +10,7 @@ namespace MEditService.Api;
 /// The gate arrives separately from the Index because a batch is one write across several of the
 /// Index's own gated doors.</summary>
 internal sealed class SourceChangeApplier(
-    IndexProjector index, IndexWriteGate writeGate, ModFolderWatcher watcher,
+    IndexProjector index, LoadOrderHolder holder, IndexWriteGate writeGate, ModFolderWatcher watcher,
     INotificationPublisher notifications, ILogger logger)
 {
     /// <summary>The watch set the load order now implies: one watch per tracked copy, and none for a
@@ -20,14 +20,16 @@ internal sealed class SourceChangeApplier(
         // A watch must never outlive the load order that asked for it, or a plugin the load order
         // does not hold would keep validating itself into it.
         watcher.UnwatchAll();
-        if (index.LoadOrder is not { } loadOrder) return;
 
-        var order = LoadOrder.From(loadOrder);
-        foreach (var plugin in loadOrder.Plugins)
+        // A closed Index arms nothing: this same announcement fires on Close, and a watch over a
+        // store that is gone can only log its own refusal until the next snapshot.
+        if (index.Status.State is LoadOrderState.None) return;
+
+        var order = holder.Current;
+        foreach (var copy in order.Copies)
         {
-            if (ModFolders.TrackedOf(order, new PluginKey(plugin.Name, plugin.Origin)) is not { } modFolder)
-                continue;
-            watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
+            if (ModFolders.TrackedOf(order, copy.Key) is not { } modFolder) continue;
+            watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
         }
     }
 
@@ -35,10 +37,8 @@ internal sealed class SourceChangeApplier(
     /// after the tree is written and committed, so Track's burst is projected like any other.</summary>
     internal void WatchTracking(string modFolder, string origin)
     {
-        if (index.LoadOrder is not { } loadOrder) return;
-
-        foreach (var plugin in loadOrder.Plugins.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)))
-            watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
+        foreach (var copy in ModFolders.PluginsOfOrigin(holder.Current, origin))
+            watcher.Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
     }
 
     /// <summary>ADR-0046: the watcher hands over every plugin it settled together. Held under one

@@ -10,16 +10,12 @@ namespace MEditService.Tests.TestSupport;
 /// <summary>The write API with the projection behind it. ADR-0046 makes the write and the Index
 /// learning of it two events, so a test reading after a write lets the projector catch up
 /// first.</summary>
-internal sealed class ProjectingEditService(
-    IndexProjector index, LoadOrderHolder holder, IServiceProvider handlers)
+internal sealed class ProjectingEditService(IndexProjector index, IServiceProvider handlers)
 {
     /// <summary>The service every test writes through, over <paramref name="index"/>'s own store and
-    /// schemas.</summary>
-    internal static ProjectingEditService Over(IndexProjector index)
-    {
-        var holder = TestEditService.HolderOver(index);
-        return new ProjectingEditService(index, holder, TestEditService.Over(holder));
-    }
+    /// schemas, reading the load order from the holder the Index was built with.</summary>
+    internal static ProjectingEditService Over(IndexProjector index, LoadOrderHolder holder) =>
+        new(index, TestEditService.Over(holder));
 
     internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
         Projected(Current<EditRecordHandler>().Edit(plugin, formKey, envelope));
@@ -50,13 +46,7 @@ internal sealed class ProjectingEditService(
     internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) =>
         Current<PeekNextFreeFormKeyHandler>().PeekNextFreeFormKey(plugin);
 
-    // The two load orders are one in the product, where a snapshot reaches the holder and the Index
-    // together; here the Index is the one a test reconciles, so the holder follows it per gesture.
-    private T Current<T>() where T : notnull
-    {
-        TestEditService.Sync(holder, index);
-        return handlers.GetRequiredService<T>();
-    }
+    private T Current<T>() where T : notnull => handlers.GetRequiredService<T>();
 
     private RecordEditResult Projected(RecordEditResult result)
     {

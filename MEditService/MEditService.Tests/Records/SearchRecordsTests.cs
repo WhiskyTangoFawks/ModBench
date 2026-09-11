@@ -13,12 +13,12 @@ public class SearchRecordsTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private IndexProjector MakeLoadedManager()
+    private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return manager;
     }
 
@@ -27,7 +27,8 @@ public class SearchRecordsTests(TestPluginFixture fixture)
     [Fact]
     public void Search_AcrossMultipleRecordTypes_ByFormKey_ResolvesRecord()
     {
-        using var manager = MakeLoadedManager();
+        var holder = new LoadOrderHolder();
+        using var manager = MakeLoadedManager(holder);
         var reader = manager.Reads!;
 
         var byEditorId = reader.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 10, Offset: 0));

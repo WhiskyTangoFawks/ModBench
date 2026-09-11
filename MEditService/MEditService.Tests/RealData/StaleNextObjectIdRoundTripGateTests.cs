@@ -113,6 +113,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     // the names present, not their content.
     private sealed class TrackedScratch : IDisposable
     {
+        internal LoadOrderHolder Holder { get; } = new();
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-stale-header-game-").FullName;
         private readonly IndexProjector _index;
 
@@ -140,17 +141,18 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin!, Slot: inputs.Count, Enabled: true, Winning: true));
 
             _index = new IndexProjector(
+                Holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_index, Plugin.Origin!, SourcePreset.Edits, deserialize);
+                .TrackAsync(_index, Holder, Plugin.Origin!, SourcePreset.Edits, deserialize);
 
         public PluginCompileService CompileService() =>
-            CompileServices.Over(_index);
+            CompileServices.Over(Holder.Current);
 
         public void Dispose()
         {

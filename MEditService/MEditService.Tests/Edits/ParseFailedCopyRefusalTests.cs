@@ -90,6 +90,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
 
         public ParseFailedCopyFixture()
         {
+            var holder = new LoadOrderHolder();
             _sourcePath = Path.Combine(_sourceModFolder, SourcePluginName);
             File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", SourcePluginName), _sourcePath);
 
@@ -118,7 +119,6 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(loadOrder, [DestinationPlugin], DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 
-            var holder = new LoadOrderHolder();
             holder.Apply(loadOrder);
             CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);
             CopyAsNewHandler = TestEditService.CopyAsNewHandler(holder);

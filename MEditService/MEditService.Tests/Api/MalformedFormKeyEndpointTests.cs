@@ -17,12 +17,12 @@ public sealed class MalformedFormKeyEndpointTests
 {
     private const string MalformedFormKey = "not-a-formkey";
 
-    private static RenumberRecordHandler RenumberHandlerFor(IndexedModFixture mod) => TestEditService.RenumberHandler(mod.Index);
+    private static RenumberRecordHandler RenumberHandlerFor(IndexedModFixture mod) => TestEditService.RenumberHandler(mod.Holder);
 
-    private static CreateRecordHandler CreateHandlerFor(IndexedModFixture mod) => TestEditService.CreateHandler(mod.Index);
+    private static CreateRecordHandler CreateHandlerFor(IndexedModFixture mod) => TestEditService.CreateHandler(mod.Holder);
 
     private static CopyRecordAsNewRecordHandler CopyAsNewHandlerFor(IndexedModFixture mod) =>
-        TestEditService.CopyAsNewHandler(mod.Index);
+        TestEditService.CopyAsNewHandler(mod.Holder);
 
     [Fact]
     public void CreateRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()

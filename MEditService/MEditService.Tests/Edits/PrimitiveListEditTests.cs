@@ -278,6 +278,7 @@ public sealed class PrimitiveListEditTests : IDisposable
 
         public Fixture()
         {
+            var holder = new LoadOrderHolder();
             _modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
             var pluginPath = Path.Combine(_modFolder, PluginName);
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
@@ -319,7 +320,6 @@ public sealed class PrimitiveListEditTests : IDisposable
                 .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
 
-            var holder = new LoadOrderHolder();
             holder.Apply(LoadOrder);
             EditHandler = TestEditService.EditHandler(holder);
         }

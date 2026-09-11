@@ -48,6 +48,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
     // their content.
     private sealed class TrueStormsScratch : IDisposable
     {
+        internal LoadOrderHolder Holder { get; } = new();
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-truestorms-game-").FullName;
         private readonly IndexProjector _index;
 
@@ -72,13 +73,14 @@ public sealed class SubrecordInventoryRoundTripGateTests
             inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, "TrueStormsMod", Slot: inputs.Count, Enabled: true, Winning: true));
 
             _index = new IndexProjector(
+                Holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            _index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, "TrueStormsMod", SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Holder, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()
         {

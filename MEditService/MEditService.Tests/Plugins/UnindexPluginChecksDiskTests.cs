@@ -15,14 +15,19 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
         .WithPlugin("Held.esp", mod => mod.Npcs.AddNew("HeldNpc"))
         .Build();
 
-    private readonly IndexProjector _index = new(
-        MutagenPluginAdapter.Instance,
-        new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+    private readonly LoadOrderHolder _holder = new();
+    private readonly IndexProjector _index;
 
     private PluginKey Key => new(_data.Plugins[0].Name, _data.Plugins[0].Origin);
 
-    public UnindexPluginChecksDiskTests() =>
-        _index.Reconcile(_data.DataFolder, _data.Plugins, GameRelease.Fallout4);
+    public UnindexPluginChecksDiskTests()
+    {
+        _index = new IndexProjector(
+            _holder,
+            MutagenPluginAdapter.Instance,
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        _index.Reconcile(_holder, _data.DataFolder, _data.Plugins, GameRelease.Fallout4);
+    }
 
     public void Dispose()
     {

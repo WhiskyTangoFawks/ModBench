@@ -38,10 +38,6 @@ public record PluginMetadata(
     /// <summary>What makes a bare filename a safe write target: plugins.txt cannot list a name
     /// twice, so at most one held copy per name is in the load order.</summary>
     public bool InLoadOrder => Registration.InLoadOrder;
-
-    /// <summary>Read-only for editing: a forced master (ADR-0036 — the game's own files are never
-    /// a write target), or a copy the load order does not name, where editing changes nothing.</summary>
-    public bool IsImmutable => IsForced || !InLoadOrder;
 }
 
 /// <summary>What reading the file told the Index about a copy, which no registration carries. Read

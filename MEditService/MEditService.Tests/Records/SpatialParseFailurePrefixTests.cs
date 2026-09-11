@@ -75,6 +75,7 @@ public sealed class SpatialParseFailurePrefixTests
 
         internal SpatialWorld()
         {
+            var holder = new LoadOrderHolder();
             var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
             var wrld = mod.Worldspaces.AddNew("PrefixWorld");
             var cell = new Cell(mod) { EditorID = "PrefixCell", Grid = new CellGrid { Point = new P2Int(1, 1) } };
@@ -102,9 +103,10 @@ public sealed class SpatialParseFailurePrefixTests
             mod.WriteToBinary(path);
 
             _index = new IndexProjector(
+                holder,
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            var holder = _index.Reconcile(
+            _index.Reconcile(holder,
                 _dataFolder,
                 [new LoadOrderEntry(PluginName, path, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);

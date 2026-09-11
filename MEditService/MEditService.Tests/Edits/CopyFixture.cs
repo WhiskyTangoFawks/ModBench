@@ -47,6 +47,7 @@ public sealed class CopyFixture : IDisposable
 
     private CopyFixture(bool trackSource)
     {
+        var holder = new LoadOrderHolder();
         SourceModFolder = Directory.CreateTempSubdirectory("medit-copy-source-").FullName;
         DestinationModFolder = Directory.CreateTempSubdirectory("medit-copy-dest-").FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-copy-game-").FullName;
@@ -77,7 +78,6 @@ public sealed class CopyFixture : IDisposable
         Track(DestinationOrigin, DestinationPlugin);
         if (trackSource) Track(SourceOrigin, SourcePlugin);
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);
         DeleteHandler = TestEditService.DeleteHandler(holder);

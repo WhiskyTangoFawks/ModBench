@@ -103,6 +103,7 @@ public sealed class ContainerModFixture : IDisposable
     /// binary first, exactly as the process does before Track ever runs.</summary>
     internal ContainerModFixture(bool track)
     {
+        var holder = new LoadOrderHolder();
         _instanceRoot = Directory.CreateTempSubdirectory("medit-container-mod-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", ModFolderOrigin)).FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(_instanceRoot, "game")).FullName;
@@ -183,7 +184,6 @@ public sealed class ContainerModFixture : IDisposable
 
         if (track) Track();
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);
         EditHandler = TestEditService.EditHandler(holder);

@@ -74,7 +74,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         using var _dispose = loggerFactory;
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.AbsorbExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Index,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
             TestEditService.AbsorbHandler(), watcher, loggerFactory));
 
         Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
@@ -103,7 +103,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
 
         var before = SourceRepository.ChangedTrackedFilesOutsideSource(_mod.ModFolder);
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.KeepExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Index,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
             TestEditService.KeepHandler(), watcher, loggerFactory));
 
         Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
@@ -133,7 +133,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.AbsorbExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Index,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
             TestEditService.AbsorbHandler(), watcher, loggerFactory));
 
         Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
@@ -154,7 +154,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.KeepExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Index,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
             TestEditService.KeepHandler(), watcher, loggerFactory));
 
         Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
@@ -172,7 +172,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.KeepExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Index,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
             TestEditService.KeepHandler(), watcher, loggerFactory));
 
         Assert.False(ok.Value!.Succeeded);

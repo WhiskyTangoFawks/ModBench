@@ -111,13 +111,11 @@ public sealed class ArchitectureTests
         // kernel and reaches the Index through the next snapshot, so the create gesture is a writer
         // and never a reconciler.
         string[] reconcilers = ["LoadOrderEndpoints.cs"];
-        // Scoped by the holder type rather than by a receiver name, so renaming the variable a write
-        // goes through cannot disarm this.
         string[] writers = ["LoadOrderEndpoints.cs", "CreatePluginHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
-        var applies = Offenders(root, Projects, [nameof(LoadOrderHolder), ".Apply("], []);
-        var registers = Offenders(root, Projects, [nameof(LoadOrderHolder), ".Register("], []);
+        var applies = HolderWrites(root, Projects, "Apply");
+        var registers = HolderWrites(root, Projects, "Register");
 
         var offenders = Unallowed(reconciles, reconcilers)
             .Concat(Unallowed(applies, writers))
@@ -174,6 +172,29 @@ public sealed class ArchitectureTests
         Assert.Contains("Registration.cs", walked);
     }
 
+    // Typed by the receiver, not by a token the whole file shares: the Index holds a holder to read
+    // from and calls the store's own Register beside it, which "this file names both" cannot tell
+    // apart.
+    internal static List<string> HolderWrites(string root, string[] projects, string verb) =>
+        [.. projects
+            .SelectMany(p => SourceTree.CSharpFiles(Path.Combine(root, p)))
+            .Where(f => CallsHolder(File.ReadAllText(f), verb))
+            .Select(f => Path.GetRelativePath(root, f))];
+
+    // A declaration, or an assignment from anything naming the type — construction, a DI resolve,
+    // a property. The name is all that is wanted; over-capturing costs a receiver nobody calls the
+    // verb on, while under-capturing loses the write.
+    private static readonly Regex HolderReceiver = new(
+        @"LoadOrderHolder\??\s+(\w+)|(\w+)\s*=(?!>)[^;]*\bLoadOrderHolder\b", RegexOptions.Compiled);
+
+    private static bool CallsHolder(string text, string verb) =>
+        HolderReceiver.Matches(text)
+            .SelectMany(m => new[] { m.Groups[1].Value, m.Groups[2].Value })
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            // Bounded, or a receiver named `holder` answers for `placeholder.Apply(`.
+            .Any(name => Regex.IsMatch(text, $@"\b{Regex.Escape(name)}\.{verb}\("));
+
     private static IEnumerable<string> Unallowed(List<string> named, string[] allowed) =>
         named.Where(f => !allowed.Contains(Path.GetFileName(f)));
 
@@ -213,24 +234,49 @@ public sealed class ArchitectureTests
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
-    // ADR-0046 invariant 11: one load order, the kernel's value, read from the holder. A query that
-    // reaches the Index's view of it instead can disagree with a command mid-reconcile.
+    // ADR-0046 invariant 11: one load order, the kernel's. An Index that hands one out is a second
+    // answer to "which copy wins". As a parameter it is the snapshot going in, the allowed
+    // direction.
     [Fact]
-    public void TheQueryServices_AndTheIndexReadInterface_NameNoLoadOrderInterface()
+    public void TheIndexSurface_HandsOutNoLoadOrder()
     {
-        var readSide = Path.Combine(SolutionDirectory(), "MEditService.Core", "Records");
-        var offenders = SourceTree
-            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Core", "Queries"))
-            .Append(Path.Combine(readSide, "IQueryIndex.cs"))
-            .Append(Path.Combine(readSide, "IRecordReads.cs"))
-            .Where(file => File.ReadAllText(file).Contains(nameof(ILoadOrder), StringComparison.Ordinal))
-            .Select(Path.GetFileName)
+        var offenders = new[] { typeof(IndexProjector), typeof(IQueryIndex), typeof(IRecordReads) }
+            .SelectMany(type => type.GetMembers(EveryMember).Select(member => (Type: type, Member: member)))
+            .Where(m => VisibleOutsideItsType(m.Member))
+            .Where(m => m.Member.Name == "LoadOrder" || ReturnsALoadOrder(m.Member))
+            .Select(m => $"{m.Type.Name}.{m.Member.Name}")
             .Order(StringComparer.Ordinal)
             .ToList();
 
         Assert.True(offenders.Count == 0,
-            $"The read side still names {nameof(ILoadOrder)}:\n" + string.Join("\n", offenders));
+            "The Index hands out a load order:\n" + string.Join("\n", offenders));
     }
+
+    private const BindingFlags EveryMember =
+        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
+    // Internal counts, private does not: the projector reads the kernel through a private field,
+    // and the rule is about what it hands out.
+    private static bool VisibleOutsideItsType(MemberInfo member) => member switch
+    {
+        PropertyInfo property =>
+            property.GetMethod?.IsPrivate == false || property.SetMethod?.IsPrivate == false,
+        FieldInfo field => !field.IsPrivate,
+        MethodBase method => !method.IsPrivate,
+        _ => true,
+    };
+
+    private static bool ReturnsALoadOrder(MemberInfo member) =>
+        IsALoadOrder(member switch
+        {
+            PropertyInfo property => property.PropertyType,
+            FieldInfo field => field.FieldType,
+            MethodInfo method => method.ReturnType,
+            _ => null,
+        });
+
+    private static bool IsALoadOrder(Type? type) =>
+        type is not null && (type == typeof(LoadOrder) || type == typeof(LoadOrderHolder));
 
     // ADR-0044: participation is derived — enabled, winning, and named by a plugins.txt line — and
     // the load order value is the one place that rule is spelled. A second spelling is how two

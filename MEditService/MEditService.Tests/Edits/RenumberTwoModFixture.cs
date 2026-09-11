@@ -44,6 +44,7 @@ public sealed class RenumberTwoModFixture : IDisposable
 
     private RenumberTwoModFixture(bool trackReferencer)
     {
+        var holder = new LoadOrderHolder();
         TargetModFolder = Directory.CreateTempSubdirectory("medit-renumber-target-").FullName;
         ReferencerModFolder = Directory.CreateTempSubdirectory("medit-renumber-ref-").FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-renumber-game-").FullName;
@@ -74,7 +75,6 @@ public sealed class RenumberTwoModFixture : IDisposable
         Track(TargetOrigin, TargetPlugin);
         if (trackReferencer) Track(ReferencerOrigin, ReferencerPlugin);
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);
     }

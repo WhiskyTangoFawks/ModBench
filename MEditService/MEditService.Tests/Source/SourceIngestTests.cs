@@ -21,12 +21,13 @@ namespace MEditService.Tests.Source;
 /// self-heal would make a binary-seeded ingest look source-seeded.</summary>
 public sealed class SourceIngestTests
 {
-    private static IndexProjector Reload(IndexedModFixture mod)
+    private static IndexProjector Reload(LoadOrderHolder holder, IndexedModFixture mod)
     {
         var index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        index.Reconcile(
+        index.Reconcile(holder,
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -38,6 +39,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         // A hand edit outside Modbench — the user's own editor, an agent's script, a git checkout.
@@ -46,7 +48,7 @@ public sealed class SourceIngestTests
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
             IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         var record = reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(record);
@@ -58,11 +60,12 @@ public sealed class SourceIngestTests
     [Fact]
     public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         File.Delete(mod.NpcSourceFile);
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         Assert.Null(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
         // Positive control: the load really happened and really indexed this plugin, or "absent"
@@ -73,11 +76,12 @@ public sealed class SourceIngestTests
     [Fact]
     public void AWorkingTreeDeletedRecord_StillAnswersAtHead()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         File.Delete(mod.NpcSourceFile);
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         var head = reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
@@ -92,13 +96,14 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
             IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         Assert.Equal("ExternallyRenamed", reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
         Assert.Equal(
@@ -109,6 +114,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnUncommittedHeaderEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(IndexedModFixture.PluginName));
         var headerPath = Path.Combine(mod.ModFolder, "source", IndexedModFixture.PluginName, "RecordData.json");
@@ -120,7 +126,7 @@ public sealed class SourceIngestTests
         edited.ModHeader.Author = "RenamedByHand";
         File.WriteAllBytes(headerPath, HeaderDocument.Write(edited));
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin);
         var head = reloaded.Store!.At(RecordRef.Head).GetDocument(headerFormKey, mod.Plugin);
@@ -134,6 +140,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnEditCommittedOutsideModbench_LeavesBothRefsOnTheNewBytes_NotPermanentlyDirty()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         var text = File.ReadAllText(mod.NpcSourceFile);
@@ -143,7 +150,7 @@ public sealed class SourceIngestTests
         GitCli.Run(gitDir, mod.ModFolder, "add", "-A");
         GitCli.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "external rename");
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         // HEAD moved with the working tree, so the record is clean against its *new* baseline —
         // not dirty against a baseline no ref holds any more.
@@ -156,13 +163,14 @@ public sealed class SourceIngestTests
     [Fact]
     public void ReconcilingOneEditedRecord_LeavesItsUntouchedSiblingClean()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
             IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         var byFormKey = reloaded.Store!
             .At(RecordRef.Effective).Search(new RecordQuery { Plugin = IndexedModFixture.PluginName, Limit = 100 })
@@ -198,6 +206,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheFailures()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         // Never-assume-exclusive-ownership: MO2, a git operation, or the user can leave this tree
@@ -206,7 +215,7 @@ public sealed class SourceIngestTests
             Path.Combine(mod.ModFolder, SourceRepository.RootFor(IndexedModFixture.PluginName), "RecordData.json"),
             "{ this is not json");
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         // Degraded, not dropped — the plugin's records are still queryable from the binary.
         Assert.NotNull(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
@@ -223,7 +232,7 @@ public sealed class SourceIngestTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        var edited = ProjectingEditService.Over(mod.Index)
+        var edited = ProjectingEditService.Over(mod.Index, mod.Holder)
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
@@ -248,11 +257,12 @@ public sealed class SourceIngestTests
     [Fact]
     public void ADirtyFileThatDeclaresNoFormKey_DegradesToTheBinary_AndSaysSoInTheFailures()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
         File.WriteAllText(mod.NpcSourceFile, """{"EditorID": "HalfWritten"}""");
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         var failure = Assert.Single(reloaded.Status.Failures);
         Assert.Equal(IndexedModFixture.PluginName, failure.Name);
@@ -262,6 +272,7 @@ public sealed class SourceIngestTests
     [Fact]
     public void APartialReconcileThenBinaryFallback_LeavesExactlyOneRowAtHead_NotTwo()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
         var gitDir = Path.Combine(mod.ModFolder, ".git");
         var sourceRoot = Path.Combine(mod.ModFolder, SourceRepository.RootFor(IndexedModFixture.PluginName));
@@ -279,7 +290,7 @@ public sealed class SourceIngestTests
             mod.Keyword, "kywd", IndexedModFixture.KeywordEditorId)));
         File.Delete(poison);
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         // Precondition: the ingest really did fail partway and fall back, or this proves nothing.
         Assert.NotEmpty(reloaded.Status.Failures);
@@ -296,14 +307,15 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
-        var edit = ProjectingEditService.Over(mod.Index)
+        var edit = ProjectingEditService.Over(mod.Index, mod.Holder)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedAcrossReload\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         // Effective is the working tree: the new name.
         var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
@@ -321,13 +333,14 @@ public sealed class SourceIngestTests
     [Fact]
     public void AnEditorIdRename_LeavesExactlyOneRowAtHead()
     {
+        var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
-        ProjectingEditService.Over(mod.Index)
+        ProjectingEditService.Over(mod.Index, mod.Holder)
             .Set(mod.Plugin, mod.Npc.ToString(), "EditorID",
                 JsonDocument.Parse("\"RenamedOnce\"").RootElement);
 
-        using var reloaded = Reload(mod);
+        using var reloaded = Reload(holder, mod);
 
         var atHead = reloaded.Store!.At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))

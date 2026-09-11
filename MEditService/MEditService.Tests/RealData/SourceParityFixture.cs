@@ -24,24 +24,26 @@ public sealed class SourceParityFixture : IDisposable
 
     public SourceParityFixture()
     {
+        var holder = new LoadOrderHolder();
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        FromBinary = NewLoadOrder(pluginPath);
+        FromBinary = NewLoadOrder(holder, pluginPath);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(FromBinary, Origin, SourcePreset.Edits)
+            .TrackAsync(FromBinary, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
-        FromSource = NewLoadOrder(pluginPath);
+        FromSource = NewLoadOrder(holder, pluginPath);
     }
 
-    private IndexProjector NewLoadOrder(string pluginPath)
+    private IndexProjector NewLoadOrder(LoadOrderHolder holder, string pluginPath)
     {
         var index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        index.Reconcile(
+        index.Reconcile(holder,
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);

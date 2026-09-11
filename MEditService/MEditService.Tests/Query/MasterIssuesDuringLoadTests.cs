@@ -19,6 +19,7 @@ public sealed class MasterIssuesDuringLoadTests
     [Fact]
     public async Task GetPlugins_MidLoad_DoesNotFlagAMasterThatSimplyHasNotBeenOpenedYet()
     {
+        var holder = new LoadOrderHolder();
         // ADR-0038: a genuine FormKey reference is what makes Mutagen record a master. Later.esm is
         // sequenced after the plugin depending on it, the transient state every ordinary load passes
         // through, held still here by the gate.
@@ -33,12 +34,11 @@ public sealed class MasterIssuesDuringLoadTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
-        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, gate);
-        var holder = new LoadOrderHolder();
+        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, gate);
         var svc = new RecordQueryService(
             manager, holder, reflector, new ConflictClassifier());
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, holder: holder));
+        var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // Parked with A.esp open and Later.esm not yet reached.
@@ -60,6 +60,7 @@ public sealed class MasterIssuesDuringLoadTests
     [Fact]
     public void GetPlugins_AfterLoad_StillReportsAGenuinelyMissingMaster()
     {
+        var holder = new LoadOrderHolder();
         // The guard against fixing the false positive by simply never reporting anything.
         using var fx = new PluginFixtureBuilder("mi-genuine")
             .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
@@ -67,9 +68,10 @@ public sealed class MasterIssuesDuringLoadTests
             .Build();
         var reflector = SharedSchemaReflector.Instance;
         using var manager = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        var holder = manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(
             manager, holder, reflector, new ConflictClassifier());
 

@@ -26,7 +26,7 @@ public sealed class ContainmentRederivationTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private ProjectingEditService EditService() => ProjectingEditService.Over(_fixture.Index);
+    private ProjectingEditService EditService() => ProjectingEditService.Over(_fixture.Index, _fixture.Holder);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -244,14 +244,16 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void AfterAnEmbeddedFieldEdit_AFreshReopen_AgreesWithTheLiveChildDocument()
     {
+        var holder = new LoadOrderHolder();
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("6.5")).Applied);
         var live = _fixture.Index.Projected().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Body;
         Assert.Contains("\"Scale\": 6.5", live!, StringComparison.Ordinal);
 
         using var reloaded = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(holder,
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -265,15 +267,17 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void AfterRenumberingAContainersOwnRecord_AFreshReopen_AgreesWithTheLivePlacementRow()
     {
+        var holder = new LoadOrderHolder();
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
         Assert.True(result.Applied, result.Message);
 
         var live = _fixture.Index.Projected().GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
 
         using var reloaded = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(holder,
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -312,6 +316,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void AfterRenumberingAQuest_AFreshReopen_AgreesWithTheLiveContainerChildRows()
     {
+        var holder = new LoadOrderHolder();
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Quest.ToString());
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
@@ -320,9 +325,10 @@ public sealed class ContainmentRederivationTests : IDisposable
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(holder,
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -358,6 +364,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public void AfterDeletingAQuestChild_AFreshReopen_AgreesWithTheLive()
     {
+        var holder = new LoadOrderHolder();
         var deleted = EditService().DeleteRecord(_fixture.Plugin, _fixture.DialogTopic2.ToString());
         Assert.True(deleted.Applied, deleted.Message);
 
@@ -365,9 +372,10 @@ public sealed class ContainmentRederivationTests : IDisposable
             .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(holder,
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -382,6 +390,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     [Fact]
     public async Task AfterRenumberingAnEmbeddedChild_AFreshReopen_AgreesWithTheLive()
     {
+        var holder = new LoadOrderHolder();
         _fixture.Index.Settle();
         var index = _fixture.Index.Store!;
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
@@ -403,9 +412,10 @@ public sealed class ContainmentRederivationTests : IDisposable
             .Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
 
         using var reloaded = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(holder,
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);

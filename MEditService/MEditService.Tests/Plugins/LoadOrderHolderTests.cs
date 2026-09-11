@@ -29,9 +29,9 @@ public sealed class LoadOrderHolderTests
     [Fact]
     public void Require_AfterApplyingTheEmptyValue_RefusesAgain()
     {
+        var holder = new LoadOrderHolder();
         // Closing the load order applies Empty; a read after it must refuse exactly as it did
         // before the first snapshot.
-        var holder = new LoadOrderHolder();
         holder.Apply(new LoadOrder(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
 
         holder.Apply(LoadOrder.Empty);

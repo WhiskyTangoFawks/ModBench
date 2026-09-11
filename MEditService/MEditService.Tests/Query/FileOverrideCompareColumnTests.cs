@@ -17,6 +17,7 @@ public sealed class FileOverrideCompareColumnTests
     [Fact]
     public void GetCompare_TwoOriginsProvideSameFilename_ExcludesTheFileLevelLosersColumn()
     {
+        var holder = new LoadOrderHolder();
         // Both copies run their own NextFormID sequence from the same ModKey, so both NPCs land on the
         // identical nominal FormKey, which is what makes this a same-identity comparison rather than two
         // unrelated files.
@@ -27,6 +28,7 @@ public sealed class FileOverrideCompareColumnTests
         using var _ = fx;
 
         using var manager = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         // ADR-0044: the snapshot carries both copies — plugins.txt names the filename once, so
@@ -35,7 +37,7 @@ public sealed class FileOverrideCompareColumnTests
         var snapshot = fx.Plugins
             .Select(p => p.Origin == "ModB" ? p with { Slot = winner.Slot, Winning = false } : p)
             .ToList();
-        var holder = manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
         var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
@@ -54,6 +56,7 @@ public sealed class FileOverrideCompareColumnTests
     [Fact]
     public void GetCompare_DisabledButWinningCopy_StillColumns()
     {
+        var holder = new LoadOrderHolder();
         // The deliberately-untouched axis: a disabled line is not a file-level loser, since its file is the
         // one the name resolves to and the user merely switched it off. Only Winning filters, so the
         // exclusion never widens to Participates.
@@ -63,10 +66,11 @@ public sealed class FileOverrideCompareColumnTests
         using var _ = fx;
 
         using var manager = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         var snapshot = fx.Plugins.Select(p => p with { Enabled = false }).ToList();
-        var holder = manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        manager.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
         var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 

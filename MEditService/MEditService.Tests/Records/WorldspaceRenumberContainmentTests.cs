@@ -19,6 +19,7 @@ namespace MEditService.Tests.Records;
 /// A self-built mod, since widening the shared fixture is the riskier change.</summary>
 public sealed class WorldspaceRenumberContainmentTests : IDisposable
 {
+    internal LoadOrderHolder Holder { get; } = new();
     private const string PluginName = "WorldspaceRenumber.esp";
     private const string Origin = "WorldspaceRenumberMod";
     private readonly PluginKey _plugin = new(PluginName, Origin);
@@ -53,13 +54,14 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         _extCellFormKey = extCell.FormKey.ToString();
 
         _index = new IndexProjector(
+            Holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        _index.Reconcile(
+        _index.Reconcile(Holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_index, Origin, SourcePreset.Edits)
+            .TrackAsync(_index, Holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -78,7 +80,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     }
 
     private ProjectingEditService EditService() =>
-        ProjectingEditService.Over(_index);
+        ProjectingEditService.Over(_index, Holder);
 
     // ---- the confirmed gap ----
 
@@ -124,6 +126,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void AfterRenumberingAWorldspace_AFreshReopen_AgreesWithTheLiveCellLocationRows()
     {
+        var Holder = new LoadOrderHolder();
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
@@ -132,9 +135,10 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             .OrderBy(c => c.FormKey).ToList();
 
         using var reloaded = new IndexProjector(
+            Holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        reloaded.Reconcile(
+        reloaded.Reconcile(Holder,
             _gameDirectory,
             [new LoadOrderEntry(PluginName, Path.Combine(_modFolder, PluginName), Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);

@@ -133,6 +133,7 @@ public sealed class ContainerCopyFixture : IDisposable
 
     private ContainerCopyFixture(bool destinationLoadsFirst, bool trackSource)
     {
+        var holder = new LoadOrderHolder();
         SourceModFolder = Directory.CreateTempSubdirectory("medit-container-copy-source-").FullName;
         DestinationModFolder = Directory.CreateTempSubdirectory("medit-container-copy-dest-").FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-container-copy-game-").FullName;
@@ -272,7 +273,6 @@ public sealed class ContainerCopyFixture : IDisposable
         Track(DestinationOrigin, DestinationPlugin);
         if (trackSource) Track(SourceOrigin, SourcePlugin);
 
-        var holder = new LoadOrderHolder();
         holder.Apply(LoadOrder);
         EditHandler = TestEditService.EditHandler(holder);
         CopyAsOverrideHandler = TestEditService.CopyAsOverrideHandler(holder);

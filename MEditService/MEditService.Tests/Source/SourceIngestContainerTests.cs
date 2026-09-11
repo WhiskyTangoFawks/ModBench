@@ -18,12 +18,13 @@ public sealed class SourceIngestContainerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private IndexProjector NewLoadOrder()
+    private IndexProjector NewLoadOrder(LoadOrderHolder holder)
     {
         var index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        index.Reconcile(
+        index.Reconcile(holder,
             _fixture.GameDirectory,
             [new LoadOrderEntry(ContainerModFixture.PluginName, Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName), ContainerModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
@@ -35,7 +36,8 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedPlacedReference_IsItsOwnRecord_AfterIngestFromSource()
     {
-        using var reloaded = NewLoadOrder();
+        var holder = new LoadOrderHolder();
+        using var reloaded = NewLoadOrder(holder);
 
         var record = reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(record);
@@ -46,7 +48,8 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedPlacedReference_KeepsItsPlacementRow_AfterIngestFromSource()
     {
-        using var reloaded = NewLoadOrder();
+        var holder = new LoadOrderHolder();
+        using var reloaded = NewLoadOrder(holder);
 
         var placement = reloaded.Store!.At(RecordRef.Effective).GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(placement);
@@ -58,7 +61,8 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedPlacedReference_AnswersAtBothRefs_OnACleanTree()
     {
-        using var reloaded = NewLoadOrder();
+        var holder = new LoadOrderHolder();
+        using var reloaded = NewLoadOrder(holder);
 
         // Nothing is dirty, so the one parse serves both refs — ADR-0041's clean fast path, asserted
         // rather than assumed, and asserted for a record that exists only inside its parent's document.
@@ -71,7 +75,8 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void TheCellItself_AnswersAfterIngestFromSource()
     {
-        using var reloaded = NewLoadOrder();
+        var holder = new LoadOrderHolder();
+        using var reloaded = NewLoadOrder(holder);
 
         var cell = reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(cell);
@@ -85,12 +90,13 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnExternallyEditedContainer_ReconcilesItsHeadState_ThroughStructuralDiff()
     {
+        var holder = new LoadOrderHolder();
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         File.WriteAllText(
             file,
             File.ReadAllText(file).Replace(ContainerModFixture.EmbedCellEditorId, "RenamedCell", StringComparison.Ordinal));
 
-        using var reloaded = NewLoadOrder();
+        using var reloaded = NewLoadOrder(holder);
 
         // The load completed and the edit is visible — no throw, no dropped plugin, no fallback.
         Assert.Empty(reloaded.Status.Failures);
@@ -105,6 +111,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AFlatRecordEditedBesideTheContainer_DoesReconcileItsHead()
     {
+        var holder = new LoadOrderHolder();
         // Asked of the repository rather than computed: FlatPathFor needs an order index this test
         // has no reason to track.
         var npcFile = SourceDocumentPath.Of(
@@ -114,7 +121,7 @@ public sealed class SourceIngestContainerTests : IDisposable
             npcFile,
             File.ReadAllText(npcFile).Replace(ContainerModFixture.NpcEditorId, "RenamedNpc", StringComparison.Ordinal));
 
-        using var reloaded = NewLoadOrder();
+        using var reloaded = NewLoadOrder(holder);
 
         Assert.Equal("RenamedNpc", reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
         Assert.Equal(
@@ -125,6 +132,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedChildEditedInPlace_ReconcilesItsOwnHeadState()
     {
+        var holder = new LoadOrderHolder();
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         File.WriteAllText(
             file,
@@ -132,7 +140,7 @@ public sealed class SourceIngestContainerTests : IDisposable
                 $"\"EditorID\": \"{ContainerModFixture.TemporaryRefEditorId}\"",
                 "\"EditorID\": \"RenamedTempRef\"", StringComparison.Ordinal));
 
-        using var reloaded = NewLoadOrder();
+        using var reloaded = NewLoadOrder(holder);
 
         Assert.Empty(reloaded.Status.Failures);
         Assert.Equal(
@@ -146,6 +154,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedChildAddedInTheWorkingTree_AnswersOnlyAtEffective()
     {
+        var holder = new LoadOrderHolder();
         const string newFormKey = "000900:ContainerFixture.esp";
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         var original = File.ReadAllText(file);
@@ -183,7 +192,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.NotEqual(original, withNewChild); // the replace actually matched — a guard against a silent no-op
         File.WriteAllText(file, withNewChild);
 
-        using var reloaded = NewLoadOrder();
+        using var reloaded = NewLoadOrder(holder);
 
         Assert.Empty(reloaded.Status.Failures);
         var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(newFormKey, _fixture.Plugin);
@@ -195,6 +204,7 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedChildDeletedInTheWorkingTree_AnswersOnlyAtHead()
     {
+        var holder = new LoadOrderHolder();
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
         var original = File.ReadAllText(file);
         var withoutPersistentChild = original.Replace(
@@ -214,7 +224,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.NotEqual(original, withoutPersistentChild); // the replace actually matched
         File.WriteAllText(file, withoutPersistentChild);
 
-        using var reloaded = NewLoadOrder();
+        using var reloaded = NewLoadOrder(holder);
 
         Assert.Empty(reloaded.Status.Failures);
         Assert.Null(reloaded.Store!.At(RecordRef.Effective).GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));

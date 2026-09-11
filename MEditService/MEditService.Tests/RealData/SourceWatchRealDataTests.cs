@@ -36,24 +36,25 @@ public sealed class SourceWatchRealDataFixture : IDisposable
 
     public SourceWatchRealDataFixture()
     {
+        var holder = new LoadOrderHolder();
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        Index = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(
+        Index = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(
             SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), Notifications));
-        Index.Reconcile(
+        Index.Reconcile(holder,
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(150));
-        var sourceChanges = new SourceChangeApplier(Index, Index.WriteGate, _watcher, Notifications, NullLogger.Instance);
+        var sourceChanges = new SourceChangeApplier(Index, holder, Index.WriteGate, _watcher, Notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
-        Index.LoadOrderChanged = sourceChanges.RefreshWatches;
+        Index.Reconciled = sourceChanges.RefreshWatches;
         sourceChanges.RefreshWatches();
 
         new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = sourceChanges.WatchTracking }
-            .TrackAsync(Index, Origin, SourcePreset.Edits)
+            .TrackAsync(Index, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         DocumentsWritten = Directory

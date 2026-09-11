@@ -12,6 +12,16 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
 {
     protected IRecordIndex Inner { get; } = inner;
 
+    /// <summary>The store at the bottom of any stack of wrappers, for a test reading its rows
+    /// directly.</summary>
+    internal static DuckDbRecordIndex DuckDbUnder(IRecordIndex index) =>
+        index switch
+        {
+            DuckDbRecordIndex duckDb => duckDb,
+            DelegatingRecordIndex wrapper => DuckDbUnder(wrapper.Inner),
+            _ => throw new InvalidOperationException($"No DuckDB store under {index.GetType().Name}."),
+        };
+
     public virtual void SetFilter(string? sql) => Inner.SetFilter(sql);
     public virtual void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys) =>
         Inner.RefreshByKeys(key, modFolder, formKeys);

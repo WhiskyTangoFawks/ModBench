@@ -27,6 +27,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     // A direct constructor parameter rather than routed through IRecordIndexFactory, which has no
     // other reason to carry it; DI already registers SchemaReflector as its own singleton.
     private readonly SchemaReflector _schemaReflector;
+    // ADR-0046 invariant 11: the one load order, the kernel's. The projector reads it for who
+    // participates and for a copy's mod folder; it never writes it and keeps no view of its own.
+    private readonly LoadOrderHolder _holder;
     private HeldPlugins? _heldPlugins;
     private IRecordIndex? _index;
     // Dropped with the scope it was materialized against (see DisposeCurrent): a filter names
@@ -41,11 +44,13 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside
     /// <c>Core/Records</c> names the store, its factory or how a file is opened (ADR-0001).</summary>
     public IndexProjector(
+        LoadOrderHolder holder,
         IPluginAdapter adapter,
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
         INotificationPublisher? notifications = null)
         : this(
+            holder,
             adapter,
             new DuckDbRecordIndexFactory(
                 schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
@@ -57,12 +62,14 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     /// <summary>The store's factory as a seam, for a test that faults or counts what the store
     /// does.</summary>
     internal IndexProjector(
+        LoadOrderHolder holder,
         IPluginAdapter adapter,
         IRecordIndexFactory indexFactory,
         ILogger? logger = null,
         SchemaReflector? schemaReflector = null,
         INotificationPublisher? notifications = null)
     {
+        _holder = holder;
         _indexFactory = indexFactory;
         _logger = logger ?? NullLogger.Instance;
         _adapter = adapter;
@@ -98,10 +105,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     private GameRelease _gameRelease;
 
-    public ILoadOrder? LoadOrder { get { lock (_lock) return _heldPlugins; } }
     public IRecordReads? Reads { get { lock (_lock) return _index?.At(RecordRef.Effective); } }
     /// <summary>The store the projections land in. Internal: ADR-0046 invariant 10 makes the Index
-    /// one module, and the rows behind this are its own. Null with no load order held.</summary>
+    /// one module, and the rows behind this are its own. Null until a reconcile opens one.</summary>
     internal IRecordIndex? Store { get { lock (_lock) return _index; } }
 
     /// <summary>Whether the store registers this copy — an endpoint's 404 question, answered without
@@ -125,36 +131,36 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
     /// <summary>Raised once a reconcile settles and once <see cref="Close"/> empties the Index, so the
     /// composition root re-registers the Source watches. Core names no watcher type.</summary>
-    public Action? LoadOrderChanged { get; set; }
+    public Action? Reconciled { get; set; }
 
     // Raised outside _lock and outside the exclusive right, so a subscriber that reads the projector
     // back cannot deadlock against the reconcile that raised it. A throwing subscriber is its own
     // business, never the reconcile's.
-    private void AnnounceLoadOrder()
+    private void AnnounceReconciled()
     {
         try
         {
-            LoadOrderChanged?.Invoke();
+            Reconciled?.Invoke();
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "A load-order subscriber failed; the load order itself is unaffected");
+            _logger.LogWarning(ex, "A reconcile subscriber failed; what was projected is unaffected");
         }
     }
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: with no load order held the
-    /// Index has opened no store to read.</summary>
+    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
+    /// the Index has opened no store to read.</summary>
     public IRecordReads RequireReads() => RequireScopeCore().Index.At(RecordRef.Effective);
 
     // The concrete HeldPlugins and write-capable IRecordIndex the projection methods need, wider
     // than the reads the public method hands out. One lock, one null check, one message.
-    private (HeldPlugins LoadOrder, IRecordIndex Index) RequireScopeCore()
+    private (HeldPlugins Held, IRecordIndex Index) RequireScopeCore()
     {
         lock (_lock)
         {
-            if (_heldPlugins is not { } loadOrder || _index is not { } index)
+            if (_heldPlugins is not { } held || _index is not { } index)
                 throw new NoLoadOrderException();
-            return (loadOrder, index);
+            return (held, index);
         }
     }
 
@@ -232,8 +238,8 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         try
         {
             var token = BeginReconcile();
-            var (loadOrder, index) = EnsureScope(snapshot);
-            ReconcileProgressively(loadOrder, index, snapshot, token);
+            var (held, index) = EnsureScope(snapshot);
+            ReconcileProgressively(held, index, snapshot, token);
         }
         catch (OperationCanceledException ex)
         {
@@ -260,7 +266,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             ExitExclusive();
         }
 
-        AnnounceLoadOrder();
+        AnnounceReconciled();
     }
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
@@ -286,12 +292,12 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     // within one.
 
     // Published before any plugin is opened, which is what makes the reconcile progressive (ADR-0035).
-    private (HeldPlugins LoadOrder, IRecordIndex Index) EnsureScope(LoadOrder snapshot)
+    private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrder snapshot)
     {
         lock (_lock)
         {
-            if (_heldPlugins is { } held && _index is { } index && SameScope(held, snapshot))
-                return (held, index);
+            if (_heldPlugins is { } current && _index is { } index && SameScope(current, snapshot))
+                return (current, index);
             DisposeCurrent();
         }
 
@@ -302,9 +308,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         {
             _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
         }
-        var loadOrder = new HeldPlugins(
+        var held = new HeldPlugins(
             _adapter, snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
-        fresh.ReadOpenedCopiesFrom(() => loadOrder.OpenedCopies);
+        fresh.ReadOpenedCopiesFrom(() => held.OpenedCopies);
 
         lock (_lock)
         {
@@ -312,12 +318,12 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             _failedHashes.Clear();
             _conflictsComputed = false;
             _plannedCount = 0;
-            _heldPlugins = loadOrder;
+            _heldPlugins = held;
             _index = fresh;
             _gameRelease = snapshot.GameRelease;
         }
         PublishStatus();
-        return (loadOrder, fresh);
+        return (held, fresh);
     }
 
     private static bool SameScope(HeldPlugins held, LoadOrder snapshot) =>
@@ -341,28 +347,28 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     // Registrations the snapshot has stopped naming are dropped before anything new is opened, so a
     // freshly opened index file's last-run rows stop answering as early as possible.
     private void ReconcileProgressively(
-        HeldPlugins loadOrder, IRecordIndex index, LoadOrder snapshot, CancellationToken token)
+        HeldPlugins held, IRecordIndex index, LoadOrder snapshot, CancellationToken token)
     {
         var resolved = snapshot.Copies;
         var wanted = resolved.ToDictionary(r => KeyOf(r.Key), StringComparer.OrdinalIgnoreCase);
-        var held = loadOrder.Plugins.ToDictionary(p => KeyOf(p.Key), StringComparer.OrdinalIgnoreCase);
+        var open = held.Plugins.ToDictionary(p => KeyOf(p.Key), StringComparer.OrdinalIgnoreCase);
 
         IReadOnlyList<PluginKey> failed;
         lock (_lock) failed = [.. _failedHashes.Values.Select(v => v.Key)];
         // Registered, held, or held only as a failure row — a copy the snapshot has stopped naming
         // leaves by every one of those doors, so a stale error row cannot outlive its copy.
         var leaving = index.RegisteredPlugins()
-            .Concat(loadOrder.Plugins.Select(p => p.Key))
+            .Concat(held.Plugins.Select(p => p.Key))
             .Concat(failed)
             .Where(k => !wanted.ContainsKey(KeyOf(k)))
             .DistinctBy(KeyOf, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var moved = resolved
-            .Where(r => held.TryGetValue(KeyOf(r.Key), out var h) && h.Registration != r.Registration)
+            .Where(r => open.TryGetValue(KeyOf(r.Key), out var h) && h.Registration != r.Registration)
             .ToList();
         // A copy in an error state whose bytes have not changed is not arriving: retrying it would
         // pay the failed parse again on every snapshot that merely mentions it.
-        var arriving = resolved.Where(r => !held.ContainsKey(KeyOf(r.Key)) && !StillFailing(r)).ToList();
+        var arriving = resolved.Where(r => !open.ContainsKey(KeyOf(r.Key)) && !StillFailing(r)).ToList();
 
         bool conflictsComputed;
         lock (_lock) conflictsComputed = _conflictsComputed;
@@ -384,7 +390,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         foreach (var key in leaving)
         {
             index.Unregister(key);
-            loadOrder.Remove(key);
+            held.Remove(key);
             lock (_lock)
             {
                 _indexed.RemoveAll(i => i.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
@@ -398,7 +404,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         {
             // ADR-0044: a reorder, an enable, a change of which copy wins — all the same SQL-only
             // move: no re-read, no re-index, so it is safe to apply live and unprompted.
-            var metadata = loadOrder.Update(held[KeyOf(plugin.Key)], plugin.Registration);
+            var metadata = held.Update(open[KeyOf(plugin.Key)], plugin.Registration);
             index.Register(metadata.Key, metadata.Registration);
         }
 
@@ -416,14 +422,14 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             // transactions, so abandoning it partway would leave some committed and others not.
             token.ThrowIfCancellationRequested();
 
-            if (loadOrder.Open(plugin) is not { } metadata)
+            if (held.Open(plugin) is not { } metadata)
             {
                 lock (_lock) _failedHashes[KeyOf(plugin.Key)] = (plugin.Key, PluginBinaryHash.OfFile(plugin.Path));
                 continue;
             }
             lock (_lock) _failedHashes.Remove(KeyOf(plugin.Key));
 
-            RegisterOrIndex(loadOrder, index, metadata, token);
+            RegisterOrIndex(held, index, metadata, token);
             firstUsableMs ??= timer.ElapsedMilliseconds;
         }
 
@@ -441,7 +447,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         {
             _logger.LogInformation(
                 "Load order reconciled in {TotalMs} ms: {Arrived} arrived, {Moved} moved, {Left} left, {Held} held (first plugin usable after {FirstUsableMs} ms, winner sweep {WinnersMs} ms)",
-                timer.ElapsedMilliseconds, arriving.Count, moved.Count, leaving.Count, loadOrder.Plugins.Count,
+                timer.ElapsedMilliseconds, arriving.Count, moved.Count, leaving.Count, held.Plugins.Count,
                 firstUsableMs, winnersTimer.ElapsedMilliseconds);
         }
     }
@@ -493,7 +499,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     // is re-derived whole.
 
     // The tree is resolved here because the register/index decision needs the answer the ingest does.
-    private void RegisterOrIndex(HeldPlugins loadOrder, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
+    private void RegisterOrIndex(HeldPlugins held, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
         var sourceTree = SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name);
@@ -521,7 +527,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         {
             // ADR-0036: threads the origin into the index, so the DuckDB row is identified
             // by (origin, plugin) together, not filename alone.
-            IndexOnePlugin(loadOrder, index, plugin, sourceTree, token);
+            IndexOnePlugin(held, index, plugin, sourceTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
@@ -536,7 +542,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             // A single plugin with malformed record data must not abort the whole reconcile. Index()
             // runs in its own DuckDB transaction, so the rollback on throw leaves no partial rows.
             _logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable", plugin.Name);
-            loadOrder.SetFailure(key, PluginLoadFailure.ReasonFor(ex));
+            held.SetFailure(key, PluginLoadFailure.ReasonFor(ex));
             PublishStatus();
             return;
         }
@@ -565,7 +571,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
     // fallback would leave the user reading pre-Track binary content believing it was their source.
     private void IndexOnePlugin(
-        HeldPlugins loadOrder, IRecordIndex index, PluginMetadata plugin,
+        HeldPlugins held, IRecordIndex index, PluginMetadata plugin,
         string? sourceTree, CancellationToken token)
     {
         // One advance for the whole copy, whichever door it came through (ADR-0046).
@@ -573,7 +579,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
 
         if (sourceTree == null)
         {
-            IndexFromBinary(loadOrder, index, plugin);
+            IndexFromBinary(held, index, plugin);
             return;
         }
 
@@ -585,7 +591,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             }
             SourceIngest.Ingest(
                 index, ModFolders.Of(plugin.Origin, plugin.Path)!,
-                plugin.Registration, plugin.Key, plugin.Path, loadOrder.GameRelease,
+                plugin.Registration, plugin.Key, plugin.Path, held.GameRelease,
                 _schemaReflector, _logger, token);
             return;
         }
@@ -602,19 +608,19 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             // first mode that isn't on it.
             _logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
-            loadOrder.SetFailure(plugin.Key,
+            held.SetFailure(plugin.Key,
                 $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Showing the " +
                 "compiled binary instead — edits made since the last compile are not reflected.");
         }
 
-        IndexFromBinary(loadOrder, index, plugin);
+        IndexFromBinary(held, index, plugin);
     }
 
     // ADR-0032 rule 2: the binary reaches the index as documents, through the adapter's own door,
     // never as the open getter HeldPlugins keeps for metadata and the write path.
-    private void IndexFromBinary(HeldPlugins loadOrder, IRecordIndex index, PluginMetadata plugin)
+    private void IndexFromBinary(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
-        using var documents = OpenDocuments(plugin, loadOrder.GameRelease, loadOrder.DataFolderPath);
+        using var documents = OpenDocuments(plugin, held.GameRelease, held.DataFolderPath);
         index.Index(documents, plugin.Registration, plugin.Key, plugin.Path);
     }
 
@@ -634,12 +640,12 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         // own verbs, and the gate is reentrant so the rebuild below can take it again.
         using var _ = WriteGate.Enter();
 
-        var (loadOrder, index) = RequireHeldIndex();
+        var (_, index) = RequireScopeCore();
         // One advance for everything this validate re-derives, however many copies it names.
         using var projection = index.BeginProjection();
         var keys = plugin is { } one ? (IReadOnlyList<PluginKey>)[one] : index.RegisteredPlugins();
 
-        var order = Plugins.LoadOrder.From(loadOrder);
+        var order = _holder.Current;
         var reports = new List<ValidationReport>(keys.Count);
         foreach (var key in keys)
         {
@@ -665,34 +671,21 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         // with nothing else ordering it against an in-flight edit.
         using var _ = WriteGate.Enter();
 
-        var (loadOrder, index) = RequireHeldIndex();
+        var (_, index) = RequireScopeCore();
         // Every key named here is one logical write, so it lands as one advance.
         using var projection = index.BeginProjection();
 
         // Re-derived every call, never remembered from when the watch started: the repository can be
         // deleted or replaced between the event and this line, and then there is no truth to read.
-        if (ModFolders.TrackedOf(Plugins.LoadOrder.From(loadOrder), key) is not { } modFolder) return;
+        if (ModFolders.TrackedOf(_holder.Current, key) is not { } modFolder) return;
 
         index.RefreshByKeys(key, modFolder, formKeys);
         ReapplyFilter();
     }
 
-    // ADR-0044: the sweep is handed who competes, projected from the load order value the held
-    // copies are — the rule is Registration.Participates and runs there. Read whole, not per plugin.
-    private IReadOnlyList<RegisteredCopy> Participating()
-    {
-        lock (_lock) return _heldPlugins is { } held ? Plugins.LoadOrder.From(held).Participating : [];
-    }
-
-    // Never null, and never one without the other, for the same reason RequireReads is not.
-    private (ILoadOrder LoadOrder, IRecordIndex Index) RequireHeldIndex()
-    {
-        lock (_lock)
-        {
-            if (_heldPlugins == null || _index == null) throw new NoLoadOrderException();
-            return (_heldPlugins, _index);
-        }
-    }
+    // ADR-0044: the sweep is handed who competes, read from the kernel's load order — the rule is
+    // Registration.Participates and runs there. Read whole, not per plugin.
+    private IReadOnlyList<RegisteredCopy> Participating() => _holder.Current.Participating;
 
     /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
     /// copy from its source tree (ADR-0041), because reading a tracked copy's binary would discard
@@ -777,7 +770,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         lock (_lock)
         {
             var scope = RequireScopeCore();
-            var metadata = scope.LoadOrder.Find(key)
+            var metadata = scope.Held.Find(key)
                 ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
             return (metadata, scope.Index, _gameRelease);
         }
@@ -876,9 +869,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>ADR-0046's Refresh: closes what is held, drops the instance's index file and
-    /// reopens it empty, flooring the new file's sequence at what this process has already handed
-    /// out. The next reconcile fills it.</summary>
+    /// <summary>ADR-0046's Refresh: closes the scope, drops the instance's index file and reopens
+    /// it empty, flooring the new file's sequence at what this process has already handed out. The
+    /// next reconcile fills it.</summary>
     public void RebuildStore(GameRelease gameRelease, string instanceRoot)
     {
         var previousSequence = Sequence;
@@ -886,8 +879,9 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         using var rebuilt = _indexFactory.Rebuild(gameRelease, instanceRoot, previousSequence);
     }
 
-    /// <summary>Drops everything held: the load order and the store's connection. Cancels an
-    /// in-flight reconcile and waits for it to stop first.</summary>
+    /// <summary>Drops the scope: the copies it has open and the store's connection. Cancels an
+    /// in-flight reconcile and waits for it to stop first. The kernel's load order is its own and
+    /// is untouched.</summary>
     public void Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything —
@@ -898,12 +892,12 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         finally { ExitExclusive(); }
 
         PublishStatus();
-        AnnounceLoadOrder();
+        AnnounceReconciled();
     }
 
     public void Dispose()
     {
-        // Guarded because Dispose owns a semaphore as well as the load order: a second call would
+        // Guarded because Dispose owns a semaphore as well as the scope: a second call would
         // otherwise wait on a disposed gate. Double disposal is a supported call pattern here.
         lock (_lock)
         {

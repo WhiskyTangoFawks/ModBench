@@ -16,18 +16,20 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
+/// <summary>The Index's scope — the store it opens, the copies it holds open in it, and the filter
+/// materialized over it — across a reconcile, a replacement, a close and a dispose.</summary>
 [Collection(TestPluginFixtureCollection.Name)]
-public class HeldLoadOrderTests(TestPluginFixture fixture)
+public class IndexScopeTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
-    private static IndexProjector MakeManager(IPluginAdapter? adapter = null)
+    private static IndexProjector MakeManager(LoadOrderHolder holder, IPluginAdapter? adapter = null)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(adapter ?? MutagenPluginAdapter.Instance, factory);
+        return new IndexProjector(holder, adapter ?? MutagenPluginAdapter.Instance, factory);
     }
 
     // An explicit request for a release this build has no Mutagen assembly for must refuse with a
@@ -35,10 +37,11 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Load_ForUnsupportedGameRelease_ThrowsUnsupportedGameReleaseException()
     {
-        using var manager = MakeManager();
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
 
         var ex = Assert.Throws<UnsupportedGameReleaseException>(
-            () => manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE));
+            () => manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE));
 
         Assert.Contains("SkyrimSE", ex.Message);
     }
@@ -49,6 +52,7 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Reconcile_WhenUpdateWinnersFaults_LeavesWhatLandedHeldAndUnsettled()
     {
+        var holder = new LoadOrderHolder();
         var data = new PluginFixtureBuilder("solo-mid-load-failure")
             .WithPlugin("Base.esp")
             .Build();
@@ -57,14 +61,13 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
             var reflector = SharedSchemaReflector.Instance;
             var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             var faulting = new FaultingUpdateWinnersRepositoryFactory(inner);
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, faulting);
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, faulting);
 
             Assert.Throws<InvalidOperationException>(() =>
-                manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4));
+                manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4));
 
             // ADR-0044: nothing is torn down — what landed stays held, honestly reported as not
             // yet settled, for the next snapshot to finish.
-            Assert.NotNull(manager.LoadOrder);
             Assert.NotNull(manager.Reads);
             Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
             Assert.False(manager.Status.ConflictsComputed);
@@ -74,12 +77,13 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Load_DelegatesToFactory()
     {
+        var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
-        using var manager = new IndexProjector(MutagenPluginAdapter.Instance, spy);
+        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, spy);
 
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(1, spy.CreateCallCount);
         Assert.Equal(GameRelease.Fallout4, spy.LastGameRelease);
@@ -88,20 +92,20 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Load_PopulatesLoadOrderAndRepository()
     {
-        using var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.NotNull(manager.LoadOrder);
         Assert.NotNull(manager.Reads);
-        Assert.Single(manager.LoadOrder.Plugins);
-        Assert.Equal(TestPluginFixture.PluginName, manager.LoadOrder.Plugins[0].Name);
+        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(manager.Reads!.OpenedCopies).Key.Name);
     }
 
     [Fact]
     public void Load_IndexesRecordsIntoRepository()
     {
-        using var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var count = manager.Reads!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
@@ -112,8 +116,9 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Load_SetsIsWinnerOnSinglePlugin()
     {
-        using var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
 
@@ -124,39 +129,29 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Unload_ClearsReferencesAndDisposesRepository()
     {
-        using var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var oldRepo = manager.Reads;
         manager.Close();
 
-        Assert.Null(manager.LoadOrder);
         Assert.Null(manager.Reads);
         Assert.ThrowsAny<Exception>(() =>
             oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
     }
 
     [Fact]
-    public void Reconcile_SameInstance_KeepsTheRepositoryAndLoadOrder()
+    public void Reconcile_SameInstance_KeepsTheStore()
     {
-        using var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var firstRepo = manager.Reads;
-        var firstLoadOrder = manager.LoadOrder;
 
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         // ADR-0044: a snapshot for the same instance reconciles in place — nothing is replaced.
         Assert.Same(firstRepo, manager.Reads);
-        Assert.Same(firstLoadOrder, manager.LoadOrder);
-    }
-
-    [Fact]
-    public void Load_WithGameRelease_LoadOrderHasCorrectGameRelease()
-    {
-        using var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-
-        Assert.Equal(GameRelease.Fallout4, manager.LoadOrder!.GameRelease);
     }
 
 
@@ -167,7 +162,8 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void SetFilter_NoLoadOrder_ThrowsInvalidOperationException()
     {
-        using var manager = MakeManager();
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
         var ex = Assert.Throws<NoLoadOrderException>(() => manager.SetFilter("SELECT form_key FROM \"NPC_\""));
         Assert.Contains("No load order", ex.Message);
     }
@@ -175,7 +171,8 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void ClearFilter_NoLoadOrder_ThrowsInvalidOperationException()
     {
-        using var manager = MakeManager();
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
         var ex = Assert.Throws<NoLoadOrderException>(() => manager.ClearFilter());
         Assert.Contains("No load order", ex.Message);
     }
@@ -183,7 +180,8 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void SetFilter_ValidSql_SetsSqlOnLoadOrder()
     {
-        using var manager = MakeLoadedManager();
+        var holder = new LoadOrderHolder();
+        using var manager = MakeLoadedManager(holder);
         manager.SetFilter("SELECT form_key FROM \"NPC_\"");
         Assert.Equal("SELECT form_key FROM \"NPC_\"", manager.FilterSql);
     }
@@ -191,7 +189,8 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void ClearFilter_AfterSetFilter_ClearsSqlOnLoadOrder()
     {
-        using var manager = MakeLoadedManager();
+        var holder = new LoadOrderHolder();
+        using var manager = MakeLoadedManager(holder);
         manager.SetFilter("SELECT form_key FROM \"NPC_\"");
         manager.ClearFilter();
         Assert.Null(manager.FilterSql);
@@ -205,14 +204,15 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public async Task ReindexPlugin_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
     {
+        var holder = new LoadOrderHolder();
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("reindex-filter-newly-matches")
             .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("NotMatchingYet").FormKey)
             .Build();
         using (data)
         {
-            using var manager = MakeManager();
-            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = MakeManager(holder);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
             Assert.Equal(0, manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
@@ -235,14 +235,15 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public async Task ReindexPlugin_AfterBinaryChangeMakesARecordStopMatchingTheFilter_FilteredListingExcludesIt()
     {
+        var holder = new LoadOrderHolder();
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("reindex-filter-stops-matching")
             .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("StillMatches").FormKey)
             .Build();
         using (data)
         {
-            using var manager = MakeManager();
-            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            using var manager = MakeManager(holder);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'");
             Assert.Equal(1, manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
@@ -265,6 +266,7 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public async Task ReindexPlugin_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
     {
+        var holder = new LoadOrderHolder();
         var data = new PluginFixtureBuilder("reindex-filter-fault")
             .WithPlugin("Plugin.esp", mod => mod.Npcs.AddNew("Npc"))
             .Build();
@@ -279,9 +281,9 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
                 b.SetMinimumLevel(LogLevel.Debug);
                 b.AddProvider(new CollectingLoggerProvider(entries));
             });
-            using var manager = new IndexProjector(MutagenPluginAdapter.Instance, faulting, loggerFactory.CreateLogger<IndexProjector>());
+            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, faulting, loggerFactory.CreateLogger<IndexProjector>());
 
-            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
             manager.SetFilter("SELECT form_key FROM npc_");
             faulting.FaultNextCall = true;
 
@@ -368,14 +370,15 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Reconcile_ForADifferentInstance_OldRepositoryBecomesUnusable()
     {
-        using var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
+        var holder = new LoadOrderHolder();
+        using var manager = MakeManager(holder);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var oldRepo = manager.Reads;
 
         // ADR-0044: only a snapshot for another instance replaces what is held; the same instance
         // reconciles in place (Reconcile_SameInstance_KeepsTheRepositoryAndLoadOrder).
         var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
         Assert.ThrowsAny<Exception>(() =>
             oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
@@ -385,8 +388,9 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
     [Fact]
     public void Dispose_RepositoryBecomesUnusable()
     {
-        var manager = MakeManager();
-        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var holder = new LoadOrderHolder();
+        var manager = MakeManager(holder);
+        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var oldRepo = manager.Reads;
 
         manager.Dispose();
@@ -403,10 +407,10 @@ public class HeldLoadOrderTests(TestPluginFixture fixture)
 
     // --- helpers ---
 
-    private IndexProjector MakeLoadedManager()
+    private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
     {
-        var m = MakeManager();
-        m.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var m = MakeManager(holder);
+        m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }
 

@@ -27,6 +27,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 
     public WorldspaceCellFullNameIndexingTests()
     {
+        var holder = new LoadOrderHolder();
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
@@ -52,13 +53,14 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
         _worldspaceFormKey = worldspace.FormKey.ToString();
 
         _index = new IndexProjector(
+            holder,
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        _index.Reconcile(
+        _index.Reconcile(holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_index, Origin, SourcePreset.Edits)
+            .TrackAsync(_index, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

@@ -15,10 +15,10 @@ namespace MEditService.Tests.Plugins;
 // ADR-0001: loading a load order the index has seen registers its plugins rather than indexing them.
 public sealed class WarmReconcileTests
 {
-    private static IndexProjector MakeManager(ILogger<IndexProjector>? logger = null)
+    private static IndexProjector MakeManager(LoadOrderHolder holder, ILogger<IndexProjector>? logger = null)
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
+        return new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
     }
 
     private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
@@ -43,16 +43,17 @@ public sealed class WarmReconcileTests
     [Fact]
     public void ASecondLoadOfTheSameOrder_IndexesNothing_AndIsStillReadyWithWinners()
     {
+        var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-same")
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = MakeManager()) cold.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = MakeManager(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
-        warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using var warm = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(0, Indexed(entries, "A.esp"));
         Assert.Equal(0, Indexed(entries, "B.esp"));
@@ -69,19 +70,20 @@ public sealed class WarmReconcileTests
     [Fact]
     public void AWarmLoad_AdvancesProgressAsEachPluginIsRegistered()
     {
+        var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-during")
             .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
             .Build();
-        using (var cold = MakeManager()) cold.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = MakeManager(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var reflector = SharedSchemaReflector.Instance;
         var observed = new List<int>();
         var factory = new ProgressWatchingFactory(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), observed);
-        using var warm = new IndexProjector(MutagenPluginAdapter.Instance, factory);
+        using var warm = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
         factory.Index = warm;
 
-        warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         // Each registration saw the plugins that had already landed and no more.
         Assert.Equal([0, 1, 2], observed);
@@ -114,13 +116,14 @@ public sealed class WarmReconcileTests
     [Fact]
     public void AWarmLoad_CountsEveryRegisteredPluginAsProgress()
     {
+        var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-progress")
             .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
             .Build();
-        using (var cold = MakeManager()) cold.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = MakeManager(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        using var warm = MakeManager();
-        warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using var warm = MakeManager(holder);
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(3, warm.Status.TotalPlugins);
         Assert.Equal(
@@ -133,11 +136,12 @@ public sealed class WarmReconcileTests
     [Fact]
     public void APluginChangedBetweenLoads_IsTheOnlyOneReindexed()
     {
+        var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-changed")
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = MakeManager()) cold.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = MakeManager(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var edited = new Fallout4Mod(ModKey.FromFileName("B.esp"), Fallout4Release.Fallout4);
         edited.Npcs.AddNew("NpcBEdited");
@@ -145,8 +149,8 @@ public sealed class WarmReconcileTests
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
-        warm.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using var warm = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+        warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
         Assert.Equal(0, Indexed(entries, "A.esp"));
@@ -164,19 +168,20 @@ public sealed class WarmReconcileTests
     [Fact]
     public void APluginTheIndexHasNeverSeen_IsIndexedBesideTheRegisteredOnes()
     {
+        var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("warm-new")
             .WithPlugin("A.esp")
             .WithPlugin("B.esp", listed: false)
             .Build();
-        using (var cold = MakeManager()) cold.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using (var cold = MakeManager(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         // The profile switch: the same order plus one plugin the index has never been shown.
         var withB = data.Plugins.Append(new LoadOrderEntry("B.esp", Path.Combine(data.DataFolder, "B.esp"), PluginOrigin.DataDirectory, Slot: 99, Enabled: true, Winning: true)).ToList();
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
-        warm.Reconcile(data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
+        using var warm = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+        warm.Reconcile(holder, data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
         Assert.Equal(1, Indexed(entries, "B.esp"));
@@ -189,6 +194,7 @@ public sealed class WarmReconcileTests
     [Fact]
     public async Task ATrackedPlugin_IsValidatedAgainstItsSourceTreeOnEveryLoad()
     {
+        var holder = new LoadOrderHolder();
         const string origin = "TrackedMod";
         const string plugin = "Tracked.esp";
         var instanceRoot = Directory.CreateTempSubdirectory("medit-warm-instance-").FullName;
@@ -203,19 +209,19 @@ public sealed class WarmReconcileTests
 
             List<LoadOrderEntry> order = [new(plugin, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)];
 
-            using (var cold = MakeManager())
+            using (var cold = MakeManager(holder))
             {
-                cold.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+                cold.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
                 await new TrackService(NullLogger<TrackService>.Instance)
-                    .TrackAsync(cold, origin, SourcePreset.Edits);
+                    .TrackAsync(cold, holder, origin, SourcePreset.Edits);
             }
 
             // Loaded twice *after* tracking, so both loads see a tracked plugin whose binary the
             // index already holds a current hash for.
             string npcSourceFile;
-            using (var second = MakeManager())
+            using (var second = MakeManager(holder))
             {
-                second.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+                second.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
                 var npc = second.Store!.At(RecordRef.Effective)
                     .GetDocuments(new PluginKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
                 npcSourceFile = SourceDocumentPath.Of(
@@ -224,8 +230,8 @@ public sealed class WarmReconcileTests
 
             var (loggerFactory, entries) = Capturing();
             using var _ = loggerFactory;
-            using var third = MakeManager(loggerFactory.CreateLogger<IndexProjector>());
-            third.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+            using var third = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+            third.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
 
             // An unmoved tree: registered and validated, never re-derived.
             Assert.Equal(1, Registered(entries, plugin));
@@ -237,8 +243,8 @@ public sealed class WarmReconcileTests
             var text = await File.ReadAllTextAsync(npcSourceFile);
             await File.WriteAllTextAsync(
                 npcSourceFile, text.Replace("\"TrackedNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
-            using var fourth = MakeManager();
-            fourth.Reconcile(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+            using var fourth = MakeManager(holder);
+            fourth.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
             Assert.Contains(
                 fourth.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey(plugin, origin)),
                 d => d.EditorId == "EditedBetweenLoads");

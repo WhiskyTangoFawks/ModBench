@@ -25,7 +25,7 @@ public sealed class ExternalChangeApplierTests : IDisposable
         File.WriteAllText(
             _mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"EditedWhileRunning\"", StringComparison.Ordinal));
 
-        var index = new ExternalChangeApplier(_mod.Index, _notifications, NullLogger.Instance);
+        var index = new ExternalChangeApplier(_mod.Index, _mod.Holder, _notifications, NullLogger.Instance);
         index.ApplyOverflow(_mod.ModFolder, IndexedModFixture.PluginName);
 
         Assert.Equal(
@@ -39,7 +39,7 @@ public sealed class ExternalChangeApplierTests : IDisposable
     [Fact]
     public void ApplyOverflow_PublishesNothing_WhenTheTrackedSourceHasNotDrifted()
     {
-        var index = new ExternalChangeApplier(_mod.Index, _notifications, NullLogger.Instance);
+        var index = new ExternalChangeApplier(_mod.Index, _mod.Holder, _notifications, NullLogger.Instance);
 
         index.ApplyOverflow(_mod.ModFolder, IndexedModFixture.PluginName);
 

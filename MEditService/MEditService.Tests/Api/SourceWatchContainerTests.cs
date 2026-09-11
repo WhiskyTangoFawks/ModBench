@@ -25,9 +25,9 @@ public sealed class SourceWatchContainerTests : IDisposable
     {
         _fixture = new IndexedContainerFixture(_notifications);
         _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceChanges = new SourceChangeApplier(_fixture.Index, _fixture.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
+        var sourceChanges = new SourceChangeApplier(_fixture.Index, _fixture.Holder, _fixture.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
         _watcher.SourceChanged = sourceChanges.Apply;
-        _fixture.Index.LoadOrderChanged = sourceChanges.RefreshWatches;
+        _fixture.Index.Reconciled = sourceChanges.RefreshWatches;
         // The fixture's own constructor already reconciled, before any watch could be
         // registered from that reconcile's own signal.
         sourceChanges.RefreshWatches();
@@ -53,7 +53,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     [Fact]
     public async Task RevertingAQuestsSourceFile_ReachesTheRecordEditorThroughTheWatcher()
     {
-        var service = TestEditService.EditHandler(_fixture.Index);
+        var service = TestEditService.EditHandler(_fixture.Holder);
         var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
 
         var before = _fixture.Index.Sequence;
@@ -77,7 +77,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     [Fact]
     public async Task RevertingAPlacedRefsOwningCellFile_ReachesTheRecordEditorThroughTheWatcher()
     {
-        var service = TestEditService.EditHandler(_fixture.Index);
+        var service = TestEditService.EditHandler(_fixture.Holder);
         var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
 
         var before = _fixture.Index.Sequence;

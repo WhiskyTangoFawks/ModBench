@@ -52,13 +52,6 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
         Copies = [.. copies];
     }
 
-    /// <summary>The held copies as the value: what the Index projects its live view back into, for
-    /// every caller that reads the load order rather than opening a copy.</summary>
-    public static LoadOrder From(ILoadOrder held) =>
-        new(held.DataFolderPath, held.InstanceRoot, held.GameRelease,
-            [.. held.Plugins.Select(p => new RegisteredCopy(
-                p.Name, p.Origin, p.Path, p.LoadOrderIndex, p.Enabled, p.Winning, p.IsForced))]);
-
     /// <summary>ADR-0044: participation is derived, never stored — enabled, winning, and named by a
     /// <c>plugins.txt</c> line. Only a participating copy competes for winner or counts in a
     /// conflict.</summary>

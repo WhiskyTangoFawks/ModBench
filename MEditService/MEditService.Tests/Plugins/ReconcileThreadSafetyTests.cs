@@ -14,17 +14,17 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static IndexProjector MakeManager()
+    private static IndexProjector MakeManager(LoadOrderHolder holder)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(MutagenPluginAdapter.Instance, factory);
+        return new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
     }
 
-    private IndexProjector MakeLoadedManager()
+    private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
     {
-        var m = MakeManager();
-        m.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var m = MakeManager(holder);
+        m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }
 
@@ -33,7 +33,8 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
     [Fact]
     public void Dispose_CalledTwice_DoesNotThrow()
     {
-        var manager = MakeLoadedManager();
+        var holder = new LoadOrderHolder();
+        var manager = MakeLoadedManager(holder);
         manager.Dispose();
 
         // Should not throw a LockRecursionException or ObjectDisposedException
@@ -44,10 +45,10 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
     [Fact]
     public void Dispose_ClearsLoadOrder()
     {
-        var manager = MakeLoadedManager();
+        var holder = new LoadOrderHolder();
+        var manager = MakeLoadedManager(holder);
         manager.Dispose();
 
-        Assert.Null(manager.LoadOrder);
         Assert.Null(manager.Reads);
     }
 }
