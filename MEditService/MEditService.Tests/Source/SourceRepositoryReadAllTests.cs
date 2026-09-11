@@ -28,15 +28,18 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
         catch (IOException) { /* scratch directory, best effort */ }
     }
 
+    // The NPC's own relative path, spelled from the fixture's own constants rather than asked of the
+    // repository: Track needs it to seed the pristine commit before any repository exists to ask.
+    private static readonly string NpcRelativePath =
+        Path.Combine("source", PluginName, "Npcs", $"{NpcEditorId} - 000800_{PluginName}.json");
+
     // Track parks the last-compile ref for every plugin the trailers name, so the ref this reads at is
     // the one Save & Compile parks.
     private SourceRepository Tracked()
     {
         SourceRepository.Track(
             _modFolder, SourcePreset.Edits,
-            [new PristineFile(
-                SourceRepository.FlatPathFor(PluginName, "npc_", NpcFormKey, NpcEditorId, Release),
-                Encoding.UTF8.GetBytes(NpcBody))],
+            [new PristineFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))],
             new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
         return SourceRepository.Open(_modFolder, Release)!;
     }

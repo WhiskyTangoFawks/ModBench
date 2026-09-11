@@ -117,8 +117,8 @@ public sealed class TrackServiceTests
             var rootHeader = Path.Combine(sourceRoot, "RecordData.json");
             Assert.True(File.Exists(rootHeader), $"expected {rootHeader}");
 
-            // FlatPathFor alone cannot name the file without knowing its order index; the repository
-            // finds it by FormKey suffix regardless of position.
+            // Computing the path alone cannot name the file without knowing its order index; the
+            // repository finds it by FormKey suffix regardless of position.
             var sourceFile1 = SourceDocumentPath.Of(
                 modFolder, "Fixture.esp", "npc_", npc1.FormKey.ToString(), "FirstNpc", GameRelease.Fallout4);
             var sourceFile2 = SourceDocumentPath.Of(

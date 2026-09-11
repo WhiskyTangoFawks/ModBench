@@ -1,5 +1,6 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
@@ -29,20 +30,20 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         SourceRepository.Track(
             _modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
-    private static PristineFile Npc0800 =>
-        new(SourceRepository.FlatPathFor(PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4),
-            System.Text.Encoding.UTF8.GetBytes(NpcBody));
-
     // Asserted against directly: "the file moved" and "the file is gone" are claims about the tree,
     // and asking the repository for them would only echo its own rule back.
     private string NpcGroupFolder =>
-        Path.GetDirectoryName(Path.Combine(
-            _modFolder, SourceRepository.FlatPathFor(PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4)))!;
+        Path.GetDirectoryName(
+            SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4))!;
 
+    // Tracks an empty tree, then puts the fixture's NPC through the repository — the same door a real
+    // edit uses — so its file lands wherever the repository's own placement decides.
     private SourceRepository Opened()
     {
-        Track(Npc0800);
-        return SourceRepository.Open(_modFolder, GameRelease.Fallout4)!;
+        Track();
+        var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)!;
+        repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
+        return repository;
     }
 
     [Fact]
@@ -54,7 +55,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     [Fact]
     public void Open_OnATrackedFolder_IsARepository()
     {
-        Track(Npc0800);
+        Track();
 
         Assert.NotNull(SourceRepository.Open(_modFolder, GameRelease.Fallout4));
     }
@@ -177,7 +178,6 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     public void Get_OfTheHeader_IsTheRootRecordDocument()
     {
         Track(
-            Npc0800,
             new PristineFile(
                 Path.Combine("source", PluginName, "RecordData.json"),
                 System.Text.Encoding.UTF8.GetBytes("{\"MasterReferences\": []}")));

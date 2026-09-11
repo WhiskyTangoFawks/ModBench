@@ -134,12 +134,11 @@ public sealed class CascadeRollbackFixture : IDisposable
         SourceDocumentPath.Of(
             ModFolderOf(plugin), plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
-    /// <summary>Where the race's own file lands once it is renumbered: the leaf name carries the
-    /// FormKey, so only a requested target makes it nameable ahead of the write.</summary>
+    /// <summary>Where the race's own file lands once it is renumbered: asked of the repository at the
+    /// requested target FormKey, the same door <see cref="SourceFileOf"/> uses for the record's
+    /// current file.</summary>
     public string RenumberedRacePath(string newFormKey) =>
-        Path.Combine(
-            Path.GetDirectoryName(SourceFileOf(TargetPlugin, Race, "race", RaceEditorId))!,
-            SourceRepository.LeafNameFor(FormKey.Factory(newFormKey), RaceEditorId, isDirectory: false));
+        SourceDocumentPath.Of(ModFolderOf(TargetPlugin), TargetPlugin.Name, "race", newFormKey, RaceEditorId, GameRelease.Fallout4);
 
     /// <summary>Every path the cascade writes, in no particular order: the three documents that
     /// reference the race and the race's own new file.</summary>

@@ -1,5 +1,6 @@
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
@@ -115,14 +116,18 @@ public sealed class RenumberRollbackTests
         File.WriteAllText(Path.Combine(directory, "occupied.txt"), "something else is here");
     }
 
+    // Put a placeholder at the renumber's own target and read back where the repository landed it, so
+    // the collision this plants sits at the tree's own answer, not a name recomputed here.
     private static string RelocatedWorldspaceDirectory(SourceContainerFixture fixture, string newFormKey)
     {
-        var worldspaceDirectory = Path.GetDirectoryName(
-            fixture.SourceFileContaining(SourceContainerFixture.WorldspaceEditorId))!;
-        return Path.Combine(
-            Path.GetDirectoryName(worldspaceDirectory)!,
-            SourceRepository.LeafNameFor(
-                FormKey.Factory(newFormKey), SourceContainerFixture.WorldspaceEditorId, isDirectory: true));
+        var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
+        var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
+        repository.Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
+        var directory = Path.GetDirectoryName(SourceDocumentPath.Of(
+            fixture.ModFolder, fixture.Plugin.Name, "wrld", newFormKey, SourceContainerFixture.WorldspaceEditorId,
+            GameRelease.Fallout4))!;
+        repository.Remove(fixture.Plugin, identity);
+        return directory;
     }
 
     // ---- the oracle ----

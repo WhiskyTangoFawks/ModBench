@@ -105,7 +105,7 @@ public sealed class CompileFixture : IDisposable
         Repository.Remove(Plugin, new RecordIdentity(formKey.ToString(), recordType, editorId));
 
     public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
-        Path.Combine(ModFolder, SourceRepository.FlatPathFor(PluginName, recordType, formKey.ToString(), editorId, Release));
+        SourceDocumentPath.Of(ModFolder, PluginName, recordType, formKey.ToString(), editorId, Release);
 
     public string NpcSourceFile => SourceFileFor(Npc, NpcRecordType, NpcEditorId);
 

@@ -39,8 +39,8 @@ public sealed class RenumberRecordHandler
     }
 
     /// <summary>A delete+create pair in source terms plus a reference cascade. Native records only; an
-    /// untracked referencer refuses before any write. Computed whole, then written through a
-    /// <see cref="SourceTransaction"/> that restores every tree on failure (ADR-0007).</summary>
+    /// untracked referencer refuses before any write. Written through a
+    /// <see cref="SourceRepository.SourceTransaction"/> that restores every tree on failure (ADR-0007).</summary>
     public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
@@ -84,7 +84,7 @@ public sealed class RenumberRecordHandler
 
         // Phase two: everything that can still fail is genuine I/O, recorded in one transaction
         // (ADR-0007).
-        var transaction = new SourceTransaction();
+        var transaction = new SourceRepository.SourceTransaction();
         try
         {
             foreach (var rewrite in rewrites) WriteComputedRewrite(transaction, rewrite);
@@ -111,7 +111,7 @@ public sealed class RenumberRecordHandler
     // Only the trees are put back (ADR-0007); the Source watcher lands the restored files. Paths
     // are relative to the mod folder, the form the Source Control panel lists.
     private string RollBackFailedRenumber(
-        SourceTransaction transaction, SourceRepository repository, IReadOnlyList<ComputedRewrite> rewrites,
+        SourceRepository.SourceTransaction transaction, SourceRepository repository, IReadOnlyList<ComputedRewrite> rewrites,
         string oldFormKey, string newFormKey, Exception cause)
     {
         var (unrestored, relativeError) =
@@ -261,7 +261,7 @@ public sealed class RenumberRecordHandler
 
     // A referencer's remapped graph is its owning document's whole text, so the batch takes it as one
     // put against that document's own identity.
-    private static void WriteComputedRewrite(SourceTransaction transaction, ComputedRewrite rewrite)
+    private static void WriteComputedRewrite(SourceRepository.SourceTransaction transaction, ComputedRewrite rewrite)
     {
         transaction.Put(
             rewrite.Repository, rewrite.Plugin,
@@ -338,7 +338,7 @@ public sealed class RenumberRecordHandler
     }
 
     private static void WriteTargetRewrite(
-        SourceTransaction transaction, PluginKey plugin, ComputedTarget target, string newFormKey)
+        SourceRepository.SourceTransaction transaction, PluginKey plugin, ComputedTarget target, string newFormKey)
     {
         var (repository, unit, written, held, text) = target;
 

@@ -255,7 +255,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var npc = scope.Index.Store!
             .At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin, Limit: 1))
             .Items[0];
-        // Asked of the repository rather than computed: FlatPathFor needs an order index this test
+        // Asked of the repository rather than computed: the path needs an order index this test
         // would otherwise reverse-engineer from Track's own output.
         var expectedPath = Path.GetRelativePath(scope.ModFolder, SourceDocumentPath.Of(
             scope.ModFolder, CutDownPluginFixture.PluginFileName, "npc_", npc.FormKey, npc.EditorId, GameRelease.Fallout4));

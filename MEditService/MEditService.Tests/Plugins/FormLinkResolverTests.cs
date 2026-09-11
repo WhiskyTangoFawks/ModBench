@@ -36,9 +36,13 @@ public sealed class FormLinkResolverTests
         SourceRepository.Track(
             modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
-    private static PristineFile Npc(string pluginName, string formKey, string editorId) =>
-        new(SourceRepository.FlatPathFor(pluginName, "npc_", formKey, editorId, GameRelease.Fallout4),
-            Encoding.UTF8.GetBytes($"{{\n  \"FormKey\": \"{formKey}\",\n  \"EditorID\": \"{editorId}\"\n}}"));
+    // Tracks an empty tree, then puts the record through the repository — the same door a real edit
+    // uses — so its file lands wherever the repository's own placement decides, never a path recomputed
+    // here.
+    private static void TrackNpc(string modFolder, string pluginName, string formKey, string editorId, string? body = null) =>
+        SourceRepository.Over(modFolder, GameRelease.Fallout4).Put(
+            new PluginKey(pluginName),
+            new SourceDocument(formKey, "npc_", editorId, body ?? $"{{\n  \"FormKey\": \"{formKey}\",\n  \"EditorID\": \"{editorId}\"\n}}"));
 
     [Fact]
     public void Resolve_ARecordOnlyTheTrackedWorkingTreeHolds_IsItsRecordTypeAndEditorId()
@@ -47,7 +51,9 @@ public sealed class FormLinkResolverTests
         using var data = new PluginFixtureBuilder("resolver-tracked")
             .WithPlugin(TrackedPlugin, origin: "TrackedMod")
             .BuildScattered();
-        Track(ModFolderOf(data, TrackedPlugin), Npc(TrackedPlugin, TreeOnlyFormKey, TreeOnlyEditorId));
+        var modFolder = ModFolderOf(data, TrackedPlugin);
+        Track(modFolder);
+        TrackNpc(modFolder, TrackedPlugin, TreeOnlyFormKey, TreeOnlyEditorId);
 
         using var resolver = ResolverOver(data);
 
@@ -62,7 +68,9 @@ public sealed class FormLinkResolverTests
         using var data = new PluginFixtureBuilder("resolver-spelling")
             .WithPlugin(TrackedPlugin, origin: "TrackedMod")
             .BuildScattered();
-        Track(ModFolderOf(data, TrackedPlugin), Npc(TrackedPlugin, "00080A:Tracked.esp", "MixedCaseNpc"));
+        var modFolder = ModFolderOf(data, TrackedPlugin);
+        Track(modFolder);
+        TrackNpc(modFolder, TrackedPlugin, "00080A:Tracked.esp", "MixedCaseNpc");
 
         using var resolver = ResolverOver(data);
 
@@ -115,12 +123,11 @@ public sealed class FormLinkResolverTests
         using var data = new PluginFixtureBuilder("resolver-declared-spelling")
             .WithPlugin(TrackedPlugin, origin: "TrackedMod")
             .BuildScattered();
-        Track(
-            ModFolderOf(data, TrackedPlugin),
-            new PristineFile(
-                SourceRepository.FlatPathFor(TrackedPlugin, "npc_", "00080A:Tracked.esp", "HandSpelledNpc", GameRelease.Fallout4),
-                Encoding.UTF8.GetBytes(
-                    "{\n  \"FormKey\": \"00080a:tracked.esp\",\n  \"EditorID\": \"HandSpelledNpc\"\n}")));
+        var modFolder = ModFolderOf(data, TrackedPlugin);
+        Track(modFolder);
+        TrackNpc(
+            modFolder, TrackedPlugin, "00080A:Tracked.esp", "HandSpelledNpc",
+            body: "{\n  \"FormKey\": \"00080a:tracked.esp\",\n  \"EditorID\": \"HandSpelledNpc\"\n}");
 
         using var resolver = ResolverOver(data);
 
@@ -155,9 +162,9 @@ public sealed class FormLinkResolverTests
             .WithPlugin(TrackedPlugin, origin: "TrackedMod")
             .BuildScattered();
         var modFolder = ModFolderOf(data, TrackedPlugin);
-        Track(modFolder, Npc(TrackedPlugin, TreeOnlyFormKey, TreeOnlyEditorId));
-        var unit = Path.Combine(
-            modFolder, SourceRepository.FlatPathFor(TrackedPlugin, "npc_", TreeOnlyFormKey, TreeOnlyEditorId, GameRelease.Fallout4));
+        Track(modFolder);
+        TrackNpc(modFolder, TrackedPlugin, TreeOnlyFormKey, TreeOnlyEditorId);
+        var unit = SourceDocumentPath.Of(modFolder, TrackedPlugin, "npc_", TreeOnlyFormKey, TreeOnlyEditorId, GameRelease.Fallout4);
         File.Move(unit, Path.Combine(Path.GetDirectoryName(unit)!, $"HandRenamed - 000800_{TrackedPlugin}.json"));
 
         using var resolver = ResolverOver(data);
@@ -254,7 +261,9 @@ public sealed class FormLinkResolverTests
             .BuildScattered();
         // Tracked, with a tree that holds some other record: tracked is the whole answer, and the
         // compiled file is not consulted behind it.
-        Track(ModFolderOf(data, TrackedPlugin), Npc(TrackedPlugin, "000900:Tracked.esp", "SomeOtherNpc"));
+        var modFolder = ModFolderOf(data, TrackedPlugin);
+        Track(modFolder);
+        TrackNpc(modFolder, TrackedPlugin, "000900:Tracked.esp", "SomeOtherNpc");
 
         using var resolver = ResolverOver(data);
 

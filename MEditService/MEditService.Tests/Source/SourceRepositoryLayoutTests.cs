@@ -1,3 +1,4 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -29,68 +30,43 @@ public sealed class SourceRepositoryLayoutTests
     // recovered from the path must carry the same plugin-name bytes For() started from.
     [InlineData("Café.esp", "npc_", "000800:Café.esp", "Né")]
     [InlineData("Плагин.esp", "npc_", "0012AB:Плагин.esp", "Имя")]
-    public void For_ThenTryParse_RoundTripsPluginAndRecordType(
+    public void Put_ThenTryParse_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
-        var path = SourceRepository.FlatPathFor(pluginFileName, recordType, formKeyString, editorId, Release);
+        var modFolder = Directory.CreateTempSubdirectory("medit-layout-roundtrip-").FullName;
+        try
+        {
+            SourceRepository.Track(
+                modFolder, SourcePreset.Edits, [], new TrackProvenance(null, null, new Dictionary<string, string>()));
+            SourceRepository.Open(modFolder, Release)!.Put(
+                new PluginKey(pluginFileName), new SourceDocument(formKeyString, recordType, editorId, "{}"));
 
-        // Everything nests under one root "source/" folder, the plugin its own child directory, not a
-        // "<plugin>.source/" sibling tree. Asserted rather than implied by TryParse round-tripping: a
-        // broken root four segments deep would round-trip too.
-        var segments = path.Split(Path.DirectorySeparatorChar);
-        Assert.Equal(SourceRepository.RootFolderName, segments[0]);
-        Assert.Equal(pluginFileName, segments[1]);
+            var path = Path.GetRelativePath(
+                modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
 
-        var ok = SourceRepository.TryParseDocumentPath(path, Release, out var identity);
+            // Everything nests under one root "source/" folder, the plugin its own child directory, not a
+            // "<plugin>.source/" sibling tree. Asserted rather than implied by TryParse round-tripping: a
+            // broken root four segments deep would round-trip too.
+            var segments = path.Split(Path.DirectorySeparatorChar);
+            Assert.Equal(SourceRepository.RootFolderName, segments[0]);
+            Assert.Equal(pluginFileName, segments[1]);
 
-        Assert.True(ok, $"expected TryParse to succeed for a path For() itself produced: '{path}'");
-        Assert.Equal(pluginFileName, identity.PluginFileName);
-        // TryParse answers RecordTypeDispatch's schema-table-name spelling; For() accepts either. The two
-        // need not match textually, only resolve to the same concrete type, which this equality checks for
-        // real rather than assuming a spelling.
-        var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
-        Assert.NotNull(expectedConcrete);
-        Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(identity.RecordType));
-    }
+            var ok = SourceRepository.TryParseDocumentPath(path, Release, out var identity);
 
-    [Theory]
-    [InlineData("SomeNpc", "SomeNpc - 000800_Vendor.esp.json")]
-    [InlineData(null, "000800_Vendor.esp.json")]
-    public void For_NamesTheRecordByIdentityAlone_WithNoOrderingPrefix(string? editorId, string expectedFileName)
-    {
-        var path = SourceRepository.FlatPathFor("Vendor.esp", "npc_", "000800:Vendor.esp", editorId, Release);
-
-        Assert.Equal(expectedFileName, Path.GetFileName(path));
-    }
-
-    // A quest is a flat file: every child slot it has is inside its document.
-    [Fact]
-    public void For_ForAQuest_IsAFileInTheQuestsFolder()
-    {
-        var path = SourceRepository.FlatPathFor("Vendor.esp", "Quest", "000800:Vendor.esp", "SomeQuest", Release);
-
-        Assert.Equal(Path.Combine("source", "Vendor.esp", "Quests", "SomeQuest - 000800_Vendor.esp.json"), path);
-    }
-
-    [Theory]
-    [InlineData("cell")]
-    [InlineData("Worldspace")]
-    public void For_ForADirectoryPerRecordType_ThrowsNamedException(string recordType)
-    {
-        var ex = Assert.Throws<NotSupportedException>(
-            () => SourceRepository.FlatPathFor("Vendor.esp", recordType, "000800:Vendor.esp", "SomeName", Release));
-
-        Assert.Contains(recordType, ex.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void For_ForATypeWithNoTopLevelGroup_ThrowsNamedException()
-    {
-        // A placed reference lives inside a cell's own document, never under a top-level group of
-        // its own: the same "ask the repository" refusal as a directory-per-record type, for
-        // another reason.
-        Assert.Throws<NotSupportedException>(
-            () => SourceRepository.FlatPathFor("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release));
+            Assert.True(ok, $"expected TryParse to succeed for a path Put itself produced: '{path}'");
+            Assert.Equal(pluginFileName, identity.PluginFileName);
+            // TryParse answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
+            // two need not match textually, only resolve to the same concrete type, which this equality
+            // checks for real rather than assuming a spelling.
+            var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
+            Assert.NotNull(expectedConcrete);
+            Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(identity.RecordType));
+        }
+        finally
+        {
+            try { Directory.Delete(modFolder, recursive: true); }
+            catch (IOException) { /* scratch directory, best effort */ }
+        }
     }
 
     [Theory]
