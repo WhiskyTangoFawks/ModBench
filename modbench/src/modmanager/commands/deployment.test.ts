@@ -14,7 +14,7 @@ const MANIFEST = join('mods', '.medit-manifest.json');
 
 // Never asked: used by every test whose fixture already has a manifest, or that predates the
 // prompt existing — a call here is itself a failure of "asks only on an absent manifest".
-const neverAsk = () => { throw new Error('showWarning should not have been called'); };
+const neverAsk = () => { throw new Error('deployMods asked its question when it had no reason to'); };
 const accept = vi.fn().mockResolvedValue(DEPLOY_CONFIRM_BUTTON);
 const decline = vi.fn().mockResolvedValue(undefined);
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import { applyRecordEdit } from '../editor/applyRecordEdit';
 import {
-  runExternalChangeDialogs, BASELINE_BUTTON, APPLY_BUTTON,
+  runExternalChangeDialogs, buttonsInDefaultOrder, messageFor, BASELINE_BUTTON, APPLY_BUTTON,
 } from '../plugins/externalChangeDialog';
 import type { UnansweredExternalChange } from '../medit/client';
 import type { RecordEditEnvelope } from '../medit/messages';
@@ -44,15 +44,17 @@ describe('the recording reporter', () => {
 
 describe('the scripted dialog', () => {
   it('answers each question with the next scripted answer and records what was asked', async () => {
+    const changes = [unanswered('ModA'), unanswered('ModB')];
     const dialog = scriptedDialog(BASELINE_BUTTON, APPLY_BUTTON);
 
-    const outcomes = await runExternalChangeDialogs([unanswered('ModA'), unanswered('ModB')], dialog);
+    const outcomes = await runExternalChangeDialogs(changes, dialog);
 
     expect(outcomes.map((o) => o.answer)).toEqual(['absorb', 'keep']);
-    expect(dialog.asked).toEqual([
-      { message: 'ModA', detail: 'Plugin(s) changed: Fixture.esp\nNo version change was observed.', buttons: [APPLY_BUTTON, BASELINE_BUTTON] },
-      { message: 'ModB', detail: 'Plugin(s) changed: Fixture.esp\nNo version change was observed.', buttons: [APPLY_BUTTON, BASELINE_BUTTON] },
-    ]);
+    // What either question says is externalChangeDialog.test.ts's to pin; what the double owes is
+    // that each question reached it whole, in the order the consumer posed them.
+    expect(dialog.asked.map((q) => q.message)).toEqual(['ModA', 'ModB']);
+    expect(dialog.asked.map((q) => q.detail)).toEqual(changes.map((c) => messageFor(c).detail));
+    expect(dialog.asked.map((q) => q.buttons)).toEqual(changes.map(buttonsInDefaultOrder));
   });
 
   it('answers a question the script did not reach with the native cancel', async () => {

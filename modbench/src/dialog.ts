@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
  *  named here, not re-declared per asking module. */
 export type AskQuestion = (
   message: string, options: { modal: true; detail?: string }, ...buttons: string[]
-) => Thenable<string | undefined> | Promise<string | undefined>;
+) => Thenable<string | undefined>;
 
 /** A question is a warning modal because that is the one message API whose modal form both
  *  carries a detail and returns which button was pressed. */
