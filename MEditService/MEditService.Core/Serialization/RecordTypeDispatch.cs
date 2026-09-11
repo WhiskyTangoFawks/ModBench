@@ -29,6 +29,7 @@ internal sealed class RecordTypeDispatch
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _typesByFolder;
     private readonly IReadOnlyDictionary<string, string> _directoryPerRecordTypeByFolder;
     private readonly IReadOnlyList<Type> _exteriorCellBlockLevels;
+    private readonly IReadOnlyList<Type> _interiorCellBlockLevels;
 
     private RecordTypeDispatch(
         IReadOnlyDictionary<string, Type?> byName,
@@ -36,8 +37,10 @@ internal sealed class RecordTypeDispatch
         IReadOnlyDictionary<Type, string> folderByType,
         IReadOnlyDictionary<string, IReadOnlyList<string>> typesByFolder,
         IReadOnlyDictionary<string, string> directoryPerRecordTypeByFolder,
-        IReadOnlyList<Type> exteriorCellBlockLevels)
+        IReadOnlyList<Type> exteriorCellBlockLevels,
+        IReadOnlyList<Type> interiorCellBlockLevels)
     {
+        _interiorCellBlockLevels = interiorCellBlockLevels;
         _byName = byName;
         _ambiguous = ambiguous;
         _folderByType = folderByType;
@@ -129,6 +132,24 @@ internal sealed class RecordTypeDispatch
     /// container types a spatial mint places blank documents for.</summary>
     internal IReadOnlyList<Type> ExteriorCellBlockLevels => _exteriorCellBlockLevels;
 
+    /// <summary>The block levels the cells group nests its interior cells under, outermost first —
+    /// the container types whose blank documents label a minted bucket.</summary>
+    internal IReadOnlyList<Type> InteriorCellBlockLevels => _interiorCellBlockLevels;
+
+    /// <summary>The member a level of the interior tree numbers itself with, one coordinate rather
+    /// than the exterior pair. Static for the same reason as <see cref="SubBlockChildMember"/>.</summary>
+    internal static string BlockNumberMember => "BlockNumber";
+
+    /// <summary>The member a level's document labels itself with. Static for the same reason as
+    /// <see cref="SubBlockChildMember"/>.</summary>
+    internal static string GroupTypeMember => "GroupType";
+
+    /// <summary>The label each interior level carries, positionally matching
+    /// <see cref="InteriorCellBlockLevels"/>. Spelled because the enum names an exterior level ending
+    /// in the same type name.</summary>
+    internal static IReadOnlyList<string> InteriorCellBlockGroupTypes { get; } =
+        ["InteriorCellBlock", "InteriorCellSubBlock"];
+
     /// <summary>Null when the folder maps to more than one concrete type (an ambiguous group such as
     /// Globals), so the document self-describes rather than a wrong type being assumed, and for a
     /// folder with no group.</summary>
@@ -216,7 +237,10 @@ internal sealed class RecordTypeDispatch
             folderByType,
             typesByFolder.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value),
             directoryPerRecordTypeByFolder,
-            BlockLevelsUnder(byName.GetValueOrDefault(WorldspaceTypeName)));
+            BlockLevelsUnder(byName.GetValueOrDefault(WorldspaceTypeName), BlockNumberXMember),
+            BlockLevelsUnder(
+                modType.GetProperty(DirectoryPerRecordFolders[NestedDirectoryPerRecordType])?.PropertyType,
+                BlockNumberMember));
     }
 
     private static bool IsAmbiguous(Type concrete, HashSet<Type> abstractElements) =>
@@ -224,23 +248,25 @@ internal sealed class RecordTypeDispatch
 
     // A block level is the list element type carrying block coordinates. Found by that shape, not by
     // member name: a worldspace and a block spell the member holding their blocks differently.
-    internal static List<Type> BlockLevelsUnder(Type? container)
+    internal static List<Type> BlockLevelsUnder(Type? container, string blockNumberMember)
     {
         var levels = new List<Type>();
         // Stops at a level already walked, so a shape that nests itself ends the walk short of the
         // caller's count check rather than descending forever.
         var walked = new HashSet<Type>();
-        for (var level = BlockLevelIn(container); level != null && walked.Add(level); level = BlockLevelIn(level))
+        for (var level = BlockLevelIn(container, blockNumberMember);
+             level != null && walked.Add(level);
+             level = BlockLevelIn(level, blockNumberMember))
         {
             levels.Add(level);
         }
         return levels;
     }
 
-    private static Type? BlockLevelIn(Type? container) =>
+    private static Type? BlockLevelIn(Type? container, string blockNumberMember) =>
         container?.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(p => ListElementType(p.PropertyType))
-            .FirstOrDefault(element => element?.GetProperty(BlockNumberXMember) != null);
+            .FirstOrDefault(element => element?.GetProperty(blockNumberMember) != null);
 
     private static Type? ListElementType(Type propertyType) =>
         propertyType.GetInterfaces()

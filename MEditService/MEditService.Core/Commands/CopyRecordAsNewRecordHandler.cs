@@ -60,21 +60,17 @@ public sealed class CopyRecordAsNewRecordHandler
         // is a separate operation).
         var duplicate = RecordDocumentEdits.DuplicatedWithoutChildren(
             _codec, body, release, identity.RecordType, targetFormKey);
-        var placement = SourceRepository.PlacementFor(
-            destinationPlugin.Name, identity.RecordType, targetFormKey, duplicate.EditorId, release);
-        SourceRepository.WriteAt(destination.ModFolder, placement, path =>
-        {
-            SourceRepository.WriteTextAtomic(path, duplicate.Text);
-            return duplicate.Text;
-        });
+        destination.Repository.Put(
+            destinationPlugin,
+            new SourceDocument(targetFormKey, identity.RecordType, duplicate.EditorId, duplicate.Text));
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
                 "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
-                "{DestinationPlugin} ({DestinationOrigin}) — new working-tree source file at {SourcePath}",
+                "{DestinationPlugin} ({DestinationOrigin}) — new working-tree source document",
                 formKey, source.Plugin.Name, source.Plugin.Origin, targetFormKey, destinationPlugin.Name,
-                destinationPlugin.Origin, placement.RelativePath);
+                destinationPlugin.Origin);
         }
         return RecordEditResult.Success(targetFormKey);
     }
