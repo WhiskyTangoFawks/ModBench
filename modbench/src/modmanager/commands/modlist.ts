@@ -15,9 +15,9 @@ import {
   renameSeparatorInText,
   setEnabledInText,
 } from '../mo2/modlistText';
-import { setUninstalledInText } from '../mo2/downloads';
-import { downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile } from '../mo2/layout';
-import { parseMetaIni } from '../mo2/metaIni';
+import { markDownloadUninstalled } from './downloads';
+import { modDir, modlistFile } from '../mo2/layout';
+import { createWriteQueue, type WriteQueue } from './writeQueue';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -31,19 +31,9 @@ const exists = (path: string): Promise<boolean> =>
     () => false,
   );
 
-// The one queue every modlist.txt write for an instance passes through — module-private
-// infrastructure, not an abstraction over commands. Keyed by instance root, so every profile
-// under it serializes together.
-const modlistWriteQueues = new Map<string, Promise<unknown>>();
-
-export function withModlistWriteLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
-  const prior = modlistWriteQueues.get(instanceRoot) ?? Promise.resolve();
-  const next = prior.then(task, task);
-  // The chain tail must never stay rejected, or every later write on this instance queues
-  // behind a dead link forever — only the caller's own `next` sees the error.
-  modlistWriteQueues.set(instanceRoot, next.catch(() => undefined));
-  return next;
-}
+/** The one queue every modlist.txt write for an instance passes through, keyed by instance root
+ *  so every profile under it serializes together. */
+export const withModlistWriteLock: WriteQueue = createWriteQueue();
 
 // The one splice point every verb below goes through. A thrown "not found" becomes `refusal`
 // rather than an exception; unchanged text is not written, so a no-op never fires the watcher.
@@ -126,37 +116,14 @@ export function reorderSeparatorBlock(
   return spliceModlist(instanceRoot, profile, (text) => moveSeparatorBlockInText(text, separatorName, toIndex));
 }
 
-// Best-effort: a download never installed from, or whose .meta is already gone, is normal.
-async function markDownloadUninstalled(instanceRoot: string, modName: string): Promise<void> {
-  let archiveFilename: string | undefined;
-  try {
-    const metaIniText = await readFile(modMetaFile(instanceRoot, modName), 'utf8');
-    archiveFilename = parseMetaIni(metaIniText).archiveFilename;
-  } catch {
-    return;
-  }
-  if (!archiveFilename) return;
-  if (!(await exists(downloadFile(instanceRoot, archiveFilename)))) return;
-  const metaPath = downloadSidecarFile(instanceRoot, archiveFilename);
-  try {
-    let metaText: string;
-    try {
-      metaText = await readFile(metaPath, 'utf8');
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') metaText = '';
-      else throw err;
-    }
-    await writeFile(metaPath, setUninstalledInText(metaText));
-  } catch {
-    // Bookkeeping only — never blocks the uninstall itself.
-  }
-}
-
 /** Removes the modlist.txt entry and the `mods/<name>/` folder. Refuses only when the modlist
- *  has no entry for `modName`; a folder-delete failure afterwards leaves a recoverable orphan. */
-export async function uninstallMod(instanceRoot: string, profile: string, modName: string): Promise<ModlistCommandResult> {
-  // Reads installationFile first: deleting the folder destroys the link to the source download.
-  await markDownloadUninstalled(instanceRoot, modName);
+ *  has no entry for `modName`. `archiveFilename` is the mod row's own `installationFile`, handed
+ *  in from the value; with none, no download is marked. */
+export async function uninstallMod(
+  instanceRoot: string, profile: string, modName: string, archiveFilename?: string,
+): Promise<ModlistCommandResult> {
+  // Bookkeeping, and refused when the download is already gone — never blocks the uninstall.
+  if (archiveFilename) await markDownloadUninstalled(instanceRoot, archiveFilename);
   // De-list before deleting: a failed delete leaves a recoverable orphan, not a dangling entry.
   const outcome = await spliceModlist(instanceRoot, profile, (text) => removeModFromText(text, modName));
   if (!outcome.applied) return outcome;

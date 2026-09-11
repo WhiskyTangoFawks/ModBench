@@ -182,7 +182,9 @@ export function registerModContextCommands(
         if (answer !== 'Uninstall') return;
         await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, async () => {
           const profile = instance.value.activeProfile;
-          applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name));
+          // The download to mark comes off the row the tree already holds (ADR-0015 invariant 1),
+          // so the command walks nothing to find it.
+          applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name, node.mod.archiveFilename));
         });
       }),
       vscode.commands.registerCommand('modbench.modList.mod.viewOnNexus', async (node: ModNode | undefined) => {
@@ -321,11 +323,9 @@ export function registerDownloadsView(
   instance: InstanceView,
   outputChannel: vscode.LogOutputChannel,
 ): DownloadsProvider {
-  // A shim for collaborators still taking a flat `(msg) => void`, built here at the boundary so
-  // the flat shape stops at them rather than one level higher.
-  const log = (msg: string) => outputChannel.info(msg);
+  const reporter = makeReporter(outputChannel, 'downloadList');
   const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
-    instanceRoot, instance, reporter: makeReporter(outputChannel, 'downloadList'),
+    instanceRoot, instance, reporter,
   }));
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,
@@ -344,8 +344,8 @@ export function registerDownloadsView(
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, log),
-    ...registerDownloadsMultiRowCommands(instanceRoot, log),
+    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter),
+    ...registerDownloadsMultiRowCommands(instanceRoot, reporter),
   ]) own(disposable);
   return downloadsProvider;
 }

@@ -205,8 +205,9 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(await readdir(join(dir, 'mods'))).toEqual(beforeDirs);
   });
 
-  it('uninstallMod marks the matching download uninstalled, without failing the uninstall itself', async () => {
-    await uninstallMod(dir, 'Default', 'Unofficial Fallout 4 Patch');
+  it('uninstallMod marks the download it is handed uninstalled, without failing the uninstall itself', async () => {
+    await uninstallMod(
+      dir, 'Default', 'Unofficial Fallout 4 Patch', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z');
     const meta = await readFile(
       join(dir, 'downloads', 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta'), 'utf8',
     );

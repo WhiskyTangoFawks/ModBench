@@ -115,8 +115,10 @@ function setMetaFlag(text: string, key: string, value: boolean): string {
   return `[General]${eol}${line}${eol}` + text;
 }
 
+/** Both keys, as MO2's own markInstalled writes them: a reader resolves `uninstalled` first, so
+ *  a download uninstalled and then reinstalled would otherwise still read Uninstalled. */
 export function setInstalledInText(text: string): string {
-  return setMetaFlag(text, 'installed', true);
+  return setMetaFlag(setMetaFlag(text, 'uninstalled', false), 'installed', true);
 }
 
 /** `installed` is left untouched, as MO2 leaves it: the two keys coexist and

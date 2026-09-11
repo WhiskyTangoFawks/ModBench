@@ -18,13 +18,14 @@ describe('mod lifecycle corpus (uninstall)', () => {
   });
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  // "Unofficial Fallout 4 Patch"'s meta.ini names a real archive under downloads/
-  // (installationFile=...) — uninstallMod's downstream writeback must land on exactly
-  // that archive's .meta and nowhere else.
+  // The archive the value's row names, as the Mods tree hands it in — uninstallMod's downstream
+  // writeback must land on exactly that archive's .meta and nowhere else.
+  const ARCHIVE = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';
+
   it('uninstallMod deletes the folder, removes the modlist line, and marks its download uninstalled — nothing else', async () => {
-    const downloadMeta = 'downloads/Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z.meta';
+    const downloadMeta = `downloads/${ARCHIVE}.meta`;
     const before = await snapshotTree(dir);
-    await uninstallMod(dir, PROFILE, 'Unofficial Fallout 4 Patch');
+    await uninstallMod(dir, PROFILE, 'Unofficial Fallout 4 Patch', ARCHIVE);
     const after = await snapshotTree(dir);
 
     assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST, downloadMeta]));
@@ -35,9 +36,20 @@ describe('mod lifecycle corpus (uninstall)', () => {
     expect(metaText).toContain('uninstalled=true');
   });
 
-  // "Harder VATS"' meta.ini has installationFile= (blank) — nothing to writeback to.
-  // The rival this catches: a writeback path that throws or writes somewhere
-  // unexpected when there's no linked download, instead of skipping silently.
+  // The rival this catches: uninstall reading the mod's meta.ini for the archive instead of
+  // taking the one the value's row names, which would mark a download nobody named.
+  it('uninstallMod marks no download when none is handed in, though the mod\'s meta.ini names one', async () => {
+    const downloadMeta = `downloads/${ARCHIVE}.meta`;
+    const before = await snapshotTree(dir);
+    await uninstallMod(dir, PROFILE, 'Unofficial Fallout 4 Patch');
+    const after = await snapshotTree(dir);
+
+    assertOnlyChanged(before, after, new Set(['mods/Unofficial Fallout 4 Patch/meta.ini', MODLIST]));
+    expect(after.get(downloadMeta)).toEqual(before.get(downloadMeta));
+  });
+
+  // "Harder VATS"' row names no download. The rival this catches: a writeback path that throws
+  // or writes somewhere unexpected with none named, instead of skipping silently.
   it('uninstallMod on a mod with no linked download touches only its own folder and modlist.txt', async () => {
     const before = await snapshotTree(dir);
     await uninstallMod(dir, PROFILE, 'Harder VATS');
