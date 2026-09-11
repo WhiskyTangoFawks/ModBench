@@ -3,6 +3,19 @@ import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import sonarjs from 'eslint-plugin-sonarjs';
 
+// ADR-0019 invariant 3, verbatim, because a lint message is the only place a developer meets it.
+const SURFACING_GOES_THROUGH_THE_REPORTER =
+    'Surfacing goes through an injected reporter, never raw window calls in business logic (ADR-0019 invariant 3).';
+
+const MESSAGE_API = /^show(Information|Warning|Error)Message$/;
+
+// Every way to name one: a dotted member, a bracketed member, a destructured property.
+const MESSAGE_API_SITES = [
+    `MemberExpression[property.name=${MESSAGE_API}]`,
+    `MemberExpression[computed=true][property.value=${MESSAGE_API}]`,
+    `ObjectPattern > Property[key.name=${MESSAGE_API}]`,
+];
+
 export default tseslint.config(
     { ignores: ['src/medit/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
@@ -32,6 +45,23 @@ export default tseslint.config(
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
         rules: {
             'no-restricted-globals': ['error', { name: 'fetch', message: 'Backend HTTP goes through the mEdit client.' }],
+        },
+    },
+
+    // The reporter and the dialog are the two adapters that own a message API. Tests are out of
+    // scope: the integration suite swaps the real API out to observe that a toast reached the
+    // user.
+    {
+        files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
+        ignores: [
+            'src/reporter.ts', 'src/dialog.ts',
+            'src/**/*.test.ts', 'src/test/**',
+            'webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**',
+        ],
+        rules: {
+            'no-restricted-syntax': ['error',
+                ...MESSAGE_API_SITES.map((selector) => ({ selector, message: SURFACING_GOES_THROUGH_THE_REPORTER })),
+            ],
         },
     },
 
