@@ -78,9 +78,6 @@ try
         sp.GetRequiredService<ILoggerFactory>(),
         sp.GetRequiredService<INotificationPublisher>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
-    // Resolved from the Index rather than registered on its own, so there is exactly one write
-    // gate — a bare `AddSingleton<IndexWriteGate>()` would inject cleanly and serialize nothing.
-    builder.Services.AddSingleton(sp => sp.GetRequiredService<IndexProjector>().WriteGate);
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
@@ -128,7 +125,7 @@ try
     // ADR-0014: the same watcher's source-routing half. The Index announces each reconcile and
     // Track the repository it has created, so a watch starts with no restart.
     var sourceChanges = new SourceChangeApplier(
-        index, holder, app.Services.GetRequiredService<IndexWriteGate>(), watcher,
+        index, holder, index.WriteGate, watcher,
         app.Services.GetRequiredService<INotificationPublisher>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceChangeApplier)));
     watcher.SourceChanged = sourceChanges.Apply;

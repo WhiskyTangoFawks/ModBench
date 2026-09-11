@@ -1,10 +1,6 @@
 using MEditService.Api;
 using MEditService.Api.Endpoints;
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.Queries;
 using MEditService.Tests.Edits;
-using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -17,20 +13,13 @@ public sealed class MalformedFormKeyEndpointTests
 {
     private const string MalformedFormKey = "not-a-formkey";
 
-    private static RenumberRecordHandler RenumberHandlerFor(IndexedModFixture mod) => TestEditService.RenumberHandler(mod.Holder);
-
-    private static CreateRecordHandler CreateHandlerFor(IndexedModFixture mod) => TestEditService.CreateHandler(mod.Holder);
-
-    private static CopyRecordAsNewRecordHandler CopyAsNewHandlerFor(IndexedModFixture mod) =>
-        TestEditService.CopyAsNewHandler(mod.Holder);
-
     [Fact]
     public void CreateRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
-        using var mod = IndexedModFixture.Tracked();
-        var req = new RecordCreateRequest(IndexedModFixture.ModFolderOrigin, "npc_", "Broken", MalformedFormKey);
+        using var fx = SourceEditFixture.Tracked();
+        var req = new RecordCreateRequest(SourceEditFixture.ModFolderOrigin, "npc_", "Broken", MalformedFormKey);
 
-        var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, CreateHandlerFor(mod), mod.Index.WriteGate, NullLoggerFactory.Instance);
+        var result = PluginEndpoints.CreateRecord(fx.Plugin.Name, req, fx.CreateHandler, NullLoggerFactory.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
@@ -39,10 +28,10 @@ public sealed class MalformedFormKeyEndpointTests
     [Fact]
     public void RenumberRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
-        using var mod = IndexedModFixture.Tracked();
-        var req = new RecordRenumberRequest(mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
+        using var fx = SourceEditFixture.Tracked();
+        var req = new RecordRenumberRequest(fx.Plugin.Name, SourceEditFixture.ModFolderOrigin, MalformedFormKey);
 
-        var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, RenumberHandlerFor(mod), mod.Index.WriteGate, NullLogger.Instance);
+        var result = RecordEndpoints.RenumberRecord(fx.Npc.ToString(), req, fx.RenumberHandler, NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
@@ -51,13 +40,13 @@ public sealed class MalformedFormKeyEndpointTests
     [Fact]
     public void CopyRecordAsNewRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()
     {
-        using var mod = IndexedModFixture.Tracked();
+        using var fx = CopyFixture.Create(trackSource: true);
         var req = new RecordCopyAsNewRecordRequest(
-            mod.Plugin.Name, IndexedModFixture.ModFolderOrigin,
-            mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
+            CopyFixture.SourcePluginName, CopyFixture.SourceOrigin,
+            CopyFixture.DestinationPluginName, CopyFixture.DestinationOrigin, MalformedFormKey);
 
         var result = RecordEndpoints.CopyRecordAsNewRecord(
-            mod.Npc.ToString(), req, CopyAsNewHandlerFor(mod), mod.Index.WriteGate, NullLogger.Instance);
+            fx.SourceNpc.ToString(), req, fx.CopyAsNewHandler, NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

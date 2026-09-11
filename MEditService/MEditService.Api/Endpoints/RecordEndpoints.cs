@@ -2,7 +2,6 @@ using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
-using MEditService.Core.Records;
 
 namespace MEditService.Api.Endpoints;
 
@@ -72,8 +71,8 @@ public static class RecordEndpoints
         // ADR-0007: the single write path's one door. Scripts and agents reach the same
         // handler the UI does, which is why the untracked refusal is expressible here.
         app.MapPost("/records/{formKey}/edit", (
-            string formKey, RecordEditRequest request, EditRecordHandler edits, IndexWriteGate gate) =>
-            EditRecord(formKey, request, edits, gate, logger))
+            string formKey, RecordEditRequest request, EditRecordHandler edits) =>
+            EditRecord(formKey, request, edits, logger))
         .WithName("EditRecord")
         .WithTags("Records")
         .Produces<RecordEditResponse>()
@@ -89,8 +88,8 @@ public static class RecordEndpoints
         // Delete-record — the source file goes away and the null-Body working-tree mechanism takes
         // it from there. Same door, same refusals, same doctrine as EditRecord above.
         app.MapPost("/records/{formKey}/delete", (
-            string formKey, RecordDeleteRequest request, DeleteRecordHandler edits, IndexWriteGate gate) =>
-            DeleteRecord(formKey, request, edits, gate, logger))
+            string formKey, RecordDeleteRequest request, DeleteRecordHandler edits) =>
+            DeleteRecord(formKey, request, edits, logger))
         .WithName("DeleteRecord")
         .WithSummary("Delete a record as a working-tree change.")
         .WithDescription(
@@ -109,8 +108,8 @@ public static class RecordEndpoints
         .ProducesProblem(503);
 
         app.MapPost("/records/{formKey}/renumber", (
-            string formKey, RecordRenumberRequest request, RenumberRecordHandler edits, IndexWriteGate gate) =>
-            RenumberRecord(formKey, request, edits, gate, logger))
+            string formKey, RecordRenumberRequest request, RenumberRecordHandler edits) =>
+            RenumberRecord(formKey, request, edits, logger))
         .WithName("RenumberRecord")
         .WithSummary("Renumber a native record's FormKey as a delete+create pair.")
         .WithDescription(
@@ -131,8 +130,8 @@ public static class RecordEndpoints
 
         // ADR-0007: the source record's own bytes land under the same FormKey in the destination.
         app.MapPost("/records/{formKey}/copy-as-override", (
-            string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, IndexWriteGate gate) =>
-            CopyRecordAsOverride(formKey, request, edits, gate, logger))
+            string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits) =>
+            CopyRecordAsOverride(formKey, request, edits, logger))
         .WithName("CopyRecordAsOverride")
         .WithSummary("Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.")
         .WithDescription(
@@ -154,8 +153,8 @@ public static class RecordEndpoints
         // Mutagen's own Duplicate. A top-level record's child slots are cleared; an embedded
         // child's whole subtree rides along under fresh FormKeys.
         app.MapPost("/records/{formKey}/copy-as-new-record", (
-            string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits, IndexWriteGate gate) =>
-            CopyRecordAsNewRecord(formKey, request, edits, gate, logger))
+            string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits) =>
+            CopyRecordAsNewRecord(formKey, request, edits, logger))
         .WithName("CopyRecordAsNewRecord")
         .WithSummary(
             "Copy as New Record Into… — the source record under a fresh FormKey; a top-level record's " +
@@ -186,12 +185,11 @@ public static class RecordEndpoints
     // and there is no exception middleware, so I/O failures are mapped here rather than escaping
     // as a bodyless 500.
     internal static IResult EditRecord(
-        string formKey, RecordEditRequest request, EditRecordHandler edits, IndexWriteGate gate, ILogger logger)
+        string formKey, RecordEditRequest request, EditRecordHandler edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         var spelled = RecordEditEnvelope.Spell(request.Path ?? []);
         return WriteEndpointMapping.Execute(
-            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -229,11 +227,10 @@ public static class RecordEndpoints
     }
 
     internal static IResult DeleteRecord(
-        string formKey, RecordDeleteRequest request, DeleteRecordHandler edits, IndexWriteGate gate, ILogger logger)
+        string formKey, RecordDeleteRequest request, DeleteRecordHandler edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
-            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -261,11 +258,10 @@ public static class RecordEndpoints
     }
 
     internal static IResult RenumberRecord(
-        string formKey, RecordRenumberRequest request, RenumberRecordHandler edits, IndexWriteGate gate, ILogger logger)
+        string formKey, RecordRenumberRequest request, RenumberRecordHandler edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
-            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -305,12 +301,10 @@ public static class RecordEndpoints
     }
 
     internal static IResult CopyRecordAsOverride(
-        string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, IndexWriteGate gate,
-        ILogger logger)
+        string formKey, RecordCopyAsOverrideRequest request, CopyRecordAsOverrideHandler edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
-            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))
@@ -346,12 +340,10 @@ public static class RecordEndpoints
     }
 
     internal static IResult CopyRecordAsNewRecord(
-        string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits, IndexWriteGate gate,
-        ILogger logger)
+        string formKey, RecordCopyAsNewRecordRequest request, CopyRecordAsNewRecordHandler edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
         return WriteEndpointMapping.Execute(
-            gate,
             logReceived: () =>
             {
                 if (logger.IsEnabled(LogLevel.Information))

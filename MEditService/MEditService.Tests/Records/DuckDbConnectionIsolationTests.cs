@@ -83,8 +83,8 @@ public class DuckDbConnectionIsolationTests
         Assert.Equal(1, await read);
     }
 
-    // InvalidOperationException is what the write endpoint maps to a 503, so an overlapping write
-    // without the gate surfaces as a nonsense "Already in a transaction." 503.
+    // Why the Index gates its own writes: two projections overlapping on the shared connection
+    // fail here, and the failure names a transaction rather than anything either caller asked for.
     [Fact]
     public void SecondTransactionOnTheSameConnection_Throws_RatherThanNesting()
     {

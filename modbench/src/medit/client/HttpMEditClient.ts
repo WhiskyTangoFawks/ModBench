@@ -1,7 +1,7 @@
 import type { RecordEditEnvelope } from '../messages';
 import {
-  createApiClient, errorText, isWriteGateTimeout, openNotificationStream,
-  toLoadOrderStatus, writeGateBusyMessage, type ApiClient,
+  createApiClient, errorText, openNotificationStream,
+  toLoadOrderStatus, type ApiClient,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
@@ -110,13 +110,6 @@ export class HttpMEditClient implements MEditClient {
       if (!response.ok) {
         const eslMessage = spec.onEslContradiction && eslContradictionMessage(error);
         if (eslMessage) return spec.onEslContradiction!(eslMessage);
-        // Contended, not broken — the write was never attempted, so this is worth repeating.
-        // Before the generic branch, which would relay the backend's own timeout prose verbatim
-        // and read as fatally as a load order that has gone away.
-        if (isWriteGateTimeout(error)) {
-          this.log(`[HttpMEditClient] ${spec.op} hit the write gate (${response.status}): ${errorText(error)}`);
-          return { refused: true, message: writeGateBusyMessage(spec.failMsg) };
-        }
         const text = errorText(error);
         this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };
@@ -385,15 +378,6 @@ export class HttpMEditClient implements MEditClient {
       body: { plugin, origin, ...envelope },
     });
     if (response.ok && data?.applied) return { applied: true };
-
-    // The one gate-wrapped write that does not reach the user through `mutate`, so the busy
-    // branch is stated here too, before the refusal shaping below would relay the gate's prose
-    // as a judgement on this edit.
-    if (isWriteGateTimeout(error)) {
-      const message = writeGateBusyMessage('Could not edit this record');
-      this.log(`[HttpMEditClient] editRecord(${formKey} ${envelope.op} ${spelled}) hit the write gate (${response.status})`);
-      return { applied: false, refusal: 'WriteGateBusy', message };
-    }
 
     // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
     // from the status: only it tells "not tracked" from "no folder", whose ways out differ.
