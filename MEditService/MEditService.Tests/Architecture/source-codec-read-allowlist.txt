@@ -1,0 +1,3 @@
+# Every spelling of a RecordTextCodec member the Source folder touches beyond RecordTypeDispatch
+# and BlankDocument (ADR-0014 invariant 1), as file, member and count. Read the type fact through
+# RecordTypeDispatch or mint through BlankDocument instead of adding a line here.
