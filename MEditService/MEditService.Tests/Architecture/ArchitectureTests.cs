@@ -218,15 +218,18 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheQueryServices_AndTheIndexReadInterface_NameNoLoadOrderInterface()
     {
-        var scanned = SourceTree
+        var readSide = Path.Combine(SolutionDirectory(), "MEditService.Core", "Records");
+        var offenders = SourceTree
             .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Core", "Queries"))
-            .Append(Path.Combine(SolutionDirectory(), "MEditService.Core", "Records", "IQueryIndex.cs"))
+            .Append(Path.Combine(readSide, "IQueryIndex.cs"))
+            .Append(Path.Combine(readSide, "IRecordReads.cs"))
             .Where(file => File.ReadAllText(file).Contains(nameof(ILoadOrder), StringComparison.Ordinal))
-            .Select(file => Path.GetFileName(file))
+            .Select(Path.GetFileName)
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Empty(scanned);
+        Assert.True(offenders.Count == 0,
+            $"The read side still names {nameof(ILoadOrder)}:\n" + string.Join("\n", offenders));
     }
 
     // ADR-0044: participation is derived — enabled, winning, and named by a plugins.txt line — and

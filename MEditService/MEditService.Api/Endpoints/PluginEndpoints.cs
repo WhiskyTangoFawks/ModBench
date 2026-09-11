@@ -19,8 +19,9 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
 
-        // Every held, mutable plugin's Kind B diagnoses off its original bytes — the session-load
-        // complement of Track's refusal. RequireReads' throw becomes a 503, never an unmapped 500.
+        // Every mutable copy in the load order, diagnosed off its original bytes — the session-load
+        // complement of Track's refusal. With no load order applied the refusal is a 503, never an
+        // unmapped 500.
         app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));

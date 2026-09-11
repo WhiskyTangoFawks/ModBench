@@ -31,6 +31,8 @@ public sealed class HeldPlugins : ILoadOrder
     // these lists on every request.
     private readonly Lock _mutation = new();
     private PluginMetadata[] _pluginsSnapshot = [];
+    private IReadOnlyDictionary<PluginKey, PluginContent> _openedSnapshot =
+        new Dictionary<PluginKey, PluginContent>(PluginKey.Comparer);
     private PluginLoadFailure[] _loadFailuresSnapshot = [];
 
     public string DataFolderPath { get; }
@@ -38,10 +40,8 @@ public sealed class HeldPlugins : ILoadOrder
     public GameRelease GameRelease { get; }
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
 
-    /// <summary>What reading each open copy told the Index, for the reads to hand out. Derived from
-    /// the snapshot on every call, so it cannot lag what is held.</summary>
-    public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies =>
-        Plugins.ToDictionary(p => p.Key, p => p.Content, PluginKey.Comparer);
+    /// <summary>What reading each open copy told the Index, for the reads to hand out.</summary>
+    public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies => Volatile.Read(ref _openedSnapshot);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
 
     public HeldPlugins(
@@ -142,10 +142,18 @@ public sealed class HeldPlugins : ILoadOrder
             }
             _modsByKey[key] = mod;
             _plugins.Add(metadata);
-            Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+            PublishPlugins();
             _loadFailures.Remove(key);
             Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
         }
+    }
+
+    // Both views of what is held are republished together, under _mutation, so a reader can never
+    // see a copy in one and not the other.
+    private void PublishPlugins()
+    {
+        Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+        Volatile.Write(ref _openedSnapshot, _plugins.ToDictionary(p => p.Key, p => p.Content, PluginKey.Comparer));
     }
 
     /// <summary>The load order's half of a copy leaving the snapshot. The index side is
@@ -162,7 +170,7 @@ public sealed class HeldPlugins : ILoadOrder
                 Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
                 removed = true;
             }
-            if (removed) Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+            if (removed) PublishPlugins();
             return removed;
         }
     }
@@ -188,7 +196,7 @@ public sealed class HeldPlugins : ILoadOrder
                 throw new KeyNotFoundException($"No plugin '{previous.Name}' from origin '{previous.Origin}' is held.");
 
             _plugins[index] = metadata;
-            Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+            PublishPlugins();
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
