@@ -54,13 +54,17 @@ public record PluginResponse(
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
     bool HasParseFailure = false)
 {
-    public static PluginResponse FromMetadata(
-        PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null, bool hasMatchingRecords = true,
-        bool hasParseFailure = false)
+    /// <summary>One row: its registration from the load order's copy, what reading the file told
+    /// the Index from <paramref name="content"/> (ADR-0044).</summary>
+    public static PluginResponse Of(
+        RegisteredCopy copy, PluginContent content, IReadOnlyList<MasterIssue>? masterIssues = null,
+        bool hasMatchingRecords = true, bool hasParseFailure = false)
     {
-        return new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
-            masterIssues ?? [], m.InLoadOrder, m.Enabled, m.Winning, hasMatchingRecords,
-            Source.ModFolders.IsEditable(m.Origin, m.Path), hasParseFailure);
+        var registration = copy.Registration;
+        return new(copy.Name, copy.Path, copy.Slot, content.IsLight, content.IsMaster, content.Masters,
+            content.RecordCount, copy.IsImmutable, registration.Participates, copy.Origin,
+            masterIssues ?? [], registration.InLoadOrder, copy.Enabled, copy.Winning, hasMatchingRecords,
+            Source.ModFolders.IsEditable(copy.Origin, copy.Path), hasParseFailure);
     }
 }
 

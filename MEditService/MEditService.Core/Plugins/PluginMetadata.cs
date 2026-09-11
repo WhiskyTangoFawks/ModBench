@@ -31,6 +31,8 @@ public record PluginMetadata(
 
     public Registration Registration => new(LoadOrderIndex, Enabled, Winning);
 
+    public PluginContent Content => new(IsLight, IsMaster, Masters, RecordCount);
+
     public bool Participates => Registration.Participates;
 
     /// <summary>What makes a bare filename a safe write target: plugins.txt cannot list a name
@@ -41,6 +43,10 @@ public record PluginMetadata(
     /// a write target), or a copy the load order does not name, where editing changes nothing.</summary>
     public bool IsImmutable => IsForced || !InLoadOrder;
 }
+
+/// <summary>What reading the file told the Index about a copy, which no registration carries. Read
+/// once when the copy is opened; a copy that never opened has none.</summary>
+public sealed record PluginContent(bool IsLight, bool IsMaster, IReadOnlyList<string> Masters, int RecordCount);
 
 /// <summary>A copy that could not be opened is a row in an error state (ADR-0044): the rest of the
 /// load order is unaffected, and the reason is reported here rather than as a failed

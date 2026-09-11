@@ -142,16 +142,12 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
     }
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: the held copies and the store
-    /// are only ever both set or both null, so this can never observe one without the other.</summary>
-    public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope()
-    {
-        var (loadOrder, index) = RequireScopeCore();
-        return (loadOrder, index.At(RecordRef.Effective));
-    }
+    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: with no load order held the
+    /// Index has opened no store to read.</summary>
+    public IRecordReads RequireReads() => RequireScopeCore().Index.At(RecordRef.Effective);
 
-    // The concrete HeldPlugins and write-capable IRecordIndex the projection methods need, not the
-    // narrower pair the public method hands out. One lock, one null check, one message.
+    // The concrete HeldPlugins and write-capable IRecordIndex the projection methods need, wider
+    // than the reads the public method hands out. One lock, one null check, one message.
     private (HeldPlugins LoadOrder, IRecordIndex Index) RequireScopeCore()
     {
         lock (_lock)
@@ -308,6 +304,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         }
         var loadOrder = new HeldPlugins(
             _adapter, snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.GameRelease, _logger);
+        fresh.ReadOpenedCopiesFrom(() => loadOrder.OpenedCopies);
 
         lock (_lock)
         {
@@ -687,7 +684,7 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         lock (_lock) return _heldPlugins is { } held ? Plugins.LoadOrder.From(held).Participating : [];
     }
 
-    // Never null, and never one without the other, for the same reason RequireScope is not.
+    // Never null, and never one without the other, for the same reason RequireReads is not.
     private (ILoadOrder LoadOrder, IRecordIndex Index) RequireHeldIndex()
     {
         lock (_lock)

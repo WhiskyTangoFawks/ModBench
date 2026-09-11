@@ -33,7 +33,7 @@ public sealed class ContainerChildQueryService(
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)
     {
         origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
-        var repo = _index.RequireScope().Reads;
+        var repo = _index.RequireReads();
         var pluginKey = new PluginKey(plugin, origin);
 
         var rows = repo.GetContainerChildren(pluginKey, parentFormKey)

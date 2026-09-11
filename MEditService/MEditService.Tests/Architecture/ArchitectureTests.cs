@@ -213,6 +213,22 @@ public sealed class ArchitectureTests
             $"{nameof(IQueryIndex)} carries members no query service calls:\n" + string.Join("\n", uncalled));
     }
 
+    // ADR-0046 invariant 11: one load order, the kernel's value, read from the holder. A query that
+    // reaches the Index's view of it instead can disagree with a command mid-reconcile.
+    [Fact]
+    public void TheQueryServices_AndTheIndexReadInterface_NameNoLoadOrderInterface()
+    {
+        var scanned = SourceTree
+            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Core", "Queries"))
+            .Append(Path.Combine(SolutionDirectory(), "MEditService.Core", "Records", "IQueryIndex.cs"))
+            .Where(file => File.ReadAllText(file).Contains(nameof(ILoadOrder), StringComparison.Ordinal))
+            .Select(file => Path.GetFileName(file))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        Assert.Empty(scanned);
+    }
+
     // ADR-0044: participation is derived — enabled, winning, and named by a plugins.txt line — and
     // the load order value is the one place that rule is spelled. A second spelling is how two
     // answers start disagreeing.

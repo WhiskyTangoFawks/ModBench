@@ -316,7 +316,7 @@ public static class LoadOrderEndpoints
         logger.LogInformation("Received GetFilter");
         try
         {
-            index.RequireScope();
+            index.RequireReads();
             return Results.Ok(new FilterResponse(index.FilterSql));
         }
         catch (NoLoadOrderException ex)

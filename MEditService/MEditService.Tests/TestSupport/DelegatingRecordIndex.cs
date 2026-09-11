@@ -17,6 +17,8 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.RefreshByKeys(key, modFolder, formKeys);
     public virtual ValidationReport Validate(PluginKey key, string? modFolder) => Inner.Validate(key, modFolder);
     public virtual void Initialize(GameRelease release) => Inner.Initialize(release);
+    public virtual void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginKey, PluginContent>> opened) =>
+        Inner.ReadOpenedCopiesFrom(opened);
     public virtual long Sequence => Inner.Sequence;
     public virtual IDisposable BeginProjection() => Inner.BeginProjection();
     public virtual void Announce(Action publish) => Inner.Announce(publish);

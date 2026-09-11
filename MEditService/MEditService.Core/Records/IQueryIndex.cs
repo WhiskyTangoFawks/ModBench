@@ -15,7 +15,7 @@ public interface IQueryIndex
     /// it prunes are the Index's.</summary>
     string? FilterSql { get; }
 
-    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: the held copies and the store
-    /// are only ever both set or both null.</summary>
-    (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope();
+    /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: with no load order held the
+    /// Index has no store to read.</summary>
+    IRecordReads RequireReads();
 }

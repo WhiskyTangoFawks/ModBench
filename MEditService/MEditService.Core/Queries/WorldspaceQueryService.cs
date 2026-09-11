@@ -30,7 +30,7 @@ public sealed class WorldspaceQueryService(
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null)
     {
         origin ??= ResolveOrigin(plugin);
-        var repo = _index.RequireScope().Reads;
+        var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
         var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: new PluginKey(plugin, origin), Limit: WorldspaceListLimit, Offset: 0);
@@ -45,7 +45,7 @@ public sealed class WorldspaceQueryService(
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
     {
         origin ??= ResolveOrigin(plugin);
-        var cells = _index.RequireScope().Reads.GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
+        var cells = _index.RequireReads().GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
 
         // A TopCell has no block coordinates. Every block-less row is surfaced, but the data can't
         // say which of several is the real TopCell, so the first (deterministic order) is treated
@@ -93,13 +93,13 @@ public sealed class WorldspaceQueryService(
     public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null)
     {
         origin ??= ResolveOrigin(plugin);
-        return _index.RequireScope().Reads.GetCellReferences(new PluginKey(plugin, origin), cellFormKey);
+        return _index.RequireReads().GetCellReferences(new PluginKey(plugin, origin), cellFormKey);
     }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null)
     {
         var pluginKey = new PluginKey(plugin, origin ?? ResolveOrigin(plugin));
-        return _index.RequireScope().Reads.GetInteriorCells(pluginKey, limit, offset);
+        return _index.RequireReads().GetInteriorCells(pluginKey, limit, offset);
     }
 
     // An ordinary load-order row has no origin to give, so this stays the fallback; callers that

@@ -37,6 +37,11 @@ public sealed class HeldPlugins : ILoadOrder
     public string? InstanceRoot { get; }
     public GameRelease GameRelease { get; }
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
+
+    /// <summary>What reading each open copy told the Index, for the reads to hand out. Derived from
+    /// the snapshot on every call, so it cannot lag what is held.</summary>
+    public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies =>
+        Plugins.ToDictionary(p => p.Key, p => p.Content, PluginKey.Comparer);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
 
     public HeldPlugins(

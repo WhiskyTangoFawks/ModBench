@@ -8,6 +8,11 @@ namespace MEditService.Core.Records;
 /// <c>Queries/</c>, built from the document body.</summary>
 public interface IRecordReads
 {
+    /// <summary>What the Index read out of each copy it has open, keyed by identity. A copy it has
+    /// not reached, or could not open, is absent, so this is also "which copies are open?".
+    /// </summary>
+    IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies { get; }
+
     /// <summary>The winning override of <paramref name="formKey"/>, across every participating
     /// plugin. Null if the FormKey isn't indexed.</summary>
     RecordDocument? GetDocument(string formKey);

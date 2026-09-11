@@ -36,6 +36,8 @@ public class WorldspaceQueryServiceTests
             LastSearchOrigin = query.Plugin?.Origin;
             return new(records ?? [], (records ?? []).Count);
         }
+        public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies =>
+            new Dictionary<PluginKey, PluginContent>();
         public RecordDocument? GetDocument(string formKey) => null;
         public RecordDocument? GetDocument(string formKey, PluginKey plugin) => null;
         public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => [];
@@ -63,15 +65,14 @@ public class WorldspaceQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
-    // This service takes the load order from the holder, so the scope's load-order half is never
-    // read here; the reads' presence is what "no load order" means for the Index side.
+    // The reads' presence is what "no load order" means for the Index side; this service takes
+    // the load order itself from the holder.
     private sealed class StubIndex(IRecordReads reads) : IQueryIndex
     {
         // These stubs never project, so they are always in the no-load-order state and unfiltered.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public string? FilterSql => null;
-        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
-            reads is { } r ? (null!, r) : throw new NoLoadOrderException();
+        public IRecordReads RequireReads() => reads ?? throw new NoLoadOrderException();
     }
 
     private static LoadOrderHolder Holder(params RegisteredCopy[] copies)

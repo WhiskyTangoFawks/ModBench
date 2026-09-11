@@ -13,6 +13,11 @@ internal interface IRecordIndex : IDisposable
     /// escaped.</summary>
     IRecordReads At(RecordRef recordRef);
 
+    /// <summary>Where <see cref="IRecordReads.OpenedCopies"/> reads from. The store holds no header
+    /// flag, master list or record count, so the projector points it at the copies it holds
+    /// open.</summary>
+    void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginKey, PluginContent>> opened);
+
     void Initialize(GameRelease release);
 
     /// <summary>ADR-0046: one monotonic counter, advanced in the same transaction as any row

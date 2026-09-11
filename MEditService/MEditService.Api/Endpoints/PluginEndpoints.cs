@@ -20,7 +20,7 @@ public static class PluginEndpoints
             .Produces<IReadOnlyList<PluginResponse>>();
 
         // Every held, mutable plugin's Kind B diagnoses off its original bytes — the session-load
-        // complement of Track's refusal. RequireScope's throw becomes a 503, never an unmapped 500.
+        // complement of Track's refusal. RequireReads' throw becomes a 503, never an unmapped 500.
         app.MapGet("/plugins/diagnoses", (MalformedPluginQueryService svc, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -225,9 +225,9 @@ public static class PluginEndpoints
 
         try
         {
-            // RequireScope for the refusal only: which copies this origin registers is the load
+            // RequireReads for the refusal only: which copies this origin registers is the load
             // order's answer, read from the shared kernel rather than from the Index.
-            index.RequireScope();
+            index.RequireReads();
             var result = await trackHandler.TrackAsync(holder.Current, HeldCopies(index), req.Origin, preset);
             if (result.Applied)
                 return Results.Ok(new TrackResponse(req.Origin));
