@@ -16,7 +16,7 @@ namespace MEditService.Core.Records;
 /// <summary>ADR-0014 invariant 5: the Index's other half. Ingest, the registration sweep and the
 /// watchers' re-projections, deciding nothing — the load order value answers who participates and
 /// wins, the schema where a field goes.</summary>
-public sealed class IndexProjector : IQueryIndex, IDisposable
+public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger _logger;
@@ -128,25 +128,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
     /// is when the ordering matters most. By construction the outer of the two locks: taking
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>
     public IndexWriteGate WriteGate { get; } = new();
-
-    /// <summary>Raised once a reconcile settles and once <see cref="Close"/> empties the Index, so the
-    /// composition root re-registers the Source watches. Core names no watcher type.</summary>
-    public Action? Reconciled { get; set; }
-
-    // Raised outside _lock and outside the exclusive right, so a subscriber that reads the projector
-    // back cannot deadlock against the reconcile that raised it. A throwing subscriber is its own
-    // business, never the reconcile's.
-    private void AnnounceReconciled()
-    {
-        try
-        {
-            Reconciled?.Invoke();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "A reconcile subscriber failed; what was projected is unaffected");
-        }
-    }
 
     /// <summary>Throws <see cref="NoLoadOrderException"/>, never null: before the first reconcile
     /// the Index has opened no store to read.</summary>
@@ -265,8 +246,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
             EndReconcile();
             ExitExclusive();
         }
-
-        AnnounceReconciled();
     }
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
@@ -892,7 +871,6 @@ public sealed class IndexProjector : IQueryIndex, IDisposable
         finally { ExitExclusive(); }
 
         PublishStatus();
-        AnnounceReconciled();
     }
 
     public void Dispose()

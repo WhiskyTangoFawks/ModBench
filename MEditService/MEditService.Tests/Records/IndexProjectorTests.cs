@@ -328,13 +328,12 @@ public sealed class IndexProjectorTests
     }
 
     [Fact]
-    public void SourceChangeApplierApply_LandsTheWholeSettledBatchAsOneAdvance()
+    public void ASettledSourceBatch_LandsWholeAsOneAdvance()
     {
         var notifications = new InMemoryNotificationPublisher();
         using var fixture = IndexedModFixture.Tracked(notifications);
         var index = (IndexProjector)fixture.Index;
-        using var watcher = new ModFolderWatcher();
-        var sourceChanges = new SourceChangeApplier(fixture.Index, fixture.Holder, index.WriteGate, watcher, notifications, NullLogger.Instance);
+        using var watcher = TestWatcher.Over(fixture.Holder, index, notifications);
 
         var otherNpcSource = fixture.SourceFileFor(
             fixture.OtherNpc, "npc_", IndexedModFixture.OtherNpcEditorId);
@@ -343,8 +342,8 @@ public sealed class IndexProjectorTests
         var before = index.Sequence;
 
         // Two documents the watcher settled together: projected one at a time, they are two
-        // advances, so this only holds while Apply opens a projection around the batch.
-        sourceChanges.Apply([
+        // advances, so this only holds while the batch opens one projection around both.
+        watcher.ProjectSourceBatch([
             Settled(fixture, fixture.NpcSourceFile),
             Settled(fixture, otherNpcSource),
         ]);

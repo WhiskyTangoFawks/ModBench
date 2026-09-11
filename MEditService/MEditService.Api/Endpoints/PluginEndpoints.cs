@@ -351,18 +351,6 @@ public static class PluginEndpoints
             });
     }
 
-    // Shared with ExternalChangeApplier's own overflow path, which starts from a bare
-    // (modFolder, pluginName) identity.
-    internal static string OriginOfExternalChange(LoadOrder loadOrder, string modFolder, string pluginName) =>
-        loadOrder.Copies.FirstOrDefault(copy =>
-            copy.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
-            && ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
-
-    // The mod-level counterpart: a change's own Plugins list can be empty (a tracked-file-only
-    // change), so origin resolves off the mod folder alone.
-    internal static string OriginOfExternalChange(LoadOrder loadOrder, string modFolder) =>
-        loadOrder.Copies.FirstOrDefault(copy => ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
-
     // Absorb, origin-scoped: every plugin the mod holds is re-parsed together, so
     // the baseline it commits covers the whole mod in one go.
     internal static IResult AbsorbExternalChange(
