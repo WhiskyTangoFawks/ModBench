@@ -8,6 +8,8 @@ import ts from 'typescript';
 const SRC = join(__dirname, '..');
 const PACKAGE_JSON = join(SRC, '..', 'package.json');
 const TOOLBOX = join(SRC, 'toolbox.ts');
+// The Toolbox box is both files: the composition root and the gestures it registers.
+const TOOLBOX_COMMANDS = join(SRC, 'toolboxCommands.ts');
 
 // The view is the Toolbox, and the Instance is the only reader of MO2's files, so nothing is a
 // "modlist source" any more. This file necessarily holds both words as data.
@@ -123,12 +125,15 @@ const parse = (path: string, text = readFileSync(path, 'utf8')): ts.SourceFile =
   ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true);
 
 describe('the Toolbox owns every disposable it constructs', () => {
-  it('every registration in toolbox.ts is handed to own() or ownAll()', () => {
-    expect(unownedProducers(parse(TOOLBOX))).toEqual([]);
-  });
+  it.each([TOOLBOX, TOOLBOX_COMMANDS].map((path) => relative(SRC, path)))(
+    'every registration in %s is owned, or returned to a caller that owns it',
+    (relativePath) => {
+      expect(unownedProducers(parse(join(SRC, relativePath)))).toEqual([]);
+    });
 
   it('finds the registrations at all — an empty scan would pass vacuously', () => {
     expect([...readFileSync(TOOLBOX, 'utf8').matchAll(/\bown(?:All)?\(/g)].length).toBeGreaterThan(15);
+    expect([...readFileSync(TOOLBOX_COMMANDS, 'utf8').matchAll(/\bregisterCommand\(/g)].length).toBeGreaterThan(3);
   });
 
   // Rival this catches: one disposable dropped from the Toolbox's teardown list.

@@ -16,9 +16,8 @@ export interface ToolboxCommandDeps {
   instance: Pick<Instance, 'value'>;
   outputChannel: vscode.LogOutputChannel;
   updateProfileDescription: () => Promise<void>;
-  /** ADR-0019 surfacing, built per tag so each gesture still names itself in the log. */
   reporterFor: (tag: string) => Reporter;
-  /** ADR-0019 surfacing: the deployment's own confirmation asks through this. */
+  /** The deployment's own confirmation asks through this. */
   ask: AskQuestion;
 }
 
@@ -49,6 +48,8 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
   const { instanceRoot, instance, outputChannel, updateProfileDescription, reporterFor, ask } = deps;
   const detectPaths = makeDetectPaths(instanceRoot);
   const deployReporter = reporterFor('deploy');
+  const profileReporter = reporterFor('switchProfile');
+  const launchReporter = reporterFor('launchTarget');
   const loadOrderTarget = async (): Promise<string | undefined> =>
     meditConfig().get('game.pluginsTxtPath') || (await detectPaths())?.pluginsTxt;
 
@@ -63,7 +64,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       if (!picked || picked.label === active) return;
       const outcome = await switchProfile(instanceRoot, picked.label);
       if (!outcome.applied) {
-        reporterFor('switchProfile').report('error', 'Failed to switch profile.', outcome.refusal);
+        profileReporter.report('error', 'Failed to switch profile.', outcome.refusal);
         return;
       }
       void updateProfileDescription();
@@ -91,7 +92,7 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       const tasks = await vscode.tasks.fetchTasks({ type: LAUNCH_TASK_TYPE });
       if (tasks.length === 0) {
         outputChannel.info('[toolbox] Launch…: no launchable tasks contributed');
-        reporterFor('launchTarget').landed(
+        launchReporter.landed(
           'No launch targets — add an executable to MO2\'s executables list and it appears here.',
         );
         return;
