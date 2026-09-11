@@ -20,10 +20,6 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     // ADR-0014: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
 
-    /// <summary>ADR-0014: raised with the mod folder and origin of a repository that now exists, so
-    /// the Source watcher starts on a tracked mod with no restart.</summary>
-    public Action<string, string>? RepositoryCreated { get; set; }
-
     private static bool Held(IReadOnlyCollection<PluginKey> heldCopies, RegisteredCopy copy) =>
         heldCopies.Any(k =>
             k.Name.Equals(copy.Name, StringComparison.OrdinalIgnoreCase)
@@ -136,10 +132,6 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
             }
             SourceRepository.Track(modFolder, preset, pristineFiles, trailers);
-
-            // After the tree is written and committed, never before: a watch over a half-written tree
-            // validates a plugin whose documents are still arriving, and re-derives it from them.
-            RepositoryCreated?.Invoke(modFolder, origin);
             return TrackResult.Success();
         }
         catch (GitUnavailableException ex)

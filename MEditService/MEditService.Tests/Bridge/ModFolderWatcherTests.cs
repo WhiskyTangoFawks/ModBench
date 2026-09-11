@@ -5,6 +5,7 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Bridge;
 
@@ -723,5 +724,113 @@ public sealed class ModFolderWatcherTests
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    // ---- Track: the mod is watched before it holds a repository ----
+
+    // The rival this pins: a registration made after Track's commit has no ref move left to see, so
+    // the tree Track just wrote never reaches the Index.
+    [Fact]
+    public void TrackingAModTheLoadOrderHolds_ValidatesItWholeOnce_WithNoReconcile()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var holder = HoldingUntracked(modFolder, "Tracked.esp", "TrackedMod");
+            var index = new RecordingRefreshIndex();
+            using var watcher = TestWatcher.Over(
+                holder, index, new InMemoryNotificationPublisher(), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
+            watcher.Rearm(holder.Current);
+
+            watcher.WatchSourceOf("TrackedMod");
+            TrackTree(modFolder, "Tracked.esp");
+
+            WaitUntil(() => index.Of("validate").Count > 0, TimeSpan.FromSeconds(10));
+            // Past a further quiet window, so a second batch would have landed its own scope by now.
+            Thread.Sleep(1500);
+            Assert.Equal(1, Scopes(index));
+            Assert.Equal(["Tracked.esp"], ValidatedIn(index, 1));
+            Assert.Empty(index.Of("refresh"));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    // The rival this pins: unregistering the source root on a settle that finds no repository, which
+    // takes Track's registration with it while Track is still parsing.
+    [Fact]
+    public void ASettleBeforeTheRepositoryExists_KeepsTheRegistration_SoTracksOwnTreeStillLands()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var holder = HoldingUntracked(modFolder, "Tracked.esp", "TrackedMod");
+            var index = new RecordingRefreshIndex();
+            using var watcher = TestWatcher.Over(
+                holder, index, new InMemoryNotificationPublisher(), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
+            watcher.Rearm(holder.Current);
+            watcher.WatchSourceOf("TrackedMod");
+
+            var sourceRoot = SourceRepository.RootIn(modFolder, "Tracked.esp");
+            Directory.CreateDirectory(sourceRoot);
+            Write(sourceRoot);
+            WaitUntil(() => Scopes(index) > 0, TimeSpan.FromSeconds(10));
+            Assert.Empty(index.Of("validate"));
+
+            TrackTree(modFolder, "Tracked.esp");
+
+            WaitUntil(() => index.Of("validate").Count > 0, TimeSpan.FromSeconds(10));
+            Assert.Equal(["Tracked.esp"], ValidatedIn(index, 2));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    // A mod folder the gesture registering it is about to create has nothing to watch yet, so that
+    // tree's own burst is lost; the rival this pins is registering once and never again.
+    [Fact]
+    public void RegisteringAModFolderNotOnDiskYet_ArmsNothing_UntilItIsRegisteredAgain()
+    {
+        var modFolder = Path.Combine(Path.GetTempPath(), $"medit-modwatch-{Guid.NewGuid():N}");
+        try
+        {
+            var holder = new LoadOrderHolder();
+            holder.Apply(new LoadOrder(modFolder, modFolder, GameRelease.Fallout4,
+                [new RegisteredCopy("Tracked.esp", "TrackedMod", Path.Combine(modFolder, "Tracked.esp"),
+                    Slot: 0, Enabled: true, Winning: true)]));
+            var index = new RecordingRefreshIndex();
+            using var watcher = TestWatcher.Over(
+                holder, index, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(200), TimeSpan.FromSeconds(30));
+            watcher.WatchSourceOf("TrackedMod");
+
+            Directory.CreateDirectory(modFolder);
+            TrackTree(modFolder, "Tracked.esp");
+            Thread.Sleep(600);
+            Assert.Empty(index.Projections);
+
+            watcher.WatchSourceOf("TrackedMod");
+            Write(SourceRepository.RootIn(modFolder, "Tracked.esp"));
+
+            WaitUntil(() => index.Of("validate").Count > 0, TimeSpan.FromSeconds(5));
+            Assert.Equal(["Tracked.esp"], ValidatedIn(index, 1));
+        }
+        finally
+        {
+            if (Directory.Exists(modFolder)) Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    private static LoadOrderHolder HoldingUntracked(string modFolder, string plugin, string origin)
+    {
+        var pluginPath = Path.Combine(modFolder, plugin);
+        File.WriteAllBytes(pluginPath, "a binary no source tree covers yet"u8.ToArray());
+        var holder = new LoadOrderHolder();
+        holder.Apply(new LoadOrder(modFolder, modFolder, GameRelease.Fallout4,
+            [new RegisteredCopy(plugin, origin, pluginPath, Slot: 0, Enabled: true, Winning: true)]));
+        return holder;
     }
 }

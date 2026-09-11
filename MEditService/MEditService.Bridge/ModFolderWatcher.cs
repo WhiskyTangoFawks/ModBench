@@ -66,6 +66,10 @@ public sealed class ModFolderWatcher : IDisposable
         foreach (var plugin in order.Copies)
         {
             var key = plugin.Key;
+            // Before anything under it is registered: a registration then upgrades a watch that is
+            // already running, which is what lets Track's own tree land under one.
+            if (ModFolders.Of(plugin.Origin, plugin.Path) is { } folder) WatchTopLevelOf(folder);
+
             if (ModFolders.TrackedOf(order, key) is not { } modFolder)
             {
                 // ADR-0009: every other indexed binary, the game's Data/ masters included, gets an
@@ -137,12 +141,22 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>Track's own start: every loaded copy in the folder being tracked is watched only
-    /// after the tree is written and committed, so Track's burst is projected like any other.</summary>
-    public void WatchTracking(string modFolder, string origin)
+    /// <summary>Registration as tracked, before Track writes a byte: every loaded copy under
+    /// <paramref name="origin"/> gets its source root, upgrading the mod's watch to the subtree the
+    /// tree and the commit ending it both land in.</summary>
+    public void WatchSourceOf(string origin)
     {
-        foreach (var copy in ModFolders.PluginsOfOrigin(_holder.Current, origin))
+        var order = _holder.Current;
+        if (ModFolders.OfOrigin(order, origin) is not { } modFolder) return;
+        foreach (var copy in ModFolders.PluginsOfOrigin(order, origin))
             Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
+    }
+
+    // No subtree: the folder is watched before it is known to hold anything worth recursing into,
+    // and every registration upgrades rather than replaces.
+    private void WatchTopLevelOf(string modFolder)
+    {
+        lock (_gate) ModEntryFor(modFolder, recursive: false);
     }
 
     /// <summary>Registers <paramref name="pluginName"/> for classification: self-echo, crash recovery
@@ -191,23 +205,6 @@ public sealed class ModFolderWatcher : IDisposable
             plugin.Origin = origin;
             plugin.IndexedArmed = true;
             plugin.RememberedHash = contentHash;
-        }
-    }
-
-    // The copy has no source to project from: its repository is gone, or the load order dropped it.
-    // Clears only source routing; a classification or indexed registration is untouched.
-    private void Unwatch(string pluginName, string origin)
-    {
-        lock (_gate)
-        {
-            foreach (var mod in _mods.Values)
-            {
-                if (mod.Plugins.TryGetValue(pluginName, out var plugin)
-                    && string.Equals(plugin.Origin, origin, StringComparison.OrdinalIgnoreCase))
-                {
-                    plugin.SourceRoot = null;
-                }
-            }
         }
     }
 
@@ -523,13 +520,9 @@ public sealed class ModFolderWatcher : IDisposable
         var key = new PluginKey(change.PluginName, change.Origin);
         try
         {
-            // MO2, git and the user can delete a repository at any moment, and a mod that has none is
-            // untracked rather than broken: there is nothing left to project from.
-            if (!SourceRepository.IsTracked(change.ModFolder))
-            {
-                Unwatch(change.PluginName, change.Origin);
-                return;
-            }
+            // A mod with no repository is untracked rather than broken: nothing to project from yet,
+            // or any more. The registration stands, since Track registers before it writes.
+            if (!SourceRepository.IsTracked(change.ModFolder)) return;
 
             if (change.Scope == SourceChangeScope.Documents && FormKeysOf(change) is { } formKeys)
             {

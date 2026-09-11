@@ -104,11 +104,6 @@ try
 
     var app = builder.Build();
 
-    // Track announces the repository it has created, so its own copies start being watched without
-    // waiting for the next load order.
-    app.Services.GetRequiredService<TrackService>().RepositoryCreated =
-        app.Services.GetRequiredService<ModFolderWatcher>().WatchTracking;
-
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings
     // Microsoft.AspNetCore override is a different category and does not touch this line.

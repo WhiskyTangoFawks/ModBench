@@ -64,7 +64,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var create = Task.Run(() => PluginEndpoints.CreatePlugin(
             new CreatePluginRequest("Interleaved.esp", Path.Combine(data.DataFolder, "InterleavedMod"), "InterleavedMod"),
-            index, holder, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance));
+            index, holder, TestEditService.PluginCreateHandler(holder), TestWatcher.Inert(), NullLoggerFactory.Instance));
         var created = await create.WaitAsync(TimeSpan.FromSeconds(10));
         factory.Release();
 

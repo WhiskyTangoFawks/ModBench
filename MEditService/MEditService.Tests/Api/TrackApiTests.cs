@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using MEditService.Core.Source;
+using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
@@ -79,5 +83,68 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         var second = await _client.PostAsJsonAsync("/plugins/track", new { origin = "TrackedMod", preset = "Edits" });
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
+    }
+
+    // ADR-0015 invariant 2: no load order is put between the Track and the edit, so the tracked
+    // copy's rows can only have reached the Index through the watch Track's own write armed.
+    [Fact]
+    public async Task AfterTrack_AHandEditToTheSourceTree_LandsInTheIndex_WithNoReconcile()
+    {
+        FormKey npc = default;
+        using var fx = new PluginFixtureBuilder("api-track-watch")
+            .WithPlugin("Watched.esp", mod => npc = mod.Npcs.AddNew("WatchedNpc").FormKey, origin: "WatchedMod")
+            .BuildScattered();
+        await LoadOnly(fx, "WatchedMod");
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "WatchedMod").Path)!;
+        var key = new PluginKey("Watched.esp", "WatchedMod");
+
+        var response = await _client.PostAsJsonAsync("/plugins/track", new { origin = "WatchedMod", preset = "Edits" });
+        response.EnsureSuccessStatusCode();
+        RenameByHand(modFolder, "Watched.esp", "WatchedNpc", "RenamedByHand");
+
+        Assert.Equal("RenamedByHand", await EditorIdReaches(npc, key, "RenamedByHand"));
+    }
+
+    // ADR-0007: the destination is Tracked inside the create gesture, so its watch is armed there
+    // too — the mod's own copy answers from source with no load order put after the create.
+    [Fact]
+    public async Task AfterCreate_AHandEditToTheDestinationsSource_LandsInTheIndex_WithNoReconcile()
+    {
+        FormKey npc = default;
+        using var fx = new PluginFixtureBuilder("api-create-watch")
+            .WithPlugin("Held.esp", mod => npc = mod.Npcs.AddNew("HeldNpc").FormKey, origin: "CreatedIntoMod")
+            .BuildScattered();
+        await LoadOnly(fx, "CreatedIntoMod");
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "CreatedIntoMod").Path)!;
+        var key = new PluginKey("Held.esp", "CreatedIntoMod");
+
+        var response = await _client.PostAsJsonAsync(
+            "/plugins/create", new { name = "Minted.esp", path = modFolder, origin = "CreatedIntoMod" });
+        response.EnsureSuccessStatusCode();
+        RenameByHand(modFolder, "Held.esp", "HeldNpc", "RenamedByHand");
+
+        Assert.Equal("RenamedByHand", await EditorIdReaches(npc, key, "RenamedByHand"));
+    }
+
+    private static void RenameByHand(string modFolder, string plugin, string editorId, string renamed)
+    {
+        var document = Directory
+            .EnumerateFiles(SourceRepository.RootIn(modFolder, plugin), "*.json", SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
+        File.WriteAllText(document,
+            File.ReadAllText(document).Replace($"\"{editorId}\"", $"\"{renamed}\"", StringComparison.Ordinal));
+    }
+
+    private string? EditorIdOf(FormKey formKey, PluginKey plugin) =>
+        loaded.Services.GetRequiredService<IndexProjector>().Store!
+            .At(RecordRef.Effective).GetDocument(formKey.ToString(), plugin)?.EditorId;
+
+    // Long enough for the settle window the edit opens, and the refresh behind it.
+    private async Task<string?> EditorIdReaches(FormKey formKey, PluginKey plugin, string editorId)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (DateTime.UtcNow < deadline && EditorIdOf(formKey, plugin) != editorId)
+            await Task.Delay(50);
+        return EditorIdOf(formKey, plugin);
     }
 }

@@ -164,7 +164,7 @@ public static class PluginEndpoints
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
         CreatePluginRequest req, IndexProjector index, LoadOrderHolder holder, CreatePluginHandler create,
-        ILoggerFactory loggerFactory)
+        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (Malformed(req) is { } malformed) return malformed;
@@ -191,6 +191,8 @@ public static class PluginEndpoints
             return Results.Problem(ex.Message, statusCode: 503);
         }
 
+        watcher.WatchSourceOf(req.Origin);
+
         try
         {
             var result = await create.CreatePlugin(registered, copy, held);
@@ -205,8 +207,8 @@ public static class PluginEndpoints
                 return WriteEndpointMapping.Refusal(refused);
             }
 
-            // ADR-0015 invariants 1 and 2: the write is done. The Index has never held this copy, so
-            // it learns of it from the next snapshot, as it does for any newly installed plugin.
+            // A destination folder this gesture made itself was not on disk to be watched above.
+            watcher.WatchSourceOf(req.Origin);
             return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot));
         }
         catch (ArgumentException ex)
@@ -262,13 +264,18 @@ public static class PluginEndpoints
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(
-        TrackRequest req, IndexProjector index, LoadOrderHolder holder, TrackHandler trackHandler, ILoggerFactory loggerFactory)
+        TrackRequest req, IndexProjector index, LoadOrderHolder holder, TrackHandler trackHandler,
+        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
             return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
+
+        // ADR-0015 invariant 2: before the write, so the tree Track commits comes back through the
+        // watch instead of waiting for a client to reconcile.
+        watcher.WatchSourceOf(req.Origin);
 
         try
         {

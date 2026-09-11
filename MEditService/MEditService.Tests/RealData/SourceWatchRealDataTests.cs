@@ -50,7 +50,9 @@ public sealed class SourceWatchRealDataFixture : IDisposable
         _watcher = TestWatcher.Over(holder, Index, Notifications, TimeSpan.FromMilliseconds(150));
         _watcher.Rearm(holder.Current);
 
-        new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = _watcher.WatchTracking }
+        // The endpoint's own order: the registration upgrades the watch before Track writes.
+        _watcher.WatchSourceOf(Origin);
+        new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(Index, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
@@ -98,8 +100,8 @@ public sealed class SourceWatchRealDataFixture : IDisposable
 public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture, ITestOutputHelper output)
     : IClassFixture<SourceWatchRealDataFixture>
 {
-    // The count a projection per file would be in the thousands; the watch starts once the repository
-    // exists, so Track's own writes cost the projector one settle at most.
+    // The count a projection per file would be in the thousands; the whole tree settles as one
+    // batch, so Track's own writes cost the projector one settle at most.
     [Fact]
     public void TrackingARealPlugin_CostsAtMostOneProjection_NotOnePerFile()
     {
