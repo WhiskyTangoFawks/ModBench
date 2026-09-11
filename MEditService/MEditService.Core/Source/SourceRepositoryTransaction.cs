@@ -156,6 +156,14 @@ internal sealed class SourceTransaction
         _log.Add(new EntryMove(modFolder, from, to));
     }
 
+    /// <summary>Moves a container to <paramref name="newFormKey"/>'s leaf and records what moved. A
+    /// no-op — nothing found, not a container, or already at that leaf — logs nothing.</summary>
+    internal void Move(SourceRepository repository, PluginKey plugin, RecordIdentity identity, string newFormKey)
+    {
+        if (repository.Move(plugin, identity, newFormKey) is not { } moved) return;
+        _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));
+    }
+
     /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
     /// before an earlier act moves back into it. A restore failure never stops the pass; it is
     /// collected (ADR-0019), not thrown.</summary>
@@ -179,6 +187,21 @@ internal sealed class SourceTransaction
         }
 
         return unrestored;
+    }
+
+    /// <summary>Rolls back, then answers <paramref name="cause"/>'s own message with every repository
+    /// this batch could have touched stripped out of it, so a caller's report reads the same whichever
+    /// tree the fault named.</summary>
+    internal (IReadOnlyList<UnrestoredPath> Unrestored, string RelativeError) Rollback(
+        Exception cause, IEnumerable<SourceRepository> repositories)
+    {
+        var unrestored = Rollback();
+        var modFolders = _log.Select(op => op.ModFolder).Concat(repositories.Select(r => r.ModFolder))
+            .Distinct().ToList();
+        var relativeError = modFolders
+            .OrderByDescending(f => f.Length)
+            .Aggregate(cause.Message, (text, folder) => text.Replace(folder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal));
+        return (unrestored, relativeError);
     }
 
     private static void RestoreFile(FileState file, List<UnrestoredPath> unrestored)
