@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
@@ -53,7 +52,7 @@ public sealed class AbsorbExternalChangeHandler
                     $"{plugin.Name} could not be parsed from its own binary: {PluginDiagnosis.FromParseException(ex).Describe()}");
             }
 
-            binarySha256ByPlugin[plugin.Name] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(plugin.Path)));
+            binarySha256ByPlugin[plugin.Name] = PluginBinaryHash.TrailerFormOfFile(plugin.Path);
         }
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
