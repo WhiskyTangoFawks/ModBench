@@ -58,7 +58,7 @@ export function originFolder(
  *  name: the Mod override order's answer, overwrite/ included. A Data-folder copy is presence,
  *  not provision, and is left out. */
 export function providedPluginsOf(
-  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'name' | 'origin' | 'path' | 'winning'>[],
+  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path' | 'winning'>[],
 ): Map<string, string> {
   const provided = new Map<string, string>();
   for (const copy of plugins) {

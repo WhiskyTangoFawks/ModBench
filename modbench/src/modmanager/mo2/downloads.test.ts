@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildDownloadRows as buildRows,
+  buildDownloadRows,
   modsByInstallationFile,
   downloadContextValue,
   filterHiddenRows,
@@ -296,12 +296,11 @@ describe('buildDownloadRows', () => {
     mtimeMs,
     metaText,
   });
-  // Most rows here are about the sidecar alone, so no mod claims them.
-  const buildDownloadRows = (entries: DownloadEntry[], installedInto: ReadonlyMap<string, readonly string[]> = new Map()) =>
-    buildRows(entries, installedInto);
+  // Every row here is about the sidecar alone, so no mod claims any of them.
+  const rowsFrom = (entries: DownloadEntry[]) => buildDownloadRows(entries, new Map());
 
   it('maps a plain archive with no .meta sidecar to a Downloaded row (gating off)', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100)]);
+    const rows = rowsFrom([entry('foo.zip', 100)]);
     expect(rows).toEqual([
       {
         name: 'foo.zip',
@@ -317,17 +316,17 @@ describe('buildDownloadRows', () => {
   });
 
   it('flags hasMeta and carries modID for an archive with a .meta sidecar', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nmodID=12345\r\n')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\nmodID=12345\r\n')]);
     expect(rows[0]).toMatchObject({ name: 'foo.zip', hasMeta: true, modID: '12345' });
   });
 
   it('flags hasMeta true for a present-but-empty .meta (there is still a file to open)', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '')]);
     expect(rows[0]).toMatchObject({ hasMeta: true, modID: undefined });
   });
 
   it('never turns a .meta file into its own row', () => {
-    const rows = buildDownloadRows([
+    const rows = rowsFrom([
       entry('foo.zip', 100, '[General]\r\ninstalled=true\r\n'),
       entry('foo.zip.meta', 100),
     ]);
@@ -337,49 +336,49 @@ describe('buildDownloadRows', () => {
   // Entries are out of mtimeMs order on purpose: a two-element ascending fixture
   // would pass by coincidence even if nothing were re-sorted.
   it('defaults to Filetime (mtimeMs) descending', () => {
-    const rows = buildDownloadRows([entry('b.zip', 2), entry('a.zip', 1), entry('c.zip', 3)]);
+    const rows = rowsFrom([entry('b.zip', 2), entry('a.zip', 1), entry('c.zip', 3)]);
     expect(rows.map((r) => r.name)).toEqual(['c.zip', 'b.zip', 'a.zip']);
   });
 
   it('carries the hidden flag through without filtering (filtering is a view concern)', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nremoved=true\r\n')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\nremoved=true\r\n')]);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ name: 'foo.zip', hidden: true });
   });
 
   it('uses the .meta name as displayName when present', () => {
-    const rows = buildDownloadRows([entry('foo_1_2_3.zip', 100, '[General]\r\nname=Sleep or Save\r\n')]);
+    const rows = rowsFrom([entry('foo_1_2_3.zip', 100, '[General]\r\nname=Sleep or Save\r\n')]);
     expect(rows[0].displayName).toBe('Sleep or Save');
   });
 
   it('falls back to the filename for displayName when .meta has no name', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\ninstalled=true\r\n')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\ninstalled=true\r\n')]);
     expect(rows[0].displayName).toBe('foo.zip');
   });
 
   it('falls back to the filename for displayName when .meta name is present but empty', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nname=\r\n')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\nname=\r\n')]);
     expect(rows[0].displayName).toBe('foo.zip');
   });
 
   it('produces a complete row (displayName = filename, version absent) when there is no .meta at all', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100)]);
+    const rows = rowsFrom([entry('foo.zip', 100)]);
     expect(rows[0].displayName).toBe('foo.zip');
     expect(rows[0].version).toBeUndefined();
   });
 
   it('carries version through from .meta', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nversion=1.2.3\r\n')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\nversion=1.2.3\r\n')]);
     expect(rows[0].version).toBe('1.2.3');
   });
 
   it('carries fileID through from .meta', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nfileID=456\r\n')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\nfileID=456\r\n')]);
     expect(rows[0].fileID).toBe('456');
   });
 
   it('carries no fileID when the sidecar has none', () => {
-    const rows = buildDownloadRows([entry('foo.zip', 100, '[General]\r\nmodID=12345\r\n')]);
+    const rows = rowsFrom([entry('foo.zip', 100, '[General]\r\nmodID=12345\r\n')]);
     expect(rows[0].fileID).toBeUndefined();
   });
 });
@@ -409,21 +408,21 @@ describe('buildDownloadRows — Installed follows the mods, not the sidecar', ()
   const entry = (name: string, metaText?: string): DownloadEntry => ({ name, size: 1, mtimeMs: 1, metaText });
 
   it('reads as Installed when a mod names it, whatever the sidecar says', () => {
-    const rows = buildRows([entry('Pack.7z', '[General]\r\nmodID=1\r\n')], new Map([['pack.7z', ['Textures']]]));
+    const rows = buildDownloadRows([entry('Pack.7z', '[General]\r\nmodID=1\r\n')], new Map([['pack.7z', ['Textures']]]));
 
     expect(rows[0].status).toBe('Installed');
   });
 
-  // The stale row this issue is about: the mod is gone, the sidecar still claims the install.
+  // The mod is gone; its sidecar outlives it, still claiming the install.
   it('never reads as Installed when no mod names it, though the sidecar claims it', () => {
-    const rows = buildRows([entry('Pack.7z', '[General]\r\ninstalled=true\r\n')], new Map());
+    const rows = buildDownloadRows([entry('Pack.7z', '[General]\r\ninstalled=true\r\n')], new Map());
 
     expect(rows[0].status).toBe('Downloaded');
   });
 
   // MO2's own Uninstalled is a user statement about the archive, not a claim about a mod.
   it('keeps the sidecar\u2019s Uninstalled when no mod names it', () => {
-    const rows = buildRows([entry('Pack.7z', '[General]\r\nuninstalled=true\r\n')], new Map());
+    const rows = buildDownloadRows([entry('Pack.7z', '[General]\r\nuninstalled=true\r\n')], new Map());
 
     expect(rows[0].status).toBe('Uninstalled');
   });

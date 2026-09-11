@@ -808,6 +808,45 @@ describe('Instance — per-mod status and the overwrite count', () => {
   });
 });
 
+// A profile listing no mod folder isolates the mods/ listing: nothing else in the recompute
+// opens a path under it, so only its own failure can fail the read.
+describe('Instance — listing mods/', () => {
+  const separatorOnly = async (root: string): Promise<void> => {
+    await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '-Section_separator\n');
+  };
+
+  // Only ENOENT is "no mods/ yet". A listing that fails for any other reason must not read as
+  // "every folder has its line": the value stands until a read succeeds (ADR-0015).
+  it('keeps the value when mods/ is present but cannot be listed', async () => {
+    const { root, instance, logs } = await minimalInstance();
+    await separatorOnly(root);
+    await instance.refresh();
+    const value = instance.value;
+    const before = instance.sequence;
+
+    await rm(join(root, 'mods'), { recursive: true, force: true });
+    await writeFile(join(root, 'mods'), 'not a directory'); // present but unlistable (ENOTDIR)
+    await instance.refresh();
+
+    expect(instance.value).toBe(value);
+    expect(instance.sequence).toBe(before);
+    expect(instance.readFailure).toBeDefined();
+    expect(logs.filter((m) => m.includes('recompute failed'))).toHaveLength(1);
+  });
+
+  // The other half, on the same isolated tree: ENOENT alone is tolerated, and the value lands.
+  it('lands a value with no unlisted folders when mods/ is absent entirely', async () => {
+    const { root, instance } = await minimalInstance();
+    await separatorOnly(root);
+    await rm(join(root, 'mods'), { recursive: true, force: true });
+
+    await instance.refresh();
+
+    expect(instance.sequence).toBe(1);
+    expect(instance.value.unlistedFolders).toEqual([]);
+  });
+});
+
 describe('Instance — the sidecar file id and meta.ini installedFiles', () => {
   it('carries a download row\'s fileID from its sidecar and a mod\'s installedFiles pairs from meta.ini', async () => {
     const { root, instance } = await minimalInstance();
