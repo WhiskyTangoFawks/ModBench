@@ -123,17 +123,14 @@ public sealed class LoadOrderTests
 
     // ADR-0041: created before any plugins.txt line names it, so the gesture that follows sees it.
     [Fact]
-    public void Register_AddsACreatedCopy_AndReplacesTheOneAlreadyUnderThatIdentity()
+    public void With_AddsACreatedCopy_AndReplacesTheOneAlreadyUnderThatIdentity()
     {
-        var holder = new LoadOrderHolder();
-        holder.Apply(Order(Copy("A.esp", "ModA", slot: 0)));
+        var added = Order(Copy("A.esp", "ModA", slot: 0)).With(Copy("New.esp", "ModA", slot: 1));
+        Assert.Equal(["A.esp", "New.esp"], added.Copies.Select(c => c.Name));
 
-        holder.Register(Copy("New.esp", "ModA", slot: 1));
-        Assert.Equal(["A.esp", "New.esp"], holder.Current.Copies.Select(c => c.Name));
-
-        holder.Register(Copy("New.esp", "ModA", slot: 1, enabled: false));
-        Assert.Equal(["A.esp", "New.esp"], holder.Current.Copies.Select(c => c.Name));
-        Assert.False(holder.Current.Participates(new PluginKey("New.esp", "ModA")));
+        var replaced = added.With(Copy("New.esp", "ModA", slot: 1, enabled: false));
+        Assert.Equal(["A.esp", "New.esp"], replaced.Copies.Select(c => c.Name));
+        Assert.False(replaced.Participates(new PluginKey("New.esp", "ModA")));
     }
 
     // The entries are the whole of the snapshot: the path they carry names no directory that

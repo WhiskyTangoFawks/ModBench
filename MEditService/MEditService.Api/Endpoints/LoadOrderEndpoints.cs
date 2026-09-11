@@ -177,9 +177,10 @@ public static class LoadOrderEndpoints
                 throw;
             }
             // The hash check and the live watches for every plugin now held, in one pass after the
-            // sweep; the crash-repair offers ride the response the same way Failures does.
+            // sweep. Read from the holder, so a copy the create endpoint registered during the
+            // reconcile is watched too.
             var crashRepairOffers = ExternalChangeLoadOrderHook.RunAfterReconcile(
-                index, snapshot, externalChangeWatcher, logger);
+                index, holder.Current, externalChangeWatcher, logger);
             return Results.Ok(new LoadOrderResponse("reconciled", index.Status.Failures, crashRepairOffers));
         }
         catch (OperationCanceledException ex)

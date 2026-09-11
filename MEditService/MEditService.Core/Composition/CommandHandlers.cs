@@ -91,9 +91,7 @@ public static class CommandHandlers
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<KeepExternalChangeHandler>>()));
 
-        services.AddSingleton(sp => new CreatePluginHandler(
-            sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<TrackHandler>()));
+        services.AddSingleton(sp => new CreatePluginHandler(sp.GetRequiredService<TrackHandler>()));
 
         services.AddSingleton(sp => new RebaseEditBranchHandler(
             sp.GetRequiredService<LoadOrderHolder>()));

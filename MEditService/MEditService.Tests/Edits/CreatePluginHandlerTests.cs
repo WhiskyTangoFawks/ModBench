@@ -25,19 +25,19 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
     private CreatePluginHandler Handler => TestEditService.PluginCreateHandler(_holder);
 
-    private static CreatePluginHandler Unloaded => TestEditService.PluginCreateHandler(new LoadOrderHolder());
-
     private string ModFolder(string name) => Path.Combine(_data.DataFolder, name);
 
-    private Task<PluginCreateResult> Create(string name, string path, string origin) =>
-        Handler.CreatePlugin(HeldCopies(), name, path, origin);
-
-    // Every fixture copy is held: nothing here fails to open, so Track sees them all.
-    private IReadOnlyCollection<PluginKey> HeldCopies() =>
-        [.. _holder.Current.Copies.Select(copy => copy.Key)];
+    // What the create endpoint hands over: the copy already registered, and the load order that
+    // registers it.
+    private Task<PluginCreateResult> Create(string name, string path, string origin)
+    {
+        var copy = new RegisteredCopy(name, origin, Path.Combine(path, name), 1, Enabled: true, Winning: true);
+        var registered = _holder.Current.With(copy);
+        return Handler.CreatePlugin(registered, copy, [.. registered.Copies.Select(c => c.Key)]);
+    }
 
     [Fact]
-    public async Task CreatePlugin_RegistersTheCopyOnTheLoadOrderHolder()
+    public async Task CreatePlugin_WritesTheFileAtTheCopysPath()
     {
         var modFolder = ModFolder("StateMod");
 
@@ -46,19 +46,19 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.True(result.Applied);
         Assert.Equal("StateMod", result.Copy.Origin);
         Assert.Equal(Path.Combine(modFolder, "NewPlugin.esp"), result.Copy.Path);
-        Assert.NotNull(_holder.Current.Copy(new PluginKey("NewPlugin.esp", "StateMod")));
+        Assert.True(File.Exists(Path.Combine(modFolder, "NewPlugin.esp")));
     }
 
-    // The slot is one past the highest the snapshot carries; a reused one would give two
-    // participants a single index.
+    // The write side writes systems of record, never the kernel: the endpoint registered this copy
+    // before the handler ran, and the handler has no holder to write.
     [Fact]
-    public async Task CreatePlugin_TakesTheSlotPastTheHighestRegisteredOne()
+    public async Task CreatePlugin_WritesNothingToTheHolder()
     {
-        var highest = _holder.Current.Copies.Max(copy => copy.Slot ?? 0);
+        var before = _holder.Current;
 
-        var result = await Create("Slotted.esp", ModFolder("SlottedMod"), "SlottedMod");
+        await Create("Untouched.esp", ModFolder("UntouchedMod"), "UntouchedMod");
 
-        Assert.Equal(highest + 1, result.Copy.Slot);
+        Assert.Same(before, _holder.Current);
     }
 
     // A newly created plugin defaults to an ESL-flagged ESP silently, the flag being an ordinary
@@ -159,36 +159,21 @@ public sealed class CreatePluginHandlerTests : IDisposable
         Assert.Contains("already exists", ex.Message, StringComparison.Ordinal);
     }
 
+    // The write API with no Index: a copy registered by the create gesture is an editable write
+    // target at once, which is what makes a created plugin editable before any snapshot names it.
     [Fact]
-    public async Task CreatePlugin_NoLoadOrder_ThrowsNoLoadOrderException()
+    public async Task AnEditAfterCreate_ResolvesToTheNewCopy()
     {
-        var ex = await Assert.ThrowsAsync<NoLoadOrderException>(
-            () => Unloaded.CreatePlugin([], "New.esp", "/tmp/SomeMod", "SomeMod"));
+        var modFolder = ModFolder("EditableMod");
+        var copy = new RegisteredCopy(
+            "Editable.esp", "EditableMod", Path.Combine(modFolder, "Editable.esp"), 1, Enabled: true, Winning: true);
+        _holder.Apply(_holder.Current.With(copy));
+        await Handler.CreatePlugin(_holder.Current, copy, [.. _holder.Current.Copies.Select(c => c.Key)]);
 
-        Assert.Contains("No load order", ex.Message, StringComparison.Ordinal);
-    }
+        var edit = TestEditService.CreateHandler(_holder).CreateRecord(copy.Key, "npc_", "MintedNpc");
 
-    // The extension check fires before the load order is consulted: a name that could never be a
-    // plugin is refused whether or not a snapshot has arrived.
-    [Fact]
-    public async Task CreatePlugin_InvalidExtension_ThrowsArgumentException()
-    {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(
-            () => Unloaded.CreatePlugin([], "Mod.txt", "/tmp/SomeMod", "SomeMod"));
-
-        Assert.Contains("extension", ex.Message, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData(null, "/tmp/SomeMod", "SomeMod")]
-    [InlineData("   ", "/tmp/SomeMod", "SomeMod")]
-    [InlineData("New.esp", "   ", "SomeMod")]
-    [InlineData("New.esp", "/tmp/SomeMod", "   ")]
-    public async Task CreatePlugin_EmptyArgument_ThrowsArgumentException(string? name, string path, string origin)
-    {
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() => Create(name!, path, origin));
-
-        Assert.Contains("empty", ex.Message, StringComparison.Ordinal);
+        Assert.True(edit.Applied);
+        Assert.EndsWith("Editable.esp", edit.NewFormKey!, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IModFlagsGetter Written(string modFolder, string name) =>

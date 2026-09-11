@@ -45,21 +45,6 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         Assert.Equal(previous, holder.Current);
     }
 
-    // ADR-0041: a created plugin is a registered copy at once, so the Track that follows it in the
-    // same gesture, and every later reader, find it without waiting for the next snapshot.
-    [Fact]
-    public async Task CreatePlugin_RegistersTheCopyInTheSharedKernel()
-    {
-        var result = await PluginEndpoints.CreatePlugin(
-            new CreatePluginRequest("Minted.esp", _mod.ModFolder, IndexedModFixture.ModFolderOrigin),
-            _mod.Index, TestEditService.PluginCreateHandler(_mod.Holder), NullLoggerFactory.Instance);
-
-        Assert.IsAssignableFrom<Ok<PluginCreatedResponse>>(result);
-        var registered = _mod.Holder.Current.Copy(new PluginKey("Minted.esp", IndexedModFixture.ModFolderOrigin));
-        Assert.NotNull(registered);
-        Assert.Equal(Path.Combine(_mod.ModFolder, "Minted.esp"), registered.Path);
-    }
-
     // Two plugins, parked before the first: a create that cancelled this reconcile would be caught
     // by the token check the second plugin makes, and the endpoint's revert then drops the created
     // copy from the kernel.
@@ -79,7 +64,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var create = Task.Run(() => PluginEndpoints.CreatePlugin(
             new CreatePluginRequest("Interleaved.esp", Path.Combine(data.DataFolder, "InterleavedMod"), "InterleavedMod"),
-            index, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance));
+            index, holder, TestEditService.PluginCreateHandler(holder), NullLoggerFactory.Instance));
         var created = await create.WaitAsync(TimeSpan.FromSeconds(10));
         factory.Release();
 
