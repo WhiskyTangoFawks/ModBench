@@ -30,9 +30,9 @@ public sealed partial class SourceRepository
     public static SourceRepository? Open(string modFolder, GameRelease release) =>
         IsTracked(modFolder) ? new SourceRepository(modFolder, release) : null;
 
-    /// <summary>The documents under a tree with no <c>.git</c> of its own — a compile's scratch
-    /// checkout at a named ref. Only the document verbs answer; every git verb here needs
-    /// <see cref="Open"/>.</summary>
+    /// <summary>The repository over a folder whose tracked state the caller has already established,
+    /// or does not need: the document verbs answer either way, and a git verb over an untracked folder
+    /// answers empty rather than throwing.</summary>
     internal static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
     /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
