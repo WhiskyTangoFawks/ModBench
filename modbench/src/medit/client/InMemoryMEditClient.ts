@@ -35,6 +35,7 @@ export class InMemoryMEditClient implements MEditClient {
   private readonly queryQueues = new Map<QueryMethod, ScriptedStep<unknown>[]>();
   private readonly commandResults = new Map<CommandMethod, unknown>();
   private readonly commandFailures = new Map<CommandMethod, Error>();
+  private readonly commandHandlers = new Map<CommandMethod, (...args: never[]) => Promise<unknown>>();
   private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private _status: BackendStatus = 'starting';
@@ -75,6 +76,14 @@ export class InMemoryMEditClient implements MEditClient {
    *  of {@link setCommandResult}. */
   setCommandFailure<K extends CommandMethod>(method: K, error: Error): void {
     this.commandFailures.set(method, error);
+  }
+
+  /** Answers `method` from the call's own arguments, taking precedence over the fixed result and
+   *  failure above — for a test that holds a command in flight or answers differently per call. */
+  setCommandHandler<K extends CommandMethod>(
+    method: K, handler: (...args: Parameters<Extract<MEditClient[K], (...a: never[]) => unknown>>) => Promise<Answer<K>>,
+  ): void {
+    this.commandHandlers.set(method, handler as unknown as (...args: never[]) => Promise<unknown>);
   }
 
   get status(): BackendStatus { return this._status; }
@@ -131,6 +140,8 @@ export class InMemoryMEditClient implements MEditClient {
 
   private command<T>(method: CommandMethod, args: unknown[]): Promise<T> {
     this.record(method, args);
+    const handler = this.commandHandlers.get(method);
+    if (handler) return handler(...(args as never[])) as Promise<T>;
     if (this.commandFailures.has(method)) return Promise.reject(this.commandFailures.get(method)!);
     if (!this.commandResults.has(method)) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted result for command "${method}"`));

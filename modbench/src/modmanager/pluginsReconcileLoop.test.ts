@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
 import type { ConfigLike, DetectWinePrefix } from './gameDirectory';
-import type { ConfigChangeEvent } from './gameDirectoryResolver';
+import type { ConfigChangeEvent } from './gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

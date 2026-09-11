@@ -207,7 +207,7 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.modList.switchProfile",
+        "command": "modbench.toolbox.switchProfile",
         "title": "Switch Profile…",
         "icon": "$(account)",
         "category": "Modbench"
@@ -225,19 +225,19 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.modList.deploy",
+        "command": "modbench.toolbox.deploy",
         "title": "Deploy Mods",
         "icon": "$(cloud-download)",
         "category": "Modbench"
       },
       {
-        "command": "modbench.modList.purge",
+        "command": "modbench.toolbox.purge",
         "title": "Purge Deployed Mods",
         "icon": "$(clear-all)",
         "category": "Modbench"
       },
       {
-        "command": "modbench.launch",
+        "command": "modbench.toolbox.launch",
         "title": "Launch…",
         "icon": "$(play)",
         "category": "Modbench"
@@ -434,15 +434,15 @@
     "menus": {
       "commandPalette": [
         {
-          "command": "modbench.modList.deploy",
+          "command": "modbench.toolbox.deploy",
           "when": "modbench.workspaceIsMo2Instance"
         },
         {
-          "command": "modbench.modList.purge",
+          "command": "modbench.toolbox.purge",
           "when": "modbench.workspaceIsMo2Instance"
         },
         {
-          "command": "modbench.launch",
+          "command": "modbench.toolbox.launch",
           "when": "modbench.workspaceIsMo2Instance"
         },
         {
@@ -577,17 +577,17 @@
           "group": "navigation@1"
         },
         {
-          "command": "modbench.launch",
+          "command": "modbench.toolbox.launch",
           "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
           "group": "navigation@2"
         },
         {
-          "command": "modbench.modList.deploy",
+          "command": "modbench.toolbox.deploy",
           "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
           "group": "2_deployment"
         },
         {
-          "command": "modbench.modList.purge",
+          "command": "modbench.toolbox.purge",
           "when": "view == modbench.toolbox && modbench.workspaceIsMo2Instance",
           "group": "2_deployment"
         },

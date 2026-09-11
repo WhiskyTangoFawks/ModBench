@@ -248,9 +248,9 @@ describe('package.json title-bar rubric', () => {
 
   // Rule 1 — docs/specs/containers.md.
   const WORKSPACE_ACTIONS = [
-    'modbench.modList.switchProfile',
-    'modbench.modList.deploy',
-    'modbench.modList.purge',
+    'modbench.toolbox.switchProfile',
+    'modbench.toolbox.deploy',
+    'modbench.toolbox.purge',
   ];
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
@@ -259,7 +259,7 @@ describe('package.json title-bar rubric', () => {
   });
 
   // Rule 4 — docs/specs/containers.md.
-  it.each(['modbench.modList.deploy', 'modbench.modList.purge'])('%s stays in overflow, never a navigation icon', (command) => {
+  it.each(['modbench.toolbox.deploy', 'modbench.toolbox.purge'])('%s stays in overflow, never a navigation icon', (command) => {
     const entries = titleMenus().filter((e) => e.command === command);
     expect(entries.length).toBeGreaterThan(0);
     expect(entries.every((e) => !e.group.startsWith('navigation'))).toBe(true);
@@ -279,7 +279,7 @@ describe('package.json title-bar rubric', () => {
 
   // The Toolbox registers with no MO2 instance, but the commands these three activate do not —
   // without this gate they are icons that throw "command not found" on a non-MO2 folder.
-  it.each(['modbench.launch', 'modbench.modList.deploy', 'modbench.modList.purge'])(
+  it.each(['modbench.toolbox.launch', 'modbench.toolbox.deploy', 'modbench.toolbox.purge'])(
     '%s is withheld until the workspace is an MO2 instance', (command) => {
       const entries = titleMenus().filter((e) => e.command === command);
       expect(entries.length).toBeGreaterThan(0);
@@ -302,9 +302,9 @@ describe('package.json Deploy/Purge/Launch gating', () => {
     const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
     expect(palette, 'expected a contributes.menus.commandPalette section').toBeTruthy();
 
-    // modbench.launch runs a contributed task, never a hardcoded game exe. Same
+    // modbench.toolbox.launch runs a contributed task, never a hardcoded game exe. Same
     // MO2-instance-only gate as Deploy/Purge — there is no separate standalone mode.
-    for (const command of ['modbench.modList.deploy', 'modbench.modList.purge', 'modbench.launch']) {
+    for (const command of ['modbench.toolbox.deploy', 'modbench.toolbox.purge', 'modbench.toolbox.launch']) {
       const entry = palette.find((e) => e.command === command);
       expect(entry, `expected a commandPalette entry for ${command}`).toBeTruthy();
       // Same gate as the view/title button for this command, so palette and title bar can never diverge.

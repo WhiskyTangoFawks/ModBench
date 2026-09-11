@@ -283,15 +283,6 @@ describe('composition-root modules import from neither context', () => {
     expect(imports).toEqual(['vscode']);
   });
 
-  // ADR-0013: the sync is the one path by which Mod Management's snapshot reaches Editing.
-  // Importing `LoadOrderPlugin` rather than keeping the snapshot opaque would be a one-word change
-  // that quietly makes this module part of Mod Management.
-  it('the load-order sync imports from neither context', () => {
-    const imports = importsOf(read('loadOrderReconcile.ts'));
-    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
-    expect(imports).toEqual([]);
-  });
-
   // The teardown/refresh writers left extension.ts for a unit seam and claim the same
   // structural-deps property, so they are guarded the same way: nothing imported but `vscode`.
   it('the editing teardown module imports from neither context', () => {
@@ -300,15 +291,26 @@ describe('composition-root modules import from neither context', () => {
     expect(imports).toEqual(['vscode']);
   });
 
-  // The sync may speak of a snapshot and a receiver, but never of what a snapshot holds on Mod
-  // Management's side, nor what a plugin contains on Editing's. Prose is exempt.
-  it('the load-order sync\'s code carries neither context\'s vocabulary', () => {
-    const code = read('loadOrderReconcile.ts')
+});
+
+// ADR-0013: the client's sender is the one path by which Mod Management's snapshot reaches
+// Editing. It restates the snapshot's shape rather than importing it, so the arrow carries a
+// value and not a dependency.
+describe('the load-order sender belongs to Editing alone', () => {
+  const SENDER = 'medit/client/loadOrderSender.ts';
+
+  it('imports nothing but its own port module', () => {
+    expect(importsOf(read(SENDER))).toEqual(['./MEditClient']);
+  });
+
+  // It may speak of a snapshot and its copies, but never of what a snapshot holds on Mod
+  // Management's side — importing `LoadOrderPlugin` would be that one-word change. Prose is exempt.
+  it('carries none of Mod Management\'s vocabulary', () => {
+    const code = read(SENDER)
       .split('\n')
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join('\n');
-    expect([...code.matchAll(/\b(mods?|modlists?)\b/gi)].map((m) => m[0])).toEqual([]);
-    expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
+    expect([...code.matchAll(/\b(mods?|modlists?|profiles?)\b/gi)].map((m) => m[0])).toEqual([]);
   });
 });
 

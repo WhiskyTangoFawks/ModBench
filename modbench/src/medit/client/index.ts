@@ -12,3 +12,7 @@ export { isRefused } from './MEditClient';
 export { HttpMEditClient, type HttpMEditClientDeps } from './HttpMEditClient';
 export type { BackendLifecycleOptions } from './backendLifecycle';
 export { InMemoryMEditClient, type RecordedCall } from './InMemoryMEditClient';
+export {
+  createLoadOrderSender,
+  type LoadOrderSender, type LoadOrderSnapshot, type LoadOrderSendClient, type LoadOrderSendOptions,
+} from './loadOrderSender';

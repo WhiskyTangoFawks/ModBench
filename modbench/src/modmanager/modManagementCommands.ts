@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
-import { type GameDirectoryResolver } from './gameDirectoryResolver';
 import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand } from './DownloadsPanel';
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
@@ -12,7 +11,7 @@ import { OVERWRITE_DIR_NAME, modDir } from './mo2/layout';
 import type { Own } from '../session';
 import { makeReporter } from '../reporter';
 import { registerNameFilter } from '../nameFilter';
-import { meditConfig, makeDetectPaths, setMo2InstanceContext } from '../workspaceConfig';
+import { setMo2InstanceContext } from '../workspaceConfig';
 import {
   createEmptyMod,
   deleteSeparator,
@@ -21,9 +20,7 @@ import {
   renameSeparator,
   uninstallMod,
 } from './commands/modlist';
-import { deployMods, purgeMods, type DeploymentCommandResult } from './commands/deployment';
 import { installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from './commands/install';
-import { listProfiles, switchProfile } from './commands/profile';
 import { collidingModName } from './modNameCollision';
 
 // A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
@@ -40,13 +37,9 @@ export const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
   getChildren: () => [],
 };
 
-/** Positional params, not a Deps bundle: a bundle earns its keep by being shared across more
- *  than one call site, not merely by having several fields. The callback is a narrow window onto
- *  the composition root's session object. */
-export function registerModListCoreCommands(
-  instanceRoot: string, modListProvider: ModListProvider, instance: Pick<Instance, 'value'>,
-  outputChannel: vscode.LogOutputChannel, updateProfileDescription: () => Promise<void>,
-): vscode.Disposable[] {
+/** The Mods tree's own view direction: a view setting, writing no MO2 file, so it lives with
+ *  the view it flips and needs nothing but the provider. */
+export function registerModListCoreCommands(modListProvider: ModListProvider): vscode.Disposable[] {
   return [
       vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
         modListProvider.toggleViewDirection();
@@ -55,24 +48,6 @@ export function registerModListCoreCommands(
       vscode.commands.registerCommand('modbench.modList.view.losingAtTop', () => {
         modListProvider.toggleViewDirection();
         void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', false);
-      }),
-      vscode.commands.registerCommand('modbench.modList.switchProfile', async () => {
-        const active = instance.value.activeProfile;
-        const profiles = await listProfiles(instanceRoot);
-        const picked = await vscode.window.showQuickPick(
-          profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined })),
-          { placeHolder: 'Switch profile' },
-        );
-        if (!picked || picked.label === active) return;
-        const outcome = await switchProfile(instanceRoot, picked.label);
-        if (!outcome.applied) {
-          makeReporter(outputChannel, 'switchProfile').report('error', 'Failed to switch profile.', outcome.refusal);
-          return;
-        }
-        void updateProfileDescription();
-        // ADR-0013/ADR-0015: the write lands in ModOrganizer.ini, which the Instance already
-        // watches — its own recompute is what reaches the load-order sync and the Toolbox's
-        // profile row, never this command.
       }),
   ];
 }
@@ -348,80 +323,4 @@ export function registerDownloadsView(
     ...registerDownloadsMultiRowCommands(instanceRoot, reporter),
   ]) own(disposable);
   return downloadsProvider;
-}
-export function registerDeployCommands(
-  instanceRoot: string,
-  instance: Pick<Instance, 'value'>,
-  outputChannel: vscode.LogOutputChannel,
-  gameDirResolver: GameDirectoryResolver,
-): vscode.Disposable[] {
-  const detectPaths = makeDetectPaths(instanceRoot);
-  const reporter = makeReporter(outputChannel, 'deploy');
-
-  const loadOrderTarget = async (): Promise<string | undefined> =>
-    meditConfig().get('game.pluginsTxtPath') || (await detectPaths())?.pluginsTxt;
-
-  // `wrote` false means the command reported its own abort, so the success message is withheld
-  // rather than announcing a deployment that did not happen.
-  const run = async (
-    failure: string, success: string, command: () => Promise<DeploymentCommandResult>,
-  ): Promise<void> => {
-    let outcome: DeploymentCommandResult;
-    try {
-      outcome = await command();
-    } catch (err) {
-      outcome = { applied: false, refusal: err instanceof Error ? err.message : String(err) };
-    }
-    if (!outcome.applied) {
-      reporter.report('error', failure, outcome.refusal);
-      return;
-    }
-    if (!outcome.wrote) return;
-    // The manifest lands under mods/, which the Instance watches — its own recompute is what
-    // moves the Toolbox's deployment row, never this command.
-    void vscode.window.showInformationMessage(success);
-  };
-
-  return [
-    vscode.commands.registerCommand('modbench.modList.deploy', () =>
-      run('Deploy failed.', 'Modbench: Mods deployed.', async () =>
-        deployMods(
-          instanceRoot,
-          instance.value.activeProfile,
-          instance.value.files,
-          // The single game-directory resolver, memoised and invalidated only when
-          // modbench.mods.gameDirectory changes.
-          (await gameDirResolver.resolve()) ?? undefined,
-          await loadOrderTarget(),
-          reporter,
-          (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
-        ))),
-    vscode.commands.registerCommand('modbench.modList.purge', () =>
-      run('Purge failed.', 'Modbench: Deployed mods purged.', async () =>
-        purgeMods(instanceRoot, (await gameDirResolver.resolve()) ?? undefined, reporter))),
-  ];
-}
-/** The task type tool launching contributes one task per MO2 executables-registry entry under.
- *  Named here so the provider and the Launch… command have one place to agree. */
-export const LAUNCH_TASK_TYPE = 'modbench';
-/** One affordance however many executables exist, because MO2's registry decides what is
- *  launchable. Tasks are read at invocation, so an executable added in MO2 appears without a
- *  reload; resolving a binary here would lock the command to one game. */
-export function registerLaunchCommand(outputChannel: vscode.LogOutputChannel): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.launch', async () => {
-    const tasks = await vscode.tasks.fetchTasks({ type: LAUNCH_TASK_TYPE });
-    if (tasks.length === 0) {
-      outputChannel.info('[extension] Launch…: no launchable tasks contributed');
-      void vscode.window.showInformationMessage(
-        'Modbench: No launch targets — add an executable to MO2\'s executables list and it appears here.',
-      );
-      return;
-    }
-    const picked = await vscode.window.showQuickPick(
-      tasks.map((task) => ({ label: task.name, task })),
-      { placeHolder: 'Launch' },
-    );
-    if (!picked) return;
-    await vscode.tasks.executeTask(picked.task);
-  });
 }

@@ -23,7 +23,7 @@ function deploymentRow(deployed: boolean): vscode.TreeItem {
   row.iconPath = new vscode.ThemeIcon(deployed ? 'check' : 'circle-outline');
   if (!deployed) {
     row.tooltip = 'Deploy';
-    row.command = { command: 'modbench.modList.deploy', title: 'Deploy' };
+    row.command = { command: 'modbench.toolbox.deploy', title: 'Deploy' };
   }
   return row;
 }
@@ -35,7 +35,7 @@ function profileRow(activeProfile: string): vscode.TreeItem {
   row.description = activeProfile || '—';
   row.iconPath = new vscode.ThemeIcon('account');
   row.tooltip = 'Switch profile';
-  row.command = { command: 'modbench.modList.switchProfile', title: 'Switch Profile' };
+  row.command = { command: 'modbench.toolbox.switchProfile', title: 'Switch Profile' };
   return row;
 }
 

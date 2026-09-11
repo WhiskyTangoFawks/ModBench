@@ -1,4 +1,6 @@
-import type { LoadOrderOutcome, LoadOrderPluginInput, WriteRefused } from './client';
+import type {
+  CrashRepairOffer, LoadOrderOutcome, LoadOrderPluginInput, PluginLoadFailure, WriteRefused,
+} from './client';
 import { isRefused } from './client';
 import { reportSkippedPlugins } from './pluginFailures';
 
@@ -44,6 +46,34 @@ export function reportLoadOrderResult(
   // The backend answers this PUT only after the winner sweep, so reaching here *is* "conflicts
   // are computed" (ADR-0013).
   deps.notifyConflictsComputed();
+}
+
+/** The three steps a reconciled load order still owes its surfaces, each injected so this file
+ *  stays free of `vscode`. */
+export interface LoadOrderApplyDeps extends LoadOrderOutcomeDeps {
+  syncFilterState: () => Promise<void>;
+  /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
+   *  it without the rest. */
+  applyReconciled: (failures: PluginLoadFailure[], totalPlugins: number) => Promise<void>;
+  presentCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
+}
+
+/** ADR-0013: a settled PUT, reported and then applied. A failed PUT tore nothing down and an
+ *  abandoned one belongs to the snapshot that replaced it, so neither reaches a surface. */
+export async function applyLoadOrderOutcome(
+  plugins: LoadOrderPluginInput[],
+  result: LoadOrderOutcome,
+  /** The backend's own count, implicit masters included — larger than `plugins.length`. */
+  totalPlugins: number,
+  deps: LoadOrderApplyDeps,
+): Promise<void> {
+  reportLoadOrderResult(plugins, result, deps);
+  if (result.outcome !== 'reconciled') return;
+  await deps.syncFilterState();
+  await deps.applyReconciled(result.failures, totalPlugins);
+  // Awaited and sequential — one native modal at a time. Declining clears nothing, so the offer
+  // re-appears at the next reconcile by construction.
+  if (result.crashRepairOffers.length > 0) await deps.presentCrashRepairOffers(result.crashRepairOffers);
 }
 
 /** What a synced filter read needs reported once it resolves — a read failure degrades to
