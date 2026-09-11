@@ -179,12 +179,16 @@ public sealed class IndexAfterARenumberTests
         var worldspace = fixture.Worldspace.ToString();
         const string newWorldspaceFormKey = "000F00:SourceContainer.esp";
 
-        var relocated = Path.Combine(
-            Path.GetDirectoryName(Path.GetDirectoryName(
-                fixture.SourceFileContaining(SourceContainerFixture.WorldspaceEditorId))!)!,
-            SourceRepository.LeafNameFor(
-                Mutagen.Bethesda.Plugins.FormKey.Factory(newWorldspaceFormKey),
-                SourceContainerFixture.WorldspaceEditorId, isDirectory: true));
+        // Put a placeholder at the renumber's own target and read back where the repository landed it,
+        // so the collision this plants sits at the tree's own answer, not a name recomputed here.
+        var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
+        var newWorldspace = new RecordIdentity(newWorldspaceFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
+        repository.Put(fixture.Plugin, new SourceDocument(
+            newWorldspaceFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
+        var relocated = Path.GetDirectoryName(SourceDocumentPath.Of(
+            fixture.ModFolder, fixture.Plugin.Name, "wrld", newWorldspaceFormKey,
+            SourceContainerFixture.WorldspaceEditorId, GameRelease.Fallout4))!;
+        repository.Remove(fixture.Plugin, newWorldspace);
         Directory.CreateDirectory(relocated);
         File.WriteAllText(Path.Combine(relocated, "occupied.txt"), "something else is here");
 

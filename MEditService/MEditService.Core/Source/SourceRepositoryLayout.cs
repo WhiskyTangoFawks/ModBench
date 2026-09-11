@@ -65,9 +65,9 @@ public sealed partial class SourceRepository
     internal static string HeaderDocumentIn(string modFolder, string pluginFileName) =>
         Path.Combine(RootIn(modFolder, pluginFileName), RecordDataFileName);
 
-    /// <summary>The flat record's own file. The origin ModKey, never the plugin written into, keeps
-    /// two masters' records from colliding on one path; a directory-per-record type refuses.</summary>
-    internal static string FlatPathFor(
+    // The flat record's own file. The origin ModKey, never the plugin written into, keeps two
+    // masters' records from colliding on one path; a directory-per-record type refuses.
+    private static string FlatPathFor(
         string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
     {
         var folder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType)
@@ -81,10 +81,10 @@ public sealed partial class SourceRepository
             LeafNameFor(FormKey.Factory(formKeyString), editorId, isDirectory: false));
     }
 
-    /// <summary>The three shapes with a group folder: flat file, container directory, and an interior
-    /// Cell nested under block/sub-block, the only reason <paramref name="blockPath"/> exists. An
-    /// embedded child lands inside its container's document instead.</summary>
-    internal static SourcePlacement PlacementFor(
+    // The three shapes with a group folder: flat file, container directory, and an interior Cell
+    // nested under block/sub-block, the only reason blockPath exists. An embedded child lands
+    // inside its container's document instead.
+    private static SourcePlacement PlacementFor(
         string pluginFileName,
         string recordType,
         string formKeyString,
@@ -114,9 +114,9 @@ public sealed partial class SourceRepository
     private static string BlockLevelName(int? x, int? y) =>
         string.Create(CultureInfo.InvariantCulture, $"{x ?? 0}, {y ?? 0}");
 
-    /// <summary><c>[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;</c>, with <c>.json</c> for a flat
-    /// file and without for a container's directory — the reason an EditorID edit is a rename.</summary>
-    internal static string LeafNameFor(FormKey formKey, string? editorId, bool isDirectory)
+    // "[<EditorID> - ]<hex6>_<originModKey>", with ".json" for a flat file and without for a
+    // container's directory — the reason an EditorID edit is a rename.
+    private static string LeafNameFor(FormKey formKey, string? editorId, bool isDirectory)
     {
         var extension = isDirectory ? string.Empty : JsonSuffix;
         var filesafe = FilesafeFormKey(formKey);
@@ -219,18 +219,17 @@ public sealed partial class SourceRepository
         };
     }
 
-    /// <summary>One place that knows a container is a directory and a flat record a file, so callers and
-    /// the rollback cannot disagree.</summary>
-    internal static void MoveEntry(string from, string to)
+    // One place that knows a container is a directory and a flat record a file, so callers and
+    // the rollback cannot disagree.
+    private static void MoveEntry(string from, string to)
     {
         if (Directory.Exists(from)) Directory.Move(from, to);
         else File.Move(from, to);
     }
 
-    /// <summary>The codec's own write-then-rename, for the writers that hold text rather than a
-    /// record: an interrupted direct write leaves a partial file that dirty detection reads as an
-    /// edit.</summary>
-    internal static void WriteTextAtomic(string filePath, string body)
+    // The codec's own write-then-rename, for the writers that hold text rather than a record: an
+    // interrupted direct write leaves a partial file that dirty detection reads as an edit.
+    private static void WriteTextAtomic(string filePath, string body)
     {
         var tempPath = filePath + ".tmp";
         try
@@ -245,9 +244,9 @@ public sealed partial class SourceRepository
         }
     }
 
-    /// <summary>The levels of <paramref name="directory"/> that do not exist yet, deepest first — what
-    /// creating it mints, and so what undoing it has to take away again.</summary>
-    internal static IReadOnlyList<string> LevelsMintedBy(string directory)
+    // The levels of directory that do not exist yet, deepest first — what creating it mints, and
+    // so what undoing it has to take away again.
+    private static List<string> LevelsMintedBy(string directory)
     {
         var minted = new List<string>();
         for (var level = directory;
@@ -259,10 +258,9 @@ public sealed partial class SourceRepository
         return minted;
     }
 
-    /// <summary>Removes the directories this call minted when <paramref name="write"/> throws: an
-    /// empty record directory is invisible to git and fails the next ingest, since the reader opens
-    /// every one unconditionally.</summary>
-    internal static T InMintedDirectory<T>(string directory, Func<T> write)
+    // Removes the directories this call minted when write throws: an empty record directory is
+    // invisible to git and fails the next ingest, since the reader opens every one unconditionally.
+    private static T InMintedDirectory<T>(string directory, Func<T> write)
     {
         var minted = LevelsMintedBy(directory);
 
@@ -278,7 +276,7 @@ public sealed partial class SourceRepository
         }
     }
 
-    internal static void InMintedDirectory(string directory, Action write) =>
+    private static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
 
     // Where a document this plugin does not hold yet lands, from the identity alone. Null for a
@@ -424,9 +422,9 @@ public sealed partial class SourceRepository
 
     private const string FirstBlockName = "0";
 
-    /// <summary>Takes back the levels <see cref="LevelsMintedBy"/> named, deepest first, so a parent is
-    /// already empty by the time it is reached. A level something else filled stops the walk.</summary>
-    internal static void RemoveMintedLevels(IReadOnlyList<string> minted)
+    // Takes back the levels LevelsMintedBy named, deepest first, so a parent is already empty by
+    // the time it is reached. A level something else filled stops the walk.
+    private static void RemoveMintedLevels(List<string> minted)
     {
         foreach (var stray in minted)
         {

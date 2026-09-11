@@ -32,14 +32,17 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     private static string BodyOf(string pluginName, string editorId) =>
         $"{{\n  \"FormKey\": \"000800:{pluginName}\",\n  \"EditorID\": \"{editorId}\"\n}}";
 
+    // Spelled from the fixture's own constants rather than asked of the repository: Track needs the
+    // path to seed the pristine commit before any repository exists to ask.
+    private static string OriginalNpcPath(string pluginName) =>
+        Path.Combine("source", pluginName, "Npcs", $"Original - 000800_{pluginName}.json");
+
     private static SourceRepository Track(string modFolder, string pluginName, params PristineFile[] alsoWrite)
     {
         SourceRepository.Track(
             modFolder, SourcePreset.Edits,
             [
-                new PristineFile(
-                    SourceRepository.FlatPathFor(pluginName, "npc_", $"000800:{pluginName}", "Original", Release),
-                    Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
+                new PristineFile(OriginalNpcPath(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
                 .. alsoWrite,
             ],
             new TrackProvenance(null, null, new Dictionary<string, string>()));
@@ -82,7 +85,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var secondPlugin = new PluginKey("Second.esp", "SecondMod");
         var (beforeFirst, beforeSecond) = (TreeSnapshot.Of(_firstFolder), TreeSnapshot.Of(_secondFolder));
 
-        var transaction = new SourceTransaction();
+        var transaction = new SourceRepository.SourceTransaction();
         transaction.Put(
             first, firstPlugin,
             new SourceDocument("000800:First.esp", "npc_", "Original", BodyOf("First.esp", "Rewritten")));
@@ -106,7 +109,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var firstPlugin = new PluginKey("First.esp", "FirstMod");
         var secondPlugin = new PluginKey("Second.esp", "SecondMod");
 
-        var transaction = new SourceTransaction();
+        var transaction = new SourceRepository.SourceTransaction();
         transaction.Put(
             first, firstPlugin, new SourceDocument("000800:First.esp", "npc_", "Original", BodyOf("First.esp", "Rewritten")));
         transaction.Put(
@@ -128,7 +131,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var plugin = new PluginKey("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
-        var transaction = new SourceTransaction();
+        var transaction = new SourceRepository.SourceTransaction();
         var refusal = Assert.Throws<NotSupportedException>(
             () => transaction.Remove(repository, plugin, new RecordIdentity(cell.ToString(), "cell", "ExteriorCell")));
 
@@ -148,7 +151,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var plugin = new PluginKey("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
-        var transaction = new SourceTransaction();
+        var transaction = new SourceRepository.SourceTransaction();
         var refusal = Assert.Throws<NotSupportedException>(() => transaction.Put(
             repository, plugin,
             new SourceDocument("000900:First.esp", "cell", "FreshCell", "{\n  \"FormKey\": \"000900:First.esp\"\n}")));
@@ -165,7 +168,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var plugin = new PluginKey("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
-        var transaction = new SourceTransaction();
+        var transaction = new SourceRepository.SourceTransaction();
         // A sibling in the group folder Track already made, so nothing here mints a directory.
         transaction.Put(
             repository, plugin,

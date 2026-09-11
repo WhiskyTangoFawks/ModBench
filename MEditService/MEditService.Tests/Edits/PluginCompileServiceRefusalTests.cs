@@ -65,9 +65,10 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // Asked of the tree, not the compiled mod: the whole-mod read ends each group with a
         // FormKey-keyed SetTo, so the pair collapses silently before compile ever sees it.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var duplicatePath = Path.Combine(_mod.ModFolder, SourceRepository.FlatPathFor(
-            CompileFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4));
-        Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
+        // The name still has to round-trip to the NPC's own FormKey — only the EditorID half differs —
+        // or compile would refuse the mismatch before it ever reaches the duplicate check under test.
+        var duplicatePath = Path.Combine(
+            Path.GetDirectoryName(_mod.NpcSourceFile)!, $"CopyOfFixtureNpc - {_mod.Npc.ID:X6}_{CompileFixture.PluginName}.json");
         File.WriteAllText(duplicatePath, npcSourceText);
 
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
