@@ -6,6 +6,7 @@ import { pluginsFile } from '../mo2/layout';
 import type { Reporter } from '../../reporter';
 import type { FileWinners } from '../fileConflictIndex';
 import type { GameDirectory } from '../gameDirectory';
+import { createWriteQueue } from './writeQueue';
 
 /** `wrote` is false when a precondition aborted the run, or when purge found nothing deployed —
  *  in both cases Data/ and the manifest are exactly as they were. */
@@ -40,14 +41,7 @@ async function confirmFirstDeploy(showWarning: ShowFirstDeployPrompt): Promise<b
 
 // Deploy and purge share one queue per instance root: both read-modify-write the same manifest,
 // and an overlapping pair would snapshot Data/ as vanilla while it still holds live links.
-const deploymentQueues = new Map<string, Promise<unknown>>();
-
-function withDeploymentLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
-  const prior = deploymentQueues.get(instanceRoot) ?? Promise.resolve();
-  const next = prior.then(task, task);
-  deploymentQueues.set(instanceRoot, next.catch(() => undefined));
-  return next;
-}
+const withDeploymentLock = createWriteQueue();
 
 const refuse = (err: unknown): DeploymentCommandResult => ({
   applied: false,

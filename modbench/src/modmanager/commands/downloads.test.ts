@@ -106,7 +106,10 @@ describe('markDownloadInstalled', () => {
     expect(await markDownloadInstalled(root, 'foo.7z')).toEqual({ applied: true });
 
     expect(await sidecarOf(root, 'foo.7z')).toMatchObject({ status: 'Installed', modID: '123' });
-    expect(await readFile(sidecarPath(root, 'foo.7z'), 'utf8')).toContain('installed=true');
+    const text = await readFile(sidecarPath(root, 'foo.7z'), 'utf8');
+    expect(text).toContain('installed=true');
+    // MO2's markInstalled writes both keys, and its tab reads `uninstalled` first.
+    expect(text).toContain('uninstalled=false');
   });
 
   it('writes a sidecar for an archive that had none, so the status survives the install', async () => {

@@ -29,7 +29,7 @@ function fileAccessIn(source: string): string[] {
 
 const read = (file: string): string => readFileSync(join(__dirname, file), 'utf8');
 
-describe('the Downloads view reads and writes no file', () => {
+describe('the Downloads view imports no filesystem module and names no filesystem call', () => {
   it('names every file the view is made of', () => {
     for (const file of VIEW_FILES) expect(read(file).length).toBeGreaterThan(0);
   });

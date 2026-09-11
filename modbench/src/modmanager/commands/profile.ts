@@ -5,6 +5,7 @@
 import { access, readdir, readFile, writeFile } from 'node:fs/promises';
 import { profileDir, profilesDir, settingsFile } from '../mo2/layout';
 import { readSelectedProfile, setSelectedProfileInText } from '../mo2/modOrganizerIni';
+import { createWriteQueue } from './writeQueue';
 
 /** `wrote` is false when the profile was already selected: no byte changes, so the
  *  ModOrganizer.ini watcher never fires. */
@@ -13,15 +14,8 @@ export type ProfileCommandResult =
   | { applied: false; refusal: string };
 
 // Serialized per instance root: two switches read-modify-writing at once would each splice a
-// stale generation of the file. The chain tail can never stay rejected.
-const writeQueues = new Map<string, Promise<unknown>>();
-
-function withIniWriteLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
-  const prior = writeQueues.get(instanceRoot) ?? Promise.resolve();
-  const next = prior.then(task, task);
-  writeQueues.set(instanceRoot, next.catch(() => undefined));
-  return next;
-}
+// stale generation of the file.
+const withIniWriteLock = createWriteQueue();
 
 /** Refuses a profile with no `profiles/<name>/` directory: selecting one points the whole
  *  instance at files that do not exist, which no later read can tell from a corrupt ini. */

@@ -17,6 +17,7 @@ import {
 } from '../mo2/modlistText';
 import { markDownloadUninstalled } from './downloads';
 import { modDir, modlistFile } from '../mo2/layout';
+import { createWriteQueue, type WriteQueue } from './writeQueue';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -30,19 +31,9 @@ const exists = (path: string): Promise<boolean> =>
     () => false,
   );
 
-// The one queue every modlist.txt write for an instance passes through — module-private
-// infrastructure, not an abstraction over commands. Keyed by instance root, so every profile
-// under it serializes together.
-const modlistWriteQueues = new Map<string, Promise<unknown>>();
-
-export function withModlistWriteLock<T>(instanceRoot: string, task: () => Promise<T>): Promise<T> {
-  const prior = modlistWriteQueues.get(instanceRoot) ?? Promise.resolve();
-  const next = prior.then(task, task);
-  // The chain tail must never stay rejected, or every later write on this instance queues
-  // behind a dead link forever — only the caller's own `next` sees the error.
-  modlistWriteQueues.set(instanceRoot, next.catch(() => undefined));
-  return next;
-}
+/** The one queue every modlist.txt write for an instance passes through, keyed by instance root
+ *  so every profile under it serializes together. */
+export const withModlistWriteLock: WriteQueue = createWriteQueue();
 
 // The one splice point every verb below goes through. A thrown "not found" becomes `refusal`
 // rather than an exception; unchanged text is not written, so a no-op never fires the watcher.

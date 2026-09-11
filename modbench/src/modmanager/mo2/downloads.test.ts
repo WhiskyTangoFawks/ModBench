@@ -195,27 +195,35 @@ describe('setHiddenInText', () => {
 });
 
 describe('setInstalledInText', () => {
-  it('creates a fresh [General] section with installed=true when there is no .meta text', () => {
-    expect(setInstalledInText('')).toBe('[General]\r\ninstalled=true\r\n');
+  it('creates a fresh [General] section with both keys when there is no .meta text', () => {
+    expect(setInstalledInText('')).toBe('[General]\r\ninstalled=true\r\nuninstalled=false\r\n');
   });
 
-  it('inserts installed=true after an existing [General] header, preserving other lines', () => {
+  it('inserts both keys after an existing [General] header, preserving other lines', () => {
     const text = '[General]\r\ngameName=Fallout4\r\nmodid=12345\r\n';
     expect(setInstalledInText(text)).toBe(
-      '[General]\r\ninstalled=true\r\ngameName=Fallout4\r\nmodid=12345\r\n',
+      '[General]\r\ninstalled=true\r\nuninstalled=false\r\ngameName=Fallout4\r\nmodid=12345\r\n',
     );
   });
 
   it('flips an existing installed=false to true in place, byte-faithful', () => {
     const text = '[General]\r\ngameName=Fallout4\r\ninstalled=false\r\nmodid=12345\r\n';
     expect(setInstalledInText(text)).toBe(
-      '[General]\r\ngameName=Fallout4\r\ninstalled=true\r\nmodid=12345\r\n',
+      '[General]\r\nuninstalled=false\r\ngameName=Fallout4\r\ninstalled=true\r\nmodid=12345\r\n',
     );
   });
 
-  it('is a no-op when installed=true is already present', () => {
-    const text = '[General]\r\ninstalled=true\r\nmodid=12345\r\n';
+  it('is a no-op when both keys already read installed', () => {
+    const text = '[General]\r\ninstalled=true\r\nuninstalled=false\r\nmodid=12345\r\n';
     expect(setInstalledInText(text)).toBe(text);
+  });
+
+  // MO2's markInstalled writes `uninstalled=false` beside `installed=true`, and a reader takes
+  // `uninstalled` first — so a reinstall that left it true would read Uninstalled in MO2 itself.
+  it('clears an earlier uninstall, so a reinstalled download reads Installed again', () => {
+    const uninstalled = setUninstalledInText('[General]\r\ninstalled=true\r\n');
+    expect(parseDownloadMeta(uninstalled).status).toBe('Uninstalled');
+    expect(parseDownloadMeta(setInstalledInText(uninstalled)).status).toBe('Installed');
   });
 
   // MO2 (via Qt's QSettings) always writes CRLF on Windows, but mEdit is not
@@ -223,7 +231,7 @@ describe('setInstalledInText', () => {
   // its own convention rather than have CRLF forced onto it.
   it('preserves LF-only line endings when inserting after an existing [General] header', () => {
     const text = '[General]\ngameName=Fallout4\n';
-    expect(setInstalledInText(text)).toBe('[General]\ninstalled=true\ngameName=Fallout4\n');
+    expect(setInstalledInText(text)).toBe('[General]\ninstalled=true\nuninstalled=false\ngameName=Fallout4\n');
   });
 });
 

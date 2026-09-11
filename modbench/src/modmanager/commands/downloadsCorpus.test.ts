@@ -80,6 +80,9 @@ describe('downloads commands corpus', () => {
   });
 
   it('mark installed writes one sidecar and nothing else — never the mod folder', async () => {
+    // As MO2 left it after an uninstall: its tab resolves `uninstalled` first, so the mark has
+    // to clear that key too, exactly as MO2's own markInstalled does.
+    await writeFile(join(dir, MANUAL_META), '[General]\r\nuninstalled=true\r\n');
     const before = await snapshotTree(dir);
 
     expect(await markDownloadInstalled(dir, MANUAL)).toEqual({ applied: true });
