@@ -1,4 +1,3 @@
-using MEditService.Core.PluginAdapter;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Plugins;
@@ -12,6 +11,10 @@ public sealed record RegisteredCopy(
     public PluginKey Key => new(Name, Origin);
 
     public Registration Registration => new(Slot, Enabled, Winning);
+
+    public static RegisteredCopy Of(LoadOrderEntry entry, int slotOffset = 0) =>
+        new(entry.Name, entry.Origin, entry.Path,
+            entry.Slot is { } slot ? slotOffset + slot : null, entry.Enabled, entry.Winning);
 }
 
 /// <summary>ADR-0046 invariant 11: the load order is state, sent by Mod Management, held in the
@@ -30,8 +33,8 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
 
     public GameRelease GameRelease { get; }
 
-    /// <summary>Every physical copy in the instance, forced masters first (ADR-0044: losing and
-    /// unlisted copies are registered like any other).</summary>
+    /// <summary>Every physical copy in the instance, in the order it was given (ADR-0044: losing
+    /// and unlisted copies are registered like any other).</summary>
     public IReadOnlyList<RegisteredCopy> Copies { get; }
 
     public LoadOrder(
@@ -43,12 +46,6 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
         // Copied, not aliased: a caller keeping its list would otherwise mutate this value.
         Copies = [.. copies];
     }
-
-    /// <summary>The snapshot as it reaches the boundary: forced masters are prepended and every
-    /// snapshot slot offset past them, so the value carries the registrations the Index does.</summary>
-    public static LoadOrder From(
-        string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries) =>
-        new(gameDirectory, instanceRoot, gameRelease, HeldPlugins.Resolve(gameDirectory, gameRelease, entries));
 
     /// <summary>The held copies as the value: what the Index projects its live view back into, for
     /// every caller that reads the load order rather than opening a copy.</summary>

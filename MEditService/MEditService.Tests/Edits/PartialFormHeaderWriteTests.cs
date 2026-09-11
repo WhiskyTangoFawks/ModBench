@@ -56,9 +56,9 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         PartialCell = cell.FormKey;
         OrdinaryNpc = npc.FormKey;
 
-        LoadOrder = LoadOrder.From(
+        LoadOrder = new LoadOrder(
             _gameDirectory, _gameDirectory, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
+            SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();

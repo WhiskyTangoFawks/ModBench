@@ -267,7 +267,7 @@ public sealed class ContainerCopyFixture : IDisposable
             new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: destinationLoadsFirst ? 1 : 0, Enabled: true, Winning: true),
             new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: destinationLoadsFirst ? 0 : 1, Enabled: true, Winning: true),
         ];
-        LoadOrder = LoadOrder.From(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
+        LoadOrder = new LoadOrder(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         Track(DestinationOrigin, DestinationPlugin);
         if (trackSource) Track(SourceOrigin, SourcePlugin);

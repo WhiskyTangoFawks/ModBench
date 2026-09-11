@@ -23,7 +23,7 @@ public sealed class FormLinkResolverTests
 
     private static FormLinkResolver ResolverOver(
         ScatteredFixtureData data, IReadOnlyList<LoadOrderEntry>? registered = null) =>
-        new(LoadOrder.From(data.GameDirectory, data.Root, GameRelease.Fallout4, registered ?? data.Plugins),
+        new(new LoadOrder(data.GameDirectory, data.Root, GameRelease.Fallout4, SnapshotCopies.Of(registered ?? data.Plugins)),
             new MutagenPluginAdapter(),
             SharedSchemaReflector.Instance);
 
@@ -95,7 +95,7 @@ public sealed class FormLinkResolverTests
         List<LogEntry> log = [];
 
         using (var resolver = new FormLinkResolver(
-                   LoadOrder.From(data.GameDirectory, data.Root, GameRelease.Fallout4, data.Plugins),
+                   new LoadOrder(data.GameDirectory, data.Root, GameRelease.Fallout4, SnapshotCopies.Of(data.Plugins)),
                    new OneModAdapter(unreadable),
                    SharedSchemaReflector.Instance,
                    new LoggerFactory([new CollectingLoggerProvider(log)]).CreateLogger<FormLinkResolver>()))
@@ -222,7 +222,7 @@ public sealed class FormLinkResolverTests
             .Build();
 
         using var resolver = new FormLinkResolver(
-            LoadOrder.From(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, []),
+            new LoadOrder(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([])),
             new MutagenPluginAdapter(),
             SharedSchemaReflector.Instance);
 

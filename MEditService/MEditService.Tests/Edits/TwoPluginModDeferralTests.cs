@@ -47,7 +47,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
             new(PluginA, pathA, Origin, Slot: 0, Enabled: true, Winning: true),
             new(PluginB, pathB, Origin, Slot: 1, Enabled: true, Winning: true),
         };
-        var loadOrder = LoadOrder.From(gameDirectory, _instanceRoot, GameRelease.Fallout4, entries);
+        var loadOrder = new LoadOrder(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
 
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(loadOrder, [new PluginKey(PluginA, Origin), new PluginKey(PluginB, Origin)], Origin, SourcePreset.Edits)

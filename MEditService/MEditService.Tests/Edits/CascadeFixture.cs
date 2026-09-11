@@ -42,7 +42,7 @@ public sealed class CascadeFixture : IDisposable
         mod.WriteToBinary(pluginPath);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = LoadOrder.From(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
+        LoadOrder = new LoadOrder(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits).GetAwaiter().GetResult();

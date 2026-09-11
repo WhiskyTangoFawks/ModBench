@@ -72,7 +72,7 @@ public sealed class CopyFixture : IDisposable
             new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
             new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
         ];
-        LoadOrder = LoadOrder.From(GameDirectory, GameDirectory, GameRelease.Fallout4, Entries);
+        LoadOrder = new LoadOrder(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         Track(DestinationOrigin, DestinationPlugin);
         if (trackSource) Track(SourceOrigin, SourcePlugin);

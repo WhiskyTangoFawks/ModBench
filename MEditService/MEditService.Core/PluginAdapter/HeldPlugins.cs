@@ -5,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Order;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.PluginAdapter;
@@ -49,58 +48,6 @@ public sealed class HeldPlugins : ILoadOrder
         DataFolderPath = dataFolderPath;
         InstanceRoot = instanceRoot;
         GameRelease = gameRelease;
-    }
-
-    /// <summary>The implicit masters and Creation Club catalog come first, forced on, and every
-    /// snapshot slot is offset past them so a forced master always sorts first. A name either
-    /// forced source claims is held exactly once.</summary>
-    public static IReadOnlyList<RegisteredCopy> Resolve(
-        string gameDirectory, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
-    {
-        var names = ForcedNames(gameDirectory, gameRelease);
-        var forcedNames = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
-
-        var forced = names
-            .Select((name, i) => new RegisteredCopy(
-                name, PluginOrigin.DataDirectory, Path.Combine(gameDirectory, name), i, Enabled: true,
-                Winning: true, IsForced: true))
-            .ToList();
-        var offset = forced.Count;
-
-        return
-        [
-            .. forced,
-            .. entries
-                .Where(e => !forcedNames.Contains(e.Name))
-                .Select(e => new RegisteredCopy(
-                    e.Name, e.Origin, e.Path, e.Slot is { } slot ? offset + slot : null, e.Enabled, e.Winning)),
-        ];
-    }
-
-    /// <summary>The plugins this install loads with no plugins.txt line: the release's implicit
-    /// masters present in <paramref name="gameDirectory"/>, then its Creation Club catalog, which
-    /// varies per install. Load order, and a name both claim appears once.</summary>
-    public static IReadOnlyList<string> ForcedNames(string gameDirectory, GameRelease gameRelease) =>
-        [.. ResolveImplicitNames(gameDirectory, gameRelease)
-            .Concat(ResolveCreationClubNames(gameDirectory, gameRelease))
-            .Distinct(StringComparer.OrdinalIgnoreCase)];
-
-    private static List<string> ResolveImplicitNames(string folder, GameRelease gameRelease) =>
-        [.. Implicits.Get(gameRelease).Listings
-            .Select(k => k.FileName.ToString())
-            .Where(name => File.Exists(Path.Combine(folder, name)))];
-
-    // Mutagen's reader already filters to entries whose file exists, so a stale catalog entry
-    // contributes nothing. Existence is checked first because LoadOrderListingsFromPath throws on a
-    // missing file. Order is the catalog's own, never re-sorted.
-    private static List<string> ResolveCreationClubNames(string folder, GameRelease gameRelease)
-    {
-        var cccPath = CreationClubListings.GetListingsPath(gameRelease.ToCategory(), folder);
-        if (cccPath is not { } path || !File.Exists(path.Path)) return [];
-
-        return CreationClubListings.LoadOrderListingsFromPath(path, folder)
-            .Select(l => l.FileName.ToString())
-            .ToList();
     }
 
     public IModGetter? GetMod(string pluginName, string origin)

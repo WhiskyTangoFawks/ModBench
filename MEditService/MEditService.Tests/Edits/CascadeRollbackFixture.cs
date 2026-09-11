@@ -98,7 +98,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         (Race, HomeNpc, FirstNpc, SecondNpc) = (race, home, first, second);
 
-        LoadOrder = LoadOrder.From(_data.GameDirectory, _data.GameDirectory, GameRelease.Fallout4, _data.Plugins);
+        LoadOrder = new LoadOrder(_data.GameDirectory, _data.GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins));
 
         var track = new TrackService(NullLogger<TrackService>.Instance);
         foreach (var origin in new[] { TargetMod, FirstMod, SecondMod })

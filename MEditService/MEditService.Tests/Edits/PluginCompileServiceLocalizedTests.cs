@@ -33,9 +33,9 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         mod.UsingLocalization = true;
         mod.WriteToBinary(pluginPath);
 
-        _loadOrder = LoadOrder.From(
+        _loadOrder = new LoadOrder(
             _gameDir, instanceRoot: null, GameRelease.Fallout4,
-            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
+            SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(_loadOrder, [new PluginKey(PluginName, Origin)], Origin, SourcePreset.Edits)

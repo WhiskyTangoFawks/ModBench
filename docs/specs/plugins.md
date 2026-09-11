@@ -759,7 +759,7 @@ overflow, then native **Collapse All** last.
   `vscode` import — same seam class as `modlistText.ts`/`metaIni.ts`/`downloads.ts`.
 - **Implicit masters**: `GET /implicit-masters` (`gameDirectory`, `gameRelease`) → the filenames
   this install loads with no `plugins.txt` line, in load order: the release's implicit masters
-  present in that folder, then its Creation Club catalog. `HeldPlugins.ForcedNames`, the same
+  present in that folder, then its Creation Club catalog. `ForcedPlugins.Names`, the same
   list a `PUT /load-order` prepends, answered with no load order held. `gameRelease` is Mutagen's
   own name, translated from `ModOrganizer.ini`'s `gameName` by `mo2/gamePaths.ts`'s
   `gameReleaseForGame` — the two vocabularies differ ("Skyrim" is `SkyrimLE`), and a game with no
@@ -793,7 +793,7 @@ overflow, then native **Collapse All** last.
   - toggle: `*` prefix set/cleared, byte-faithful (CRLF/BOM/comments untouched).
   - reorder: single-row and multi-row (contiguous and non-contiguous selection) moves,
     byte-faithful.
-- **Implicit-master unit tests** (`MEditService.Tests/Plugins/HeldPluginsTests.cs`): an implicit
+- **Implicit-master unit tests** (`MEditService.Tests/Api/ForcedPluginsTests.cs`): an implicit
   master present in the Data folder is listed, one missing from it is not, the Creation Club
   catalog follows in its own order, and a plugin neither source claims is absent.
 - **Load-order-derived master classification unit tests** (`MEditService.Tests/Query/MasterResolutionTests.cs`):

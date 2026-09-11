@@ -53,9 +53,9 @@ public sealed class CompileFixture : IDisposable
         mod.WriteToBinary(PluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        _loadOrder = LoadOrder.From(
+        _loadOrder = new LoadOrder(
             _gameDirectory, _instanceRoot, Release,
-            [new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]);
+            SnapshotCopies.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(_loadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
