@@ -109,46 +109,6 @@ public sealed partial class SourceRepository
             [RootFor(pluginFileName), groupFolder, .. blockPath ?? [], leaf, RecordDataFileName]));
     }
 
-    /// <summary>Where an exterior cell's subtree lands, each path relative to the mod folder: the
-    /// worldspace's own document, the two block levels' group documents, and the cell's document
-    /// beneath them.</summary>
-    internal readonly record struct ExteriorCellSubtree(
-        string GroupDirectory,
-        string WorldspaceDirectory,
-        SourcePlacement WorldspaceDocument,
-        SourcePlacement BlockGroupDocument,
-        SourcePlacement SubBlockGroupDocument,
-        SourcePlacement CellDocument);
-
-    /// <summary>The one cell whose directory sits inside another record's rather than in its own
-    /// group folder, under the two block levels <paramref name="location"/> numbers.</summary>
-    internal static ExteriorCellSubtree ExteriorCellSubtreeFor(
-        string pluginFileName,
-        string worldspaceRecordType,
-        string worldspaceFormKey,
-        string? worldspaceEditorId,
-        string cellFormKey,
-        string? cellEditorId,
-        CellPlacement location,
-        GameRelease gameRelease)
-    {
-        var worldspaceDocument = PlacementFor(
-            pluginFileName, worldspaceRecordType, worldspaceFormKey, worldspaceEditorId, gameRelease);
-        var worldspaceDirectory = Path.GetDirectoryName(worldspaceDocument.RelativePath)!;
-        var block = Path.Combine(worldspaceDirectory, BlockLevelName(location.BlockX, location.BlockY));
-        var subBlock = Path.Combine(block, BlockLevelName(location.SubX, location.SubY));
-        var cellDirectory = Path.Combine(
-            subBlock, LeafNameFor(FormKey.Factory(cellFormKey), cellEditorId, isDirectory: true));
-
-        return new ExteriorCellSubtree(
-            Path.GetDirectoryName(worldspaceDirectory)!,
-            worldspaceDirectory,
-            worldspaceDocument,
-            new SourcePlacement(Path.Combine(block, GroupRecordDataFileName)),
-            new SourcePlacement(Path.Combine(subBlock, GroupRecordDataFileName)),
-            new SourcePlacement(Path.Combine(cellDirectory, RecordDataFileName)));
-    }
-
     // "<x>, <y>", the whole-mod door's own name for a block level's directory, and the spelling
     // Coordinates reads the numbers back out of. A missing number is the zero the door writes.
     private static string BlockLevelName(int? x, int? y) =>
@@ -371,21 +331,22 @@ public sealed partial class SourceRepository
     internal static void InMintedDirectory(string directory, Action write) =>
         InMintedDirectory(directory, () => { write(); return true; });
 
-    /// <summary>Writes the record's file at its placement, minting the directories above it and
-    /// removing them again if the write throws.</summary>
-    internal static string WriteAt(string modFolder, SourcePlacement placement, Func<string, string> write)
-    {
-        var path = Path.Combine(modFolder, placement.RelativePath);
-        return InMintedDirectory(Path.GetDirectoryName(path)!, () => write(path));
-    }
-
     // Where a document this plugin does not hold yet lands, from the identity alone. Null for a
     // record with no group folder: it lands inside its container's document, which its own identity
     // cannot name.
-    private SourceUnit? PlaceNewDocument(PluginKey plugin, RecordIdentity identity)
+    private SourceUnit? PlaceNewDocument(PluginKey plugin, RecordIdentity identity, CellPlacement? placement)
     {
         var dispatch = RecordTypeDispatch.For(_release);
         if (dispatch.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
+
+        // The one document that does not sit in a group folder at all. Only the placement it is put
+        // with tells an exterior cell from an interior one, which has no worldspace above it.
+        if (dispatch.IsCell(identity.RecordType) && placement is { IsInterior: false } exterior)
+        {
+            return Unit(
+                Path.Combine(ExteriorCellDirectory(plugin, identity, exterior), RecordDataFileName),
+                identity.FormKey, identity.RecordType, isEmbedded: false);
+        }
 
         // A Cell's block bucket is the one level chosen rather than derived, so it is settled — and
         // minted — before the placement it becomes part of.
@@ -393,10 +354,67 @@ public sealed partial class SourceRepository
             ? InteriorCellBlockPathIn(Path.Combine(_modFolder, RootFor(plugin.Name), groupFolder))
             : null;
 
-        var placement = PlacementFor(
+        var where = PlacementFor(
             plugin.Name, identity.RecordType, identity.FormKey, identity.EditorId, _release, blockPath);
         return Unit(
-            Path.Combine(_modFolder, placement.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false);
+            Path.Combine(_modFolder, where.RelativePath), identity.FormKey, identity.RecordType, isEmbedded: false);
+    }
+
+    // The worldspace's directory is found by its FormKey rather than composed from it: an override
+    // the destination named itself is written into, never doubled by a bare-named sibling.
+    private string ExteriorCellDirectory(PluginKey plugin, RecordIdentity identity, CellPlacement placement)
+    {
+        var levels = RecordTypeDispatch.For(_release).ExteriorCellBlockLevels;
+        if (levels.Count != ExteriorBlockLevels)
+        {
+            throw new NotSupportedException(
+                $"{_release} nests an exterior cell under {levels.Count} block levels, and the source " +
+                $"tree's layout has exactly {ExteriorBlockLevels}.");
+        }
+
+        var block = MintBlockLevel(
+            WorldspaceDirectoryHolding(plugin, placement), levels[0], placement.BlockX, placement.BlockY);
+        var subBlock = MintBlockLevel(block, levels[1], placement.SubX, placement.SubY);
+
+        return Path.Combine(
+            subBlock, LeafNameFor(FormKey.Factory(identity.FormKey), identity.EditorId, isDirectory: true));
+    }
+
+    private const int ExteriorBlockLevels = 2;
+
+    // Refuses rather than minting: a worldspace is a record, and only a caller that can mint one
+    // through the codec may put it.
+    private string WorldspaceDirectoryHolding(PluginKey plugin, CellPlacement placement)
+    {
+        if (placement.ParentWorldspace is not { } worldspace)
+            throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");
+
+        if (FindOwnUnit(Path.Combine(_modFolder, RootFor(plugin.Name)), worldspace) is not { } document)
+        {
+            throw new InvalidOperationException(
+                $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
+                "inside it has nowhere to land.");
+        }
+        return Path.GetDirectoryName(document)!;
+    }
+
+    // Minted only where it is missing, so a second cell into a block level leaves the level's own
+    // document exactly as it stands.
+    private string MintBlockLevel(string parentDirectory, Type level, int? x, int? y)
+    {
+        var directory = Path.Combine(parentDirectory, BlockLevelName(x, y));
+        if (File.Exists(Path.Combine(directory, GroupRecordDataFileName))) return directory;
+
+        var document = RecordTextCodec.BlankDocument(
+            level, _release,
+            new JsonObject
+            {
+                [RecordTypeDispatch.BlockNumberXMember] = x ?? 0,
+                [RecordTypeDispatch.BlockNumberYMember] = y ?? 0,
+            });
+        InMintedDirectory(
+            directory, () => WriteTextAtomic(Path.Combine(directory, GroupRecordDataFileName), document));
+        return directory;
     }
 
     // Interior placement carries no gameplay meaning (PlacementWalker records null block/sub for

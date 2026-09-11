@@ -87,7 +87,7 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder, out var destinationRepository)
+        if (RefuseIfBlocked(destinationPlugin, out _, out var destinationRepository)
             is { } blocked) return blocked;
 
         var release = loadOrder.Current.GameRelease;
@@ -103,7 +103,7 @@ internal sealed class WriteTargets(
 
             target = new CopyTarget(
                 source, identity,
-                new RecordCopy.Destination(destinationRepository, destinationPlugin, destinationModFolder),
+                new RecordCopy.Destination(destinationRepository, destinationPlugin),
                 release, source.Body(identity));
             return null;
         }

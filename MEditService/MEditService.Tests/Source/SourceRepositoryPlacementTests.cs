@@ -4,9 +4,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>The whole taxonomy, asserted on the tree a put leaves behind: a flat record (a quest
-/// included) is a file in its group folder, a container a directory there, an interior Cell a
-/// directory under a block pair.</summary>
+/// <summary>The whole taxonomy, on the tree a put leaves behind: a flat record is a file in its
+/// group folder, a container a directory, a Cell a directory under a block pair — inside the
+/// worldspace's when exterior.</summary>
 public sealed class SourceRepositoryPlacementTests : IDisposable
 {
     private const GameRelease Release = GameRelease.Fallout4;
@@ -106,6 +106,121 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         Assert.Equal(
             [Under("Npcs", "000800_Vendor.esp.json")],
             TreeAfterPutting("npc_", editorId: null));
+    }
+
+    private const string WorldspaceFormKey = FormKey;
+    private const string CellFormKey = "000801:Vendor.esp";
+
+    // Deliberately not derivable from the cell's grid by any floor(grid/N) rule: a put that
+    // recomputed the numbers instead of carrying the placement's own would name other directories.
+    private static readonly CellPlacement Somewhere =
+        new(WorldspaceFormKey, BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, IsInterior: false);
+
+    private IReadOnlyList<string> TreeAfterPuttingExteriorCell(
+        CellPlacement placement, string? editorId = "SomeCell", string formKey = CellFormKey)
+    {
+        SourceRepository.Over(_modFolder, Release)
+            .Put(Key, new SourceDocument(formKey, "cell", editorId, Body(formKey, editorId)), placement);
+
+        return Documents();
+    }
+
+    private string Text(string relativePath) => File.ReadAllText(Path.Combine(_modFolder, relativePath));
+
+    [Fact]
+    public void AnExteriorCell_LandsUnderTwoBlockLevelsInsideItsWorldspacesOwnDirectory()
+    {
+        TreeAfterPutting("wrld", "SomeWorld");
+        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+
+        Assert.Equal(
+            new[]
+            {
+                Path.Combine(worldspace, "RecordData.json"),
+                Path.Combine(worldspace, "3, -2", "GroupRecordData.json"),
+                Path.Combine(worldspace, "3, -2", "0, -1", "GroupRecordData.json"),
+                Path.Combine(worldspace, "3, -2", "0, -1", "SomeCell - 000801_Vendor.esp", "RecordData.json"),
+            }.Order(StringComparer.Ordinal),
+            TreeAfterPuttingExteriorCell(Somewhere));
+    }
+
+    // Pinned to the byte: the compiler reads a level's numbers back out of the document as well as
+    // its directory name, and a level numbered zero leaves the member out as its own default.
+    [Fact]
+    public void AMintedBlockLevel_CarriesThePlacementsOwnNumbers()
+    {
+        TreeAfterPutting("wrld", "SomeWorld");
+        TreeAfterPuttingExteriorCell(Somewhere);
+        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+
+        Assert.Equal(
+            "{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 3\n}",
+            Text(Path.Combine(worldspace, "3, -2", "GroupRecordData.json")));
+        Assert.Equal(
+            "{\n  \"BlockNumberY\": -1\n}",
+            Text(Path.Combine(worldspace, "3, -2", "0, -1", "GroupRecordData.json")));
+    }
+
+    [Fact]
+    public void AnExteriorCellsBlockLevels_AreNamedFromThePlacementsOwnNumbers_NotDerived()
+    {
+        TreeAfterPutting("wrld", "SomeWorld");
+
+        Assert.Contains(
+            Under(
+                "Worldspaces", "SomeWorld - 000800_Vendor.esp", "-7, 11", "4, -3",
+                "SomeCell - 000801_Vendor.esp", "RecordData.json"),
+            TreeAfterPuttingExteriorCell(
+                new CellPlacement(WorldspaceFormKey, BlockX: -7, BlockY: 11, SubX: 4, SubY: -3, IsInterior: false)));
+    }
+
+    // Track writes a block level's document with whatever metadata the source mod carried, and a cell
+    // landing in the level is no reason to respell it.
+    [Fact]
+    public void ABlockLevelTheTreeAlreadyHolds_KeepsItsOwnDocument()
+    {
+        TreeAfterPutting("wrld", "SomeWorld");
+        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+        var standing = Path.Combine(worldspace, "3, -2", "GroupRecordData.json");
+        const string HandWritten = "{\n  \"BlockNumberY\": -2,\n  \"BlockNumberX\": 3,\n  \"Timestamp\": 7\n}";
+
+        Directory.CreateDirectory(Path.Combine(_modFolder, worldspace, "3, -2"));
+        File.WriteAllText(Path.Combine(_modFolder, standing), HandWritten);
+
+        TreeAfterPuttingExteriorCell(Somewhere);
+
+        Assert.Equal(HandWritten, Text(standing));
+    }
+
+    // The worldspace is found by its FormKey, so the override the destination named itself is written
+    // into; a computed directory name would stand a bare-named sibling beside it.
+    [Fact]
+    public void ASecondExteriorCell_LandsInsideTheStandingWorldspace_AndLeavesItsOwnDocumentAlone()
+    {
+        TreeAfterPutting("wrld", "SomeWorld");
+        var worldspace = Under("Worldspaces", "SomeWorld - 000800_Vendor.esp");
+        var before = Text(Path.Combine(worldspace, "RecordData.json"));
+
+        TreeAfterPuttingExteriorCell(Somewhere);
+        var tree = TreeAfterPuttingExteriorCell(Somewhere, "OtherCell", "000802:Vendor.esp");
+
+        Assert.Equal(before, Text(Path.Combine(worldspace, "RecordData.json")));
+        Assert.Single(Directory.EnumerateDirectories(Path.Combine(_modFolder, Under("Worldspaces"))));
+        Assert.Contains(
+            Path.Combine(worldspace, "3, -2", "0, -1", "OtherCell - 000802_Vendor.esp", "RecordData.json"), tree);
+        Assert.Contains(
+            Path.Combine(worldspace, "3, -2", "0, -1", "SomeCell - 000801_Vendor.esp", "RecordData.json"), tree);
+    }
+
+    // The mint of a worldspace is the handler's, so a put with nowhere to place the cell says so
+    // rather than standing a directory the tree cannot name.
+    [Fact]
+    public void AnExteriorCell_WhoseWorldspaceTheTreeDoesNotHold_HasNoPlaceOfItsOwn()
+    {
+        var refused = Assert.Throws<InvalidOperationException>(() => TreeAfterPuttingExteriorCell(Somewhere));
+
+        Assert.Contains(WorldspaceFormKey, refused.Message, StringComparison.Ordinal);
+        Assert.Empty(Documents());
     }
 
     // A child has no document of its own, so a put with no container to splice it into has nowhere to

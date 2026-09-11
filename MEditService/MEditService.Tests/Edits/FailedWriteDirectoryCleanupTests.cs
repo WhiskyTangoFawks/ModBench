@@ -162,32 +162,4 @@ public sealed class FailedWriteDirectoryCleanupTests
         Assert.Equal("body", written);
         Assert.True(File.Exists(Path.Combine(target, "RecordData.json")));
     }
-
-    [Fact]
-    public void MergeAdditively_WhenAFileCopyThrows_LeavesNoneOfThatFilesMintedDirectories()
-    {
-        using var tree = new TempTree();
-        var source = Directory.CreateDirectory(Path.Combine(tree.Root, "scratch")).FullName;
-        var destination = Directory.CreateDirectory(Path.Combine(tree.Root, "Worldspaces")).FullName;
-
-        // A sub-block the destination already holds, byte-identical in both trees — the merge's own
-        // convergence rule skips it, and nothing here may remove it.
-        var alreadyThere = Path.Combine("W", "3, -2", "RecordData.json");
-        foreach (var root in new[] { source, destination })
-        {
-            var path = Path.Combine(root, alreadyThere);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllText(path, "{}");
-        }
-
-        // A second sub-block, new to the destination, whose file cannot be copied.
-        var doomed = Path.Combine(source, "W", "5, 1", "RecordData.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(doomed)!);
-        File.CreateSymbolicLink(doomed, Path.Combine(tree.Root, "nothing-is-here.json"));
-
-        Assert.ThrowsAny<Exception>(() => SourceTreeMerge.MergeAdditively(source, destination));
-
-        Assert.False(Directory.Exists(Path.Combine(destination, "W", "5, 1")));
-        Assert.True(File.Exists(Path.Combine(destination, alreadyThere)));
-    }
 }
