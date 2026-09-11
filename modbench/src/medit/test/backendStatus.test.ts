@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { backendStatusText, wireBackendStatus, enterEditingAcrossRestarts } from '../backendStatus';
-import { InMemoryMEditClient } from '../client';
-import { createLoadOrderSync, type LoadOrderSyncDeps } from '../../loadOrderReconcile';
+import { InMemoryMEditClient, createLoadOrderSender } from '../client';
 
 function makeViews() {
   return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn() };
@@ -100,42 +99,31 @@ describe('wireBackendStatus', () => {
 });
 
 // The whole point of the abandon: the user hears "abandoned", not a network failure they cannot
-// act on, when the backend they were talking to went away mid-reconcile.
-describe('a backend that disconnects mid-reconcile', () => {
-  it('leaves the reconcile reporting abandoned, not failed', async () => {
+// act on, when the backend they were talking to went away mid-send.
+describe('a backend that disconnects mid-send', () => {
+  it('leaves the send reporting abandoned, not failed', async () => {
     const client = new InMemoryMEditClient();
+    client.setStatus('attached');
     let putStarted!: () => void;
     const started = new Promise<void>((resolve) => { putStarted = resolve; });
-    const deps: LoadOrderSyncDeps = {
-      debounceMs: 0,
-      log: vi.fn(),
-      withProgress: (work) => work(),
-      say: vi.fn(),
-      logInfo: vi.fn(),
-      notifyNoGameDirectory: vi.fn(),
-      resolveGameDirectory: () => Promise.resolve({ dataFolder: '/data' }),
-      buildSnapshot: () => Promise.resolve([]),
-      makeProgressHandler: () => ({ onProgress: vi.fn(), lastTotalPlugins: () => 0 }),
-      // What the controller answers on each ending: a deliberate abort is 'abandoned', and a
-      // refused connection would be 'failed'.
-      putLoadOrder: (_plugins, _dataFolder, signal) => new Promise((resolve) => {
-        putStarted();
-        signal.addEventListener('abort', () => resolve({ outcome: 'abandoned' }));
-      }),
-      syncFilterState: () => Promise.resolve(),
-      applyReconciled: () => Promise.resolve(),
-      presentCrashRepairOffers: () => Promise.resolve(),
-    };
-    const sync = createLoadOrderSync(deps);
+    // What the backend answers on each ending: a deliberate abort is 'abandoned', and a refused
+    // connection would be 'failed'.
+    client.setCommandHandler('putLoadOrder', (...args) => new Promise((resolve) => {
+      putStarted();
+      args[4]!.signal!.addEventListener('abort', () => resolve({ outcome: 'abandoned' }));
+    }));
+    const sender = createLoadOrderSender(client);
     wireBackendStatus(client, {
-      setStatusText: vi.fn(), abandonReconcile: () => sync.abandon(), refreshTree: vi.fn(),
+      setStatusText: vi.fn(), abandonReconcile: () => sender.abandon(), refreshTree: vi.fn(),
     });
 
-    const outcome = sync.flush();
+    const outcome = sender.send({
+      plugins: [], gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4',
+    });
     await started;
     client.setStatus('disconnected');
 
-    expect(await outcome).toBe('abandoned');
+    expect(await outcome).toEqual({ outcome: 'abandoned' });
   });
 });
 

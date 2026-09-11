@@ -1,20 +1,20 @@
 import * as vscode from 'vscode';
-import type { MEditClient } from './medit/client';
-import { implicitMastersFrom, rebuildIndexVia, putLoadOrderVia } from './toolboxClientCalls';
+import type {
+  CrashRepairOffer, LoadOrderStatus as LoadOrderProgress, MEditClient, PluginLoadFailure,
+} from './medit/client';
+import { createLoadOrderSender, type LoadOrderSender } from './medit/client';
+import { implicitMastersFrom, rebuildIndexVia } from './toolboxClientCalls';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
-import { reportLoadOrderResult, syncActiveFilter } from './medit/loadOrderOutcome';
+import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
-import type { CrashRepairOffer, LoadOrderStatus as LoadOrderProgress, PluginLoadFailure } from './medit/client';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
-import { Instance, loadOrderSnapshotOf, wireLoadOrderSyncToInstance } from './modmanager/instance';
+import { Instance, loadOrderSnapshotOf } from './modmanager/instance';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider } from './modmanager/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
-import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
-import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
 import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
 import { makeReporter, type Reporter } from './reporter';
-import { originFolder, type LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
+import { originFolder } from './modmanager/loadOrderSnapshot';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeRefreshAll } from './refreshAll';
@@ -27,7 +27,9 @@ import { adoptMods } from './modmanager/commands/modlist';
 import { registerModAdoption } from './modmanager/modAdoptionTrigger';
 import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerModListCoreCommands } from './modmanager/modManagementCommands';
+import { deployMods, purgeMods, type DeploymentCommandResult } from './modmanager/commands/deployment';
+import { listProfiles, switchProfile } from './modmanager/commands/profile';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
 import { meditConfig, makeDetectPaths, makeDetectWinePrefix, setMo2InstanceContext } from './workspaceConfig';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
@@ -97,8 +99,8 @@ interface PluginListDeps {
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   instanceRoot: string;
-  // A getter through the single game-directory resolver, not a Promise settled once. Folds a
-  // resolution failure to undefined, which leaves an implicit row without a file to point at.
+  // A getter over the Instance value's own resolution, not a Promise settled once. Undefined
+  // when nothing resolved, which leaves an implicit row without a file to point at.
   dataFolder: () => Promise<string | undefined>;
   /** The rows the game forces on, asked of the backend (ADR-0016). */
   implicitMasters: ImplicitMasterSource;
@@ -145,8 +147,6 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     new ImplicitMasterDecorationProvider(dataFolder, () => pluginsTree.implicitMasterNames()),
   ));
   own(pluginListView.onDidChangeCheckboxState((e) => onPluginCheckboxChanged(e, pluginsTree, outputChannel)));
-  // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture.
-  own(wireLoadOrderSyncToInstance(instance, session.loadOrderSync!));
   own(registerRevealInExplorerCommand(pluginsTree, outputChannel));
   return pluginsTree;
 }
@@ -167,8 +167,10 @@ function registerPluginsNameFilter(
 interface ReconcileDeps {
   session: ExtensionSession;
   instanceRoot: string;
-  /** ADR-0013/ADR-0015: the sync reads its snapshot from this, never from a walk of its own. */
+  /** ADR-0013/ADR-0015: the snapshot is read from this, never from a walk of its own. */
   instance: Instance;
+  /** ADR-0013: the one thing a snapshot is handed to. */
+  sender: LoadOrderSender;
   client: ToolboxClient;
   /** The record browser a reconciled load order refreshes — a different provider from
    *  `session.pluginsTree`, which `applyLoadOrderToTree` below owns. */
@@ -191,57 +193,50 @@ function applySyncedFilterState(
   });
 }
 
-// ADR-0013: the sync an Instance change and a client connect both feed. 250 ms covers a burst
-// of Instance recomputes landing close together. `resolveGameDirectory`/`buildSnapshot` read one
-// Instance value together (closed over below), never two generations of it.
-function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
+// ADR-0013: one landed Instance value becomes one snapshot; the client's sender owns what
+// happens to it from there, and what comes back is reported and applied here.
+function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
   const {
-    session, instanceRoot, instance, client, recordBrowser, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
   } = deps;
-  let snapshot: ReturnType<typeof loadOrderSnapshotOf>;
-  return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer, PluginLoadFailure>({
-    debounceMs: 250,
-    log: (msg) => outputChannel.debug(msg),
-    withProgress: (work) => withPluginsViewProgress(session, work),
-    say: (message) => say(session, message),
-    logInfo: (msg) => outputChannel.info(msg),
-    notifyNoGameDirectory: () => void vscode.window.showErrorMessage(
-      'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
-    ),
-    resolveGameDirectory: () => {
-      snapshot = loadOrderSnapshotOf(instance.value);
-      return Promise.resolve(snapshot ? { dataFolder: snapshot.dataFolder } : undefined);
-    },
-    buildSnapshot: () => Promise.resolve(snapshot?.plugins ?? []),
-    makeProgressHandler: () => makeTreeProgressHandler(session),
+  const run = async (): Promise<void> => {
+    const snapshot = loadOrderSnapshotOf(instance.value);
+    if (!snapshot) {
+      outputChannel.info('[toolbox] no game directory resolved — there is no load order to hand mEdit');
+      return;
+    }
+    const { plugins, dataFolder } = snapshot;
+    const treeProgress = makeTreeProgressHandler(session);
+    outputChannel.info(`[toolbox] handing mEdit the load order snapshot (${plugins.length} plugin copies)`);
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
-    putLoadOrder: async (plugins, dataFolder, signal, onProgress) => {
-      const result = await putLoadOrderVia(
-        client, plugins, dataFolder, instanceRoot,
-        gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
-        { onProgress, signal },
-      );
-      reportLoadOrderResult(plugins, result, {
-        log: (m) => outputChannel.info(`[toolbox] ${m}`),
-        warn: (m) => void vscode.window.showWarningMessage(m),
-        error: (m) => void vscode.window.showErrorMessage(m),
-        setStatusText,
-        refreshTree: () => recordBrowser.refresh(),
-        notifyConflictsComputed,
-      });
-      return result;
-    },
-    syncFilterState: () => applySyncedFilterState(client, session, outputChannel),
-    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, totalPlugins),
-    presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
-  });
+    const result = await sender.send({
+      plugins,
+      gameDirectory: dataFolder,
+      instanceRoot,
+      gameRelease: gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
+    }, { onProgress: treeProgress.onProgress });
+    await applyLoadOrderOutcome(plugins, result, treeProgress.lastTotalPlugins(), {
+      log: (m) => outputChannel.info(`[toolbox] ${m}`),
+      warn: (m) => void vscode.window.showWarningMessage(m),
+      error: (m) => void vscode.window.showErrorMessage(m),
+      setStatusText,
+      refreshTree: () => recordBrowser.refresh(),
+      notifyConflictsComputed,
+      syncFilterState: () => applySyncedFilterState(client, session, outputChannel),
+      applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, totalPlugins),
+      presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
+    });
+  };
+  // A snapshot handed over before mEdit is attached waits on the client for the connect, so
+  // narrating it would leave the Plugins view spinning on a load nobody has asked for yet.
+  return () => (client.status === 'attached' ? withPluginsViewProgress(session, run) : run());
 }
 
 // ADR-0002: rows gain chevrons here — and *finish* gaining them here. The tree reads the
-// backend's own plugin list itself; the failures the toast inside putLoadOrder already consumed
-// ride along rather than being re-derived.
+// backend's own plugin list itself; the failures `reportLoadOrderResult` already toasted ride
+// along rather than being re-derived.
 async function applyLoadOrderToTree(
   session: ExtensionSession,
   failures: PluginLoadFailure[],
@@ -284,8 +279,8 @@ function makeTreeProgressHandler(
   };
 }
 
-// `loadOrderSync.arm()` returns a pure check — it cannot hold an `outputChannel` (ADR-0013) — so
-// each call site logs explicitly instead.
+// `loadOrderSender.arm()` returns a pure check — it cannot hold an `outputChannel` (ADR-0013) —
+// so each call site logs explicitly instead.
 function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
   outputChannel.info('[toolbox] the reconcile was abandoned before it landed; leaving the closed view alone');
 }
@@ -293,13 +288,13 @@ function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
 // ADR-0002: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(
-  session: ExtensionSession, instance: Instance, client: ToolboxClient,
-  outputChannel: vscode.LogOutputChannel, revealLog: () => void,
+  session: ExtensionSession, instance: Instance, sender: LoadOrderSender, client: ToolboxClient,
+  outputChannel: vscode.LogOutputChannel, revealLog: () => void, reconcile: () => Promise<void>,
 ): () => Promise<void> {
   const enter = async (): Promise<void> => {
-    const { abandoned } = session.loadOrderSync!.arm();
-    // Overlaps with the backend starting below, same as the tree's own first-value
-    // wait: `flush()` must read a real Instance value, never the empty pre-first-read sentinel.
+    const { abandoned } = sender.arm();
+    // Overlaps with the backend starting below, same as the tree's own first-value wait: the
+    // reconcile must read a real Instance value, never the empty pre-first-read sentinel.
     const instanceReady = instance.sequence > 0 ? Promise.resolve() : instance.refresh();
     revealLog(); // the launch can take a while; let the user watch the step log
     say(session, 'Starting backend…');
@@ -314,11 +309,115 @@ function makeEnterEditing(
       return;
     }
     await instanceReady;
-    // No game directory means nothing to build a snapshot from — don't strand the UI in an empty
-    // editing view. `flush()` is used because this path wants the outcome, not just a promise.
-    if ((await session.loadOrderSync!.flush()) === 'no-game-directory') exitEditing(session, client);
+    // No game directory means no snapshot to hand over — don't strand the UI in an empty editing
+    // view. This is the one path that asked for a load order, so this is where it is reported.
+    if (!loadOrderSnapshotOf(instance.value)) {
+      void vscode.window.showErrorMessage(
+        'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
+      );
+      exitEditing(session, client);
+      return;
+    }
+    await reconcile();
   };
   return () => withPluginsViewProgress(session, enter);
+}
+
+
+// The task type the Launch… command picks from. Nothing contributes one yet, so the pick is
+// empty until a task provider or a tasks.json entry declares this type.
+const LAUNCH_TASK_TYPE = 'modbench';
+
+interface ToolboxCommandDeps {
+  instanceRoot: string;
+  /** ADR-0015: the profile, the game directory and the file winners all come from the value. */
+  instance: Pick<Instance, 'value'>;
+  outputChannel: vscode.LogOutputChannel;
+  updateProfileDescription: () => Promise<void>;
+}
+
+// `wrote` false means the command reported its own abort, so the success message is withheld
+// rather than announcing a deployment that did not happen.
+async function runDeployment(
+  reporter: Reporter, failure: string, success: string, command: () => Promise<DeploymentCommandResult>,
+): Promise<void> {
+  let outcome: DeploymentCommandResult;
+  try {
+    outcome = await command();
+  } catch (err) {
+    outcome = { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+  }
+  if (!outcome.applied) {
+    reporter.report('error', failure, outcome.refusal);
+    return;
+  }
+  if (!outcome.wrote) return;
+  // The manifest lands under mods/, which the Instance watches — its own recompute is what moves
+  // the Toolbox's deployment row, never this command.
+  void vscode.window.showInformationMessage(success);
+}
+
+// The four instance-wide gestures the Toolbox view owns (docs/specs/containers.md rule 1),
+// registered from the box that draws them.
+function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Disposable[] {
+  const { instanceRoot, instance, outputChannel, updateProfileDescription } = deps;
+  const detectPaths = makeDetectPaths(instanceRoot);
+  const deployReporter = makeReporter(outputChannel, 'deploy');
+  const loadOrderTarget = async (): Promise<string | undefined> =>
+    meditConfig().get('game.pluginsTxtPath') || (await detectPaths())?.pluginsTxt;
+
+  return [
+    vscode.commands.registerCommand('modbench.toolbox.switchProfile', async () => {
+      const active = instance.value.activeProfile;
+      const profiles = await listProfiles(instanceRoot);
+      const picked = await vscode.window.showQuickPick(
+        profiles.map((p) => ({ label: p, description: p === active ? 'current' : undefined })),
+        { placeHolder: 'Switch profile' },
+      );
+      if (!picked || picked.label === active) return;
+      const outcome = await switchProfile(instanceRoot, picked.label);
+      if (!outcome.applied) {
+        makeReporter(outputChannel, 'switchProfile').report('error', 'Failed to switch profile.', outcome.refusal);
+        return;
+      }
+      void updateProfileDescription();
+      // ADR-0013/ADR-0015: the write lands in ModOrganizer.ini, which the Instance already
+      // watches — its own recompute reaches the load order and the Toolbox's profile row.
+    }),
+    vscode.commands.registerCommand('modbench.toolbox.deploy', () =>
+      runDeployment(deployReporter, 'Deploy failed.', 'Modbench: Mods deployed.', async () =>
+        deployMods(
+          instanceRoot,
+          instance.value.activeProfile,
+          instance.value.files,
+          instance.value.gameDirectory,
+          await loadOrderTarget(),
+          deployReporter,
+          (message, options, ...items) => vscode.window.showWarningMessage(message, options, ...items),
+        ))),
+    vscode.commands.registerCommand('modbench.toolbox.purge', () =>
+      runDeployment(deployReporter, 'Purge failed.', 'Modbench: Deployed mods purged.', () =>
+        purgeMods(instanceRoot, instance.value.gameDirectory, deployReporter))),
+    // One affordance however many executables exist, because MO2's registry decides what is
+    // launchable. Tasks are read at invocation, so an executable added in MO2 appears without a
+    // reload; resolving a binary here would lock the command to one game.
+    vscode.commands.registerCommand('modbench.toolbox.launch', async () => {
+      const tasks = await vscode.tasks.fetchTasks({ type: LAUNCH_TASK_TYPE });
+      if (tasks.length === 0) {
+        outputChannel.info('[toolbox] Launch…: no launchable tasks contributed');
+        void vscode.window.showInformationMessage(
+          'Modbench: No launch targets — add an executable to MO2\'s executables list and it appears here.',
+        );
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        tasks.map((task) => ({ label: task.name, task })),
+        { placeHolder: 'Launch' },
+      );
+      if (!picked) return;
+      await vscode.tasks.executeTask(picked.task);
+    }),
+  ];
 }
 
 
@@ -358,24 +457,18 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   }
   setMo2InstanceContext(true);
   const modListReporter = makeReporter(outputChannel, 'modList');
-  // Memoised, and invalidated only when modbench.mods.gameDirectory changes, so no consumer can
-  // disagree about which folder is current. Deliberately not an activation-scoped Promise
-  // resolved once.
   const detectPaths = makeDetectPaths(instanceRoot);
   const detectWinePrefix = makeDetectWinePrefix(instanceRoot);
-  const gameDirResolver = own(createGameDirectoryResolver(
-    instanceRoot, meditConfig, detectPaths, detectWinePrefix, vscode.workspace.onDidChangeConfiguration));
-  // Never rejects: a null resolution and a misconfigured setting both fold to undefined, so the
-  // views degrade rather than throw. Memoised by the resolver's cache generation, so a
-  // stuck-broken setting logs once instead of once per visible file.
-  const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
-    outputChannel.error(`[toolbox] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
-  // ADR-0015: the one Instance over MO2's files, its own watchers and game-directory
-  // resolution included — a second, independent resolution from the memoised one above.
+  // ADR-0015: the one Instance over MO2's files, its own watchers and its game-directory
+  // resolution included — the only resolution there is.
   const instance = own(new Instance({
     instanceRoot, log,
     config: meditConfig, detectPaths, detectWinePrefix, onConfigChange: vscode.workspace.onDidChangeConfiguration,
   }));
+  // The value's own resolution, read fresh per call: a config change is a recompute trigger like
+  // any watched file, so the folder a view reads can never be a generation behind the rows.
+  const dataFolder = (): Promise<string | undefined> =>
+    Promise.resolve(instance.value.gameDirectory?.dataFolder);
   // Fire-and-forget: watchers alone leave the value at its EMPTY sentinel until a change, so
   // this kicks off the first real read. The Plugins tree's own `sequence === 0` guard is
   // what keeps activation from being blocking here.
@@ -383,12 +476,14 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0015: rows, statuses and the overwrite count all come from the Instance value now —
   // this provider builds no index and reads no disk of its own.
   const modListProvider = own(new ModListProvider({ instance, log, instanceRoot, reporter: modListReporter }));
-  // ADR-0013: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
-  // and enterEditing below need the session slot filled first.
-  session.loadOrderSync = own(makeLoadOrderSync({
-    session, instanceRoot, instance, client, recordBrowser, outputChannel, showCrashRepairOffers,
+  // Held on the session as well, because the teardown writers outside this file abandon the
+  // send in flight through it (ADR-0013).
+  const sender = own(createLoadOrderSender(client));
+  session.loadOrderSender = sender;
+  const reconcile = makeReconcile({
+    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
-  }));
+  });
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
   // and the game. An unresolved folder, a game with no Mutagen release, and an unreachable
   // backend are one answer: unknown.
@@ -438,13 +533,18 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   };
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
-    makeEnterEditing(session, instance, client, outputChannel, () => outputChannel.show(true)),
+    makeEnterEditing(session, instance, sender, client, outputChannel, () => outputChannel.show(true), reconcile),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
+  // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture. A throw
+  // in the applied outcome is logged here, because no caller is left to hear it.
+  own(instance.subscribe(() => void reconcile().catch((e: unknown) => outputChannel.error(
+    `[toolbox] handing mEdit the load order threw: ${e instanceof Error ? e.message : String(e)}`))));
   own(modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)));
-  ownAll(own, registerModListCoreCommands(instanceRoot, modListProvider, instance, outputChannel, updateProfileDescription));
-  ownAll(own, registerDeployCommands(instanceRoot, instance, outputChannel, gameDirResolver));
-  own(registerLaunchCommand(outputChannel));
+  ownAll(own, registerModListCoreCommands(modListProvider));
+  ownAll(own, registerToolboxCommands({
+    instanceRoot, instance, outputChannel, updateProfileDescription,
+  }));
   ownAll(own, registerModInstallCommands({ instanceRoot, instance, runModAction, promptModName, warnIfFomod }));
   ownAll(own, registerModContextCommands(instanceRoot, instance, outputChannel, runModAction));
   ownAll(own, registerSeparatorCommands(instanceRoot, instance, runModAction));
@@ -463,7 +563,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
       (message, detail) => makeReporter(outputChannel, 'refresh').report('error', message, detail),
       gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
     ),
-    sendLoadOrder: () => session.loadOrderSync!.flush(),
+    sendLoadOrder: () => reconcile(),
     // The Mods tree renders the Instance's value now (ADR-0015): force a real re-read of disk,
     // not just a re-render of whatever the Instance last landed.
     invalidateMods: () => { void instance.refresh(); modListProvider.invalidate(); },

@@ -64,16 +64,14 @@ const DISPOSABLE_PRODUCERS = [
   'Instance',
   'ModListProvider',
   'PluginsTreeProvider',
-  'createGameDirectoryResolver',
   'createTreeView',
-  'makeLoadOrderSync',
+  'createLoadOrderSender',
   'onDidChangeCheckboxState',
   'registerCreateEmptyModCommand',
   'registerCreatePluginCommand',
   'registerCommand',
-  'registerDeployCommands',
+  'registerToolboxCommands',
   'registerFileDecorationProvider',
-  'registerLaunchCommand',
   'registerModContextCommands',
   'registerModInstallCommands',
   'registerModListCoreCommands',
@@ -84,7 +82,6 @@ const DISPOSABLE_PRODUCERS = [
   'registerPluginsReconcile',
   'registerSeparatorCommands',
   'subscribe',
-  'wireLoadOrderSyncToInstance',
 ];
 
 // The trailing name of a call target: `vscode.window.createTreeView` reads as `createTreeView`,
@@ -99,6 +96,8 @@ function calleeName(node: ts.CallExpression | ts.NewExpression): string | undefi
 // Owned where it is built, or handed straight back to a caller that owns it.
 function transfersOwnership(node: ts.Node): boolean {
   if (ts.isReturnStatement(node) || ts.isArrowFunction(node)) return true;
+  // An element of an array is owned by whoever owns the array, so the question moves up to it.
+  if (ts.isArrayLiteralExpression(node)) return transfersOwnership(node.parent);
   if (!ts.isCallExpression(node)) return false;
   const name = calleeName(node);
   return name === 'own' || name === 'ownAll';
@@ -138,5 +137,9 @@ describe('the Toolbox owns every disposable it constructs', () => {
     expect(unownedProducers(parse('planted.ts', `const view = ${planted}`))).toEqual(['createTreeView:1']);
     expect(unownedProducers(parse('planted.ts', `own(${planted})`))).toEqual([]);
     expect(unownedProducers(parse('planted.ts', `function f() { return ${planted} }`))).toEqual([]);
+    // A registration returned inside an array is owned by whoever owns the array; the same
+    // registration left in an array nobody hands on is not.
+    expect(unownedProducers(parse('planted.ts', `function f() { return [${planted}] }`))).toEqual([]);
+    expect(unownedProducers(parse('planted.ts', `const all = [${planted}]`))).toEqual(['createTreeView:1']);
   });
 });

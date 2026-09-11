@@ -1,8 +1,6 @@
-import type {
-  MEditClient, LoadOrderOptions, LoadOrderOutcome, LoadOrderPluginInput,
-} from './medit/client';
+import type { MEditClient } from './medit/client';
 
-// toolbox.ts's own wiring is `vscode`-heavy to import, so each of its three port-facing calls is
+// toolbox.ts's own wiring is `vscode`-heavy to import, so each of its port-facing calls is
 // pulled out here, vscode-free, testable with the in-memory adapter directly.
 
 /** ADR-0016: the rows the game forces on, asked of the backend — undefined whenever there is
@@ -21,13 +19,4 @@ export function rebuildIndexVia(
   instanceRoot: string, onFailure: (message: string, detail: string) => void, gameRelease: string,
 ): Promise<boolean> {
   return client.rebuildIndex(instanceRoot, onFailure, gameRelease);
-}
-
-/** ADR-0013: the sync's own PUT. */
-export function putLoadOrderVia(
-  client: Pick<MEditClient, 'putLoadOrder'>,
-  plugins: LoadOrderPluginInput[], dataFolder: string, instanceRoot: string, gameRelease: string,
-  options?: LoadOrderOptions,
-): Promise<LoadOrderOutcome> {
-  return client.putLoadOrder(plugins, dataFolder, instanceRoot, gameRelease, options);
 }

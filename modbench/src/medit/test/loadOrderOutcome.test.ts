@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { reportLoadOrderResult, applyFilterSyncResult, syncActiveFilter } from '../loadOrderOutcome';
+import {
+  reportLoadOrderResult, applyFilterSyncResult, syncActiveFilter, applyLoadOrderOutcome,
+} from '../loadOrderOutcome';
 import type { components } from '../generated/api';
 
 function makeDeps() {
@@ -187,5 +189,69 @@ describe('syncActiveFilter', () => {
     expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('boom'));
     expect(deps.warn).toHaveBeenCalledWith('mEdit: Could not read the active filter — treating the filter as inactive. boom');
     expect(deps.setFilterActive).toHaveBeenCalledWith(false);
+  });
+});
+
+// ADR-0013: a settled PUT is reported first, then applied. `failed` tore nothing down and
+// `abandoned` owns no view, so neither reaches the filter, the tree or a crash-repair offer.
+describe('applyLoadOrderOutcome', () => {
+  const makeApplyDeps = () => ({
+    ...makeDeps(),
+    syncFilterState: vi.fn().mockResolvedValue(undefined),
+    applyReconciled: vi.fn().mockResolvedValue(undefined),
+    presentCrashRepairOffers: vi.fn().mockResolvedValue(undefined),
+  });
+
+  it('syncs the filter state, then hands the tree the failures and the backend\'s own count', async () => {
+    const deps = makeApplyDeps();
+    const order: string[] = [];
+    deps.syncFilterState.mockImplementation(() => { order.push('syncFilterState'); return Promise.resolve(); });
+    deps.applyReconciled.mockImplementation(() => { order.push('applyReconciled'); return Promise.resolve(); });
+
+    await applyLoadOrderOutcome([plugin()], reconciled(), 42, deps);
+
+    expect(order).toEqual(['syncFilterState', 'applyReconciled']);
+    expect(deps.applyReconciled).toHaveBeenCalledWith([], 42);
+  });
+
+  it('reports the reconciled load order as well as applying it', async () => {
+    const deps = makeApplyDeps();
+
+    await applyLoadOrderOutcome([plugin()], reconciled(), 1, deps);
+
+    expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (1 plugin copies)');
+  });
+
+  it('presents crash-repair offers only when the backend found any', async () => {
+    const none = makeApplyDeps();
+    await applyLoadOrderOutcome([plugin()], reconciled(), 1, none);
+    expect(none.presentCrashRepairOffers).not.toHaveBeenCalled();
+
+    const offers = [{ plugin: 'Foo.esp', origin: 'A', reason: 'InterruptedCompile' as const }];
+    const found = makeApplyDeps();
+    await applyLoadOrderOutcome(
+      [plugin()], { outcome: 'reconciled', failures: [], crashRepairOffers: offers }, 1, found);
+    expect(found.presentCrashRepairOffers).toHaveBeenCalledWith(offers);
+  });
+
+  it('applies nothing when the send failed, and surfaces the failure', async () => {
+    const deps = makeApplyDeps();
+
+    await applyLoadOrderOutcome([plugin()], { outcome: 'failed', message: 'no backend' }, 1, deps);
+
+    expect(deps.error).toHaveBeenCalledWith('no backend');
+    expect(deps.syncFilterState).not.toHaveBeenCalled();
+    expect(deps.applyReconciled).not.toHaveBeenCalled();
+  });
+
+  it('applies nothing and says nothing when the send was abandoned', async () => {
+    const deps = makeApplyDeps();
+
+    await applyLoadOrderOutcome([plugin()], { outcome: 'abandoned' }, 1, deps);
+
+    expect(deps.error).not.toHaveBeenCalled();
+    expect(deps.setStatusText).not.toHaveBeenCalled();
+    expect(deps.syncFilterState).not.toHaveBeenCalled();
+    expect(deps.applyReconciled).not.toHaveBeenCalled();
   });
 });

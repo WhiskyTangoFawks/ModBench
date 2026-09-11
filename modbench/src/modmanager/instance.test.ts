@@ -7,15 +7,14 @@ import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from './test/cor
 import { setEnabledInText } from './mo2/modlistText';
 import { setSelectedProfileInText } from './mo2/modOrganizerIni';
 import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
-import type { ConfigChangeEvent } from './gameDirectoryResolver';
+import type { ConfigChangeEvent } from './gameDirectory';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
 import {
-  Instance, firstReadOf, loadOrderSnapshotOf, wireLoadOrderSyncToInstance,
+  Instance, firstReadOf, loadOrderSnapshotOf,
   type InstanceSubscriber, type InstanceValue, type ReadFailureListener,
 } from './instance';
-import { createLoadOrderSync } from '../loadOrderReconcile';
 import type { LoadOrderPlugin } from './loadOrderSnapshot';
 
 const roots: string[] = [];
@@ -37,7 +36,7 @@ function fakeConfig(explicit: string | undefined): ConfigLike {
   return { get: (key) => (key === 'mods.gameDirectory' ? explicit : undefined) };
 }
 
-// Same double `gameDirectoryResolver.test.ts` uses for the same event shape.
+// A hand-rolled double for vscode's ConfigurationChangeEvent subscription.
 function fakeOnConfigChange() {
   let listener: ((e: ConfigChangeEvent) => void) | undefined;
   return {
@@ -965,66 +964,3 @@ const within = <T>(pending: Promise<T>, ms: number): Promise<T> => Promise.race(
   pending,
   new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`did not settle within ${ms} ms`)), ms)),
 ]);
-
-describe('wireLoadOrderSyncToInstance', () => {
-  function fakeInstance(): Pick<Instance, 'subscribe'> & { land: () => void } {
-    const subscribers: ((value: InstanceValue, sequence: number) => void)[] = [];
-    return {
-      subscribe: (fn) => { subscribers.push(fn); return { dispose: () => {} }; },
-      land: () => { for (const fn of subscribers) fn({} as InstanceValue, 0); },
-    };
-  }
-
-  it('never calls request() before the Instance lands anything', () => {
-    const instance = fakeInstance();
-    const sync = { request: vi.fn() };
-    wireLoadOrderSyncToInstance(instance, sync);
-
-    expect(sync.request).not.toHaveBeenCalled();
-  });
-
-  it('calls request() once for each landed value', () => {
-    const instance = fakeInstance();
-    const sync = { request: vi.fn() };
-    wireLoadOrderSyncToInstance(instance, sync);
-
-    instance.land();
-    instance.land();
-
-    expect(sync.request).toHaveBeenCalledTimes(2);
-  });
-
-  // The real sync's own debounce is what turns a burst of landed values into a bounded number
-  // of PUTs — this proves the wiring feeds that debounce rather than bypassing it.
-  it('a burst of landed values coalesces to one PUT via the sync\'s own debounce', async () => {
-    vi.useFakeTimers();
-    try {
-      const instance = fakeInstance();
-      const putLoadOrder = vi.fn().mockResolvedValue({ outcome: 'reconciled', failures: [], crashRepairOffers: [] });
-      const sync = createLoadOrderSync({
-        debounceMs: 100,
-        log: vi.fn(),
-        withProgress: (work: () => Promise<void>) => work(),
-        say: vi.fn(),
-        logInfo: vi.fn(),
-        notifyNoGameDirectory: vi.fn(),
-        resolveGameDirectory: vi.fn().mockResolvedValue({ dataFolder: '/data' }),
-        buildSnapshot: vi.fn().mockResolvedValue([]),
-        makeProgressHandler: () => ({ onProgress: vi.fn(), lastTotalPlugins: () => 0 }),
-        putLoadOrder,
-        syncFilterState: vi.fn().mockResolvedValue(undefined),
-        applyReconciled: vi.fn().mockResolvedValue(undefined),
-        presentCrashRepairOffers: vi.fn().mockResolvedValue(undefined),
-      });
-      wireLoadOrderSyncToInstance(instance, sync);
-
-      instance.land(); instance.land(); instance.land(); // a burst of Instance recomputes
-
-      expect(putLoadOrder).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(100);
-      expect(putLoadOrder).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-});

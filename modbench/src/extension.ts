@@ -188,7 +188,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push({
     dispose: wireBackendStatus(meditClient, {
       setStatusText: (t) => { statusBarItem.text = t; },
-      abandonReconcile: () => session.loadOrderSync?.abandon(),
+      abandonReconcile: () => session.loadOrderSender?.abandon(),
       refreshTree: () => { void refreshMatchingPlugins(session); },
     }),
   });

@@ -15,7 +15,7 @@ import { adoptMods } from './commands/modlist';
 import { installFromFolder } from './commands/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './test/corpusFixture';
 import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
-import type { ConfigChangeEvent } from './gameDirectoryResolver';
+import type { ConfigChangeEvent } from './gameDirectory';
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
