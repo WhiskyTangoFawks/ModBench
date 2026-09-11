@@ -1,15 +1,23 @@
 using System.Timers;
+using MEditService.Core.Notifications;
 using MEditService.Core.PluginAdapter;
+using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using MEditService.Core.Source;
+using Microsoft.Extensions.Logging;
 using Timer = System.Timers.Timer;
 
 namespace MEditService.Bridge;
 
-/// <summary>ADR-0014: one recursive watcher per mod folder in the load order, tracked or not. The
-/// Source repository names what to watch; settling is per mod, so a batch is per mod while
-/// projection stays per plugin.</summary>
+/// <summary>ADR-0014 invariant 1: the driving adapter over the mod folders. One recursive watcher
+/// per mod folder in the load order, tracked or not, and the routing of whatever settles under
+/// it.</summary>
 public sealed class ModFolderWatcher : IDisposable
 {
+    private readonly LoadOrderHolder _holder;
+    private readonly IRefreshIndex _index;
+    private readonly INotificationPublisher _notifications;
+    private readonly ILogger _logger;
     private readonly TimeSpan _quiet;
     private readonly TimeSpan _maxWindow;
     private readonly object _gate = new();
@@ -17,33 +25,125 @@ public sealed class ModFolderWatcher : IDisposable
     // Keyed by mod folder alone: the unit of a question is the mod (ADR-0003).
     private readonly Dictionary<string, UnansweredExternalChange> _unanswered = new(StringComparer.Ordinal);
 
-    // Past this many documents in one window the batch is projected whole: see SourceChangeApplier's
-    // own measurement of a whole-plugin validate against a per-key refresh.
+    // Past this many documents in one window the batch is projected whole: one git listing for the
+    // copy costs less than asking git per named record.
     private const int CoalesceThreshold = 32;
 
-    /// <param name="quiet">Collapses several events into one settle. Defaults to 300ms.</param>
-    /// <param name="maxWindow">The longest a mod's batch stays open. Defaults to 2s.</param>
-    public ModFolderWatcher(TimeSpan? quiet = null, TimeSpan? maxWindow = null)
+    /// <summary>The 300ms default collapses several events into one settle; the 2s default bounds
+    /// how long a mod's batch stays open when the stream never goes quiet.</summary>
+    public ModFolderWatcher(
+        LoadOrderHolder holder,
+        IRefreshIndex index,
+        INotificationPublisher notifications,
+        ILogger logger,
+        TimeSpan? quiet = null,
+        TimeSpan? maxWindow = null)
     {
+        _holder = holder;
+        _index = index;
+        _notifications = notifications;
+        _logger = logger;
         _quiet = quiet ?? TimeSpan.FromMilliseconds(300);
         _maxWindow = maxWindow ?? TimeSpan.FromSeconds(2);
     }
 
-    /// <summary>ADR-0014: what the projector is handed once a mod's batch settles.</summary>
-    public Action<IReadOnlyList<SourceChangeEvent>>? SourceChanged { get; set; }
+    /// <summary>The watch set the load order now implies, and the check for everything that changed
+    /// while no watcher ran. Returns what only a repair can answer for.</summary>
+    public IReadOnlyList<CrashRepairOffer> Rearm(LoadOrder order)
+    {
+        // A watch must never outlive the load order that asked for it, or a plugin the load order
+        // does not hold would keep projecting itself into the Index.
+        UnwatchAll();
+        UnwatchAllIndexed();
 
-    /// <summary>Raised once an external-change question is queued, whichever trigger found it.</summary>
-    public Action<UnansweredExternalChange>? ExternalChangeReported { get; set; }
+        var offers = new List<CrashRepairOffer>();
+        // Grouped by mod folder: the classifier runs once per mod (ADR-0003), covering every tracked
+        // plugin the mod holds in one pass, exactly as the live watcher's settle does.
+        var byModFolder = new Dictionary<string, List<(string Name, string Origin, byte[] Bytes)>>(StringComparer.Ordinal);
+        // A mod with a plugin nobody could hash has no whole verdict, so nothing of its is cleared.
+        var unreadable = new HashSet<string>(StringComparer.Ordinal);
 
-    /// <summary>ADR-0015 invariant 4: an OS overflow on a tracked plugin's classification route.</summary>
-    public Action<string, string>? WatchOverflowed { get; set; }
+        foreach (var plugin in order.Copies)
+        {
+            var key = plugin.Key;
+            if (ModFolders.TrackedOf(order, key) is not { } modFolder)
+            {
+                // ADR-0009: every other indexed binary, the game's Data/ masters included, gets an
+                // indexed-binary watch: a write by another tool is answered by re-reading it, not by
+                // asking the user. No indexed hash, nothing to compare against.
+                if (_index.IndexedContentHash(key) is { } contentHash)
+                    WatchIndexed(plugin.Name, plugin.Origin, plugin.Path, contentHash);
+                continue;
+            }
 
-    /// <summary>The indexed-binary counterpart of <see cref="WatchOverflowed"/>.</summary>
-    public Action<string, string>? IndexedWatchOverflowed { get; set; }
+            Watch(modFolder, SourceRepository.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
 
-    /// <summary>ADR-0009. A delegate, not an event, because the handler answers whether it applied: a
-    /// false answer keeps the remembered hash so the next settle retries.</summary>
-    public Func<IndexedBinaryEvent, bool>? IndexedBinaryChanged { get; set; }
+            byte[] bytes;
+            try
+            {
+                bytes = File.ReadAllBytes(plugin.Path);
+            }
+            catch (IOException ex)
+            {
+                // Nothing to hash: an unreadable tracked binary is a repair offer, not classified,
+                // and gets no classification watch.
+                _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
+                offers.Add(new CrashRepairOffer(plugin.Name, plugin.Origin, CrashRepairReason.MissingOrUnreadableBinary));
+                unreadable.Add(modFolder);
+                continue;
+            }
+
+            if (!byModFolder.TryGetValue(modFolder, out var entries))
+                byModFolder[modFolder] = entries = [];
+            entries.Add((plugin.Name, plugin.Origin, bytes));
+
+            Watch(modFolder, plugin.Name, plugin.Path);
+        }
+
+        foreach (var (modFolder, entries) in byModFolder)
+            ClassifyAtLoad(modFolder, entries, unreadable, offers);
+
+        return offers;
+    }
+
+    private void ClassifyAtLoad(
+        string modFolder,
+        List<(string Name, string Origin, byte[] Bytes)> entries,
+        HashSet<string> unreadable,
+        List<CrashRepairOffer> offers)
+    {
+        switch (ExternalChangeClassifier.ClassifyMod(modFolder, [.. entries.Select(e => (e.Name, e.Bytes))]))
+        {
+            case ExternalChangeClassification.ExternalChange change:
+                if (_logger.IsEnabled(LogLevel.Information))
+                    _logger.LogInformation("External change detected at load for {ModFolder}", modFolder);
+                ReportExternalChange(modFolder, change);
+                break;
+            case ExternalChangeClassification.CrashRecovery:
+                // Never ReportExternalChange — the two prompts must never both fire for one event,
+                // and this one already routes to the repair offer instead.
+                foreach (var entry in entries)
+                {
+                    if (_logger.IsEnabled(LogLevel.Information))
+                        _logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", entry.Name, entry.Origin);
+                    offers.Add(new CrashRepairOffer(entry.Name, entry.Origin, CrashRepairReason.InterruptedCompile));
+                }
+                break;
+            case null when !unreadable.Contains(modFolder):
+                // The classifier is the authority and the marker only its cache (ADR-0007
+                // amendment): a question whose change is gone is not asked again, or kept.
+                ExternalChangeDeferral.Clear(modFolder);
+                break;
+        }
+    }
+
+    /// <summary>Track's own start: every loaded copy in the folder being tracked is watched only
+    /// after the tree is written and committed, so Track's burst is projected like any other.</summary>
+    public void WatchTracking(string modFolder, string origin)
+    {
+        foreach (var copy in ModFolders.PluginsOfOrigin(_holder.Current, origin))
+            Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
+    }
 
     /// <summary>Registers <paramref name="pluginName"/> for classification: self-echo, crash recovery
     /// or a genuine external change, decided at settle by <see cref="ExternalChangeClassifier"/>.
@@ -61,9 +161,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>The Source watcher's own registration: a path under <paramref name="sourceRoot"/>
-    /// refreshes the Index by key; a ref move refreshes the whole plugin.</summary>
-    public void Watch(string modFolder, string sourceRoot, string pluginName, string origin)
+    /// <summary>The Source registration: a path under <paramref name="sourceRoot"/> refreshes the
+    /// Index by key; a ref move refreshes the whole plugin.</summary>
+    internal void Watch(string modFolder, string sourceRoot, string pluginName, string origin)
     {
         lock (_gate)
         {
@@ -76,7 +176,7 @@ public sealed class ModFolderWatcher : IDisposable
 
     /// <summary>ADR-0009: every other indexed binary, tracked or not, re-reads on change with no
     /// question asked. <paramref name="contentHash"/> is the baseline a settle compares against.</summary>
-    public void WatchIndexed(string pluginName, string origin, string pluginPath, string contentHash)
+    internal void WatchIndexed(string pluginName, string origin, string pluginPath, string contentHash)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException($"'{pluginPath}' has no containing directory.", nameof(pluginPath));
@@ -94,10 +194,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>The copy has no source to project from: its repository is gone, or the load order
-    /// dropped it. Clears only source routing; a classification or indexed registration on the same
-    /// plugin is untouched.</summary>
-    public void Unwatch(string pluginName, string origin)
+    // The copy has no source to project from: its repository is gone, or the load order dropped it.
+    // Clears only source routing; a classification or indexed registration is untouched.
+    private void Unwatch(string pluginName, string origin)
     {
         lock (_gate)
         {
@@ -112,9 +211,7 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>Called before every reconcile's own re-registration, so a dropped plugin's source
-    /// routing never outlives the load order that named it.</summary>
-    public void UnwatchAll()
+    private void UnwatchAll()
     {
         lock (_gate)
         {
@@ -124,9 +221,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>The indexed-binary counterpart of <see cref="UnwatchAll"/>: called before every
-    /// reconcile re-decides which plugins have a known baseline to watch.</summary>
-    public void UnwatchAllIndexed()
+    /// <summary>The indexed-binary counterpart of the source unwatch: every reconcile re-decides
+    /// which plugins have a known baseline to watch.</summary>
+    internal void UnwatchAllIndexed()
     {
         lock (_gate)
         {
@@ -153,8 +250,8 @@ public sealed class ModFolderWatcher : IDisposable
     }
 
     /// <summary>Both triggers — the live watch and the load-time check — get
-    /// <see cref="ExternalChangeDeferral"/>'s marker here.</summary>
-    public void ReportExternalChange(string modFolder, ExternalChangeClassification.ExternalChange classification)
+    /// <see cref="ExternalChangeDeferral"/>'s marker here, and publish the same question.</summary>
+    internal void ReportExternalChange(string modFolder, ExternalChangeClassification.ExternalChange classification)
     {
         UnansweredExternalChange change;
         lock (_gate)
@@ -169,8 +266,28 @@ public sealed class ModFolderWatcher : IDisposable
             change = new UnansweredExternalChange(modFolder, classification);
             _unanswered[modFolder] = change;
         }
-        RaiseSafely(() => ExternalChangeReported?.Invoke(change));
+        RaiseSafely(() => PublishPending(change));
     }
+
+    // The watch carries only the bare mod folder, so origin is resolved here, off the load order the
+    // kernel holds.
+    private void PublishPending(UnansweredExternalChange change)
+    {
+        var classification = change.Classification;
+        _notifications.Publish(new ExternalChangePendingNotification(
+            OriginOf(_holder.Current, change.ModFolder), classification.Plugins, classification.TrackedFiles,
+            classification.MetaChanged, classification.OldVersion, classification.NewVersion));
+    }
+
+    // A change's own Plugins list can be empty (a tracked-file-only change), so origin resolves off
+    // the mod folder alone.
+    private static string OriginOf(LoadOrder loadOrder, string modFolder) =>
+        loadOrder.Copies.FirstOrDefault(copy => ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
+
+    private static string OriginOf(LoadOrder loadOrder, string modFolder, string pluginName) =>
+        loadOrder.Copies.FirstOrDefault(copy =>
+            copy.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
+            && ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
     // Called under _gate. Lazily arms the mod's watcher, recursive only once needed — the game's
     // Data/ folder never needs it. A vanished mod folder gets no watch, and no throw.
@@ -256,9 +373,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    // An operating-system overflow drops events, so nothing this mod's watch saw can be trusted.
-    // A vanished root raises the same event, with nothing left to watch.
-    private void Interrupted(string modFolder)
+    /// <summary>An operating-system overflow drops events, so nothing this mod's watch saw can be
+    /// trusted. A vanished root raises the same event, with nothing left to watch.</summary>
+    internal void Interrupted(string modFolder)
     {
         List<(string Name, string? Origin, bool ClassificationArmed, bool IndexedArmed)> targets;
         lock (_gate)
@@ -281,8 +398,33 @@ public sealed class ModFolderWatcher : IDisposable
 
         foreach (var (name, origin, classificationArmed, indexedArmed) in targets)
         {
-            if (classificationArmed) RaiseSafely(() => WatchOverflowed?.Invoke(modFolder, name));
-            if (indexedArmed) RaiseSafely(() => IndexedWatchOverflowed?.Invoke(name, origin ?? ""));
+            if (!classificationArmed && !indexedArmed) continue;
+            // The registration first: a copy the load order has since dropped still knows the origin
+            // its watch was armed with. The load order answers for a classification-only watch,
+            // which carries none.
+            var key = new PluginKey(name, origin ?? OriginOf(_holder.Current, modFolder, name));
+            RaiseSafely(() => ValidateAfterOverflow(key));
+        }
+    }
+
+    /// <summary>ADR-0015 invariant 4: an OS overflow dropped events, so this copy is compared by
+    /// content hash rather than trusted.</summary>
+    internal void ValidateAfterOverflow(PluginKey key)
+    {
+        try
+        {
+            foreach (var report in _index.ValidateIndex(key))
+            {
+                foreach (var failure in report.Failures)
+                    _logger.LogWarning("Validating {Plugin} after a watch overflow: {Failure}", key.Name, failure);
+                if (report.NeedsRebuild) _notifications.Publish(new PluginChangedNotification(key, _index.Sequence));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not validate {Plugin} after a watch overflow; it will be re-checked at the next reconcile",
+                key.Name);
         }
     }
 
@@ -344,9 +486,96 @@ public sealed class ModFolderWatcher : IDisposable
             }
         }
 
-        if (batch.Count > 0) RaiseSafely(() => SourceChanged?.Invoke(batch));
-        if (classify) SettleExternalChange(mod.ModFolder, classificationArmed);
+        if (batch.Count > 0) RaiseSafely(() => ProjectSourceBatch(batch));
+        if (classify) RaiseSafely(() => SettleExternalChange(mod.ModFolder, classificationArmed));
         foreach (var plugin in indexedTouched) SettleIndexed(plugin);
+    }
+
+    /// <summary>ADR-0015 invariant 2: everything one mod settled together, under one gate
+    /// acquisition and one projection scope, so a client that awaits once sees the whole
+    /// batch.</summary>
+    internal void ProjectSourceBatch(IReadOnlyList<SourceChangeEvent> batch)
+    {
+        // A closed Index has nowhere for a batch to land, and the next reconcile re-derives whatever
+        // settled while it was shut.
+        if (_index.Status.State is LoadOrderState.None) return;
+
+        try
+        {
+            using var _ = _index.WriteGate.Enter();
+            using var projection = _index.BeginProjection();
+            foreach (var change in batch) ProjectOne(change);
+        }
+        catch (IndexWriteGateTimeoutException ex)
+        {
+            // ADR-0019: never swallowed. The timer callback has no caller to propagate to, so the
+            // whole batch is logged rather than lost; it is re-checked the same way a single
+            // plugin's own catch below re-checks its.
+            var plugins = string.Join(", ", batch.Select(c => $"{c.PluginName} ({c.Origin})"));
+            _logger.LogWarning(ex,
+                "Could not project the source change batch for {Plugins}; it will be re-checked at the " +
+                "next signal and at the next reconcile", plugins);
+        }
+    }
+
+    private void ProjectOne(SourceChangeEvent change)
+    {
+        var key = new PluginKey(change.PluginName, change.Origin);
+        try
+        {
+            // MO2, git and the user can delete a repository at any moment, and a mod that has none is
+            // untracked rather than broken: there is nothing left to project from.
+            if (!SourceRepository.IsTracked(change.ModFolder))
+            {
+                Unwatch(change.PluginName, change.Origin);
+                return;
+            }
+
+            if (change.Scope == SourceChangeScope.Documents && FormKeysOf(change) is { } formKeys)
+            {
+                _index.RefreshKeys(key, formKeys);
+                return;
+            }
+
+            ValidateWholeCopy(key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not project the source change to {Plugin} ({Origin}); it will be re-checked at the " +
+                "next signal and at the next reconcile", change.PluginName, change.Origin);
+        }
+    }
+
+    // The answer to a ref move, a dropped event and a burst too wide to name keys for: one git
+    // listing for the whole copy, where a per-key refresh asks git per record.
+    private void ValidateWholeCopy(PluginKey key)
+    {
+        foreach (var report in _index.ValidateIndex(key))
+        {
+            foreach (var failure in report.Failures)
+                _logger.LogWarning("Validating {Plugin} after a source change: {Failure}", key.Name, failure);
+
+            // ADR-0014: a re-derived copy has too many rows to name, so this names the plugin.
+            // Announced rather than published, so its sequence is the one the batch landed on.
+            if (report.NeedsRebuild)
+                _index.Announce(() => _notifications.Publish(new PluginChangedNotification(key, _index.Sequence)));
+        }
+    }
+
+    // Null when any path in the batch names no key: an unknown layout, a document that has gone or one
+    // that cannot be read is a whole-plugin question, never a guess.
+    private static List<string>? FormKeysOf(SourceChangeEvent change)
+    {
+        var formKeys = new List<string>();
+        foreach (var path in change.Paths)
+        {
+            if (SourceRepository.CarriesNoRecord(path)) continue;
+            if (SourceRepository.FormKeyDeclaredBy(path, change.ModFolder, change.PluginName) is not { } formKey)
+                return null;
+            formKeys.Add(formKey);
+        }
+        return formKeys;
     }
 
     // One classification per mod per settle. Every armed plugin is hashed, not only the touched
@@ -381,11 +610,11 @@ public sealed class ModFolderWatcher : IDisposable
     }
 
     // Content, never events: identical bytes raise nothing, so a touch is free. The remembered hash
-    // moves ahead of the handler and is put back on failure only if nothing newer has landed.
+    // moves ahead of the projection and is put back on failure only if nothing newer has landed.
     private void SettleIndexed(PluginEntry plugin)
     {
         var pluginPath = plugin.Path!;
-        IndexedBinaryEvent notification;
+        IndexedBinaryEvent settled;
         string? previousHash;
         string? reportedHash;
         lock (_gate)
@@ -399,35 +628,61 @@ public sealed class ModFolderWatcher : IDisposable
                 // without this every one of them would remove the same rows again.
                 if (previousHash == null) return;
                 reportedHash = null;
-                notification = new IndexedBinaryEvent(
-                    plugin.Name, plugin.Origin ?? "", pluginPath, IndexedBinaryChange.Deleted);
+                settled = new IndexedBinaryEvent(plugin.Name, plugin.Origin ?? "", IndexedBinaryChange.Deleted);
             }
             else
             {
                 if (PluginBinaryHash.OfFile(pluginPath) is not { } observed || observed == previousHash) return;
                 reportedHash = observed;
-                notification = new IndexedBinaryEvent(
-                    plugin.Name, plugin.Origin ?? "", pluginPath, IndexedBinaryChange.Modified);
+                settled = new IndexedBinaryEvent(plugin.Name, plugin.Origin ?? "", IndexedBinaryChange.Modified);
             }
 
             plugin.RememberedHash = reportedHash;
         }
 
-        bool applied;
-        try
-        {
-            applied = IndexedBinaryChanged?.Invoke(notification) ?? true;
-        }
-        catch
-        {
-            applied = false;
-        }
-
-        if (applied) return;
+        if (ProjectIndexedBinary(settled)) return;
 
         lock (_gate)
         {
             if (plugin.RememberedHash == reportedHash) plugin.RememberedHash = previousHash;
+        }
+    }
+
+    // ADR-0009's runtime half. Nothing escapes it: it runs on a timer thread where an exception is a
+    // process crash, and a false answer puts the remembered hash back.
+    private bool ProjectIndexedBinary(IndexedBinaryEvent change)
+    {
+        var key = new PluginKey(change.PluginName, change.Origin);
+        try
+        {
+            switch (change.Change)
+            {
+                case IndexedBinaryChange.Modified:
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation(
+                            "{Plugin} ({Origin}) changed on disk; re-indexing it", change.PluginName, change.Origin);
+                    }
+                    _index.ReindexPlugin(key).GetAwaiter().GetResult();
+                    break;
+
+                case IndexedBinaryChange.Deleted:
+                    _index.UnindexPlugin(key);
+                    break;
+            }
+
+            // ADR-0014: the plugin watcher's own re-index, so the whole plugin changed rather than
+            // named rows — the same event Track's own reindex would raise if it went through here.
+            _notifications.Publish(new PluginChangedNotification(key, _index.Sequence));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not project the on-disk change to {Plugin} ({Origin}) into the index; it will be retried " +
+                "the next time that file settles, and re-checked at the next reconcile",
+                change.PluginName, change.Origin);
+            return false;
         }
     }
 
@@ -521,15 +776,14 @@ public sealed class ModFolderWatcher : IDisposable
     }
 }
 
-public enum IndexedBinaryChange
+internal enum IndexedBinaryChange
 {
     Modified,
     Deleted,
 }
 
-/// <summary>ADR-0009: one indexed binary's disk event. A bare (name, origin) pair rather than a
-/// PluginKey: this assembly may not reference the load order or record-index namespaces.</summary>
-public sealed record IndexedBinaryEvent(string PluginName, string Origin, string PluginPath, IndexedBinaryChange Change);
+/// <summary>ADR-0009: one indexed binary's disk event, as the settle observed it.</summary>
+internal sealed record IndexedBinaryEvent(string PluginName, string Origin, IndexedBinaryChange Change);
 
 /// <summary>One mod's unanswered external-change question, as the watcher (or the load-time
 /// check, via the same classification) last observed it — the notification's own source.</summary>
@@ -537,14 +791,12 @@ public sealed record UnansweredExternalChange(string ModFolder, ExternalChangeCl
 
 /// <summary>Which projection the batch asks for: the named documents, or the whole copy when a ref
 /// moved, the operating system dropped events, or the burst was wider than one batch is worth.</summary>
-public enum SourceChangeScope
+internal enum SourceChangeScope
 {
     Documents,
     WholePlugin,
 }
 
-/// <summary>ADR-0014: one settled batch of source changes to one plugin copy. A bare (name, origin)
-/// pair rather than a PluginKey: this assembly may not reference the load order or record-index
-/// namespaces.</summary>
-public sealed record SourceChangeEvent(
+/// <summary>ADR-0014: one settled batch of source changes to one plugin copy.</summary>
+internal sealed record SourceChangeEvent(
     string PluginName, string Origin, string ModFolder, SourceChangeScope Scope, IReadOnlyList<string> Paths);

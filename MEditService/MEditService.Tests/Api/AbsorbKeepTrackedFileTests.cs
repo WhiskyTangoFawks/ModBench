@@ -63,7 +63,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
     }
 
     private static (ILoggerFactory factory, ModFolderWatcher watcher) Backend() =>
-        (LoggerFactory.Create(_ => { }), new ModFolderWatcher());
+        (LoggerFactory.Create(_ => { }), TestWatcher.Inert());
 
     [Fact]
     public void Absorb_OverAHandChangedAndADeletedAsset_CommitsBothWithTheNewPlugin_TrailersAndRebase()

@@ -121,11 +121,9 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         // Short, because a test waits on the projection rather than on the clock; the composition
         // root's own window is 300 ms.
-        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceChanges = new SourceChangeApplier(Index, holder, Index.WriteGate, _watcher, new InMemoryNotificationPublisher(), NullLogger.Instance);
-        _watcher.SourceChanged = sourceChanges.Apply;
-        Index.Reconciled = sourceChanges.RefreshWatches;
-        sourceChanges.RefreshWatches();
+        _watcher = TestWatcher.Over(
+            holder, Index, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(100));
+        _watcher.Rearm(holder.Current);
     }
 
     public string ModFolderOf(PluginKey plugin) => ModFolders.Of(LoadOrder, plugin)!;

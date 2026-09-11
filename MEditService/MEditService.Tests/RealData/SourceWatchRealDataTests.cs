@@ -47,13 +47,10 @@ public sealed class SourceWatchRealDataFixture : IDisposable
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
-        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(150));
-        var sourceChanges = new SourceChangeApplier(Index, holder, Index.WriteGate, _watcher, Notifications, NullLogger.Instance);
-        _watcher.SourceChanged = sourceChanges.Apply;
-        Index.Reconciled = sourceChanges.RefreshWatches;
-        sourceChanges.RefreshWatches();
+        _watcher = TestWatcher.Over(holder, Index, Notifications, TimeSpan.FromMilliseconds(150));
+        _watcher.Rearm(holder.Current);
 
-        new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = sourceChanges.WatchTracking }
+        new TrackService(NullLogger<TrackService>.Instance) { RepositoryCreated = _watcher.WatchTracking }
             .TrackAsync(Index, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

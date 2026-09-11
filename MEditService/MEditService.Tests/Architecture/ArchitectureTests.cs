@@ -239,7 +239,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void TheIndexSurface_HandsOutNoLoadOrder()
     {
-        var offenders = new[] { typeof(IndexProjector), typeof(IQueryIndex), typeof(IRecordReads) }
+        var offenders = new[] { typeof(IndexProjector), typeof(IQueryIndex), typeof(IRefreshIndex), typeof(IRecordReads) }
             .SelectMany(type => type.GetMembers(EveryMember).Select(member => (Type: type, Member: member)))
             .Where(m => VisibleOutsideItsType(m.Member))
             .Where(m => m.Member.Name == "LoadOrder" || ReturnsALoadOrder(m.Member))
