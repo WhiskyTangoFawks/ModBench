@@ -44,7 +44,7 @@ public sealed class KeepExternalChangeHandler
             .ToList();
         if (colliding.Count > 0 || stagedAlready.Count > 0)
         {
-            return ExternalChangeLandResult.Refused(CollisionMessage(plugins, modFolder, colliding, stagedAlready));
+            return ExternalChangeLandResult.Refused(CollisionMessage(plugins, colliding, stagedAlready));
         }
 
         var landed = new List<string>();
@@ -79,7 +79,7 @@ public sealed class KeepExternalChangeHandler
     // The mod's own name travels on RegisteredCopy.Origin already (ADR-0009): every copy in
     // plugins shares it, so nothing here re-derives a name from the folder path.
     private static string CollisionMessage(
-        IReadOnlyList<RegisteredCopy> plugins, string modFolder, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
+        IReadOnlyList<RegisteredCopy> plugins, List<TouchedRecord> colliding, List<TrackedFileChange> stagedAlready)
     {
         var parts = new List<string>();
         if (colliding.Count > 0)
@@ -87,8 +87,7 @@ public sealed class KeepExternalChangeHandler
         if (stagedAlready.Count > 0)
             parts.Add($"tracked file(s) already dirty in the index — {string.Join(", ", stagedAlready.Select(c => c.RelativePath))}");
 
-        var modName = plugins.Count > 0 ? plugins[0].Origin : modFolder;
-        return $"{modName} has uncommitted working-tree changes on " +
+        return $"{plugins[0].Origin} has uncommitted working-tree changes on " +
             $"{string.Join(" and ", parts)}. Commit or revert them, then answer the external-change question again.";
     }
 
