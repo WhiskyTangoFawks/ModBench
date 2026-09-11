@@ -95,7 +95,8 @@ public sealed class RenumberRecordHandler
             // Unfiltered so an unexpected fault is rolled back and disclosed rather than falling
             // through to the endpoint's InvalidOperationException handler ("no usable load order").
             // Rethrown as IOException so it reaches the client as the same 500 every write fault does.
-            throw new IOException(RollBackFailedRenumber(transaction, plugin, rewrites, formKey, targetFormKey, ex), ex);
+            throw new IOException(
+                RollBackFailedRenumber(transaction, repository, rewrites, formKey, targetFormKey, ex), ex);
         }
 
         if (_logger.IsEnabled(LogLevel.Information))
@@ -110,10 +111,11 @@ public sealed class RenumberRecordHandler
     // Only the trees are put back (ADR-0007); the Source watcher lands the restored files. Paths
     // are relative to the mod folder, the form the Source Control panel lists.
     private string RollBackFailedRenumber(
-        SourceTransaction transaction, PluginKey plugin, IReadOnlyList<ComputedRewrite> rewrites,
+        SourceTransaction transaction, SourceRepository repository, IReadOnlyList<ComputedRewrite> rewrites,
         string oldFormKey, string newFormKey, Exception cause)
     {
-        var unrestored = transaction.Rollback();
+        var (unrestored, relativeError) =
+            transaction.Rollback(cause, rewrites.Select(r => r.Repository).Append(repository));
         if (unrestored.Count > 0)
         {
             _logger.LogWarning(
@@ -141,18 +143,9 @@ public sealed class RenumberRecordHandler
             (UnrestoredReason.RestoreFailed, "could not be restored"),
         }.Select(r => NamedPaths(unrestored, r.Item1, r.Item2)).OfType<string>());
 
-        var modFolders = rewrites.Select(r => r.ModFolder).Append(ModFolders.Of(_loadOrder.Current, plugin))
-            .OfType<string>().Distinct().ToList();
-        sentences.Add($"Underlying error: {RelativeToModFolders(cause.Message, modFolders)}");
+        sentences.Add($"Underlying error: {relativeError}");
         return string.Join(" ", sentences);
     }
-
-    // The cause is the only thing that says why, so it is relativized rather than dropped; the log
-    // keeps the untouched original. Textual, since an exception message is prose.
-    private static string RelativeToModFolders(string message, IReadOnlyList<string> modFolders) =>
-        modFolders
-            .OrderByDescending(f => f.Length)
-            .Aggregate(message, (text, folder) => text.Replace(folder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal));
 
     private static string? NamedPaths(
         IReadOnlyList<UnrestoredPath> unrestored, UnrestoredReason reason, string phrase)
@@ -164,10 +157,7 @@ public sealed class RenumberRecordHandler
     // Owner is the identity of the document this rewrite lands as: the referencer's own, or its
     // container's when the referencer is embedded. Text is that whole document, remapped.
     private sealed record ComputedRewrite(
-        PluginKey Plugin, SourceRepository Repository, RecordIdentity Owner, string Text)
-    {
-        internal string ModFolder => Repository.ModFolder;
-    }
+        PluginKey Plugin, SourceRepository Repository, RecordIdentity Owner, string Text);
 
     // One document at a time, which is what the scan answers with: a container holding several
     // referencers is remapped once. The typed remap moves links and only links, and the
@@ -360,19 +350,12 @@ public sealed class RenumberRecordHandler
             return;
         }
 
-        // A container is moved whole rather than recreated from scratch: a worldspace's block subtree
-        // travels with it rather than being orphaned, which no put-then-remove pair can express.
+        // A container moves whole rather than being recreated from scratch, its block subtree with it.
+        // The move lands the directory at the new leaf, so the put that follows finds and replaces it.
         if (unit.IsDirectoryPerRecord)
         {
-            var oldLeafPath = Path.GetDirectoryName(unit.FullPath)!;
-            var newLeafPath = Path.Combine(
-                Path.GetDirectoryName(oldLeafPath)!,
-                SourceRepository.LeafNameFor(FormKey.Factory(newFormKey), held.EditorId, isDirectory: true));
-
-            transaction.Move(repository.ModFolder, oldLeafPath, newLeafPath);
-            var writePath = Path.Combine(newLeafPath, SourceRepository.RecordDataFileName);
-            transaction.Write(
-                repository.ModFolder, writePath, () => SourceRepository.WriteTextAtomic(writePath, text));
+            transaction.Move(repository, plugin, held, newFormKey);
+            transaction.Put(repository, plugin, new SourceDocument(written.FormKey, written.RecordType, written.EditorId, text));
             return;
         }
 

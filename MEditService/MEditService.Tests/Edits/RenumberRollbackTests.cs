@@ -99,9 +99,12 @@ public sealed class RenumberRollbackTests
         var before = TreeSnapshot.Of(fixture.ModFolder);
         var statusBefore = fixture.GitStatus();
 
-        Assert.Throws<IOException>(() =>
+        var thrown = Assert.Throws<IOException>(() =>
             fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Worldspace.ToString(), NewWorldspaceFormKey));
 
+        // The occupied check's own words, not a message the filesystem happened to produce: the
+        // check is what this test is watching, not whatever Directory.Move would have said instead.
+        Assert.Contains("nowhere to move to", thrown.Message, StringComparison.Ordinal);
         Assert.Equal(before, TreeSnapshot.Of(fixture.ModFolder));
         Assert.Equal(statusBefore, fixture.GitStatus());
     }

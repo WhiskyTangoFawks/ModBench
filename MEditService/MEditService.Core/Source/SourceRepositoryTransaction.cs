@@ -26,9 +26,9 @@ internal enum UnrestoredReason
 internal sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
-/// <summary>A batch of puts and removes across one or more repositories, applied all or restored all
-/// (ADR-0007). Conditional by design: a path something else has written since is preserved and
-/// reported, never reverted.</summary>
+/// <summary>A batch of puts, removes and moves, each by identity, across one or more repositories,
+/// applied all or restored all (ADR-0007). Conditional by design: a path something else has written
+/// since is preserved and reported, never reverted.</summary>
 internal sealed class SourceTransaction
 {
     /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
@@ -105,26 +105,6 @@ internal sealed class SourceTransaction
 
     private readonly List<Operation> _log = [];
 
-    /// <summary>Captures <paramref name="path"/>'s content before and after the write, whether it returned
-    /// or threw. Minting goes through <see cref="SourceRepository.InMintedDirectory{T}"/> as any source
-    /// write does.</summary>
-    internal void Write(string modFolder, string path, Action write)
-    {
-        var directory = System.IO.Path.GetDirectoryName(path)!;
-        var before = Snapshot(path);
-        var minted = SourceRepository.LevelsMintedBy(directory);
-        try
-        {
-            SourceRepository.InMintedDirectory(directory, write);
-        }
-        finally
-        {
-            // Ahead of the write it enabled, so the reverse pass empties the directory before taking it.
-            RecordMint(modFolder, minted);
-            _log.Add(new FileState(modFolder, path, before, Snapshot(path)));
-        }
-    }
-
     // A directory this batch minted is the batch's to take back: rolling the file away and leaving the
     // directory standing leaves an empty record directory, which fails the next ingest.
     private void RecordMint(string modFolder, IReadOnlyList<string> minted)
@@ -132,28 +112,12 @@ internal sealed class SourceTransaction
         if (minted.Count > 0) _log.Add(new MintedDirectories(modFolder, minted));
     }
 
-    /// <summary>Deletes <paramref name="path"/>, holding its bytes so the rollback can put the file
-    /// back. The same <see cref="FileState"/> shape a write records — a delete is just the one whose
-    /// after-state is "absent".</summary>
-    internal void Delete(string modFolder, string path)
+    /// <summary>Moves a container to <paramref name="newFormKey"/>'s leaf and records what moved. A
+    /// no-op — nothing found, not a container, or already at that leaf — logs nothing.</summary>
+    internal void Move(SourceRepository repository, PluginKey plugin, RecordIdentity identity, string newFormKey)
     {
-        var before = Snapshot(path);
-        try
-        {
-            File.Delete(path);
-        }
-        finally
-        {
-            _log.Add(new FileState(modFolder, path, before, Snapshot(path)));
-        }
-    }
-
-    /// <summary>Recorded only once the move has happened: <c>Directory.Move</c>/<c>File.Move</c> either
-    /// rename the entry or leave it, so a throw leaves nothing to undo.</summary>
-    internal void Move(string modFolder, string from, string to)
-    {
-        SourceRepository.MoveEntry(from, to);
-        _log.Add(new EntryMove(modFolder, from, to));
+        if (repository.Move(plugin, identity, newFormKey) is not { } moved) return;
+        _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));
     }
 
     /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
@@ -179,6 +143,21 @@ internal sealed class SourceTransaction
         }
 
         return unrestored;
+    }
+
+    /// <summary>Rolls back, then answers <paramref name="cause"/>'s own message with every repository
+    /// this batch could have touched stripped out of it, so a caller's report reads the same whichever
+    /// tree the fault named.</summary>
+    internal (IReadOnlyList<UnrestoredPath> Unrestored, string RelativeError) Rollback(
+        Exception cause, IEnumerable<SourceRepository> repositories)
+    {
+        var unrestored = Rollback();
+        var modFolders = _log.Select(op => op.ModFolder).Concat(repositories.Select(r => r.ModFolder))
+            .Distinct().ToList();
+        var relativeError = modFolders
+            .OrderByDescending(f => f.Length)
+            .Aggregate(cause.Message, (text, folder) => text.Replace(folder + Path.DirectorySeparatorChar, "", StringComparison.Ordinal));
+        return (unrestored, relativeError);
     }
 
     private static void RestoreFile(FileState file, List<UnrestoredPath> unrestored)
