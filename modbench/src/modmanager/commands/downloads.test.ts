@@ -2,7 +2,13 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deleteDownload, hideDownload, markDownloadInstalled, unhideDownload } from './downloads';
+import {
+  deleteDownload,
+  hideDownload,
+  markDownloadInstalled,
+  markDownloadUninstalled,
+  unhideDownload,
+} from './downloads';
 import { parseDownloadMeta } from '../mo2/downloads';
 
 // tmpdirs made this test, removed in afterEach even when an assertion above the cleanup failed.
@@ -133,6 +139,31 @@ describe('markDownloadInstalled', () => {
     await Promise.all([hideDownload(root, 'foo.7z'), markDownloadInstalled(root, 'foo.7z')]);
 
     expect(await sidecarOf(root, 'foo.7z')).toMatchObject({ hidden: true, status: 'Installed' });
+  });
+});
+
+describe('markDownloadUninstalled', () => {
+  it('sets the sidecar flag MO2 reads as uninstalled, leaving the installed key as MO2 leaves it', async () => {
+    const root = await makeInstanceRoot();
+    await writeArchive(root, 'foo.7z');
+    await writeSidecar(root, 'foo.7z', '[General]\r\ninstalled=true\r\n');
+
+    expect(await markDownloadUninstalled(root, 'foo.7z')).toEqual({ applied: true });
+
+    expect(await sidecarOf(root, 'foo.7z')).toMatchObject({ status: 'Uninstalled' });
+    expect(await readFile(sidecarPath(root, 'foo.7z'), 'utf8')).toContain('installed=true');
+  });
+
+  // A mod outlives the download it came from, so this verb alone can be fired at an archive that
+  // is gone — and a sidecar for no archive is a file MO2 would never write.
+  it('refuses when no archive by that name is in downloads/, writing no orphan sidecar', async () => {
+    const root = await makeInstanceRoot();
+
+    expect(await markDownloadUninstalled(root, 'gone.7z')).toEqual({
+      applied: false,
+      refusal: expect.stringContaining('gone.7z'),
+    });
+    await expect(readFile(sidecarPath(root, 'gone.7z'), 'utf8')).rejects.toThrow();
   });
 });
 

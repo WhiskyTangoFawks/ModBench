@@ -3,7 +3,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deleteDownload, hideDownload, markDownloadInstalled, unhideDownload } from './downloads';
+import {
+  deleteDownload,
+  hideDownload,
+  markDownloadInstalled,
+  markDownloadUninstalled,
+  unhideDownload,
+} from './downloads';
 import { scanDownloads } from '../downloadsScan';
 import { buildDownloadRows, modsByInstallationFile, parseDownloadMeta, type DownloadRow } from '../mo2/downloads';
 import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../test/corpusFixture';
@@ -80,6 +86,15 @@ describe('downloads commands corpus', () => {
 
     assertOnlyChanged(before, await snapshotTree(dir), new Set([MANUAL_META]));
     expect(await sidecarOf(MANUAL_META)).toMatchObject({ status: 'Installed' });
+  });
+
+  it('mark uninstalled writes one sidecar and nothing else — never the mod it was installed into', async () => {
+    const before = await snapshotTree(dir);
+
+    expect(await markDownloadUninstalled(dir, NAME)).toEqual({ applied: true });
+
+    assertOnlyChanged(before, await snapshotTree(dir), new Set([META]));
+    expect(await sidecarOf(META)).toMatchObject({ status: 'Uninstalled' });
   });
 
   it('delete trashes the sidecar and then the archive, and nothing else', async () => {

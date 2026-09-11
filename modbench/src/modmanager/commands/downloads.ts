@@ -3,7 +3,7 @@
 // returns — the downloads watcher is how the change comes back.
 
 import { access, readFile, writeFile } from 'node:fs/promises';
-import { setHiddenInText, setInstalledInText } from '../mo2/downloads';
+import { setHiddenInText, setInstalledInText, setUninstalledInText } from '../mo2/downloads';
 import { downloadFile, downloadSidecarFile } from '../mo2/layout';
 
 /** Every verb here writes unconditionally — a splice of the sidecar, or a trash — so `applied`
@@ -72,6 +72,18 @@ export function unhideDownload(instanceRoot: string, name: string): Promise<Down
  *  this writes only the key MO2's Downloads tab reads. */
 export function markDownloadInstalled(instanceRoot: string, name: string): Promise<DownloadCommandResult> {
   return spliceSidecar(instanceRoot, name, setInstalledInText);
+}
+
+/** Fired with the download the uninstalled mod's row names. A mod outlives its download, so an
+ *  archive that is gone is a refusal: a sidecar beside no archive is one MO2 never writes. */
+export async function markDownloadUninstalled(
+  instanceRoot: string, name: string,
+): Promise<DownloadCommandResult> {
+  if (!(await exists(downloadFile(instanceRoot, name)))) {
+    return { applied: false, refusal: `No such download: ${name}` };
+  }
+  // `installed` is left standing, as MO2 leaves it: the codec resolves the two keys' precedence.
+  return spliceSidecar(instanceRoot, name, setUninstalledInText);
 }
 
 /** The sidecar is trashed BEFORE the archive, so a mid-failure leaves a metaless archive — an

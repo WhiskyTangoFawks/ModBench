@@ -182,7 +182,9 @@ export function registerModContextCommands(
         if (answer !== 'Uninstall') return;
         await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, async () => {
           const profile = instance.value.activeProfile;
-          applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name));
+          // The download to mark comes off the row the tree already holds (ADR-0015 invariant 1),
+          // so the command walks nothing to find it.
+          applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name, node.mod.archiveFilename));
         });
       }),
       vscode.commands.registerCommand('modbench.modList.mod.viewOnNexus', async (node: ModNode | undefined) => {
