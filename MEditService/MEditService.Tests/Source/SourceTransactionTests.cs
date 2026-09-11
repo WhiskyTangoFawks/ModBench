@@ -1,50 +1,74 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>The third-party writes here are real: the test process writes and deletes files itself
-/// between the transaction's write and its rollback, the sequence another tool produces.</summary>
+/// <summary>Rollback's own mechanics — reverse order, minted directories, third-party interference —
+/// proved at the seam every caller crosses: put, remove and move by identity, over one
+/// repository.</summary>
 public sealed class SourceTransactionTests : IDisposable
 {
+    private const GameRelease Release = GameRelease.Fallout4;
+    private const string PluginName = "Fixture.esp";
+    private static readonly PluginKey Plugin = new(PluginName, "FixtureMod");
+
     private readonly string _root = Directory.CreateTempSubdirectory("medit-swt-").FullName;
+
+    // Constructed fresh per call rather than held: several tests delete and recreate _root at the
+    // same path, and a held instance would answer from a listing cache the recreate invalidated.
+    private SourceRepository Repo => SourceRepository.Over(_root, Release);
 
     public void Dispose()
     {
         try { Directory.Delete(_root, recursive: true); }
-        catch (DirectoryNotFoundException) { /* the sweep tears its own scratch tree down */ }
+        catch (DirectoryNotFoundException) { /* the sweep tears its own tree down */ }
         catch (IOException) { /* scratch directory, best effort */ }
         catch (UnauthorizedAccessException) { /* ditto */ }
     }
 
-    private string Path_(string relative) => Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar));
+    private static string Fk(string hex) => $"{hex}:{PluginName}";
 
-    private void Seed(string relative, string content)
-    {
-        var path = Path_(relative);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllText(path, content);
-    }
+    private static string Body(string formKey, string editorId) =>
+        $"{{\n  \"FormKey\": \"{formKey}\",\n  \"EditorID\": \"{editorId}\"\n}}";
 
-    private void WriteThrough(SourceTransaction transaction, string relative, string content) =>
-        transaction.Write(_root, Path_(relative), () => File.WriteAllText(Path_(relative), content));
+    private void Seed(string formKey, string recordType, string editorId) =>
+        Repo.Put(Plugin, new SourceDocument(formKey, recordType, editorId, Body(formKey, editorId)));
+
+    private static string FlatFile(string root, string formKey, string recordType, string editorId) =>
+        Path.Combine(root, SourceRepository.FlatPathFor(PluginName, recordType, formKey, editorId, Release));
+
+    private string FlatFile(string formKey, string recordType, string editorId) =>
+        FlatFile(_root, formKey, recordType, editorId);
+
+    private string ContainerDirectory(string formKey, string recordType, string editorId) =>
+        Path.GetDirectoryName(Path.Combine(
+            _root,
+            SourceRepository.PlacementFor(PluginName, recordType, formKey, editorId, Release).RelativePath))!;
+
+    // A directory at the destination's own ".tmp" name blocks the write-then-rename that lands
+    // there, before it ever reaches the real path.
+    private static void Block(string path) => Directory.CreateDirectory(path + ".tmp");
 
     [Fact]
-    public void Rollback_PutsBackAnOverwrite_ACreate_ADelete_AndARelocatedSubtree()
+    public void Rollback_PutsBackAnOverwrite_ACreate_ARemove_AndAMovedContainer()
     {
-        Seed("Npcs/existing.json", "original");
-        Seed("Races/doomed.json", "doomed");
-        Seed("Cells/Home/RecordData.json", "cell");
-        // An empty directory in the tree from the start: it must still be there afterwards, and it is
-        // the entry no git-based oracle would see either way.
-        Directory.CreateDirectory(Path_("Cells/Home/Empty"));
+        Seed(Fk("000800"), "npc_", "ExistingNpc");
+        Seed(Fk("000801"), "npc_", "DoomedNpc");
+        Seed(Fk("000900"), "wrld", "Home");
+        // An empty directory inside the container from the start: it has to travel with the move
+        // and be there afterwards, and it is the one entry no git-based oracle would see either way.
+        Directory.CreateDirectory(Path.Combine(ContainerDirectory(Fk("000900"), "wrld", "Home"), "Empty"));
         var before = TreeSnapshot.Of(_root);
 
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Npcs/existing.json", "rewritten");
-        WriteThrough(transaction, "Npcs/created.json", "brand new");
-        transaction.Delete(_root, Path_("Races/doomed.json"));
-        transaction.Move(_root, Path_("Cells/Home"), Path_("Cells/Moved"));
+        transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "ExistingNpc", Body(Fk("000800"), "Rewritten")));
+        transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000802"), "npc_", "NewNpc", Body(Fk("000802"), "NewNpc")));
+        transaction.Remove(Repo, Plugin, new RecordIdentity(Fk("000801"), "npc_", "DoomedNpc"));
+        transaction.Move(Repo, Plugin, new RecordIdentity(Fk("000900"), "wrld", "Home"), Fk("000901"));
 
         Assert.NotEqual(before, TreeSnapshot.Of(_root));
         Assert.Empty(transaction.Rollback());
@@ -52,17 +76,16 @@ public sealed class SourceTransactionTests : IDisposable
     }
 
     [Fact]
-    public void Rollback_TakesBackTheDirectoriesTheBatchMinted_NotJustTheFilesInThem()
+    public void Rollback_TakesBackEveryDirectoryTheBatchMinted_NotJustTheFile()
     {
-        Seed("Npcs/existing.json", "original");
+        // Nothing under source/ yet: the plugin's own root, its group folder and the file are all
+        // minted in one put.
         var before = TreeSnapshot.Of(_root);
 
-        // git tracks files, not directories, so an emptied record directory left standing is invisible
-        // to status while failing the next ingest.
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Cells/0/0/Home - 000800_Fixture.esp/RecordData.json", "cell");
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "FreshNpc", Body(Fk("000800"), "FreshNpc")));
 
-        Assert.True(Directory.Exists(Path_("Cells/0/0")));
+        Assert.True(Directory.Exists(Path.Combine(_root, "source", PluginName, "Npcs")));
         Assert.Empty(transaction.Rollback());
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
@@ -70,31 +93,31 @@ public sealed class SourceTransactionTests : IDisposable
     [Fact]
     public void Rollback_LeavesAMintedDirectoryAThirdPartyHasSinceFilled()
     {
-        Seed("Npcs/existing.json", "original");
-
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Cells/0/0/Home - 000800_Fixture.esp/RecordData.json", "cell");
-        File.WriteAllText(Path_("Cells/0/theirs.json"), "another tool's");
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "FreshNpc", Body(Fk("000800"), "FreshNpc")));
+
+        var pluginRoot = Path.Combine(_root, "source", PluginName);
+        File.WriteAllText(Path.Combine(pluginRoot, "theirs.json"), "another tool's");
 
         Assert.Empty(transaction.Rollback());
-        Assert.True(File.Exists(Path_("Cells/0/theirs.json")));
-        Assert.False(Directory.Exists(Path_("Cells/0/0")));
+        Assert.True(File.Exists(Path.Combine(pluginRoot, "theirs.json")));
+        Assert.False(Directory.Exists(Path.Combine(pluginRoot, "Npcs")));
     }
 
+    // The second move's destination is where the first vacated: undone out of order, the first
+    // move's restore would find the second still sitting there.
     [Fact]
-    public void Rollback_UndoesActsInReverse_SoARestoreNeverCollidesWithARenamedSibling()
+    public void Rollback_UndoesTwoDependentContainerMoves_SoNeitherLandsOnTheOther()
     {
-        Seed("Races/old.json", "old");
+        Seed(Fk("000900"), "wrld", "Shared");
+        Seed(Fk("000901"), "wrld", "Shared");
         var before = TreeSnapshot.Of(_root);
 
-        // The moved file lands on exactly the name the deleted sibling vacated, which is what makes
-        // reverse order load-bearing: restoring the delete first would put old.json on top of a live
-        // file.
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Races/new.json", "new");
-        transaction.Delete(_root, Path_("Races/old.json"));
-        transaction.Move(_root, Path_("Races/new.json"), Path_("Races/old.json"));
+        transaction.Move(Repo, Plugin, new RecordIdentity(Fk("000900"), "wrld", "Shared"), Fk("000902"));
+        transaction.Move(Repo, Plugin, new RecordIdentity(Fk("000901"), "wrld", "Shared"), Fk("000900"));
 
+        Assert.NotEqual(before, TreeSnapshot.Of(_root));
         Assert.Empty(transaction.Rollback());
         Assert.Equal(before, TreeSnapshot.Of(_root));
     }
@@ -102,84 +125,87 @@ public sealed class SourceTransactionTests : IDisposable
     [Fact]
     public void Rollback_KeepsAThirdPartysBytes_RestoresEverythingElse_AndNamesOnlyThatFile()
     {
-        Seed("Npcs/contested.json", "original");
-        Seed("Npcs/quiet.json", "quiet original");
+        Seed(Fk("000800"), "npc_", "Contested");
+        Seed(Fk("000801"), "npc_", "Quiet");
 
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Npcs/contested.json", "ours");
-        WriteThrough(transaction, "Npcs/quiet.json", "ours too");
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Contested", Body(Fk("000800"), "Ours")));
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000801"), "npc_", "Quiet", Body(Fk("000801"), "OursToo")));
 
-        File.WriteAllText(Path_("Npcs/contested.json"), "someone else's work");
+        var contestedFile = FlatFile(Fk("000800"), "npc_", "Contested");
+        File.WriteAllText(contestedFile, "someone else's work");
 
         var unrestored = transaction.Rollback();
 
         var only = Assert.Single(unrestored);
         Assert.Equal(UnrestoredReason.ChangedByAnother, only.Reason);
-        Assert.Equal("Npcs/contested.json", only.RelativePath.Replace('\\', '/'));
-        Assert.Equal("someone else's work", File.ReadAllText(Path_("Npcs/contested.json")));
-        Assert.Equal("quiet original", File.ReadAllText(Path_("Npcs/quiet.json")));
+        Assert.Equal(
+            "source/Fixture.esp/Npcs/Contested - 000800_Fixture.esp.json", only.RelativePath.Replace('\\', '/'));
+        Assert.Equal("someone else's work", File.ReadAllText(contestedFile));
+        Assert.Equal(Body(Fk("000801"), "Quiet"), File.ReadAllText(FlatFile(Fk("000801"), "npc_", "Quiet")));
     }
 
     [Fact]
-    public void Rollback_DoesNotResurrectAFileAThirdPartyDeleted_AndNamesIt()
+    public void Rollback_DoesNotResurrectAnOverwrittenFileAThirdPartyDeleted_AndNamesIt()
     {
-        Seed("Npcs/doomed.json", "original");
+        Seed(Fk("000800"), "npc_", "Doomed");
 
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Npcs/doomed.json", "ours");
-        File.Delete(Path_("Npcs/doomed.json"));
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Doomed", Body(Fk("000800"), "Ours")));
+        var file = FlatFile(Fk("000800"), "npc_", "Doomed");
+        File.Delete(file);
 
         var only = Assert.Single(transaction.Rollback());
         Assert.Equal(UnrestoredReason.RemovedByAnother, only.Reason);
-        Assert.Equal("Npcs/doomed.json", only.RelativePath.Replace('\\', '/'));
-        Assert.False(File.Exists(Path_("Npcs/doomed.json")));
+        Assert.False(File.Exists(file));
     }
 
     [Fact]
-    public void Rollback_NamesAFileItCreatedAndAThirdPartyRemoved_RatherThanClaimingItUndidIt()
+    public void Rollback_NamesACreatedFileAThirdPartyRemoved_RatherThanClaimingItUndidIt()
     {
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Npcs/created.json", "ours");
-        File.Delete(Path_("Npcs/created.json"));
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Fresh", Body(Fk("000800"), "Ours")));
+        File.Delete(FlatFile(Fk("000800"), "npc_", "Fresh"));
 
         var only = Assert.Single(transaction.Rollback());
         Assert.Equal(UnrestoredReason.RemovedByAnother, only.Reason);
     }
 
     [Fact]
-    public void Rollback_SaysNothingAboutAWriteThatChangedNothing()
+    public void Rollback_SaysNothingAboutAPutThatChangedNothing()
     {
-        Seed("Npcs/untouched.json", "original");
+        Seed(Fk("000800"), "npc_", "Untouched");
+        var file = FlatFile(Fk("000800"), "npc_", "Untouched");
+        Block(file);
 
         var transaction = new SourceTransaction();
-        Assert.ThrowsAny<Exception>(() =>
-            transaction.Write(_root, Path_("Npcs/untouched.json"), () => throw new IOException("disk went away")));
+        Assert.ThrowsAny<Exception>(() => transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "Untouched", Body(Fk("000800"), "Rewritten"))));
 
         Assert.Empty(transaction.Rollback());
-        Assert.Equal("original", File.ReadAllText(Path_("Npcs/untouched.json")));
+        Assert.Equal(Body(Fk("000800"), "Untouched"), File.ReadAllText(file));
     }
 
     [Fact]
     public void Rollback_ReportsAPathItCouldNotRestore_AndStillRestoresTheRest()
     {
-        Seed("Npcs/first.json", "first original");
-        Seed("Races/second.json", "second original");
+        Seed(Fk("000800"), "npc_", "First");
+        Seed(Fk("000801"), "npc_", "Second");
 
         var transaction = new SourceTransaction();
-        WriteThrough(transaction, "Npcs/first.json", "ours");
-        transaction.Delete(_root, Path_("Races/second.json"));
+        transaction.Put(Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "First", Body(Fk("000800"), "Ours")));
+        transaction.Remove(Repo, Plugin, new RecordIdentity(Fk("000801"), "npc_", "Second"));
 
-        // A directory where the deleted file stood: real, unwritable on every platform, and needing
+        // A directory where the removed file stood: real, unwritable on every platform, and needing
         // no permission bits a privileged test runner would sail through.
-        Directory.CreateDirectory(Path_("Races/second.json"));
+        Directory.CreateDirectory(FlatFile(Fk("000801"), "npc_", "Second"));
 
         var only = Assert.Single(transaction.Rollback());
         Assert.Equal(UnrestoredReason.RestoreFailed, only.Reason);
-        Assert.Equal("Races/second.json", only.RelativePath.Replace('\\', '/'));
         Assert.NotNull(only.Error);
 
-        // The pass carried on past the failure: the earlier write, undone after it, went back.
-        Assert.Equal("first original", File.ReadAllText(Path_("Npcs/first.json")));
+        // The pass carried on past the failure: the earlier put, undone after it, went back.
+        Assert.Equal(Body(Fk("000800"), "First"), File.ReadAllText(FlatFile(Fk("000800"), "npc_", "First")));
     }
 
     [Fact]
@@ -187,8 +213,8 @@ public sealed class SourceTransactionTests : IDisposable
     {
         int positions;
         {
-            var probe = new SourceTransaction();
             SeedTree();
+            var probe = new SourceTransaction();
             positions = RunSequence(probe, failAt: int.MaxValue);
             probe.Rollback();
             Directory.Delete(_root, recursive: true);
@@ -213,11 +239,12 @@ public sealed class SourceTransactionTests : IDisposable
 
     private void SeedTree()
     {
-        Seed("Npcs/a.json", "a original");
-        Seed("Npcs/b.json", "b original");
-        Seed("Races/r.json", "r original");
-        Seed("Cells/Home/RecordData.json", "cell original");
-        Directory.CreateDirectory(Path_("Cells/Home/Empty"));
+        Seed(Fk("000800"), "npc_", "NpcA");
+        Seed(Fk("000801"), "npc_", "NpcB");
+        Seed(Fk("000900"), "wrld", "Home");
+        Directory.CreateDirectory(Path.Combine(ContainerDirectory(Fk("000900"), "wrld", "Home"), "Empty"));
+        Seed(Fk("000A00"), "race", "DoomedRace");
+        Seed(Fk("000902"), "wrld", "Other");
     }
 
     private int RunSequence(SourceTransaction transaction, int failAt)
@@ -229,13 +256,15 @@ public sealed class SourceTransactionTests : IDisposable
             perform();
         }
 
-        At(failAt, () => WriteThrough(transaction, "Npcs/a.json", "a rewritten"));
-        At(failAt, () => WriteThrough(transaction, "Npcs/b.json", "b rewritten"));
-        At(failAt, () => transaction.Move(_root, Path_("Cells/Home"), Path_("Cells/Moved")));
-        At(failAt, () => WriteThrough(transaction, "Cells/Moved/RecordData.json", "cell rewritten"));
-        At(failAt, () => WriteThrough(transaction, "Races/r2-moved.json", "r2 new"));
-        At(failAt, () => transaction.Delete(_root, Path_("Races/r.json")));
-        At(failAt, () => transaction.Move(_root, Path_("Races/r2-moved.json"), Path_("Races/r2.json")));
+        At(failAt, () => transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000800"), "npc_", "NpcA", Body(Fk("000800"), "NpcA rewritten"))));
+        At(failAt, () => transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000801"), "npc_", "NpcB", Body(Fk("000801"), "NpcB rewritten"))));
+        At(failAt, () => transaction.Move(Repo, Plugin, new RecordIdentity(Fk("000900"), "wrld", "Home"), Fk("000901")));
+        At(failAt, () => transaction.Put(
+            Repo, Plugin, new SourceDocument(Fk("000901"), "wrld", "Home", Body(Fk("000901"), "Home rewritten"))));
+        At(failAt, () => transaction.Remove(Repo, Plugin, new RecordIdentity(Fk("000A00"), "race", "DoomedRace")));
+        At(failAt, () => transaction.Move(Repo, Plugin, new RecordIdentity(Fk("000902"), "wrld", "Other"), Fk("000903")));
         return act;
     }
 }
