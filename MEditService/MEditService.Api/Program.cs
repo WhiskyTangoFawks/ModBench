@@ -96,41 +96,18 @@ try
     builder.Services.AddSingleton<PluginCompileService>();
     // ADR-0014: one recursive watcher per mod folder in the load order, a process singleton so the
     // reconcile-time check (PUT /load-order), Track and the live watch all share it.
-    builder.Services.AddSingleton<ModFolderWatcher>();
+    builder.Services.AddSingleton(sp => new ModFolderWatcher(
+        sp.GetRequiredService<LoadOrderHolder>(),
+        sp.GetRequiredService<IndexProjector>(),
+        sp.GetRequiredService<INotificationPublisher>(),
+        sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ModFolderWatcher))));
 
     var app = builder.Build();
 
-    // ADR-0009: subscribed once, not per reconcile — the watcher is a process singleton, and
-    // re-subscribing would stack a handler per reconcile. Which plugins are watched is re-decided
-    // per reconcile instead.
-    var index = app.Services.GetRequiredService<IndexProjector>();
-    var holder = app.Services.GetRequiredService<LoadOrderHolder>();
-    var watcher = app.Services.GetRequiredService<ModFolderWatcher>();
-    var binaryChanges = new BinaryChangeApplier(
-        index,
-        app.Services.GetRequiredService<INotificationPublisher>(),
-        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(BinaryChangeApplier)));
-    watcher.IndexedBinaryChanged = binaryChanges.Apply;
-    watcher.IndexedWatchOverflowed = binaryChanges.ApplyOverflow;
-
-    // ADR-0014: the mod watcher's own external-change signals, subscribed once for the same reason.
-    var externalChanges = new ExternalChangeApplier(
-        index,
-        holder,
-        app.Services.GetRequiredService<INotificationPublisher>(),
-        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ExternalChangeApplier)));
-    watcher.ExternalChangeReported = externalChanges.ApplyPending;
-    watcher.WatchOverflowed = externalChanges.ApplyOverflow;
-
-    // ADR-0014: the same watcher's source-routing half. The Index announces each reconcile and
-    // Track the repository it has created, so a watch starts with no restart.
-    var sourceChanges = new SourceChangeApplier(
-        index, holder, index.WriteGate, watcher,
-        app.Services.GetRequiredService<INotificationPublisher>(),
-        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(SourceChangeApplier)));
-    watcher.SourceChanged = sourceChanges.Apply;
-    index.Reconciled = sourceChanges.RefreshWatches;
-    app.Services.GetRequiredService<TrackService>().RepositoryCreated = sourceChanges.WatchTracking;
+    // Track announces the repository it has created, so its own copies start being watched without
+    // waiting for the next load order.
+    app.Services.GetRequiredService<TrackService>().RepositoryCreated =
+        app.Services.GetRequiredService<ModFolderWatcher>().WatchTracking;
 
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings

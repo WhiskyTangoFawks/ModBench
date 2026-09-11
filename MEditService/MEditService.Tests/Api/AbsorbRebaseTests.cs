@@ -45,7 +45,7 @@ public sealed class AbsorbRebaseTests : IDisposable
     }
 
     private static (ILoggerFactory factory, ModFolderWatcher watcher) Backend() =>
-        (LoggerFactory.Create(_ => { }), new ModFolderWatcher());
+        (LoggerFactory.Create(_ => { }), TestWatcher.Inert());
 
     private Ok<ExternalChangeActionResponse> Absorb()
     {

@@ -132,8 +132,8 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
             .EnsureSuccessStatusCode();
-        // Re-registers the plugin watcher now that the origin is tracked (ExternalChangeLoadOrderHook
-        // runs on every PUT /load-order).
+        // Re-arms the watcher now that the origin is tracked: PUT /load-order hands the watcher
+        // the value it just put.
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
         using var reader = await OpenStreamAsync();
 
@@ -159,8 +159,8 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
             .EnsureSuccessStatusCode();
-        // Re-registers the plugin watcher now that the origin is tracked (ExternalChangeLoadOrderHook
-        // runs on every PUT /load-order).
+        // Re-arms the watcher now that the origin is tracked: PUT /load-order hands the watcher
+        // the value it just put.
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;

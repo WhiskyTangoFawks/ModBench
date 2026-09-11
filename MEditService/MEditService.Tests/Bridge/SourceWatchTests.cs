@@ -1,4 +1,3 @@
-using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
 using MEditService.Core.Notifications;
@@ -13,7 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Tests.Bridge;
 
 /// <summary>ADR-0015 invariant 2: a hand edit, a commit and a checkout reach the Index the same way
 /// our own writes do. Wired the way the composition root wires it, over a real git working
@@ -27,13 +26,11 @@ public sealed class SourceWatchTests : IDisposable
     public SourceWatchTests()
     {
         _mod = IndexedModFixture.Tracked(_notifications);
-        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceChanges = new SourceChangeApplier(_mod.Index, _mod.Holder, _mod.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
-        _watcher.SourceChanged = sourceChanges.Apply;
-        _mod.Index.Reconciled = sourceChanges.RefreshWatches;
-        // The watch set arrives the way it does in the composition root: the Index announces the
-        // load order it now holds, and every tracked copy in it is watched.
+        _watcher = TestWatcher.Over(_mod.Holder, _mod.Index, _notifications, TimeSpan.FromMilliseconds(100));
         _mod.Index.Reconcile(_mod.Holder, _mod.GameDirectory, [_mod.Entry], GameRelease.Fallout4);
+        // The watch set arrives the way it does in the composition root: the load-order endpoint
+        // hands the watcher the value it just put, and every tracked copy in it is watched.
+        _watcher.Rearm(_mod.Holder.Current);
     }
 
     public void Dispose()
@@ -76,23 +73,21 @@ public sealed class SourceWatchTests : IDisposable
     private IReadOnlyList<RowsChangedNotification> RowsChanged() =>
         [.. _notifications.Notifications.OfType<RowsChangedNotification>()];
 
-    // Close raises the same announcement a reconcile does, and the kernel keeps its load order
-    // across it: a watch armed from that value would fire into a store that is gone.
+    // The kernel keeps its load order across a Close, so the watches armed from it are still live
+    // while the store they would project into is gone.
     [Fact]
-    public void AfterClose_TheAnnouncementArmsNoWatch()
+    public void AfterClose_AWatchThatFires_ProjectsNothingAndLogsNothing()
     {
         var entries = new List<LogEntry>();
-        using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceChanges = new SourceChangeApplier(
-            _mod.Index, _mod.Holder, _mod.Index.WriteGate, watcher, _notifications, new CollectingLogger(entries));
-        watcher.SourceChanged = sourceChanges.Apply;
+        using var watcher = new ModFolderWatcher(
+            _mod.Holder, _mod.Index, _notifications, new CollectingLogger(entries), TimeSpan.FromMilliseconds(100));
+        watcher.Rearm(_mod.Holder.Current);
 
         _mod.Index.Close();
-        sourceChanges.RefreshWatches();
         RenameTheNpcByHand("RenamedAfterClose");
         WaitOutTheWatcher();
 
-        // The applier logs whatever it could not project, so a watch that fired says so here.
+        // A refused projection is logged, so a batch that reached the closed store says so here.
         Assert.Empty(entries);
     }
 

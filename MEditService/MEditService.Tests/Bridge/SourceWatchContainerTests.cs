@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
 using MEditService.Core.Notifications;
@@ -11,7 +10,7 @@ using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Tests.Bridge;
 
 /// <summary>ADR-0015 invariant 2, for a container and an embedded child: a revert to a quest's or a
 /// placed ref's owning cell file reaches the index the same way a flat record's does.</summary>
@@ -24,13 +23,10 @@ public sealed class SourceWatchContainerTests : IDisposable
     public SourceWatchContainerTests()
     {
         _fixture = new IndexedContainerFixture(_notifications);
-        _watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var sourceChanges = new SourceChangeApplier(_fixture.Index, _fixture.Holder, _fixture.Index.WriteGate, _watcher, _notifications, NullLogger.Instance);
-        _watcher.SourceChanged = sourceChanges.Apply;
-        _fixture.Index.Reconciled = sourceChanges.RefreshWatches;
-        // The fixture's own constructor already reconciled, before any watch could be
-        // registered from that reconcile's own signal.
-        sourceChanges.RefreshWatches();
+        _watcher = TestWatcher.Over(_fixture.Holder, _fixture.Index, _notifications, TimeSpan.FromMilliseconds(100));
+        // The fixture's own constructor already reconciled, so the re-arm the load-order endpoint
+        // would have made is made here.
+        _watcher.Rearm(_fixture.Holder.Current);
     }
 
     public void Dispose()

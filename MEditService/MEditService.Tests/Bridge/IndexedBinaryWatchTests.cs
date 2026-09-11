@@ -1,4 +1,3 @@
-using MEditService.Api;
 using MEditService.Bridge;
 using MEditService.Core.Notifications;
 using MEditService.Core.PluginAdapter;
@@ -6,16 +5,15 @@ using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Api;
+namespace MEditService.Tests.Bridge;
 
 /// <summary>Wired the way the composition root wires it (ADR-0009); what is asserted is what the
 /// load order answers afterwards, while the backend runs, with no reload anywhere.</summary>
-public sealed class BinaryChangeApplierTests
+public sealed class IndexedBinaryWatchTests
 {
     private static void WaitUntil(Func<bool> condition, TimeSpan timeout)
     {
@@ -29,10 +27,10 @@ public sealed class BinaryChangeApplierTests
 
     private static ModFolderWatcher StartWatching(IndexedModFixture fixture, INotificationPublisher? notifications = null)
     {
-        var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        var index = new BinaryChangeApplier(fixture.Index, notifications ?? new InMemoryNotificationPublisher(), NullLogger.Instance);
-        watcher.IndexedBinaryChanged = index.Apply;
-        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, fixture.Holder.Current, watcher, NullLogger.Instance);
+        var watcher = TestWatcher.Over(
+            fixture.Holder, fixture.Index, notifications ?? new InMemoryNotificationPublisher(),
+            TimeSpan.FromMilliseconds(100));
+        watcher.Rearm(fixture.Holder.Current);
         return watcher;
     }
 
@@ -102,10 +100,10 @@ public sealed class BinaryChangeApplierTests
     public void ATrackedPluginChangedMidReconcile_AsksTheUser_AndIsNeverSilentlyReindexed()
     {
         using var fixture = IndexedModFixture.Tracked();
-        var reindexed = new List<IndexedBinaryEvent>();
-        using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-        watcher.IndexedBinaryChanged = e => { lock (reindexed) reindexed.Add(e); return true; };
-        ExternalChangeLoadOrderHook.RunAfterReconcile(fixture.Index, fixture.Holder.Current, watcher, NullLogger.Instance);
+        var index = new RecordingRefreshIndex();
+        using var watcher = TestWatcher.Over(
+            fixture.Holder, index, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(100));
+        watcher.Rearm(fixture.Holder.Current);
 
         RewriteBinaryWithExtraNpc(fixture, "ChangedByXEdit");
 
@@ -113,21 +111,21 @@ public sealed class BinaryChangeApplierTests
         Assert.NotEmpty(watcher.Unanswered());
         // Well past the debounce window, so "no re-index" is a decision rather than a race.
         Thread.Sleep(500);
-        lock (reindexed) Assert.Empty(reindexed);
+        Assert.Empty(index.Of("reindex"));
         Assert.DoesNotContain("ChangedByXEdit", EditorIds(fixture, fixture.Plugin));
     }
 
-    // A change to a plugin the index holds no rows for is not this applier's business — there is
+    // A change to a plugin the index holds no rows for is not this route's business — there is
     // nothing to compare against and nothing to refresh.
     [Fact]
-    public void RunAfterReconcile_WatchesNothing_WhenThereIsNoLoadOrder()
+    public void Rearm_WatchesNothing_WhenThereIsNoLoadOrder()
     {
         var holder = new LoadOrderHolder();
-        using var watcher = new ModFolderWatcher(TimeSpan.FromMilliseconds(100));
-
         using var noLoadOrder = new IndexProjector(holder, MutagenPluginAdapter.Instance, SharedSchemaReflector.Instance);
+        using var watcher = TestWatcher.Over(
+            holder, noLoadOrder, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(100));
 
-        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(noLoadOrder, holder.Current, watcher, NullLogger.Instance);
+        var offers = watcher.Rearm(holder.Current);
 
         Assert.Empty(offers);
         Assert.Empty(watcher.Unanswered());
