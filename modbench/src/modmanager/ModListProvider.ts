@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { join } from 'node:path';
+import { OVERWRITE_DIR_NAME, overwriteDir } from './mo2/layout';
 import type { Mod, ModlistEntry, Separator } from './model';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from './statusChecker';
@@ -96,10 +96,10 @@ export class ModNode extends vscode.TreeItem {
  *  modlist.txt entry — no checkbox, no drag, no mod actions. Single-click and
  *  the sole context action both reveal the folder in the Explorer. */
 export class OverwriteNode extends vscode.TreeItem {
-  readonly kind = 'overwrite' as const;
+  readonly kind = OVERWRITE_DIR_NAME;
   constructor(public readonly resourceUri: vscode.Uri, fileCount: number) {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'overwrite';
+    this.contextValue = OVERWRITE_DIR_NAME;
     // No explicit icon or color here: the spec scopes the row's look to a reddish
     // tint applied by a FileDecorationProvider keyed on resourceUri; this node
     // only carries the resourceUri. Let VS Code render the folder icon.
@@ -207,7 +207,7 @@ export class ModListProvider
     if (!payload) return;
     // Neither the count summary nor the pinned Overwrite fixture is a modlist.txt
     // position — dropping onto them must not fall through to "move to end".
-    if (target?.kind === 'count' || target?.kind === 'overwrite') return;
+    if (target?.kind === 'count' || target?.kind === OVERWRITE_DIR_NAME) return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
     // Resync against disk afterwards so a failed mutation never leaves a phantom reorder on
     // screen (ADR-0019).
@@ -314,7 +314,7 @@ export class ModListProvider
   private overwriteNode(): OverwriteNode | undefined {
     const count = this.instanceValue.overwriteFileCount;
     if (count <= 0) return undefined;
-    return new OverwriteNode(vscode.Uri.file(join(this.instanceRoot, 'overwrite')), count);
+    return new OverwriteNode(vscode.Uri.file(overwriteDir(this.instanceRoot)), count);
   }
 
   private toModNode = (m: Mod): ModNode => new ModNode(m, this.instanceValue.modStatuses.get(m.name));

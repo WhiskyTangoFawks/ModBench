@@ -1,8 +1,8 @@
 // Deploy and purge as gesture commands (ADR-0015 invariant 2): applied-or-refusal, never a throw.
 // Winners come from the Instance, not a fresh walk, so deploy can't disagree with the trees.
 
-import { join } from 'node:path';
 import { deploy, isDeployed, purge, type LoadOrderDeployment } from '../deployer';
+import { pluginsFile } from '../mo2/layout';
 import type { Reporter } from '../../reporter';
 import type { FileWinners } from '../fileConflictIndex';
 import type { GameDirectory } from '../gameDirectory';
@@ -72,9 +72,8 @@ export function deployMods(
       return { applied: false, refusal: DEPLOY_DECLINED };
     }
     try {
-      const profileDir = join(instanceRoot, 'profiles', profile);
       const loadOrder: LoadOrderDeployment[] = loadOrderTarget
-        ? [{ source: join(profileDir, 'plugins.txt'), target: loadOrderTarget }]
+        ? [{ source: pluginsFile(instanceRoot, profile), target: loadOrderTarget }]
         : [];
       return { applied: true, wrote: await deploy(instanceRoot, gameDirectory, { files }, reporter, { loadOrder }) };
     } catch (err) {

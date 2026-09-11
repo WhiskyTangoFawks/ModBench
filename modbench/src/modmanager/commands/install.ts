@@ -7,6 +7,7 @@ import { detectRoot } from '../install/detectRoot';
 import { extractArchive, type Runner } from '../install/extractArchive';
 import type { InstallMeta } from '../model';
 import { modNameCollisionRefusal } from '../modNameCollision';
+import { MOD_META_FILE_NAME, modsDir as modsDirOf, settingsFile } from '../mo2/layout';
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
 import { readGameName } from '../mo2/modOrganizerIni';
 
@@ -83,7 +84,7 @@ async function landNewMod(
   modsDir: string, modDir: string, stagedRoot: string, keys: OwnedMetaKeys,
   renameFn: (from: string, to: string) => Promise<void>,
 ): Promise<void> {
-  await writeFile(join(stagedRoot, 'meta.ini'), writeMetaIni(keys));
+  await writeFile(join(stagedRoot, MOD_META_FILE_NAME), writeMetaIni(keys));
   await mkdir(modsDir, { recursive: true });
   await renameFn(stagedRoot, modDir);
 }
@@ -108,7 +109,7 @@ async function landUpgrade(
   modDir: string, stagedRoot: string, gameName: string, meta: InstallMeta,
   renameFn: (from: string, to: string) => Promise<void>,
 ): Promise<void> {
-  const oldMetaText = await readTextOrEmpty(join(modDir, 'meta.ini'));
+  const oldMetaText = await readTextOrEmpty(join(modDir, MOD_META_FILE_NAME));
   const keys = keysForUpgrade(gameName, meta, oldMetaText);
   for (const entry of await readdir(modDir)) {
     if (entry === '.git') continue;
@@ -117,7 +118,7 @@ async function landUpgrade(
   for (const entry of await readdir(stagedRoot)) {
     await renameFn(join(stagedRoot, entry), join(modDir, entry));
   }
-  await writeFile(join(modDir, 'meta.ini'), setOwnedKeysInText(oldMetaText, keys));
+  await writeFile(join(modDir, MOD_META_FILE_NAME), setOwnedKeysInText(oldMetaText, keys));
 }
 
 // The folder can appear or vanish between the caller's decision and this check — MO2, xEdit or
@@ -136,12 +137,12 @@ function landStagedMod(
 ): Promise<InstallCommandResult> {
   const { name } = target;
   return withInstallLock(instanceRoot, async (): Promise<InstallCommandResult> => {
-    const modsDir = join(instanceRoot, 'mods');
+    const modsDir = modsDirOf(instanceRoot);
     const modDir = join(modsDir, name);
     const refusal = mismatchRefusal(target, await exists(modDir));
     if (refusal) return { applied: false, refusal };
     try {
-      const gameName = readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'));
+      const gameName = readGameName(await readFile(settingsFile(instanceRoot), 'utf8'));
       if (target.kind === 'new') {
         await landNewMod(modsDir, modDir, stagedRoot, { gameName, ...meta }, renameFn);
         return { applied: true, wrote: true, isFomod };

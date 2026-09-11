@@ -14,7 +14,7 @@ import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { createGameDirectoryResolver, dataFolderFrom } from './modmanager/gameDirectoryResolver';
 import { gameReleaseForGame } from './modmanager/mo2/gamePaths';
 import { makeReporter, type Reporter } from './reporter';
-import type { LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
+import { originFolder, type LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
 import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
 import { makeRefreshAll } from './refreshAll';
@@ -124,7 +124,8 @@ function registerPluginListView(deps: PluginListDeps): PluginsTreeProvider {
     instance, source, log, reporter, dataFolder, implicitMasters,
     records: deps.recordBrowser,
     client: deps.pluginFacts,
-    publishDiagnoses: (reports) => publishLoadDiagnoses(deps.loadDiagnostics, instanceRoot, reports),
+    publishDiagnoses: (reports) => publishLoadDiagnoses(
+      deps.loadDiagnostics, (origin) => originFolder(instance.value.plugins, origin), reports),
   }));
   session.pluginsTree = pluginsTree;
   const pluginListView = own(vscode.window.createTreeView('modbench.pluginListTree', {

@@ -3,10 +3,11 @@
 
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
+import { MOD_META_FILE_NAME, modDir } from './mo2/layout';
 import type { ModlistEntry } from './model';
 
 // Nearly every mod has one, so indexing it would make them all conflict with each other.
-const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
+const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);
 
 // Matched at the mod root only: Papyrus assets ship nested (`Scripts/Source/...`), so a bare
 // name match at any depth would exclude a mod's own scripts.
@@ -189,7 +190,7 @@ async function walkMod(
   modName: string,
   log: (msg: string) => void,
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
-  const dir = join(instanceRoot, 'mods', modName);
+  const dir = modDir(instanceRoot, modName);
   try {
     const rootReal = await realpath(dir);
     return await walk(dir, dir, new Set([rootReal]), log);

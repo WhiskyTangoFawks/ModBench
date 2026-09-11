@@ -3,9 +3,10 @@
 // prepended by the backend, never listed here.
 
 import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { ModlistEntry } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
+import { OVERWRITE_DIR_NAME, overwriteDir } from './mo2/layout';
 import { isPluginFile } from './pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from './mo2/pluginsText';
@@ -13,7 +14,7 @@ import { pluginSlots } from './mo2/pluginsText';
 // Reserved origin values (ADR-0012), matching their literal directory names. Never a real mod
 // folder name: mod folders live under `mods/`.
 export const DATA_DIRECTORY_ORIGIN = 'Data';
-export const OVERWRITE_ORIGIN = 'overwrite';
+export const OVERWRITE_ORIGIN = OVERWRITE_DIR_NAME;
 
 /** One physical plugin copy in the snapshot — the boundary object (CONTEXT.md): a plugin file
  *  at a physical path, the origin that provides it, and the three registration facts. */
@@ -39,6 +40,20 @@ export interface LoadOrderPluginLine extends Omit<LoadOrderPlugin, 'path'> {
   readonly path: undefined;
 }
 
+/** `originFolder` bound to one generation of the value's rows, for a caller that holds no rows
+ *  of its own. */
+export type OriginFolder = (origin: string) => string | undefined;
+
+/** The folder an origin's plugin copies sit in, read off the value's own rows: `overwrite` and
+ *  `Data` are not folders under `mods/` (ADR-0012). `undefined` when no row for that origin
+ *  has a copy on disk. */
+export function originFolder(
+  plugins: readonly Pick<LoadOrderPlugin | LoadOrderPluginLine, 'origin' | 'path'>[], origin: string,
+): string | undefined {
+  const copy = plugins.find((p) => p.path !== undefined && p.origin === origin);
+  return copy?.path === undefined ? undefined : dirname(copy.path);
+}
+
 /** Keyed by lowercased name, since plugins.txt casing is not authoritative. Root-level index
  *  files only. A name with no mod winner and no `dataFolder` has no entry — nothing to fall
  *  back to. */
@@ -58,7 +73,7 @@ export function resolvePluginPaths(
 // too, not just origin classification. Empty until a purge first creates the folder.
 async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, string>> {
   try {
-    const entries = await readdir(join(instanceRoot, 'overwrite'), { withFileTypes: true });
+    const entries = await readdir(overwriteDir(instanceRoot), { withFileTypes: true });
     return new Map(entries.filter((e) => e.isFile()).map((e) => [foldPath(e.name), e.name]));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map(); // no overwrite folder — nothing wins from it
@@ -103,7 +118,7 @@ async function buildRows(
     const overwriteFile = overwriteFiles.get(foldPath(name));
     const enabledLine = enabledNames.has(foldPath(name));
     if (overwriteFile !== undefined) {
-      return { name, path: join(instanceRoot, 'overwrite', overwriteFile), origin: OVERWRITE_ORIGIN, slot, enabled: enabledLine, winning: true };
+      return { name, path: join(overwriteDir(instanceRoot), overwriteFile), origin: OVERWRITE_ORIGIN, slot, enabled: enabledLine, winning: true };
     }
     return {
       name,
@@ -134,7 +149,7 @@ async function buildRows(
   const strays = [...overwriteFiles]
     .filter(([folded, real]) => !slotByName.has(folded) && isPluginFile(real))
     .map(([, real]) => ({
-      name: real, path: join(instanceRoot, 'overwrite', real), origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
+      name: real, path: join(overwriteDir(instanceRoot), real), origin: OVERWRITE_ORIGIN, slot: null, enabled: false, winning: true,
     }));
 
   return [...listed, ...losers, ...strays];

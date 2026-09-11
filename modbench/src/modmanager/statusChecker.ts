@@ -3,7 +3,7 @@
 // import, and no plugin file is opened — master facts are the backend's (ADR-0016).
 
 import { stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { modDir } from './mo2/layout';
 import type { ModlistEntry } from './model';
 import type { FileConflictIndex } from './fileConflictIndex';
 
@@ -51,7 +51,7 @@ async function computeEntryStatus(
 // ENOENT reads as absent; any other stat error propagates.
 async function modFolderExists(instanceRoot: string, modName: string): Promise<boolean> {
   try {
-    await stat(join(instanceRoot, 'mods', modName));
+    await stat(modDir(instanceRoot, modName));
     return true;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
