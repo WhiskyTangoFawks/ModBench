@@ -140,7 +140,7 @@ public sealed class SourceTransactionTests : IDisposable
         var only = Assert.Single(unrestored);
         Assert.Equal(UnrestoredReason.ChangedByAnother, only.Reason);
         Assert.Equal(
-            Path.GetRelativePath(_root, contestedFile).Replace('\\', '/'), only.RelativePath.Replace('\\', '/'));
+            "source/Fixture.esp/Npcs/Contested - 000800_Fixture.esp.json", only.RelativePath.Replace('\\', '/'));
         Assert.Equal("someone else's work", File.ReadAllText(contestedFile));
         Assert.Equal(Body(Fk("000801"), "Quiet"), File.ReadAllText(FlatFile(Fk("000801"), "npc_", "Quiet")));
     }

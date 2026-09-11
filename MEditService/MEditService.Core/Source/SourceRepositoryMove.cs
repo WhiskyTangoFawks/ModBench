@@ -3,12 +3,13 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>The full path a container's subtree moved from and to, both relative to the same mod
-/// folder — what a transaction needs to log the move without computing either path itself.</summary>
+/// <summary>The full, absolute path a container's subtree moved from and to — what a transaction
+/// needs to log the move without computing either path itself. A caller reporting one relativises it
+/// to a mod folder.</summary>
 internal readonly record struct MovedContainer(string From, string To);
 
-/// <summary>Renumber's own verb: a directory-per-record container travels to the leaf its new identity
-/// computes, subtree and all.</summary>
+/// <summary>Moves a directory-per-record container to the leaf its new identity computes, subtree and
+/// all.</summary>
 public sealed partial class SourceRepository
 {
     /// <summary>Moves the container <paramref name="identity"/> names to the leaf
