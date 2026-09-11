@@ -1,0 +1,8 @@
+# Every spelling of a RecordTextCodec member the Source folder touches beyond RecordTypeDispatch
+# and BlankDocument (ADR-0014 invariant 1), as file, member and count. Read the type fact through
+# RecordTypeDispatch or mint through BlankDocument instead of adding a line here.
+#
+# The tree-documents reader holds a RecordTextCodec to round-trip an embedded child's own text
+# through ContainerDocuments.TextOf, reading record content through the codec. Pre-existing on
+# main; the scan (ticket #869) found it but does not fix it — no debt ticket filed yet.
+MEditService.Core/Source/SourceTreeDocuments.cs: RecordTextCodec: 2
