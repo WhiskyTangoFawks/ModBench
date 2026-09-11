@@ -1,16 +1,24 @@
 // ADR-0013: a landed Instance recompute and a launch are the only things that hand mEdit a load
-// order, and the Toolbox — the MO2 side's composition root — is where both are wired.
+// order, and the client's sender is the only thing that reaches the port verb underneath.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, extname } from 'node:path';
+import { join, extname, relative, dirname } from 'node:path';
 
-// The one legitimate caller: the Toolbox subscribes the Instance to the client's sender at
-// activation. No gesture, command or view may reach the sender itself.
-const ALLOWED = 'toolbox.ts';
+// The Toolbox subscribes the Instance to the sender at activation; no gesture, command or view
+// may reach the sender itself.
+const SENDS = 'toolbox.ts';
+// The sender owns connect-before-the-first-PUT, one PUT at a time and supersession, so a second
+// caller of the port verb would be a second implementation of the arrow.
+const PUTS = join('medit', 'client', 'loadOrderSender.ts');
+// The port declares the verb and its two adapters implement it; what the scan forbids is a
+// *third* party calling it.
+const PORT = ['MEditClient.ts', 'HttpMEditClient.ts', 'InMemoryMEditClient.ts']
+  .map((name) => join('medit', 'client', name));
 
 const SEND_CALL = /\.send\s*\(/;
+const PUT_CALL = /\bputLoadOrder\s*\(/;
 
 function tsFiles(dir: string): string[] {
   const out: string[] = [];
@@ -23,40 +31,78 @@ function tsFiles(dir: string): string[] {
   return out;
 }
 
-// Shared by the production assertion and the rival test below, so a broken walk — a wrong root, a
-// silently-excluded directory — fails both the same way, not just the regex.
-function findOffenders(root: string, allowed: string): string[] {
+// Shared by the production assertions and the rivals below, so a broken walk fails them the same
+// way. The allowed files are whole relative paths: `endsWith` would exempt a `subtoolbox.ts` too.
+function findOffenders(root: string, call: RegExp, allowed: string[]): string[] {
   return tsFiles(root)
-    .filter((path) => !path.endsWith(allowed))
-    .filter((path) => SEND_CALL.test(readFileSync(path, 'utf8')));
+    .filter((path) => !allowed.includes(relative(root, path)))
+    .filter((path) => call.test(readFileSync(path, 'utf8')));
 }
+
+const SRC = join(__dirname, '..');
 
 describe('only the Toolbox hands the client a load order', () => {
   it('covers the whole extension source tree', () => {
-    const root = join(__dirname, '..'); // src/
-    expect(tsFiles(root).length).toBeGreaterThan(50);
+    expect(tsFiles(SRC).length).toBeGreaterThan(50);
   });
 
   it('no file but toolbox.ts calls .send()', () => {
-    const root = join(__dirname, '..'); // src/
-    expect(findOffenders(root, ALLOWED)).toEqual([]);
+    expect(findOffenders(SRC, SEND_CALL, [SENDS])).toEqual([]);
   });
 
-  // Rival: a gesture or command module sending a snapshot directly instead of trusting the
-  // Instance's watcher to bring the change back — caught by the real walk, not just the regex.
-  it('the tree walk itself catches a planted send() call in a non-wiring file', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'medit-load-order-send-scan-'));
-    try {
-      await mkdir(join(dir, 'nested'));
-      await writeFile(join(dir, 'topLevel.ts'), "export const noop = () => undefined;\n");
-      await writeFile(
-        join(dir, 'nested', 'someCommand.ts'),
-        "export const fire = (session) => session.loadOrderSender?.send(snapshot);\n",
-      );
-      const offenders = findOffenders(dir, join('nowhere', 'no.ts'));
-      expect(offenders).toEqual([join(dir, 'nested', 'someCommand.ts')]);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it('no file but the sender and the port itself calls putLoadOrder()', () => {
+    expect(findOffenders(SRC, PUT_CALL, [PUTS, ...PORT])).toEqual([]);
+  });
+
+  // The allowlist must name files that are really there, or an allowed path silently becomes a
+  // rule about nothing.
+  it('every allowed path is a file the walk actually reaches', () => {
+    const reached = tsFiles(SRC).map((path) => relative(SRC, path));
+    expect(reached).toEqual(expect.arrayContaining([SENDS, PUTS, ...PORT]));
   });
 });
+
+// Each rival runs through the one shared findOffenders(), over a real temporary tree rather than
+// a hand-built string, so the walk itself is on test and not just the regex.
+describe('the walk catches what goes round the sender', () => {
+  const SENDER_CALL_SOURCE = "export const fire = (session) => session.loadOrderSender?.send(snapshot);\n";
+  const PORT_CALL_SOURCE = "export const fire = (client) => client.putLoadOrder([], '/d', '/i', 'Fallout4');\n";
+
+  // Rival: a gesture or command module sending a snapshot directly instead of trusting the
+  // Instance's watcher to bring the change back.
+  it('names a planted send() call in a non-wiring file', async () => {
+    await withPlantedFile(join('nested', 'someCommand.ts'), SENDER_CALL_SOURCE, (root, planted) => {
+      expect(findOffenders(root, SEND_CALL, ['nowhere.ts'])).toEqual([planted]);
+    });
+  });
+
+  // Rival: a caller going round the sender straight to the port, which would put a second
+  // sequencing story on the arrow.
+  it('names a planted putLoadOrder() call outside the sender', async () => {
+    await withPlantedFile(join('nested', 'someCommand.ts'), PORT_CALL_SOURCE, (root, planted) => {
+      expect(findOffenders(root, PUT_CALL, ['nowhere.ts'])).toEqual([planted]);
+    });
+  });
+
+  // Rival: the allowlist matched loosely. A file whose name merely ends with an allowed one is a
+  // different file and stays an offender.
+  it('does not exempt a file whose name merely ends with an allowed one', async () => {
+    await withPlantedFile('subtoolbox.ts', SENDER_CALL_SOURCE, (root, planted) => {
+      expect(findOffenders(root, SEND_CALL, [SENDS])).toEqual([planted]);
+    });
+  });
+});
+
+async function withPlantedFile(
+  relativePath: string, source: string, check: (root: string, planted: string) => void,
+): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), 'medit-load-order-send-scan-'));
+  try {
+    await mkdir(dirname(join(dir, relativePath)), { recursive: true });
+    await writeFile(join(dir, 'topLevel.ts'), "export const noop = () => undefined;\n");
+    await writeFile(join(dir, relativePath), source);
+    check(dir, join(dir, relativePath));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}

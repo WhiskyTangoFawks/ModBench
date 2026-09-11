@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type {
   CrashRepairOffer, LoadOrderStatus as LoadOrderProgress, MEditClient, PluginLoadFailure,
 } from './medit/client';
-import { createLoadOrderSender } from './medit/client';
+import { createLoadOrderSender, type LoadOrderSender } from './medit/client';
 import { implicitMastersFrom, rebuildIndexVia } from './toolboxClientCalls';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
@@ -169,6 +169,8 @@ interface ReconcileDeps {
   instanceRoot: string;
   /** ADR-0013/ADR-0015: the snapshot is read from this, never from a walk of its own. */
   instance: Instance;
+  /** ADR-0013: the one thing a snapshot is handed to. */
+  sender: LoadOrderSender;
   client: ToolboxClient;
   /** The record browser a reconciled load order refreshes — a different provider from
    *  `session.pluginsTree`, which `applyLoadOrderToTree` below owns. */
@@ -195,7 +197,7 @@ function applySyncedFilterState(
 // happens to it from there, and what comes back is reported and applied here.
 function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
   const {
-    session, instanceRoot, instance, client, recordBrowser, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
   } = deps;
   const run = async (): Promise<void> => {
@@ -209,7 +211,7 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
     outputChannel.info(`[toolbox] handing mEdit the load order snapshot (${plugins.length} plugin copies)`);
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
-    const result = await session.loadOrderSender!.send({
+    const result = await sender.send({
       plugins,
       gameDirectory: dataFolder,
       instanceRoot,
@@ -233,8 +235,8 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
 }
 
 // ADR-0002: rows gain chevrons here — and *finish* gaining them here. The tree reads the
-// backend's own plugin list itself; the failures the toast inside putLoadOrder already consumed
-// ride along rather than being re-derived.
+// backend's own plugin list itself; the failures `reportLoadOrderResult` already toasted ride
+// along rather than being re-derived.
 async function applyLoadOrderToTree(
   session: ExtensionSession,
   failures: PluginLoadFailure[],
@@ -286,11 +288,11 @@ function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
 // ADR-0002: owns its own progress indicator rather than leaving each caller to wrap it, and
 // reports its steps through `say`.
 function makeEnterEditing(
-  session: ExtensionSession, instance: Instance, client: ToolboxClient,
+  session: ExtensionSession, instance: Instance, sender: LoadOrderSender, client: ToolboxClient,
   outputChannel: vscode.LogOutputChannel, revealLog: () => void, reconcile: () => Promise<void>,
 ): () => Promise<void> {
   const enter = async (): Promise<void> => {
-    const { abandoned } = session.loadOrderSender!.arm();
+    const { abandoned } = sender.arm();
     // Overlaps with the backend starting below, same as the tree's own first-value wait: the
     // reconcile must read a real Instance value, never the empty pre-first-read sentinel.
     const instanceReady = instance.sequence > 0 ? Promise.resolve() : instance.refresh();
@@ -322,9 +324,9 @@ function makeEnterEditing(
 }
 
 
-/** The task type tool launching contributes one task per MO2 executables-registry entry under.
- *  Named here so the provider and the Launch… command have one place to agree. */
-export const LAUNCH_TASK_TYPE = 'modbench';
+// The task type the Launch… command picks from. Nothing contributes one yet, so the pick is
+// empty until a task provider or a tasks.json entry declares this type.
+const LAUNCH_TASK_TYPE = 'modbench';
 
 interface ToolboxCommandDeps {
   instanceRoot: string;
@@ -474,11 +476,12 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // ADR-0015: rows, statuses and the overwrite count all come from the Instance value now —
   // this provider builds no index and reads no disk of its own.
   const modListProvider = own(new ModListProvider({ instance, log, instanceRoot, reporter: modListReporter }));
-  // ADR-0013: built before the Plugins tree, because both the tree's hasMatchingRecords accessor
-  // and enterEditing below need the session slot filled first.
-  session.loadOrderSender = own(createLoadOrderSender(client));
+  // Held on the session as well, because the teardown writers outside this file abandon the
+  // send in flight through it (ADR-0013).
+  const sender = own(createLoadOrderSender(client));
+  session.loadOrderSender = sender;
   const reconcile = makeReconcile({
-    session, instanceRoot, instance, client, recordBrowser, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
     setStatusText, notifyConflictsComputed,
   });
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder
@@ -530,7 +533,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   };
   const { enter: enterEditing } = own(enterEditingAcrossRestarts(
     client,
-    makeEnterEditing(session, instance, client, outputChannel, () => outputChannel.show(true), reconcile),
+    makeEnterEditing(session, instance, sender, client, outputChannel, () => outputChannel.show(true), reconcile),
     (msg) => outputChannel.error(`[toolbox] ${msg}`),
   ));
   // ADR-0013: the one trigger for a PUT — a landed Instance recompute, never a gesture. A throw
