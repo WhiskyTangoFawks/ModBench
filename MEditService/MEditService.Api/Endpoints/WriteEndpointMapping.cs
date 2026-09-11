@@ -1,7 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
-using MEditService.Core.Records;
 
 namespace MEditService.Api.Endpoints;
 
@@ -64,24 +63,15 @@ internal static class WriteEndpointMapping
     /// request.</summary>
     internal static IResult NoLoadOrder(InvalidOperationException ex) => Results.Problem(ex.Message, statusCode: 503);
 
-    /// <summary>503, not 500: the write was never attempted, so nothing is half-applied and the right
-    /// response is a retry. The writeGateTimeout extension tells it apart from
-    /// <see cref="NoLoadOrder"/>, which wants a reload instead (ADR-0019).</summary>
-    internal static IResult WriteGateBusy(IndexWriteGateTimeoutException ex) => Results.Problem(
-        detail: ex.Message,
-        statusCode: 503,
-        extensions: new Dictionary<string, object?> { ["writeGateTimeout"] = true });
-
     /// <summary>xEdit's typed-FormID path reaches Mutagen's FormKey.Factory with no TryFactory
     /// guard, so a malformed value throws ArgumentException: malformed syntax is a 400, never
     /// <see cref="Refusal(RecordEditResult)"/>'s 422.</summary>
     internal static IResult MalformedFormKey(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
 
-    /// <summary>The gate wraps only the service call, so a malformed request never queues and the
-    /// response is shaped while the next write runs; taking it here makes one-write-at-a-time a
-    /// property of the write path.</summary>
+    /// <summary>ADR-0015 invariant 2: no Index gate here. A record gesture writes its system of
+    /// record and returns, and the Index serializes its own projections afterwards, so a source
+    /// write never queues behind one and never answers "busy".</summary>
     internal static IResult Execute(
-        IndexWriteGate gate,
         Action? logReceived,
         Func<IResult?> validate,
         Func<RecordEditResult> execute,
@@ -97,16 +87,8 @@ internal static class WriteEndpointMapping
 
         try
         {
-            RecordEditResult result;
-            using (gate.Enter()) result = execute();
+            var result = execute();
             return result.Applied ? onApplied(result) : Refusal(result);
-        }
-        catch (IndexWriteGateTimeoutException ex)
-        {
-            // The gate is what makes this honest answer reachable: without it, a nested
-            // BeginTransaction on the shared connection throws InvalidOperationException, which the
-            // catch below reports as the load order having gone away.
-            return WriteGateBusy(ex);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

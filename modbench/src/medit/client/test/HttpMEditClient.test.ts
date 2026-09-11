@@ -126,47 +126,17 @@ describe('HttpMEditClient — the notification stream follows the status', () =>
 });
 
 // ADR-0019: the adapter's own logic — transport, timeouts and error mapping — with the per-verb
-// wiring left to the backend's own handler tests. Every case here is named in fix-826's ticket.
-describe('HttpMEditClient — write-gate contention', () => {
-  it('says the write is retryable, not that the load order went away', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, {
-      writeGateTimeout: true, detail: 'Another write to the record index is still in progress after 5s.',
-    })));
-    const client = makeClient(fetch);
-
-    const result = await client.renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
-
-    expect(result).toEqual({
-      refused: true,
-      message: 'mEdit: Could not renumber 000800:MyPatch.esp — another change is still being written. Try again in a moment.',
-    });
-  });
-
-  // The rival this guards against: keying off the 503 status, or off the detail text, rather
-  // than off the extension. A load order that genuinely went away is also a 503.
-  it('leaves the load-order-absent 503 exactly as it was', async () => {
+// wiring left to the backend's own handler tests.
+describe('HttpMEditClient — a 503 from a write', () => {
+  // 503 has one meaning left: the load order went away. The rival is a client that reads more
+  // into the status than the detail says.
+  it('relays the load-order-absent 503 as the backend worded it', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
 
     const result = await client.renumberRecord('000800:MyPatch.esp', 'MyPatch.esp', 'ModA');
 
     expect(result).toEqual({ refused: true, message: 'mEdit: Could not renumber 000800:MyPatch.esp — No load order has been received.' });
-  });
-
-  it('editRecord reports the same gate timeout, in the same words every other write uses', async () => {
-    const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, {
-      writeGateTimeout: true, detail: 'Another write to the record index is still in progress after 5s.',
-    })));
-    const client = makeClient(fetch);
-
-    const outcome = await client.editRecord(
-      '000800:MyPatch.esp', 'MyPatch.esp', 'ModA', { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'x' },
-    );
-
-    expect(outcome).toEqual({
-      applied: false, refusal: 'WriteGateBusy',
-      message: 'Could not edit this record — another change is still being written. Try again in a moment.',
-    });
   });
 });
 

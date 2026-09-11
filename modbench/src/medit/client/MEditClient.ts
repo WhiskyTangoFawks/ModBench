@@ -65,8 +65,8 @@ export interface LoadOrderOptions {
 }
 
 /** A refusal is an outcome, not an exception: `refusal` carries the backend's own name for it,
- *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'`
- *  and `'WriteGateBusy'` are this side's additions. */
+ *  which lets a caller offer Track for one and the patch-plugin path for another. `'Unknown'` is
+ *  this side's own addition. */
 export type RecordEditOutcome =
   | { applied: true }
   | { applied: false; refusal: string; message: string };

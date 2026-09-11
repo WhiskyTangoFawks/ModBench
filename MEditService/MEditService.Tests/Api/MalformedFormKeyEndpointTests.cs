@@ -30,7 +30,7 @@ public sealed class MalformedFormKeyEndpointTests
         using var mod = IndexedModFixture.Tracked();
         var req = new RecordCreateRequest(IndexedModFixture.ModFolderOrigin, "npc_", "Broken", MalformedFormKey);
 
-        var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, CreateHandlerFor(mod), mod.Index.WriteGate, NullLoggerFactory.Instance);
+        var result = PluginEndpoints.CreateRecord(mod.Plugin.Name, req, CreateHandlerFor(mod), NullLoggerFactory.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
@@ -42,7 +42,7 @@ public sealed class MalformedFormKeyEndpointTests
         using var mod = IndexedModFixture.Tracked();
         var req = new RecordRenumberRequest(mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
-        var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, RenumberHandlerFor(mod), mod.Index.WriteGate, NullLogger.Instance);
+        var result = RecordEndpoints.RenumberRecord(mod.Npc.ToString(), req, RenumberHandlerFor(mod), NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
@@ -57,7 +57,7 @@ public sealed class MalformedFormKeyEndpointTests
             mod.Plugin.Name, IndexedModFixture.ModFolderOrigin, MalformedFormKey);
 
         var result = RecordEndpoints.CopyRecordAsNewRecord(
-            mod.Npc.ToString(), req, CopyAsNewHandlerFor(mod), mod.Index.WriteGate, NullLogger.Instance);
+            mod.Npc.ToString(), req, CopyAsNewHandlerFor(mod), NullLogger.Instance);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

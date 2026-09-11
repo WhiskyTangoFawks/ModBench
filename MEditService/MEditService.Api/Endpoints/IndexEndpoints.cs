@@ -61,10 +61,6 @@ public static class IndexEndpoints
                 index.Sequence,
                 [.. reports.SelectMany(r => r.Failures)]));
         }
-        catch (IndexWriteGateTimeoutException ex)
-        {
-            return WriteEndpointMapping.WriteGateBusy(ex);
-        }
         catch (NoLoadOrderException ex)
         {
             logger.LogWarning(ex, "No load order when reconciling the index");
