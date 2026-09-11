@@ -348,8 +348,8 @@ public sealed partial class SourceRepository
         return Path.GetDirectoryName(document)!;
     }
 
-    // Minted only where it is missing, so a second cell into a block level leaves the level's own
-    // document exactly as it stands.
+    // Track writes a level's document with whatever metadata the source mod carried, and a cell
+    // landing in the level is no reason to respell it.
     private string MintBlockLevel(string parentDirectory, Type level, int? x, int? y)
     {
         var directory = Path.Combine(parentDirectory, BlockLevelName(x, y));
