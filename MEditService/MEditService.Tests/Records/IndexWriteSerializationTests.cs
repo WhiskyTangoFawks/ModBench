@@ -18,7 +18,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
     private IndexProjector Index => _mod.Index;
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_mod.Index, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_mod.Index, _mod.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private static (Task Work, bool Finished) RunAndWait(Action work, TimeSpan within)
     {

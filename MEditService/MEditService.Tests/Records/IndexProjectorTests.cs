@@ -107,6 +107,44 @@ public sealed class IndexProjectorTests
             RegistrationRows(projector).Select(c => (c.Name, c.Origin, c.Slot, c.Enabled, c.Winning)).OrderBy(c => c.Name).ToList());
     }
 
+    // Header flags, the master list and the record count are read out of the file when the copy is
+    // opened and are stored in no row, so the reads answer them from the copies the Index holds open.
+    [Fact]
+    public void TheReads_CarryTheContentFactsOfEveryCopyTheIndexOpened()
+    {
+        using var fx = TwoProviders("projector-opened-content");
+        var projector = MakeProjector();
+        using var _1 = projector;
+        var snapshot = Snapshot(fx);
+
+        projector.Reconcile(snapshot);
+
+        var opened = projector.RequireReads().OpenedCopies;
+        var patch = opened[snapshot.Copies.Single(c => c.Name == "B.esp").Key];
+        Assert.Equal(["A.esm"], patch.Masters);
+        Assert.Equal(1, patch.RecordCount);
+        Assert.False(patch.IsMaster);
+        Assert.True(opened[snapshot.Copies.Single(c => c.Name == "A.esm").Key].IsMaster);
+    }
+
+    // A copy the Index could not open has no content to report, and the plugin listing is built by
+    // joining the load order's copies to exactly this set.
+    [Fact]
+    public void TheReads_OmitACopyTheIndexCouldNotOpen()
+    {
+        using var fx = TwoProviders("projector-unopenable-content");
+        var projector = MakeProjector();
+        using var _1 = projector;
+        var gone = new LoadOrderEntry("Gone.esp", Path.Combine(fx.GameDirectory, "Gone.esp"), "SomeMod", 9, true, true);
+        var snapshot = Snapshot(fx, [.. fx.Plugins, gone]);
+
+        projector.Reconcile(snapshot);
+
+        var opened = projector.RequireReads().OpenedCopies;
+        Assert.DoesNotContain(new PluginKey("Gone.esp", "SomeMod"), opened.Keys);
+        Assert.Contains(snapshot.Copies.Single(c => c.Name == "A.esm").Key, opened.Keys);
+    }
+
     [Fact]
     public void ACopyDroppedFromTheSnapshot_LosesItsRegistrationRow_OnTheNextReconcile()
     {

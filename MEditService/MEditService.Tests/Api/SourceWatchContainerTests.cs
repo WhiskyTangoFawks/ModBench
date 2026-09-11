@@ -40,7 +40,7 @@ public sealed class SourceWatchContainerTests : IDisposable
     }
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Index, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Index, _fixture.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, args);

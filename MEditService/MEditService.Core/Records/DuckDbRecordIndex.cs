@@ -600,6 +600,14 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private IRecordReads? _effectiveReads;
     private IRecordReads? _headReads;
 
+    // Empty until the projector points it somewhere: a store opened by a test that never reconciles
+    // has no copies open, which is what an empty set says.
+    private Func<IReadOnlyDictionary<PluginKey, PluginContent>> _openedCopies =
+        () => new Dictionary<PluginKey, PluginContent>();
+
+    public void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginKey, PluginContent>> opened) =>
+        _openedCopies = opened;
+
     /// <summary>Reads answering from the extracted tables (<c>Resolve</c>, <c>GetReferencedBy</c>,
     /// <c>GetPlacement</c>) are identical at both refs: those tables carry no ref dimension and
     /// track Effective. The public surface is <c>At(Effective)</c>.</summary>
@@ -618,6 +626,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // names, so a read cannot be ref-aware on one path and not the other.
     private sealed class RelationReads(DuckDbRecordIndex owner, string records) : IRecordReads
     {
+        public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies => owner._openedCopies();
+
         public RecordDocument? GetDocument(string formKey)
         {
             using var connection = owner.OpenRead();

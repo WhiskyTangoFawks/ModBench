@@ -23,22 +23,22 @@ public static class MasterResolution
     /// <summary>Per-plugin master issues, keyed by plugin name; a plugin with every master
     /// resolved has no entry (never an empty list).</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> Classify(
-        IReadOnlyList<PluginMetadata> plugins, IReadOnlyList<PluginLoadFailure> failures)
+        IReadOnlyDictionary<PluginKey, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
     {
-        var loaded = plugins.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var loaded = opened.Keys.Select(k => k.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var failed = failures.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var result = new Dictionary<string, IReadOnlyList<MasterIssue>>(StringComparer.OrdinalIgnoreCase);
-        foreach (var plugin in plugins)
+        foreach (var (key, content) in opened)
         {
             var issues = new List<MasterIssue>();
-            foreach (var master in plugin.Masters)
+            foreach (var master in content.Masters)
             {
                 if (loaded.Contains(master)) continue;
                 var kind = failed.Contains(master) ? MasterIssueKind.Unloadable : MasterIssueKind.DirectlyMissing;
                 issues.Add(new MasterIssue(master, kind));
             }
-            if (issues.Count > 0) result[plugin.Name] = issues;
+            if (issues.Count > 0) result[key.Name] = issues;
         }
         return result;
     }

@@ -27,13 +27,13 @@ public sealed class CutDownPluginCompareFixture : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         Index = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        Index.Reconcile(
+        var holder = Index.Reconcile(
             _gameDirectory,
             [new LoadOrderEntry(
                 CutDownPluginFixture.PluginFileName, CutDownPluginFixture.PluginPath, Origin,
                 Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Compare = new RecordQueryService(Index, reflector, new ConflictClassifier());
+        Compare = new RecordQueryService(Index, holder, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

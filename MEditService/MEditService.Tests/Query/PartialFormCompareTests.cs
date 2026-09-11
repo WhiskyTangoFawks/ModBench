@@ -75,8 +75,8 @@ public sealed class PartialFormCompareTests : IDisposable
 
         var reflector = SharedSchemaReflector.Instance;
         _manager = new IndexProjector(MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
+        var holder = _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _service = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

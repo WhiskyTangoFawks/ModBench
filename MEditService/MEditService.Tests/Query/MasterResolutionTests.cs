@@ -7,13 +7,17 @@ namespace MEditService.Tests.Query;
 // directly-missing master from one that is itself unloadable.
 public class MasterResolutionTests
 {
-    private static PluginMetadata Plugin(string name, params string[] masters) =>
-        new(name, "", 0, IsLight: false, IsMaster: false, masters, RecordCount: 0, IsForced: false, Origin: "Data", Enabled: true, Winning: true);
+    private static (PluginKey Key, PluginContent Content) Plugin(string name, params string[] masters) =>
+        (new PluginKey(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
+
+    private static IReadOnlyDictionary<PluginKey, PluginContent> Opened(
+        params (PluginKey Key, PluginContent Content)[] plugins) =>
+        plugins.ToDictionary(p => p.Key, p => p.Content, PluginKey.Comparer);
 
     [Fact]
     public void Classify_MasterAbsentFromLoadedAndFailedSets_ReturnsDirectlyMissing()
     {
-        var plugins = new[] { Plugin("Patch.esp", "Ghost.esm") };
+        var plugins = Opened(Plugin("Patch.esp", "Ghost.esm"));
 
         var result = MasterResolution.Classify(plugins, failures: []);
 
@@ -25,7 +29,7 @@ public class MasterResolutionTests
     [Fact]
     public void Classify_MasterInFailedSet_ReturnsUnloadable()
     {
-        var plugins = new[] { Plugin("Patch.esp", "Broken.esm") };
+        var plugins = Opened(Plugin("Patch.esp", "Broken.esm"));
         var failures = new[] { new PluginLoadFailure("Broken.esm", "SomeMod", "Malformed record") };
 
         var result = MasterResolution.Classify(plugins, failures);
@@ -38,7 +42,7 @@ public class MasterResolutionTests
     [Fact]
     public void Classify_MasterSuccessfullyLoaded_ReportsNoIssue()
     {
-        var plugins = new[] { Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm") };
+        var plugins = Opened(Plugin("Base.esm"), Plugin("Patch.esp", "Base.esm"));
 
         var result = MasterResolution.Classify(plugins, failures: []);
 
@@ -48,7 +52,7 @@ public class MasterResolutionTests
     [Fact]
     public void Classify_MasterNameMatchIsCaseInsensitive()
     {
-        var plugins = new[] { Plugin("Base.ESM"), Plugin("Patch.esp", "base.esm") };
+        var plugins = Opened(Plugin("Base.ESM"), Plugin("Patch.esp", "base.esm"));
 
         var result = MasterResolution.Classify(plugins, failures: []);
 
@@ -60,11 +64,9 @@ public class MasterResolutionTests
     [Fact]
     public void Classify_MastersMasterIsMissing_DoesNotCascadeToDependent()
     {
-        var plugins = new[]
-        {
+        var plugins = Opened(
             Plugin("A.esm", "C.esm"), // A itself has a missing master C
-            Plugin("B.esp", "A.esm"), // B masters A only — A loaded fine
-        };
+            Plugin("B.esp", "A.esm")); // B masters A only — A loaded fine
 
         var result = MasterResolution.Classify(plugins, failures: []);
 
@@ -75,7 +77,7 @@ public class MasterResolutionTests
     [Fact]
     public void Classify_NoIssues_ReturnsEmptyDictionary()
     {
-        var plugins = new[] { Plugin("Base.esm") };
+        var plugins = Opened(Plugin("Base.esm"));
 
         var result = MasterResolution.Classify(plugins, failures: []);
 

@@ -35,9 +35,9 @@ public sealed class FileOverrideCompareColumnTests
         var snapshot = fx.Plugins
             .Select(p => p.Origin == "ModB" ? p with { Slot = winner.Slot, Winning = false } : p)
             .ToList();
-        manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        var holder = manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var compare = svc.GetCompare("000800:Shared.esp");
 
@@ -66,9 +66,9 @@ public sealed class FileOverrideCompareColumnTests
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         var snapshot = fx.Plugins.Select(p => p with { Enabled = false }).ToList();
-        manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
+        var holder = manager.Reconcile(fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var svc = new RecordQueryService(manager, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var compare = svc.GetCompare("000800:Solo.esp");
 

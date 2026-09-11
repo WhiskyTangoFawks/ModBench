@@ -259,8 +259,8 @@ public sealed class ParseFailedRecordTests
             Index = new IndexProjector(
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            Index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
-            Query = new RecordQueryService(Index, SharedSchemaReflector.Instance, new ConflictClassifier());
+            var holder = Index.Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
+            Query = new RecordQueryService(Index, holder, SharedSchemaReflector.Instance, new ConflictClassifier());
         }
 
         public void Dispose()

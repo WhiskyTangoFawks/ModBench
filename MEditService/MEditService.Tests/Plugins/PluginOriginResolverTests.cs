@@ -1,6 +1,5 @@
 using MEditService.Core.Plugins;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
@@ -8,18 +7,18 @@ namespace MEditService.Tests.Plugins;
 // filename mean?" has two candidates and one right answer.
 public sealed class PluginOriginResolverTests
 {
-    private static ILoadOrder LoadOrderWith(params PluginMetadata[] plugins) => new StubLoadOrder(plugins);
+    private static LoadOrder LoadOrderWith(params RegisteredCopy[] copies) =>
+        new(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, copies);
 
-    private static PluginMetadata Plugin(string name, string origin, bool inLoadOrder) =>
-        new(name, Path: "", LoadOrderIndex: 0, IsLight: false, IsMaster: false, Masters: [], RecordCount: 0,
-            IsForced: false, Origin: origin, Enabled: true, Winning: inLoadOrder);
+    private static RegisteredCopy Copy(string name, string origin, bool inLoadOrder) =>
+        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: inLoadOrder);
 
     [Fact]
     public void Resolve_ShadowedCopyListedFirst_StillResolvesTheLoadOrderCopy()
     {
         var loadOrder = LoadOrderWith(
-            Plugin("Shared.esp", "ModB", inLoadOrder: false),
-            Plugin("Shared.esp", "ModA", inLoadOrder: true));
+            Copy("Shared.esp", "ModB", inLoadOrder: false),
+            Copy("Shared.esp", "ModA", inLoadOrder: true));
 
         Assert.Equal("ModA", PluginOriginResolver.Resolve(loadOrder, "Shared.esp"));
     }
@@ -30,7 +29,7 @@ public sealed class PluginOriginResolverTests
         // A write target absent from the load order is not a legitimate target, so resolving to its origin
         // would attribute a read to a file the game never loads. The reserved fallback keeps that
         // impossible.
-        var loadOrder = LoadOrderWith(Plugin("Orphan.esp", "SomeMod", inLoadOrder: false));
+        var loadOrder = LoadOrderWith(Copy("Orphan.esp", "SomeMod", inLoadOrder: false));
 
         Assert.Equal(PluginOrigin.DataDirectory, PluginOriginResolver.Resolve(loadOrder, "Orphan.esp"));
     }
@@ -40,54 +39,26 @@ public sealed class PluginOriginResolverTests
     {
         // Participation is not membership: a disabled plugins.txt line is still in the load order
         // and is still a legitimate write target (ADR-0035).
-        var disabled = Plugin("Disabled.esp", "SomeMod", inLoadOrder: true) with { Enabled = false };
+        var disabled = Copy("Disabled.esp", "SomeMod", inLoadOrder: true) with { Enabled = false };
         var loadOrder = LoadOrderWith(disabled);
 
         Assert.Equal("SomeMod", PluginOriginResolver.Resolve(loadOrder, "Disabled.esp"));
     }
 
-    // LoadOrderPlugin is Resolve's own building block, exposed for the write-path guards that need the
-    // metadata itself rather than the origin string. Same scoping, same reason: a plain first match is
-    // an accident of list order.
     [Fact]
-    public void LoadOrderPlugin_ShadowedCopyListedFirst_StillReturnsTheLoadOrderCopy()
+    public void Resolve_UnlistedCopy_FallsBackEvenThoughItWins()
     {
-        var loadOrder = LoadOrderWith(
-            Plugin("Shared.esp", "ModB", inLoadOrder: false),
-            Plugin("Shared.esp", "ModA", inLoadOrder: true));
+        // No plugins.txt line, so no slot: the Mod override order still names a winner among the
+        // copies, and that is not load-order membership.
+        var unlisted = Copy("Loose.esp", "SomeMod", inLoadOrder: true) with { Slot = null };
+        var loadOrder = LoadOrderWith(unlisted);
 
-        var meta = loadOrder.LoadOrderPlugin("Shared.esp");
-
-        Assert.NotNull(meta);
-        Assert.Equal("ModA", meta.Origin);
-        Assert.False(meta.IsImmutable);
-    }
-
-    // Null is the answer for "no load-order member of this name" — callers must read it as a
-    // refusal, not as "not immutable".
-    [Fact]
-    public void LoadOrderPlugin_OnlyCopyIsOutsideTheLoadOrder_ReturnsNull()
-    {
-        var loadOrder = LoadOrderWith(Plugin("Orphan.esp", "SomeMod", inLoadOrder: false));
-
-        Assert.Null(loadOrder.LoadOrderPlugin("Orphan.esp"));
+        Assert.Equal(PluginOrigin.DataDirectory, PluginOriginResolver.Resolve(loadOrder, "Loose.esp"));
     }
 
     [Fact]
-    public void LoadOrderPlugin_NoLoadOrder_ReturnsNull()
+    public void Resolve_NoLoadOrderApplied_FallsBack()
     {
-        ILoadOrder? loadOrder = null;
-
-        Assert.Null(loadOrder.LoadOrderPlugin("Anything.esp"));
-    }
-
-    private sealed class StubLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
-    {
-        public string DataFolderPath => throw new NotSupportedException();
-        public string? InstanceRoot => throw new NotSupportedException();
-        public GameRelease GameRelease => GameRelease.Fallout4;
-        public IReadOnlyList<PluginMetadata> Plugins { get; } = plugins;
-        public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
-        public void Dispose() { }
+        Assert.Equal(PluginOrigin.DataDirectory, PluginOriginResolver.Resolve(LoadOrder.Empty, "Anything.esp"));
     }
 }

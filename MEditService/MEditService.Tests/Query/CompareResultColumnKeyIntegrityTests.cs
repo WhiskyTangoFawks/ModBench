@@ -117,26 +117,14 @@ public sealed class CompareResultColumnKeyIntegrityTests
     private static IEnumerable<Type> CandidateInterfaces(Type type) =>
         type.IsInterface ? [type, .. type.GetInterfaces()] : type.GetInterfaces();
 
-    // ---- minimal IQueryIndex/ILoadOrder fakes ----
-    //
-    // One Plugins entry is all this needs: it asserts the shape of the response's column keys, not
-    // classification, and the other column falls back to fail-open defaults it never reads.
-    private sealed class FakeLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
-    {
-        public string DataFolderPath => throw new NotSupportedException();
-        public string? InstanceRoot => throw new NotSupportedException();
-        public GameRelease GameRelease => GameRelease.Fallout4;
-        public IReadOnlyList<PluginMetadata> Plugins { get; } = plugins;
-        public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
-        public void Dispose() { }
-    }
-
-    private sealed class FakeIndex(ILoadOrder loadOrder, IRecordReads reads) : IQueryIndex
+    // One copy in the load order is all this needs: it asserts the shape of the response's column
+    // keys, not classification, and the other column falls back to fail-open defaults it never reads.
+    private sealed class FakeIndex(IRecordReads reads) : IQueryIndex
     {
         // This double exists for read-model shape assertions only: nothing here projects or filters.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public string? FilterSql => null;
-        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => (loadOrder, reads);
+        public IRecordReads RequireReads() => reads;
     }
 
     [Fact]
@@ -192,9 +180,12 @@ public sealed class CompareResultColumnKeyIntegrityTests
         repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
-        var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data", Enabled: true, Winning: true) };
-        var index = new FakeIndex(new FakeLoadOrder(plugins), repo.At(RecordRef.Effective));
-        var svc = new RecordQueryService(index, reflector, new ConflictClassifier());
+        var index = new FakeIndex(repo.At(RecordRef.Effective));
+        var holder = new LoadOrderHolder();
+        holder.Apply(new LoadOrder(
+            @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4,
+            [new RegisteredCopy("Shared.esp", "Data", "", Slot: 0, Enabled: true, Winning: true)]));
+        var svc = new RecordQueryService(index, holder, reflector, new ConflictClassifier());
 
         var compare = svc.GetCompare(perk.FormKey.ToString());
 

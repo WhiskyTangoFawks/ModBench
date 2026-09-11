@@ -12,13 +12,10 @@ namespace MEditService.Core.Plugins;
 // first-match returns the right plugin today only by accident of list order.
 public static class PluginOriginResolver
 {
-    public static string Resolve(ILoadOrder? loadOrder, string plugin) =>
-        loadOrder.LoadOrderPlugin(plugin)?.Origin ?? PluginOrigin.DataDirectory;
-
-    // Null means "no load-order member of this name", which callers must treat as a refusal. An
-    // extension rather than an ILoadOrder member so it forces no mechanical edit onto every
-    // hand-written ILoadOrder test double.
-    public static PluginMetadata? LoadOrderPlugin(this ILoadOrder? loadOrder, string plugin) =>
-        loadOrder?.Plugins.FirstOrDefault(p =>
-            p.InLoadOrder && p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase));
+    public static string Resolve(LoadOrder loadOrder, string plugin) =>
+        loadOrder.Copies
+            .FirstOrDefault(c =>
+                c.Registration.InLoadOrder && c.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))
+            ?.Origin
+        ?? PluginOrigin.DataDirectory;
 }
