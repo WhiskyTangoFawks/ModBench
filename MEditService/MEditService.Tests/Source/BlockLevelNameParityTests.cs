@@ -36,7 +36,7 @@ public sealed class BlockLevelNameParityTests
             var writtenSubBlock = Directory.EnumerateDirectories(writtenBlock).Single();
             var writtenCell = Directory.EnumerateDirectories(writtenSubBlock).Single();
 
-            var placedWorldspace = PutOneExteriorCell(scratch);
+            var placedWorldspace = WorldspaceDirectoryAPutOfOneExteriorCellLeaves(scratch);
             var placedBlock = Directory.EnumerateDirectories(placedWorldspace).Single();
             var placedSubBlock = Directory.EnumerateDirectories(placedBlock).Single();
             var placedCell = Directory.EnumerateDirectories(placedSubBlock).Single();
@@ -52,9 +52,7 @@ public sealed class BlockLevelNameParityTests
         }
     }
 
-    // A mod folder of its own beside the serializer's output, so the two trees cannot be confused for
-    // one another. Answers the worldspace's directory, which the block levels hang under.
-    private static string PutOneExteriorCell(string scratch)
+    private static string WorldspaceDirectoryAPutOfOneExteriorCellLeaves(string scratch)
     {
         var modFolder = Directory.CreateDirectory(Path.Combine(scratch, "put")).FullName;
         var key = new PluginKey(Plugin);

@@ -332,8 +332,8 @@ public sealed partial class SourceRepository
 
     private const int ExteriorBlockLevels = 2;
 
-    // Refuses rather than minting: a worldspace is a record, and only a caller that can mint one
-    // through the codec may put it.
+    // A worldspace is a record and only the codec mints one, so a tree already holding it is this
+    // put's precondition.
     private string WorldspaceDirectoryHolding(PluginKey plugin, CellPlacement placement)
     {
         if (placement.ParentWorldspace is not { } worldspace)

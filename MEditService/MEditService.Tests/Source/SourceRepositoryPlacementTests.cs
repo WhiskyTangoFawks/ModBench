@@ -111,8 +111,6 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
     private const string WorldspaceFormKey = FormKey;
     private const string CellFormKey = "000801:Vendor.esp";
 
-    // Deliberately not derivable from the cell's grid by any floor(grid/N) rule: a put that
-    // recomputed the numbers instead of carrying the placement's own would name other directories.
     private static readonly CellPlacement Somewhere =
         new(WorldspaceFormKey, BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, IsInterior: false);
 
@@ -144,8 +142,6 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
             TreeAfterPuttingExteriorCell(Somewhere));
     }
 
-    // Pinned to the byte: the compiler reads a level's numbers back out of the document as well as
-    // its directory name, and a level numbered zero leaves the member out as its own default.
     [Fact]
     public void AMintedBlockLevel_CarriesThePlacementsOwnNumbers()
     {
@@ -174,8 +170,6 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
                 new CellPlacement(WorldspaceFormKey, BlockX: -7, BlockY: 11, SubX: 4, SubY: -3, IsInterior: false)));
     }
 
-    // Track writes a block level's document with whatever metadata the source mod carried, and a cell
-    // landing in the level is no reason to respell it.
     [Fact]
     public void ABlockLevelTheTreeAlreadyHolds_KeepsItsOwnDocument()
     {
@@ -192,8 +186,6 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
         Assert.Equal(HandWritten, Text(standing));
     }
 
-    // The worldspace is found by its FormKey, so the override the destination named itself is written
-    // into; a computed directory name would stand a bare-named sibling beside it.
     [Fact]
     public void ASecondExteriorCell_LandsInsideTheStandingWorldspace_AndLeavesItsOwnDocumentAlone()
     {
@@ -212,8 +204,6 @@ public sealed class SourceRepositoryPlacementTests : IDisposable
             Path.Combine(worldspace, "3, -2", "0, -1", "SomeCell - 000801_Vendor.esp", "RecordData.json"), tree);
     }
 
-    // The mint of a worldspace is the handler's, so a put with nowhere to place the cell says so
-    // rather than standing a directory the tree cannot name.
     [Fact]
     public void AnExteriorCell_WhoseWorldspaceTheTreeDoesNotHold_HasNoPlaceOfItsOwn()
     {
