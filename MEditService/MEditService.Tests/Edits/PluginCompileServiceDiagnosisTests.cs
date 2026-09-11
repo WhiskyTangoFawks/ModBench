@@ -18,9 +18,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
     [Fact]
     public void Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheSourceFileNotJustTheRawExceptionText()
     {
-        var npcFile = _mod.NpcSourceFile;
-        var original = File.ReadAllText(npcFile);
-        File.WriteAllText(npcFile, original.Replace(_mod.Race.ToString(), "NOT-A-FORMKEY", StringComparison.Ordinal));
+        Corrupt(_mod.NpcSourceFile);
 
         var compileService = _mod.CompileService();
         var result = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
@@ -32,4 +30,38 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         Assert.Contains(PluginDiagnosis.UnknownClass, result.RefusalReason);
         Assert.Contains("Re-Track to regenerate the source.", result.RefusalReason);
     }
+
+    // Mod-folder relative, so the named file joins straight onto the mod folder for the Problems
+    // panel, whichever source the compile read.
+    [Fact]
+    public void Compile_WhenTheWorkingTreeHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
+    {
+        Corrupt(_mod.NpcSourceFile);
+
+        var result = _mod.CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(
+            Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile), result.RefusalReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Compile_WhenTheCompiledRefHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
+    {
+        var healthy = File.ReadAllText(_mod.NpcSourceFile);
+        Corrupt(_mod.NpcSourceFile);
+        _mod.CommitWorkingTree("a malformed FormKey");
+        File.WriteAllText(_mod.NpcSourceFile, healthy);
+
+        var result = _mod.CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("HEAD"));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(
+            Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile), result.RefusalReason, StringComparison.Ordinal);
+    }
+
+    private void Corrupt(string sourceFile) =>
+        File.WriteAllText(
+            sourceFile,
+            File.ReadAllText(sourceFile).Replace(_mod.Race.ToString(), "NOT-A-FORMKEY", StringComparison.Ordinal));
 }

@@ -111,6 +111,14 @@ public sealed class CompileFixture : IDisposable
 
     private string RunGit(params string[] args) => GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, args);
 
+    /// <summary>Commits the working tree as it stands, so a compile at a ref reads blobs the files on
+    /// disk need not still match.</summary>
+    public void CommitWorkingTree(string message)
+    {
+        RunGit("add", "-A");
+        RunGit("commit", "-q", "-m", message);
+    }
+
     /// <summary>Raw porcelain lines: every caller here compares one listing to another, and none
     /// reads a path out of one.</summary>
     public IReadOnlyList<string> GitStatus() =>

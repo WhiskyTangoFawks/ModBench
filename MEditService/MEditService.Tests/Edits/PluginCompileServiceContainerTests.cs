@@ -250,6 +250,27 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         Assert.Contains("\"CellA\"", File.ReadAllText(full), StringComparison.Ordinal);
     }
 
+    // A container's document is found by scanning the tree, never computed from the identity, so the
+    // ref's own answer is the only one left once the working tree has lost the directory.
+    [Fact]
+    public void Compile_AtARef_ForAnEmbeddedChildWithASemanticError_NamesTheContainersDocumentInThatRef()
+    {
+        var cellDirectory = Directory
+            .EnumerateDirectories(
+                Path.Combine(_modFolder, SourceRepository.RootFor(PluginName)), "CellA*", SearchOption.AllDirectories)
+            .Single();
+        Directory.Delete(cellDirectory, recursive: true);
+
+        var result = CompileService().Compile(_plugin, new CompileSource.AtRef("HEAD"));
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        var diagnostic = result.Diagnostics.First(d => d.FormKey == _cellATemporaryRef.ToString());
+        Assert.Equal(
+            Path.Combine(Path.GetRelativePath(_modFolder, cellDirectory), "RecordData.json"),
+            diagnostic.SourceRelativePath);
+        Assert.False(File.Exists(Path.Combine(_modFolder, diagnostic.SourceRelativePath)));
+    }
+
     [Fact]
     public void Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {

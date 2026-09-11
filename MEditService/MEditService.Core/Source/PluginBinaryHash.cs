@@ -20,4 +20,12 @@ public static class PluginBinaryHash
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
     }
+
+    /// <summary>The same hash upper-cased, which is how the commit trailers spell it (ADR-0003).
+    /// Throws rather than answering null: a caller here has just written the file.</summary>
+    public static string TrailerFormOfFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream));
+    }
 }

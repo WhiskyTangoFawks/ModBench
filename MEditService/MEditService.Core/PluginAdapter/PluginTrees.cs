@@ -123,11 +123,49 @@ internal static class PluginTrees
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }
 
-    /// <summary>The tree at <paramref name="treeRoot"/> read into the mod it compiles to, held here
-    /// so the compile itself holds documents (ADR-0005 rule 2).</summary>
-    internal static async Task<CompiledTree> ReadTreeAsync(
-        string treeRoot, RecordTextCodec codec, GameRelease gameRelease, CancellationToken cancel = default) =>
-        new(await DeserializeTree(treeRoot, cancel), codec, gameRelease);
+    /// <summary>The prefix of the scratch folder a whole-mod read materializes its files in, so a test
+    /// watching for a leak knows what to look for.</summary>
+    internal const string ReadScratchPrefix = "medit-readtree-";
+
+    /// <summary>A read that produced a mod, or the diagnosis of why it could not.
+    /// <see cref="Error"/> is that failure's own exception, for the log.</summary>
+    internal readonly record struct TreeRead(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error);
+
+    /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
+    /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005 rule
+    /// 2).</summary>
+    internal static async Task<TreeRead> ReadTreeAsync(
+        IReadOnlyList<PristineFile> files, string pluginName, RecordTextCodec codec, GameRelease gameRelease,
+        CancellationToken cancel = default)
+    {
+        var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
+        try
+        {
+            // Outside the catch below: a tree git holds and this filesystem cannot write is not a
+            // source defect, and a refusal naming the source would misname it.
+            await PristineFileWriter.WriteAllAsync(files, scratchDir, cancel);
+
+            // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and
+            // every path a read failure names is relative to one.
+            try
+            {
+                var mod = await DeserializeTree(Path.Combine(scratchDir, SourceRepository.RootFor(pluginName)), cancel);
+                return new TreeRead(new CompiledTree(mod, codec, gameRelease), null, null);
+            }
+            catch (Exception ex)
+            {
+                return new TreeRead(null, PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
+            }
+        }
+        finally
+        {
+            // Best-effort: a scratch folder that will not delete must not turn a compile that has
+            // already read its mod into a throw.
+            try { Directory.Delete(scratchDir, recursive: true); }
+            catch (IOException) { /* scratch, best-effort */ }
+            catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        }
+    }
 
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 }

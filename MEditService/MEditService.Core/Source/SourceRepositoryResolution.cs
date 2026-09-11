@@ -44,9 +44,8 @@ public sealed partial class SourceRepository
     {
         if (identity.RecordType == PluginHeader.RecordType)
         {
-            var headerPath = Path.Combine(
-                _modFolder, RootFor(plugin.Name), RecordDataFileName);
-            return Unit(headerPath, identity.FormKey, identity.RecordType, isEmbedded: false);
+            return Unit(
+                HeaderDocumentIn(_modFolder, plugin.Name), identity.FormKey, identity.RecordType, isEmbedded: false);
         }
 
         // A flat record: the path is computed, then corrected if the file has been renamed out from
@@ -94,7 +93,7 @@ public sealed partial class SourceRepository
         // than the FormKey the index files it under, so no name or text in the tree carries that key.
         if (spelled.Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
         {
-            return File.Exists(Path.Combine(sourceRoot, RecordDataFileName))
+            return File.Exists(HeaderDocumentIn(_modFolder, plugin.Name))
                 ? new RecordIdentity(spelled, PluginHeader.RecordType, null)
                 : null;
         }
@@ -209,7 +208,7 @@ public sealed partial class SourceRepository
         // The header's document is the fixed root RecordData.json, and it declares a ModKey rather
         // than the FormKey the tree files it under, so no name or text carries that key.
         if (parsed.ToString().Equals(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)), StringComparison.OrdinalIgnoreCase))
-            return File.Exists(Path.Combine(sourceRoot, RecordDataFileName));
+            return File.Exists(HeaderDocumentIn(_modFolder, plugin.Name));
 
         foreach (var documentPath in DocumentsNaming(sourceRoot, parsed.ToString()))
         {
@@ -324,12 +323,13 @@ public sealed partial class SourceRepository
         return entries;
     }
 
-    // Every verb that writes calls this: the memo and the owner maps describe a tree this repository
-    // has just changed, and reading them afterwards would answer about the tree as it stood.
+    // Every verb that writes calls this: the listing, owner and file maps describe a tree this
+    // repository has just changed, and reading them afterwards would answer about the tree as it stood.
     private void Forget()
     {
         _entriesByScanRoot.Clear();
         _ownersBySourceRoot.Clear();
+        _filesByPluginAndRef.Clear();
     }
 
     private EmbeddedOwners OwnersUnder(string sourceRoot)
