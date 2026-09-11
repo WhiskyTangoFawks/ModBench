@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { detectGamePaths, detectWinePrefix, type GameAutodetect } from './medit/GamePathDetector';
 import type { DetectPaths, DetectWinePrefix } from './modmanager/gameDirectory';
 import { mo2InstanceContext } from './modmanager/detectMo2Instance';
 import { readGameName } from './modmanager/mo2/modOrganizerIni';
 import { gameReleaseForGame, gamePathInfoForRelease } from './modmanager/mo2/gamePaths';
+import { settingsFile } from './modmanager/mo2/layout';
 import { loadOrderAppDataFolder } from './modmanager/mo2/loadOrderDestination';
 
 /** Vocabulary-neutral workspace facts both bounded contexts read, so they belong to neither
@@ -17,7 +17,7 @@ export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 async function resolveGameAutodetect(instanceRoot: string): Promise<GameAutodetect | undefined> {
   let gameName: string;
   try {
-    gameName = readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'));
+    gameName = readGameName(await readFile(settingsFile(instanceRoot), 'utf8'));
   } catch {
     return undefined;
   }

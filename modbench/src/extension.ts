@@ -22,6 +22,7 @@ import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
 } from './plugins/pluginRowCommands';
+import { originFolder, type OriginFolder } from './modmanager/loadOrderSnapshot';
 import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
 import { wireExternalChangePending } from './plugins/externalChangeWiring';
 
@@ -128,13 +129,20 @@ export function activate(context: vscode.ExtensionContext) {
   // Primes the view with whatever activeRecordTracker already knows — a no-op today, but it makes
   // ActiveRecordTracker.current()'s "initial state" contract true rather than aspirational.
   referencedByTreeProvider.showFor(activeRecordTracker.current());
+  // Its `originFolder` closes over the Toolbox built below and re-reads the value each call, so a
+  // compile always asks the generation on screen.
+  const pluginRowDeps: PluginRowCommandDeps = {
+    session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider,
+    notifyConflictsComputed,
+    originFolder: (origin) => originFolder(toolbox.instance?.value.plugins ?? [], origin),
+  };
   // Run once per completed reconcile, never a poller: a reconcile is the only moment either offer
   // reason can newly arise.
   const showCrashRepairOffers = (offers: CrashRepairOffer[]) => presentCrashRepairOffers(
     offers,
     (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
     (offer, atRef) => compileAndReport(
-      meditClient, compileDiagnostics, { name: offer.plugin, origin: offer.origin }, atRef,
+      meditClient, compileDiagnostics, pluginRowDeps.originFolder, { name: offer.plugin, origin: offer.origin }, atRef,
     ),
   );
   // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
@@ -158,9 +166,7 @@ export function activate(context: vscode.ExtensionContext) {
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
-    ...registerPluginRowCommands({
-      session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed,
-    }),
+    ...registerPluginRowCommands(pluginRowDeps),
     // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
     registerLoadMoreCommand(treeProvider),
@@ -210,12 +216,13 @@ interface PluginRowCommandDeps {
   compileDiagnostics: vscode.DiagnosticCollection;
   treeProvider: PluginTreeProvider;
   notifyConflictsComputed: () => void;
+  originFolder: OriginFolder;
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/renumber/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed } = deps;
+  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, originFolder } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
@@ -225,8 +232,8 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
         notifyConflictsComputed();
       },
     ),
-    registerSaveAndCompileCommand(client, activeRecordTracker, outputChannel, compileDiagnostics),
-    registerCompileAtRefCommand(client, outputChannel, compileDiagnostics),
+    registerSaveAndCompileCommand(client, activeRecordTracker, outputChannel, compileDiagnostics, originFolder),
+    registerCompileAtRefCommand(client, outputChannel, compileDiagnostics, originFolder),
     registerRebaseCommand(client, outputChannel, treeProvider, refreshMatchingPluginsFor),
     registerOpenHeaderCommand(),
   ];

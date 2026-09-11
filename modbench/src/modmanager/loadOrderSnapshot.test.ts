@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
-import { buildLoadOrderSnapshot, resolvePluginPaths } from './loadOrderSnapshot';
+import { buildLoadOrderSnapshot, originFolder, resolvePluginPaths } from './loadOrderSnapshot';
 
 // Origins are asserted against their literal reserved values, not the constants the module uses
 // to produce them: those are a wire contract (ADR-0012), and asserting against the same symbol
@@ -191,5 +191,45 @@ describe('resolvePluginPaths', () => {
     const result = resolvePluginPaths(['Fallout4.esm'], index({}), undefined);
 
     expect(result.has('Fallout4.esm')).toBe(false);
+  });
+});
+
+describe('originFolder', () => {
+  const row = (origin: string, path: string | undefined) =>
+    ({ name: 'X.esp', path, origin, slot: null, enabled: false, winning: true });
+
+  it('answers a mod origin with the mod folder its copy sits in', () => {
+    const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
+
+    expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
+  });
+
+  // The reserved origins are the rival the guess `mods/<origin>` got wrong (ADR-0012).
+  it('answers the overwrite origin with the overwrite directory, never a folder under mods/', () => {
+    const rows = [row('overwrite', join('/instance', 'overwrite', 'Stray.esp'))];
+
+    expect(originFolder(rows, 'overwrite')).toBe(join('/instance', 'overwrite'));
+  });
+
+  it('answers the Data origin with the game’s Data folder', () => {
+    const rows = [row('Data', join('/game', 'Data', 'Fallout4.esm'))];
+
+    expect(originFolder(rows, 'Data')).toBe(join('/game', 'Data'));
+  });
+
+  it('answers undefined for an origin whose only rows are line-only, with no copy on disk', () => {
+    expect(originFolder([row('Ghost Mod', undefined)], 'Ghost Mod')).toBeUndefined();
+  });
+
+  it('answers undefined for an origin no row carries', () => {
+    const rows = [row('TS Mod', join('/instance', 'mods', 'TS Mod', 'TrueStorms.esp'))];
+
+    expect(originFolder(rows, 'Other Mod')).toBeUndefined();
+  });
+
+  it('skips a line-only row to reach the same origin’s row that has a copy', () => {
+    const rows = [row('TS Mod', undefined), row('TS Mod', join('/instance', 'mods', 'TS Mod', 'B.esp'))];
+
+    expect(originFolder(rows, 'TS Mod')).toBe(join('/instance', 'mods', 'TS Mod'));
   });
 });

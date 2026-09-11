@@ -2,6 +2,7 @@
 // suffix marks a separator, and `*` (DLC/CC) and `#` lines are never surfaced.
 // The top of the file is the winning end. Mutations splice the raw string.
 
+import { OVERWRITE_DIR_NAME } from './layout';
 import type { InstalledFileId } from './metaIni';
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
 
@@ -152,7 +153,7 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
   });
 }
 
-const RESERVED_DIR_NAMES = new Set(['overwrite']);
+const RESERVED_DIR_NAMES = new Set([OVERWRITE_DIR_NAME]);
 
 /** Excludes `overwrite` and the `<name>_separator` marker folders MO2 writes,
  *  neither of which is a mod. Sorted, for a deterministic registration order. */

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { join } from 'node:path';
+import { downloadsDir } from './mo2/layout';
 
 /** Colour only, no badge: Show hidden is additive, so hidden rows sit alongside visible ones
  *  and this tint is the only cue telling them apart — MO2 itself draws none. */
@@ -10,7 +10,7 @@ export class HiddenDownloadDecorationProvider implements vscode.FileDecorationPr
     instanceRoot: string,
     private readonly hiddenNames: () => ReadonlySet<string>,
   ) {
-    this.downloadsDir = join(instanceRoot, 'downloads');
+    this.downloadsDir = downloadsDir(instanceRoot);
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {

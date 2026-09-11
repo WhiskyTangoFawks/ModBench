@@ -79,7 +79,7 @@ _Avoid_: parent record, group record
 
 **Embedded**:
 A child record held inline in its container's document rather than in a file of its own.
-_Avoid_: folder-split, nested file
+_Avoid_: the hyphenated coinage for splitting a folder, nested file
 
 **Partial form**:
 A container override that exists only to carry children. Its own fields are ignored for conflict

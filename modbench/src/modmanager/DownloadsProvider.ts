@@ -2,7 +2,6 @@
 // ModListProvider makes for modlist.txt.
 
 import * as vscode from 'vscode';
-import { join } from 'node:path';
 import {
   downloadContextValue,
   filterHiddenRows,
@@ -11,6 +10,7 @@ import {
   type DownloadSortColumn,
   type DownloadStatus,
 } from './mo2/downloads';
+import { downloadFile } from './mo2/layout';
 import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from './instance';
 import { ErrorNode } from '../errorNode';
 import type { Reporter } from '../reporter';
@@ -63,7 +63,7 @@ export class DownloadNode extends vscode.TreeItem {
     this.tooltip = downloadTooltip(row);
     this.contextValue = downloadContextValue(row);
     // Decoration hook — the dimming FileDecorationProvider keys off this URI.
-    this.resourceUri = vscode.Uri.file(join(instanceRoot, 'downloads', row.name));
+    this.resourceUri = vscode.Uri.file(downloadFile(instanceRoot, row.name));
   }
 }
 

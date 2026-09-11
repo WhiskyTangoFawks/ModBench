@@ -6,6 +6,7 @@ import { copyFile, link, mkdir, readFile, readdir, rename, rm, rmdir, stat, writ
 import { dirname, join, relative, sep } from 'node:path';
 import type { GameDirectory } from './gameDirectory';
 import { foldPath, type FileWinners } from './fileConflictIndex';
+import { modsDir as modsDirOf, overwriteDir } from './mo2/layout';
 import type { Reporter } from '../reporter';
 
 /** A load-order file (plugins.txt/loadorder.txt) copied to where the game reads it. */
@@ -43,7 +44,7 @@ type ManifestResult =
 const MANIFEST_NAME = '.medit-manifest.json';
 
 function manifestPath(instanceRoot: string): string {
-  return join(instanceRoot, 'mods', MANIFEST_NAME);
+  return join(modsDirOf(instanceRoot), MANIFEST_NAME);
 }
 
 /** The manifest's presence, which is what purge relies on, rather than a second notion of
@@ -123,7 +124,7 @@ export async function deploy(
 ): Promise<boolean> {
   const { dataFolder } = gameDirectory;
 
-  const modsDir = join(instanceRoot, 'mods');
+  const modsDir = modsDirOf(instanceRoot);
   const statFn = opts.statFn ?? ((p: string) => stat(p));
   if (!(await onSameVolume(modsDir, gameDirectory, statFn, reporter))) return false;
 
@@ -169,7 +170,7 @@ async function onSameVolume(
   reporter.report(
     'error',
     'Cannot deploy: mods/ and the game directory are on different drives. Point modbench.mods.gameDirectory at a stock folder on the same drive, or use the symlink fallback.',
-    `mods/=${modsDir} game=${gameDirectory.root}`,
+    `modsDir=${modsDir} game=${gameDirectory.root}`,
   );
   return false;
 }
@@ -349,7 +350,7 @@ async function relocateStrayFiles(
   for (const relativePath of await listRelativeFiles(dataFolder)) {
     if (keptFolded.has(foldPath(relativePath))) continue;
     const from = join(dataFolder, relativePath);
-    const to = join(instanceRoot, 'overwrite', relativePath);
+    const to = join(overwriteDir(instanceRoot), relativePath);
     try {
       await mkdir(dirname(to), { recursive: true });
       await moveFile(from, to, renameFn);

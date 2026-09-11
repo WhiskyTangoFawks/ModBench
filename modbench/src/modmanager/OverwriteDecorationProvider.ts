@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import * as path from 'node:path';
+import { overwriteDir } from './mo2/layout';
 
 /** VS Code consults a decoration provider only for a URI it is rendering, so a static answer
  *  needs no event and no coupling back into the tree provider. The colour is theme-adaptive. */
@@ -7,7 +7,7 @@ export class OverwriteDecorationProvider implements vscode.FileDecorationProvide
   private readonly overwriteDir: string;
 
   constructor(instanceRoot: string) {
-    this.overwriteDir = path.join(instanceRoot, 'overwrite');
+    this.overwriteDir = overwriteDir(instanceRoot);
   }
 
   provideFileDecoration(uri: vscode.Uri): vscode.FileDecoration | undefined {
