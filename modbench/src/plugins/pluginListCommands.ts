@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { isRefused, type MEditClient } from '../medit/client';
 import type { Instance } from '../modmanager/instance';
 import { PluginsTreeProvider, type PluginListNode } from './PluginsTreeProvider';
+import { OVERWRITE_DIR_NAME } from '../modmanager/mo2/layout';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from '../modmanager/pluginDestination';
 import { appendPlugin } from '../modmanager/commands/plugins';
 import { makeReporter } from '../reporter';
@@ -36,7 +37,7 @@ async function pickPluginDestination(
     placeHolder: 'Where should the new plugin live?',
   });
   if (!picked) return undefined;
-  if (picked.choice === 'overwrite') return resolvePluginDestination(instanceRoot, { kind: 'overwrite' });
+  if (picked.choice === OVERWRITE_DIR_NAME) return resolvePluginDestination(instanceRoot, { kind: OVERWRITE_DIR_NAME });
 
   const modNames = instance.value.mods.filter((e) => e.kind === 'mod').map((e) => e.name);
   const modName = await vscode.window.showQuickPick(modNames, { placeHolder: 'Which mod?' });

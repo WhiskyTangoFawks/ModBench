@@ -3,6 +3,7 @@
 
 import { readFile, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { settingsFile } from './mo2/layout';
 import { readGamePath } from './mo2/modOrganizerIni';
 
 export interface GameDirectory {
@@ -70,7 +71,7 @@ export async function resolveGameDirectory(
   config: ConfigLike,
   detectPaths: DetectPaths,
   detectWinePrefix: DetectWinePrefix,
-  readIniText: ReadIniText = () => readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8'),
+  readIniText: ReadIniText = () => readFile(settingsFile(instanceRoot), 'utf8'),
 ): Promise<GameDirectory | null> {
   const explicit = (config.get('mods.gameDirectory') ?? '').trim();
   if (explicit) {

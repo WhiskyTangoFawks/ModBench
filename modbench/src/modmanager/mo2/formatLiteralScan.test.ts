@@ -1,9 +1,10 @@
-// Each MO2 file's format lives in its kernel module, and nothing else names it.
+// Each MO2 file's format lives in its kernel module, and nothing else names it; MO2's own
+// directory and file names live in `layout.ts`, and nothing else spells them.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, extname, basename } from 'node:path';
+import { join, extname, basename, sep } from 'node:path';
 import ts from 'typescript';
 
 const KERNEL_FILES = ['modlistText.ts', 'pluginsText.ts', 'metaIni.ts', 'modOrganizerIni.ts', 'downloads.ts'];
@@ -14,6 +15,10 @@ const KERNEL_TESTS = KERNEL_FILES.map((f) => f.replace(/\.ts$/, '.test.ts'));
 const SELF = 'formatLiteralScan.test.ts';
 
 const TOKENS = ['+', '-', '_separator', '*', '[General]', 'selected_profile', 'gameName', 'gamePath', 'installed', 'uninstalled', 'removed'];
+
+// MO2's layout: the names of the directories and files the extension touches. Their one speller.
+const LAYOUT_NAMES = ['profiles', 'mods', 'overwrite', 'downloads', 'ModOrganizer.ini', 'meta.ini', 'modlist.txt', 'plugins.txt', '.meta'];
+const LAYOUT_OWNER = 'layout.ts';
 
 // Every string-literal-like node's decoded value, plus a template's head — never a substring of
 // a larger literal, and never text sitting only in a comment, since comments are trivia the AST
@@ -159,5 +164,113 @@ describe('mo2 kernel format literals', () => {
     expect(KERNEL_FILES).not.toContain('lineScan.ts');
     const text = readFileSync(join(__dirname, 'lineScan.ts'), 'utf8');
     expect(tokenLeaks(text, 'lineScan.ts')).toEqual([]);
+  });
+});
+
+// ── MO2's layout: directory and file names ────────────────────────────────
+
+// A module specifier names this repo's own tree, never the MO2 instance; a literal type, as in
+// `Pick<InstanceValue, 'mods'>`, names a property.
+function isNotAPath(node: ts.Node): boolean {
+  const parent = node.parent as ts.Node | undefined;
+  if (!parent) return false;
+  if (ts.isLiteralTypeNode(parent)) return true;
+  if ((ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) && parent.moduleSpecifier === node) return true;
+  if (ts.isExternalModuleReference(parent)) return true;
+  return ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword;
+}
+
+// The token scan's node set minus the two positions above. A template's middle and tail are not
+// visited, so a name spliced after a substitution escapes this scan.
+function pathLiterals(sourceText: string, fileName: string): string[] {
+  const scriptKind = fileName.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+  const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if ((ts.isStringLiteralLike(node) || ts.isTemplateHead(node)) && !isNotAPath(node)) found.push(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+// A layout name is a path SEGMENT, not a whole literal: the glob `profiles/*/plugins.txt` spells
+// two of them, and the prose `Cannot deploy: mods/ and …` spells none.
+function layoutLeaks(sourceText: string, fileName: string): string[] {
+  const segments = new Set<string>();
+  for (const literal of pathLiterals(sourceText, fileName)) {
+    for (const segment of literal.split(/[/\\]/)) segments.add(segment);
+  }
+  return LAYOUT_NAMES.filter((name) => segments.has(name));
+}
+
+// Production files only: a test builds a real MO2 tree, and its literal paths are what keep it
+// independent of the layout module under test.
+const isTestFile = (path: string): boolean => /\.test\.tsx?$/.test(path) || path.split(sep).includes('test');
+
+const isLayoutOwner = (path: string): boolean => path.endsWith(join('modmanager', 'mo2', LAYOUT_OWNER));
+
+function findLayoutLeaks(root: string): Record<string, string[]> {
+  const leaks: Record<string, string[]> = {};
+  for (const path of tsFiles(root)) {
+    if (isTestFile(path) || isLayoutOwner(path)) continue;
+    const found = layoutLeaks(readFileSync(path, 'utf8'), path);
+    if (found.length > 0) leaks[path] = found;
+  }
+  return leaks;
+}
+
+describe('mo2 layout names', () => {
+  // Rival: a name dropped from layout.ts, which frees every other file to spell it again with
+  // the production assertion still green.
+  it('layout.ts spells every name the scan forbids elsewhere', () => {
+    const path = join(__dirname, LAYOUT_OWNER);
+    expect(layoutLeaks(readFileSync(path, 'utf8'), path)).toEqual(LAYOUT_NAMES);
+  });
+
+  it('appear in no production file but layout.ts', () => {
+    const root = join(__dirname, '..', '..'); // src/
+    expect(findLayoutLeaks(root)).toEqual({});
+  });
+
+  // Rival this catches: a mod folder guessed as the mods directory joined with an origin.
+  it('the walk catches a name planted in a nested non-kernel production file', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'medit-layout-scan-'));
+    try {
+      await mkdir(join(dir, 'nested'));
+      await writeFile(join(dir, 'topLevel.ts'), "export const label = 'unrelated';\n");
+      const planted = join(dir, 'nested', 'guess.ts');
+      await writeFile(planted, "export const modFolder = (root: string, origin: string) => join(root, 'mods', origin);\n");
+      expect(findLayoutLeaks(dir)).toEqual({ [planted]: ['mods'] });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('catches a name spelled as one segment of a watcher glob', () => {
+    expect(layoutLeaks("watch(root, 'profiles/*/plugins.txt');\n", 'x.ts')).toEqual(['profiles', 'plugins.txt']);
+  });
+
+  it('does not flag a name inside a longer path segment, or one only in prose', () => {
+    expect(layoutLeaks("const msg = 'Cannot deploy: mods/ and the game directory differ';\n", 'x.ts')).toEqual([]);
+    expect(layoutLeaks("const key = 'modbench.mods.gameDirectory';\n", 'x.ts')).toEqual([]);
+  });
+
+  it('does not flag a module specifier', () => {
+    expect(layoutLeaks("import { buildDownloadRows } from './mo2/downloads';\n", 'x.ts')).toEqual([]);
+  });
+
+  it('does not flag a literal type, which can never be a path', () => {
+    expect(layoutLeaks("type V = Pick<InstanceValue, 'mods' | 'downloads'>;\n", 'x.ts')).toEqual([]);
+  });
+
+  it('does not flag a Nexus URL’s own path segments', () => {
+    expect(layoutLeaks('const url = `https://www.nexusmods.com/${slug}/mods/${id}`;\n', 'x.ts')).toEqual([]);
+  });
+
+  it('leaves test files to spell their own fixtures', () => {
+    expect(isTestFile(join('src', 'modmanager', 'instance.test.ts'))).toBe(true);
+    expect(isTestFile(join('src', 'modmanager', 'test', 'corpusFixture.ts'))).toBe(true);
+    expect(isTestFile(join('src', 'modmanager', 'instance.ts'))).toBe(false);
   });
 });

@@ -33,11 +33,17 @@ vi.mock('vscode', () => ({
   commands: { registerCommand },
   window: { showQuickPick, showInformationMessage, showWarningMessage, showErrorMessage, withProgress },
   TreeItem, ThemeIcon, EventEmitter, TreeItemCollapsibleState,
+  Diagnostic: class { constructor(public range: unknown, public message: string, public severity: number) {} },
+  Range: class { constructor(public a: number, public b: number, public c: number, public d: number) {} },
+  DiagnosticSeverity: { Warning: 1 },
+  Uri: { file: (p: string) => ({ fsPath: p }) },
 }));
 
 import {
-  registerTrackCommand, registerRebaseCommand, compileAndReport, registerSaveAndCompileCommand, registerCompileAtRefCommand,
+  registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics,
+  registerSaveAndCompileCommand, registerCompileAtRefCommand,
 } from '../pluginRowCommands';
+import { originFolder } from '../../modmanager/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../medit/client';
 import type { PluginListNode } from '../PluginsTreeProvider';
 
@@ -145,11 +151,43 @@ describe('compileAndReport', () => {
     client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' } as any);
     const diagnostics = { delete: vi.fn(), set: vi.fn(), [Symbol.iterator]: function* () {} } as any;
 
-    await compileAndReport(client, diagnostics, { name: 'MyPatch.esp', origin: 'ModA' }, undefined);
+    await compileAndReport(client, diagnostics, () => undefined, { name: 'MyPatch.esp', origin: 'ModA' }, undefined);
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
     expect(showErrorMessage).toHaveBeenCalledWith('mEdit: Could not compile "MyPatch.esp" — boom');
     expect(showInformationMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ── publishCompileDiagnostics ──────────────────────────────────────────────
+
+describe('publishCompileDiagnostics', () => {
+  const compiled = (sourceRelativePath: string) => ({
+    succeeded: true, diagnostics: [{ sourceRelativePath, message: 'bad' }],
+  } as any);
+
+  function collectingDiagnostics() {
+    const set = new Map<string, unknown>();
+    return { set: (uri: any, list: unknown) => set.set(uri.fsPath, list), delete: vi.fn(), [Symbol.iterator]: function* () {}, seen: set };
+  }
+
+  // Rival this catches: the old guess, the mods directory joined with the origin, which put an
+  // overwrite-origin plugin's diagnostics under a folder that does not exist.
+  it('targets the folder the value gave for the origin, overwrite included', () => {
+    const diagnostics = collectingDiagnostics();
+    const row = { name: 'Stray.esp', path: '/instance/overwrite/Stray.esp', origin: 'overwrite', slot: null, enabled: false, winning: true };
+
+    publishCompileDiagnostics(diagnostics as any, originFolder([row], 'overwrite'), compiled('Source/Stray.psc'));
+
+    expect([...diagnostics.seen.keys()]).toEqual(['/instance/overwrite/Source/Stray.psc']);
+  });
+
+  it('publishes nothing when the value knows no folder for the origin', () => {
+    const diagnostics = collectingDiagnostics();
+
+    publishCompileDiagnostics(diagnostics as any, undefined, compiled('Source/A.psc'));
+
+    expect([...diagnostics.seen.keys()]).toEqual([]);
   });
 });
 
@@ -165,7 +203,7 @@ describe('registerSaveAndCompileCommand', () => {
     client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' } as any);
     const activeRecordTracker = { current: () => undefined } as any;
     const diagnostics = fakeDiagnostics();
-    registerSaveAndCompileCommand(client, activeRecordTracker, fakeOutputChannel(), diagnostics);
+    registerSaveAndCompileCommand(client, activeRecordTracker, fakeOutputChannel(), diagnostics, () => undefined);
 
     await handlers.get('modbench.saveAndCompile')!({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
 
@@ -182,7 +220,7 @@ describe('registerCompileAtRefCommand', () => {
     client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom' } as any);
     const diagnostics = fakeDiagnostics();
     showWarningMessage.mockResolvedValue('Compile at main');
-    registerCompileAtRefCommand(client, fakeOutputChannel(), diagnostics);
+    registerCompileAtRefCommand(client, fakeOutputChannel(), diagnostics, () => undefined);
 
     await handlers.get('modbench.pluginListTree.compileAtMain')!({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
 

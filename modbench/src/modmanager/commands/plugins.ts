@@ -2,9 +2,10 @@
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
 import { buildFileConflictIndex, foldPath, rootLevelWinners, type FileConflictIndex } from '../fileConflictIndex';
 import { isPluginFile } from '../pluginFile';
+import { modlistFile, overwriteDir, pluginsFile } from '../mo2/layout';
 import { parseModlist } from '../mo2/modlistText';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2/pluginsText';
 
@@ -13,9 +14,6 @@ import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromTe
 export type PluginsCommandResult =
   | { applied: true; wrote: boolean }
   | { applied: false; refusal: string };
-
-const pluginsPath = (instanceRoot: string, profile: string): string =>
-  join(instanceRoot, 'profiles', profile, 'plugins.txt');
 
 // Serialized: two commands read-modify-writing at once would each splice a stale generation of
 // the text. The chain can never go dead — the task below returns its failures and never rejects.
@@ -26,7 +24,7 @@ function modifyPlugins(
 ): Promise<PluginsCommandResult> {
   const task = writes.then(async (): Promise<PluginsCommandResult> => {
     try {
-      const path = pluginsPath(instanceRoot, profile);
+      const path = pluginsFile(instanceRoot, profile);
       const before = await readFile(path, 'utf8');
       const after = edit(before);
       // Unchanged text is not written: for `reconcilePlugins` that is the difference between a
@@ -109,7 +107,7 @@ async function rootLevelPlugins(folder: string): Promise<Map<string, string>> {
 // overwrite/ doesn't exist until a purge deposits a stray file, so ENOENT is "none" here.
 async function overwritePlugins(instanceRoot: string): Promise<Map<string, string>> {
   try {
-    return await rootLevelPlugins(join(instanceRoot, 'overwrite'));
+    return await rootLevelPlugins(overwriteDir(instanceRoot));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map();
     throw err;
@@ -153,7 +151,7 @@ export async function reconcilePlugins(
       log('[plugins] the implicit masters are unknown — appending and pruning nothing this run');
       return { applied: true, wrote: false, append: [], prune: [] };
     }
-    const entries = parseModlist(await readFile(join(instanceRoot, 'profiles', profile, 'modlist.txt'), 'utf8'));
+    const entries = parseModlist(await readFile(modlistFile(instanceRoot, profile), 'utf8'));
     const [index, overwrite] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       overwritePlugins(instanceRoot),

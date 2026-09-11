@@ -18,6 +18,9 @@ import { say } from '../editingTeardown';
 // compiling, and (on an ESL contradiction) editing the header to retry.
 type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compile' | 'editRecord'>;
 
+/** The Instance value's answer for where an origin's files live; `undefined` when it has none. */
+export type ModFolderOfOrigin = (origin: string) => string | undefined;
+
 // Edits is the default `.gitignore` preset — Everything is the opt-in authoring choice. A
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
@@ -107,6 +110,7 @@ export function registerSaveAndCompileCommand(
   activeRecordTracker: { current(): string | undefined },
   outputChannel: vscode.LogOutputChannel,
   diagnostics: vscode.DiagnosticCollection,
+  modFolderOf: ModFolderOfOrigin,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode) => {
     const target = await resolveCompileTarget(
@@ -133,7 +137,7 @@ export function registerSaveAndCompileCommand(
     );
     if (!target) return;
 
-    await compileAndReport(client, diagnostics, target, undefined);
+    await compileAndReport(client, diagnostics, modFolderOf, target, undefined);
   });
 }
 
@@ -142,6 +146,7 @@ export function registerSaveAndCompileCommand(
 export function registerCompileAtRefCommand(
   client: CompileClient,
   outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
+  modFolderOf: ModFolderOfOrigin,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -164,7 +169,7 @@ export function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    await compileAndReport(client, diagnostics, target, 'main');
+    await compileAndReport(client, diagnostics, modFolderOf, target, 'main');
   });
 }
 
@@ -187,20 +192,20 @@ export function reportCompileTargetError(outputChannel: vscode.LogOutputChannel,
 /** Nothing re-reads `GET /plugins` after a compile: a compiled binary changes only bytes on
  *  disk, which the index's own mirror watch re-reads. */
 export async function compileAndReport(
-  client: CompileClient, diagnostics: vscode.DiagnosticCollection,
+  client: CompileClient, diagnostics: vscode.DiagnosticCollection, modFolderOf: ModFolderOfOrigin,
   target: { name: string; origin: string }, atRef: string | undefined,
 ): Promise<void> {
   const result = await client.compile(target.name, target.origin, atRef);
   if (!result) return;
   if (isRefused(result)) { void vscode.window.showErrorMessage(result.message); return; }
 
-  publishCompileDiagnostics(diagnostics, target.origin, result);
+  publishCompileDiagnostics(diagnostics, modFolderOf(target.origin), result);
 
   const refSuffix = atRef ? ` at "${atRef}"` : '';
   if (!result.succeeded) {
     if (result.eslContradiction
         && await promptEslFlagRemoval(target, result.refusalReason ?? '', 'Compile', client)) {
-      await compileAndReport(client, diagnostics, target, atRef);
+      await compileAndReport(client, diagnostics, modFolderOf, target, atRef);
       return;
     }
     void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
@@ -214,12 +219,12 @@ export async function compileAndReport(
 }
 
 /** Replaces whatever this plugin's source files held from the last compile — never additive, or
- *  a fixed diagnostic would survive forever. Grouped by file, since a diagnostic names its
- *  record's field, not a line this text format defines. */
-export function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, origin: string, result: CompileResult): void {
-  const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (!instanceRoot) return;
-  const modFolder = path.join(instanceRoot, 'mods', origin);
+ *  a fixed diagnostic would survive forever. `modFolder` is the Instance value's answer for the
+ *  origin: `overwrite` and `Data` are not under `mods/` (ADR-0012). */
+export function publishCompileDiagnostics(
+  collection: vscode.DiagnosticCollection, modFolder: string | undefined, result: CompileResult,
+): void {
+  if (modFolder === undefined) return;
 
   // Clear every URI this collection holds under this folder before republishing —
   // DiagnosticCollection has no "clear just this prefix" primitive, so this walks every entry it holds.

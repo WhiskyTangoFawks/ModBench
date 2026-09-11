@@ -8,6 +8,7 @@ import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import type { Instance, InstanceView } from './instance';
 import { nexusSlugForGame } from './mo2/gamePaths';
+import { OVERWRITE_DIR_NAME, modDir } from './mo2/layout';
 import type { Own } from '../session';
 import { makeReporter } from '../reporter';
 import { registerNameFilter } from '../nameFilter';
@@ -145,7 +146,7 @@ export function registerModContextCommands(
   return [
       vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
-        const uri = vscode.Uri.file(path.join(instanceRoot, 'mods', node.mod.name));
+        const uri = vscode.Uri.file(modDir(instanceRoot, node.mod.name));
         await vscode.commands.executeCommand('revealInExplorer', uri);
       }),
       vscode.commands.registerCommand('modbench.modList.mod.addSeparatorBelow', async (node: ModNode | undefined) => {
@@ -257,7 +258,7 @@ export function registerOverwriteView(
     // constant overwrite/ path, which matches OverwriteNode.resourceUri.
     vscode.window.registerFileDecorationProvider(new OverwriteDecorationProvider(instanceRoot)),
     vscode.commands.registerCommand('modbench.modList.overwrite.reveal', async (node: OverwriteNode | undefined) => {
-      if (node?.kind !== 'overwrite') return;
+      if (node?.kind !== OVERWRITE_DIR_NAME) return;
       try {
         await vscode.commands.executeCommand('revealInExplorer', node.resourceUri);
       } catch (err) {
@@ -324,7 +325,7 @@ export function registerDownloadsView(
   // the flat shape stops at them rather than one level higher.
   const log = (msg: string) => outputChannel.info(msg);
   const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
-    instanceRoot, instance, reporter: makeReporter(outputChannel, 'downloads'),
+    instanceRoot, instance, reporter: makeReporter(outputChannel, 'downloadList'),
   }));
   const downloadsView = own(vscode.window.createTreeView('modbench.downloads', {
     treeDataProvider: downloadsProvider,

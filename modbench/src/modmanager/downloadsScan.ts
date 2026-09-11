@@ -1,6 +1,7 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DownloadEntry } from './mo2/downloads';
+import { DOWNLOAD_SIDECAR_SUFFIX, downloadsDir } from './mo2/layout';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.
 async function readMetaText(path: string): Promise<string | undefined> {
@@ -14,7 +15,7 @@ async function readMetaText(path: string): Promise<string | undefined> {
 
 /** `downloads/` absent reads as no downloads, not a failure — a fresh instance has none yet. */
 export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry[] | undefined> {
-  const dir = join(instanceRoot, 'downloads');
+  const dir = downloadsDir(instanceRoot);
   let names: string[];
   try {
     names = await readdir(dir);
@@ -27,7 +28,7 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
   return Promise.all(
     names.map(async (name) => {
       const filePath = join(dir, name);
-      const [info, metaText] = await Promise.all([stat(filePath), readMetaText(`${filePath}.meta`)]);
+      const [info, metaText] = await Promise.all([stat(filePath), readMetaText(filePath + DOWNLOAD_SIDECAR_SUFFIX)]);
       return { name, size: info.size, mtimeMs: info.mtimeMs, metaText };
     }),
   );

@@ -21,7 +21,9 @@ import { meditConfig } from './workspaceConfig';
 import {
   registerTrackCommand, registerRebaseCommand, registerSaveAndCompileCommand, registerCompileAtRefCommand,
   registerOpenHeaderCommand, compileAndReport, registerHeldTrackedRepositories, refreshSourceControlFor,
+  type ModFolderOfOrigin,
 } from './plugins/pluginRowCommands';
+import { originFolder } from './modmanager/loadOrderSnapshot';
 import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
 import { wireExternalChangePending } from './plugins/externalChangeWiring';
 
@@ -134,9 +136,11 @@ export function activate(context: vscode.ExtensionContext) {
     offers,
     (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
     (offer, atRef) => compileAndReport(
-      meditClient, compileDiagnostics, { name: offer.plugin, origin: offer.origin }, atRef,
+      meditClient, compileDiagnostics, modFolderOf, { name: offer.plugin, origin: offer.origin }, atRef,
     ),
   );
+  // Closes over the Toolbox built below: a compile can only be gestured once activation has run.
+  const modFolderOf = (origin: string) => originFolder(toolbox.instance?.value.plugins ?? [], origin);
   // The MO2 side, whole: the Instance, the four views, their gestures and the backend sync.
   const toolbox = createToolbox({
     outputChannel, session, client: meditClient,
@@ -159,7 +163,8 @@ export function activate(context: vscode.ExtensionContext) {
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands({
-      session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed,
+      session, client: meditClient, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider,
+      notifyConflictsComputed, modFolderOf,
     }),
     // The record filter scopes the Plugins tree's own rows — a Plugins-view concern (its module
     // lives under plugins/), so it is wired here rather than inside Editor's own registration.
@@ -210,12 +215,13 @@ interface PluginRowCommandDeps {
   compileDiagnostics: vscode.DiagnosticCollection;
   treeProvider: PluginTreeProvider;
   notifyConflictsComputed: () => void;
+  modFolderOf: ModFolderOfOrigin;
 }
 
 // One shared concern, the Plugins-tree row's own context menu, as distinct from the record
 // editor's own commands (create/delete/renumber/copy — Editor's own registration).
 function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposable[] {
-  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed } = deps;
+  const { session, client, activeRecordTracker, outputChannel, compileDiagnostics, treeProvider, notifyConflictsComputed, modFolderOf } = deps;
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
@@ -225,8 +231,8 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
         notifyConflictsComputed();
       },
     ),
-    registerSaveAndCompileCommand(client, activeRecordTracker, outputChannel, compileDiagnostics),
-    registerCompileAtRefCommand(client, outputChannel, compileDiagnostics),
+    registerSaveAndCompileCommand(client, activeRecordTracker, outputChannel, compileDiagnostics, modFolderOf),
+    registerCompileAtRefCommand(client, outputChannel, compileDiagnostics, modFolderOf),
     registerRebaseCommand(client, outputChannel, treeProvider, refreshMatchingPluginsFor),
     registerOpenHeaderCommand(),
   ];

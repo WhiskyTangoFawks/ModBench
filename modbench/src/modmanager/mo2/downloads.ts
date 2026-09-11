@@ -2,6 +2,7 @@
 // `removed=true` flag means HIDDEN and is a separate axis from Status, which
 // `uninstalled=true` carries.
 
+import { DOWNLOAD_SIDECAR_SUFFIX } from './layout';
 import { lineRanges } from './lineScan';
 
 export type DownloadStatus = 'Installed' | 'Uninstalled' | 'Downloaded';
@@ -152,7 +153,7 @@ export function downloadContextValue(row: DownloadRow): string {
  *  concern. Sidecars do not become rows of their own. */
 export function buildDownloadRows(entries: DownloadEntry[]): DownloadRow[] {
   const rows = entries
-    .filter((e) => !e.name.endsWith('.meta'))
+    .filter((e) => !e.name.endsWith(DOWNLOAD_SIDECAR_SUFFIX))
     .map((e) => {
       const { status, hidden, modID, fileID, name, version, modName, gameName, author } = parseDownloadMeta(
         e.metaText ?? '',

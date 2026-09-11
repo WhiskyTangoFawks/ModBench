@@ -3,7 +3,6 @@
 // no interface, no base type.
 
 import { access, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import {
   deleteSeparatorInText,
   insertModAtWinningEnd,
@@ -19,6 +18,7 @@ import {
   deadModEntryNames,
 } from '../mo2/modlistText';
 import { setUninstalledInText } from '../mo2/downloads';
+import { downloadFile, downloadSidecarFile, modDir, modMetaFile, modlistFile, modsDir } from '../mo2/layout';
 import { parseMetaIni } from '../mo2/metaIni';
 import type { ModlistEntry } from '../model';
 
@@ -33,9 +33,6 @@ const exists = (path: string): Promise<boolean> =>
     () => true,
     () => false,
   );
-
-const modlistPath = (instanceRoot: string, profile: string): string =>
-  join(instanceRoot, 'profiles', profile, 'modlist.txt');
 
 // The one queue every modlist.txt write for an instance passes through — module-private
 // infrastructure, not an abstraction over commands. Keyed by instance root, so every profile
@@ -59,7 +56,7 @@ function spliceModlist(
   transform: (text: string) => string,
 ): Promise<ModlistCommandResult> {
   return withModlistWriteLock(instanceRoot, async () => {
-    const path = modlistPath(instanceRoot, profile);
+    const path = modlistFile(instanceRoot, profile);
     try {
       const before = await readFile(path, 'utf8');
       const after = transform(before);
@@ -136,15 +133,14 @@ export function reorderSeparatorBlock(
 async function markDownloadUninstalled(instanceRoot: string, modName: string): Promise<void> {
   let archiveFilename: string | undefined;
   try {
-    const metaIniText = await readFile(join(instanceRoot, 'mods', modName, 'meta.ini'), 'utf8');
+    const metaIniText = await readFile(modMetaFile(instanceRoot, modName), 'utf8');
     archiveFilename = parseMetaIni(metaIniText).archiveFilename;
   } catch {
     return;
   }
   if (!archiveFilename) return;
-  const downloadPath = join(instanceRoot, 'downloads', archiveFilename);
-  if (!(await exists(downloadPath))) return;
-  const metaPath = `${downloadPath}.meta`;
+  if (!(await exists(downloadFile(instanceRoot, archiveFilename)))) return;
+  const metaPath = downloadSidecarFile(instanceRoot, archiveFilename);
   try {
     let metaText: string;
     try {
@@ -167,18 +163,18 @@ export async function uninstallMod(instanceRoot: string, profile: string, modNam
   // De-list before deleting: a failed delete leaves a recoverable orphan, not a dangling entry.
   const outcome = await spliceModlist(instanceRoot, profile, (text) => removeModFromText(text, modName));
   if (!outcome.applied) return outcome;
-  await rm(join(instanceRoot, 'mods', modName), { recursive: true, force: true }).catch(() => undefined);
+  await rm(modDir(instanceRoot, modName), { recursive: true, force: true }).catch(() => undefined);
   return outcome;
 }
 
 /** A folder under `mods/` plus a disabled modlist.txt line — nothing else. Refuses when `name`
  *  is already a mod folder on disk. */
 export async function createEmptyMod(instanceRoot: string, profile: string, name: string): Promise<ModlistCommandResult> {
-  const modDir = join(instanceRoot, 'mods', name);
-  if (await exists(modDir)) {
+  const dir = modDir(instanceRoot, name);
+  if (await exists(dir)) {
     return { applied: false, refusal: `A mod named "${name}" already exists.` };
   }
-  await mkdir(modDir, { recursive: true });
+  await mkdir(dir, { recursive: true });
   return spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
 }
 
@@ -189,7 +185,7 @@ export async function reconcileMods(
 ): Promise<{ applied: true; added: string[]; pruned: string[] } | { applied: false; refusal: string }> {
   let dirNames: string[];
   try {
-    const dirents = await readdir(join(instanceRoot, 'mods'), { withFileTypes: true });
+    const dirents = await readdir(modsDir(instanceRoot), { withFileTypes: true });
     dirNames = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { applied: true, added: [], pruned: [] };
@@ -197,7 +193,7 @@ export async function reconcileMods(
   }
   let entries: ModlistEntry[];
   try {
-    entries = parseModlist(await readFile(modlistPath(instanceRoot, profile), 'utf8'));
+    entries = parseModlist(await readFile(modlistFile(instanceRoot, profile), 'utf8'));
   } catch (err) {
     return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
   }

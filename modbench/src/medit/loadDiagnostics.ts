@@ -6,12 +6,17 @@ import type { PluginDiagnosisReport } from './client';
  *  file to point at, and one scan answers for the whole load order. Warning severity: a
  *  Malformed plugin still loads and plays. */
 export function publishLoadDiagnoses(
-  collection: vscode.DiagnosticCollection, instanceRoot: string, reports: PluginDiagnosisReport[],
+  collection: vscode.DiagnosticCollection,
+  folderOfOrigin: (origin: string) => string | undefined,
+  reports: PluginDiagnosisReport[],
 ): void {
   collection.clear();
   const byUri = new Map<string, vscode.Diagnostic[]>();
   for (const r of reports) {
-    const fsPath = path.join(instanceRoot, 'mods', r.origin, r.plugin);
+    // An origin whose copies vanished between scan and publish has no file to point at.
+    const folder = folderOfOrigin(r.origin);
+    if (folder === undefined) continue;
+    const fsPath = path.join(folder, r.plugin);
     const list = byUri.get(fsPath) ?? [];
     list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), r.text, vscode.DiagnosticSeverity.Warning));
     byUri.set(fsPath, list);

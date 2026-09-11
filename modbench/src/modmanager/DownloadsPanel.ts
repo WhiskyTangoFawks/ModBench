@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { parseDownloadMeta, setHiddenInText, setInstalledInText, type DownloadSortColumn } from './mo2/downloads';
+import { downloadFile, downloadSidecarFile, settingsFile } from './mo2/layout';
 import { deleteDownload } from './deleteDownload';
 import { readGameName } from './mo2/modOrganizerIni';
 import { nexusSlugForGame } from './mo2/gamePaths';
@@ -53,8 +53,8 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
 async function installArchive(
   instanceRoot: string, name: string, instance: Pick<Instance, 'value'>, log: (msg: string) => void,
 ): Promise<void> {
-  const archivePath = join(instanceRoot, 'downloads', name);
-  const metaPath = `${archivePath}.meta`;
+  const archivePath = downloadFile(instanceRoot, name);
+  const metaPath = downloadSidecarFile(instanceRoot, name);
   let installed = false;
   try {
     const metaText = (await readMetaText(metaPath)) ?? '';
@@ -115,8 +115,8 @@ async function trashOneArchive(
   log: (msg: string) => void,
   confirm: () => Promise<boolean>,
 ): Promise<void> {
-  const archivePath = join(instanceRoot, 'downloads', name);
-  const metaPath = `${archivePath}.meta`;
+  const archivePath = downloadFile(instanceRoot, name);
+  const metaPath = downloadSidecarFile(instanceRoot, name);
   await deleteDownload({
     archivePath,
     metaPath,
@@ -160,17 +160,17 @@ export async function deleteArchives(instanceRoot: string, names: string[], log:
 
 // A no-op without a mod id; the native menu's `hasModID` `when` clause is the other guard.
 async function visitOnNexus(instanceRoot: string, name: string): Promise<void> {
-  const metaText = await readMetaText(join(instanceRoot, 'downloads', `${name}.meta`));
+  const metaText = await readMetaText(downloadSidecarFile(instanceRoot, name));
   const modID = metaText ? parseDownloadMeta(metaText).modID : undefined;
   if (!modID) return;
-  const slug = nexusSlugForGame(readGameName(await readFile(join(instanceRoot, 'ModOrganizer.ini'), 'utf8')));
+  const slug = nexusSlugForGame(readGameName(await readFile(settingsFile(instanceRoot), 'utf8')));
   await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${modID}`));
 }
 
 // `removed` is a separate axis from the Uninstalled Status, so this never touches Status. A
 // metaless download gets a fresh minimal `.meta`, matching MO2's own QSettings auto-create.
 async function setArchiveHidden(instanceRoot: string, name: string, hidden: boolean): Promise<void> {
-  const metaPath = join(instanceRoot, 'downloads', `${name}.meta`);
+  const metaPath = downloadSidecarFile(instanceRoot, name);
   const metaText = (await readMetaText(metaPath)) ?? '';
   await writeFile(metaPath, setHiddenInText(metaText, hidden), 'utf8');
 }
@@ -194,7 +194,7 @@ export function registerDownloadsSingleRowCommands(
       const name = node?.row.name;
       if (!name) return;
       void runRowAction('Open File', name, log, async () => {
-        await vscode.env.openExternal(vscode.Uri.file(join(instanceRoot, 'downloads', name)));
+        await vscode.env.openExternal(vscode.Uri.file(downloadFile(instanceRoot, name)));
       });
     }),
     // Open the `.meta` sidecar in the editor (gated off in the native menu when absent).
@@ -202,7 +202,7 @@ export function registerDownloadsSingleRowCommands(
       const name = node?.row.name;
       if (!name) return;
       void runRowAction('Open Meta File', name, log, async () => {
-        await vscode.window.showTextDocument(vscode.Uri.file(join(instanceRoot, 'downloads', `${name}.meta`)));
+        await vscode.window.showTextDocument(vscode.Uri.file(downloadSidecarFile(instanceRoot, name)));
       });
     }),
   ];
