@@ -162,9 +162,7 @@ public static class LoadOrderEndpoints
                 .ToList();
             // ADR-0046 invariant 11: the state lands in the shared kernel first, so a reader asking
             // "which copy wins" during the reconcile is answered by the snapshot, not by the Index.
-            var snapshot = new LoadOrder(
-                req.GameDirectory, req.InstanceRoot, gameRelease,
-                ForcedPlugins.Prepend(req.GameDirectory, gameRelease, entries));
+            var snapshot = ForcedPlugins.Snapshot(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
             var previous = holder.Current;
             holder.Apply(snapshot);
             try

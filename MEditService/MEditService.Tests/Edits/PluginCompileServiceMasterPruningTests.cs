@@ -1,3 +1,4 @@
+using MEditService.Api;
 using MEditService.Core.Edits;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
@@ -48,7 +49,9 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         }
         inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-        _loadOrder = new LoadOrder(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
+        // Both stubs name FO4 implicit masters, so the game directory forces them: the deriver is
+        // what composes the load order production would hold for this directory.
+        _loadOrder = ForcedPlugins.Snapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4, inputs);
 
         // Track directly (bypassing TrackService.TrackAsync's own round-trip gate — see class doc comment).
         var deepParsed = ModFactory.ImportSetter(

@@ -12,8 +12,6 @@ public sealed record RegisteredCopy(
 
     public Registration Registration => new(Slot, Enabled, Winning);
 
-    /// <summary>A snapshot entry as the copy it names, its slot offset past the copies the
-    /// boundary registers ahead of the snapshot.</summary>
     public static RegisteredCopy Of(LoadOrderEntry entry, int slotOffset = 0) =>
         new(entry.Name, entry.Origin, entry.Path,
             entry.Slot is { } slot ? slotOffset + slot : null, entry.Enabled, entry.Winning);
@@ -35,8 +33,8 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
 
     public GameRelease GameRelease { get; }
 
-    /// <summary>Every physical copy in the instance, in the order the boundary composed them
-    /// (ADR-0044: losing and unlisted copies are registered like any other).</summary>
+    /// <summary>Every physical copy in the instance, in the order it was given (ADR-0044: losing
+    /// and unlisted copies are registered like any other).</summary>
     public IReadOnlyList<RegisteredCopy> Copies { get; }
 
     public LoadOrder(

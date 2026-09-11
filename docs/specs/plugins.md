@@ -793,7 +793,7 @@ overflow, then native **Collapse All** last.
   - toggle: `*` prefix set/cleared, byte-faithful (CRLF/BOM/comments untouched).
   - reorder: single-row and multi-row (contiguous and non-contiguous selection) moves,
     byte-faithful.
-- **Implicit-master unit tests** (`MEditService.Tests/Plugins/HeldPluginsTests.cs`): an implicit
+- **Implicit-master unit tests** (`MEditService.Tests/Api/ForcedPluginsTests.cs`): an implicit
   master present in the Data folder is listed, one missing from it is not, the Creation Club
   catalog follows in its own order, and a plugin neither source claims is absent.
 - **Load-order-derived master classification unit tests** (`MEditService.Tests/Query/MasterResolutionTests.cs`):

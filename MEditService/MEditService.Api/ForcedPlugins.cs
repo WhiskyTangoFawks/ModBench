@@ -2,6 +2,7 @@ using MEditService.Core.Plugins;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Order;
+using LoadOrder = MEditService.Core.Plugins.LoadOrder;
 
 namespace MEditService.Api;
 
@@ -18,9 +19,11 @@ public static class ForcedPlugins
             .Concat(CreationClubNames(gameDirectory, gameRelease))
             .Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    /// <summary>The snapshot as the load order registers it: the forced plugins first, forced on,
-    /// and every entry slot offset past them. An entry naming a forced plugin is dropped, so that
-    /// name is registered once.</summary>
+    /// <summary>The load order a snapshot arrives as, which is what PUT /load-order applies.</summary>
+    public static LoadOrder Snapshot(
+        string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries) =>
+        new(gameDirectory, instanceRoot, gameRelease, Prepend(gameDirectory, gameRelease, entries));
+
     public static IReadOnlyList<RegisteredCopy> Prepend(
         string gameDirectory, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)
     {
