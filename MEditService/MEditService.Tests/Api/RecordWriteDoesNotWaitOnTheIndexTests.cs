@@ -19,7 +19,7 @@ public sealed class RecordWriteDoesNotWaitOnTheIndexTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     // Generous, so a slow box cannot turn "was served" into a failure: a write that took the gate
-    // would instead wait out IndexWriteGate.DefaultTimeout, two orders of magnitude longer.
+    // would wait out IndexWriteGate.DefaultTimeout instead, well past this window.
     private static readonly TimeSpan ServedWindow = TimeSpan.FromSeconds(15);
 
     [Fact]

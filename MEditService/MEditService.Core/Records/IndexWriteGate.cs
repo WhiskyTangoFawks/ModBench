@@ -16,8 +16,6 @@ public sealed class IndexWriteGate(TimeSpan? timeout = null)
     private readonly Lock _gate = new();
     private readonly TimeSpan _timeout = timeout ?? DefaultTimeout;
 
-    public TimeSpan Timeout => _timeout;
-
     /// <summary>Throws <see cref="IndexWriteGateTimeoutException"/> rather than returning false: every
     /// caller's answer is the same (do not write), and a boolean would let one forget.</summary>
     public Holding Enter()
@@ -33,9 +31,9 @@ public sealed class IndexWriteGate(TimeSpan? timeout = null)
     }
 }
 
-/// <summary>A projection waited out the gate. It reaches no client: a record gesture never takes
-/// the gate (ADR-0015 invariant 2), and the source watcher's batch logs it rather than
-/// propagating (ADR-0019).</summary>
+/// <summary>A projection waited out the gate: busy, not broken. No caller offers a retry — a
+/// record gesture never takes the gate (ADR-0015 invariant 2), and the source watcher's batch logs
+/// it rather than propagating (ADR-0019).</summary>
 public sealed class IndexWriteGateTimeoutException : TimeoutException
 {
     private const string DefaultMessage = "Another write to the record index is still in progress.";
@@ -57,9 +55,5 @@ public sealed class IndexWriteGateTimeoutException : TimeoutException
     public IndexWriteGateTimeoutException(TimeSpan timeout)
         : base($"Another write to the record index is still in progress after {timeout.TotalSeconds:0.###}s.")
     {
-        Timeout = timeout;
     }
-
-    /// <summary>How long this caller waited.</summary>
-    public TimeSpan Timeout { get; }
 }

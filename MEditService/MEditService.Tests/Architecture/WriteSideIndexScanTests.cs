@@ -116,6 +116,28 @@ public sealed class WriteSideIndexScanTests
         }
     }
 
+    // Not the write side: an endpoint's read routes name the query services by definition. So the
+    // scan here is narrowed to the gate, which a record route can take again in one compiling line.
+    private const string EndpointRoot = "MEditService.Api/Endpoints";
+
+    private static readonly string[] GateSymbols = ["IndexWriteGate", "IndexWriteGateTimeoutException"];
+
+    [Fact]
+    public void NoEndpoint_NamesTheIndexWriteGate()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        var walked = ScannedFiles(root, [EndpointRoot], []).Count;
+        var named = Counts(root, [EndpointRoot], [], GateSymbols);
+
+        Assert.True(walked > 5, $"The endpoint scan walked only {walked} files under {EndpointRoot}.");
+        Assert.True(
+            named.Count == 0,
+            "An endpoint names the Index's write gate. A record gesture writes its system of record "
+            + "and returns (ADR-0015 invariant 2), so the gate stays the projector's own:\n"
+            + string.Join("\n", named));
+    }
+
     private static void AssertCountsMatchAllowlist(
         IReadOnlyList<string> counts, IReadOnlyList<string> allowlist, string allowlistPath)
     {

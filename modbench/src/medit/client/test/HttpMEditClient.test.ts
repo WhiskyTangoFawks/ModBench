@@ -202,7 +202,8 @@ describe('HttpMEditClient — the not-OK response text', () => {
     });
   });
 
-  // A 503 with no extension at all: the load order genuinely went away, not a busy gate.
+  // 503 has one meaning: the load order went away. There is no typed refusal in it, so the
+  // outcome carries this side's own 'Unknown'.
   it('editRecord leaves the load-order-absent 503 alone', async () => {
     const fetch = vi.fn(() => Promise.resolve(jsonResponse(503, { detail: 'No load order has been received.' })));
     const client = makeClient(fetch);
