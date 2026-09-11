@@ -101,31 +101,30 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0044: PUT /load-order is the only arrival; a second caller makes the Index's Status lie,
-    // and a second writer makes the shared kernel's load order disagree with the index.
+    // ADR-0044: PUT /load-order is the only arrival; a second reconciler makes the Index's Status
+    // lie, and a writer outside the API makes the shared kernel disagree with the index.
     [Fact]
-    public void LoadOrder_ArrivesOnlyThroughTheLoadOrderEndpoint()
+    public void LoadOrder_ArrivesOnlyThroughTheApiEndpoints()
     {
         var root = SolutionDirectory();
-        // The reconcile request is the endpoint's alone. ADR-0041's created copy is registered on the
-        // kernel and reaches the Index through the next snapshot, so the create gesture is a writer
-        // and never a reconciler.
+        // The reconcile request is the load-order endpoint's alone. ADR-0041's created copy is
+        // registered by the create endpoint and reaches the Index through the next snapshot, so
+        // create writes the kernel and never reconciles.
         string[] reconcilers = ["LoadOrderEndpoints.cs"];
-        string[] writers = ["LoadOrderEndpoints.cs", "CreatePluginHandler.cs"];
+        string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
         var applies = HolderWrites(root, Projects, "Apply");
-        var registers = HolderWrites(root, Projects, "Register");
 
         var offenders = Unallowed(reconciles, reconcilers)
             .Concat(Unallowed(applies, writers))
-            .Concat(Unallowed(registers, writers))
             .Distinct()
             .ToList();
         Assert.True(offenders.Count == 0,
-            "The load order is reconciled or written outside its endpoints in:\n" + string.Join("\n", offenders));
+            "The load order is reconciled outside LoadOrderEndpoints.cs, or written outside "
+            + "LoadOrderEndpoints.cs and PluginEndpoints.cs, in:\n" + string.Join("\n", offenders));
 
-        var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies, registers)).ToList();
+        var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies)).ToList();
         Assert.True(dead.Count == 0,
             "Allowances naming no such call — delete them rather than leaving a write pre-authorized:\n"
             + string.Join("\n", dead));

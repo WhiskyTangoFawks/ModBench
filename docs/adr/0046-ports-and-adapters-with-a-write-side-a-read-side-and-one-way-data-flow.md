@@ -55,8 +55,8 @@ gesture family. Read [target-architecture.md](../architecture/target-architectur
     reads. The store is the module's own; nothing outside it names the store or its factory. The projector asks the load order which copy wins and the
     schema which fields are references and children; it decides nothing itself.
 11. **The load order is state**, sent by Mod Management, held in the shared kernel with the
-    participation and winner rules, read by both sides, persisted by the Index as rows like any
-    other projection.
+    participation and winner rules, written by the API alone, read by both sides, persisted by the
+    Index as rows like any other projection.
 12. **The notification channel is a seam.** One publish interface in the backend, one subscribe
     interface in the extension, transport behind an adapter on each side, a test double as the
     second adapter.

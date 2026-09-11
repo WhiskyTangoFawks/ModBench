@@ -163,17 +163,37 @@ public static class PluginEndpoints
     // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, IndexProjector index, CreatePluginHandler create, ILoggerFactory loggerFactory)
+        CreatePluginRequest req, IndexProjector index, LoadOrderHolder holder, CreatePluginHandler create,
+        ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Name))
-            return Results.Problem("Plugin name is required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Destination path and origin are required.", statusCode: 400);
+        if (Malformed(req) is { } malformed) return malformed;
+
+        LoadOrder previous;
+        LoadOrder registered;
+        RegisteredCopy copy;
+        IReadOnlyCollection<PluginKey> held;
+        try
+        {
+            held = HeldCopies(index);
+            previous = holder.Require();
+            copy = new RegisteredCopy(
+                req.Name, req.Origin, Path.Combine(req.Path, req.Name), NextSlot(previous),
+                Enabled: true, Winning: true);
+            registered = previous.With(copy);
+            // ADR-0041: a participant before the file exists, so the Track inside this gesture and
+            // every later reader see it without waiting for the snapshot that lists it.
+            holder.Apply(registered);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
 
         try
         {
-            var result = await create.CreatePlugin(HeldCopies(index), req.Name, req.Path, req.Origin);
+            var result = await create.CreatePlugin(registered, copy, held);
             if (result.Track is { Applied: false } refused)
             {
                 // Loud, not silent: the plugin file and load order entry already landed, but
@@ -187,25 +207,51 @@ public static class PluginEndpoints
 
             // ADR-0046 invariants 1 and 4: the write is done. The Index has never held this copy, so
             // it learns of it from the next snapshot, as it does for any newly installed plugin.
-            var copy = result.Copy;
             return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot));
         }
         catch (ArgumentException ex)
         {
+            // Mutagen refuses the filename the request passed the extension check with.
+            holder.Apply(Unregistered(holder.Current, previous, copy.Key));
             logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 400);
         }
         catch (System.IO.IOException ex)
         {
+            holder.Apply(Unregistered(holder.Current, previous, copy.Key));
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
         }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
-            return Results.Problem(ex.Message, statusCode: 503);
-        }
     }
+
+    // No file was created, so the registration goes; only it, because a snapshot may have landed
+    // meanwhile, and the copy this one displaced under the same identity goes back.
+    internal static LoadOrder Unregistered(LoadOrder current, LoadOrder previous, PluginKey key) =>
+        previous.Copy(key) is { } displaced
+            ? current.Without(key).With(displaced)
+            : current.Without(key);
+
+    // The refusals a malformed request earns, taken before the holder is written so a name that
+    // could never be a plugin file registers no copy.
+    private static IResult? Malformed(CreatePluginRequest req)
+    {
+        if (string.IsNullOrWhiteSpace(req.Name))
+            return Results.Problem("Plugin name is required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Destination path and origin are required.", statusCode: 400);
+
+        var extension = Path.GetExtension(req.Name);
+        return extension.Equals(".esp", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".esm", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".esl", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : Results.Problem(
+                $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400);
+    }
+
+    // One past the highest slot, not the count: a reused slot would give two participants one index.
+    private static int NextSlot(LoadOrder loadOrder) =>
+        loadOrder.Copies.Count == 0 ? 0 : loadOrder.Copies.Max(copy => copy.Slot ?? 0) + 1;
 
     // Which registered copies Editing actually holds: the copies the Index has open. A copy it
     // could not open is registered like any other but has no bytes to read.
