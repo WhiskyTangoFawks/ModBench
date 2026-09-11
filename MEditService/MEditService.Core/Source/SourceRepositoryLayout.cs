@@ -219,56 +219,6 @@ public sealed partial class SourceRepository
         };
     }
 
-    /// <summary>Which FormKeys more than one document claims. Asked of the tree, not the compiled mod:
-    /// the reader's FormKey-keyed RecordCache collapses two files in one group folder to the last
-    /// read.</summary>
-    internal IReadOnlyList<string> FormKeysWithMoreThanOneDocument(PluginKey plugin, IEnumerable<FormKey> formKeys)
-    {
-        var sourceRoot = RootIn(_modFolder, plugin.Name);
-        if (!Directory.Exists(sourceRoot)) return [];
-
-        var unitsByTail = new Dictionary<string, int>(StringComparer.Ordinal);
-        void Count(string leaf)
-        {
-            foreach (var tail in TailsCarriedBy(leaf))
-            {
-                unitsByTail[tail] = unitsByTail.GetValueOrDefault(tail) + 1;
-            }
-        }
-
-        // Group-level files and block directories carry no FormKey, so they never match a tail and need no
-        // exclusion.
-        foreach (var directory in Directory.EnumerateDirectories(sourceRoot, "*", SearchOption.AllDirectories))
-            Count(Path.GetFileName(directory));
-        foreach (var file in Directory.EnumerateFiles(sourceRoot, $"*{JsonSuffix}", SearchOption.AllDirectories))
-            Count(Path.GetFileName(file));
-
-        var colliding = new List<string>();
-        foreach (var formKey in formKeys)
-        {
-            var filesafe = LeafNameFor(formKey, editorId: null, isDirectory: true);
-            var units = unitsByTail.GetValueOrDefault(filesafe)
-                        + unitsByTail.GetValueOrDefault(filesafe + JsonSuffix);
-            if (units > 1) colliding.Add(formKey.ToString());
-        }
-        return colliding;
-    }
-
-    // More than one candidate arises only when an EditorID itself contains " - "; a non-FormKey
-    // candidate is simply never looked up.
-    private static IEnumerable<string> TailsCarriedBy(string leaf)
-    {
-        yield return leaf;
-
-        const string separator = " - ";
-        var at = leaf.IndexOf(separator, StringComparison.Ordinal);
-        while (at >= 0)
-        {
-            yield return leaf[(at + separator.Length)..];
-            at = leaf.IndexOf(separator, at + separator.Length, StringComparison.Ordinal);
-        }
-    }
-
     /// <summary>One place that knows a container is a directory and a flat record a file, so callers and
     /// the rollback cannot disagree.</summary>
     internal static void MoveEntry(string from, string to)

@@ -76,6 +76,20 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
     }
 
+    // Never exclusive owners of the tree (ADR-0003): a document another program is holding open is
+    // content this compile does not have, and omitting it would write a binary missing that record.
+    [Fact]
+    public void Compile_WithASourceFileItCannotRead_RefusesNamingTheFile()
+    {
+        using var held = new FileStream(_mod.NpcSourceFile, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(
+            Path.GetRelativePath(_mod.ModFolder, _mod.NpcSourceFile), result.RefusalReason, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Compile_WithUnparsableSourceFile_RefusesPointingAtReTrack()
     {
