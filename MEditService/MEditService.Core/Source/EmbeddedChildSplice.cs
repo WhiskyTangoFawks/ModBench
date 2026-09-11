@@ -21,6 +21,11 @@ internal static class EmbeddedChildSplice
         byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release) =>
         EmbeddedChildLocator.Find(ownerBytes, ownerTypeName, formKey, release);
 
+    /// <summary>The same text for a caller holding the owner and asking by identity. Null when no
+    /// embedded slot of the owner carries <paramref name="formKey"/>.</summary>
+    internal static string? TextOf(byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release) =>
+        Find(ownerBytes, ownerTypeName, formKey, release) is { } span ? Extract(ownerBytes, span, release) : null;
+
     /// <summary>The child's own text as the codec spells it standalone: the span de-indented, and
     /// without the discriminator a document of an unambiguous type carries none of.</summary>
     internal static string Extract(byte[] ownerBytes, EmbeddedChildSpan span, GameRelease release)
@@ -126,12 +131,16 @@ internal static class EmbeddedChildSplice
         return Encoding.UTF8.GetString([.. bytes[..from], .. bytes[to..]]);
     }
 
-    // Zero for a span something else wrote part-way along a line.
+    // The column the child's whole line starts at, not the column the span starts at: a single-value
+    // slot opens its child's brace after the member name, so the two differ by the name's width.
     private static int IndentAt(byte[] bytes, int start)
     {
+        var lineStart = start;
+        while (lineStart > 0 && bytes[lineStart - 1] != (byte)'\n') lineStart--;
+
         var spaces = 0;
-        while (start - spaces - 1 >= 0 && bytes[start - spaces - 1] == (byte)' ') spaces++;
-        return start - spaces - 1 >= 0 && bytes[start - spaces - 1] == (byte)'\n' ? spaces : 0;
+        while (lineStart + spaces < start && bytes[lineStart + spaces] == (byte)' ') spaces++;
+        return spaces;
     }
 
     private static string DeIndent(string text, int indent) =>
