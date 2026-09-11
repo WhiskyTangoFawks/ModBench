@@ -7,23 +7,25 @@ namespace MEditService.Core.Queries;
 
 public sealed class RecordQueryService(
     IQueryIndex index,
+    LoadOrderHolder loadOrder,
     SchemaReflector schemaReflector,
     ConflictClassifier conflictClassifier) : IRecordQueryService
 {
     private readonly IQueryIndex _index = index;
+    private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
-        var s = RequireLoadOrder();
+        var heldPlugins = RequireHeldPlugins();
         // ADR-0037: classified once per call, and only once the projection is complete: a partial
         // load order cannot tell a master not yet opened from one genuinely absent. Reconciling
         // reports no issues rather than inventing a third state.
         var status = _index.Status;
         IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
             status.State == LoadOrderState.Ready
-                ? MasterResolution.Classify(s.Plugins, status.Failures)
+                ? MasterResolution.Classify(heldPlugins, status.Failures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
         var parseFailures = RequireReads().GetPluginsWithParseFailures();
         PluginResponse ToResponse(PluginMetadata p, bool hasMatchingRecords) =>
@@ -32,13 +34,13 @@ public sealed class RecordQueryService(
                 parseFailures.Contains(ColumnKey.Of(p.Name, p.Origin)));
 
         if (_index.FilterSql is null)
-            return [.. s.Plugins.Select(p => ToResponse(p, hasMatchingRecords: true))];
+            return [.. heldPlugins.Select(p => ToResponse(p, hasMatchingRecords: true))];
 
         // ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
         // a caller decides expandability from, not row presence.
         var matchingPlugins = RequireReads().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
-        return [.. s.Plugins.Select(p => ToResponse(p, matchingPlugins.Contains(p.Name)))];
+        return [.. heldPlugins.Select(p => ToResponse(p, matchingPlugins.Contains(p.Name)))];
     }
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/
@@ -50,7 +52,7 @@ public sealed class RecordQueryService(
         var schemas = RequireSchemas();
         // The caller states which copy when it knows (a tree row does); otherwise resolve from the
         // load order, since a bare filename is all most callers have.
-        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(RequireLoadOrder(), plugin);
+        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
 
         if (type != null && !schemas.ContainsKey(type))
             return new PagedResult<RecordSummary>([], 0);
@@ -81,7 +83,7 @@ public sealed class RecordQueryService(
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
-        var heldPlugins = RequireLoadOrder().Plugins;
+        var heldPlugins = RequireHeldPlugins();
         // ADR-0036: the grid is the record's in-game resolution stack, so a file-level loser is
         // not a column. Winning alone, never Participates — a disabled copy still columns.
         // Fail-open on a copy the load order lacks.
@@ -118,7 +120,7 @@ public sealed class RecordQueryService(
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var classification = _conflictClassifier.Classify(
-            committedOverrides, pluginMasters, RequireLoadOrder().GameRelease, resolveFormKey, pluginParticipates);
+            committedOverrides, pluginMasters, _loadOrder.Require().GameRelease, resolveFormKey, pluginParticipates);
         return (classification, classification.ConflictAll);
     }
 
@@ -127,7 +129,7 @@ public sealed class RecordQueryService(
         var reads = RequireReads();
         // Stated by the caller when it knows which copy it is browsing (a tree row does),
         // else resolved server-side from the load order.
-        origin ??= PluginOriginResolver.Resolve(RequireLoadOrder(), plugin);
+        origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var schemas = RequireSchemas();
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
@@ -147,10 +149,10 @@ public sealed class RecordQueryService(
             IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable,
             ParseDiagnosis: document.ParseDiagnosis);
 
-    private ILoadOrder RequireLoadOrder() => _index.RequireScope().LoadOrder;
+    private IReadOnlyList<PluginMetadata> RequireHeldPlugins() => _index.RequireScope().LoadOrder.Plugins;
 
     private IRecordReads RequireReads() => _index.RequireScope().Reads;
 
     private IReadOnlyDictionary<string, Schema.RecordTableSchema> RequireSchemas() =>
-        _schemaReflector.GetSchemas(RequireLoadOrder().GameRelease);
+        _schemaReflector.GetSchemas(_loadOrder.Require().GameRelease);
 }

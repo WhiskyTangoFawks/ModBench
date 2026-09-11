@@ -31,7 +31,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         ProjectingEditService.Over(_fixture.Index);
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Index, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Index, _fixture.Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     // ---- Reads never throw on a container ----
 

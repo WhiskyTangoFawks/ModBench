@@ -145,6 +145,8 @@ public sealed class InjectedChildTests
         private readonly string _gameDirectory;
 
         public IndexProjector Index { get; }
+
+        private readonly LoadOrderHolder _holder;
         public PluginKey Base { get; } = new(BasePluginName, BaseOrigin);
         public PluginKey Injector { get; } = new(InjectorPluginName, InjectorOrigin);
 
@@ -196,7 +198,7 @@ public sealed class InjectedChildTests
             Index = new IndexProjector(
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            Index.Reconcile(
+            _holder = Index.Reconcile(
                 _gameDirectory,
                 [
                     new LoadOrderEntry(BasePluginName, basePath, BaseOrigin, Slot: 0, Enabled: true, Winning: true),
@@ -215,7 +217,7 @@ public sealed class InjectedChildTests
         };
 
         public IReadOnlyList<ContainerChildSummary> Children(PluginKey plugin, FormKey container) =>
-            new ContainerChildQueryService(Index).GetChildren(plugin.Name, container.ToString(), plugin.Origin);
+            new ContainerChildQueryService(Index, _holder).GetChildren(plugin.Name, container.ToString(), plugin.Origin);
 
         public void TrackBoth()
         {

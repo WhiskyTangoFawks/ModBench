@@ -23,8 +23,8 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-        _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
+        var holder = _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 
     public void Dispose() => _manager.Dispose();
@@ -82,8 +82,8 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new IndexProjector(MutagenPluginAdapter.Instance, factory);
-        _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
+        var holder = _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
 
     public void Dispose()

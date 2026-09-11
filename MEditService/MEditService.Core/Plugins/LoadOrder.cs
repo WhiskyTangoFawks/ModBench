@@ -12,6 +12,11 @@ public sealed record RegisteredCopy(
 
     public Registration Registration => new(Slot, Enabled, Winning);
 
+    /// <summary>Read-only for editing: a forced master (ADR-0036 — the game's own files are never
+    /// a write target), or a copy the load order does not name, where editing changes nothing.
+    /// </summary>
+    public bool IsImmutable => IsForced || !Registration.InLoadOrder;
+
     public static RegisteredCopy Of(LoadOrderEntry entry, int slotOffset = 0) =>
         new(entry.Name, entry.Origin, entry.Path,
             entry.Slot is { } slot ? slotOffset + slot : null, entry.Enabled, entry.Winning);

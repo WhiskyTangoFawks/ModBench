@@ -194,7 +194,9 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
         var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data", Enabled: true, Winning: true) };
         var index = new FakeIndex(new FakeLoadOrder(plugins), repo.At(RecordRef.Effective));
-        var svc = new RecordQueryService(index, reflector, new ConflictClassifier());
+        var holder = new LoadOrderHolder();
+        holder.Apply(new LoadOrder(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
+        var svc = new RecordQueryService(index, holder, reflector, new ConflictClassifier());
 
         var compare = svc.GetCompare(perk.FormKey.ToString());
 

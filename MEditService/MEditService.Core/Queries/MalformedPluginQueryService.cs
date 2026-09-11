@@ -9,15 +9,12 @@ namespace MEditService.Core.Queries;
 /// <summary>Kind B detection: original bytes only, no Mutagen. Immutable plugins are never
 /// diagnosed — they are the proof set the tables were built from (docs/specs/medit-repair.md),
 /// so a hit there is a test bug.</summary>
-public sealed class MalformedPluginQueryService(IQueryIndex index, ILogger<MalformedPluginQueryService>? logger = null)
+public sealed class MalformedPluginQueryService(LoadOrderHolder loadOrder, ILogger<MalformedPluginQueryService>? logger = null)
 {
-    public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses()
-    {
-        var (loadOrder, _) = index.RequireScope();
-        return ScanAll(loadOrder.Plugins, logger);
-    }
+    public IReadOnlyList<PluginDiagnosisReport> GetLoadOrderDiagnoses() =>
+        ScanAll(loadOrder.Require().Copies, logger);
 
-    internal static List<PluginDiagnosisReport> ScanAll(IReadOnlyList<PluginMetadata> plugins, ILogger? logger)
+    internal static List<PluginDiagnosisReport> ScanAll(IReadOnlyList<RegisteredCopy> plugins, ILogger? logger)
     {
         var stopwatch = Stopwatch.StartNew();
         var reports = new List<PluginDiagnosisReport>();

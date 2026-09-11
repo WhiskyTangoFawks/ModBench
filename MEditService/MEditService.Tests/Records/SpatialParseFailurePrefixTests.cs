@@ -104,12 +104,12 @@ public sealed class SpatialParseFailurePrefixTests
             _index = new IndexProjector(
                 MutagenPluginAdapter.Instance,
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            _index.Reconcile(
+            var holder = _index.Reconcile(
                 _dataFolder,
                 [new LoadOrderEntry(PluginName, path, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
-            Query = new WorldspaceQueryService(_index);
+            Query = new WorldspaceQueryService(_index, holder);
         }
 
         internal void MarkUnreadable(string formKey)

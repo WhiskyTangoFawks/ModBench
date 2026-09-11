@@ -34,10 +34,11 @@ public sealed class MasterIssuesDuringLoadTests
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
         using var manager = new IndexProjector(MutagenPluginAdapter.Instance, gate);
+        var holder = new LoadOrderHolder();
         var svc = new RecordQueryService(
-            manager, reflector, new ConflictClassifier());
+            manager, holder, reflector, new ConflictClassifier());
 
-        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, holder: holder));
         await gate.WaitUntilParkedAsync();
 
         // Parked with A.esp open and Later.esm not yet reached.
@@ -68,9 +69,9 @@ public sealed class MasterIssuesDuringLoadTests
         using var manager = new IndexProjector(
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
+        var holder = manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(
-            manager, reflector, new ConflictClassifier());
+            manager, holder, reflector, new ConflictClassifier());
 
         var patch = svc.GetPlugins().Single(p => p.Name == "Patch.esp");
         Assert.Contains(patch.MasterIssues ?? [], i => i.MasterName == "Ghost.esm");

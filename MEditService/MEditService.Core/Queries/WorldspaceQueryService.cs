@@ -17,18 +17,20 @@ public interface IWorldspaceQueryService
 
 /// <summary>Everything a plugin declares (own records and overrides), never a cross-plugin winner.
 /// See ADR-0023.</summary>
-public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<WorldspaceQueryService>? logger = null)
+public sealed class WorldspaceQueryService(
+    IQueryIndex index, LoadOrderHolder loadOrder, ILogger<WorldspaceQueryService>? logger = null)
     : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
     private readonly IQueryIndex _index = index;
+    private readonly LoadOrderHolder _loadOrder = loadOrder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null)
     {
-        var (loadOrder, repo) = _index.RequireScope();
-        origin ??= ResolveOrigin(loadOrder, plugin);
+        origin ??= ResolveOrigin(plugin);
+        var repo = _index.RequireScope().Reads;
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
         var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: new PluginKey(plugin, origin), Limit: WorldspaceListLimit, Offset: 0);
@@ -42,9 +44,8 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
 
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
     {
-        var (loadOrder, reads) = _index.RequireScope();
-        origin ??= ResolveOrigin(loadOrder, plugin);
-        var cells = reads.GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
+        origin ??= ResolveOrigin(plugin);
+        var cells = _index.RequireScope().Reads.GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
 
         // A TopCell has no block coordinates. Every block-less row is surfaced, but the data can't
         // say which of several is the real TopCell, so the first (deterministic order) is treated
@@ -91,19 +92,18 @@ public sealed class WorldspaceQueryService(IQueryIndex index, ILogger<Worldspace
 
     public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null)
     {
-        var (loadOrder, reads) = _index.RequireScope();
-        origin ??= ResolveOrigin(loadOrder, plugin);
-        return reads.GetCellReferences(new PluginKey(plugin, origin), cellFormKey);
+        origin ??= ResolveOrigin(plugin);
+        return _index.RequireScope().Reads.GetCellReferences(new PluginKey(plugin, origin), cellFormKey);
     }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null)
     {
-        var (loadOrder, reads) = _index.RequireScope();
-        return reads.GetInteriorCells(new PluginKey(plugin, origin ?? ResolveOrigin(loadOrder, plugin)), limit, offset);
+        var pluginKey = new PluginKey(plugin, origin ?? ResolveOrigin(plugin));
+        return _index.RequireScope().Reads.GetInteriorCells(pluginKey, limit, offset);
     }
 
     // An ordinary load-order row has no origin to give, so this stays the fallback; callers that
     // do know (a tree row built from a specific copy) pass an explicit origin instead.
-    private static string ResolveOrigin(ILoadOrder loadOrder, string plugin) =>
-        PluginOriginResolver.Resolve(loadOrder, plugin);
+    private string ResolveOrigin(string plugin) =>
+        PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
 }

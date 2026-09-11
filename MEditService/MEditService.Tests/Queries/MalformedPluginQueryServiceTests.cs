@@ -9,9 +9,8 @@ public sealed class MalformedPluginQueryServiceTests
 {
     private static string Fixture(string name) => Path.Combine(AppContext.BaseDirectory, "TestData", name);
 
-    private static PluginMetadata Plugin(string name, string path, string origin = "SomeMod", bool isForced = false) =>
-        new(name, path, LoadOrderIndex: 0, IsLight: false, IsMaster: false, Masters: [],
-            RecordCount: 1, IsForced: isForced, Origin: origin, Enabled: true, Winning: true);
+    private static RegisteredCopy Plugin(string name, string path, string origin = "SomeMod", bool isForced = false) =>
+        new(name, origin, path, Slot: 0, Enabled: true, Winning: true, IsForced: isForced);
 
     [Fact]
     public void ScanAll_AMalformedHeldPlugin_ReportsTheRefusalWording()

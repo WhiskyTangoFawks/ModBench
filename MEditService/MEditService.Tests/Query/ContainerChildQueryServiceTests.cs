@@ -53,25 +53,26 @@ public class ContainerChildQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
-    // The reads' presence is what "no load order" means for these tests, most of which leave
-    // loadOrder null, so a "both null together" check would throw in all of them.
-    private sealed class StubIndex(IRecordReads reads, ILoadOrder? loadOrder = null) : IQueryIndex
+    // This service takes the load order from the holder, so the scope's load-order half is never
+    // read here; the reads' presence is what "no load order" means for the Index side.
+    private sealed class StubIndex(IRecordReads reads) : IQueryIndex
     {
         // These stubs never project, so they are always in the no-load-order state and unfiltered.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public string? FilterSql => null;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
-            reads is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
+            reads is { } r ? (null!, r) : throw new NoLoadOrderException();
     }
 
-    private sealed class StubLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
+    private static LoadOrderHolder Holder(params RegisteredCopy[] copies)
     {
-        public string DataFolderPath => "";
-        public string? InstanceRoot => null;
-        public GameRelease GameRelease => GameRelease.Fallout4;
-        public IReadOnlyList<PluginMetadata> Plugins => plugins;
-        public void Dispose() { }
+        var holder = new LoadOrderHolder();
+        holder.Apply(new LoadOrder(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        return holder;
     }
+
+    private static RegisteredCopy Copy(string name, string origin) =>
+        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
     // Mixed rows come back Topics, then Branches, then Scenes (xEdit's DIAL, DLBR, SCEN order), never
     // the raw table's alphabetical ORDER BY, which would put the branch before either topic.
@@ -95,7 +96,7 @@ public class ContainerChildQueryServiceTests
                 ["dlbr"] = [new RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
                 ["scen"] = [new RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -124,7 +125,7 @@ public class ContainerChildQueryServiceTests
                     new RecordSummary("dial2:M.esp", "M.esp", 0, true, "TopicB", "Data", HasContainerChildren: false),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -149,7 +150,7 @@ public class ContainerChildQueryServiceTests
                     new RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
 
         var result = svc.GetChildren("M.esp", "dial1:M.esp");
 
@@ -163,10 +164,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var loadOrder = new StubLoadOrder([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
-        ]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader, loadOrder));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
 
         svc.GetChildren("M.esp", "qust1:M.esp", origin: "ModB");
 
@@ -191,13 +189,14 @@ public class ContainerChildQueryServiceTests
             });
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
-        var svc = new ContainerChildQueryService(new StubIndex(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
+        var svc = new ContainerChildQueryService(
+            new StubIndex(reader), Holder(), loggerFactory.CreateLogger<ContainerChildQueryService>());
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
         Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
         var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
-        // Origin is omitted here (no load order), so PluginOriginResolver resolves it to the
+        // Origin is omitted here (no copy of that name), so PluginOriginResolver resolves it to the
         // reserved PluginOrigin.DataDirectory value ("Data") — the same fallback every other
         // caller of that resolver gets.
         Assert.Equal(
@@ -212,7 +211,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubIndex(reader));
+        var svc = new ContainerChildQueryService(new StubIndex(reader), Holder());
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -223,7 +222,8 @@ public class ContainerChildQueryServiceTests
     [Fact]
     public void GetChildren_NoLoadOrder_ThrowsInvalidOperation()
     {
-        var svc = new ContainerChildQueryService(new StubIndex(null!));
+        // The reads are there; what is missing is a snapshot in the kernel.
+        var svc = new ContainerChildQueryService(new StubIndex(new StubReader([])), new LoadOrderHolder());
         Assert.Throws<NoLoadOrderException>(() => svc.GetChildren("M.esp", "qust1:M.esp"));
     }
 }

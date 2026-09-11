@@ -25,6 +25,8 @@ public sealed class IndexedModFixture : IDisposable
     public string ModFolder { get; }
     public string GameDirectory { get; }
     public IndexProjector Index { get; }
+
+    public LoadOrderHolder Holder { get; }
     public PluginKey Plugin { get; }
 
     // PluginName unless a caller asked otherwise: ref-unsafe names need a real tracked load order.
@@ -63,7 +65,7 @@ public sealed class IndexedModFixture : IDisposable
             MutagenPluginAdapter.Instance,
             new DuckDbRecordIndexFactory(
                 SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
-        Index.Reconcile(
+        Holder = Index.Reconcile(
             GameDirectory,
             [Entry],
             GameRelease.Fallout4,

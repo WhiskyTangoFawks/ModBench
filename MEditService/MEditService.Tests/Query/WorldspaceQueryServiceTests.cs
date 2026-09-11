@@ -63,30 +63,29 @@ public class WorldspaceQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
-    // The reads' presence is what "no load order" means for these tests, most of which leave
-    // loadOrder null, so a "both null together" check would throw in all of them.
-    private sealed class StubIndex(IRecordReads reads, ILoadOrder? loadOrder = null) : IQueryIndex
+    // This service takes the load order from the holder, so the scope's load-order half is never
+    // read here; the reads' presence is what "no load order" means for the Index side.
+    private sealed class StubIndex(IRecordReads reads) : IQueryIndex
     {
         // These stubs never project, so they are always in the no-load-order state and unfiltered.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public string? FilterSql => null;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
-            reads is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
+            reads is { } r ? (null!, r) : throw new NoLoadOrderException();
     }
 
-    // A minimal fake load order whose Plugins list is real enough to exercise
-    // PluginOriginResolver.Resolve — used only by the origin-resolution plumbing test below.
-    private sealed class StubLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
+    private static LoadOrderHolder Holder(params RegisteredCopy[] copies)
     {
-        public string DataFolderPath => "";
-        public string? InstanceRoot => null;
-        public GameRelease GameRelease => GameRelease.Fallout4;
-        public IReadOnlyList<PluginMetadata> Plugins => plugins;
-        public void Dispose() { }
+        var holder = new LoadOrderHolder();
+        holder.Apply(new LoadOrder(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        return holder;
     }
+
+    private static RegisteredCopy Copy(string name, string origin) =>
+        new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), Slot: 0, Enabled: true, Winning: true);
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        new(new StubIndex(new StubReader(cells)));
+        new(new StubIndex(new StubReader(cells)), Holder());
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
@@ -142,7 +141,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
     {
         using var fixture = new CutDownPluginFixture();
-        var svc = new WorldspaceQueryService(new StubIndex(fixture.Repo.At(RecordRef.Effective)));
+        var svc = new WorldspaceQueryService(new StubIndex(fixture.Repo.At(RecordRef.Effective)), Holder());
 
         var result = svc.GetWorldspaces(CutDownPluginFixture.PluginFileName);
 
@@ -152,8 +151,9 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation()
     {
-        // No load order held → Reads is null → a clear NoLoadOrderException, not an NRE.
-        var svc = new WorldspaceQueryService(new StubIndex(null!));
+        // The reads are there; what is missing is a snapshot in the kernel, and that alone must
+        // produce a clear NoLoadOrderException rather than a read against the reserved origin.
+        var svc = new WorldspaceQueryService(new StubIndex(new StubReader([])), new LoadOrderHolder());
         Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp", 50, 0));
     }
 
@@ -164,7 +164,7 @@ public class WorldspaceQueryServiceTests
             new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder());
 
         var result = svc.GetWorldspaces("M.esp");
 
@@ -181,10 +181,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_ResolvesRealOriginFromLoadOrder_AndPassesItToGetRecords()
     {
         var reader = new StubReader([]);
-        var loadOrder = new StubLoadOrder([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
-        ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
 
         svc.GetWorldspaces("M.esp");
 
@@ -197,10 +194,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var loadOrder = new StubLoadOrder([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
-        ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
 
         svc.GetWorldspaces("M.esp", origin: "ModB");
 
@@ -211,10 +205,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaceBlocks_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var loadOrder = new StubLoadOrder([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
-        ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
 
         svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
 
@@ -225,10 +216,7 @@ public class WorldspaceQueryServiceTests
     public void GetInteriorCells_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var loadOrder = new StubLoadOrder([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
-        ]);
-        var svc = new WorldspaceQueryService(new StubIndex(reader, loadOrder));
+        var svc = new WorldspaceQueryService(new StubIndex(reader), Holder(Copy("M.esp", "ModA")));
 
         svc.GetInteriorCells("M.esp", 50, 0, origin: "ModB");
 
