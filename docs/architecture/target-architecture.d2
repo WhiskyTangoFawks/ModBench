@@ -49,15 +49,15 @@ modbench_core: "MODBENCH · Core — one command per gesture, beside the codec o
 
 medit_kernel: "MEDIT · Kernel — read by every box above it; a kernel box references only Vocabulary" {
   class: band; grid-rows: 1
-  vocabulary: "Vocabulary\ninterface: the value types every box shares\nhides: nothing; values only" {class: core}
-  loadorder: "Load order state\ninterface: the snapshot; which copy wins; who participates\nhides: the winner and participation rules" {class: core}
-  codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences and children\nhides: the game assemblies; Mutagen owns the typing" {class: core}
+  vocabulary: "Vocabulary\ninterface: the value types every box shares\nhides: nothing; values only" {class: kernel}
+  loadorder: "Load order state\ninterface: the snapshot; which copy wins; who participates\nhides: the winner and participation rules" {class: kernel}
+  codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences and children\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by every box above it, the record panel included; a kernel box references nothing" {
   class: band; grid-rows: 1
-  codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini\nhides: installedFiles in MO2's form; game name to release" {class: core}
-  wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: core}
-  tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: core}
+  codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini\nhides: installedFiles in MO2's form; game name to release" {class: kernel}
+  wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: kernel}
+  tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: kernel}
 }
 
 medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {

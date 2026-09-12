@@ -42,8 +42,8 @@ http -> commands: envelope {class: edit}
 commands -> sourcerepo: "baseline: documents and tracked files to main, deletions included" {class: track}
 commands -> sourcerepo: "apply: working-tree dirt on the current branch, refusing a same-file collision" {class: edit}
 sourcerepo."commit to main by plumbing, then rebase the edit branch"
-sourcerepo -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: signal}
-commands -> http: applied or refusal {class: signal}
-http -> client: applied or refusal {class: signal}
-client -> plugins: the outcome {class: signal}
+sourcerepo -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: edit}
+commands -> http: applied or refusal {class: edit}
+http -> client: applied or refusal {class: edit}
+client -> plugins: the outcome {class: edit}
 plugins."clean: silent · refused: the paths · conflict: the merge editor"

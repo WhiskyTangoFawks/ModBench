@@ -25,10 +25,11 @@ layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-throu
   boxes, imported by name; time runs down; a message is labelled with what moves, never with the
   call, so a request and its reply are two messages. A note on an actor is what it does between
   messages.
-- [styles.d2](styles.d2) is the shared vocabulary. A box class says what a module is: driving,
-  core, driven, a system of record, derived. A message class says which gesture family the
-  payload belongs to. A signal is dashed grey and carries no payload; a push is dashed purple and
-  names what changed, and the receiver re-reads.
+- [styles.d2](styles.d2) is the shared vocabulary. A box class is its layer: driving, core,
+  kernel, driven, a system of record, derived; in a trace the actor's colour is the only layer
+  mark. A message class says which gesture family the payload belongs to, and a reply takes its
+  request's class. A signal is dashed grey and carries no payload, a watch event or a bare
+  request; a push is dashed purple and names what changed, and the receiver re-reads.
 
 ## The layers
 
