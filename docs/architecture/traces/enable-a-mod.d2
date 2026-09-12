@@ -15,6 +15,7 @@ mo2.label: "MO2 instance\nprofiles/<profile>/modlist.txt"
 instance: @../target-architecture.modbench_driven.instance
 instance.label: Instance
 views: "every view" {class: driving}
+toolbox: @../target-architecture.modbench_driving.toolbox
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -32,7 +33,8 @@ mo2files -> mo2: bytes, then forget {class: loadout}
 mo2 -> instance: watch {class: signal}
 instance."recompute, next sequence"
 instance -> views: value {class: loadout}
-instance -> client: "load order snapshot, on change and on connect" {class: loadout}
+instance -> toolbox: "load order snapshot, on change and on connect" {class: loadout}
+toolbox -> client: "load order snapshot, on change and on connect" {class: loadout}
 client -> http: load order snapshot {class: loadout}
 http -> commands: put load order {class: loadout}
 commands -> loadorder: load order snapshot {class: loadout}

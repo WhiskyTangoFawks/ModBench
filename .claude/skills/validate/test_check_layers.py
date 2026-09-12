@@ -259,21 +259,10 @@ class TraceMessagesAgainstReferenceView(unittest.TestCase):
             self.assertIn("a -> views", failures[0])
 
 
-# Three pairs not covered by the six allowed pairs, found in the traces committed at 975f2bc5.
-# Reported as findings, not patched around.
-REPORTED_GAP_PAIRS = {"instance -> client", "watcher -> plugins", "plugins -> source"}
-
-
 class RealRepoDiagrams(unittest.TestCase):
-    def test_the_committed_diagrams_report_the_gaps_by_file_line_and_arrow_and_fail(self):
-        failures = cl.run(REPO_ROOT)
-        pairs = set()
-        for failure in failures:
-            self.assertIn("no allowed pair covers this message", failure)
-            self.assertRegex(failure.split(": ", 1)[0], r"\.d2:\d+$")
-            pairs.add(failure.split(": ", 2)[1])
-        self.assertEqual(pairs, REPORTED_GAP_PAIRS)
-        self.assertEqual(cl.main([str(REPO_ROOT)]), 1)
+    def test_the_committed_diagrams_pass_the_checker(self):
+        self.assertEqual(cl.run(REPO_ROOT), [])
+        self.assertEqual(cl.main([str(REPO_ROOT)]), 0)
 
 
 if __name__ == "__main__":
