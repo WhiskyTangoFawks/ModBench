@@ -33,7 +33,8 @@ mo2files -> mo2: bytes, then forget {class: loadout}
 mo2 -> instance: watch {class: signal}
 instance."recompute from the new profile"
 instance -> views: value {class: loadout}
-instance -> client: load order snapshot {class: loadout}
+instance -> toolbox: load order snapshot {class: loadout}
+toolbox -> client: load order snapshot {class: loadout}
 client -> http: load order snapshot {class: loadout}
 http -> commands: put load order {class: loadout}
 commands -> loadorder: load order snapshot {class: loadout}

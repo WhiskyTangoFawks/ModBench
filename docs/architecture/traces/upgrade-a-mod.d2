@@ -20,10 +20,6 @@ mo2.label: "MO2 instance\nthe tracked mod's folder"
 views: "every view" {class: driving}
 watcher: @../target-architecture.medit_driving.watcher
 watcher.label: "Mod watcher\nmEdit"
-plugins: @../target-architecture.modbench_driving.plugins
-plugins.label: Plugins
-source: @../target-architecture.medit_data.source
-source.label: "Source tree in git\nmain"
 
 downloads."install this, with the sidecar's mod id and file id"
 instance -> downloads: "value: mods with this Nexus id, their installedFiles" {class: loadout}
@@ -36,5 +32,4 @@ mo2files -> mo2: the folder, then forget {class: loadout}
 mo2 -> instance: watch {class: signal}
 instance -> views: value {class: loadout}
 mo2 -> watcher: changed paths {class: signal}
-watcher -> plugins: "a-tracked-mod-changes-on-disk: the dialog, baseline pre-selected: the version moved" {class: push}
-plugins -> source: "commit to main as new baseline, version in the trailer; then rebase the edit branch" {class: track}
+watcher."a-tracked-mod-changes-on-disk from here: the dialog with the baseline answer pre-selected, since the version moved; the answer commits the new baseline to main, version in the trailer, then rebases the edit branch"

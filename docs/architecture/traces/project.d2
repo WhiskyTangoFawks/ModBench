@@ -5,6 +5,7 @@
 shape: sequence_diagram
 instance: @../target-architecture.modbench_driven.instance
 instance.label: Instance
+toolbox: @../target-architecture.modbench_driving.toolbox
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
@@ -27,7 +28,8 @@ port: @../target-architecture.medit_kernel.ports
 port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
-instance -> client: load order snapshot {class: loadout}
+instance -> toolbox: load order snapshot {class: loadout}
+toolbox -> client: load order snapshot {class: loadout}
 client -> http: load order snapshot {class: loadout}
 http -> commands: put load order {class: loadout}
 commands -> loadorder: load order snapshot {class: query}
