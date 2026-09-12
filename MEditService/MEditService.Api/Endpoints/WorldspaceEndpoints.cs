@@ -1,4 +1,5 @@
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 
 namespace MEditService.Api.Endpoints;
 

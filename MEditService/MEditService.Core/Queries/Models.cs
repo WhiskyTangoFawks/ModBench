@@ -1,7 +1,5 @@
-using System.Text.Json.Serialization;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 
 namespace MEditService.Core.Queries;
 
@@ -67,40 +65,6 @@ public record PluginResponse(
             Source.ModFolders.IsEditable(copy.Origin, copy.Path), hasParseFailure);
     }
 }
-
-// A tri-state rather than two booleans: the states are mutually exclusive, and a future Deleted
-// would be a wire addition, not a reshape. Deleted is absent because a working-tree-deleted
-// record has no Search() row to describe.
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum WorkingTreeState { None, Modified, Added }
-
-// Origin (ADR-0012): additive alongside Plugin; without it two same-filename plugins listed
-// together are indistinguishable rows.
-public record RecordSummary(
-    string FormKey,
-    string Plugin,
-    int LoadOrderIndex,
-    bool IsWinner,
-    string? EditorId,
-    string Origin,
-    // Defaults to None (test fixtures, GetOverrideStack's own unrelated read paths) — Search() is
-    // the only real producer of a non-None value; see DuckDbRecordIndex.Search.
-    WorkingTreeState WorkingTreeState = WorkingTreeState.None,
-    // Whether at least one container_child row names this FormKey as parent — the Plugins tree's
-    // expand chevron for a qust/dial row. Search() is the only producer of true; every
-    // other construction site has nothing to report.
-    bool HasContainerChildren = false,
-    // Non-null when ingest could not turn this record into its document — the Mutagen read, the
-    // reference walk or the codec write — so Search can never omit one silently.
-    string? ParseDiagnosis = null,
-    // The same fact widened to this row's subtree, so the tree never walks children to aggregate.
-    bool HasParseFailure = false);
-
-public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
-
-/// <summary>Value is the stored document's own node for this field, verbatim, or null when the
-/// document omits the member (which the codec does for a member equal to its default).</summary>
-public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckError = null);
 
 public record RecordDetail(
     string FormKey,
@@ -172,7 +136,3 @@ public record CompareResult(
 // HasParseFailure: whether this subtree holds a record Mutagen could not read, so the tree renders
 // the failure prefix from the page it has instead of walking children.
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName, bool HasParseFailure);
-
-// Origin (ADR-0012): additive alongside Plugin; without it two same-filename sources referencing
-// the same target are indistinguishable.
-public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);

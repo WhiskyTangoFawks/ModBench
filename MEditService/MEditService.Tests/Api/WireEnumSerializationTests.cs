@@ -3,6 +3,7 @@ using MEditService.Api.Endpoints;
 using MEditService.Core.Commands;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using MEditService.Core.Source;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;

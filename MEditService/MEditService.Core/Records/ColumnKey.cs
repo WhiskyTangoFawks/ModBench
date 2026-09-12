@@ -1,6 +1,6 @@
 using MEditService.Core.Plugins;
 
-namespace MEditService.Core.Queries;
+namespace MEditService.Core.Records;
 
 // ADR-0012: the compound identity compare-grid columns are keyed by. `|` is illegal in a Windows
 // filename and an MO2 mod-folder name; `:` was rejected as already load-bearing in the
@@ -15,9 +15,3 @@ public static class ColumnKey
             ? plugin
             : $"{plugin}{Delimiter}{origin}";
 }
-
-// Marks a DTO property whose dictionary keys are ColumnKey.Of values; the column-key integrity
-// test reflects over this instead of a hand-typed property-name allowlist, which drifts. A
-// nested column-keyed dictionary is marked the same way.
-[AttributeUsage(AttributeTargets.Property)]
-public sealed class ColumnKeyedAttribute : Attribute;

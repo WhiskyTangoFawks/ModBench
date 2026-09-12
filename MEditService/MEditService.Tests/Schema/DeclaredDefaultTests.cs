@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
