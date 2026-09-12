@@ -212,6 +212,9 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     {
         if (ctx.ResolveFormKey == null) return (null, null);
 
+        ResolvedFormKey? Resolve(string formKey) =>
+            ctx.ResolveFormKey(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
+
         var resolutions = new Dictionary<string, FormKeyResolution>();
         var checkErrors = new Dictionary<string, string>();
         foreach (var (column, value) in values)
@@ -220,12 +223,12 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             // absent value is not an unset link to report.
             if (ctx.PartialFormColumns.Contains(column)) continue;
             var meta = shapes[column];
-            if (CheckErrorBuilder.Build(meta, value as JsonElement?, ctx.ResolveFormKey, ctx.Release) is { } error)
+            if (CheckErrorBuilder.Build(meta, value as JsonElement?, Resolve, ctx.Release) is { } error)
                 checkErrors[column] = error;
             if (meta.Type != "formKey") continue;
             var fk = FormReferences.ExtractString(value);
             if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
-            resolutions[column] = FormKeyResolution.From(fk, ctx.ResolveFormKey(fk), meta.ValidFormKeyTypes, ctx.Release);
+            resolutions[column] = FormKeyResolution.From(fk, Resolve(fk), meta.ValidFormKeyTypes, ctx.Release);
         }
         return (resolutions.Count > 0 ? resolutions : null, checkErrors.Count > 0 ? checkErrors : null);
     }

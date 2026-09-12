@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Core.Records;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Schema;
@@ -11,7 +10,7 @@ public static class CheckErrorBuilder
     // ADR-0005: `resolve` is a lookup the caller already holds, never a scan started here.
     // `whyUnchecked` answers only for a caller that can lose a target's bytes: unread is not broken.
     public static string? Build(
-        FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release,
+        FieldMetadata meta, JsonElement? value, Func<string, ResolvedFormKey?> resolve, GameRelease release,
         Func<string, string?>? whyUnchecked = null)
     {
         var entries = new List<string>();
@@ -28,7 +27,7 @@ public static class CheckErrorBuilder
 
     private static string? CheckScalar(
         string? value, bool allowsNull, IReadOnlyList<string> validTypes,
-        Func<string, RecordLookupEntry?> resolve, Func<string, string?> whyUnchecked, GameRelease release)
+        Func<string, ResolvedFormKey?> resolve, Func<string, string?> whyUnchecked, GameRelease release)
     {
         if (string.IsNullOrEmpty(value) || value == "Null")
             return allowsNull ? null : $"Found a NULL reference, expected: {string.Join(", ", validTypes)}";

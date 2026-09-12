@@ -73,9 +73,9 @@ public sealed class CopyRecordAsOverrideHandler
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
         }
 
-        // IsInterior is false for both a genuine SubCells cell and a Worldspace's TopCell
-        // (PlacementWalker hardcodes it). Only the SubCells case has block coordinates to mint from; a
-        // TopCell falls through to the refusal, its placement being a follow-up.
+        // IsInterior is false for both a genuine SubCells cell and a Worldspace's TopCell. Only the
+        // SubCells case has block coordinates to mint from; a TopCell falls through to the refusal,
+        // its placement being a follow-up.
         var isCell = RecordTypeDispatch.For(release).IsCell(identity.RecordType);
         var placement = isCell ? source.CellPlacementOf(identity) : null;
         if (isCell && placement?.IsInterior == false && placement.Value.BlockX != null)

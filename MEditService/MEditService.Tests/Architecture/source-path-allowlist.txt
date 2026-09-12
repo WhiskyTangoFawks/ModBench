@@ -12,4 +12,4 @@ MEditService.Core/Serialization/HeaderDocument.cs: "RecordData.json": 1
 MEditService.Core/Source/CompileJournal.cs: ".git": 1
 MEditService.Core/Source/ExternalChangeDeferral.cs: ".git": 2
 MEditService.Core/Edits/WriteTargets.cs: "HEAD": 1
-MEditService.Core/Source/SourceIngest.cs: "HEAD": 1
+MEditService.Core/Records/SourceIngest.cs: "HEAD": 1

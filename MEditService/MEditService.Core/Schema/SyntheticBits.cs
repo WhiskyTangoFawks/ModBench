@@ -1,7 +1,6 @@
 using System.Text.Json;
-using MEditService.Core.Schema;
 
-namespace MEditService.Core.Records;
+namespace MEditService.Core.Schema;
 
 /// <summary>The read side of a synthetic member: whether its bit is set in the member the
 /// document spells, a raw integer or an array of flag names.</summary>

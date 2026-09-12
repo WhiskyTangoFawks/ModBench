@@ -1,5 +1,5 @@
 using MEditService.Core.PluginAdapter;
-using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -42,7 +42,7 @@ public sealed class LoadOrderLinkTargetsTests
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             formKeys);
 
-    private static IReadOnlyDictionary<string, RecordLookupEntry> Targets(
+    private static IReadOnlyDictionary<string, ResolvedFormKey> Targets(
         IReadOnlyList<ModPath> loadOrder, params string[] formKeys) =>
         Answers(loadOrder, formKeys).Targets;
 
@@ -53,8 +53,8 @@ public sealed class LoadOrderLinkTargetsTests
 
         var targets = Targets(Paths(data, BaseName, PatchName), _keyword.ToString(), _race.ToString());
 
-        Assert.Equal(new RecordLookupEntry("kywd", "BaseKeyword"), targets[_keyword.ToString()]);
-        Assert.Equal(new RecordLookupEntry("race", "BaseRace"), targets[_race.ToString()]);
+        Assert.Equal(new ResolvedFormKey("kywd", "BaseKeyword"), targets[_keyword.ToString()]);
+        Assert.Equal(new ResolvedFormKey("race", "BaseRace"), targets[_race.ToString()]);
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class LoadOrderLinkTargetsTests
 
         var targets = Targets(Paths(data, BaseName, PatchName), _overriddenKeyword.ToString());
 
-        Assert.Equal(new RecordLookupEntry("kywd", "RenamedByPatch"), targets[_overriddenKeyword.ToString()]);
+        Assert.Equal(new ResolvedFormKey("kywd", "RenamedByPatch"), targets[_overriddenKeyword.ToString()]);
     }
 
     // A file the load order names can be gone or malformed by the time compile asks (ADR-0003). It
@@ -91,7 +91,7 @@ public sealed class LoadOrderLinkTargetsTests
 
         var answers = Answers([.. Paths(data, BaseName), missing], _keyword.ToString(), absentKey);
 
-        Assert.Equal(new RecordLookupEntry("kywd", "BaseKeyword"), answers.Targets[_keyword.ToString()]);
+        Assert.Equal(new ResolvedFormKey("kywd", "BaseKeyword"), answers.Targets[_keyword.ToString()]);
         Assert.False(answers.Targets.ContainsKey(absentKey));
         var unread = Assert.Single(answers.UnreadableFiles);
         Assert.Equal("Absent.esp", unread.FileName);

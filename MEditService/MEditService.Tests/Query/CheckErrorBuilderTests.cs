@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 
@@ -12,7 +11,7 @@ public class CheckErrorBuilderTests
     private static readonly FieldMetadata FormKeyMeta = new(
         "Race", "formKey", false, ["race"], [], AllowsNull: false);
 
-    private static RecordLookupEntry? Entry(string recordType) => new RecordLookupEntry(recordType, null);
+    private static ResolvedFormKey? Entry(string recordType) => new ResolvedFormKey(recordType, null);
 
     [Fact]
     public void Build_CleanScalarReference_ReturnsNull()

@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Implicit;
 using Mutagen.Bethesda.Plugins.Meta;
 
-namespace MEditService.Core.Records;
+namespace MEditService.Core.Schema;
 
 // Shared with FieldDiff so a resolvable-but-wrong-type reference stays distinguishable from a
 // dangling one (ADR-0005). [JsonConverter] on the enum itself is what Swashbuckle honors; without
@@ -24,7 +24,7 @@ public sealed record FormKeyResolution(FormKeyResolutionState State, string? Rec
     // A lookup miss is not always a broken link: form_lookup never carries an engine-hardcoded
     // FormID (Player 00000007), because no plugin defines one. xEdit gates the same way, on
     // ObjectID < $800. Only checked against Implicits.BaseMasters, the modules always present.
-    public static FormKeyResolution From(string formKey, RecordLookupEntry? entry, IReadOnlyList<string> validTypes, GameRelease release)
+    public static FormKeyResolution From(string formKey, ResolvedFormKey? entry, IReadOnlyList<string> validTypes, GameRelease release)
     {
         if (entry is not { } e) return IsHardcoded(formKey, release) ? new FormKeyResolution(FormKeyResolutionState.ResolvedValidType, null, null) : Unresolved;
 

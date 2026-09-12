@@ -365,9 +365,8 @@ public sealed partial class SourceRepository
         return directory;
     }
 
-    // Interior placement carries no gameplay meaning (PlacementWalker records null block/sub for
-    // every interior cell), so the bucket already standing is reused and a fresh one minted only the
-    // first time.
+    // Interior placement carries no gameplay meaning — every interior cell's block and sub-block are
+    // null — so the bucket already standing is reused and a fresh one minted only the first time.
     private List<string> InteriorCellBlockPathIn(string groupDirectory)
     {
         var levels = RecordTypeDispatch.For(_release).InteriorCellBlockLevels;
