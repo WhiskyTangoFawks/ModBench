@@ -472,10 +472,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // document. Idempotent by construction, being the ingest Track and a re-index run.
     private void RederiveWholeCopyFromSource(PluginKey key, string modFolder)
     {
-        var sourceTree = Path.Combine(modFolder, SourceRepository.RootFor(key.Name));
         // Nothing to re-derive from: the tree went away between the signal and this line, or this
         // copy's rows came from its binary and a source key is not its to answer for.
-        if (!Directory.Exists(sourceTree)) return;
+        if (!SourceRepository.HoldsTreeFor(modFolder, key.Name)) return;
         if (RegistrationOf(key) is not { } registration) return;
 
         // Ingest, head reconcile and winner sweep are one whole-plugin projection, so they are one
