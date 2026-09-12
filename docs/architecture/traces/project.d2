@@ -1,30 +1,40 @@
-# Projection, purple. The load order snapshot arrives from Modbench; the
-# Projector asks the kernel for winners and schema and decides nothing; the Store
-# announces what changed and every subscriber re-reads.
+# Projection, purple. The load order snapshot arrives from Modbench; the Projector asks
+# the kernel for winners and schema and decides nothing; the Store announces what changed
+# and every subscriber re-reads.
 ...@../styles
-direction: down
-instance: "Instance" {class: driven}
-client: "mEdit client" {class: core}
-http: "HTTP endpoints\nand the notification stream" {class: driving}
-loadorder: "Load order state\nhome of the winner rule" {class: core}
-codec: "Codec + schema" {class: core}
-srcrepo: "Source repository" {class: driven}
-plgadapter: "Plugin adapter" {class: driven}
-proj: "Projector\nrefresh keys, validate by hash" {class: driven}
-store: "Store\nDuckDB" {class: derived}
-port: "Notification port" {class: core}
-views: "Plugins view · Editor" {class: driving}
+shape: sequence_diagram
+instance: @../target-architecture.modbench_driven.instance
+instance.label: Instance
+client: @../target-architecture.modbench_core.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+loadorder: @../target-architecture.medit_kernel.loadorder
+loadorder.label: Load order state
+projector: @../target-architecture.medit_driven.index.projector
+projector.label: Projector
+codec: @../target-architecture.medit_kernel.codec
+codec.label: Codec + schema
+sourcerepo: @../target-architecture.medit_driven.sourcerepo
+sourcerepo.label: Source repository
+pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter.label: Plugin adapter
+store: @../target-architecture.medit_driven.index.store
+store.label: Store
+port: @../target-architecture.medit_core.port
+port.label: Notification port
+views: "Plugins · Editor" {class: driving}
 
 instance -> client: load order snapshot {class: loadout}
 client -> http: load order snapshot {class: loadout}
 http -> loadorder: load order snapshot {class: query}
-http -> proj: reconcile: validate by hash {class: signal}
-loadorder -> proj: winners {class: query}
-codec -> proj: schema {class: query}
-srcrepo -> proj: documents (tracked) {class: query}
-plgadapter -> proj: bytes (untracked) {class: query}
-proj -> store: rows {class: query}
-store -> port: rows changed: keys, sequence {class: push}
+http -> projector: "reconcile: validate by hash" {class: signal}
+loadorder -> projector: winners {class: query}
+codec -> projector: schema {class: query}
+sourcerepo -> projector: documents (tracked) {class: query}
+pluginadapter -> projector: bytes (untracked) {class: query}
+projector -> store: rows {class: query}
+store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
 client -> views: rows changed (push), then re-read {class: push}

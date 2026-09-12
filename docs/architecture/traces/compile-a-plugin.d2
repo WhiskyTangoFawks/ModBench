@@ -1,24 +1,32 @@
-# Compile and keep, orange. Compile writes the source tree's documents back as
-# bytes. Keep is the same write, chosen over absorb when a tracked plugin changed.
+# Compile and keep, orange. Compile writes the source tree's documents back as bytes.
+# Keep is the same write, chosen over absorb when a tracked plugin changed.
 ...@../styles
-direction: down
-plugins: "Plugins view" {class: driving}
-client: "mEdit client" {class: core}
-http: "HTTP endpoints" {class: driving}
-cmd: "Commands\nplugin: compile, keep" {class: core}
-srcrepo: "Source repository" {class: driven}
-source: "Source tree in git" {class: sor}
-plgadapter: "Plugin adapter\nMutagen write" {class: driven}
-plugin: "Plugin files" {class: sor}
-watcher: "Mod watcher" {class: driving}
-proj: "Projector\nvalidate by hash" {class: driven}
+shape: sequence_diagram
+plugins: @../target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+client: @../target-architecture.modbench_core.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
+source: @../target-architecture.medit_data.source
+sourcerepo: @../target-architecture.medit_driven.sourcerepo
+sourcerepo.label: Source repository
+pluginadapter: @../target-architecture.medit_driven.pluginadapter
+pluginadapter.label: Plugin adapter
+plugin: @../target-architecture.medit_data.plugin
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: Mod watcher
+projector: @../target-architecture.medit_driven.index.projector
+projector.label: Projector
 
 plugins -> client: compile · keep {class: edit}
 client -> http: envelope {class: edit}
-http -> cmd: envelope {class: edit}
-source -> srcrepo: documents {class: compile}
-srcrepo -> cmd: documents {class: compile}
-cmd -> plgadapter: bytes {class: compile}
-plgadapter -> plugin: bytes {class: compile}
+http -> commands: envelope {class: edit}
+source -> sourcerepo: documents {class: compile}
+sourcerepo -> commands: documents {class: compile}
+commands -> pluginadapter: bytes {class: compile}
+pluginadapter -> plugin: bytes {class: compile}
 plugin -> watcher: bytes {class: signal}
-watcher -> proj: plugin changed {class: signal}
+watcher -> projector: "plugin changed: validate by hash" {class: signal}

@@ -2,26 +2,34 @@
 # modlist adoption is a command handed the value, the way the plugins reconcile is. mEdit
 # learns of the folder the same way: by watching.
 ...@../styles
-direction: down
-downloads: "Downloads view" {class: driving}
-install: "install\nstaging, then one rename into mods/" {class: core}
-meta: "meta.ini\nwrite" {class: core}
-disk: "MO2 instance\nmods/<name>/, meta.ini" {class: sor}
-instance: "Instance" {class: driven}
+shape: sequence_diagram
+downloads: @../target-architecture.modbench_driving.downloads
+downloads.label: Downloads
+install: @../target-architecture.modbench_core.install
+install.label: install
+codecs: @../target-architecture.modbench_kernel.codecs
+codecs.label: MO2 file codecs
+mo2: @../target-architecture.modbench_data.mo2
+mo2.label: "MO2 instance\nmods/<name>/, meta.ini, modlist.txt"
+instance: @../target-architecture.modbench_driven.instance
+instance.label: Instance
 views: "every view" {class: driving}
-modlist: "modlist commands\nadopt unlisted folders" {class: core}
-codec: "modlist.txt\nsplice" {class: core}
-watcher: "Mod watcher\nmEdit's own, one per mod" {class: driving}
-proj: "Projector" {class: driven}
+modlist: @../target-architecture.modbench_core.modlist
+modlist.label: modlist commands
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: "Mod watcher\nmEdit's own, one per mod"
+projector: @../target-architecture.medit_driven.index.projector
+projector.label: Projector
 
 downloads -> install: install this {class: loadout}
-install -> meta: the meta it knows {class: loadout}
-meta -> install: bytes {class: loadout}
-install -> disk: one rename, then forget {class: loadout}
-disk -> instance: watch {class: signal}
+install."staging, then one rename into mods/"
+install -> codecs: "meta.ini: the meta it knows" {class: loadout}
+codecs -> install: bytes {class: loadout}
+install -> mo2: one rename, then forget {class: loadout}
+mo2 -> instance: watch {class: signal}
 instance -> views: value {class: loadout}
-instance -> modlist: "each value, as an argument:\nfolders with no modlist line" {class: loadout}
-modlist -> codec: lines to add {class: loadout}
-codec -> disk: bytes, then forget {class: loadout}
-disk -> watcher: bytes {class: signal}
-watcher -> proj: plugin changed {class: signal}
+instance -> modlist: "each value, as an argument: folders with no modlist line" {class: loadout}
+modlist -> codecs: "modlist.txt: lines to add" {class: loadout}
+codecs -> mo2: bytes, then forget {class: loadout}
+mo2 -> watcher: bytes {class: signal}
+watcher -> projector: plugin changed {class: signal}

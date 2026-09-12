@@ -1,33 +1,42 @@
 # Edit gesture, both processes. Blue carries the edit down to the source tree;
 # purple carries the projection back up. The editor re-reads on the push.
 ...@../styles
-direction: down
-editor: "Editor" {class: driving}
-client: "mEdit client" {class: core}
-http: "HTTP endpoints\nand the notification stream" {class: driving}
-cmd: "Commands\nrecord: edit" {class: core}
-srcrepo: "Source repository" {class: driven}
-source: "Source tree in git" {class: sor}
-watcher: "Mod watcher" {class: driving}
-proj: "Projector\nrefresh keys" {class: driven}
-store: "Store" {class: derived}
-port: "Notification port" {class: core}
+shape: sequence_diagram
+editor: @../target-architecture.modbench_driving.editor
+editor.label: Editor
+client: @../target-architecture.modbench_core.client
+client.label: mEdit client
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
+sourcerepo: @../target-architecture.medit_driven.sourcerepo
+sourcerepo.label: Source repository
+source: @../target-architecture.medit_data.source
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: Mod watcher
+projector: @../target-architecture.medit_driven.index.projector
+projector.label: Projector
+store: @../target-architecture.medit_driven.index.store
+store.label: Store
+port: @../target-architecture.medit_core.port
+port.label: Notification port
 
 editor -> client: "edit: one path" {class: edit}
 client -> http: envelope {class: edit}
-http -> cmd: envelope {class: edit}
-source -> srcrepo: documents {class: edit}
-srcrepo -> cmd: current document {class: edit}
-cmd -> srcrepo: new document {class: edit}
-srcrepo -> source: documents {class: edit}
-cmd -> http: applied or refusal {class: signal}
-http -> client: applied or refusal {class: signal}
-client -> editor: applied or refusal {class: signal}
+http -> commands: envelope {class: edit}
+source -> sourcerepo: documents {class: edit}
+sourcerepo -> commands: current document {class: edit}
+commands -> sourcerepo: new document {class: edit}
+sourcerepo -> source: documents {class: edit}
+commands -> http: applied or refusal {class: edit}
+http -> client: applied or refusal {class: edit}
+client -> editor: applied or refusal {class: edit}
 source -> watcher: source changed {class: signal}
-watcher -> proj: source changed {class: signal}
-srcrepo -> proj: documents (tracked) {class: query}
-proj -> store: rows {class: query}
-store -> port: rows changed: keys, sequence {class: push}
+watcher -> projector: "source changed: refresh keys" {class: signal}
+sourcerepo -> projector: documents (tracked) {class: query}
+projector -> store: rows {class: query}
+store -> port: "rows changed: keys, sequence" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
 client -> editor: rows changed (push), then re-read {class: push}

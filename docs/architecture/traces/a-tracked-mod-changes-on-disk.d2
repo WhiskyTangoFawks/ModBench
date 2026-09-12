@@ -1,37 +1,49 @@
-# External change, per mod (#813). One watcher per mod; the Source repository names its
-# paths. A tracked mod changed externally when the plugin bytes differ from the baseline,
-# or a file git tracks differs from what git last saw; the preset chosen at Track decides
-# what git tracks. meta.ini is a tell: its version chooses the default, never triggers.
-# The human always answers. After the baseline commit the rebase is attempted at once.
+# External change, per mod. One watcher per mod; the Source repository names its paths.
+# A tracked mod changed externally when the plugin bytes differ from the baseline, or a
+# file git tracks differs from what git last saw; the preset chosen at Track decides what
+# git tracks. meta.ini is a tell: its version chooses the default, never triggers. The
+# human always answers. After the baseline commit the rebase is attempted at once.
 ...@../styles
-direction: down
-tools: "Other tools, or a Modbench upgrade\nMO2, xEdit, the user, install" {class: other}
-mod: "Tracked mod folder\nplugin · assets · meta.ini · source/ · .git" {class: sor}
-watcher: "Mod watcher\nsettle per mod" {class: driving}
-classify: "Commands\nclassify: plugin bytes vs baseline · git status of tracked files · meta hash as tell" {class: core}
-proj: "Projector" {class: driven}
-port: "Notification port" {class: core}
-http: "HTTP endpoints\nand the notification stream" {class: driving}
-client: "mEdit client" {class: core}
-plugins: "Plugins view\none dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc" {class: driving}
-cmd: "Commands\nbaseline · apply" {class: core}
-srcrepo: "Source repository\ncommit to main by plumbing, then rebase the edit branch" {class: driven}
-outcome: "Plugins view\nclean: silent · refused: the paths · conflict: the merge editor" {class: driving}
+shape: sequence_diagram
+tools: @../target-architecture.medit_data.tools
+tools.label: "Other tools, or a Modbench upgrade\nMO2, xEdit, the user, install"
+mo2: @../target-architecture.modbench_data.mo2
+mo2.label: "MO2 instance\nthe tracked mod's folder: plugin · assets · meta.ini · source/ · .git"
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: "Mod watcher\nsettle per mod"
+projector: @../target-architecture.medit_driven.index.projector
+projector.label: Projector
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
+port: @../target-architecture.medit_core.port
+port.label: Notification port
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+client: @../target-architecture.modbench_core.client
+client.label: mEdit client
+plugins: @../target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+sourcerepo: @../target-architecture.medit_driven.sourcerepo
+sourcerepo.label: Source repository
 
-tools -> mod: bytes, at any time {class: outside}
-mod -> watcher: changed paths {class: signal}
-watcher -> proj: plugin or source changed {class: signal}
-watcher -> classify: a tracked mod settled {class: signal}
-classify -> port: "external change pending: mod, what changed, default" {class: push}
+tools -> mo2: bytes, at any time {class: outside}
+mo2 -> watcher: changed paths {class: signal}
+watcher -> projector: plugin or source changed {class: signal}
+watcher -> commands: a tracked mod settled {class: signal}
+commands."classify: plugin bytes vs baseline · git status of tracked files · meta hash as tell"
+commands -> port: "external change pending: mod, what changed, default" {class: push}
 port -> http: publish {class: push}
 http -> client: stream {class: push}
 client -> plugins: external change pending {class: push}
+plugins."one dialog per mod: Commit to main as new baseline · Apply to working tree on <branch> · Esc"
 plugins -> client: baseline · apply {class: edit}
 client -> http: envelope {class: edit}
-http -> cmd: envelope {class: edit}
-cmd -> srcrepo: "baseline: documents and tracked files to main, deletions included" {class: track}
-cmd -> srcrepo: "apply: working-tree dirt on the current branch, refusing a same-file collision" {class: edit}
-srcrepo -> cmd: rebase: clean · refused (paths) · conflicted (files) {class: signal}
-cmd -> http: applied or refusal {class: signal}
-http -> client: applied or refusal {class: signal}
-client -> outcome: the outcome {class: signal}
+http -> commands: envelope {class: edit}
+commands -> sourcerepo: "baseline: documents and tracked files to main, deletions included" {class: track}
+commands -> sourcerepo: "apply: working-tree dirt on the current branch, refusing a same-file collision" {class: edit}
+sourcerepo."commit to main by plumbing, then rebase the edit branch"
+sourcerepo -> commands: "rebase: clean · refused (paths) · conflicted (files)" {class: edit}
+commands -> http: applied or refusal {class: edit}
+http -> client: applied or refusal {class: edit}
+client -> plugins: the outcome {class: edit}
+plugins."clean: silent · refused: the paths · conflict: the merge editor"

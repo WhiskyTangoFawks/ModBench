@@ -1,29 +1,37 @@
-# Upgrade a tracked mod, end to end (#813). One gesture, install, that knows it is an
-# upgrade because the Nexus mod id is already installed. The target is always confirmed,
+# Upgrade a tracked mod, end to end. One gesture, install, that knows it is an upgrade
+# because the Nexus mod id is already installed. The target is always confirmed,
 # pre-selected by file id, never by filename. The write replaces the folder's contents in
 # place around .git. From there it is a-tracked-mod-changes-on-disk, with the version tell
 # pre-selecting the baseline button; versions of a tracked mod are history on main.
 ...@../styles
-direction: down
-downloads: "Downloads view\ninstall this" {class: driving}
-instance: "Instance\nmods with this Nexus id, their installedFiles" {class: driven}
-pick: "Downloads view\nthe pick: candidates + new mod, pre-selected by file id, confirmed" {class: driving}
-install: "install\nupgrade: target as an argument" {class: core}
-meta: "meta.ini\nwrite, with installedFiles" {class: core}
-mod: "Tracked mod folder\ncontents replaced in place; .git kept" {class: sor}
+shape: sequence_diagram
+downloads: @../target-architecture.modbench_driving.downloads
+downloads.label: Downloads
+instance: @../target-architecture.modbench_driven.instance
+instance.label: Instance
+install: @../target-architecture.modbench_core.install
+install.label: install
+codecs: @../target-architecture.modbench_kernel.codecs
+codecs.label: MO2 file codecs
+mo2: @../target-architecture.modbench_data.mo2
+mo2.label: "MO2 instance\nthe tracked mod's folder"
 views: "every view" {class: driving}
-watcher: "Mod watcher\nmEdit" {class: driving}
-dialog: "Plugins view\nthe dialog, baseline pre-selected: the version moved" {class: driving}
-main: "main\nnew baseline commit, version in the trailer; edit branch rebased" {class: sor}
+watcher: @../target-architecture.medit_driving.watcher
+watcher.label: "Mod watcher\nmEdit"
+plugins: @../target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+source: @../target-architecture.medit_data.source
+source.label: "Source tree in git\nmain"
 
-downloads -> pick: gesture, with the sidecar's mod id and file id {class: loadout}
-instance -> pick: value {class: loadout}
-pick -> install: the confirmed target {class: loadout}
-install -> meta: the meta it knows {class: loadout}
-meta -> install: bytes {class: loadout}
-install -> mod: staged tree in, old files out, then forget {class: loadout}
-mod -> instance: watch {class: signal}
+downloads."install this, with the sidecar's mod id and file id"
+instance -> downloads: "value: mods with this Nexus id, their installedFiles" {class: loadout}
+downloads."the pick: candidates + new mod, pre-selected by file id, confirmed"
+downloads -> install: "upgrade: the confirmed target" {class: loadout}
+install -> codecs: "meta.ini: the meta it knows, with installedFiles" {class: loadout}
+codecs -> install: bytes {class: loadout}
+install -> mo2: "staged tree in, old files out, .git kept, then forget" {class: loadout}
+mo2 -> instance: watch {class: signal}
 instance -> views: value {class: loadout}
-mod -> watcher: changed paths {class: signal}
-watcher -> dialog: "a-tracked-mod-changes-on-disk" {class: push}
-dialog -> main: commit to main as new baseline, then rebase {class: track}
+mo2 -> watcher: changed paths {class: signal}
+watcher -> plugins: "a-tracked-mod-changes-on-disk: the dialog, baseline pre-selected: the version moved" {class: push}
+plugins -> source: "commit to main as new baseline, version in the trailer; then rebase the edit branch" {class: track}

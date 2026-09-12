@@ -1,25 +1,35 @@
-# Loadout gesture, and the plugins reconcile. Enable and reorder splice plugins.txt.
-# The reconcile is the same splice with another trigger: an Instance value in which mods/
-# and plugins.txt disagree, handed to the command as an argument; the command reads
-# nothing. Implicit masters come from mEdit (#810).
+# Loadout gesture, and the plugins reconcile. Enable and reorder splice plugins.txt. The
+# reconcile is the same splice with another trigger: an Instance value in which mods/ and
+# plugins.txt disagree, handed to the command as an argument; the command reads nothing.
+# Implicit masters come from mEdit.
 ...@../styles
-direction: down
-plugins: "Plugins view" {class: driving}
-instance: "Instance" {class: driven}
-cmd: "plugins commands\nenable, reorder, reconcile against disk" {class: core}
-client: "mEdit client" {class: core}
-codec: "plugins.txt\nsplice" {class: core}
-disk: "MO2 instance\nprofiles/<profile>/plugins.txt · mods/" {class: sor}
+shape: sequence_diagram
+plugins: @../target-architecture.modbench_driving.plugins
+plugins.label: Plugins
+instance: @../target-architecture.modbench_driven.instance
+instance.label: Instance
+pluginscommands: @../target-architecture.modbench_core.pluginscommands
+pluginscommands.label: plugins commands
+client: @../target-architecture.modbench_core.client
+client.label: mEdit client
+codecs: @../target-architecture.modbench_kernel.codecs
+codecs.label: MO2 file codecs
+mo2: @../target-architecture.modbench_data.mo2
+mo2.label: "MO2 instance\nprofiles/<profile>/plugins.txt · mods/"
 views: "every view" {class: driving}
-medit: "mEdit\nload order state" {class: driving}
+http: @../target-architecture.medit_driving.http
+http.label: HTTP endpoints
+loadorder: @../target-architecture.medit_kernel.loadorder
+loadorder.label: "Load order state\nmEdit"
 
-plugins -> cmd: gesture {class: loadout}
-instance -> cmd: "each value, as an argument:\nplugins on disk not in plugins.txt, or gone" {class: loadout}
-cmd -> client: which plugins load implicitly? {class: query}
-client -> cmd: the set, or unreachable {class: query}
-cmd -> codec: lines to flip, move, add or drop {class: loadout}
-codec -> disk: bytes, then forget {class: loadout}
-disk -> instance: watch {class: signal}
+plugins -> pluginscommands: enable · reorder {class: loadout}
+instance -> pluginscommands: "each value, as an argument: plugins on disk not in plugins.txt, or gone" {class: loadout}
+pluginscommands -> client: which plugins load implicitly? {class: query}
+client -> pluginscommands: the set, or unreachable {class: query}
+pluginscommands -> codecs: "plugins.txt: lines to flip, move, add or drop" {class: loadout}
+codecs -> mo2: bytes, then forget {class: loadout}
+mo2 -> instance: watch {class: signal}
 instance -> views: value {class: loadout}
 instance -> client: load order snapshot {class: loadout}
-client -> medit: load order snapshot {class: loadout}
+client -> http: load order snapshot {class: loadout}
+http -> loadorder: load order snapshot {class: loadout}
