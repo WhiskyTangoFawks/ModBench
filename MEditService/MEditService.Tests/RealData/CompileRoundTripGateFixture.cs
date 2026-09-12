@@ -36,7 +36,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(Index, Holder, Plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

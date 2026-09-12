@@ -60,7 +60,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         _index.Reconcile(Holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(_index, Holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

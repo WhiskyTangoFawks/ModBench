@@ -539,12 +539,10 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // everything else. Both branches end in the same Index call, which is what keeps the read model
     // free of a dialect.
 
-    // The binary is still opened for a tracked plugin — HeldPlugins reads the overlay for metadata and
-    // the write path builds its link cache from it. What this establishes is only "never consult the
-    // binary for a tracked plugin's content".
+    // The binary is still read for a tracked plugin — HeldPlugins asks the adapter for its metadata.
+    // What this establishes is only "never consult the binary for a tracked plugin's content".
 
-    // Moving masters and record count onto the tree as well is a further step, not this one: it
-    // would reach into HeldPlugins' mod registry and the save path.
+    // Moving masters and record count onto the tree as well is a further step, not this one.
 
     // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
     // fallback would leave the user reading pre-Track binary content believing it was their source.
@@ -595,7 +593,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     // ADR-0005 rule 2: the binary reaches the index as documents, through the adapter's own door,
-    // never as the open getter HeldPlugins keeps for metadata and the write path.
+    // never as a mod this side holds.
     private void IndexFromBinary(HeldPlugins held, IRecordIndex index, PluginMetadata plugin)
     {
         using var documents = OpenDocuments(plugin, held.GameRelease, held.DataFolderPath);
@@ -890,7 +888,6 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
     private void DisposeCurrent()
     {
-        _heldPlugins?.Dispose();
         _heldPlugins = null;
         _index?.Dispose();
         _index = null;

@@ -231,13 +231,13 @@ public static class LoadOrderEndpoints
     // Deliberately not logged at Information like its neighbours: the Plugins tree polls this every
     // few hundred milliseconds for the duration of a reconcile, and one reception line per poll
     // would bury the per-plugin indexing lines it sits between.
-    private static IResult GetStatus(IndexProjector index, ILoggerFactory loggerFactory)
+    private static IResult GetStatus(IQueryIndex index, ILoggerFactory loggerFactory)
     {
         loggerFactory.CreateLogger(nameof(LoadOrderEndpoints)).LogTrace("Received GetLoadOrderStatus");
         return Results.Ok(index.Status);
     }
 
-    private static IResult GetSequence(IndexProjector index) => Results.Ok(index.Sequence);
+    private static IResult GetSequence(IRefreshIndex index) => Results.Ok(index.Sequence);
 
     // An absent directory is a bad request, not an empty answer: "no implicit masters" and "that
     // folder isn't there" want opposite responses from the caller.
@@ -310,7 +310,7 @@ public static class LoadOrderEndpoints
         }
     }
 
-    private static IResult GetFilter(IndexProjector index, ILoggerFactory loggerFactory)
+    private static IResult GetFilter(IQueryIndex index, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         logger.LogInformation("Received GetFilter");

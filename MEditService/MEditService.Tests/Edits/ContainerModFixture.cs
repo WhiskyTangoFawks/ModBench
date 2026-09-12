@@ -1,5 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
@@ -195,7 +196,7 @@ public sealed class ContainerModFixture : IDisposable
     /// <summary>Track through the real service: what an edit does to a git working tree is the thing
     /// under test, and no mock can answer that.</summary>
     internal void Track() =>
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(LoadOrder, [Plugin], ModFolderOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

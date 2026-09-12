@@ -223,7 +223,7 @@ public sealed class InjectedChildTests
 
         public void TrackBoth()
         {
-            var track = new TrackService(NullLogger<TrackService>.Instance);
+            var track = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             foreach (var origin in new[] { BaseOrigin, InjectorOrigin })
                 track.TrackAsync(Index, Holder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
         }

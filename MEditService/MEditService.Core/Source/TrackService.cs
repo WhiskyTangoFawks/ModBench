@@ -5,13 +5,15 @@ using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
 /// <summary>The Track gesture end to end: deep-parses each plugin under one origin (the load order's
 /// overlay is not always structurally faithful), serializes through the whole-mod door, and
 /// commits. A designated door (ADR-0007).</summary>
-public sealed class TrackService(ILogger<TrackService> logger, INotificationPublisher? notifications = null)
+public sealed class TrackService(
+    ILogger<TrackService> logger, IPluginAdapter adapter, INotificationPublisher? notifications = null)
 {
     // Read concurrently while a track is in flight. Snapshots are replaced wholesale, never
     // mutated, so Volatile.Read/Write suffices and no lock is needed.
@@ -25,20 +27,11 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             k.Name.Equals(copy.Name, StringComparison.OrdinalIgnoreCase)
             && string.Equals(k.Origin, copy.Origin, StringComparison.OrdinalIgnoreCase));
 
-    public Task<TrackResult> TrackAsync(
-        LoadOrder loadOrder, IReadOnlyCollection<PluginKey> heldCopies, string origin, SourcePreset preset,
-        CancellationToken cancel = default) =>
-        TrackAsync(loadOrder, heldCopies, origin, preset, deserializeForVerification: null, cancel);
-
-    /// <summary>Same gesture with one extra seam: how the round-trip gate reads the tree back. Null gets
-    /// the real whole-mod door. Only a negative test overrides it: no known codec defect can trigger
-    /// the gate for real.</summary>
-    internal async Task<TrackResult> TrackAsync(
+    public async Task<TrackResult> TrackAsync(
         LoadOrder loadOrder,
         IReadOnlyCollection<PluginKey> heldCopies,
         string origin,
         SourcePreset preset,
-        TreeDeserializer? deserializeForVerification,
         CancellationToken cancel = default)
     {
         // A copy the Index could not open has no bytes to deep-parse, so Track passes over it
@@ -80,10 +73,12 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
 
                 // A fresh deep parse, not the load order's own overlay, whose lifetime Track does not control.
                 // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
-                PluginTrees.PluginTree tree;
+                (IReadOnlyList<PristineFile> Files, string? MissingStringsFile) tree;
                 try
                 {
-                    tree = await PluginTrees.ReadAsync(plugin.Name, plugin.Path, loadOrder.GameRelease, strings, cancel);
+                    tree = await adapter.ReadSourceAsync(
+                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
+                        strings, cancel);
                 }
                 catch (Exception ex)
                 {
@@ -115,7 +110,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                 // TrackPhase.
                 if (await VerifyRoundTrip(
                         plugin.Name, plugin.Path, pluginPristineFiles, loadOrder.GameRelease, strings,
-                        deserializeForVerification, logger, cancel) is { } refusal)
+                        cancel) is { } refusal)
                     return TrackResult.Refused(TrackRefusal.RoundTripFailed, refusal);
 
                 pristineFiles.AddRange(pluginPristineFiles);
@@ -155,14 +150,12 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
     // ADR-0006 decision 2's gate: the tree is read back, recompiled and reparsed; refuses unless every
     // record is model-identical. Reparse, not the pre-write object: only written bytes show what the
     // writer does.
-    private static async Task<string?> VerifyRoundTrip(
+    private async Task<string?> VerifyRoundTrip(
         string pluginName,
         string originalPluginPath,
         IReadOnlyList<PristineFile> pristineFilesForThisPlugin,
         GameRelease gameRelease,
         PluginStrings strings,
-        TreeDeserializer? deserialize,
-        ILogger logger,
         CancellationToken cancel)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-trackverify-").FullName;
@@ -174,7 +167,7 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
             var recompiledPath = Path.Combine(scratchDir, pluginName);
             try
             {
-                await PluginTrees.WriteFromTreeAsync(treeRoot, recompiledPath, deserialize, cancel);
+                await adapter.WriteFromTreeAsync(treeRoot, recompiledPath, cancel);
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
@@ -203,10 +196,11 @@ public sealed class TrackService(ILogger<TrackService> logger, INotificationPubl
                       "present in the original — dropped during parsing, before Track ever wrote its source.");
             }
 
-            if (PluginTrees.DivergenceBetween(pluginName, originalPluginPath, recompiledPath, gameRelease, strings)
-                is { } divergence)
+            if (adapter.DivergenceBetween(
+                    new ModPath(ModKey.FromFileName(pluginName), originalPluginPath), recompiledPath,
+                    gameRelease, strings) is { } divergence)
             {
-                return $"{pluginName} does not round-trip through its own tracked source: {divergence.Describe()}";
+                return $"{pluginName} does not round-trip through its own tracked source: {divergence}";
             }
 
             // Model-identical but not byte-identical: an encoding-only difference ADR-0006 decision 2

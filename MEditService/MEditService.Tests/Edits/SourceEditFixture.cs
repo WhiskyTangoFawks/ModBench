@@ -1,5 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -77,7 +78,7 @@ public sealed class SourceEditFixture : IDisposable
         // working tree is the thing under test, and no mock can answer that.
         if (track)
         {
-            new TrackService(NullLogger<TrackService>.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
                 .TrackAsync(LoadOrder, [Plugin], ModFolderOrigin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }

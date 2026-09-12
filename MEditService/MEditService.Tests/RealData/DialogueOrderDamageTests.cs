@@ -38,7 +38,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(_index, holder, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

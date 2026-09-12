@@ -305,7 +305,8 @@ public sealed class PluginCompileService(
     private (CompiledTree? Tree, string? RefusalReason) DeserializeSource(
         IReadOnlyList<PristineFile> files, string pluginName, GameRelease release)
     {
-        var read = PluginTrees.ReadTreeAsync(files, pluginName, codec, release).GetAwaiter().GetResult();
+        var read = adapter.ReadTreeAsync(files, ModKey.FromFileName(pluginName), codec, release)
+            .GetAwaiter().GetResult();
         if (read.Tree is { } tree) return (tree, null);
 
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);

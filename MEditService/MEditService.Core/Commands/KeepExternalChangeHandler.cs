@@ -7,6 +7,7 @@ using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Commands;
 
@@ -16,13 +17,15 @@ namespace MEditService.Core.Commands;
 public sealed class KeepExternalChangeHandler
 {
     private readonly WriteTargets _targets;
+    private readonly IPluginAdapter _adapter;
     private readonly SchemaReflector _reflector;
     private readonly ILogger<KeepExternalChangeHandler> _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
     internal KeepExternalChangeHandler(
-        WriteTargets targets, SchemaReflector reflector, ILogger<KeepExternalChangeHandler> logger) =>
-        (_targets, _reflector, _logger) = (targets, reflector, logger);
+        WriteTargets targets, IPluginAdapter adapter, SchemaReflector reflector,
+        ILogger<KeepExternalChangeHandler> logger) =>
+        (_targets, _adapter, _reflector, _logger) = (targets, adapter, reflector, logger);
 
     public ExternalChangeLandResult Keep(string modFolder, IReadOnlyList<RegisteredCopy> plugins, GameRelease gameRelease)
     {
@@ -105,8 +108,9 @@ public sealed class KeepExternalChangeHandler
 
         // Keep only runs against a tracked plugin, so the mod-folder-only strings overload applies.
         var touched = new List<TouchedRecord>();
-        foreach (var (incoming, incomingText) in PluginTrees.RecordDocumentsOf(
-                     pluginName, pluginPath, gameRelease, PluginStrings.In(repository.ModFolder), codec, schemas))
+        foreach (var (incoming, incomingText) in _adapter.RecordDocumentsOf(
+                     new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease,
+                     PluginStrings.In(repository.ModFolder), codec, schemas))
         {
             var formKey = incoming.FormKey;
             var baselineText = baselineByFormKey.GetValueOrDefault(formKey);

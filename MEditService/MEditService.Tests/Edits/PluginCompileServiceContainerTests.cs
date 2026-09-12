@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
@@ -135,7 +136,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(_loadOrder, [_plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

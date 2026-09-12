@@ -78,6 +78,7 @@ try
         sp.GetRequiredService<ILoggerFactory>(),
         sp.GetRequiredService<INotificationPublisher>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
+    builder.Services.AddSingleton<IRefreshIndex>(sp => sp.GetRequiredService<IndexProjector>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<MalformedPluginQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
@@ -93,7 +94,7 @@ try
     // reconcile-time check (PUT /load-order), Track and the live watch all share it.
     builder.Services.AddSingleton(sp => new ModFolderWatcher(
         sp.GetRequiredService<LoadOrderHolder>(),
-        sp.GetRequiredService<IndexProjector>(),
+        sp.GetRequiredService<IRefreshIndex>(),
         sp.GetRequiredService<INotificationPublisher>(),
         sp.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(ModFolderWatcher))));
 

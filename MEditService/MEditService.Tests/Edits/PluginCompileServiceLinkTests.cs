@@ -62,7 +62,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
                 new LoadOrderEntry(HostName, hostPath, HostOrigin, Slot: 1, Enabled: true, Winning: true),
             ]));
 
-        var trackService = new TrackService(NullLogger<TrackService>.Instance);
+        var trackService = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
         trackService.TrackAsync(_loadOrder, [_target], TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
         trackService.TrackAsync(_loadOrder, [_host], HostOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
     }
@@ -94,7 +94,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
-        using var loaded = new MEditService.Core.PluginAdapter.MutagenPluginAdapter().OpenForRead(
+        using var loaded = MEditService.Core.PluginAdapter.MutagenPluginAdapter.OpenForRead(
             new ModPath(ModKey.FromFileName(HostName), Path.Combine(_hostFolder, HostName)), GameRelease.Fallout4);
         return [.. ((IFallout4ModGetter)loaded.Getter).Npcs.Single().Keywords!.Select(k => k.FormKey)];
     }
@@ -176,10 +176,6 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     private sealed class FaultyLinkAdapter : ReadOnlyPluginAdapter
     {
         internal const string Fault = "the link cache could not be built";
-
-        public override ILoadedMod OpenForRead(
-            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
-            MutagenPluginAdapter.Instance.OpenForRead(modPath, gameRelease, strings);
 
         public override LinkAnswers LinkTargets(
             IReadOnlyList<ModPath> loadOrder,

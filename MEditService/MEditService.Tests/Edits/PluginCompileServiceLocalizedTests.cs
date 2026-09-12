@@ -37,7 +37,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
             _gameDir, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(_loadOrder, [new PluginKey(PluginName, Origin)], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

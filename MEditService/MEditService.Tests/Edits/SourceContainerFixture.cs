@@ -1,5 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
@@ -59,7 +60,7 @@ public sealed class SourceContainerFixture : IDisposable
         Entries = [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)];
         LoadOrder = new LoadOrder(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

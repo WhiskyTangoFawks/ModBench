@@ -1,5 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
@@ -82,7 +83,7 @@ public sealed class RenumberTwoModFixture : IDisposable
     public static RenumberTwoModFixture Create(bool trackReferencer) => new(trackReferencer);
 
     private void Track(string origin, PluginKey plugin) =>
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(LoadOrder, [plugin], origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     public string ModFolderOf(PluginKey plugin) =>

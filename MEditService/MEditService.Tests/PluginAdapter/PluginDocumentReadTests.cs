@@ -37,7 +37,7 @@ public sealed class PluginDocumentReadTests
             new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
         var npc = documents.Records.Single(d => d.RecordType == "npc_");
 
-        using var loaded = Adapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4);
+        using var loaded = MutagenPluginAdapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var expected = codec.SerializeToText(loaded.Getter.EnumerateMajorRecords().Single(), GameRelease.Fallout4);
 

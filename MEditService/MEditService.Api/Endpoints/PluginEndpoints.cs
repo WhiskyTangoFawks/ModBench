@@ -163,7 +163,7 @@ public static class PluginEndpoints
     // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, IndexProjector index, LoadOrderHolder holder, CreatePluginHandler create,
+        CreatePluginRequest req, IQueryIndex index, LoadOrderHolder holder, CreatePluginHandler create,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -257,14 +257,14 @@ public static class PluginEndpoints
 
     // Which registered copies Editing actually holds: the copies the Index has open. A copy it
     // could not open is registered like any other but has no bytes to read.
-    private static IReadOnlyCollection<PluginKey> HeldCopies(IndexProjector index) =>
+    private static IReadOnlyCollection<PluginKey> HeldCopies(IQueryIndex index) =>
         [.. index.RequireReads().OpenedCopies.Keys];
 
     // ADR-0007: the Track gesture. Origin names the mod folder (every loaded plugin sharing
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(
-        TrackRequest req, IndexProjector index, LoadOrderHolder holder, TrackHandler trackHandler,
+        TrackRequest req, IQueryIndex index, LoadOrderHolder holder, TrackHandler trackHandler,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));

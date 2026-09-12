@@ -2,6 +2,7 @@ using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Commands;
 
@@ -10,14 +11,16 @@ namespace MEditService.Core.Commands;
 /// branch onto it at once.</summary>
 public sealed class AbsorbExternalChangeHandler
 {
+    private readonly IPluginAdapter _adapter;
     private readonly ILogger<AbsorbExternalChangeHandler> _logger;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal AbsorbExternalChangeHandler(ILogger<AbsorbExternalChangeHandler> logger) => _logger = logger;
+    internal AbsorbExternalChangeHandler(IPluginAdapter adapter, ILogger<AbsorbExternalChangeHandler> logger) =>
+        (_adapter, _logger) = (adapter, logger);
 
     public AbsorbResult Absorb(string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrder loadOrder)
     {
-        var result = Run(modFolder, plugins, loadOrder);
+        var result = Run(_adapter, modFolder, plugins, loadOrder);
         // Track's own endpoint already logs its refusal, so Absorb gains the same posture.
         if (!result.Applied)
             _logger.LogWarning("Refused to absorb {ModFolder}: {Reason}", modFolder, result.RefusalReason);
@@ -26,8 +29,9 @@ public sealed class AbsorbExternalChangeHandler
         return result;
     }
 
-    // Static because none of it reads this handler's state.
-    private static AbsorbResult Run(string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrder loadOrder)
+    // Static because none of it reads this handler's state beyond the port it is handed.
+    private static AbsorbResult Run(
+        IPluginAdapter adapter, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrder loadOrder)
     {
         var allPristineFiles = new List<PristineFile>();
         var binarySha256ByPlugin = new Dictionary<string, string>();
@@ -40,8 +44,9 @@ public sealed class AbsorbExternalChangeHandler
             try
             {
                 allPristineFiles.AddRange(
-                    PluginTrees.ReadPristineFilesAsync(
-                        plugin.Name, plugin.Path, loadOrder.GameRelease, PluginStrings.In(modFolder))
+                    adapter.ReadPristineFilesAsync(
+                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
+                        PluginStrings.In(modFolder))
                         .GetAwaiter().GetResult());
             }
             catch (Exception ex)

@@ -1,5 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
@@ -287,7 +288,7 @@ public sealed class ContainerCopyFixture : IDisposable
         new(destinationLoadsFirst: true, trackSource: false);
 
     private void Track(string origin, PluginKey plugin) =>
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(LoadOrder, [plugin], origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     /// <summary>What a tracked plugin's tree holds for a FormKey — the whole read model here.</summary>

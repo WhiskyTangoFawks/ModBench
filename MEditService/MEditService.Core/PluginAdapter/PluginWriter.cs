@@ -24,7 +24,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     {
         // No load order concept here, so no origin to distinguish a mod folder from the game Data folder:
         // the single-argument ForRead overload applies. The path names its own ModKey.
-        var mod = MutagenPluginAdapter.Instance.OpenForWrite(
+        var mod = MutagenPluginAdapter.OpenForWrite(
             new ModPath(pluginPath), gameRelease, PluginStrings.In(Path.GetDirectoryName(pluginPath)!));
         return PrepareFromModAsync(mod, pluginPath, loadOrder);
     }
@@ -49,7 +49,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         // PreparedPluginSave to Dispose it.
         try
         {
-            await MutagenPluginAdapter.Instance.WriteAsync(mod, tmpPath, loadOrder, tmpStringsDir);
+            await MutagenPluginAdapter.WriteAsync(mod, tmpPath, loadOrder, tmpStringsDir);
 
             // Whatever StringsWriter actually produced (only present when UsingLocalization, and
             // only once WriteAsync's own StringsWriter.Dispose has run) rides to its real Strings/ folder

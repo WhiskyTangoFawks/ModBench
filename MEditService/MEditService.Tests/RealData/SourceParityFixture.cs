@@ -30,7 +30,7 @@ public sealed class SourceParityFixture : IDisposable
 
         FromBinary = NewLoadOrder(holder, pluginPath);
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(FromBinary, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

@@ -34,7 +34,7 @@ public sealed class TrackServiceTests
         {
             var loadOrder = new LoadOrder(gameDir, null, GameRelease.Fallout4, []);
 
-            var result = await new TrackService(NullLogger<TrackService>.Instance)
+            var result = await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
                 .TrackAsync(loadOrder, [], "NoSuchMod", SourcePreset.Edits);
 
             Assert.False(result.Applied);
@@ -70,7 +70,7 @@ public sealed class TrackServiceTests
                 new RegisteredCopy("Broken.esp", "FixtureMod", unreadable, 1, Enabled: true, Winning: true),
             ]);
 
-            await new TrackService(NullLogger<TrackService>.Instance)
+            await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
                 .TrackAsync(loadOrder, [new PluginKey("Fixture.esp", "FixtureMod")], "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
@@ -108,7 +108,7 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
@@ -184,7 +184,7 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
@@ -217,7 +217,7 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
@@ -262,7 +262,7 @@ public sealed class TrackServiceTests
             // ever reached.
             File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.False(result.Applied);
@@ -294,7 +294,7 @@ public sealed class TrackServiceTests
                 new RegisteredCopy("Fixture.esp", PluginOrigin.DataDirectory, pluginPath, 0, Enabled: true, Winning: true),
             ]);
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             var result = await service.TrackAsync(
                 loadOrder, HeldIn(loadOrder), PluginOrigin.DataDirectory, SourcePreset.Edits);
 
@@ -335,7 +335,7 @@ public sealed class TrackServiceTests
                     new LoadOrderEntry("Second.esp", secondPluginPath, "FixtureMod", Slot: 1, Enabled: true, Winning: true),
                 ]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
 
             var observed = new List<TrackProgress>();
@@ -373,8 +373,6 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
-
             var deserializeCalls = 0;
             async Task<IMod> CountingDeserialize(string folder, CancellationToken ct)
             {
@@ -382,7 +380,9 @@ public sealed class TrackServiceTests
                 return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
             }
 
-            await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, CountingDeserialize);
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(CountingDeserialize));
+
+            await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.Equal(1, deserializeCalls);
             Assert.True(SourceRepository.IsTracked(modFolder));
@@ -412,8 +412,6 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
-
             static async Task<IMod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
             {
                 var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
@@ -421,7 +419,9 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenCorruptTheNpc);
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(DeserializeThenCorruptTheNpc));
+
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -458,8 +458,6 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
-
             static async Task<IMod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
             {
                 var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
@@ -467,7 +465,9 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenMutateTheFloat);
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(DeserializeThenMutateTheFloat));
+
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -511,7 +511,7 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
 
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
@@ -558,8 +558,6 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
-
             async Task<IMod> DeserializeThenCorrupt(string folder, CancellationToken ct)
             {
                 var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
@@ -567,7 +565,9 @@ public sealed class TrackServiceTests
                 return deserialized;
             }
 
-            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits, DeserializeThenCorrupt);
+            var service = new TrackService(NullLogger<TrackService>.Instance, new ForgedTreeWriteAdapter(DeserializeThenCorrupt));
+
+            var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.False(result.Applied);
             Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
@@ -600,7 +600,7 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.False(result.Applied);
@@ -685,7 +685,7 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
@@ -727,7 +727,7 @@ public sealed class TrackServiceTests
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
-            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
             var result = await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             Assert.False(result.Applied);

@@ -16,7 +16,11 @@ public sealed class PluginBytesScanTests
     // also exposes are constants, and name no content.
     private static readonly string[] RepositoryOpens = [@"SourceRepository\.Open", @"SourceRepository\.Over"];
 
-    private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite"];
+    private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite", "CreateEmpty"];
+
+    // The tree door's implementation and the seam its write takes: both are entered through the
+    // port, so a caller naming either has reached past it.
+    private static readonly string[] TreeDoorInternals = ["PluginTrees", "TreeDeserializer"];
 
     [Fact]
     public void NothingOutsideThePluginAdapter_OpensAPlugin()
@@ -32,6 +36,23 @@ public sealed class PluginBytesScanTests
             "A type outside the Plugin adapter opens a plugin file. A live Mutagen mod reaches nothing "
             + "but the codec and the Plugin adapter (ADR-0005 rule 2), so ask the adapter for the "
             + "answer as data instead:\n"
+            + string.Join("\n", named));
+    }
+
+    [Fact]
+    public void NothingOutsideThePluginAdapter_NamesTheTreeDoorsImplementation()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        var walked = Files(root, ProductionRoots, [AdapterRoot]);
+        var named = Sites(root, walked, TreeDoorInternals);
+
+        Assert.True(walked.Count > 50, $"The tree-door scan walked only {walked.Count} files.");
+        Assert.True(
+            named.Count == 0,
+            "A type outside the Plugin adapter names the tree door's implementation. Reading a source "
+            + "tree into a mod and writing one back are the port's two members (ADR-0005 rule 2), so "
+            + "ask the adapter:\n"
             + string.Join("\n", named));
     }
 

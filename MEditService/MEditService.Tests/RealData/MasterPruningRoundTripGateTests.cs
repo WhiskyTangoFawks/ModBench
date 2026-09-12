@@ -189,7 +189,7 @@ public sealed class MasterPruningRoundTripGateTests
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Holder, _origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance).TrackAsync(_index, Holder, _origin, SourcePreset.Edits);
 
         public void Dispose()
         {
