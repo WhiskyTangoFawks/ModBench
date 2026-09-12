@@ -2,7 +2,7 @@
 // splices a file's text through its own codec and puts the result through here.
 
 import type { Dirent } from 'node:fs';
-import { access, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, readdir, rename as fsRename, rm, writeFile } from 'node:fs/promises';
 
 // One chain per path in flight: a file with no writer pending costs nothing, and two different
 // paths never serialize against each other. Module-level, so every command shares one adapter.
@@ -42,6 +42,36 @@ export interface PutOptions {
 /** Whether `path`, file or directory, is there. */
 export function exists(path: string): Promise<boolean> {
   return access(path).then(() => true, () => false);
+}
+
+/** Reads `path` as text. Pass `ifMissing` to read a missing file as that text instead of
+ *  rejecting. */
+export function get(path: string, ifMissing?: string): Promise<string> {
+  return readOr(path, ifMissing);
+}
+
+/** Writes `text` to `path` outright — no read-back, no splice, no lock: a landing mod's own
+ *  meta.ini, written once into a staged tree nothing else can see yet. */
+export function write(path: string, text: string): Promise<void> {
+  return writeFile(path, text);
+}
+
+/** Moves `from` to `to` in one filesystem step — a staged tree landing in `mods/`, or an
+ *  install's own entries moving into an existing mod folder. */
+export function rename(from: string, to: string): Promise<void> {
+  return fsRename(from, to);
+}
+
+/** Copies `from`'s whole tree to `to`, leaving `from` in place — a source folder staged before
+ *  its one rename into `mods/`. */
+export function copyTree(from: string, to: string): Promise<void> {
+  return cp(from, to, { recursive: true });
+}
+
+/** A fresh, uniquely-named directory next to `prefix`, for a staged tree no watcher's glob
+ *  reaches until its one rename into place. */
+export function makeTempDir(prefix: string): Promise<string> {
+  return mkdtemp(prefix);
 }
 
 /** `path`'s directory entries; the caller's own filter picks the ones it wants. */
