@@ -32,7 +32,7 @@ public sealed partial class SourceRepository
     /// <summary>The repository over a folder whose tracked state the caller has already established,
     /// or does not need: the document verbs answer either way, and a git verb over an untracked folder
     /// answers empty rather than throwing.</summary>
-    internal static SourceRepository Over(string root, GameRelease release) => new(root, release);
+    public static SourceRepository Over(string root, GameRelease release) => new(root, release);
 
     /// <summary>True exactly when <paramref name="modFolder"/> contains a <c>.git</c> directory —
     /// nothing broader (a folder that merely exists, or exists but was never tracked, is not

@@ -417,11 +417,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // rather than once per key.
         var repository = SourceRepository.Over(modFolder, _release);
         foreach (var formKey in formKeys)
-            RefreshOneKey(repository, key, modFolder, formKey);
+            RefreshOneKey(repository, key, formKey);
     }
 
     // Re-derives one key's rows at both refs. Called again with the same bytes, nothing below fires.
-    private void RefreshOneKey(SourceRepository repository, PluginKey key, string modFolder, string formKey)
+    private void RefreshOneKey(SourceRepository repository, PluginKey key, string formKey)
     {
         var effective = At(RecordRef.Effective).GetDocument(formKey, key);
         var head = At(RecordRef.Head).GetDocument(formKey, key);
@@ -430,15 +430,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         var recordType = effective?.RecordType ?? head?.RecordType;
         if (recordType == null) return;
 
-        var unit = repository.Locate(
-            key, new RecordIdentity(formKey, recordType, effective?.EditorId ?? head?.EditorId));
-
-        string? workingTreeText = null;
-        if (unit is { } resolved)
-        {
-            var ownerBytes = File.Exists(resolved.FullPath) ? File.ReadAllBytes(resolved.FullPath) : null;
-            workingTreeText = SourceRepository.RecordBodyFromOwnerBytes(ownerBytes, resolved, formKey, _release);
-        }
+        var identity = new RecordIdentity(formKey, recordType, effective?.EditorId ?? head?.EditorId);
+        var workingTreeText = repository.Get(key, identity)?.Body;
 
         // Never exclusive owners of the file: it can be caught mid-save, or hand-edited into
         // something that is not a document. Rows stay as they stand until it reads as one again.
@@ -453,10 +446,13 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (!string.Equals(workingTreeText, effective?.Body, StringComparison.Ordinal))
             ProjectDocuments(key, [(formKey, workingTreeText)]);
 
-        // Nothing left to ask git about when Resolve found no unit at all — fail closed rather than
-        // consulting a path that was never real.
-        if (unit is { } resolvedUnit)
-            RebaselineIfHeadMoved(key, modFolder, resolvedUnit, formKey);
+        // Re-read, since the projection above may have moved this record's committed row too. Asked
+        // only for a record the index already believes dirty.
+        if (At(RecordRef.Head).GetDocument(formKey, key)?.Body is { } committedBody
+            && repository.CommittedTextIfMoved(key, identity, committedBody) is { } movedText)
+        {
+            SetCommittedBaseline(key, [(formKey, movedText)]);
+        }
     }
 
     private static bool IsDocument(string text)
@@ -509,42 +505,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (!reader.Read()) return null;
         return new Registration(
             reader.IsDBNull(0) ? null : reader.GetInt32(0), reader.GetBoolean(1), reader.GetBoolean(2));
-    }
-
-    // Asked only for a record the index already believes dirty; a clean one's committed bytes are the
-    // file's, so no git process starts. The unit tells a record's own file from an embedded child's owner.
-    private void RebaselineIfHeadMoved(PluginKey key, string modFolder, SourceUnit unit, string formKey)
-    {
-        var head = At(RecordRef.Head).GetDocument(formKey, key);
-        if (head?.Body is not { } committedBody) return;
-
-        var relativePath = unit.RelativePath;
-
-        // The hash fast path is meaningless for an embedded child: the blob at relativePath is the owner's
-        // whole document.
-        if (!unit.IsEmbedded)
-        {
-            var hashes = SourceRepository.CommittedSourceHashes(modFolder, [relativePath]);
-            if (hashes == null || !hashes.TryGetValue(relativePath.Replace('\\', '/'), out var headHash)) return;
-
-            // Equality is conclusive; inequality only sends us to compare bytes, never an assertion of change.
-            if (headHash == GitBlobHash.Of(Encoding.UTF8.GetBytes(committedBody))) return;
-        }
-
-        if (SourceRepository.ReadCommittedSourceText(modFolder, relativePath) is not { } headOwnerText) return;
-
-        // Same BOM defence as RecordBodyFromOwnerBytes.
-        headOwnerText = headOwnerText.TrimStart('\uFEFF');
-
-        // For an embedded child the HEAD text is the owner's document; a null means the owner's HEAD copy
-        // does not carry this child, which leaves the committed baseline alone (fail closed).
-        var headText = unit.IsEmbedded
-            ? SourceRepository.RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, formKey, _release)
-            : headOwnerText;
-        if (headText is not { } resolvedHeadText) return;
-        if (string.Equals(resolvedHeadText, committedBody, StringComparison.Ordinal)) return;
-
-        SetCommittedBaseline(key, [(formKey, resolvedHeadText)]);
     }
 
     // --- Validate ---
