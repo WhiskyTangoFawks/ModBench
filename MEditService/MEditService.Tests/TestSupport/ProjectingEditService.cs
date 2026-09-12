@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.TestSupport;

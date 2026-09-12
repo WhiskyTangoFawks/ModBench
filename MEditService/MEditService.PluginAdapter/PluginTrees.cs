@@ -11,7 +11,7 @@ namespace MEditService.PluginAdapter;
 
 /// <summary>How a source tree becomes a live mod. Only a negative test substitutes one; the real
 /// deserialize is the codec's whole-mod door.</summary>
-internal delegate Task<IMod> TreeDeserializer(string treeRoot, CancellationToken cancel);
+public delegate Task<IMod> TreeDeserializer(string treeRoot, CancellationToken cancel);
 
 /// <summary>A plugin's binary and its source tree, composed: the codec's whole-mod door on one side
 /// and this adapter's open and write on the other, so no caller holds the live mod between

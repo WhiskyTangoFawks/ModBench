@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 

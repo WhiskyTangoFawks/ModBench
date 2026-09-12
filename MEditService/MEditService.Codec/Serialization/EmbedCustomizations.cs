@@ -6,7 +6,7 @@ namespace MEditService.Codec.Serialization;
 /// <summary>The embed list: a container member holding child major records is inlined in the
 /// container's document in Mutagen's list order (ADR-0006 decision 4). No SortList: decision 3
 /// forbids re-sorting.</summary>
-public sealed class CellEmbedCustomization : ICustomize<ICellGetter>
+internal sealed class CellEmbedCustomization : ICustomize<ICellGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<ICellGetter> builder)
     {
@@ -18,7 +18,7 @@ public sealed class CellEmbedCustomization : ICustomize<ICellGetter>
 }
 
 /// <inheritdoc cref="CellEmbedCustomization"/>
-public sealed class WorldspaceEmbedCustomization : ICustomize<IWorldspaceGetter>
+internal sealed class WorldspaceEmbedCustomization : ICustomize<IWorldspaceGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<IWorldspaceGetter> builder)
     {
@@ -27,7 +27,7 @@ public sealed class WorldspaceEmbedCustomization : ICustomize<IWorldspaceGetter>
 }
 
 /// <inheritdoc cref="CellEmbedCustomization"/>
-public sealed class QuestEmbedCustomization : ICustomize<IQuestGetter>
+internal sealed class QuestEmbedCustomization : ICustomize<IQuestGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<IQuestGetter> builder)
     {
@@ -38,7 +38,7 @@ public sealed class QuestEmbedCustomization : ICustomize<IQuestGetter>
 }
 
 /// <inheritdoc cref="CellEmbedCustomization"/>
-public sealed class DialogTopicEmbedCustomization : ICustomize<IDialogTopicGetter>
+internal sealed class DialogTopicEmbedCustomization : ICustomize<IDialogTopicGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<IDialogTopicGetter> builder)
     {

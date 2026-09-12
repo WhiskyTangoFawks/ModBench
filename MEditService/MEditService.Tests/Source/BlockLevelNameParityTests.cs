@@ -1,5 +1,5 @@
-using MEditService.LoadOrder;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

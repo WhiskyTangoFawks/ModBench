@@ -1,9 +1,9 @@
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using MEditService.Index;
-using MEditService.Codec.Schema;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;

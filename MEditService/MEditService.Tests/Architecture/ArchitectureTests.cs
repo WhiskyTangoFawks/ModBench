@@ -1,8 +1,8 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using MEditService.Http;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
@@ -130,7 +130,7 @@ public sealed class ArchitectureTests
             + string.Join("\n", dead));
     }
 
-    private static readonly string LoadOrderFolder = Path.Combine("MEditService.Core", "Plugins");
+    private const string LoadOrderFolder = "MEditService.LoadOrder";
 
     // ADR-0013 invariant 4: the load order value is built from what Mod Management sent. An
     // adapter type here is a disk read on its construction path.
@@ -220,7 +220,7 @@ public sealed class ArchitectureTests
     public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
         var queries = SourceTree
-            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Core", "Queries"))
+            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Queries"))
             .Select(File.ReadAllText)
             .ToList();
         // Property getters travel as get_X methods; naming the property is what a caller does.
@@ -410,7 +410,10 @@ public sealed class ArchitectureTests
         Assert.Equal(allowed.Order(), present.Order());
     }
 
-    private static readonly string[] Projects = ["MEditService.Core", "MEditService.Http", "MEditService.Watcher"];
+    private static readonly string[] Projects =
+    ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);

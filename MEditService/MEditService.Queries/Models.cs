@@ -1,6 +1,6 @@
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 
 namespace MEditService.Queries;

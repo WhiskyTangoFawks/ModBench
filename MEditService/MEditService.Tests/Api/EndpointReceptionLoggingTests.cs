@@ -1,12 +1,12 @@
+using MEditService.Codec.Schema;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
-using MEditService.Watcher;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
-using MEditService.Queries;
 using MEditService.Index;
-using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 

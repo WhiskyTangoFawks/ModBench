@@ -1,5 +1,5 @@
-using MEditService.Commands.Edits;
 using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;

@@ -1,12 +1,12 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using MEditService.Commands.Edits;
-using MEditService.Ports;
-using MEditService.LoadOrder;
-using MEditService.Queries;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -88,11 +88,11 @@ public sealed class CompareResultColumnKeyIntegrityTests
         }
     }
 
-    // Only walk our own DTOs (MEditService.Core.*) — never BCL/Mutagen types (string, object,
+    // Only walk our own DTOs (MEditService.*) — never BCL/Mutagen types (string, object,
     // enums, ConflictThis, etc.), which is what stops the recursion at every leaf.
     private static bool IsOwnDtoType(Type type) =>
         !type.IsEnum && !type.IsPrimitive
-        && type.Namespace is { } ns && ns.StartsWith("MEditService.Core", StringComparison.Ordinal);
+        && type.Namespace is { } ns && ns.StartsWith("MEditService.", StringComparison.Ordinal);
 
     private static bool TryGetStringDictValueType(Type type, out Type valueType)
     {

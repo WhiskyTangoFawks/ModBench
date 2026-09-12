@@ -1,7 +1,7 @@
 using System.Text.Json;
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 

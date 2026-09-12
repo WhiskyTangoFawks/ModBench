@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

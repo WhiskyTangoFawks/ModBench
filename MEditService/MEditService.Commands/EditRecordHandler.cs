@@ -1,10 +1,10 @@
 using System.Text;
 using System.Text.Json.Nodes;
-using MEditService.Commands.Edits;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;

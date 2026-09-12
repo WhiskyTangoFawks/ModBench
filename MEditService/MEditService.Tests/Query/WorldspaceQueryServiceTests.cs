@@ -1,9 +1,9 @@
-using MEditService.Commands.Edits;
-using MEditService.Ports;
-using MEditService.LoadOrder;
-using MEditService.Queries;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Queries;
 using MEditService.Tests.RealData;
 using Mutagen.Bethesda;
 

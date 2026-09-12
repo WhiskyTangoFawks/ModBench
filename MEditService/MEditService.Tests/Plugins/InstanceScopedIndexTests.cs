@@ -1,7 +1,7 @@
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

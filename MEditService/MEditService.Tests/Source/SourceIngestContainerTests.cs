@@ -1,7 +1,7 @@
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;

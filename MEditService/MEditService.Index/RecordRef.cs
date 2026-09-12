@@ -2,7 +2,7 @@ namespace MEditService.Index;
 
 /// <summary>Which state of a record's text a read answers from; the two diverge for any record a
 /// working-tree edit has touched. <see cref="IRecordIndex.At"/> repositions a read between them.</summary>
-public enum RecordRef
+internal enum RecordRef
 {
     /// <summary>The record's current bytes — a working-tree edit where one exists, the committed
     /// baseline otherwise — narrowed by the active filter. The default surface every index read

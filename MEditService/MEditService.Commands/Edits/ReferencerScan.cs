@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -27,7 +27,7 @@ internal sealed class ReferencerScan(
     /// <summary>Every copy linking <paramref name="targetFormKey"/>, the target record itself excluded:
     /// one typed remap moves its whole graph. <c>Untracked</c> names the copies whose links no
     /// renumber can rewrite.</summary>
-    internal (List<Referencing> Tracked, List<string> Untracked) Of(string targetFormKey, PluginKey targetPlugin)
+    public (List<Referencing> Tracked, List<string> Untracked) Of(string targetFormKey, PluginKey targetPlugin)
     {
         var tracked = new List<Referencing>();
         var untracked = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);

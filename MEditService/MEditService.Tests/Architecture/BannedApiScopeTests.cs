@@ -48,10 +48,10 @@ public sealed class BannedApiScopeTests
 
         Assert.Equal(
             ReportDiagnostic.Error,
-            configured.For(Path.Combine("MEditService.Core", "Records", "Probe.cs")));
+            configured.For(Path.Combine("MEditService.Index", "Probe.cs")));
         Assert.Equal(
             ReportDiagnostic.Error,
-            configured.For(Path.Combine("MEditService.Core", "Commands", "Probe.cs")));
+            configured.For(Path.Combine("MEditService.Commands", "Probe.cs")));
         Assert.All(
             ExemptSections.Select(section => section.Replace("/**.cs", "", StringComparison.Ordinal)),
             folder => Assert.Equal(

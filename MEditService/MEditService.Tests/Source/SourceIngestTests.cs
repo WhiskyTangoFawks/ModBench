@@ -1,12 +1,12 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Commands.Edits;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
-using MEditService.Queries;
-using MEditService.Index;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;

@@ -1,6 +1,6 @@
 using System.Text;
-using MEditService.LoadOrder;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;

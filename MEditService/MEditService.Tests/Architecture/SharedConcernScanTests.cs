@@ -47,7 +47,7 @@ public sealed class SharedConcernScanTests
     public void EveryNeedle_MatchesTheSharedModuleItself()
     {
         var module = File.ReadAllText(Path.Combine(
-            ArchitectureTests.SolutionDirectory(), "MEditService.Core", "Edits", SharedModuleFileName));
+            ArchitectureTests.SolutionDirectory(), "MEditService.Commands", "Edits", SharedModuleFileName));
 
         Assert.Empty(Concerns.Where(c => Regex.Count(module, c.Needle) == 0).Select(c => $"{c.Concern}: {c.Needle}"));
     }

@@ -46,7 +46,7 @@ public class RecordTextCodecGeneratorSeedTests
             "PluginTrees.cs",                  // a plugin's binary and its tree, composed
         };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -75,7 +75,7 @@ public class RecordTextCodecGeneratorSeedTests
             "HeaderDocument.cs",        // the plugin header's document, both directions
         };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -103,7 +103,7 @@ public class RecordTextCodecGeneratorSeedTests
             "HeaderDocument.cs",       // the plugin header's document, both directions
         };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -123,7 +123,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string bootstrapReceiver = "MutagenJsonConverter.Instance";
         const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -144,7 +144,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string parallelDropoffName = "ParallelWorkDropoff";
         var doorFiles = new[] { "TrackService.cs", "PluginTrees.cs", "HeaderDocument.cs" };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories)
+        var sourceFiles = ProductionSources()
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))
             .ToList();
         Assert.NotEmpty(sourceFiles);
@@ -173,6 +173,19 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Equal(["Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns"], alienPublicTypes);
     }
 
-    private static string CoreSourceRoot([CallerFilePath] string here = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "MEditService.Core"));
+    // Every production project: the doors the whitelists name now sit in three of them, and a scan
+    // scoped to one would stop seeing the other two.
+    private static readonly string[] ProductionProjects =
+    [
+        "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+        "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+        "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher",
+    ];
+
+    private static string[] ProductionSources([CallerFilePath] string here = "")
+    {
+        var solution = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
+        return [.. ProductionProjects.SelectMany(
+            project => Directory.GetFiles(Path.Combine(solution, project), "*.cs", SearchOption.AllDirectories))];
+    }
 }

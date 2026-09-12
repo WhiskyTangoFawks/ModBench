@@ -1,5 +1,5 @@
-using MEditService.PluginAdapter;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda.Plugins;
 

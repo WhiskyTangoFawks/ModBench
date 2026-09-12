@@ -1,7 +1,7 @@
-using MEditService.Commands.Edits;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;

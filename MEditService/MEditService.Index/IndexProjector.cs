@@ -1,9 +1,9 @@
 using System.Diagnostics;
-using MEditService.Ports;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

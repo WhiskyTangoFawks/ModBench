@@ -1,6 +1,6 @@
 {
   "stryker-config": {
-    "project": "MEditService.Core/MEditService.Core.csproj",
+    "solution": "MEditService.sln",
     "test-projects": [
       "MEditService.Tests/MEditService.Tests.csproj"
     ],
@@ -15,7 +15,14 @@
       "break": 0
     },
     "mutate": [
-      "**/MEditService.Core/**/*.cs",
+      "**/MEditService.Codec/**/*.cs",
+      "**/MEditService.Commands/**/*.cs",
+      "**/MEditService.Index/**/*.cs",
+      "**/MEditService.LoadOrder/**/*.cs",
+      "**/MEditService.PluginAdapter/**/*.cs",
+      "**/MEditService.Ports/**/*.cs",
+      "**/MEditService.Queries/**/*.cs",
+      "**/MEditService.SourceRepo/**/*.cs",
       "!**/MEditService.Queries/RecordQueryService.cs",
       "!**/MEditService.Ports/LoadOrderStatus.cs"
     ],

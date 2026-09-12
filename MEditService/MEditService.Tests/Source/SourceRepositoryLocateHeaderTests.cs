@@ -4,8 +4,8 @@ using MEditService.Index;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 

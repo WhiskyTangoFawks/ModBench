@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using MEditService.Queries;
 using MEditService.Codec.Schema;
+using MEditService.Queries;
 using MEditService.Tests.Api;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;

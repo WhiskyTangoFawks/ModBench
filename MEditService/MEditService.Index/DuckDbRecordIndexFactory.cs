@@ -1,5 +1,5 @@
-using MEditService.Ports;
 using MEditService.Codec.Schema;
+using MEditService.Ports;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

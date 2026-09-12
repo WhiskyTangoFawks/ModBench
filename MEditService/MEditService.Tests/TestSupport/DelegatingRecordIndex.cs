@@ -1,7 +1,7 @@
+using MEditService.Codec.Serialization;
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using MEditService.Index;
-using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests;

@@ -1,7 +1,7 @@
 using MEditService.Http.Endpoints;
-using MEditService.Watcher;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;

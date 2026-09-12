@@ -1,11 +1,11 @@
 using System.Text.Json;
-using MEditService.Commands.Edits;
-using MEditService.Ports;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
-using MEditService.Queries;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
+using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

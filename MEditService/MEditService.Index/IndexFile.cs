@@ -3,7 +3,7 @@ namespace MEditService.Index;
 /// <summary>One DuckDB file per MO2 instance, in the instance root (ADR-0009). Never under
 /// <c>mods/</c>, <c>overwrite/</c> or <c>profiles/</c>: a reinstall, profile delete or archiver
 /// would take it as content.</summary>
-public static class IndexFile
+internal static class IndexFile
 {
     /// <summary>The index file for one MO2 instance. Pure — it creates nothing;
     /// <see cref="DuckDbRecordIndex"/> creates the directory when it opens.</summary>

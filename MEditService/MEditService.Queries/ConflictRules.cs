@@ -5,7 +5,7 @@ namespace MEditService.Queries;
 
 // Single owner of the ADR-0018 two-axis model's decision rules, so a rule change cannot drift
 // between the sites that fold per-plugin values through them.
-public static class ConflictRules
+internal static class ConflictRules
 {
     // plugins.md: a non-participating plugin never contributes to conflict classification — filtered
     // out before any diff/winner/cell-state computation, not masked in the result. Null

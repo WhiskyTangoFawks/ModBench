@@ -1,7 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
-using MEditService.Commands.Edits;
 using MEditService.Commands;
+using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;

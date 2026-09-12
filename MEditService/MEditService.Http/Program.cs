@@ -2,12 +2,12 @@ using System.Globalization;
 using System.Text.Json.Serialization;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands;
 using MEditService.Commands.Composition;
 using MEditService.Commands.Edits;
-using MEditService.Commands;
+using MEditService.Http;
 using MEditService.Http.Endpoints;
 using MEditService.Http.Notifications;
-using MEditService.Http;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -15,8 +15,8 @@ using MEditService.Ports;
 using MEditService.Queries;
 using MEditService.SourceRepo;
 using MEditService.Watcher;
-using Serilog.Events;
 using Serilog;
+using Serilog.Events;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)

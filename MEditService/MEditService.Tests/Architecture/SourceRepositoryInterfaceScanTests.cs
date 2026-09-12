@@ -9,7 +9,9 @@ namespace MEditService.Tests.Architecture;
 public sealed class SourceRepositoryInterfaceScanTests
 {
     private static readonly string[] ProductionRoots =
-        ["MEditService.Core", "MEditService.Http", "MEditService.Watcher"];
+        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
     private const string RepositoryRoot = "MEditService.SourceRepo";
 

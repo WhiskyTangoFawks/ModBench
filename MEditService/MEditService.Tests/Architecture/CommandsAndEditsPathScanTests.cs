@@ -15,7 +15,7 @@ public sealed class CommandsAndEditsPathScanTests
         + @"|(?<![\w.])new\s+(?:System\.IO\.)?(?:FileInfo|DirectoryInfo|FileStream|FileSystemWatcher)\b",
         RegexOptions.Compiled);
 
-    private static readonly string[] ScannedRoots = ["MEditService.Commands", "MEditService.Commands/Edits"];
+    private static readonly string[] ScannedRoots = ["MEditService.Commands"];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/commands-and-edits-path-allowlist.txt";
 
@@ -48,9 +48,9 @@ public sealed class CommandsAndEditsPathScanTests
         var root = Directory.CreateTempSubdirectory("medit-commands-edits-path-scan-").FullName;
         try
         {
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.Core", "Edits", "obj"));
+            Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands", "Edits", "obj"));
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Edits", "PluginCompileService.cs"),
+                Path.Combine(root, "MEditService.Commands", "Edits", "PluginCompileService.cs"),
                 "var tree = Path.Combine(modFolder, root);\n"
                 + "var held = System.IO.File.ReadAllBytes(unit.FullPath);\n"
                 + "var entry = new FileInfo(tree);\n"
@@ -59,22 +59,22 @@ public sealed class CommandsAndEditsPathScanTests
                 + "if (edit.Path.Count == 0) return;\n"
                 + "var again = Path.Combine(tree, \"x\");\n");
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Edits", "obj", "Generated.cs"),
+                Path.Combine(root, "MEditService.Commands", "Edits", "obj", "Generated.cs"),
                 "var tree = Path.Combine(modFolder, root);\n");
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.Core", "Commands"));
+            Directory.CreateDirectory(Path.Combine(root, "MEditService.Commands"));
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Commands", "KeepExternalChangeHandler.cs"),
+                Path.Combine(root, "MEditService.Commands", "KeepExternalChangeHandler.cs"),
                 "var bytes = File.ReadAllBytes(plugin.Path);\n");
 
             var counts = Counts(root, ScannedRoots);
 
             Assert.Equal(
                 [
-                    "MEditService.Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
                     "MEditService.Commands/Edits/PluginCompileService.cs: File.ReadAllBytes: 1",
                     "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2",
                     "MEditService.Commands/Edits/PluginCompileService.cs: new FileInfo: 1",
                     "MEditService.Commands/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
+                    "MEditService.Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
                 ],
                 counts);
 

@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MEditService.LoadOrder;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

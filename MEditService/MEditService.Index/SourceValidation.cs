@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;

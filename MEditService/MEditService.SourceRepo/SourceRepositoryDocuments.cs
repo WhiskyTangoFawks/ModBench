@@ -1,8 +1,8 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -113,7 +113,7 @@ public sealed partial class SourceRepository
 
     /// <summary>Where the owner's text carries the child, with the owner's own type taken from the
     /// record type its path decides — the one fact the text alone cannot supply.</summary>
-    public static EmbeddedChildSpan? EmbeddedChildIn(
+    internal static EmbeddedChildSpan? EmbeddedChildIn(
         byte[] ownerBytes, SourceUnit unit, string formKey, GameRelease release) =>
         EmbeddedChildSplice.Find(
             ownerBytes, EmbeddedChildSplice.ContainerTypeName(unit.OwnerRecordType, ownerBytes, release), formKey, release);

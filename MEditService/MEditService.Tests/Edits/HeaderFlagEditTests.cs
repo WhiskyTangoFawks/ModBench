@@ -1,8 +1,8 @@
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index;
-using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

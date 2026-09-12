@@ -1,7 +1,7 @@
-using MEditService.Watcher;
-using MEditService.Ports;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Watcher;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.TestSupport;

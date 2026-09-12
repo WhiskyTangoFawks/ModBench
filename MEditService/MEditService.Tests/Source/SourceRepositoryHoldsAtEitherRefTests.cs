@@ -1,5 +1,5 @@
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;

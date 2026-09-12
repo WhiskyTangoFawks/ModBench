@@ -1,10 +1,10 @@
-using MEditService.Watcher;
-using MEditService.Ports;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

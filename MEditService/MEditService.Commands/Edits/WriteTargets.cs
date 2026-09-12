@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -189,7 +189,7 @@ internal sealed class WriteTargets(
 
     // Everything the allocator needs about one plugin, read from its tree once per gesture: a
     // per-child re-read would walk the whole tree again for every key drawn.
-    internal readonly record struct Allocator(
+    public readonly record struct Allocator(
         PluginKey Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
         IReadOnlySet<string> Effective, IReadOnlySet<string> Head)
     {

@@ -55,7 +55,7 @@ public sealed class RecordTypeDispatch
     /// <summary>Normalizes an overlay reader's type through the BinaryOverlay suffix convention: an
     /// overlay class does not derive from the concrete setter type, so a bare assignability test
     /// would answer "unambiguous" for every record ingest sees.</summary>
-    public bool IsPathAmbiguous(Type runtimeType) =>
+    internal bool IsPathAmbiguous(Type runtimeType) =>
         ConcreteFor(runtimeType.Name) is { } concrete
             ? _ambiguous.Contains(concrete)
             : _ambiguous.Any(a => a.IsAssignableFrom(runtimeType));

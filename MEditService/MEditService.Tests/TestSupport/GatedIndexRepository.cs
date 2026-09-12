@@ -1,6 +1,6 @@
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Serialization;
+using MEditService.Index;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 

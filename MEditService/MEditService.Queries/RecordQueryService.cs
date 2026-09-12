@@ -1,7 +1,7 @@
-using MEditService.Ports;
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
 using Mutagen.Bethesda;
 
 namespace MEditService.Queries;

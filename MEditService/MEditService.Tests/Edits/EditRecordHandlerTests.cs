@@ -1,7 +1,7 @@
 using System.Text.Json;
+using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;

@@ -1,9 +1,10 @@
 using MEditService.Commands;
+using MEditService.Commands.Edits;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 

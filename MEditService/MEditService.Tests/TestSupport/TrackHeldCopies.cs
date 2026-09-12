@@ -1,6 +1,7 @@
 using MEditService.Commands;
-using MEditService.LoadOrder;
+using MEditService.Commands.Edits;
 using MEditService.Index;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 
 namespace MEditService.Tests;

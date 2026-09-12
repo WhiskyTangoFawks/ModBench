@@ -1,7 +1,7 @@
 using MEditService.Http;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

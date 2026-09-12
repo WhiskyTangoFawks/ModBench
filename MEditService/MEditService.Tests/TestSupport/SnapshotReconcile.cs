@@ -1,6 +1,6 @@
 using MEditService.Http;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests;

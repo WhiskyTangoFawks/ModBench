@@ -1,7 +1,7 @@
-using MEditService.Commands.Edits;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.TestSupport;

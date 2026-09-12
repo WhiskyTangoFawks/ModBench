@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;

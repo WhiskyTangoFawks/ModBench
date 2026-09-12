@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
+using MEditService.Codec.Schema;
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using MEditService.Index;
-using MEditService.Codec.Schema;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda.Plugins;
 

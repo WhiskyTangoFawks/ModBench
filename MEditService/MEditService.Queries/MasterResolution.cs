@@ -19,7 +19,7 @@ public sealed record MasterIssue(string MasterName, MasterIssueKind Kind);
 // Pure and deliberately shallow: only a plugin's own declared Masters are consulted, never a
 // master's masters — a cascade is exactly what ADR-0012 rules out; nothing here deactivates,
 // so there is nothing to propagate.
-public static class MasterResolution
+internal static class MasterResolution
 {
     /// <summary>Per-plugin master issues, keyed by plugin name; a plugin with every master
     /// resolved has no entry (never an empty list).</summary>

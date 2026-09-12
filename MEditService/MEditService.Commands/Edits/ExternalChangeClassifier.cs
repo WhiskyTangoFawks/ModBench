@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using MEditService.SourceRepo;
 
-namespace MEditService.Commands;
+namespace MEditService.Commands.Edits;
 
 /// <summary>Shared by the live watcher, the load-time hash check and the write gate: a mod changed
 /// externally when a plugin's bytes differ from Modbench's own write, or a tracked file differs

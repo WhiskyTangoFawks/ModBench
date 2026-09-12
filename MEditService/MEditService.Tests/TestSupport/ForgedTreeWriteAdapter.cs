@@ -1,5 +1,5 @@
-using MEditService.PluginAdapter;
 using MEditService.Codec.Serialization;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 
 namespace MEditService.Tests.TestSupport;

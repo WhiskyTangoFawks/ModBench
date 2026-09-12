@@ -10,7 +10,7 @@ namespace MEditService.Tests.TestSupport;
 internal static class Envelopes
 {
     internal static PathHop Member(string name) => PathHop.Member(name);
-    public static PathHop At(int index) => PathHop.At(index);
+    internal static PathHop At(int index) => PathHop.At(index);
     internal static PathHop Key(string key) => PathHop.ByKey(key);
 
     internal static RecordEditEnvelope SetAt(JsonElement value, params PathHop[] path) =>

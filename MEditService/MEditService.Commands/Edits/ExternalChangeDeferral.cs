@@ -1,4 +1,4 @@
-namespace MEditService.Commands;
+namespace MEditService.Commands.Edits;
 
 /// <summary>An unanswered external-change question refuses every write to the mod, compile included
 /// (ADR-0003). The marker caches the classifier's verdict, which alone decides: a present

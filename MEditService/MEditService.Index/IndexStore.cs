@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using System.Globalization;
 using DuckDB.NET.Data;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Codec.Schema;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;

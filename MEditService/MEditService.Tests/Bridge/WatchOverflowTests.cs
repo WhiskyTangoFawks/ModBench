@@ -1,6 +1,6 @@
-using MEditService.Ports;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 

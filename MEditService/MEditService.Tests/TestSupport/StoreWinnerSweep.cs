@@ -1,5 +1,5 @@
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
 
 namespace MEditService.Tests;
 

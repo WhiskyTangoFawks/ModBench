@@ -1,7 +1,7 @@
-using MEditService.Ports;
-using MEditService.LoadOrder;
-using MEditService.Queries;
 using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;

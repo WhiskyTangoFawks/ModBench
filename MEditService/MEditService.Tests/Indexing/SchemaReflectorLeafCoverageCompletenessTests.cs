@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
-using MEditService.Queries;
 using MEditService.Codec.Schema;
+using MEditService.Queries;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

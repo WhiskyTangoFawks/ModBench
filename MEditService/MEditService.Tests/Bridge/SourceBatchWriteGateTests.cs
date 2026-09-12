@@ -1,7 +1,7 @@
-using MEditService.Watcher;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Tests.Bridge;

@@ -1,5 +1,5 @@
-using MEditService.LoadOrder;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
 namespace MEditService.Index;

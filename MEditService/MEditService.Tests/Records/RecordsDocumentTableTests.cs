@@ -1,7 +1,7 @@
 using System.Globalization;
-using MEditService.Index;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index;
 using MEditService.SourceRepo;
 using MEditService.Tests.RealData;
 using Microsoft.Extensions.Logging.Abstractions;

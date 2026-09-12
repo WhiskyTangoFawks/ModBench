@@ -1,7 +1,7 @@
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using static MEditService.Tests.TestSupport.Envelopes;

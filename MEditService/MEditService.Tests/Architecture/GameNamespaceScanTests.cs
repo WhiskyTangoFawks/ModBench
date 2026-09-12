@@ -14,7 +14,10 @@ public sealed class GameNamespaceScanTests
 
     private static readonly string[] GameNamespaces = [.. GameNames.Select(game => $"Mutagen.Bethesda.{game}")];
 
-    private static readonly string[] ScannedRoots = ["MEditService.Core", "MEditService.Http", "MEditService.Watcher"];
+    private static readonly string[] ScannedRoots =
+    ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
     // The codec and the Plugin adapter, the two boxes the game assemblies live in.
     private static readonly string[] ExemptFolders =

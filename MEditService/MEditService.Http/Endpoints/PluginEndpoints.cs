@@ -1,10 +1,10 @@
-using MEditService.Watcher;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using MEditService.Index;
 using MEditService.SourceRepo;
+using MEditService.Watcher;
 
 namespace MEditService.Http.Endpoints;
 

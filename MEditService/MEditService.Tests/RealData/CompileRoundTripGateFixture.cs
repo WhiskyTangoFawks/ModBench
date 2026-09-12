@@ -1,13 +1,13 @@
-using MEditService.Commands.Edits;
 using MEditService.Commands;
+using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 

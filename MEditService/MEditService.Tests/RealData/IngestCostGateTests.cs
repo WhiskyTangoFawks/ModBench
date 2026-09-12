@@ -1,10 +1,10 @@
 using System.Diagnostics;
-using MEditService.Http;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Http;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;

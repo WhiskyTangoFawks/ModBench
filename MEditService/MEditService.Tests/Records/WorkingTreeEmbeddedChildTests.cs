@@ -1,6 +1,6 @@
 using System.Text;
-using MEditService.Index;
 using MEditService.Codec.Serialization;
+using MEditService.Index;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;

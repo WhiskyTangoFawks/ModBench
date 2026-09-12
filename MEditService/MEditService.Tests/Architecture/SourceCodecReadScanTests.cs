@@ -58,19 +58,19 @@ public sealed class SourceCodecReadScanTests
         var root = Directory.CreateTempSubdirectory("medit-source-codec-read-scan-").FullName;
         try
         {
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.Core", "Source", "obj"));
+            Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceRepo", "obj"));
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Source", "Permitted.cs"),
+                Path.Combine(root, "MEditService.SourceRepo", "Permitted.cs"),
                 "var folder = RecordTypeDispatch.For(release).FolderNameFor(recordType);\n"
                 + "var minted = RecordTextCodec.BlankDocument(loquiType, release, identity);\n");
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Source", "Planted.cs"),
+                Path.Combine(root, "MEditService.SourceRepo", "Planted.cs"),
                 "internal sealed class Reader\n{\n"
                 + "    private readonly RecordTextCodec _codec = new(logger);\n"
                 + "    internal string Read(IMajorRecordGetter record, GameRelease release) =>\n"
                 + "        _codec.RoundTrip(text, release, null);\n}\n");
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Source", "obj", "Generated.cs"),
+                Path.Combine(root, "MEditService.SourceRepo", "obj", "Generated.cs"),
                 "var codec = new RecordTextCodec(logger);\n");
 
             var counts = Counts(root, ["MEditService.SourceRepo"]);

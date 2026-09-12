@@ -6,10 +6,10 @@ using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Commands;
+namespace MEditService.Commands.Edits;
 
 /// <summary>The Track gesture end to end: deep-parses each plugin under one origin (the load order's
 /// overlay is not always structurally faithful), serializes through the whole-mod door, and

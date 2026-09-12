@@ -1,8 +1,8 @@
-using MEditService.Watcher;
-using MEditService.Ports;
-using MEditService.LoadOrder;
-using MEditService.Index;
 using MEditService.Codec.Schema;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Watcher;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Endpoints;

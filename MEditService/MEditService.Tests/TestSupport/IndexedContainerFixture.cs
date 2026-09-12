@@ -1,8 +1,8 @@
 using MEditService.Commands.Edits;
-using MEditService.Ports;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
 using MEditService.Tests.Edits;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;

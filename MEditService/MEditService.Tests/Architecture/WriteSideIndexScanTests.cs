@@ -20,9 +20,14 @@ public sealed class WriteSideIndexScanTests
         "FormKeyResolutionCache", "PlacementWalker",
     ];
 
-    // The whole shared-kernel-and-write-side assembly, not a list of folders: a folder literal means
-    // a new folder joins the write side unguarded.
-    private const string ProductionRoot = "MEditService.Core";
+    // Whole projects, not folders inside them: a folder literal means a new folder joins the write
+    // side unguarded. The composition root and the watcher are not the write side and are not here.
+    private static readonly string[] ProductionRoots =
+    [
+        "MEditService.Codec", "MEditService.Commands", "MEditService.Index", "MEditService.LoadOrder",
+        "MEditService.PluginAdapter", "MEditService.Ports", "MEditService.Queries",
+        "MEditService.SourceRepo",
+    ];
 
     // Not write side: Records is the Index module itself and Queries is the read side, both of which
     // name these types by definition.
@@ -37,21 +42,21 @@ public sealed class WriteSideIndexScanTests
         var root = ArchitectureTests.SolutionDirectory();
 
         AssertCountsMatchAllowlist(
-            Counts(root, [ProductionRoot], NotWriteSide, Symbols),
+            Counts(root, ProductionRoots, NotWriteSide, Symbols),
             SourceTree.ReadAllowlist(Path.Combine(root, AllowlistPath.Replace('/', Path.DirectorySeparatorChar))),
             AllowlistPath);
     }
 
     // An empty allowlist and zero symbols found are the same string: this is what tells them apart,
-    // so a ProductionRoot or exclusion typo that scans nothing cannot pass by matching nothing.
+    // so a ProductionRoots or exclusion typo that scans nothing cannot pass by matching nothing.
     [Fact]
     public void TheScan_WalksMoreThanFiftyProductionFiles()
     {
         var root = ArchitectureTests.SolutionDirectory();
 
-        var walked = ScannedFiles(root, [ProductionRoot], NotWriteSide).Count;
+        var walked = ScannedFiles(root, ProductionRoots, NotWriteSide).Count;
 
-        Assert.True(walked > 50, $"The write side scan walked only {walked} files under {ProductionRoot}.");
+        Assert.True(walked > 50, $"The write side scan walked only {walked} files under {string.Join(", ", ProductionRoots)}.");
     }
 
     // The write side's own suites, which would otherwise keep the shape the production code no

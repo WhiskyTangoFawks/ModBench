@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Http.Endpoints;
+using MEditService.Index;
 using MEditService.Ports;
 using MEditService.Queries;
-using MEditService.Index;
 using MEditService.SourceRepo;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;

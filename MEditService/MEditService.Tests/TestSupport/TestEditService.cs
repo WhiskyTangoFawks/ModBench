@@ -1,11 +1,11 @@
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Composition;
 using MEditService.Commands.Edits;
-using MEditService.PluginAdapter;
-using MEditService.LoadOrder;
 using MEditService.Index;
-using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

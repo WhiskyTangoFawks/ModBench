@@ -1,5 +1,5 @@
-using MEditService.Queries;
 using MEditService.Index;
+using MEditService.Queries;
 
 namespace MEditService.Http.Endpoints;
 

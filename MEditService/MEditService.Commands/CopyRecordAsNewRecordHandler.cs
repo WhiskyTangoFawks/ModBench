@@ -1,6 +1,6 @@
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
-using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 
