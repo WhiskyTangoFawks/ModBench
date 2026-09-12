@@ -4,9 +4,8 @@ namespace MEditService.Core.Source;
 /// <paramref name="RelativePath"/> is relative to the mod folder and forward-slash-shaped.</summary>
 public sealed record PristineFile(string RelativePath, byte[] Content);
 
-/// <summary>The one way a list of <see cref="PristineFile"/>s becomes real files under a base directory,
-/// shared so the call sites cannot drift. Sync and async forms: the git-mechanics callers have no
-/// async context.</summary>
+/// <summary>The one way a list of <see cref="PristineFile"/>s becomes real files under a base
+/// directory, shared so the call sites cannot drift.</summary>
 internal static class PristineFileWriter
 {
     internal static void WriteAll(IEnumerable<PristineFile> files, string baseDirectory)
@@ -16,16 +15,6 @@ internal static class PristineFileWriter
             var fullPath = Path.Combine(baseDirectory, file.RelativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
             File.WriteAllBytes(fullPath, file.Content);
-        }
-    }
-
-    internal static async Task WriteAllAsync(IEnumerable<PristineFile> files, string baseDirectory, CancellationToken cancel = default)
-    {
-        foreach (var file in files)
-        {
-            var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
         }
     }
 }

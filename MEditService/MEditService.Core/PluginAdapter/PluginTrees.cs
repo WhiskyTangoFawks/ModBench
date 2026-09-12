@@ -22,7 +22,7 @@ internal static class PluginTrees
     /// <summary>A plugin's own binary read as the documents its tree would hold.
     /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
     /// which case there are no files.</summary>
-    internal static async Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadAsync(
+    internal static async Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadAsync(
         ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default)
     {
@@ -32,15 +32,15 @@ internal static class PluginTrees
         // file with no exception.
         return LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing
             ? ([], missing)
-            : (await SerializeToPristineFiles(mod, pluginName, cancel), null);
+            : (await SerializeTree(mod, cancel), null);
     }
 
     /// <summary>A plugin's binary re-serialized as its whole source tree, with no localization
     /// check: what a re-baseline of an already tracked plugin commits.</summary>
-    internal static Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
+    internal static Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
+        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>
-        SerializeToPristineFiles(OpenFor(modPath, gameRelease, strings), pluginName, cancel);
+        SerializeTree(OpenFor(modPath, gameRelease, strings), cancel);
 
     /// <summary>A plugin's binary as every record's own document plus the identity a source tree
     /// files it by. The mod is held here, so the caller never has one (ADR-0005 rule 2).</summary>
@@ -52,11 +52,11 @@ internal static class PluginTrees
     private static IMod OpenFor(ModPath modPath, GameRelease gameRelease, PluginStrings strings) =>
         MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings);
 
-    /// <summary>One plugin's complete source tree, ready to commit — the one implementation of the
-    /// door's write. A second serializer that dropped the root RecordData.json would delete the header
-    /// from the baseline.</summary>
-    internal static async Task<IReadOnlyList<PristineFile>> SerializeToPristineFiles(
-        IModGetter mod, string pluginName, CancellationToken cancel = default)
+    /// <summary>One plugin's complete tree, ready to commit — the one implementation of the door's
+    /// write. A second serializer that dropped the root RecordData.json would delete the header from
+    /// the baseline.</summary>
+    internal static async Task<IReadOnlyList<TreeFile>> SerializeTree(
+        IModGetter mod, CancellationToken cancel = default)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-serialize-").FullName;
         try
@@ -73,15 +73,15 @@ internal static class PluginTrees
 
             // Newtonsoft's JsonTextWriter has no reachable NewLine to pin, so line endings are canonicalized
             // after the write, as the per-record codec does.
-            var pristineFiles = new List<PristineFile>();
+            var treeFiles = new List<TreeFile>();
             foreach (var file in Directory.EnumerateFiles(scratchDir, "*", SearchOption.AllDirectories))
             {
                 cancel.ThrowIfCancellationRequested();
-                var relativePath = Path.Combine(
-                    SourceRepository.RootFor(pluginName), Path.GetRelativePath(scratchDir, file));
-                pristineFiles.Add(new PristineFile(relativePath, StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel))));
+                treeFiles.Add(new TreeFile(
+                    Path.GetRelativePath(scratchDir, file),
+                    StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel))));
             }
-            return pristineFiles;
+            return treeFiles;
         }
         finally
         {
@@ -89,15 +89,55 @@ internal static class PluginTrees
         }
     }
 
-    /// <summary>The tree at <paramref name="treeRoot"/> compiled to bytes at
+    /// <summary>The tree in <paramref name="files"/> compiled to bytes at
     /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification must
     /// not drop a .bak beside the real plugin.</summary>
     internal static async Task WriteFromTreeAsync(
-        string treeRoot, string destinationPath, TreeDeserializer? deserialize = null,
+        IReadOnlyList<PristineFile> files, string destinationPath, TreeDeserializer? deserialize = null,
         CancellationToken cancel = default)
     {
-        var recompiled = await (deserialize ?? DeserializeTree)(treeRoot, cancel);
-        await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath);
+        var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
+        try
+        {
+            var recompiled = await (deserialize ?? DeserializeTree)(
+                await MaterializeTree(files, scratchDir, cancel), cancel);
+            await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath);
+        }
+        finally
+        {
+            Directory.Delete(scratchDir, recursive: true);
+        }
+    }
+
+    // The files written under baseDirectory, answering the root the door reads from.
+    private static async Task<string> MaterializeTree(
+        IReadOnlyList<PristineFile> files, string baseDirectory, CancellationToken cancel)
+    {
+        foreach (var file in files)
+        {
+            var fullPath = Path.Combine(baseDirectory, file.RelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
+        }
+        return Path.Combine(baseDirectory, SharedDirectoryOf(files));
+    }
+
+    // Every file of one plugin's tree sits under that tree's root, so their common directory is it.
+    // Nothing here spells that root: where a tree lives in a mod folder is the repository's layout.
+    private static string SharedDirectoryOf(IReadOnlyList<PristineFile> files)
+    {
+        var shared = Path.GetDirectoryName(files.Count > 0 ? files[0].RelativePath : "") ?? "";
+        foreach (var file in files)
+        {
+            var directory = Path.GetDirectoryName(file.RelativePath) ?? "";
+            while (shared.Length > 0
+                   && !directory.Equals(shared, StringComparison.Ordinal)
+                   && !directory.StartsWith(shared + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                shared = Path.GetDirectoryName(shared) ?? "";
+            }
+        }
+        return shared;
     }
 
     private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel) =>
@@ -124,7 +164,7 @@ internal static class PluginTrees
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005 rule
     /// 2).</summary>
     internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<PristineFile> files, string pluginName, RecordTextCodec codec, GameRelease gameRelease,
+        IReadOnlyList<PristineFile> files, RecordTextCodec codec, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;
@@ -132,13 +172,13 @@ internal static class PluginTrees
         {
             // Outside the catch below: a tree git holds and this filesystem cannot write is not a
             // source defect, and a refusal naming the source would misname it.
-            await PristineFileWriter.WriteAllAsync(files, scratchDir, cancel);
+            var treeRoot = await MaterializeTree(files, scratchDir, cancel);
 
             // The files carry their own mod-folder-relative paths, so the scratch is a mod folder and
             // every path a read failure names is relative to one.
             try
             {
-                var mod = await DeserializeTree(Path.Combine(scratchDir, SourceRepository.RootFor(pluginName)), cancel);
+                var mod = await DeserializeTree(treeRoot, cancel);
                 return (new CompiledTree(mod, codec, gameRelease), null, null);
             }
             catch (Exception ex)
@@ -209,8 +249,7 @@ public sealed class CompiledTree
 
     /// <summary>What the current codec would write for this mod, which is what the round-trip gate
     /// compares the tree against.</summary>
-    public Task<IReadOnlyList<PristineFile>> SerializeToPristineFilesAsync(string pluginName) =>
-        PluginTrees.SerializeToPristineFiles(_mod, pluginName);
+    public Task<IReadOnlyList<TreeFile>> SerializeTreeAsync() => PluginTrees.SerializeTree(_mod);
 
     /// <summary>The mod handed straight to the write, through the backup-and-rename discipline
     /// every plugin replacement shares.</summary>

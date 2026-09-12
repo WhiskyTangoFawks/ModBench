@@ -3,6 +3,16 @@ using System.Text;
 
 namespace MEditService.Core.Source;
 
+/// <summary>The content hash: how a stored body and a tracked source file are named the same object
+/// (ADR-0007).</summary>
+public sealed partial class SourceRepository
+{
+    /// <summary>The name git gives these same bytes, so equality proves the tracked file holds them.
+    /// One-directional: inequality never proves an edit, because overlay and deep-parse serialization
+    /// diverge on a few records (4 of 3,940 measured).</summary>
+    public static string ContentHash(ReadOnlySpan<byte> body) => GitBlobHash.Of(body);
+}
+
 /// <summary>Git's own blob object name, so <c>documents.content_hash</c> and a tracked source file
 /// are provably the same object (ADR-0007). One-directional: equality proves identical bytes;
 /// inequality never proves an edit.</summary>

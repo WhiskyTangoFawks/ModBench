@@ -118,6 +118,23 @@ public sealed class SourceRepositoryLayoutTests
         Assert.Null(identity);
     }
 
+    // The one bridge from the door's own tree to the mod folder holding it. The name is verbatim: a
+    // ModKey renders the extension lowercase, and a tree read from another root is invisible.
+    [Fact]
+    public void PristineFilesOf_PutsTheDoorsTree_UnderTheRootTheNameSpells()
+    {
+        var pristine = SourceRepository.PristineFilesOf(
+            "Mixed.ESP",
+            [new TreeFile("RecordData.json", [1]),
+             new TreeFile(Path.Combine("npc_", "SomeNpc - 000800_Mixed.ESP.json"), [2])]);
+
+        Assert.Equal(
+            [Path.Combine("source", "Mixed.ESP", "RecordData.json"),
+             Path.Combine("source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
+            pristine.Select(file => file.RelativePath));
+        Assert.Equal([1], pristine[0].Content);
+    }
+
     [Fact]
     public void TryParse_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
     {

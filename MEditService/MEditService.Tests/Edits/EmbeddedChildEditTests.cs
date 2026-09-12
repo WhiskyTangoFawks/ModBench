@@ -317,4 +317,30 @@ public sealed class EmbeddedChildEditTests : IDisposable
         foreach (var child in new[] { ContainerModFixture.DialogTopicEditorId, ContainerModFixture.ResponseEditorId, ContainerModFixture.DialogBranchEditorId, ContainerModFixture.SceneEditorId })
             Assert.Equal(newFile, _fixture.SourceFileContaining(child));
     }
+
+    // The refusal names the document the gesture resolved (ADR-0015 invariant 5): an empty path would
+    // send the author looking for a file with no name.
+    [Fact]
+    public void EditingAnEmbeddedChild_WhoseOwnerTheTreeNoLongerHolds_RefusesNamingTheDocument()
+    {
+        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        var declared = $"\"FormKey\": \"{_fixture.EmbedCell}\"";
+        var text = File.ReadAllText(file);
+        Assert.Contains(declared, text, StringComparison.Ordinal);
+        // A hand edit that moves the owner's own FormKey leaves this write nothing to read.
+        File.WriteAllText(file, ReplaceFirst(text, declared, "\"FormKey\": \"00FFFF:Absent.esp\""));
+
+        var result = EditService().Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", Json("2.5"));
+
+        Assert.False(result.Applied, result.Message);
+        Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
+        Assert.StartsWith(
+            Path.GetRelativePath(_fixture.ModFolder, file), result.Message, StringComparison.Ordinal);
+    }
+
+    private static string ReplaceFirst(string text, string what, string with)
+    {
+        var at = text.IndexOf(what, StringComparison.Ordinal);
+        return text[..at] + with + text[(at + what.Length)..];
+    }
 }

@@ -62,6 +62,41 @@ public sealed partial class SourceRepository
         return null;
     }
 
+    /// <summary>The text HEAD commits for the record, or null when it is the text
+    /// <paramref name="knownText"/> holds, no unit holds the record, or HEAD carries it nowhere. One
+    /// record, so a clean one starts no git process.</summary>
+    public string? CommittedTextIfMoved(PluginKey plugin, RecordIdentity identity, string knownText)
+    {
+        if (Locate(plugin, identity) is not { } unit) return null;
+
+        // The hash fast path is meaningless for an embedded child: the blob at the unit's path is the
+        // owner's whole document.
+        if (!unit.IsEmbedded)
+        {
+            var hashes = CommittedSourceHashes(_modFolder, [unit.RelativePath]);
+            if (hashes == null || !hashes.TryGetValue(ToGitPath(unit.RelativePath), out var headHash)) return null;
+
+            // Equality is conclusive; inequality only sends us on to compare bytes, never an assertion of
+            // change.
+            if (headHash == GitBlobHash.Of(Encoding.UTF8.GetBytes(knownText))) return null;
+        }
+
+        if (ReadCommittedSourceText(_modFolder, unit.RelativePath) is not { } headOwnerText) return null;
+
+        // Same BOM defence as RecordBodyFromOwnerBytes.
+        headOwnerText = headOwnerText.TrimStart('﻿');
+
+        // For an embedded child HEAD's text is the owner's document; null means the owner's HEAD copy
+        // does not carry this child, which leaves the committed baseline alone (fail closed).
+        var headText = unit.IsEmbedded
+            ? RecordBodyFromOwnerBytes(Encoding.UTF8.GetBytes(headOwnerText), unit, identity.FormKey, _release)
+            : headOwnerText;
+
+        return headText is { } resolved && !string.Equals(resolved, knownText, StringComparison.Ordinal)
+            ? resolved
+            : null;
+    }
+
     /// <summary>Every FormKey the plugin originates and its tree holds now, a record with a document
     /// of its own and an embedded child alike. The header is excluded: its key is synthetic.</summary>
     public IReadOnlySet<string> NativeFormKeysHeld(PluginKey plugin) => Native(ReadAll(plugin), plugin);

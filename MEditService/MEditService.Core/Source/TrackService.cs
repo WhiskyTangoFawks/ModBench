@@ -3,6 +3,7 @@ using MEditService.Core.Commands;
 using MEditService.Core.Notifications;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
+using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -58,7 +59,7 @@ public sealed class TrackService(
 
         try
         {
-            GitCli.EnsureOnPath();
+            SourceRepository.EnsureTrackable();
 
             var pristineFiles = new List<PristineFile>();
             var binaryHashesByPlugin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -73,7 +74,7 @@ public sealed class TrackService(
 
                 // A fresh deep parse, not the load order's own overlay, whose lifetime Track does not control.
                 // Naming where the strings are: "pass nothing" is not neutral for a Localized plugin.
-                (IReadOnlyList<PristineFile> Files, string? MissingStringsFile) tree;
+                (IReadOnlyList<TreeFile> Files, string? MissingStringsFile) tree;
                 try
                 {
                     tree = await adapter.ReadSourceAsync(
@@ -103,7 +104,9 @@ public sealed class TrackService(
                 SetProgress(origin, TrackPhase.Parsing, parsedDone, plugins.Count);
 
                 SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
-                var pluginPristineFiles = tree.Files;
+                // Where the door's tree lands in the mod folder is the repository's answer, and the
+                // round-trip gate below reads the same files the commit will hold.
+                var pluginPristineFiles = SourceRepository.PristineFilesOf(plugin.Name, tree.Files);
 
                 // ADR-0006 decision 2: the gate refuses before a single byte of any plugin in this Track is
                 // committed, leaving the folder exactly as untracked as it was. Same Serializing phase — no new
@@ -120,7 +123,8 @@ public sealed class TrackService(
             }
 
             SetProgress(origin, TrackPhase.Committing, plugins.Count, plugins.Count);
-            var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), binaryHashesByPlugin);
+            var meta = SourceRepository.MetaFactsIn(modFolder);
+            var trailers = new TrackProvenance(meta.UpstreamVersion, meta.MetaSha256, binaryHashesByPlugin);
 
             if (logger.IsEnabled(LogLevel.Information))
             {
@@ -161,13 +165,10 @@ public sealed class TrackService(
         var scratchDir = Directory.CreateTempSubdirectory("medit-trackverify-").FullName;
         try
         {
-            await PristineFileWriter.WriteAllAsync(pristineFilesForThisPlugin, scratchDir, cancel);
-
-            var treeRoot = Path.Combine(scratchDir, SourceRepository.RootFor(pluginName));
             var recompiledPath = Path.Combine(scratchDir, pluginName);
             try
             {
-                await adapter.WriteFromTreeAsync(treeRoot, recompiledPath, cancel);
+                await adapter.WriteFromTreeAsync(pristineFilesForThisPlugin, recompiledPath, cancel);
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {

@@ -432,14 +432,14 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
     // Registers first: the index's reads are scoped by registration, so validate would otherwise
     // compare an empty row set against a full tree. False falls through to a full index.
-    private bool WarmRegister(IRecordIndex index, PluginMetadata plugin, string? sourceTree)
+    private bool WarmRegister(IRecordIndex index, PluginMetadata plugin, bool holdsTree)
     {
         index.Register(plugin.Key, plugin.Registration);
 
         // An untracked copy's binary was already hashed against its stored claim when the index file
         // opened (IndexStore.ValidateAgainstDisk), so a second hash of every binary here would pay
         // that whole cost twice for no new answer.
-        if (sourceTree == null) return true;
+        if (!holdsTree) return true;
 
         try
         {
@@ -480,8 +480,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     private void RegisterOrIndex(HeldPlugins held, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
-        var sourceTree = SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name);
-        if (index.IndexedContentHash(key) != null && WarmRegister(index, plugin, sourceTree))
+        var holdsTree = SourceIngest.HoldsTree(plugin.Origin, plugin.Path, plugin.Name);
+        if (index.IndexedContentHash(key) != null && WarmRegister(index, plugin, holdsTree))
         {
             if (_logger.IsEnabled(LogLevel.Information))
             {
@@ -505,7 +505,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             // ADR-0012: threads the origin into the index, so the DuckDB row is identified
             // by (origin, plugin) together, not filename alone.
-            IndexOnePlugin(held, index, plugin, sourceTree, token);
+            IndexOnePlugin(held, index, plugin, holdsTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
@@ -546,12 +546,12 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // fallback would leave the user reading pre-Track binary content believing it was their source.
     private void IndexOnePlugin(
         HeldPlugins held, IRecordIndex index, PluginMetadata plugin,
-        string? sourceTree, CancellationToken token)
+        bool holdsTree, CancellationToken token)
     {
         // One advance for the whole copy, whichever door it came through (ADR-0014).
         using var _ = index.BeginProjection();
 
-        if (sourceTree == null)
+        if (!holdsTree)
         {
             IndexFromBinary(held, index, plugin);
             return;
@@ -561,7 +561,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             if (_logger.IsEnabled(LogLevel.Information))
             {
-                _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
+                _logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
             SourceIngest.Ingest(
                 index, ModFolders.Of(plugin.Origin, plugin.Path)!,
@@ -685,7 +685,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
         // Asked here as a bare "is this tracked" question; the door below resolves the tree it reads
         // for itself, so neither trusts the other about a folder either could have lost in between.
-        if (SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name) != null)
+        if (SourceIngest.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
         {
             IngestFromSourceTree(key);
             return Task.CompletedTask;
@@ -705,14 +705,16 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
         var (metadata, index, gameRelease) = RequireHeldCopy(key);
         using var projection = index.BeginProjection();
-        var sourceTree = SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name)
-            ?? throw new InvalidOperationException(
+        if (!SourceIngest.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
+        {
+            throw new InvalidOperationException(
                 $"Plugin '{key.Name}' from '{key.Origin}' has no source tree to re-ingest; it is not tracked.");
+        }
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(
-                "Re-ingesting {Plugin} from its source tree ({Tree})", metadata.Name, sourceTree);
+                "Re-ingesting {Plugin} from its source tree", metadata.Name);
         }
 
         // Under _lock, unlike the reconcile's own ingest: this fires against a live index that every

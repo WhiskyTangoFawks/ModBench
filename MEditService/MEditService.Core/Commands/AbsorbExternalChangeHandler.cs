@@ -43,11 +43,11 @@ public sealed class AbsorbExternalChangeHandler
             // mod-folder-only strings overload applies.
             try
             {
-                allPristineFiles.AddRange(
-                    adapter.ReadPristineFilesAsync(
-                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name,
-                        loadOrder.GameRelease, PluginStrings.In(modFolder))
-                        .GetAwaiter().GetResult());
+                var tree = adapter.ReadPristineFilesAsync(
+                    new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path),
+                    loadOrder.GameRelease, PluginStrings.In(modFolder))
+                    .GetAwaiter().GetResult();
+                allPristineFiles.AddRange(SourceRepository.PristineFilesOf(plugin.Name, tree));
             }
             catch (Exception ex)
             {
@@ -61,7 +61,8 @@ public sealed class AbsorbExternalChangeHandler
         }
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
-        var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), binarySha256ByPlugin);
+        var meta = SourceRepository.MetaFactsIn(modFolder);
+        var trailers = new TrackProvenance(meta.UpstreamVersion, meta.MetaSha256, binarySha256ByPlugin);
 
         try
         {

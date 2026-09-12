@@ -305,7 +305,7 @@ public sealed class PluginCompileService(
     private (CompiledTree? Tree, string? RefusalReason) DeserializeSource(
         IReadOnlyList<PristineFile> files, string pluginName, GameRelease release)
     {
-        var read = adapter.ReadTreeAsync(files, pluginName, codec, release).GetAwaiter().GetResult();
+        var read = adapter.ReadTreeAsync(files, codec, release).GetAwaiter().GetResult();
         if (read.Tree is { } tree) return (tree, null);
 
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
@@ -323,7 +323,8 @@ public sealed class PluginCompileService(
     private static string? RefuseIfSourceDoesNotRoundTrip(
         CompiledTree tree, string pluginName, IReadOnlyList<PristineFile> sourceFiles)
     {
-        var regeneratedFiles = tree.SerializeToPristineFilesAsync(pluginName).GetAwaiter().GetResult();
+        var regeneratedFiles = SourceRepository.PristineFilesOf(
+            pluginName, tree.SerializeTreeAsync().GetAwaiter().GetResult());
         var headerDocument = SourceRepository.HeaderDocumentFor(pluginName);
         var read = sourceFiles.ToDictionary(file => file.RelativePath, file => file.Content, StringComparer.Ordinal);
 

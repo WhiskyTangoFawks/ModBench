@@ -94,7 +94,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
         {
             if (HeadBody(key, formKey) is not { } headBody) continue;
 
-            if (blobs.Contains(GitBlobHash.Of(Encoding.UTF8.GetBytes(headBody)))) continue;
+            if (blobs.Contains(SourceRepository.ContentHash(Encoding.UTF8.GetBytes(headBody)))) continue;
 
             if (CommittedPathFor(listing.Keys, key.Name, formKey) != null) drifted.Add(formKey);
             else goneAtHead.Add(formKey);

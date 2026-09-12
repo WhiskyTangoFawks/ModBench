@@ -246,7 +246,7 @@ internal sealed class PluginIngest
         if (document.ParseDiagnosis is not null)
         {
             return new PreparedRecord(
-                document.RecordType, document.FormKey, body, GitBlobHash.Of(body), [], [],
+                document.RecordType, document.FormKey, body, SourceRepository.ContentHash(body), [], [],
                 placements, cellLocation, editorId, document.ParseDiagnosis);
         }
 
@@ -266,7 +266,7 @@ internal sealed class PluginIngest
         }
 
         return new PreparedRecord(
-            document.RecordType, document.FormKey, body, GitBlobHash.Of(body), refs, childRows,
+            document.RecordType, document.FormKey, body, SourceRepository.ContentHash(body), refs, childRows,
             placements, cellLocation, editorId, ParseDiagnosis: null);
     }
 

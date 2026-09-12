@@ -18,7 +18,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     public void TheTrackedPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
     {
         Assert.Empty(fixture.FromSource.Status.Failures);
-        Assert.NotNull(SourceIngest.TreeFor(SourceParityFixture.Origin, Path.Combine(fixture.ModFolder, CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginFileName));
+        Assert.True(SourceIngest.HoldsTree(SourceParityFixture.Origin, Path.Combine(fixture.ModFolder, CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginFileName));
     }
 
     [Fact]

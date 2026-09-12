@@ -18,7 +18,7 @@ public sealed class DeleteRecordHandler
     internal DeleteRecordHandler(WriteTargets targets, ILogger<DeleteRecordHandler> logger) =>
         (_targets, _logger) = (targets, logger);
 
-    /// <summary>Every record shape resolves through <see cref="SourceRepository.Locate"/>.</summary>
+    /// <summary>Every record shape resolves through the unit holding it.</summary>
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;

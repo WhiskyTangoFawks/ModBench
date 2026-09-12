@@ -79,8 +79,8 @@ public sealed class RegisteredPluginSpellingTests
         internal void TrackFromPristineFiles()
         {
             var deepParsed = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(PluginName), PluginPath), Release);
-            var pristineFiles = PluginTrees.SerializeToPristineFiles(deepParsed, PluginName)
-                .GetAwaiter().GetResult();
+            var pristineFiles = SourceRepository.PristineFilesOf(
+                PluginName, PluginTrees.SerializeTree(deepParsed).GetAwaiter().GetResult());
 
             SourceRepository.Track(
                 ModFolder, SourcePreset.Edits, pristineFiles,

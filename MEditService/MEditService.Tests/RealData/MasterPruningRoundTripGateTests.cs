@@ -139,13 +139,15 @@ public sealed class MasterPruningRoundTripGateTests
 
     private static async Task<IFallout4Mod> DeserializeLegendariesThroughSource(string scratchDir)
     {
-        var pristineFiles = await PluginTrees.SerializeToPristineFiles(DeepParseLegendaries(), LegendariesFixtureFileName);
-        await PristineFileWriter.WriteAllAsync(pristineFiles, scratchDir, CancellationToken.None);
+        foreach (var file in await PluginTrees.SerializeTree(DeepParseLegendaries()))
+        {
+            var fullPath = Path.Combine(scratchDir, file.RelativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            await File.WriteAllBytesAsync(fullPath, file.Content);
+        }
 
         return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(
-            Path.Combine(scratchDir, SourceRepository.RootFor(LegendariesFixtureFileName)),
-            InlineWorkDropoff.Instance,
-            CancellationToken.None);
+            scratchDir, InlineWorkDropoff.Instance, CancellationToken.None);
     }
 
     // Empty master stubs satisfy Track's read; which of them survive the write back out is what these

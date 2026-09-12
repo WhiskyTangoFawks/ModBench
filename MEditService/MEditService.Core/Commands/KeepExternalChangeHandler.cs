@@ -121,7 +121,7 @@ public sealed class KeepExternalChangeHandler
             var recordType = incoming.RecordType;
             var held = repository.IdentityOf(plugin, formKey, schemas);
 
-            if (held is { } identity && repository.Locate(plugin, identity) is { IsEmbedded: true } unit)
+            if (held is { } identity && repository.UnitHolding(plugin, identity) is { IsEmbedded: true } unit)
             {
                 // Inlined in its owner's document, and the owner's own pass serializes this child's
                 // current value as part of the owner's whole text.

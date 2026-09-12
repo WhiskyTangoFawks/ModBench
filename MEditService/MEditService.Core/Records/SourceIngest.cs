@@ -14,17 +14,11 @@ namespace MEditService.Core.Records;
 /// indexing call.</summary>
 internal static class SourceIngest
 {
-    /// <summary>The tree to ingest from, or null to use the binary: no mod folder, untracked, or tracked
-    /// but holding no tree for this plugin. Re-derived every call, never cached — MO2's Replace install
-    /// shell-deletes the folder.</summary>
-    internal static string? TreeFor(string origin, string pluginPath, string pluginName)
-    {
-        if (ModFolders.Of(origin, pluginPath) is not { } modFolder) return null;
-        if (!SourceRepository.IsTracked(modFolder)) return null;
-
-        var tree = Path.Combine(modFolder, SourceRepository.RootFor(pluginName));
-        return Directory.Exists(tree) ? tree : null;
-    }
+    /// <summary>Whether this copy has a tree to ingest from; false reads the binary instead.
+    /// Re-derived every call — MO2's Replace install shell-deletes the folder.</summary>
+    internal static bool HoldsTree(string origin, string pluginPath, string pluginName) =>
+        ModFolders.Of(origin, pluginPath) is { } modFolder
+        && SourceRepository.HoldsTreeFor(modFolder, pluginName);
 
     /// <summary>Indexes the whole tree as the key. Throws whatever the tree throws: "quietly served the
     /// binary instead" is a silent lie. <paramref name="binaryPath"/> only stamps the rows; null
@@ -37,13 +31,17 @@ internal static class SourceIngest
         cancel.ThrowIfCancellationRequested();
         var schemas = schemaReflector.GetSchemas(gameRelease);
 
+        // Over rather than Open: the documents read the same either way, and a repository verb over an
+        // untracked folder answers empty instead of throwing.
+        var repository = SourceRepository.Over(modFolder, gameRelease);
+
         var timer = Stopwatch.StartNew();
-        using (var documents = new SourceTreeDocuments(modFolder, key.Name, gameRelease, schemas))
+        using (var documents = repository.OpenDocuments(key, schemas))
             index.Index(documents, registration, key, binaryPath);
         var indexMs = timer.ElapsedMilliseconds;
 
         timer.Restart();
-        ReconcileHead(index, modFolder, key, gameRelease, schemas, logger);
+        ReconcileHead(index, repository, key, schemas, logger);
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug(
@@ -52,115 +50,40 @@ internal static class SourceIngest
         }
     }
 
-    // Moves the dirty records back onto HEAD. The dirty set comes from git status, not a content_hash
-    // compare: the hash is of the codec's canonical form, so any other tree would read as wholly dirty.
+    // Moves the dirty records back onto HEAD, as the tree's own dirt reports each of them: a record
+    // still there with committed text behind it, one the tree has gained, one it has lost.
     private static void ReconcileHead(
-        IRecordIndex index, string modFolder, PluginKey key, GameRelease gameRelease,
+        IRecordIndex index, SourceRepository repository, PluginKey key,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, ILogger logger)
     {
-        // The clean fast path: reconciling every record would still be correct, so no test can tell bounded
-        // from unbounded here; keep the bound anyway.
-        var dirty = SourceRepository.WorkingTreeStatus(modFolder);
-        if (dirty.Count == 0) return;
+        var dirt = repository.DirtOf(key);
+
+        // The clean fast path: reconciling every record would still be correct, so no test can tell
+        // bounded from unbounded here; keep the bound anyway.
+        if (dirt.Documents.Count == 0 && !dirt.NeedsStructuralPass) return;
 
         var baselines = new List<(string FormKey, string Body)>();
         var workingTreeOnly = new List<string>();
         var deletedInWorkingTree = new List<(string FormKey, string RecordType, string Body)>();
-        var needsStructuralFallback = false;
 
-        // Which plugin's subtree a dirty path sits under — not a container-path grammar (ADR-0003).
-        var ownTreePrefix = $"{SourceRepository.RootFor(key.Name)}{Path.DirectorySeparatorChar}";
-
-        foreach (var gitPath in dirty)
+        foreach (var document in dirt.Documents)
         {
-            // git speaks forward slashes on every platform; the layout splits on the platform's
-            // own separator, so a raw porcelain path would simply never parse on Windows.
-            var relativePath = gitPath.Replace('/', Path.DirectorySeparatorChar);
-
-            if (!SourceRepository.TryParseDocumentPath(relativePath, gameRelease, out var identity))
-            {
-                // Not a flat record file: a path under this plugin's own tree (a container) defers to the
-                // structural pass, once, after the loop; a path outside it carries nothing to reconcile.
-                if (relativePath.StartsWith(ownTreePrefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    needsStructuralFallback = true;
-                }
-                else
-                {
-                    if (logger.IsEnabled(LogLevel.Debug))
-                    {
-                        logger.LogDebug(
-                            "Not a flat source record and not under {Plugin}'s own tree, so it carries no " +
-                            "Head state to reconcile here: {Path}", key.Name, gitPath);
-                    }
-                }
-                continue;
-            }
-
-            if (!identity.PluginFileName.Equals(key.Name, StringComparison.OrdinalIgnoreCase)) continue;
-
-            // A deletion or a create moves which refs hold the record at all, which SetCommittedBaseline cannot
-            // express; each gets its own verb.
-            var fullPath = Path.Combine(modFolder, relativePath);
-            var headText = SourceRepository.ReadCommittedSourceText(modFolder, relativePath);
-
-            // The header: its FormKey is computed directly, since a ModHeader cannot flow through the
-            // per-record codec, and the structural pass cannot reach it either.
-            if (identity.RecordType == PluginHeader.RecordType)
-            {
-                var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(identity.PluginFileName));
-
-                if (!File.Exists(fullPath))
-                {
-                    if (headText != null)
-                        deletedInWorkingTree.Add((headerFormKey, PluginHeader.RecordType, headText));
-                    continue;
-                }
-
-                if (headText == null)
-                    workingTreeOnly.Add(headerFormKey);
-                else
-                    baselines.Add((headerFormKey, headText));
-                continue;
-            }
-
-            if (!File.Exists(fullPath))
-            {
-                // Deleted in the working tree: gone at Effective, but it must keep answering at Head so the user
-                // can see, diff or revert it (ADR-0007).
-                if (headText != null)
-                {
-                    var goneFormKey = SourceRepository.RootStringIn(headText, FormKeyMember)
-                        ?? throw new UnreadableSourceDocumentException(
-                            fullPath, "the text HEAD committed for it declares no FormKey");
-                    deletedInWorkingTree.Add((goneFormKey, identity.RecordType, headText));
-                }
-                continue;
-            }
-
-            // Identity from the document, not the path: an EditorID may contain " - " (SourceRecordIdentity).
-            // Null covers an unreadable file as well as one declaring nothing, and a file that races
-            // this read is exactly what must degrade visibly rather than go missing.
-            var formKey = SourceRepository.FormKeyDeclaredBy(fullPath, modFolder, key.Name)
-                ?? throw new UnreadableSourceDocumentException(fullPath, "it declares no FormKey");
-
-            if (headText == null)
-            {
-                // Created and not yet committed — the ordinary shape, since the write path never runs git add.
-                workingTreeOnly.Add(formKey);
-                continue;
-            }
-
-            baselines.Add((formKey, headText));
+            // A deletion or a create moves which refs hold the record at all, which SetCommittedBaseline
+            // cannot express; each gets its own verb.
+            if (document.CommittedText is not { } committed)
+                workingTreeOnly.Add(document.FormKey);
+            else if (document.InWorkingTree)
+                baselines.Add((document.FormKey, committed));
+            else
+                deletedInWorkingTree.Add((document.FormKey, document.RecordType, committed));
         }
 
         PairRenamedSourceUnits(baselines, workingTreeOnly, deletedInWorkingTree);
 
-        if (needsStructuralFallback)
+        if (dirt.NeedsStructuralPass)
         {
             ReconcileHeadStructurally(
-                modFolder, key, gameRelease, schemas, logger,
-                baselines, workingTreeOnly, deletedInWorkingTree);
+                repository, key, schemas, logger, baselines, workingTreeOnly, deletedInWorkingTree);
         }
 
         // Applied only once the whole dirty set has been read: a throw mid-loop leaves Head untouched
@@ -175,7 +98,7 @@ internal static class SourceIngest
     // (ADR-0003). A schema-unpublished type is skipped on the deletion side only: a
     // Head-only row for it could never be read back.
     private static void ReconcileHeadStructurally(
-        string modFolder, PluginKey key, GameRelease gameRelease,
+        SourceRepository repository, PluginKey key,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, ILogger logger,
         List<(string FormKey, string Body)> baselines,
         List<string> workingTreeOnly,
@@ -186,9 +109,9 @@ internal static class SourceIngest
         foreach (var formKey in workingTreeOnly) alreadyHandled.Add(formKey);
         foreach (var (formKey, _, _) in deletedInWorkingTree) alreadyHandled.Add(formKey);
 
-        using var tree = new SourceTreeDocuments(modFolder, key.Name, gameRelease, schemas);
+        using var tree = repository.OpenDocuments(key, schemas);
         var effective = DocumentsByFormKey(tree.Records);
-        var head = DocumentsByFormKey(CommittedDocuments(tree, modFolder, key, gameRelease));
+        var head = DocumentsByFormKey(CommittedDocuments(repository, key, schemas));
 
         foreach (var (formKey, headDocument) in head)
         {
@@ -230,19 +153,14 @@ internal static class SourceIngest
         return byFormKey;
     }
 
-    // HEAD's own documents, straight from the object store: no checkout and no second working tree.
-    // The header is excluded because the flat pass above already reconciles it by name.
+    // The header is left out because the flat pass above already reconciles it by name: no text in the
+    // tree carries the FormKey the index files it under.
     private static IEnumerable<PluginDocument> CommittedDocuments(
-        SourceTreeDocuments tree, string modFolder, PluginKey key, GameRelease gameRelease)
+        SourceRepository repository, PluginKey key, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        if (SourceRepository.Open(modFolder, gameRelease) is not { } repository) yield break;
-
-        foreach (var document in repository.ReadAll(key, "HEAD"))
-        {
-            if (document.RecordType.Equals(PluginHeader.RecordType, StringComparison.Ordinal)) continue;
-            foreach (var expanded in tree.Expand(document.RecordType, document.FormKey, document.Body))
-                yield return expanded;
-        }
+        var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(key.Name));
+        return repository.DocumentsAt(key, "HEAD", schemas)
+            .Where(document => !document.FormKey.Equals(headerFormKey, StringComparison.OrdinalIgnoreCase));
     }
 
     // An EditorID edit moves the file, so one FormKey shows as a delete plus a create, which would land
@@ -267,6 +185,4 @@ internal static class SourceIngest
 
         deletedInWorkingTree.RemoveAll(d => created.Contains(d.FormKey));
     }
-
-    private const string FormKeyMember = "FormKey";
 }

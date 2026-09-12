@@ -2,6 +2,21 @@ using System.Security.Cryptography;
 
 namespace MEditService.Core.Source;
 
+/// <summary>What the mod folder's <c>meta.ini</c> says, as the repository answers it: the upstream
+/// version, and the file's own hash, opaque and never interpreted. Both null when there is no such
+/// file (ADR-0003).</summary>
+public sealed record ModMetaFacts(string? UpstreamVersion, string? MetaSha256);
+
+/// <summary>The mod folder's own meta file, which the layout names and nothing outside the
+/// repository reads.</summary>
+public sealed partial class SourceRepository
+{
+    /// <summary>What Track's baseline trailers record and the external-change classifier compares
+    /// against them, from one pass over the folder.</summary>
+    public static ModMetaFacts MetaFactsIn(string modFolder) =>
+        new(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder));
+}
+
 /// <summary><c>meta.ini</c> read as a source, never tracked content (ADR-0003). The one
 /// reading shared by Track's baseline trailers and the external-change classifier.</summary>
 internal static class MetaIni

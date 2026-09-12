@@ -272,13 +272,13 @@ public sealed class RenumberRecordHandler
     // Text is the target's own document renumbered — the owner's whole text when embedded — and
     // Written is that document's identity. Held is the target's own identity, as the tree has it.
     private sealed record ComputedTarget(
-        SourceRepository Repository, SourceUnit Unit, RecordIdentity Written, RecordIdentity Held,
+        SourceRepository Repository, HoldingUnit Unit, RecordIdentity Written, RecordIdentity Held,
         string Text);
 
     // The referencer pass skips the target, so this is the only place a self-link is remapped.
     // Nothing here writes; every failure mode is a typed refusal.
     private RecordEditResult? ComputeTargetRewrite(
-        PluginKey plugin, SourceRepository repository, RecordIdentity identity, SourceUnit unit,
+        PluginKey plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
         string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget target)
     {
         target = null!;

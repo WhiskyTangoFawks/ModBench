@@ -21,10 +21,17 @@ internal readonly record struct SourceUnit(
         && Path.GetFileName(FullPath).Equals(SourceRepository.RecordDataFileName, StringComparison.Ordinal);
 }
 
+/// <summary>The unit holding a record: the document it is, relative to the mod folder, whose record
+/// that document is, and whether it is a directory of its own. One read, so the facts and the path
+/// cannot disagree.</summary>
+public sealed record HoldingUnit(
+    string RelativePath, bool IsEmbedded, string OwnerFormKey, string? OwnerRecordType,
+    bool IsDirectoryPerRecord);
+
 /// <summary>Where the tree puts a cell: the worldspace whose subtree carries it and the block
 /// directories it sits in. An interior cell has neither; a worldspace's own top cell has a
 /// worldspace and no block.</summary>
-internal readonly record struct CellPlacement(
+public readonly record struct CellPlacement(
     string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior);
 
 /// <summary>Resolution: which document in the tree holds a record. The listing memo and the
@@ -37,9 +44,17 @@ public sealed partial class SourceRepository
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EmbeddedOwners> _ownersBySourceRoot = new(StringComparer.Ordinal);
 
+    /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
+    /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
+    public HoldingUnit? UnitHolding(PluginKey plugin, RecordIdentity identity) =>
+        Locate(plugin, identity) is { } unit
+            ? new HoldingUnit(
+                unit.RelativePath, unit.IsEmbedded, unit.OwnerFormKey, unit.OwnerRecordType,
+                unit.IsDirectoryPerRecord)
+            : null;
+
     /// <summary>The document holding <paramref name="identity"/>, and whether that document is another
-    /// record's. The one place an identity becomes a path; the callers still holding one are moving off
-    /// it.</summary>
+    /// record's. The one place an identity becomes a path, which is why it stays here.</summary>
     internal SourceUnit? Locate(PluginKey plugin, RecordIdentity identity)
     {
         if (identity.RecordType == PluginHeader.RecordType)
@@ -233,7 +248,7 @@ public sealed partial class SourceRepository
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. The block levels are directories, which is why only the repository reads them back
     /// (ADR-0014 invariant 5).</summary>
-    internal CellPlacement? CellPlacementOf(PluginKey plugin, RecordIdentity identity)
+    public CellPlacement? CellPlacementOf(PluginKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return null;
 

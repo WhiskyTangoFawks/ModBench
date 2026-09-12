@@ -39,15 +39,14 @@ public static class ExternalChangeClassifier
         // Mod-wide, so any tracked plugin's name resolves the same trailers off refs/heads/main.
         var representative = plugins.Count > 0 ? plugins[0].PluginName : "";
         var baseline = SourceRepository.LatestBaselineTrailers(modFolder, representative);
-        var newVersion = MetaIni.ReadVersion(modFolder);
-        var newMetaSha256 = MetaIni.ComputeSha256(modFolder);
+        var meta = SourceRepository.MetaFactsIn(modFolder);
 
         // Trailers inform the dialog's default, never act: unchanged or absent both mean false.
-        var metaChanged = baseline?.MetaSha256 != null && newMetaSha256 != null
-            && !string.Equals(baseline.MetaSha256, newMetaSha256, StringComparison.OrdinalIgnoreCase);
+        var metaChanged = baseline?.MetaSha256 != null && meta.MetaSha256 != null
+            && !string.Equals(baseline.MetaSha256, meta.MetaSha256, StringComparison.OrdinalIgnoreCase);
 
         return new ExternalChangeClassification.ExternalChange(
-            changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged, baseline?.UpstreamVersion, newVersion);
+            changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged, baseline?.UpstreamVersion, meta.UpstreamVersion);
     }
 }
 
