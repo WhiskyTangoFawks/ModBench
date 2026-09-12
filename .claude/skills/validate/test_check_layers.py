@@ -265,34 +265,15 @@ REPORTED_GAP_PAIRS = {"instance -> client", "watcher -> plugins", "plugins -> so
 
 
 class RealRepoDiagrams(unittest.TestCase):
-    def test_the_committed_diagrams_have_exactly_the_reported_gaps(self):
+    def test_the_committed_diagrams_report_the_gaps_by_file_line_and_arrow_and_fail(self):
         failures = cl.run(REPO_ROOT)
         pairs = set()
         for failure in failures:
             self.assertIn("no allowed pair covers this message", failure)
+            self.assertRegex(failure.split(": ", 1)[0], r"\.d2:\d+$")
             pairs.add(failure.split(": ", 2)[1])
         self.assertEqual(pairs, REPORTED_GAP_PAIRS)
-
-    def test_main_exits_zero_on_the_real_repo_despite_the_known_gaps(self):
-        self.assertEqual(cl.main([str(REPO_ROOT)]), 0)
-
-
-class KnownGapsDoNotMaskANewViolation(unittest.TestCase):
-    def test_main_still_fails_on_a_violation_the_known_gaps_do_not_name(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            trace = (
-                "...@../styles\nshape: sequence_diagram\n"
-                + TraceMessagesAgainstReferenceView().actor_block("a", "fx_driving.a")
-                + "\n"
-                + TraceMessagesAgainstReferenceView().actor_block("b", "fx_driving.c")
-                + "\na -> b: a stray call {class: edit}\n"
-            )
-            root = make_fixture(
-                pathlib.Path(tmp),
-                "fx_driving.a -> fx_core.b {class: ref}\n",
-                {"one": trace},
-            )
-            self.assertEqual(cl.main([str(root)]), 1)
+        self.assertEqual(cl.main([str(REPO_ROOT)]), 1)
 
 
 if __name__ == "__main__":

@@ -233,36 +233,16 @@ def run(root: Path):
     return failures
 
 
-# Three pairs the six allowed pairs do not cover, in the traces committed at 975f2bc5. Printed
-# on every run, never silently passed, and never grown to cover a new violation.
-_INSTANCE_TO_CLIENT = "instance -> client"
-KNOWN_GAPS = (
-    ("traces/enable-a-mod.d2", _INSTANCE_TO_CLIENT),
-    ("traces/enable-a-plugin.d2", _INSTANCE_TO_CLIENT),
-    ("traces/project.d2", _INSTANCE_TO_CLIENT),
-    ("traces/switch-profile.d2", _INSTANCE_TO_CLIENT),
-    ("traces/the-instance-recomputes.d2", _INSTANCE_TO_CLIENT),
-    ("traces/upgrade-a-mod.d2", "watcher -> plugins"),
-    ("traces/upgrade-a-mod.d2", "plugins -> source"),
-)
-
-
-def _is_known_gap(failure: str) -> bool:
-    return any(path in failure and f"{pair}:" in failure for path, pair in KNOWN_GAPS)
-
-
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     root = Path(argv[0]) if argv else Path(__file__).resolve().parents[3]
     failures = run(root)
-    new_failures = [f for f in failures if not _is_known_gap(f)]
     for failure in failures:
-        tag = "" if failure in new_failures else "(known, reported) "
-        print(tag + failure)
-    if new_failures:
+        print(failure)
+    if failures:
         print("--- DIAGRAM LAYER CHECK FAILED ---")
         return 1
-    print("=== Diagrams match docs/architecture/layers.d2 (known findings above, if any) ===")
+    print("=== Diagrams match docs/architecture/layers.d2 ===")
     return 0
 
 
