@@ -13,7 +13,7 @@ public sealed class PluginBytesScanTests
     private const string AdapterRoot = "MEditService.Core/PluginAdapter";
 
     // The repository itself, not just its doors: the tree door answers in documents, so where a tree
-    // sits and how it is read are the repository's alone (#827's target architecture).
+    // sits and how it is read are the repository's alone (ADR-0007).
     private static readonly string[] RepositoryNames = ["SourceRepository"];
 
     private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite", "CreateEmpty"];
