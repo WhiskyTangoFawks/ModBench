@@ -9,10 +9,9 @@ import ts from 'typescript';
 
 const FOLDER = __dirname; // src/modmanager/
 
-// The adapter itself, plus two known exceptions this scan leaves alone: detectMo2Instance.ts is
-// a synchronous composition-root gate that runs before an Instance exists, and deployer.ts is a
-// separate driven adapter over Game Data/, not the instance.
-const EXCEPTIONS = new Set(['mo2Files.ts', 'detectMo2Instance.ts', 'deployer.ts']);
+// The adapter itself, plus one known exception this scan leaves alone: detectMo2Instance.ts is
+// a synchronous composition-root gate that runs before an Instance exists.
+const EXCEPTIONS = new Set(['mo2Files.ts', 'detectMo2Instance.ts']);
 
 const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
 
@@ -49,7 +48,7 @@ describe('no file in the Instance\'s folder imports the file system outside the 
     expect(folderFiles().length).toBeGreaterThan(5);
   });
 
-  it('every production file here, other than mo2Files.ts and its two listed exceptions, imports no node:fs', () => {
+  it('every production file here, other than mo2Files.ts and its one listed exception, imports no node:fs', () => {
     const offenders: Record<string, string[]> = {};
     for (const path of folderFiles()) {
       const found = fsImportsIn(path);

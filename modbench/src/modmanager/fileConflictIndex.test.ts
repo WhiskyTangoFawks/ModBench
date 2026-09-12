@@ -8,8 +8,8 @@ import type { Mod, Separator, ModlistEntry } from './model';
 import { buildFileConflictIndex, rootLevelWinners, foldPath } from './fileConflictIndex';
 import { parseModlist } from './mo2/modlistText';
 import { computeModStatuses } from './statusChecker';
-import { deploy } from './deployer';
-import { makeDeployerFixture, makeIndex } from './test/deployerFixture';
+import { deployToGameData, type DeployLink } from './mo2Files';
+import { makeDeployerFixture } from './test/deployerFixture';
 
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
 // chmod-based permission denial is silently bypassed when the runner is root.
@@ -320,10 +320,6 @@ const litrModlistPath = join(litrInstance, 'profiles', 'Life in the Ruins', 'mod
 const hasLitr = existsSync(litrModlistPath);
 
 
-function fakeReporter() {
-  return { report: () => {}, landed: () => {} };
-}
-
 describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in)', () => {
   // A real conflict in the live LitR modlist, not planted: a fix patch must override what it
   // fixes, which is an oracle independent of this codebase's own logic.
@@ -378,8 +374,8 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     // source path is real.
     const fx = await makeDeployerFixture();
     try {
-      const deployIndex = makeIndex(Object.fromEntries(winnerPaths));
-      await deploy(fx.instanceRoot, fx.gameDirectory, deployIndex, fakeReporter());
+      const links: DeployLink[] = [...winnerPaths].map(([relativePath, source]) => ({ relativePath, source }));
+      await deployToGameData(fx.instanceRoot, fx.gameDirectory, links);
       for (const relativePath of contested) {
         const winner = winnerPaths.get(relativePath)!;
         const target = join(fx.gameDirectory.dataFolder, relativePath);

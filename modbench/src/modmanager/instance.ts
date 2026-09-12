@@ -22,10 +22,9 @@ import {
   resolveGameDirectory,
   type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory, type OnConfigChange,
 } from './gameDirectory';
-import { isDeployed } from './deployer';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
-import { get, listDir } from './mo2Files';
+import { exists, get, listDir, manifestFile } from './mo2Files';
 
 // A change here must recompute exactly as a file event does — the Instance's own replacement
 // for the memoized resolver's invalidation.
@@ -298,7 +297,7 @@ export class Instance implements vscode.Disposable {
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
       scanDownloads(instanceRoot),
-      isDeployed(instanceRoot),
+      exists(manifestFile(instanceRoot)),
       countOverwriteFiles(overwriteDir(instanceRoot)),
       readModFolderNames(instanceRoot),
     ]);

@@ -35,11 +35,16 @@ vi.mock('../workspaceConfig', () => ({
   makeDetectPaths: () => () => Promise.resolve({ pluginsTxt: '/instance/profiles/Default/plugins.txt' }),
 }));
 
-import { registerToolboxCommands, type ToolboxCommandDeps } from '../toolboxCommands';
+import { registerToolboxCommands, DEPLOY_CONFIRM_BUTTON, DEPLOY_DECLINED, type ToolboxCommandDeps } from '../toolboxCommands';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import type { Instance } from '../modmanager/instance';
+import type { AskQuestion } from '../dialog';
 
-const value = { activeProfile: 'Default', files: { winners: new Map() }, gameDirectory: { dataFolder: '/game/Data' } };
+// `deployed: true` is the steady state most tests want — a directory that already has a
+// manifest, so the deploy gesture never has to ask.
+const value = {
+  activeProfile: 'Default', files: { winners: new Map() }, gameDirectory: { dataFolder: '/game/Data' }, deployed: true,
+};
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
@@ -117,16 +122,78 @@ describe('Deploy and Purge', () => {
     ]);
   });
 
-  it('hands the deployment the same reporter and dialog it surfaces through', async () => {
+  it('hands the command the Instance value and the resolved load-order target, no reporter or dialog', async () => {
     deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
 
-    const { reporter, ask, run } = register();
+    const { run } = register();
     await run('modbench.toolbox.deploy');
 
-    expect(deployMods).toHaveBeenCalledWith(
-      '/instance', 'Default', value.files, value.gameDirectory,
-      '/instance/profiles/Default/plugins.txt', reporter, ask,
-    );
+    expect(deployMods).toHaveBeenCalledWith('/instance', value, '/instance/profiles/Default/plugins.txt');
+  });
+
+  it('hands purge the Instance value alone', async () => {
+    purgeMods.mockResolvedValueOnce({ applied: true, wrote: true });
+
+    const { run } = register();
+    await run('modbench.toolbox.purge');
+
+    expect(purgeMods).toHaveBeenCalledWith('/instance', value);
+  });
+
+  it('reports each warning at warning severity, with its own detail, before landing the toast', async () => {
+    deployMods.mockResolvedValueOnce({
+      applied: true, wrote: true,
+      warnings: [{ message: 'a mod file was skipped', detail: 'textures/foo.dds' }],
+    });
+
+    const { reporter, run } = register();
+    await run('modbench.toolbox.deploy');
+
+    expect(reporter.reports).toEqual([
+      { severity: 'warning', message: 'a mod file was skipped', detail: 'textures/foo.dds' },
+    ]);
+    expect(reporter.landings).toEqual(['Mods deployed.']);
+  });
+
+  describe('the first-deploy consent', () => {
+    const notDeployed = { ...value, deployed: false };
+
+    it('asks once, and deploys once accepted', async () => {
+      deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
+      const ask = scriptedDialog(DEPLOY_CONFIRM_BUTTON);
+
+      const { reporter, run } = register({ instance: { value: notDeployed } as unknown as Pick<Instance, 'value'>, ask });
+      await run('modbench.toolbox.deploy');
+
+      expect(ask.asked).toHaveLength(1);
+      expect(deployMods).toHaveBeenCalledWith('/instance', notDeployed, '/instance/profiles/Default/plugins.txt');
+      expect(reporter.landings).toEqual(['Mods deployed.']);
+    });
+
+    // Rival: deploy without asking. Declining must refuse without ever calling the command —
+    // a stubbed deployMods that "declines" itself would leave this rival undetected.
+    it('declining refuses without calling the command', async () => {
+      const ask = scriptedDialog(undefined); // the native cancel
+
+      const { reporter, run } = register({ instance: { value: notDeployed } as unknown as Pick<Instance, 'value'>, ask });
+      await run('modbench.toolbox.deploy');
+
+      expect(deployMods).not.toHaveBeenCalled();
+      expect(reporter.reports).toEqual([{ severity: 'error', message: 'Deploy failed.', detail: DEPLOY_DECLINED }]);
+      expect(reporter.landings).toEqual([]);
+    });
+
+    // Rival: ask unconditionally. A directory the Instance already reports as deployed must
+    // never raise the prompt.
+    it('never asks when the Instance already reports deployed', async () => {
+      deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
+      const neverAsk: AskQuestion = () => { throw new Error('asked when the Instance already reports deployed'); };
+
+      const { run } = register({ ask: neverAsk });
+      await run('modbench.toolbox.deploy');
+
+      expect(deployMods).toHaveBeenCalled();
+    });
   });
 });
 
