@@ -2,7 +2,9 @@
 // box). A command splices a file's text through its own codec and puts the result through here.
 
 import type { Dirent } from 'node:fs';
-import { access, cp, mkdir, mkdtemp, readFile, readdir, rename as fsRename, rm, writeFile } from 'node:fs/promises';
+import {
+  access, cp, mkdir, mkdtemp, readFile, readdir, realpath, rename as fsRename, rm, stat, writeFile,
+} from 'node:fs/promises';
 
 // The Instance's watcher modules ask here rather than naming MO2's layout themselves.
 export { MODS_GLOB, MODLIST_GLOB, PLUGINS_GLOB, OVERWRITE_GLOB, DOWNLOADS_GLOB } from './mo2/layout';
@@ -42,9 +44,35 @@ export interface PutOptions {
   ifMissing?: string;
 }
 
-/** Whether `path`, file or directory, is there. */
-export function exists(path: string): Promise<boolean> {
-  return access(path).then(() => true, () => false);
+/** Whether `path`, file or directory, is there. Only a missing path answers false; any other
+ *  failure (a permission error, say) propagates rather than reading as absent (ADR-0019). */
+export async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+export interface PathFacts {
+  readonly size: number;
+  readonly mtimeMs: number;
+  /** `other` covers a non-regular target (a socket, FIFO or device node) — a caller's own
+   *  skip-and-log, never a fourth branch here. */
+  readonly kind: 'file' | 'directory' | 'other';
+  /** `path` with every symlink along it resolved; itself when `path` names no symlink. */
+  readonly realPath: string;
+}
+
+/** `path`'s size, modified time and kind, following symlinks the way a directory walk does —
+ *  `stat`, not `lstat`. Sequential, so a `stat` failure propagates before `realpath` runs. */
+export async function factsOf(path: string): Promise<PathFacts> {
+  const info = await stat(path);
+  const kind: PathFacts['kind'] = info.isDirectory() ? 'directory' : info.isFile() ? 'file' : 'other';
+  const realPath = await realpath(path);
+  return { size: info.size, mtimeMs: info.mtimeMs, kind, realPath };
 }
 
 /** Reads `path` as text. Pass `ifMissing` to read a missing file as that text instead of

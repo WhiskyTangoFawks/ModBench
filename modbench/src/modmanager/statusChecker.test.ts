@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Mod, ModlistEntry } from './model';
@@ -10,7 +10,7 @@ import { computeModStatuses } from './statusChecker';
 // error. chmod-based denial would be silently bypassed when the runner is root.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
-  return { ...actual, stat: vi.fn(actual.stat) };
+  return { ...actual, access: vi.fn(actual.access) };
 });
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
@@ -103,25 +103,24 @@ describe('computeModStatuses', () => {
   });
 });
 
-describe('computeModStatuses — non-ENOENT stat failures propagate', () => {
-  // modFolderExists's own contract: "ENOENT reads as absent; any other stat error
-  // propagates." A permission-denied mod folder (real: a restrictively-mounted
-  // or externally-managed mods/ subtree) must reject, not silently degrade to
-  // missingMod like ENOENT does.
-  it('rejects rather than degrading to missingMod on a non-ENOENT stat error', async () => {
+describe('computeModStatuses — non-ENOENT existence-check failures propagate', () => {
+  // mo2Files.exists's own contract: only ENOENT reads as absent, any other failure propagates.
+  // A permission-denied mod folder (real: a restrictively-mounted or externally-managed
+  // mods/ subtree) must reject, not silently degrade to missingMod like ENOENT does.
+  it('rejects rather than degrading to missingMod on a non-ENOENT existence-check error', async () => {
     const root = await mkdtemp(join(tmpdir(), 'medit-statuschecker-eacces-'));
     try {
       await writeMod(root, 'Restricted', { 'Restricted.esp': 'plugin bytes' });
       const restrictedEntries: ModlistEntry[] = [mod('Restricted')];
       const index = await buildFileConflictIndex(restrictedEntries, root, () => {});
 
-      const { stat: actualStat } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      const { access: actualAccess } = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
       const restrictedPath = join('mods', 'Restricted');
-      vi.mocked(stat).mockImplementation(async (path, ...rest) => {
+      vi.mocked(access).mockImplementation(async (path, ...rest) => {
         if (String(path).endsWith(restrictedPath)) {
           throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
         }
-        return actualStat(path, ...(rest as []));
+        return actualAccess(path, ...(rest as []));
       });
 
       try {
@@ -129,7 +128,7 @@ describe('computeModStatuses — non-ENOENT stat failures propagate', () => {
           computeModStatuses(restrictedEntries, root, index),
         ).rejects.toThrow(/EACCES|permission denied/);
       } finally {
-        vi.mocked(stat).mockImplementation(actualStat);
+        vi.mocked(access).mockImplementation(actualAccess);
       }
     } finally {
       await rm(root, { recursive: true, force: true });

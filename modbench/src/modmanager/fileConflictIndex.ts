@@ -1,10 +1,10 @@
 // The effective merged mod view — the merge a VFS performs over the Mod override order.
 // No vscode import, so it is unit-testable standalone.
 
-import { readdir, realpath, stat } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { MOD_META_FILE_NAME, modDir } from './mo2/layout';
 import type { ModlistEntry } from './model';
+import { factsOf, listDir } from './mo2Files';
 
 // Nearly every mod has one, so indexing it would make them all conflict with each other.
 const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);
@@ -105,7 +105,7 @@ async function walk(
   ancestors: Set<string>,
   log: (msg: string) => void,
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
-  const dirents = await readdir(dir, { withFileTypes: true });
+  const dirents = await listDir(dir);
   const results: { relativePath: string; absolutePath: string }[] = [];
   for (const dirent of dirents) {
     // Dot-prefixed at any depth, any dirent kind — checked first, ahead of every other
@@ -132,30 +132,30 @@ async function walkSymlink(
   ancestors: Set<string>,
   log: (msg: string) => void,
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
-  let target;
+  let facts;
   try {
-    target = await stat(absolutePath); // follows the link
+    facts = await factsOf(absolutePath); // follows the link
   } catch (err) {
-    // ENOENT (broken link) only — any other stat failure (e.g. EACCES) propagates rather
+    // ENOENT (broken link) only — any other failure (e.g. EACCES) propagates rather
     // than silently degrading to a skip, matching statusChecker.ts's modFolderExists
     // convention: a permission error must reject, not read as "nothing here".
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     log(`[fileConflictIndex] broken symlink, skipping: "${absolutePath}" (${err instanceof Error ? err.message : String(err)})`);
     return [];
   }
-  if (target.isDirectory()) return descend(absolutePath, root, ancestors, log);
-  if (target.isFile()) {
+  if (facts.kind === 'directory') return descend(absolutePath, root, ancestors, log);
+  if (facts.kind === 'file') {
     // Resolve to the real file so the deployer hardlinks the target, not the link itself;
     // the relativePath key still comes from the symlink's own name.
     const results: { relativePath: string; absolutePath: string }[] = [];
-    pushEntry(results, root, absolutePath, await realpath(absolutePath));
+    pushEntry(results, root, absolutePath, facts.realPath);
     return results;
   }
   log(`[fileConflictIndex] symlink target is not a file or directory, skipping: "${absolutePath}"`);
   return [];
 }
 
-// One realpath per directory, uniform rather than symlink-only, so there is a single cycle
+// One real path per directory, uniform rather than symlink-only, so there is a single cycle
 // guard to verify instead of two conditionally-correct ones.
 async function descend(
   dirPath: string,
@@ -163,12 +163,12 @@ async function descend(
   ancestors: Set<string>,
   log: (msg: string) => void,
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
-  const real = await realpath(dirPath);
-  if (ancestors.has(real)) {
+  const { realPath } = await factsOf(dirPath);
+  if (ancestors.has(realPath)) {
     log(`[fileConflictIndex] symlink cycle detected at "${dirPath}", skipping`);
     return [];
   }
-  return walk(dirPath, root, new Set(ancestors).add(real), log);
+  return walk(dirPath, root, new Set(ancestors).add(realPath), log);
 }
 
 // `fs.link`'s final path component does not dereference a symlink on Linux, so a symlinked
@@ -192,7 +192,7 @@ async function walkMod(
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
   const dir = modDir(instanceRoot, modName);
   try {
-    const rootReal = await realpath(dir);
+    const { realPath: rootReal } = await factsOf(dir);
     return await walk(dir, dir, new Set([rootReal]), log);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; // missing mod folder — StatusChecker's concern

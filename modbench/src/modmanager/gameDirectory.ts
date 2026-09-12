@@ -1,11 +1,10 @@
 // Pure over an injected config and game-path detector — no vscode import, unit-testable
 // like the rest of modmanager/.
 
-import { stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { settingsFile } from './mo2/layout';
 import { readGamePath } from './mo2/modOrganizerIni';
-import { get } from './mo2Files';
+import { factsOf, get } from './mo2Files';
 
 export interface GameDirectory {
   /** Folder containing the game executable and Data/. */
@@ -67,7 +66,7 @@ export async function normalizeGamePath(
 
 async function hasDataFolder(root: string): Promise<boolean> {
   try {
-    return (await stat(join(root, 'Data'))).isDirectory();
+    return (await factsOf(join(root, 'Data'))).kind === 'directory';
   } catch {
     return false;
   }

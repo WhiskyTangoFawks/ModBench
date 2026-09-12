@@ -2,10 +2,10 @@
 // folders. Pure over ModlistEntry[] + instanceRoot + a precomputed FileConflictIndex; no vscode
 // import, and no plugin file is opened — master facts are the backend's (ADR-0016).
 
-import { stat } from 'node:fs/promises';
 import { modDir } from './mo2/layout';
 import type { ModlistEntry } from './model';
 import type { FileConflictIndex } from './fileConflictIndex';
+import { exists } from './mo2Files';
 
 export type ModStatus =
   | { kind: 'ok' }
@@ -48,15 +48,9 @@ async function computeEntryStatus(
   return { status: classifyStatus(conflicts, overrides), conflictLines };
 }
 
-// ENOENT reads as absent; any other stat error propagates.
-async function modFolderExists(instanceRoot: string, modName: string): Promise<boolean> {
-  try {
-    await stat(modDir(instanceRoot, modName));
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw err;
-  }
+// A missing mod folder answers false; any other read failure propagates (mo2Files.exists).
+function modFolderExists(instanceRoot: string, modName: string): Promise<boolean> {
+  return exists(modDir(instanceRoot, modName));
 }
 
 // A contested file this mod wins is an override; one it loses is a conflict.
