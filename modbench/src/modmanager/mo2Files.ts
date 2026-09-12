@@ -9,6 +9,7 @@ import {
 import { dirname, join, relative, sep } from 'node:path';
 import { modsDir as modsDirOf, overwriteDir } from './mo2/layout';
 import type { GameDirectory } from './gameDirectory';
+import { errnoCode } from '../errno';
 
 // The Instance's watcher modules ask here rather than naming MO2's layout themselves.
 export { MODS_GLOB, MODLIST_GLOB, PLUGINS_GLOB, OVERWRITE_GLOB, DOWNLOADS_GLOB } from './mo2/layout';
@@ -37,7 +38,7 @@ async function readOr(path: string, ifMissing: string | undefined): Promise<stri
   try {
     return await readFile(path, 'utf8');
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    if (errnoCode(err) !== 'ENOENT') throw err;
     return ifMissing;
   }
 }
@@ -55,7 +56,7 @@ export async function exists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    if (errnoCode(err) === 'ENOENT') return false;
     throw err;
   }
 }
@@ -230,16 +231,40 @@ function toError(err: unknown): Error {
   return err instanceof Error ? err : new Error(String(err));
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v): v is string => typeof v === 'string');
+}
+
+// The manifest's one parse point: checks the fields a manifest always has and throws rather
+// than handing back a value whose shape was never proven. readManifest, below, catches it.
+function parseManifest(raw: string): Manifest {
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error(`Expected the deploy manifest to be a JSON object, got ${typeof parsed}.`);
+  }
+  const witness = parsed as { links?: unknown; preExisting?: unknown; loadOrder?: unknown };
+  if (!isStringArray(witness.links)) {
+    throw new Error('Expected the deploy manifest to have a "links" string array.');
+  }
+  if (!isStringArray(witness.preExisting)) {
+    throw new Error('Expected the deploy manifest to have a "preExisting" string array.');
+  }
+  if (witness.loadOrder !== undefined && !isStringArray(witness.loadOrder)) {
+    throw new Error('Expected the deploy manifest\'s "loadOrder" to be a string array when present.');
+  }
+  return { links: witness.links, preExisting: witness.preExisting, loadOrder: witness.loadOrder };
+}
+
 async function readManifest(instanceRoot: string): Promise<ManifestResult> {
   let raw: string;
   try {
     raw = await readFile(manifestFile(instanceRoot), 'utf8');
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'absent' };
+    if (errnoCode(err) === 'ENOENT') return { status: 'absent' };
     return { status: 'corrupt', error: toError(err) };
   }
   try {
-    return { status: 'ok', manifest: JSON.parse(raw) as Manifest };
+    return { status: 'ok', manifest: parseManifest(raw) };
   } catch (err) {
     return { status: 'corrupt', error: toError(err) };
   }
@@ -296,7 +321,7 @@ async function linkOneWinner(
   try {
     await linkFn(winner, target);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    if (errnoCode(err) !== 'EXDEV') throw err;
     return 'cross-volume';
   }
   return 'linked';
@@ -485,7 +510,7 @@ async function moveFile(
   try {
     await renameFn(from, to);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+    if (errnoCode(err) !== 'EXDEV') throw err;
     await copyFile(from, to);
     await rm(from, { force: true });
   }

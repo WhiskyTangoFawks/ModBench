@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { mkdir, writeFile, chmod, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Reporter } from '../reporter';
+import { errnoCode } from '../errno';
 
 // Any segment may carry a FormKey's `:` or characters Windows paths reject. Collapsed whitespace
 // and a length cap keep the result one sane segment; `|| '_'` guards a segment that sanitizes
@@ -61,7 +62,7 @@ export async function openExtendedFieldEditor(
     // writeFile against a non-writable file throws EACCES. ENOENT is the one error to ignore —
     // nothing exists to chmod yet.
     await chmod(path, 0o644).catch((err: unknown) => {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+      if (errnoCode(err) !== 'ENOENT') throw err;
     });
     await writeFile(path, params.value, 'utf8');
     // Read-only, not absent — a read-only tab is still the only way to read a long value in full,

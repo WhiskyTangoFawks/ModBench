@@ -16,7 +16,7 @@ import type {
 import { columnKey } from './types';
 import { vscode } from './vscode';
 import { editField } from './nativeBridge';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, type ExtensionToWebview } from './messages';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 
@@ -190,7 +190,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   // React state, so it says what happened and each open panel decides whether it applies.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
-      const msg = event.data as ExtensionToWebview;
+      let msg;
+      try {
+        msg = parseExtensionToWebview(event.data);
+      } catch {
+        return; // Not one of ours, or a stale/mismatched build.
+      }
       if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
         if (msg.formKey !== prevFormKeyRef.current) {
           // formKey will change → [formKey] effect will fire; skip it.

@@ -30,6 +30,16 @@ export function isRefused(result: unknown): result is WriteRefused {
 export type NotificationKind =
   | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'external-change-pending';
 
+const NOTIFICATION_KINDS = new Set<string>([
+  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change-pending',
+]);
+
+/** Whether `kind` is one of the five the wire defines — the one place `NotificationEvent.kind`
+ *  (the schema's honest `string`) is narrowed to `NotificationKind` for dispatch. */
+export function isNotificationKind(kind: string): kind is NotificationKind {
+  return NOTIFICATION_KINDS.has(kind);
+}
+
 /** Re-exported under its own name because it is a callback contract, not merely a query return
  *  type the caller happens to see. */
 export type LoadOrderProgress = LoadOrderStatus;

@@ -20,6 +20,13 @@ import {
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
+// `DataTransferItem.value` is `any` — handleDrag, above, is this provider's only writer of it.
+function isDragPayload(value: unknown): value is { kind: 'mod' | 'separator'; name: string } {
+  if (typeof value !== 'object' || value === null) return false;
+  const witness = value as { kind?: unknown; name?: unknown };
+  return (witness.kind === 'mod' || witness.kind === 'separator') && typeof witness.name === 'string';
+}
+
 export interface ModListProviderOptions {
   /** Mods/separators in override order, per-mod conflict/override/missing status and the
    *  overwrite/ file count — the tree's only data input (ADR-0015). */
@@ -205,11 +212,11 @@ export class ModListProvider
     _token: vscode.CancellationToken,
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
-    if (!payload) return;
+    if (!payload || !isDragPayload(payload.value)) return;
     // Neither the count summary nor the pinned Overwrite fixture is a modlist.txt
     // position — dropping onto them must not fall through to "move to end".
     if (target?.kind === 'count' || target?.kind === OVERWRITE_DIR_NAME) return;
-    const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
+    const { kind, name } = payload.value;
     // Resync against disk afterwards so a failed mutation never leaves a phantom reorder on
     // screen (ADR-0019).
     await this.applyDrop(kind, name, target);
