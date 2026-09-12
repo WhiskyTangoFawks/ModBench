@@ -1,50 +1,52 @@
-// Deploy and purge as gesture commands (ADR-0015 invariant 2): applied-or-refusal, never a throw.
-// Winners come from the Instance, not a fresh walk, so deploy can't disagree with the trees.
+// Deploy and purge as deploy commands (target-architecture.d2's `deploy` box): decide which
+// files to hardlink and hand MO2 files the plan to execute. No reporter, no dialog — Toolbox
+// turns the result into what the user sees.
 
-import { deploy, isDeployed, purge, type LoadOrderDeployment } from '../deployer';
+import {
+  deployToGameData, purgeFromGameData, type DeployOutcome, type DeployLink,
+  type DeployWarning, type LoadOrderDeployment, type PurgeOutcome,
+} from '../mo2Files';
 import { pluginsFile } from '../mo2/layout';
-import type { Reporter } from '../../reporter';
 import type { FileWinners } from '../fileConflictIndex';
 import type { GameDirectory } from '../gameDirectory';
-import type { AskQuestion } from '../../dialog';
+
+export type { DeployWarning };
+
+/** The slice of the Instance's value deploy needs, named on its own rather than imported from
+ *  `../instance` — commands never read the read model (ADR-0015 invariant 2). */
+export interface DeployableValue {
+  activeProfile: string;
+  files: FileWinners;
+  gameDirectory: GameDirectory | undefined;
+}
 
 /** `wrote` is false when a precondition aborted the run, or when purge found nothing deployed —
  *  in both cases Data/ and the manifest are exactly as they were. */
 export type DeploymentCommandResult =
-  | { applied: true; wrote: boolean }
+  | { applied: true; wrote: boolean; warnings?: DeployWarning[] }
   | { applied: false; refusal: string };
 
 const NO_GAME_DIRECTORY =
   'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.';
 
-const DEPLOY_DECLINED = 'Deploy declined — Modbench was not confirmed as the deployer; nothing was written.';
-
-export const DEPLOY_CONFIRM_BUTTON = 'Deploy';
-
-// Keyed on the manifest's absence, so a directory that already has one never asks again.
-async function confirmFirstDeploy(ask: AskQuestion): Promise<boolean> {
-  const choice = await ask(
-    'Modbench has never deployed into this game directory. Deploying now hardlinks your enabled ' +
-      'mods into Data/ and makes Modbench the deployer — if MO2 or another tool also deploys here, ' +
-      'the two will conflict. Continue?',
-    { modal: true },
-    DEPLOY_CONFIRM_BUTTON,
-  );
-  return choice === DEPLOY_CONFIRM_BUTTON;
+// MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/. Folder only — no
+// vendored MO2 source special-cases a bare `root` file, so one deploys normally.
+function hardlinkableWinners(files: FileWinners): DeployLink[] {
+  const links: DeployLink[] = [];
+  for (const entry of files) {
+    if (entry.relativePath.startsWith('root/')) continue;
+    links.push({ relativePath: entry.relativePath, source: entry.winner });
+  }
+  return links;
 }
 
-// Deploy and purge share one queue per instance root: both read-modify-write the same manifest,
-// and an overlapping pair would snapshot Data/ as vanilla while it still holds live links.
-const deploymentChains = new Map<string, Promise<unknown>>();
-function withDeploymentLock<T>(key: string, task: () => Promise<T>): Promise<T> {
-  const prior = deploymentChains.get(key) ?? Promise.resolve();
-  const next = prior.then(task, task);
-  const settled = next.then(() => undefined, () => undefined);
-  deploymentChains.set(key, settled);
-  void settled.then(() => {
-    if (deploymentChains.get(key) === settled) deploymentChains.delete(key);
-  });
-  return next;
+function toCommandResult(outcome: DeployOutcome | PurgeOutcome): DeploymentCommandResult {
+  if (!outcome.wrote) {
+    return outcome.refusal !== undefined
+      ? { applied: false, refusal: outcome.refusal }
+      : { applied: true, wrote: false };
+  }
+  return { applied: true, wrote: true, warnings: outcome.warnings.length > 0 ? outcome.warnings : undefined };
 }
 
 const refuse = (err: unknown): DeploymentCommandResult => ({
@@ -52,45 +54,26 @@ const refuse = (err: unknown): DeploymentCommandResult => ({
   refusal: err instanceof Error ? err.message : String(err),
 });
 
-/** `files` and `profile` are the Instance's own `files`/`activeProfile` fields, never a fresh
- *  walk. `loadOrderTarget` is where the game reads plugins.txt; undefined leaves the load order
- *  undeployed, which is the state on a machine whose paths never resolved. */
+/** `value.files` are the Instance's own field, never a fresh walk. `loadOrderTarget` is where
+ *  the game reads plugins.txt; undefined leaves the load order undeployed. */
 export function deployMods(
   instanceRoot: string,
-  profile: string,
-  files: FileWinners,
-  gameDirectory: GameDirectory | undefined,
+  value: Pick<DeployableValue, 'activeProfile' | 'files' | 'gameDirectory'>,
   loadOrderTarget: string | undefined,
-  reporter: Reporter,
-  ask: AskQuestion,
 ): Promise<DeploymentCommandResult> {
-  return withDeploymentLock(instanceRoot, async (): Promise<DeploymentCommandResult> => {
-    if (!gameDirectory) return { applied: false, refusal: NO_GAME_DIRECTORY };
-    if (!(await isDeployed(instanceRoot)) && !(await confirmFirstDeploy(ask))) {
-      return { applied: false, refusal: DEPLOY_DECLINED };
-    }
-    try {
-      const loadOrder: LoadOrderDeployment[] = loadOrderTarget
-        ? [{ source: pluginsFile(instanceRoot, profile), target: loadOrderTarget }]
-        : [];
-      return { applied: true, wrote: await deploy(instanceRoot, gameDirectory, { files }, reporter, { loadOrder }) };
-    } catch (err) {
-      return refuse(err);
-    }
-  });
+  const { activeProfile, files, gameDirectory } = value;
+  if (!gameDirectory) return Promise.resolve({ applied: false, refusal: NO_GAME_DIRECTORY });
+  const loadOrder: LoadOrderDeployment[] = loadOrderTarget
+    ? [{ source: pluginsFile(instanceRoot, activeProfile), target: loadOrderTarget }]
+    : [];
+  return deployToGameData(instanceRoot, gameDirectory, hardlinkableWinners(files), loadOrder)
+    .then(toCommandResult, refuse);
 }
 
 export function purgeMods(
   instanceRoot: string,
-  gameDirectory: GameDirectory | undefined,
-  reporter: Reporter,
+  value: Pick<DeployableValue, 'gameDirectory'>,
 ): Promise<DeploymentCommandResult> {
-  return withDeploymentLock(instanceRoot, async (): Promise<DeploymentCommandResult> => {
-    if (!gameDirectory) return { applied: false, refusal: NO_GAME_DIRECTORY };
-    try {
-      return { applied: true, wrote: await purge(instanceRoot, gameDirectory, reporter) };
-    } catch (err) {
-      return refuse(err);
-    }
-  });
+  if (!value.gameDirectory) return Promise.resolve({ applied: false, refusal: NO_GAME_DIRECTORY });
+  return purgeFromGameData(instanceRoot, value.gameDirectory).then(toCommandResult, refuse);
 }
