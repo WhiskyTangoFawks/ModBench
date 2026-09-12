@@ -62,27 +62,27 @@ public interface IPluginAdapter
     /// does not (ADR-0005 rule 2). A tree that will not read answers with its diagnosis.</summary>
     Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<PristineFile> files,
-        string registeredName,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default);
 
-    /// <summary>The tree at <paramref name="treeRoot"/> compiled to bytes at
+    /// <summary>The tree in <paramref name="files"/> compiled to bytes at
     /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification
     /// must not drop a .bak beside the real plugin.</summary>
-    Task WriteFromTreeAsync(string treeRoot, string destinationPath, CancellationToken cancel = default);
+    Task WriteFromTreeAsync(
+        IReadOnlyList<PristineFile> files, string destinationPath, CancellationToken cancel = default);
 
     /// <summary>A plugin's binary read as the source tree it would commit.
     /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
     /// which case there are no files.</summary>
-    Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadSourceAsync(
+    Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
         ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default);
 
     /// <summary>The same binary re-serialized with no localization check: what a re-baseline of an
     /// already tracked plugin commits.</summary>
-    Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+    Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
+        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default);
 
     /// <summary>A plugin's binary as every record's own document plus the identity a source tree

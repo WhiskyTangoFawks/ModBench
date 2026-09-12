@@ -47,9 +47,9 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var deepParsed = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName), pluginPath),
             _mod.LoadOrder.GameRelease, LocalizedStrings.ForRead(PluginStrings.In(_mod.ModFolder)));
-        var pristineFiles = PluginTrees
-            .SerializeToPristineFiles(deepParsed, SourceEditFixture.PluginName)
-            .GetAwaiter().GetResult();
+        var pristineFiles = SourceRepository.PristineFilesOf(
+            SourceEditFixture.PluginName,
+            PluginTrees.SerializeTree(deepParsed).GetAwaiter().GetResult());
         var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath)));
         var trailers = new TrackProvenance(
             null, null, new Dictionary<string, string> { [SourceEditFixture.PluginName] = binarySha256 });

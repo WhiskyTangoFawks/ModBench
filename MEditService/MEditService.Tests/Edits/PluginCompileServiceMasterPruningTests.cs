@@ -57,8 +57,9 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         var deepParsed = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(FixtureFileName), pluginPath), GameRelease.Fallout4,
             LocalizedStrings.ForRead(PluginStrings.In(_modFolder)));
-        var pristineFiles = PluginTrees.SerializeToPristineFiles(deepParsed, FixtureFileName, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var pristineFiles = SourceRepository.PristineFilesOf(
+            FixtureFileName,
+            PluginTrees.SerializeTree(deepParsed, CancellationToken.None).GetAwaiter().GetResult());
         SourceRepository.Track(_modFolder, SourcePreset.Edits, pristineFiles, new TrackProvenance(null, null, new Dictionary<string, string>()));
     }
 

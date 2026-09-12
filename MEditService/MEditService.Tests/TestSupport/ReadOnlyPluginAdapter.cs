@@ -46,21 +46,20 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<PristineFile> files,
-        string registeredName,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        Real.ReadTreeAsync(files, registeredName, codec, gameRelease, cancel);
+        Real.ReadTreeAsync(files, codec, gameRelease, cancel);
 
-    public Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadSourceAsync(
+    public Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(
         ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>
         Real.ReadSourceAsync(modPath, registeredName, gameRelease, strings, cancel);
 
-    public Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+    public Task<IReadOnlyList<TreeFile>> ReadPristineFilesAsync(
+        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>
-        Real.ReadPristineFilesAsync(modPath, registeredName, gameRelease, strings, cancel);
+        Real.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
 
     public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
         ModPath modPath,
@@ -74,7 +73,8 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
         Real.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
 
-    public virtual Task WriteFromTreeAsync(string treeRoot, string destinationPath, CancellationToken cancel = default) =>
+    public virtual Task WriteFromTreeAsync(
+        IReadOnlyList<PristineFile> files, string destinationPath, CancellationToken cancel = default) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
     public Task CreateAndWriteAsync(

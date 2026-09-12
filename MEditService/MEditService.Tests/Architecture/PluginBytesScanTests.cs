@@ -12,9 +12,9 @@ public sealed class PluginBytesScanTests
 
     private const string AdapterRoot = "MEditService.Core/PluginAdapter";
 
-    // Holding a repository is how a reader starts answering from a tree; the layout spellings it
-    // also exposes are constants, and name no content.
-    private static readonly string[] RepositoryOpens = [@"SourceRepository\.Open", @"SourceRepository\.Over"];
+    // The repository itself, not just its doors: the tree door answers in documents, so where a tree
+    // sits and how it is read are the repository's alone (#827's target architecture).
+    private static readonly string[] RepositoryNames = ["SourceRepository"];
 
     private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite", "CreateEmpty"];
 
@@ -89,18 +89,18 @@ public sealed class PluginBytesScanTests
             .Equals(CompositionRoot, StringComparison.Ordinal);
 
     [Fact]
-    public void ThePluginAdapter_OpensNoSourceRepository()
+    public void ThePluginAdapter_NamesNoSourceRepository()
     {
         var root = ArchitectureTests.SolutionDirectory();
 
         var walked = Files(root, [AdapterRoot], []);
-        var named = Sites(root, walked, RepositoryOpens);
+        var named = Sites(root, walked, RepositoryNames);
 
         Assert.True(walked.Count > 5, $"The adapter scan walked only {walked.Count} files.");
         Assert.True(
             named.Count == 0,
-            "The Plugin adapter reads a source tree. What a plugin holds is its own bytes' answer "
-            + "(ADR-0015 invariant 5), and the tree is the write side's to read:\n"
+            "The Plugin adapter names the Source repository. What a plugin holds is its own bytes' answer "
+            + "(ADR-0015 invariant 5), and where a tree sits and how it is read are the repository's:\n"
             + string.Join("\n", named));
     }
 
