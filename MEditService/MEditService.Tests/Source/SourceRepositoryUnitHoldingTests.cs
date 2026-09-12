@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Source;
 
 /// <summary>Which unit holds a record, as a caller outside the repository is told it: embedded or
-/// not, whose document it is, directory-per-record or not. No path — that is the repository's.</summary>
+/// not, whose document it is, directory-per-record or not, and that document's path.</summary>
 public sealed class SourceRepositoryUnitHoldingTests
 {
     // The header has no group folder and carries no FormKey in its file name, so every other

@@ -1,3 +1,4 @@
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Records;

@@ -1,6 +1,7 @@
 using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
+using MEditService.Core.Notifications;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
