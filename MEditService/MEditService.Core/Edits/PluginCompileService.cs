@@ -213,12 +213,8 @@ public sealed class PluginCompileService(
     {
         var answers = adapter.LinkTargets(
             loadOrder, copy, schemaReflector.GetSchemas(loadOrder.GameRelease), content.Links);
-        // The check builder is kernel code; the Plugin adapter's answer converts to its lookup
-        // value at this call, rather than the write side naming the Index's lookup entry.
         ResolvedFormKey? Resolve(string formKey) =>
-            answers.Targets.TryGetValue(formKey, out var entry)
-                ? new ResolvedFormKey(entry.RecordType, entry.EditorId)
-                : null;
+            answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
 
         // A file nothing could be read from answers nothing about the records in it, so a link into
         // it is unchecked with that reason, never broken (ADR-0019).

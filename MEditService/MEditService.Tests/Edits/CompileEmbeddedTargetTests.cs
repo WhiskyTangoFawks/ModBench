@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -140,6 +140,6 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             [_embeddedTarget.ToString()]);
 
         Assert.Empty(targets.UnreadableFiles);
-        Assert.Equal(new RecordLookupEntry("refr", "EmbeddedRef"), targets.Targets[_embeddedTarget.ToString()]);
+        Assert.Equal(new ResolvedFormKey("refr", "EmbeddedRef"), targets.Targets[_embeddedTarget.ToString()]);
     }
 }

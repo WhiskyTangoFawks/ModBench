@@ -17,7 +17,7 @@ public sealed class WriteSideIndexScanTests
         "IRecordReads", "RecordRef", "IndexProjector", "IQueryIndex", "IndexStore", "IndexWriteGate",
         "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
-        "FormKeyResolutionCache",
+        "FormKeyResolutionCache", "PlacementWalker",
     ];
 
     // The whole shared-kernel-and-write-side assembly, not a list of folders: a folder literal means
@@ -28,10 +28,6 @@ public sealed class WriteSideIndexScanTests
     // name these types by definition.
     private static readonly string[] NotWriteSide =
         ["MEditService.Core/Records", "MEditService.Core/Queries"];
-
-    // Not write side either: SourceIngest is how the Index reads a tracked tree, so the store it
-    // fills is its subject rather than something it consults mid-write.
-    private const string IndexIngestFileName = "SourceIngest.cs";
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/write-side-index-allowlist.txt";
 
@@ -87,8 +83,6 @@ public sealed class WriteSideIndexScanTests
             File.WriteAllText(Path.Combine(root, "Edits", "Factory.cs"), "new IRecordIndexFactory();");
             File.WriteAllText(Path.Combine(root, "Edits", "obj", "Generated.cs"), "IRecordIndex index;");
             File.WriteAllText(Path.Combine(root, "Edits", "Clean.cs"), "repository.Put(plugin, document);");
-            Directory.CreateDirectory(Path.Combine(root, "Source"));
-            File.WriteAllText(Path.Combine(root, "Source", IndexIngestFileName), "IRecordIndex index;");
             // An excluded subtree is skipped whole, not file by file.
             Directory.CreateDirectory(Path.Combine(root, "Records"));
             File.WriteAllText(Path.Combine(root, "Records", "Store.cs"), "IRecordIndex index;");
@@ -174,8 +168,7 @@ public sealed class WriteSideIndexScanTests
 
         return [.. scannedRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
-            .Where(file => !excluded.Exists(e => file.StartsWith(e, StringComparison.Ordinal)))
-            .Where(file => !Path.GetFileName(file).Equals(IndexIngestFileName, StringComparison.Ordinal))];
+            .Where(file => !excluded.Exists(e => file.StartsWith(e, StringComparison.Ordinal)))];
     }
 
     private static IEnumerable<(string Symbol, int Count)> References(string text, string[] symbols) =>

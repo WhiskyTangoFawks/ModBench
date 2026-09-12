@@ -212,8 +212,6 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     {
         if (ctx.ResolveFormKey == null) return (null, null);
 
-        // The check builder and FormKeyResolution are kernel code and take their lookup answer as a
-        // value the kernel declares, never the Index's own lookup entry; converted once here.
         ResolvedFormKey? Resolve(string formKey) =>
             ctx.ResolveFormKey(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
 

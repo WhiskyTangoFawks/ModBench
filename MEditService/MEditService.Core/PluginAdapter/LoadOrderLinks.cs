@@ -1,4 +1,3 @@
-using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
@@ -14,11 +13,11 @@ public readonly record struct UnreadablePlugin(string FileName, string Reason);
 /// <summary>What a link cache over the load order's files answers: the record each FormKey asked
 /// about names, and the files nothing could be read from (ADR-0019).</summary>
 public sealed record LinkAnswers(
-    IReadOnlyDictionary<string, RecordLookupEntry> Targets,
+    IReadOnlyDictionary<string, ResolvedFormKey> Targets,
     IReadOnlyList<UnreadablePlugin> UnreadableFiles)
 {
     public static readonly LinkAnswers None =
-        new(new Dictionary<string, RecordLookupEntry>(StringComparer.OrdinalIgnoreCase), []);
+        new(new Dictionary<string, ResolvedFormKey>(StringComparer.OrdinalIgnoreCase), []);
 }
 
 /// <summary>One link cache over a whole load order, asked a set of FormKeys and answering names
@@ -60,12 +59,12 @@ internal static class LoadOrderLinks
     // repeating — the file that is not there, the header that is not a header — is the innermost one.
     private static string Why(Exception ex) => ex.GetBaseException().Message;
 
-    private static Dictionary<string, RecordLookupEntry> Named(
+    private static Dictionary<string, ResolvedFormKey> Named(
         List<ILoadedMod> opened,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys)
     {
-        var targets = new Dictionary<string, RecordLookupEntry>(StringComparer.OrdinalIgnoreCase);
+        var targets = new Dictionary<string, ResolvedFormKey>(StringComparer.OrdinalIgnoreCase);
         if (opened.Count == 0) return targets;
 
         using var cache = opened.Select(mod => mod.Getter).ToUntypedImmutableLinkCache();
@@ -74,7 +73,7 @@ internal static class LoadOrderLinks
             // A malformed FormKey is an editor's raw input: it names nothing and throws nothing.
             if (!FormKey.TryFactory(formKey, out var parsed)) continue;
             if (!cache.TryResolve<IMajorRecordGetter>(parsed, out var record)) continue;
-            targets[formKey] = new RecordLookupEntry(RecordTableName.Of(record, schemas), record.EditorID);
+            targets[formKey] = new ResolvedFormKey(RecordTableName.Of(record, schemas), record.EditorID);
         }
         return targets;
     }

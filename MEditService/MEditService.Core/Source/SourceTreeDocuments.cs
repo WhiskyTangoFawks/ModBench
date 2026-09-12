@@ -89,7 +89,7 @@ internal sealed class SourceTreeDocuments : IPluginDocuments
             .SelectMany(file => DocumentsAt(file, cell: null));
 
     // Interior placement carries no gameplay meaning, so the block levels a cell sits under are read
-    // as depth alone (PlacementWalker records null block/sub for every interior cell).
+    // as depth alone — every interior cell's block and sub-block are null.
     private IEnumerable<PluginDocument> InteriorCells(string cellsDirectory) =>
         Directory.EnumerateDirectories(cellsDirectory)
             .SelectMany(Directory.EnumerateDirectories)

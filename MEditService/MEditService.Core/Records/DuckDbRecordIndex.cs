@@ -1345,9 +1345,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         RecordTableSchema schema, JsonElement root,
         Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
     {
-        // The check builder is kernel code and takes its lookup answer as a value the kernel
-        // declares, never the Index's own lookup entry; converted once here rather than threading a
-        // second resolver type through the read path.
         ResolvedFormKey? Resolve(string formKey) =>
             resolveFormKey(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
 
