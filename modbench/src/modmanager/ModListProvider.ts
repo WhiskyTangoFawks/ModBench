@@ -281,8 +281,10 @@ export class ModListProvider
     const entries = this.cachedEntries ?? [];
     const idx = entries.findIndex((e) => e.kind === 'separator' && e.name === sepName);
     if (idx < 0) return [sepName];
-    let start = idx - 1;
-    while (start >= 0 && entries[start].kind !== 'separator') start--;
+    let start = -1;
+    for (const [i, e] of [...entries.entries()].slice(0, idx).reverse()) {
+      if (e.kind === 'separator') { start = i; break; }
+    }
     const names = entries.slice(start + 1, idx).map((e) => e.name);
     names.push(sepName);
     return names;
@@ -339,8 +341,8 @@ export class ModListProvider
     const groupNodes = this.orderedGroups(tree.groups).map(
       (g) => new SeparatorNode(g.separator, this.orderedMods(g.mods)),
     );
-    const blocks = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
-    return [new CountNode(tree.activeCount, tree.installedCount), ...blocks[0], ...blocks[1]];
+    const [first, second] = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
+    return [new CountNode(tree.activeCount, tree.installedCount), ...first, ...second];
   }
 
   // modlist.txt is winning-first, so the default losing-at-top view reverses it. View order only.
@@ -355,8 +357,8 @@ export class ModListProvider
   private flatFilteredRoots(tree: ModlistTree): ModlistNode[] {
     const ungroupedNodes = this.orderedMods(tree.ungrouped);
     const groupedNodes = this.orderedGroups(tree.groups).flatMap((g) => this.orderedMods(g.mods));
-    const blocks = this.winningAtTop ? [ungroupedNodes, groupedNodes] : [groupedNodes, ungroupedNodes];
-    return [...blocks[0], ...blocks[1]].filter((m) => this.matches(m.name)).map(this.toModNode);
+    const [first, second] = this.winningAtTop ? [ungroupedNodes, groupedNodes] : [groupedNodes, ungroupedNodes];
+    return [...first, ...second].filter((m) => this.matches(m.name)).map(this.toModNode);
   }
 
   private groupedFilteredRoots(tree: ModlistTree): ModlistNode[] {
@@ -370,8 +372,8 @@ export class ModListProvider
         groupNodes.push(new SeparatorNode(g.separator, matchingMods));
       }
     }
-    const blocks = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
-    return [...blocks[0], ...blocks[1]];
+    const [first, second] = this.winningAtTop ? [ungroupedNodes, groupNodes] : [groupNodes, ungroupedNodes];
+    return [...first, ...second];
   }
 
   private matches(name: string): boolean {

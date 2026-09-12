@@ -213,13 +213,13 @@ export async function buildFileConflictIndex(
 
   // Each mod's disk walk is independent, so run them concurrently; only the merge below
   // needs the override order.
-  const walked = await Promise.all(enabledMods.map((mod) => walkMod(instanceRoot, mod.name, log)));
+  const walked = await Promise.all(
+    enabledMods.map(async (mod) => ({ mod, modFiles: await walkMod(instanceRoot, mod.name, log) })),
+  );
 
   // modlist.txt is winning-first, so the FIRST enabled provider wins and later ones only
   // register as contenders (CONTEXT.md, "Override order").
-  for (let i = 0; i < enabledMods.length; i++) {
-    const mod = enabledMods[i];
-    const modFiles = walked[i];
+  for (const { mod, modFiles } of walked) {
     filesByMod.set(mod.name, modFiles);
 
     for (const file of modFiles) {

@@ -3,9 +3,12 @@ import type { LogOutputChannel } from 'vscode';
 type LeveledChannel = Pick<LogOutputChannel, 'debug' | 'info' | 'warn' | 'error'>;
 
 // Serilog's `{Level:u3}` tokens, as they appear in its default console template.
-const LEVELS: Record<string, keyof LeveledChannel> = {
+type SerilogTag = 'VRB' | 'DBG' | 'INF' | 'WRN' | 'ERR' | 'FTL';
+const LEVELS: Record<SerilogTag, keyof LeveledChannel> = {
   VRB: 'debug', DBG: 'debug', INF: 'info', WRN: 'warn', ERR: 'error', FTL: 'error',
 };
+
+const isSerilogTag = (tag: string | undefined): tag is SerilogTag => tag !== undefined && tag in LEVELS;
 
 // `[HH:mm:ss LVL] ` — the leading half of Serilog's default console template.
 const TAG = /^\[\d{2}:\d{2}:\d{2} ([A-Z]{3})\] /;
@@ -23,7 +26,7 @@ export function makeBackendLogForwarder(channel: LeveledChannel): (line: string,
   return (line, source) => {
     if (!line.trim()) return;
     const tag = TAG.exec(line);
-    if (tag && tag[1] in LEVELS) {
+    if (tag && isSerilogTag(tag[1])) {
       level[source] = LEVELS[tag[1]];
       line = line.slice(tag[0].length); // channel stamps its own timestamp + level
     }

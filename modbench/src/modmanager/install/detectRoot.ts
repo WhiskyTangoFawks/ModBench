@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { present } from '../../present';
 
 /** Top-level folder names that mean "this level is already the mod's data root"
  *  (a game data subfolder), so a lone one of them must NOT be peeled as a wrapper. */
@@ -29,9 +30,12 @@ export async function detectRoot(
 
     const dirs = entries.filter((e) => e.isDirectory());
     const files = entries.filter((e) => e.isFile());
-    if (dirs.length === 1 && files.length === 0 && !DATA_DIRS.has(dirs[0].name.toLowerCase())) {
-      level = join(level, dirs[0].name);
-      continue;
+    if (dirs.length === 1 && files.length === 0) {
+      const onlyDir = present(dirs[0], 'the sole entry of a single-directory staging level');
+      if (!DATA_DIRS.has(onlyDir.name.toLowerCase())) {
+        level = join(level, onlyDir.name);
+        continue;
+      }
     }
 
     return { sourceDir: level, isFomod: false };

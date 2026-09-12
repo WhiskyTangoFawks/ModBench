@@ -15,6 +15,7 @@ import type { Instance } from './instance';
 import type { Reporter } from '../reporter';
 import type { AskQuestion } from '../dialog';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
+import { present } from '../present';
 
 // The host's trash, the one capability a command cannot hold itself.
 const trashFile = async (path: string): Promise<void> => {
@@ -141,7 +142,7 @@ export async function deleteArchives(
   instanceRoot: string, names: string[], reporter: Reporter, ask: AskQuestion,
 ): Promise<void> {
   if (names.length === 1) {
-    await deleteArchive(instanceRoot, names[0], reporter, ask);
+    await deleteArchive(instanceRoot, present(names[0], 'the sole selected archive name'), reporter, ask);
     return;
   }
   const confirmed = (await ask(
