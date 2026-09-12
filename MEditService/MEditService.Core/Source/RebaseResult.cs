@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace MEditService.Core.Commands;
+namespace MEditService.Core.Source;
 
 /// <summary>A rebase attempt's outcome. <see cref="ConflictedPaths"/> is the extension's cue to open
 /// each path in the native merge editor; the refusal reason is set only when refused.</summary>

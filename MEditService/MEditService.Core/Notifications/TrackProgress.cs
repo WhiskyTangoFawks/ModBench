@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using MEditService.Core.Source;
 
-namespace MEditService.Core.Commands;
+namespace MEditService.Core.Notifications;
 
 /// <summary>The phases a Track moves through, in order. <c>Serializing</c> advances one plugin at a
 /// time: the whole-mod door serializes each plugin as one call with no per-record progress

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using MEditService.Core.Commands;
+using MEditService.Core.Notifications;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;

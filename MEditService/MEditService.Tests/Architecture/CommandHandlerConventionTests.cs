@@ -38,10 +38,6 @@ public sealed class CommandHandlerConventionTests
         typeof(AbsorbResult),
         typeof(ExternalChangeLandResult),
         typeof(PluginCreateResult),
-        typeof(RebaseOutcome),
-        typeof(RebaseResult),
-        typeof(TrackPhase),
-        typeof(TrackProgress),
         typeof(TrackRefusal),
         typeof(TrackResult),
     ];
