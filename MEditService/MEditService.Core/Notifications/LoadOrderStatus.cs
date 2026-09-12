@@ -3,7 +3,7 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Notifications;
 
-/// <summary>Where the Index's reconcile is right now (ADR-0013, ADR-0013). Reconciling is
+/// <summary>Where the Index's reconcile is right now (ADR-0013). Reconciling is
 /// observable rather than an internal phase: a plugin's records are browsable the moment it is
 /// indexed, well before the reconcile finishes.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
