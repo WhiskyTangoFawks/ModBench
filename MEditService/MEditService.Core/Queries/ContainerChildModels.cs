@@ -1,3 +1,5 @@
+using MEditService.Core.Records;
+
 namespace MEditService.Core.Queries;
 
 // Container-type-agnostic by design: only Quest/DialogTopic are wired to it; Cell/Worldspace keep

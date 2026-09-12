@@ -1,3 +1,4 @@
+using MEditService.Core.Records;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Queries;
