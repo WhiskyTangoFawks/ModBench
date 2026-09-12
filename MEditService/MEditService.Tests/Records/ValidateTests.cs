@@ -1,5 +1,5 @@
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.Index;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 

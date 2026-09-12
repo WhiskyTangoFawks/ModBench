@@ -16,7 +16,7 @@ public sealed class HandWrittenApplierScanTests
     ];
 
     private static readonly string[] ScannedRoots =
-        [Path.Combine("MEditService.Core", "Schema"), Path.Combine("MEditService.Core", "Edits")];
+        [Path.Combine("MEditService.Codec", "Schema"), Path.Combine("MEditService.Commands", "Edits")];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/hand-written-applier-allowlist.txt";
 

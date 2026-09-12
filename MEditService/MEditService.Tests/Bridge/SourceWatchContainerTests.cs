@@ -1,13 +1,13 @@
 using System.Text.Json;
-using MEditService.Bridge;
-using MEditService.Core.Edits;
-using MEditService.Core.Notifications;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Queries;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Bridge;

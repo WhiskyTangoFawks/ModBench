@@ -1,10 +1,10 @@
 using System.Text.Json;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -43,8 +43,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         var plugins = _svc.GetPlugins();
 
         Assert.Single(plugins);
-        Assert.Equal(TestPluginFixture.PluginName, plugins[0].Name);
-        Assert.Equal(TestPluginFixture.RecordCount, plugins[0].RecordCount);
+        Assert.Equal(TestPluginFixture.PluginName, plugins[0].Copy.Name);
+        Assert.Equal(TestPluginFixture.RecordCount, plugins[0].Content.RecordCount);
     }
 
     // ADR-0012: a plugin whose master is absent from the whole load order is flagged on the
@@ -69,13 +69,13 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         var plugins = svc.GetPlugins();
 
-        var patch = Assert.Single(plugins, p => p.Name == "Patch.esp");
+        var patch = Assert.Single(plugins, p => p.Copy.Name == "Patch.esp");
         var issue = Assert.Single(patch.MasterIssues);
         Assert.Equal("Ghost.esm", issue.MasterName);
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // ADR-0012 end to end: a whole load order built via LoadOrder/IndexProjector rather than a
+    // ADR-0012 end to end: a whole load order built via LoadOrderSnapshot/IndexProjector rather than a
     // hand-fed index, where the referenced master is not part of the load order at all, with no
     // plugins.txt line and no file.
     [Fact]
@@ -865,7 +865,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         try
         {
             var plugins = _svc.GetPlugins();
-            var plugin = Assert.Single(plugins, p => p.Name == TestPluginFixture.PluginName);
+            var plugin = Assert.Single(plugins, p => p.Copy.Name == TestPluginFixture.PluginName);
             Assert.True(plugin.HasMatchingRecords);
         }
         finally { _manager.ClearFilter(); }
@@ -880,7 +880,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         try
         {
             var plugins = _svc.GetPlugins();
-            var plugin = Assert.Single(plugins, p => p.Name == TestPluginFixture.PluginName);
+            var plugin = Assert.Single(plugins, p => p.Copy.Name == TestPluginFixture.PluginName);
             Assert.False(plugin.HasMatchingRecords);
         }
         finally { _manager.ClearFilter(); }
@@ -894,7 +894,7 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins);
-        Assert.Equal(TestPluginFixture.PluginName, plugin.Name);
+        Assert.Equal(TestPluginFixture.PluginName, plugin.Copy.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
 

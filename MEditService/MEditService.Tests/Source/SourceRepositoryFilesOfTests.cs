@@ -1,6 +1,6 @@
 using System.Text;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;

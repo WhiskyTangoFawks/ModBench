@@ -1,4 +1,4 @@
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Schema;

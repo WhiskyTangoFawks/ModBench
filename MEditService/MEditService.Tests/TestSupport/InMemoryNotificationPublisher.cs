@@ -1,4 +1,4 @@
-using MEditService.Core.Notifications;
+using MEditService.Ports;
 
 namespace MEditService.Tests.TestSupport;
 

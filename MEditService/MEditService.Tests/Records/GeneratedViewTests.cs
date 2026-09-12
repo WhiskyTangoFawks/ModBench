@@ -1,5 +1,5 @@
 using System.Globalization;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
 using MEditService.Tests.RealData;
 using Mutagen.Bethesda;
 

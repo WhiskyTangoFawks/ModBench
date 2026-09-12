@@ -1,6 +1,6 @@
 using DuckDB.NET.Data;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Index;
+using MEditService.LoadOrder;
 using MEditService.Tests.Api;
 using Microsoft.Extensions.DependencyInjection;
 

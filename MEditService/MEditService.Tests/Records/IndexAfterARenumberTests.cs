@@ -1,9 +1,10 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;

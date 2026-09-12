@@ -1,9 +1,9 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -43,8 +43,8 @@ public sealed class MasterIssuesDuringLoadTests
 
         // Parked with A.esp open and Later.esm not yet reached.
         var midLoad = svc.GetPlugins();
-        Assert.Contains(midLoad, p => p.Name == "A.esp");
-        Assert.DoesNotContain(midLoad, p => p.Name == "Later.esm");
+        Assert.Contains(midLoad, p => p.Copy.Name == "A.esp");
+        Assert.DoesNotContain(midLoad, p => p.Copy.Name == "Later.esm");
         Assert.All(midLoad, p => Assert.Empty(p.MasterIssues ?? []));
 
         gate.Release();
@@ -53,7 +53,7 @@ public sealed class MasterIssuesDuringLoadTests
         // And once the load is complete the answer is real again — this suppresses the claim while
         // it cannot be made, it does not abandon it.
         var loaded = svc.GetPlugins();
-        Assert.Contains(loaded, p => p.Name == "Later.esm");
+        Assert.Contains(loaded, p => p.Copy.Name == "Later.esm");
         Assert.All(loaded, p => Assert.Empty(p.MasterIssues ?? []));
     }
 
@@ -75,7 +75,7 @@ public sealed class MasterIssuesDuringLoadTests
         var svc = new RecordQueryService(
             manager, holder, reflector, new ConflictClassifier());
 
-        var patch = svc.GetPlugins().Single(p => p.Name == "Patch.esp");
+        var patch = svc.GetPlugins().Single(p => p.Copy.Name == "Patch.esp");
         Assert.Contains(patch.MasterIssues ?? [], i => i.MasterName == "Ghost.esm");
     }
 }

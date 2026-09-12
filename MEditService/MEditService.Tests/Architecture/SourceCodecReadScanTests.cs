@@ -25,7 +25,7 @@ public sealed class SourceCodecReadScanTests
         ("EmptyMajorRecord", new Regex(@"\bEmptyMajorRecord\b", RegexOptions.Compiled)),
     ];
 
-    private static readonly string[] ScannedRoots = ["MEditService.Core/Source"];
+    private static readonly string[] ScannedRoots = ["MEditService.SourceRepo"];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/source-codec-read-allowlist.txt";
 
@@ -58,39 +58,39 @@ public sealed class SourceCodecReadScanTests
         var root = Directory.CreateTempSubdirectory("medit-source-codec-read-scan-").FullName;
         try
         {
-            Directory.CreateDirectory(Path.Combine(root, "MEditService.Core", "Source", "obj"));
+            Directory.CreateDirectory(Path.Combine(root, "MEditService.SourceRepo", "obj"));
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Source", "Permitted.cs"),
+                Path.Combine(root, "MEditService.SourceRepo", "Permitted.cs"),
                 "var folder = RecordTypeDispatch.For(release).FolderNameFor(recordType);\n"
                 + "var minted = RecordTextCodec.BlankDocument(loquiType, release, identity);\n");
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Source", "Planted.cs"),
+                Path.Combine(root, "MEditService.SourceRepo", "Planted.cs"),
                 "internal sealed class Reader\n{\n"
                 + "    private readonly RecordTextCodec _codec = new(logger);\n"
                 + "    internal string Read(IMajorRecordGetter record, GameRelease release) =>\n"
                 + "        _codec.RoundTrip(text, release, null);\n}\n");
             File.WriteAllText(
-                Path.Combine(root, "MEditService.Core", "Source", "obj", "Generated.cs"),
+                Path.Combine(root, "MEditService.SourceRepo", "obj", "Generated.cs"),
                 "var codec = new RecordTextCodec(logger);\n");
 
-            var counts = Counts(root, ["MEditService.Core/Source"]);
+            var counts = Counts(root, ["MEditService.SourceRepo"]);
 
             Assert.Equal(
-                ["MEditService.Core/Source/Planted.cs: RecordTextCodec: 1",
-                 "MEditService.Core/Source/Planted.cs: RoundTrip: 1"],
+                ["MEditService.SourceRepo/Planted.cs: RecordTextCodec: 1",
+                 "MEditService.SourceRepo/Planted.cs: RoundTrip: 1"],
                 counts);
 
             var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
-            Assert.Contains("MEditService.Core/Source/Planted.cs: RecordTextCodec: 1", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains("MEditService.Core/Source/Planted.cs: RoundTrip: 1", unallowed.Message, StringComparison.Ordinal);
+            Assert.Contains("MEditService.SourceRepo/Planted.cs: RecordTextCodec: 1", unallowed.Message, StringComparison.Ordinal);
+            Assert.Contains("MEditService.SourceRepo/Planted.cs: RoundTrip: 1", unallowed.Message, StringComparison.Ordinal);
             Assert.Contains("RecordTypeDispatch", unallowed.Message, StringComparison.Ordinal);
             Assert.Contains("BlankDocument", unallowed.Message, StringComparison.Ordinal);
 
             var stale = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(
-                    counts, [.. counts, "MEditService.Core/Source/Gone.cs: SerializeAsync: 3"], AllowlistPath));
-            Assert.Contains("MEditService.Core/Source/Gone.cs: SerializeAsync: 3", stale.Message, StringComparison.Ordinal);
+                    counts, [.. counts, "MEditService.SourceRepo/Gone.cs: SerializeAsync: 3"], AllowlistPath));
+            Assert.Contains("MEditService.SourceRepo/Gone.cs: SerializeAsync: 3", stale.Message, StringComparison.Ordinal);
         }
         finally
         {

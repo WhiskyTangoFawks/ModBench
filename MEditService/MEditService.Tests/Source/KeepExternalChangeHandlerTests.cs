@@ -1,7 +1,8 @@
 using System.Text.Json;
-using MEditService.Core.Edits;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;

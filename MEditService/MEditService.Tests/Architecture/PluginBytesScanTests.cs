@@ -8,9 +8,11 @@ namespace MEditService.Tests.Architecture;
 public sealed class PluginBytesScanTests
 {
     private static readonly string[] ProductionRoots =
-        ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
-    private const string AdapterRoot = "MEditService.Core/PluginAdapter";
+    private const string AdapterRoot = "MEditService.PluginAdapter";
 
     // The repository itself, not just its doors: the tree door answers in documents, so where a tree
     // sits and how it is read are the repository's alone (ADR-0007).
@@ -24,7 +26,7 @@ public sealed class PluginBytesScanTests
 
     // The composition root names the implementation it builds, and nothing else does
     // (docs/architecture/target-architecture.md, "The pictures are the reference lists").
-    private const string CompositionRoot = "MEditService.Api/Program.cs";
+    private const string CompositionRoot = "MEditService.Http/Program.cs";
 
     [Fact]
     public void NothingOutsideThePluginAdapter_OpensAPlugin()

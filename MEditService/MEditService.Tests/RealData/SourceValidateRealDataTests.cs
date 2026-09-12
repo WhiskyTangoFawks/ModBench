@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Index;
+using MEditService.LoadOrder;
 using Xunit.Abstractions;
 
 namespace MEditService.Tests.RealData;

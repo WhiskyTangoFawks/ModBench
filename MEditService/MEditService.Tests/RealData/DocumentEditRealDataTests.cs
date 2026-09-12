@@ -1,11 +1,11 @@
 using System.Text;
 using System.Text.Json;
-using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;

@@ -11,6 +11,10 @@
       exemption is needed. The code-quality Stop hook (.claude/hooks/code-quality.py) surfaces them,
       scoped to changed files, for per-instance triage. See /validate Step 3.
     -->
+    <!-- One project per box (ADR-0014): a box reaches only the boxes its own reference list draws
+         in docs/architecture/target-architecture-references.d2, so a box two hops down is a compile
+         error rather than a line nobody noticed arriving. -->
+    <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 
   <!-- ADR-0005 rule 2, held by the build for every project. The symbol list is the one at the
@@ -22,5 +26,9 @@
     </PackageReference>
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
     <EditorConfigFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.globalconfig" />
+    <!-- Identity is not a model of a record (ADR-0005 rule 2): FormKey, ModKey and GameRelease are
+         values every box names, and the ban above is what keeps the live-object namespaces out.
+         Pinned to the version Mutagen.Bethesda.Fallout4 resolves in the codec and the adapter. -->
+    <PackageReference Include="Mutagen.Bethesda.Core" Version="0.53.1" />
   </ItemGroup>
 </Project>

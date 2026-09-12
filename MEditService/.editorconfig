@@ -400,14 +400,14 @@ dotnet_naming_style.s_camelcase.capitalization = camel_case
 dotnet_diagnostic.RS0030.severity = error
 
 # The codec — the one box a record is a CLR object in.
-[MEditService.Core/Serialization/**.cs]
+[MEditService.Codec/Serialization/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
-[MEditService.Core/Schema/**.cs]
+[MEditService.Codec/Schema/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
 # The Plugin adapter — bytes to a Mutagen mod and back.
-[MEditService.Core/PluginAdapter/**.cs]
+[MEditService.PluginAdapter/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
 # Permanent: the fixture builder constructs plugins with live objects by design.

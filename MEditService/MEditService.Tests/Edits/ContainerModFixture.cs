@@ -1,8 +1,9 @@
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -22,7 +23,7 @@ public sealed class ContainerModFixture : IDisposable
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public LoadOrder LoadOrder { get; }
+    public LoadOrderSnapshot LoadOrder { get; }
     public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
@@ -181,7 +182,7 @@ public sealed class ContainerModFixture : IDisposable
         (DialogBranch, Scene) = (dialogBranch.FormKey, scene.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrder(GameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         if (track) Track();
 

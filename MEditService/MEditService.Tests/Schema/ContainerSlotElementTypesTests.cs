@@ -1,5 +1,5 @@
 using System.Reflection;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 

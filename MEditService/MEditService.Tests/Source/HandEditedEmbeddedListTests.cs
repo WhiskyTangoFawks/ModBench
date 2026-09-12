@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using MEditService.Tests.RealData;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;

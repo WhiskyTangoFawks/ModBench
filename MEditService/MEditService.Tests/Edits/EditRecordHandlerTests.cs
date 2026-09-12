@@ -1,8 +1,8 @@
 using System.Text.Json;
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

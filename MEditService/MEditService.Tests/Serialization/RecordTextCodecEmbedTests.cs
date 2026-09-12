@@ -1,5 +1,5 @@
 using System.Text.Json;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

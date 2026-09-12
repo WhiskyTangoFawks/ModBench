@@ -1,8 +1,8 @@
 using System.Text;
-using MEditService.Core.Notifications;
-using MEditService.Core.Records;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.Index;
+using MEditService.Ports;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;

@@ -1,5 +1,6 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.TestSupport;
@@ -9,7 +10,7 @@ namespace MEditService.Tests.TestSupport;
 /// something renames the file.</summary>
 internal static class SourceDocumentPath
 {
-    internal static string Of(
+    public static string Of(
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
         GameRelease release)
     {

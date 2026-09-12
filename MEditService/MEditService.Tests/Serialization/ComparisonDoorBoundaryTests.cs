@@ -1,4 +1,4 @@
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
 
 namespace MEditService.Tests.Serialization;
 
@@ -9,7 +9,12 @@ public sealed class ComparisonDoorBoundaryTests
     [Fact]
     public void GeneratedEqualityMask_IsOnlyConsultedByModelIdentity()
     {
-        var offenders = new[] { "MEditService.Core", "MEditService.Api", "MEditService.Bridge" }
+        var offenders = new[]
+        {
+            "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+            "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+            "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher",
+        }
             .Select(FindProjectSourceRoot)
             .SelectMany(ScanForMaskConsultation)
             .ToList();

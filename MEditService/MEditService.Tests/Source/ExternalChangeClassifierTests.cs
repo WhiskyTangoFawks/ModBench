@@ -1,6 +1,8 @@
 using System.Text.Json;
-using MEditService.Core.Edits;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 
@@ -190,14 +192,14 @@ public sealed class ExternalChangeClassifierTests
 
     private static void Track(string modFolder, string plugin)
     {
-        var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+        var files = new[] { new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
         var trailers = TrailersOver(modFolder, plugin);
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
     }
 
     private static void TrackEverything(string modFolder, string plugin)
     {
-        var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+        var files = new[] { new TreeFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
         var trailers = TrailersOver(modFolder, plugin);
         SourceRepository.Track(modFolder, SourcePreset.Everything, files, trailers);
     }

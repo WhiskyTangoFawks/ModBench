@@ -1,4 +1,4 @@
-using MEditService.Core.Source;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 

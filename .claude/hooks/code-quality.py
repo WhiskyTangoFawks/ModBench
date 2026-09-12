@@ -30,8 +30,16 @@ from urllib.request import url2pathname
 
 # --- Backend: analyzed C# projects, keyed by repo-relative source dir. --------
 CS_PROJECTS = {
-    "MEditService/MEditService.Core": "MEditService.Core",
-    "MEditService/MEditService.Api": "MEditService.Api",
+    "MEditService/MEditService.Codec": "MEditService.Codec",
+    "MEditService/MEditService.Commands": "MEditService.Commands",
+    "MEditService/MEditService.Http": "MEditService.Http",
+    "MEditService/MEditService.Index": "MEditService.Index",
+    "MEditService/MEditService.LoadOrder": "MEditService.LoadOrder",
+    "MEditService/MEditService.PluginAdapter": "MEditService.PluginAdapter",
+    "MEditService/MEditService.Ports": "MEditService.Ports",
+    "MEditService/MEditService.Queries": "MEditService.Queries",
+    "MEditService/MEditService.SourceRepo": "MEditService.SourceRepo",
+    "MEditService/MEditService.Watcher": "MEditService.Watcher",
     "MEditService/MEditService.Tests": "MEditService.Tests",
 }
 # These two never reach the SARIF log even at 'suggestion' severity; only `dotnet format`

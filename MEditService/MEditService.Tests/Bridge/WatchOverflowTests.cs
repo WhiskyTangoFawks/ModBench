@@ -1,6 +1,6 @@
-using MEditService.Core.Notifications;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 

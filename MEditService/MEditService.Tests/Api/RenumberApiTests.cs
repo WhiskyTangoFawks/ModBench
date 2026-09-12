@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Core.Source;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;

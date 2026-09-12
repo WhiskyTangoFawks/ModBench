@@ -1,4 +1,4 @@
-using MEditService.Core.Records;
+using MEditService.Index;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests;

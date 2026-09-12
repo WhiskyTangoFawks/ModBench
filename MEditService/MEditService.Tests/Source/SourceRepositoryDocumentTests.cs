@@ -1,5 +1,6 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
@@ -26,7 +27,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     }
 
     // Track rather than a hand-made .git: the repository the tests open is the one the product makes.
-    private void Track(params PristineFile[] files) =>
+    private void Track(params TreeFile[] files) =>
         SourceRepository.Track(
             _modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
@@ -178,7 +179,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     public void Get_OfTheHeader_IsTheRootRecordDocument()
     {
         Track(
-            new PristineFile(
+            new TreeFile(
                 Path.Combine("source", PluginName, "RecordData.json"),
                 System.Text.Encoding.UTF8.GetBytes("{\"MasterReferences\": []}")));
         var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)!;

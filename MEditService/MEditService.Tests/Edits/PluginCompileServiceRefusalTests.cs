@@ -1,6 +1,6 @@
-using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -23,7 +23,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public void Compile_BeforeAnyLoadOrderHasArrived_RefusesSayingSo()
     {
-        var result = CompileServices.Over(LoadOrder.Empty).Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = CompileServices.Over(LoadOrderSnapshot.Empty).Compile(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Equal("No load order has been received.", result.RefusalReason);

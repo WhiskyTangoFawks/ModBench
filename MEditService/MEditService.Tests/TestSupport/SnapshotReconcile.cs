@@ -1,6 +1,6 @@
-using MEditService.Api;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Http;
+using MEditService.Index;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests;

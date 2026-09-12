@@ -1,4 +1,5 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 
@@ -16,7 +17,7 @@ public sealed class SourceRepositoryUntrackTests
             var content = "{\"formKey\":\"000001:Test.esp\"}"u8.ToArray();
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,
-                [new PristineFile(relativePath, content)],
+                [new TreeFile(relativePath, content)],
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var sourceFilePath = Path.Combine(modFolder, relativePath);

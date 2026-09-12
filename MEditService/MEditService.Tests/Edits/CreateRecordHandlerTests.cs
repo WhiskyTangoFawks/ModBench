@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text.Json;
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
 

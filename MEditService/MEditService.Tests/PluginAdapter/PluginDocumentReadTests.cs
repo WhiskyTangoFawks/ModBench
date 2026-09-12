@@ -1,7 +1,7 @@
 using System.Text.Json;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

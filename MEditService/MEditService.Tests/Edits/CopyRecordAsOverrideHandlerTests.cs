@@ -1,5 +1,6 @@
-using MEditService.Core.Edits;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;

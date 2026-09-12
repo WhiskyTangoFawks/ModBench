@@ -1,8 +1,9 @@
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -28,7 +29,7 @@ public sealed class ContainerCopyFixture : IDisposable
     /// <summary>The same snapshot as a list, for a test that reconciles an index over these trees.</summary>
     public IReadOnlyList<LoadOrderEntry> Entries { get; }
 
-    public LoadOrder LoadOrder { get; }
+    public LoadOrderSnapshot LoadOrder { get; }
     public EditRecordHandler EditHandler { get; }
     public CopyRecordAsOverrideHandler CopyAsOverrideHandler { get; }
     public CopyRecordAsNewRecordHandler CopyAsNewHandler { get; }
@@ -269,7 +270,7 @@ public sealed class ContainerCopyFixture : IDisposable
             new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: destinationLoadsFirst ? 1 : 0, Enabled: true, Winning: true),
             new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: destinationLoadsFirst ? 0 : 1, Enabled: true, Winning: true),
         ];
-        LoadOrder = new LoadOrder(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         Track(DestinationOrigin, DestinationPlugin);
         if (trackSource) Track(SourceOrigin, SourcePlugin);

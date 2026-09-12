@@ -1,4 +1,4 @@
-using MEditService.Core.Records;
+using MEditService.Index;
 using MEditService.Tests.Edits;
 
 namespace MEditService.Tests.Records;

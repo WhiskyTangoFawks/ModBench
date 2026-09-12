@@ -1,7 +1,7 @@
 using System.Text;
-using MEditService.Core.Edits;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;

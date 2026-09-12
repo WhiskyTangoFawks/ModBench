@@ -1,6 +1,6 @@
 using System.Reflection;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;

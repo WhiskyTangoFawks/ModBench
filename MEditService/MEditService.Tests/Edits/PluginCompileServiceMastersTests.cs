@@ -1,8 +1,10 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -22,7 +24,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private const string DeltaName = "Delta.esm";
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-masters-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masters-game-").FullName;
-    private readonly LoadOrder _loadOrder;
+    private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginKey _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
@@ -69,7 +71,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         });
         (_npc, _bravoKeyword, _charlieKeyword) = (npc.FormKey, bravoKeyword.FormKey, charlieKeyword.FormKey);
 
-        _loadOrder = new LoadOrder(
+        _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([
                 new LoadOrderEntry(CharlieName, charliePath, "Data", Slot: 0, Enabled: true, Winning: true),

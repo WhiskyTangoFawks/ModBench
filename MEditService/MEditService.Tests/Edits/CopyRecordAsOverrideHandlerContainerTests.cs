@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using MEditService.Core.Edits;
-using MEditService.Core.Source;
+using MEditService.Commands.Edits;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;

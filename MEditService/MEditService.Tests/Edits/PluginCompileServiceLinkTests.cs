@@ -1,9 +1,10 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -29,7 +30,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-links-game-").FullName;
     private readonly string _hostFolder;
     private readonly string _targetFolder;
-    private readonly LoadOrder _loadOrder;
+    private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginKey _host = new(HostName, HostOrigin);
     private readonly PluginKey _target = new(TargetName, TargetOrigin);
     private readonly FormKey _npc;
@@ -55,7 +56,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
             MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.Iterate,
         });
 
-        _loadOrder = new LoadOrder(
+        _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
             SnapshotCopies.Of([
                 new LoadOrderEntry(TargetName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
@@ -94,7 +95,7 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
-        using var loaded = MEditService.Core.PluginAdapter.MutagenPluginAdapter.OpenForRead(
+        using var loaded = MEditService.PluginAdapter.MutagenPluginAdapter.OpenForRead(
             new ModPath(ModKey.FromFileName(HostName), Path.Combine(_hostFolder, HostName)), GameRelease.Fallout4);
         return [.. ((IFallout4ModGetter)loaded.Getter).Npcs.Single().Keywords!.Select(k => k.FormKey)];
     }
