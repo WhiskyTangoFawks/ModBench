@@ -17,7 +17,14 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
     case 'struct':
     case 'array':
       return JSON.stringify(value);
-    default:
+    case 'string':
+    case 'int':
+    case 'float':
+    case 'bool':
+    case 'enum':
+    case 'hex':
+    case 'color':
+    case 'vector':
       return toStr(value);
   }
 }

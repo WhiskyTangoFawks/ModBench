@@ -192,7 +192,7 @@ export function defaultOf(meta: FieldMetadata): unknown {
     case 'bool': return false;
     case 'string': case 'translatedString': return '';
     case 'flags': case 'array': return [];
-    default: return undefined;
+    case 'enum': case 'formKey': case 'struct': case 'hex': case 'color': case 'vector': return undefined;
   }
 }
 
