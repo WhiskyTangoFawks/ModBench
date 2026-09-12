@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;

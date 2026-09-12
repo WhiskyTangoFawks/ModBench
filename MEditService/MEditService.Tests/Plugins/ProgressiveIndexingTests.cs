@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Notifications;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;

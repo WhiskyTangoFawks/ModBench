@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Api.Endpoints;
 using MEditService.Core.Notifications;
-using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Source;

@@ -1,3 +1,4 @@
+using MEditService.Core.Notifications;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
