@@ -33,3 +33,4 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 ## Rules that matter
 - Generalize across Bethesda games — FO4-concrete paths/tests are a fixture choice, not a platform lock; each bounded context enforces this independently.
 - Never assume exclusive ownership of a file on disk (ADR-0003). Anything that holds disk-derived state must detect that the file changed without Modbench's knowledge and recover.
+- The target architecture in `docs/architecture/` and every reference list, csproj `ProjectReference` and tsconfig `references`, are the maintainer's. An implementation that needs a module, an arrow, a payload or a public type not drawn there stops and asks; it never adds one.

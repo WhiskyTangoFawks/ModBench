@@ -29,6 +29,15 @@ layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-throu
   belongs to. A signal is dashed grey and carries no payload; a push is dashed purple and names
   what changed, and the receiver re-reads.
 
+## The pictures are the reference lists
+
+A box is a project. Its reference list is the arrows drawn into the boxes beneath it, plus the
+kernel by the band's rule: the shared kernel is read by every box above it, and a kernel box
+references only Vocabulary on mEdit and nothing on Modbench. A composition root, the HTTP endpoints
+on mEdit, the activation file and Toolbox on Modbench, references every box below it by
+definition, and that is not an arrow. A reference the pictures do not draw is a compile error and a
+question for the maintainer, never a line an agent adds.
+
 ## Why the two columns match
 
 Each process has its own systems of record and one read model over them, built only by

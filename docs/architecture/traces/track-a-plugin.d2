@@ -12,6 +12,7 @@ plugin: "Plugin files" {class: sor}
 srcrepo: "Source repository" {class: driven}
 source: "Source tree in git" {class: sor}
 proj: "Projector" {class: driven}
+port: "Notification port" {class: core}
 
 plugins -> client: track · absorb {class: edit}
 client -> http: envelope {class: edit}
@@ -19,5 +20,6 @@ http -> cmd: envelope {class: edit}
 plugin -> plgadapter: bytes {class: track}
 plgadapter -> cmd: bytes {class: track}
 cmd -> srcrepo: all documents {class: track}
+cmd -> port: track progress, per plugin {class: push}
 srcrepo -> source: documents {class: track}
 source -> proj: source changed, then documents (tracked) {class: signal}
