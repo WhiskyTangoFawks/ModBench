@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { WEBVIEW_TO_EXTENSION } from '../messages';
 import type { LoadResult, RecordPanelClient } from '../RecordPanelClient';
 import type { FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from '../types';
-import { columnKey } from '../types';
+import { columnKey } from '../columnKey';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
 // module that reached it would throw in every test file that does not mock it.

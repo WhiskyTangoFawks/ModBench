@@ -37,7 +37,7 @@ export function registerTrackCommand(
       return;
     }
 
-    const choice = await vscode.window.showQuickPick(
+    const choice = await vscode.window.showQuickPick<vscode.QuickPickItem & { label: 'Edits' | 'Everything' }>(
       [
         { label: 'Edits', description: 'Source only — recommended for downloaded mods' },
         { label: 'Everything', description: 'Source + assets — for authoring a mod from scratch' },
@@ -48,7 +48,7 @@ export function registerTrackCommand(
 
     await withPluginsViewProgress(session, async () => {
       say(session, trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
-      const result = await client.track(origin, choice.label as 'Edits' | 'Everything', {
+      const result = await client.track(origin, choice.label, {
         onProgress: (status) => say(session, trackProgressMessage(origin, status)),
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }

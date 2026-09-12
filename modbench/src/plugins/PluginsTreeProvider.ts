@@ -13,6 +13,14 @@ import { ErrorNode } from '../errorNode';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
+// `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
+// only writer of it.
+function isDropPayload(value: unknown): value is { names: string[] } {
+  if (typeof value !== 'object' || value === null) return false;
+  const witness = value as { names?: unknown };
+  return Array.isArray(witness.names) && witness.names.every((n): n is string => typeof n === 'string');
+}
+
 // mEdit is always running (target-architecture.md); reaching this means the tree has nothing
 // held from it at all, which reads to the user the same as a disconnect.
 const NOT_CONNECTED = 'mEdit is not connected.';
@@ -117,6 +125,16 @@ export class EmptyNode extends vscode.TreeItem {
 
 export type PluginListNode = PluginNode | ImplicitMasterNode | EmptyNode;
 
+// Each constructor above passes its own plain string to `super()` as the label, so this reads
+// the same string back through its own field rather than the base class's string|TreeItemLabel.
+function plainLabelOf(node: PluginListNode): string {
+  switch (node.kind) {
+    case 'plugin': return node.plugin.name;
+    case 'implicitMaster': return node.name;
+    case 'empty': return '';
+  }
+}
+
 /** What this tree hands VS Code: a load-order row, or one of the record browser's nodes under
  *  it. */
 export type PluginsTreeNode = PluginListNode | PluginTreeNode;
@@ -160,13 +178,13 @@ class ByPluginCopy<T> {
     this.byName.set(name.toLowerCase(), value);
   }
 
-  // Each index accumulates on its own, so the name-only fallback reads as every copy's lines
-  // together while a copy's own key reads as its own.
-  append(name: string, origin: string | undefined, item: T extends (infer U)[] ? U : never): void {
+  // Each index accumulates on its own: the name-only fallback reads as every copy's lines
+  // together, a copy's own key as its own. `this` narrows to an array-valued instance.
+  append<U>(this: ByPluginCopy<U[]>, name: string, origin: string | undefined, item: U): void {
     const copyKey = ByPluginCopy.key(name, origin);
     const nameKey = name.toLowerCase();
-    this.byCopy.set(copyKey, [...((this.byCopy.get(copyKey) ?? []) as unknown[]), item] as T);
-    this.byName.set(nameKey, [...((this.byName.get(nameKey) ?? []) as unknown[]), item] as T);
+    this.byCopy.set(copyKey, [...(this.byCopy.get(copyKey) ?? []), item]);
+    this.byName.set(nameKey, [...(this.byName.get(nameKey) ?? []), item]);
   }
 
   get(name: string, origin: string | undefined): T | undefined {
@@ -326,10 +344,8 @@ export class PluginsTreeProvider
       this.cache = built.cache;
     }
 
-    // Rows here are always PluginNode/ImplicitMasterNode, both constructed with a
-    // plain string label — safe to filter on directly (never TreeItemLabel/object).
     const named = this.filterText
-      ? this.cache.rows.filter((n) => (n.label as string).toLowerCase().includes(this.filterLower))
+      ? this.cache.rows.filter((n) => plainLabelOf(n).toLowerCase().includes(this.filterLower))
       : this.cache.rows;
     // plugins.md: a row the record filter matches nothing of is omitted, not merely left
     // unexpandable — a visible-but-inert row is still noise.
@@ -612,8 +628,8 @@ export class PluginsTreeProvider
     _token: vscode.CancellationToken,
   ): Promise<void> {
     const payload = dataTransfer.get(DND_MIME);
-    if (!payload) return;
-    const { names } = payload.value as { names: string[] };
+    if (!payload || !isDropPayload(payload.value)) return;
+    const { names } = payload.value;
     if (names.length === 0) return;
     const toIndex = this.dropIndexFor(target, names);
     if (toIndex === undefined) return;

@@ -2,13 +2,14 @@ import { join } from 'node:path';
 import type { DownloadEntry } from './mo2/downloads';
 import { DOWNLOAD_SIDECAR_SUFFIX, downloadsDir } from './mo2/layout';
 import { factsOf, get, listDir } from './mo2Files';
+import { errnoCode } from '../errno';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.
 async function readMetaText(path: string): Promise<string | undefined> {
   try {
     return await get(path);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;
   }
 }
@@ -20,7 +21,7 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
   try {
     names = (await listDir(dir)).map((dirent) => dirent.name);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    if (errnoCode(err) === 'ENOENT') return undefined;
     throw err;
   }
   // .meta sidecars are suppressed as rows by buildDownloadRows, not filtered

@@ -1,30 +1,35 @@
 import { vscode } from './vscode';
 import {
-  EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION,
+  EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseExtensionToWebview,
   type ExtensionToWebview, type RecordEditEnvelope, type WebviewToExtension,
 } from './messages';
 
 // The webview's bridge to native VS Code surfaces: a new native-surface gesture extends the
 // request/reply mechanism below rather than reinventing it.
 
-// `read` absorbs the only real difference between bridges — each reply's payload lives under a
-// different field — so the listener below stays blind to what is being asked.
+// `settle` closes over `read` and `resolve` at the call site below, where their shared type
+// parameter is still in scope — the listener stays blind to both what is being asked and what
+// the answer's type is.
 interface InFlight {
   replyType: ExtensionToWebview['type'];
-  read: (msg: ExtensionToWebview) => unknown;
-  resolve: (value: unknown) => void;
+  settle: (msg: ExtensionToWebview) => void;
 }
 
 let counter = 0;
 const inFlight = new Map<string, InFlight>();
 
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
-  const msg = event.data as ExtensionToWebview | undefined;
-  if (!msg || !('requestId' in msg)) return;
+  let msg: ExtensionToWebview;
+  try {
+    msg = parseExtensionToWebview(event.data);
+  } catch {
+    return; // Not one of ours, or a stale/mismatched build — no in-flight request to answer.
+  }
+  if (!('requestId' in msg)) return;
   const entry = inFlight.get(msg.requestId);
   if (!entry || msg.type !== entry.replyType) return;
   inFlight.delete(msg.requestId);
-  entry.resolve(entry.read(msg));
+  entry.settle(msg);
 });
 
 function requestReply<T>(
@@ -34,7 +39,7 @@ function requestReply<T>(
 ): Promise<T> {
   const requestId = `nb-${++counter}`;
   return new Promise<T>(resolve => {
-    inFlight.set(requestId, { replyType, read, resolve: resolve as (value: unknown) => void });
+    inFlight.set(requestId, { replyType, settle: (msg) => resolve(read(msg)) });
     vscode.postMessage(buildRequest(requestId));
   });
 }

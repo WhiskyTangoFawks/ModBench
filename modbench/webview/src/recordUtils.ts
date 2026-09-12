@@ -1,5 +1,5 @@
 import type { ColumnKey, CompareOverride, FieldMetadata, FieldValue, PathHop, PathSegment } from './types';
-import { columnKey } from './types';
+import { columnKey } from './columnKey';
 
 export function toStr(v: unknown): string {
   if (v == null) return '';

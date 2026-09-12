@@ -5,6 +5,7 @@ import { join, relative, sep } from 'node:path';
 import { MOD_META_FILE_NAME, modDir } from './mo2/layout';
 import type { ModlistEntry } from './model';
 import { factsOf, listDir } from './mo2Files';
+import { errnoCode } from '../errno';
 
 // Nearly every mod has one, so indexing it would make them all conflict with each other.
 const EXCLUDED_RELATIVE_PATHS = new Set([MOD_META_FILE_NAME]);
@@ -139,7 +140,7 @@ async function walkSymlink(
     // ENOENT (broken link) only — any other failure (e.g. EACCES) propagates rather
     // than silently degrading to a skip, matching statusChecker.ts's modFolderExists
     // convention: a permission error must reject, not read as "nothing here".
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    if (errnoCode(err) !== 'ENOENT') throw err;
     log(`[fileConflictIndex] broken symlink, skipping: "${absolutePath}" (${err instanceof Error ? err.message : String(err)})`);
     return [];
   }
@@ -195,7 +196,7 @@ async function walkMod(
     const { realPath: rootReal } = await factsOf(dir);
     return await walk(dir, dir, new Set([rootReal]), log);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return []; // missing mod folder — StatusChecker's concern
+    if (errnoCode(err) === 'ENOENT') return []; // missing mod folder — StatusChecker's concern
     throw err;
   }
 }

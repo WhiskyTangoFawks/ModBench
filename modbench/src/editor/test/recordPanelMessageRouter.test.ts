@@ -147,6 +147,17 @@ describe('routeRecordPanelMessage', () => {
     expect(executeCommand).not.toHaveBeenCalled();
     expect(writeText).not.toHaveBeenCalled();
   });
+
+  // Correctly discriminated (a real EDIT_FIELD), but formKey is the wrong type — parseWebviewToExtension's
+  // required-field check, not its discriminant switch.
+  it('a correctly-discriminated message with a malformed payload is also a no-op', async () => {
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: 123, plugin: 'Mod.esp', origin: 'SomeMod', envelope: { op: 'set', path: [] } },
+      makeDeps(),
+    )).resolves.toBeUndefined();
+
+    expect(editRecordCalls()).toEqual([]);
+  });
 });
 
 // The router carries no panel identity, so "two panels" is two independently-built deps bundles.

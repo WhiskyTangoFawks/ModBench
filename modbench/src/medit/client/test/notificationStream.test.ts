@@ -14,6 +14,12 @@ function commentFrame(): Uint8Array {
   return new TextEncoder().encode(': connected\n\n');
 }
 
+// A well-formed SSE frame around a JSON payload missing every field NotificationEvent requires
+// — parseNotificationEvent's own check, not JSON.parse's.
+function malformedFrame(): Uint8Array {
+  return new TextEncoder().encode('event: rows-changed\ndata: {"kind":"rows-changed"}\n\n');
+}
+
 // Enqueues every chunk up front, then closes — a stream whose whole life is scripted at
 // construction, standing in for one real fetch response.
 function scriptedStream(chunks: Uint8Array[]): ReadableStream<Uint8Array> {
@@ -65,6 +71,25 @@ describe('SseNotificationSubscriber', () => {
 
     expect(openStream).toHaveBeenCalledTimes(2);
     expect(received[0]).toEqual(secondEvent);
+    subscriber.stop();
+  });
+
+  it('reconnects after a malformed frame, without dispatching it', async () => {
+    const goodEvent = rowsChanged(['000002:Other.esp']);
+    const openStream = vi.fn()
+      .mockResolvedValueOnce(streamResponse([malformedFrame()]))
+      .mockResolvedValueOnce(streamResponse([sseFrame(goodEvent)]));
+    const subscriber = new SseNotificationSubscriber({ openStream, reconnectDelayMs: 1000 });
+    const received: NotificationEvent[] = [];
+    subscriber.subscribe('rows-changed', (e) => received.push(e));
+
+    subscriber.start();
+    await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+
+    expect(openStream).toHaveBeenCalledTimes(2);
+    expect(received[0]).toEqual(goodEvent);
     subscriber.stop();
   });
 

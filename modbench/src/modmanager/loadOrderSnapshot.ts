@@ -10,6 +10,7 @@ import { isPluginFile } from './mo2/pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from './mo2/pluginsText';
 import { listDir } from './mo2Files';
+import { errnoCode } from '../errno';
 
 // Reserved origin values (ADR-0012), matching their literal directory names. Never a real mod
 // folder name: mod folders live under `mods/`.
@@ -91,7 +92,7 @@ async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, s
     const entries = await listDir(overwriteDir(instanceRoot));
     return new Map(entries.filter((e) => e.isFile()).map((e) => [foldPath(e.name), e.name]));
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map(); // no overwrite folder — nothing wins from it
+    if (errnoCode(err) === 'ENOENT') return new Map(); // no overwrite folder — nothing wins from it
     throw err;
   }
 }
@@ -184,8 +185,15 @@ export async function buildLoadOrderSnapshot(
 ): Promise<LoadOrderPlugin[]> {
   const rows = await buildRows(source, instanceRoot, dataFolder, buildIndex);
   // A definite dataFolder means resolvePluginPaths covers every name, so no row here is ever a
-  // line-only one — the cast is exact, not a narrowing guess.
-  return rows as LoadOrderPlugin[];
+  // line-only one — checked below rather than assumed.
+  return rows.map(assertResolvedPath);
+}
+
+function assertResolvedPath(row: LoadOrderPlugin | LoadOrderPluginLine): LoadOrderPlugin {
+  if (row.path === undefined) {
+    throw new Error(`Expected "${row.name}" to resolve a physical path with a Data folder set.`);
+  }
+  return row;
 }
 
 /** Same rows `buildLoadOrderSnapshot` computes, over the one read `dataFolder` optional: a listed

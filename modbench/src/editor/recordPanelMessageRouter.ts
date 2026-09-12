@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from '../medit/messages';
+import {
+  EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, parseWebviewToExtension,
+  type ExtensionToWebview, type WebviewToExtension,
+} from '../medit/messages';
 import type { Reporter } from '../reporter';
 import type { RecordSummary, MEditClient } from '../medit/client';
 import { applyRecordEdit, type RecordWriteDeps } from './applyRecordEdit';
@@ -53,17 +56,34 @@ const HANDLERS: {
   [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
 };
 
+// Each case below narrows `m` to its own variant, so calling its HANDLERS entry needs no
+// cast — the narrowing is exactly the correlation `HANDLERS[m.type]` cannot prove on its own.
+function dispatch(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Promise<void> | void {
+  switch (m.type) {
+    case WEBVIEW_TO_EXTENSION.OPEN_RECORD: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.LOG: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return HANDLERS[m.type](deps, m);
+    case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return HANDLERS[m.type](deps, m);
+    default: {
+      const unreachable: never = m;
+      return unreachable;
+    }
+  }
+}
+
 // The single dispatch point for every message the webview sends up. A plain function, not a
 // registered-handler pattern, so a unit test can call it with only `vscode.commands
 // .executeCommand` mocked.
 export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPanelMessageDeps): Promise<void> {
-  if (typeof msg !== 'object' || msg === null || !('type' in msg)) return;
-  const m = msg as WebviewToExtension;
-  const handler = HANDLERS[m.type] as
-    | ((deps: RouteRecordPanelMessageDeps, m: WebviewToExtension) => Promise<void> | void)
-    | undefined;
-  // A message whose type the map doesn't know (a stale webview build) stays a no-op.
-  if (handler) await handler(deps, m);
+  let m: WebviewToExtension;
+  try {
+    m = parseWebviewToExtension(msg);
+  } catch {
+    // A message this build doesn't recognize (a stale webview build) or garbage stays a no-op.
+    return;
+  }
+  await dispatch(deps, m);
 }
 
 // The same "EditorID [FormKey]" label the picker's items have always

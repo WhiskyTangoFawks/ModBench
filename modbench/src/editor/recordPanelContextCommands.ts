@@ -14,17 +14,38 @@ interface ContextCommand {
   run: (deps: RecordPanelContextCommandDeps, ctx: unknown) => Promise<void>;
 }
 
-// The `when` clause on the contribution is what guarantees the shape VS Code hands back as
-// `unknown`, so the cast is named once, here.
+// The `when` clause on each contribution guarantees the shape VS Code hands back — but as
+// `unknown`, so each context type carries its own `webviewSection` check rather than a cast.
+function hasWebviewSection<Ctx extends { webviewSection: string }>(
+  value: unknown, webviewSection: Ctx['webviewSection'],
+): value is Ctx {
+  if (typeof value !== 'object' || value === null) return false;
+  return (value as { webviewSection?: unknown }).webviewSection === webviewSection;
+}
+
+function isArrayParentContext(value: unknown): value is ArrayParentContext {
+  return hasWebviewSection(value, 'arrayParent');
+}
+
+function isArrayElementContext(value: unknown): value is ArrayElementContext {
+  return hasWebviewSection(value, 'arrayElement');
+}
+
+function isStringValueContext(value: unknown): value is StringValueContext {
+  return hasWebviewSection(value, 'stringValue');
+}
+
 function editCommand<Ctx extends { formKey: string; plugin: string; origin: string }>(
-  command: string, envelopeOf: (ctx: Ctx) => RecordEditEnvelope | undefined,
+  command: string,
+  isCtx: (value: unknown) => value is Ctx,
+  envelopeOf: (ctx: Ctx) => RecordEditEnvelope | undefined,
 ): ContextCommand {
   return {
     command,
     run: async (deps, raw) => {
-      const ctx = raw as Ctx;
-      const envelope = envelopeOf(ctx);
-      if (envelope) await applyRecordEdit(deps, ctx.formKey, ctx.plugin, ctx.origin, envelope);
+      if (!isCtx(raw)) return;
+      const envelope = envelopeOf(raw);
+      if (envelope) await applyRecordEdit(deps, raw.formKey, raw.plugin, raw.origin, envelope);
     },
   };
 }
@@ -49,12 +70,12 @@ function openStringValueEditor(deps: RecordPanelContextCommandDeps, ctx: StringV
 const CONTEXT_COMMANDS: ContextCommand[] = [
   {
     command: 'modbench.field.openExtended',
-    run: (deps, ctx) => openStringValueEditor(deps, ctx as StringValueContext),
+    run: async (deps, ctx) => { if (isStringValueContext(ctx)) await openStringValueEditor(deps, ctx); },
   },
-  editCommand<ArrayParentContext>('modbench.array.add', ctx => ({ op: 'add', path: ctx.path })),
-  editCommand<ArrayElementContext>('modbench.array.remove', ctx => ({ op: 'remove', path: ctx.path })),
-  editCommand<ArrayElementContext>('modbench.array.moveUp', ctx => moveEnvelope(ctx.path, -1)),
-  editCommand<ArrayElementContext>('modbench.array.moveDown', ctx => moveEnvelope(ctx.path, 1)),
+  editCommand('modbench.array.add', isArrayParentContext, ctx => ({ op: 'add', path: ctx.path })),
+  editCommand('modbench.array.remove', isArrayElementContext, ctx => ({ op: 'remove', path: ctx.path })),
+  editCommand('modbench.array.moveUp', isArrayElementContext, ctx => moveEnvelope(ctx.path, -1)),
+  editCommand('modbench.array.moveDown', isArrayElementContext, ctx => moveEnvelope(ctx.path, 1)),
 ];
 
 /** The record panel's native right-click menus. Each command writes from the extension host with

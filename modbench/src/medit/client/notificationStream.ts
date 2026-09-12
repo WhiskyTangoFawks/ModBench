@@ -1,5 +1,5 @@
 import type { NotificationEvent } from './apiClient';
-import type { NotificationKind } from './MEditClient';
+import { isNotificationKind, type NotificationKind } from './MEditClient';
 
 // Subscribing and dispatching for the one stream kind this file opens (SSE); `whenConnected`'s
 // default answer below is settled, which `SseNotificationSubscriber` overrides with its own.
@@ -18,7 +18,10 @@ class NotificationListenerRegistry {
   }
 
   protected dispatch(event: NotificationEvent): void {
-    for (const listener of this.listeners.get(event.kind as NotificationKind) ?? []) listener(event);
+    // `event.kind` is `string` on the wire type (it reports every kind the schema knows, not just
+    // the five this client subscribes on); an event this build doesn't route stays undelivered.
+    if (!isNotificationKind(event.kind)) return;
+    for (const listener of this.listeners.get(event.kind) ?? []) listener(event);
   }
 }
 
@@ -57,10 +60,49 @@ async function* readFrames(body: ReadableStream<Uint8Array>): AsyncGenerator<str
 
 // A comment-only frame (`: connected`) has no `data:` line and parses to `undefined`. Only
 // `data:` is read: it already carries `kind`, so the SSE `event:` line is redundant.
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isString);
+}
+
+// The notification stream's one parse point for an SSE frame's JSON: checks the fields every
+// event has and throws rather than handing back an unproven shape. parseFrame's caller treats
+// the throw the same as a dropped connection.
+function parseNotificationEvent(raw: string): NotificationEvent {
+  const parsed: unknown = JSON.parse(raw);
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error(`Expected a notification event object, got ${typeof parsed}.`);
+  }
+  const w = parsed as {
+    kind?: unknown; plugin?: unknown; origin?: unknown; keys?: unknown; sequence?: unknown;
+    loadOrderStatus?: NotificationEvent['loadOrderStatus'];
+    trackProgress?: NotificationEvent['trackProgress'];
+    externalChangeMetaChanged?: NotificationEvent['externalChangeMetaChanged'];
+    externalChangeOldVersion?: NotificationEvent['externalChangeOldVersion'];
+    externalChangeNewVersion?: NotificationEvent['externalChangeNewVersion'];
+    externalChangeTrackedFiles?: NotificationEvent['externalChangeTrackedFiles'];
+  };
+  if (!isString(w.kind)) throw new Error('Expected a notification event to carry a string kind.');
+  if (!isString(w.plugin)) throw new Error('Expected a notification event to carry a string plugin.');
+  if (!isString(w.origin)) throw new Error('Expected a notification event to carry a string origin.');
+  if (!isStringArray(w.keys)) throw new Error('Expected a notification event to carry a string array of keys.');
+  if (typeof w.sequence !== 'number') throw new Error('Expected a notification event to carry a numeric sequence.');
+  return {
+    kind: w.kind, plugin: w.plugin, origin: w.origin, keys: w.keys, sequence: w.sequence,
+    loadOrderStatus: w.loadOrderStatus, trackProgress: w.trackProgress,
+    externalChangeMetaChanged: w.externalChangeMetaChanged,
+    externalChangeOldVersion: w.externalChangeOldVersion, externalChangeNewVersion: w.externalChangeNewVersion,
+    externalChangeTrackedFiles: w.externalChangeTrackedFiles,
+  };
+}
+
 function parseFrame(frame: string): NotificationEvent | undefined {
   const dataLine = frame.split('\n').find((line) => line.startsWith('data:'));
   if (!dataLine) return undefined;
-  return JSON.parse(dataLine.slice('data:'.length).trim()) as NotificationEvent;
+  return parseNotificationEvent(dataLine.slice('data:'.length).trim());
 }
 
 function delay(ms: number): Promise<void> {

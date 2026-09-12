@@ -132,3 +132,107 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isLogLevel(value: unknown): value is LogLevel {
+  return value === 'debug' || value === 'info' || value === 'warn';
+}
+
+function isRecordEditEnvelope(value: unknown): value is RecordEditEnvelope {
+  if (typeof value !== 'object' || value === null) return false;
+  const witness = value as { op?: unknown; path?: unknown };
+  return (
+    (witness.op === 'set' || witness.op === 'add' || witness.op === 'remove' || witness.op === 'move')
+    && Array.isArray(witness.path)
+  );
+}
+
+type WebviewToExtensionWitness = {
+  type?: unknown; formKey?: unknown; level?: unknown; message?: unknown; value?: unknown;
+  plugin?: unknown; origin?: unknown; envelope?: unknown;
+  requestId?: unknown; seed?: unknown; validTypes?: unknown;
+};
+
+function parseOpenRecord(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isString(w.formKey)) throw new Error('Expected "openRecord" to carry a string formKey.');
+  return { type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: w.formKey };
+}
+
+function parseLog(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isLogLevel(w.level)) throw new Error('Expected "log" to carry a level of debug, info or warn.');
+  if (!isString(w.message)) throw new Error('Expected "log" to carry a string message.');
+  return { type: WEBVIEW_TO_EXTENSION.LOG, level: w.level, message: w.message };
+}
+
+function parseCopyToClipboard(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isString(w.value)) throw new Error('Expected "copyToClipboard" to carry a string value.');
+  return { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: w.value };
+}
+
+function parseEditField(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isString(w.formKey)) throw new Error('Expected "editField" to carry a string formKey.');
+  if (!isString(w.plugin)) throw new Error('Expected "editField" to carry a string plugin.');
+  if (!isString(w.origin)) throw new Error('Expected "editField" to carry a string origin.');
+  if (!isRecordEditEnvelope(w.envelope)) {
+    throw new Error('Expected "editField" to carry a record edit envelope with an op and a path.');
+  }
+  return { type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: w.formKey, plugin: w.plugin, origin: w.origin, envelope: w.envelope };
+}
+
+function parseOpenFormKeyPicker(w: WebviewToExtensionWitness): WebviewToExtension {
+  if (!isString(w.requestId)) throw new Error('Expected "openFormKeyPicker" to carry a string requestId.');
+  if (!isString(w.seed)) throw new Error('Expected "openFormKeyPicker" to carry a string seed.');
+  if (!Array.isArray(w.validTypes) || !w.validTypes.every(isString)) {
+    throw new Error('Expected "openFormKeyPicker" to carry a string array validTypes.');
+  }
+  return { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: w.requestId, seed: w.seed, validTypes: w.validTypes };
+}
+
+/** The webview message router's one entry point for data crossing `postMessage`: every
+ *  `WEBVIEW_TO_EXTENSION` site parses through this rather than asserting the shape itself.
+ *  Throws when the discriminant or a required field doesn't match what the type demands. */
+export function parseWebviewToExtension(value: unknown): WebviewToExtension {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`Expected a webview-to-extension message object, got ${typeof value}.`);
+  }
+  const w = value as WebviewToExtensionWitness;
+  switch (w.type) {
+    case WEBVIEW_TO_EXTENSION.OPEN_RECORD: return parseOpenRecord(w);
+    case WEBVIEW_TO_EXTENSION.LOG: return parseLog(w);
+    case WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD: return parseCopyToClipboard(w);
+    case WEBVIEW_TO_EXTENSION.EDIT_FIELD: return parseEditField(w);
+    case WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER: return parseOpenFormKeyPicker(w);
+    default:
+      throw new Error(`Unknown webview-to-extension message type: ${String(w.type)}.`);
+  }
+}
+
+/** The webview message router's other direction: every `EXTENSION_TO_WEBVIEW` listener parses
+ *  through this rather than asserting `event.data`'s shape itself. */
+export function parseExtensionToWebview(value: unknown): ExtensionToWebview {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error(`Expected an extension-to-webview message object, got ${typeof value}.`);
+  }
+  const w = value as { type?: unknown; formKey?: unknown; requestId?: unknown };
+  switch (w.type) {
+    case EXTENSION_TO_WEBVIEW.LOAD_RECORD:
+      if (!isString(w.formKey)) throw new Error('Expected "loadRecord" to carry a string formKey.');
+      return { type: w.type, formKey: w.formKey };
+
+    case EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED:
+      return { type: w.type };
+
+    case EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED:
+      if (!isString(w.requestId)) throw new Error('Expected "formKeyPicked" to carry a string requestId.');
+      if (w.formKey !== null && !isString(w.formKey)) {
+        throw new Error('Expected "formKeyPicked" to carry a string or null formKey.');
+      }
+      return { type: w.type, requestId: w.requestId, formKey: w.formKey };
+
+    default:
+      throw new Error(`Unknown extension-to-webview message type: ${String(w.type)}.`);
+  }
+}

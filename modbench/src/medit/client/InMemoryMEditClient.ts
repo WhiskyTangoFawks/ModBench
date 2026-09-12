@@ -1,4 +1,4 @@
-import type { MEditClient, NotificationKind, NotificationEvent, BackendStatus } from './MEditClient';
+import { isNotificationKind, type MEditClient, type NotificationKind, type NotificationEvent, type BackendStatus } from './MEditClient';
 
 // Every query and command a test can script; `putLoadOrder` counts as a command here — the
 // distinction is architectural, not behavioural.
@@ -13,7 +13,15 @@ type CommandMethod =
   | 'copyRecordAsOverride' | 'copyRecordAsNewRecord' | 'compile' | 'absorbUpstreamUpdate'
   | 'keepAsMyEdit' | 'rebaseOntoMain' | 'continueRebase' | 'editRecord' | 'putLoadOrder';
 
-type Answer<K extends keyof MEditClient> = Awaited<ReturnType<Extract<MEditClient[K], (...a: never[]) => unknown>>>;
+// Homomorphic over `MEditClient`'s own keys, so indexing either by a generic `K` below — read or
+// write — stays exactly `Answer<K>`/`Handlers[K]` for the checker, never a wider or narrower type.
+type Answers = { [K in QueryMethod | CommandMethod]: Awaited<ReturnType<Extract<MEditClient[K], (...a: never[]) => unknown>>> };
+type Answer<K extends QueryMethod | CommandMethod> = Answers[K];
+type Handlers = {
+  [K in CommandMethod]: (
+    ...args: Parameters<Extract<MEditClient[K], (...a: never[]) => unknown>>
+  ) => Promise<Answer<K>>;
+};
 
 export interface RecordedCall {
   method: string;
@@ -24,24 +32,30 @@ export interface RecordedCall {
 // below drains the queue, in order, before falling back to the fixed script.
 type ScriptedStep<T> = { kind: 'answer'; value: T } | { kind: 'failure'; error: Error };
 
+// Homomorphic over `QueryMethod`, for the same reason `Answers` is: `QueryQueues[K]` (not
+// `ScriptedStep<Answer<K>>[]` inline) is what keeps a generic-keyed write sound.
+type QueryQueues = { [K in QueryMethod]: ScriptedStep<Answer<K>>[] };
+
 /** The in-memory adapter (ADR-0002): a test scripts each answer/result by method name, drives
  *  notifications with `emit`, and reads every recorded call back. An unscripted query rejects,
  *  so a forgotten script fails loudly, not silently empty. */
 export class InMemoryMEditClient implements MEditClient {
   readonly calls: RecordedCall[] = [];
 
-  private readonly queryAnswers = new Map<QueryMethod, unknown>();
+  // Not readonly: `disconnected()` clears both wholesale by reassignment — the one mutation the
+  // rest of this class does through `set`/`get`-shaped access instead.
+  private queryAnswers: { [K in QueryMethod]?: Answer<K> } = {};
   private readonly queryFailures = new Map<QueryMethod, Error>();
-  private readonly queryQueues = new Map<QueryMethod, ScriptedStep<unknown>[]>();
-  private readonly commandResults = new Map<CommandMethod, unknown>();
+  private queryQueues: { [K in QueryMethod]?: QueryQueues[K] } = {};
+  private readonly commandResults: { [K in CommandMethod]?: Answer<K> } = {};
   private readonly commandFailures = new Map<CommandMethod, Error>();
-  private readonly commandHandlers = new Map<CommandMethod, (...args: never[]) => Promise<unknown>>();
+  private readonly commandHandlers: { [K in CommandMethod]?: Handlers[K] } = {};
   private readonly listeners = new Map<NotificationKind, Set<(event: NotificationEvent) => void>>();
   private readonly statusListeners = new Set<(status: BackendStatus) => void>();
   private _status: BackendStatus = 'starting';
 
   setQueryAnswer<K extends QueryMethod>(method: K, answer: Answer<K>): void {
-    this.queryAnswers.set(method, answer);
+    this.queryAnswers[method] = answer;
   }
 
   /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
@@ -62,14 +76,14 @@ export class InMemoryMEditClient implements MEditClient {
     this.pushQueryStep(method, { kind: 'failure', error });
   }
 
-  private pushQueryStep(method: QueryMethod, step: ScriptedStep<unknown>): void {
-    const queue = this.queryQueues.get(method) ?? [];
+  private pushQueryStep<K extends QueryMethod>(method: K, step: ScriptedStep<Answer<K>>): void {
+    const queue: QueryQueues[K] = this.queryQueues[method] ?? [];
     queue.push(step);
-    this.queryQueues.set(method, queue);
+    this.queryQueues[method] = queue;
   }
 
   setCommandResult<K extends CommandMethod>(method: K, result: Answer<K>): void {
-    this.commandResults.set(method, result);
+    this.commandResults[method] = result;
   }
 
   /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
@@ -80,10 +94,8 @@ export class InMemoryMEditClient implements MEditClient {
 
   /** Answers `method` from the call's own arguments, taking precedence over the fixed result and
    *  failure above — for a test that holds a command in flight or answers differently per call. */
-  setCommandHandler<K extends CommandMethod>(
-    method: K, handler: (...args: Parameters<Extract<MEditClient[K], (...a: never[]) => unknown>>) => Promise<Answer<K>>,
-  ): void {
-    this.commandHandlers.set(method, handler as unknown as (...args: never[]) => Promise<unknown>);
+  setCommandHandler<K extends CommandMethod>(method: K, handler: Handlers[K]): void {
+    this.commandHandlers[method] = handler;
   }
 
   get status(): BackendStatus { return this._status; }
@@ -96,9 +108,9 @@ export class InMemoryMEditClient implements MEditClient {
   // One call: the backend goes disconnected and every query starts rejecting, same as a real
   // disconnected backend's read side.
   disconnected(): void {
-    this.queryAnswers.clear();
+    this.queryAnswers = {};
     this.queryFailures.clear();
-    this.queryQueues.clear();
+    this.queryQueues = {};
     this.setStatus('disconnected');
   }
 
@@ -119,34 +131,38 @@ export class InMemoryMEditClient implements MEditClient {
   }
 
   emit(event: NotificationEvent): void {
-    for (const listener of this.listeners.get(event.kind as NotificationKind) ?? []) listener(event);
+    // `event.kind` is the schema's honest `string`; an event this fake's caller emits under a
+    // kind `subscribe` never narrows stays undelivered rather than guessed at.
+    if (!isNotificationKind(event.kind)) return;
+    for (const listener of this.listeners.get(event.kind) ?? []) listener(event);
   }
 
   private record(method: string, args: unknown[]): void {
     this.calls.push({ method, args });
   }
 
-  private query<T>(method: QueryMethod, args: unknown[]): Promise<T> {
+  private query<K extends QueryMethod>(method: K, args: unknown[]): Promise<Answer<K>> {
     this.record(method, args);
-    const queue = this.queryQueues.get(method);
-    const step = queue?.shift();
-    if (step) return step.kind === 'answer' ? Promise.resolve(step.value as T) : Promise.reject(step.error);
+    const step = this.queryQueues[method]?.shift();
+    if (step) return step.kind === 'answer' ? Promise.resolve(step.value) : Promise.reject(step.error);
     if (this.queryFailures.has(method)) return Promise.reject(this.queryFailures.get(method)!);
-    if (!this.queryAnswers.has(method)) {
+    if (!(method in this.queryAnswers)) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted answer for query "${method}"`));
     }
-    return Promise.resolve(this.queryAnswers.get(method) as T);
+    return Promise.resolve(this.queryAnswers[method]!);
   }
 
-  private command<T>(method: CommandMethod, args: unknown[]): Promise<T> {
+  private command<K extends CommandMethod>(
+    method: K, args: Parameters<Extract<MEditClient[K], (...a: never[]) => unknown>>,
+  ): Promise<Answer<K>> {
     this.record(method, args);
-    const handler = this.commandHandlers.get(method);
-    if (handler) return handler(...(args as never[])) as Promise<T>;
+    const handler = this.commandHandlers[method];
+    if (handler) return handler(...args);
     if (this.commandFailures.has(method)) return Promise.reject(this.commandFailures.get(method)!);
-    if (!this.commandResults.has(method)) {
+    if (!(method in this.commandResults)) {
       return Promise.reject(new Error(`InMemoryMEditClient: no scripted result for command "${method}"`));
     }
-    return Promise.resolve(this.commandResults.get(method) as T);
+    return Promise.resolve(this.commandResults[method]!);
   }
 
   putLoadOrder(...args: Parameters<MEditClient['putLoadOrder']>): ReturnType<MEditClient['putLoadOrder']> {
