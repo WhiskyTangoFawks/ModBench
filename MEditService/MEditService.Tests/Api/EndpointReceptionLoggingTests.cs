@@ -1,12 +1,12 @@
-using MEditService.Api;
-using MEditService.Api.Endpoints;
-using MEditService.Bridge;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
+using MEditService.Http;
+using MEditService.Http.Endpoints;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -112,7 +112,7 @@ public sealed class EndpointReceptionLoggingTests
 
     private sealed class StubRecordQueryService : IRecordQueryService
     {
-        public IReadOnlyList<PluginResponse> GetPlugins() => throw new NotSupportedException();
+        public IReadOnlyList<PluginRow> GetPlugins() => throw new NotSupportedException();
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null) =>
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();

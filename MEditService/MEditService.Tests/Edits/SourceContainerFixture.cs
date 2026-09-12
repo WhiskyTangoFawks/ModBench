@@ -1,8 +1,8 @@
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -24,7 +24,7 @@ public sealed class SourceContainerFixture : IDisposable
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public LoadOrder LoadOrder { get; }
+    public LoadOrderSnapshot LoadOrder { get; }
     public RenumberRecordHandler RenumberHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over this tree.</summary>
@@ -58,7 +58,7 @@ public sealed class SourceContainerFixture : IDisposable
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
 
         Entries = [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrder(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)

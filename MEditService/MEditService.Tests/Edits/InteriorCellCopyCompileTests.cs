@@ -1,4 +1,4 @@
-using MEditService.Core.Edits;
+using MEditService.Commands.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

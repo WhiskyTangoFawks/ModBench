@@ -1,8 +1,8 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -157,17 +157,17 @@ public sealed class CompareGoldenTests : IDisposable
             // Path is deliberately absent: it is a per-run temp directory.
             Plugins = _service.GetPlugins().Select(p => new
             {
-                p.Name,
-                p.LoadOrderIndex,
-                p.IsLight,
-                p.IsMaster,
-                p.Masters,
-                p.RecordCount,
-                p.IsImmutable,
-                p.Participates,
-                p.Origin,
+                p.Copy.Name,
+                LoadOrderIndex = p.Copy.Slot,
+                p.Content.IsLight,
+                p.Content.IsMaster,
+                p.Content.Masters,
+                p.Content.RecordCount,
+                p.Copy.IsImmutable,
+                p.Copy.Registration.Participates,
+                p.Copy.Origin,
                 p.MasterIssues,
-                p.InLoadOrder,
+                p.Copy.Registration.InLoadOrder,
                 p.HasMatchingRecords,
             }).ToList(),
             // GameRelease.Fallout4 is hardcoded rather than derived from the reconciled load order: the same

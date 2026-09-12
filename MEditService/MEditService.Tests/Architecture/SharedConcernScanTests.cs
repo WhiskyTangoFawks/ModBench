@@ -21,7 +21,7 @@ public sealed class SharedConcernScanTests
 
     // The gestures, the collaborators they write through, and the wire door above them.
     private static readonly string[] ScannedRoots =
-        ["MEditService.Core/Commands", "MEditService.Core/Edits", "MEditService.Api"];
+        ["MEditService.Commands", "MEditService.Commands/Edits", "MEditService.Http"];
 
     // The module itself, which is where all five needles belong.
     private const string SharedModuleFileName = "WriteTargets.cs";
@@ -47,7 +47,7 @@ public sealed class SharedConcernScanTests
     public void EveryNeedle_MatchesTheSharedModuleItself()
     {
         var module = File.ReadAllText(Path.Combine(
-            ArchitectureTests.SolutionDirectory(), "MEditService.Core", "Edits", SharedModuleFileName));
+            ArchitectureTests.SolutionDirectory(), "MEditService.Commands", "Edits", SharedModuleFileName));
 
         Assert.Empty(Concerns.Where(c => Regex.Count(module, c.Needle) == 0).Select(c => $"{c.Concern}: {c.Needle}"));
     }

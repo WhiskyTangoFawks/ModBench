@@ -18,7 +18,9 @@ public sealed class CarrierScanTests
     ];
 
     private static readonly string[] ScannedRoots =
-        ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/carrier-allowlist.txt";
 

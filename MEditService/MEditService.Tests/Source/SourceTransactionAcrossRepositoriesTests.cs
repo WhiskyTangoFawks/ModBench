@@ -1,7 +1,7 @@
 using System.Text;
-using MEditService.Core.Plugins;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -37,12 +37,12 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     private static string OriginalNpcPath(string pluginName) =>
         Path.Combine("source", pluginName, "Npcs", $"Original - 000800_{pluginName}.json");
 
-    private static SourceRepository Track(string modFolder, string pluginName, params PristineFile[] alsoWrite)
+    private static SourceRepository Track(string modFolder, string pluginName, params TreeFile[] alsoWrite)
     {
         SourceRepository.Track(
             modFolder, SourcePreset.Edits,
             [
-                new PristineFile(OriginalNpcPath(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
+                new TreeFile(OriginalNpcPath(pluginName), Encoding.UTF8.GetBytes(BodyOf(pluginName, "Original"))),
                 .. alsoWrite,
             ],
             new TrackProvenance(null, null, new Dictionary<string, string>()));
@@ -51,7 +51,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
 
     // A worldspace with an exterior cell beneath it: the one shape whose removal takes a whole
     // subtree rather than a file.
-    private static (PristineFile[] Files, FormKey Cell) ContainerFiles(string pluginName)
+    private static (TreeFile[] Files, FormKey Cell) ContainerFiles(string pluginName)
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
         var cell = new Cell(mod) { EditorID = "ExteriorCell", WaterHeight = 50f };
@@ -68,9 +68,9 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
         var root = SourceRepository.RootFor(pluginName);
         return (
         [
-            new PristineFile(
+            new TreeFile(
                 Path.Combine(root, "Worldspaces", Leaf(worldspace), "RecordData.json"), Serialize(worldspace)),
-            new PristineFile(
+            new TreeFile(
                 Path.Combine(root, "Worldspaces", Leaf(worldspace), "0, 0", "0, 0", Leaf(cell), "RecordData.json"),
                 Serialize(cell)),
         ], cell.FormKey);

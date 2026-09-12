@@ -1,4 +1,5 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 
@@ -8,7 +9,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-gitignore-").FullName;
 
-    private static PristineFile SourceFile() =>
+    private static TreeFile SourceFile() =>
         new(Path.Combine("source", "Test.esp", "npc_", "Test.esp", "000001.json"), "{}"u8.ToArray());
 
     private static void WriteMetaIniBesideTheSource(string modFolder) =>
@@ -111,7 +112,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             Directory.CreateDirectory(Path.Combine(modFolder, "MySource"));
             File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "Notes");
 
-            var otherPluginFile = new PristineFile(
+            var otherPluginFile = new TreeFile(
                 Path.Combine("source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
 
             SourceRepository.Track(

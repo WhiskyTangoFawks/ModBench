@@ -1,4 +1,5 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 
@@ -11,7 +12,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
 
     private static string Track(string modFolder, string sourceRelativePath, string content)
     {
-        var files = new[] { new PristineFile(sourceRelativePath, System.Text.Encoding.UTF8.GetBytes(content)) };
+        var files = new[] { new TreeFile(sourceRelativePath, System.Text.Encoding.UTF8.GetBytes(content)) };
         var trailers = new TrackProvenance("1.0.0", "OLDMETA", new Dictionary<string, string> { [Plugin] = "OLDBIN" });
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
         return Path.Combine(modFolder, ".git");
@@ -26,7 +27,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
         {
             Track(modFolder, relativePath, "{\"old\":true}");
 
-            var newFiles = new[] { new PristineFile(relativePath, "{\"new\":true}"u8.ToArray()) };
+            var newFiles = new[] { new TreeFile(relativePath, "{\"new\":true}"u8.ToArray()) };
             var newTrailers = new TrackProvenance("2.0.0", "NEWMETA", new Dictionary<string, string> { [Plugin] = "NEWBIN" });
             SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
 
@@ -54,7 +55,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
         {
             Track(modFolder, relativePath, "{\"old\":true}");
 
-            var newFiles = new[] { new PristineFile(relativePath, "{\"new\":true}"u8.ToArray()) };
+            var newFiles = new[] { new TreeFile(relativePath, "{\"new\":true}"u8.ToArray()) };
             var newTrailers = new TrackProvenance(null, null, new Dictionary<string, string> { [Plugin] = "NEWBIN" });
             SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
 
@@ -89,7 +90,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             var dirtBefore = SourceRepository.WorkingTreeStatus(modFolder);
             var fileContentBefore = File.ReadAllText(fullPath);
 
-            var newFiles = new[] { new PristineFile(relativePath, "{\"upstream\":true}"u8.ToArray()) };
+            var newFiles = new[] { new TreeFile(relativePath, "{\"upstream\":true}"u8.ToArray()) };
             var newTrailers = new TrackProvenance(null, null, new Dictionary<string, string> { [Plugin] = "NEWBIN" });
             SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
 

@@ -1,4 +1,4 @@
-using MEditService.Core.Plugins;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
@@ -14,7 +14,7 @@ public sealed class LoadOrderTests
         string name, string origin, int? slot, bool enabled = true, bool winning = true) =>
         new(name, origin, Path.Combine(@"C:\MO2\mods", origin, name), slot, enabled, winning);
 
-    private static LoadOrder Order(params RegisteredCopy[] copies) =>
+    private static LoadOrderSnapshot Order(params RegisteredCopy[] copies) =>
         new(Data, Instance, GameRelease.Fallout4, copies);
 
     [Fact]
@@ -91,7 +91,7 @@ public sealed class LoadOrderTests
     public void ApplyingADifferentSnapshot_ReplacesTheValue()
     {
         var holder = new LoadOrderHolder();
-        Assert.Equal(LoadOrder.Empty, holder.Current);
+        Assert.Equal(LoadOrderSnapshot.Empty, holder.Current);
 
         holder.Apply(Order(Copy("A.esp", "ModA", slot: 0)));
         Assert.Equal(["A.esp"], holder.Current.Participating.Select(c => c.Name));
@@ -104,7 +104,7 @@ public sealed class LoadOrderTests
     public void EqualValues_HashAlike_WhenTheirPathsDifferOnlyInCase()
     {
         var copy = Copy("A.esp", "ModA", slot: 0);
-        var lower = new LoadOrder(Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [copy]);
+        var lower = new LoadOrderSnapshot(Data.ToLowerInvariant(), Instance.ToLowerInvariant(), GameRelease.Fallout4, [copy]);
 
         Assert.Equal(Order(copy), lower);
         Assert.Equal(Order(copy).GetHashCode(), lower.GetHashCode());
@@ -114,7 +114,7 @@ public sealed class LoadOrderTests
     public void TheCallersList_IsCopiedOnConstruction_SoTheValueCannotChangeBehindIt()
     {
         var copies = new List<RegisteredCopy> { Copy("A.esp", "ModA", slot: 0) };
-        var order = new LoadOrder(Data, Instance, GameRelease.Fallout4, copies);
+        var order = new LoadOrderSnapshot(Data, Instance, GameRelease.Fallout4, copies);
 
         copies.Add(Copy("B.esp", "ModB", slot: 1));
 
@@ -156,7 +156,7 @@ public sealed class LoadOrderTests
             new("A.esp", Path.Combine(absent, origin, "A.esp"), origin, Slot: 0, Enabled: true, winning);
         LoadOrderEntry[] entries = [Entry("LowPriorityMod", winning: false), Entry("HighPriorityMod", winning: true)];
 
-        var order = new LoadOrder(
+        var order = new LoadOrderSnapshot(
             absent, null, GameRelease.Fallout4, [.. entries.Select(entry => RegisteredCopy.Of(entry))]);
 
         Assert.False(Directory.Exists(absent));

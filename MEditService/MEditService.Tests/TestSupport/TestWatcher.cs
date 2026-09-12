@@ -1,7 +1,7 @@
-using MEditService.Bridge;
-using MEditService.Core.Notifications;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Watcher;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.TestSupport;

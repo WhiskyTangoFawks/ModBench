@@ -1,4 +1,5 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.ProcessEnvironment;
 
@@ -12,7 +13,7 @@ public sealed class SourceRepositoryTrackConfigTests
     private static void Track(string modFolder) =>
         SourceRepository.Track(
             modFolder, SourcePreset.Edits,
-            [new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
+            [new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
             new TrackProvenance(null, null, new Dictionary<string, string>()));
 
     [Fact]

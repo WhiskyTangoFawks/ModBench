@@ -1,8 +1,9 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -25,7 +26,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-embedded-target-game-").FullName;
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
-    private readonly LoadOrder _loadOrder;
+    private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginKey _referrer = new(ReferrerName, ReferrerOrigin);
     private readonly string _targetPath;
     private readonly string _referrerPath;
@@ -58,7 +59,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.Iterate,
         });
 
-        _loadOrder = new LoadOrder(
+        _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4,
             SnapshotCopies.Of([
                 Target(enabled: true),
@@ -117,7 +118,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     [Fact]
     public void Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
-        var notLoaded = new LoadOrder(
+        var notLoaded = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([Target(enabled: false), Referrer]));
 
         var result = CompileServices.Over(notLoaded).Compile(_referrer, new CompileSource.WorkingTree());

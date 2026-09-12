@@ -1,4 +1,5 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.ProcessEnvironment;
 
@@ -22,7 +23,7 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
             // test that needs it.
             Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
 
-            var files = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var ex = Assert.Throws<GitUnavailableException>(() =>
                 SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>())));
 

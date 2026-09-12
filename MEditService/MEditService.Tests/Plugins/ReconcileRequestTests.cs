@@ -1,5 +1,5 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Index;
+using MEditService.LoadOrder;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 

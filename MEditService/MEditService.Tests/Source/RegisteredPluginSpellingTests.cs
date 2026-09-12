@@ -1,7 +1,8 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -54,9 +55,9 @@ public sealed class RegisteredPluginSpellingTests
         private readonly string _instanceRoot = Directory.CreateTempSubdirectory("medit-spelling-instance-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-spelling-game-").FullName;
 
-        internal string ModFolder { get; }
+        public string ModFolder { get; }
         internal PluginKey Plugin { get; } = new(PluginName, Origin);
-        internal LoadOrder LoadOrder { get; }
+        internal LoadOrderSnapshot LoadOrder { get; }
 
         internal ModFolderScratch()
         {
@@ -65,7 +66,7 @@ public sealed class RegisteredPluginSpellingTests
             mod.Npcs.AddNew("SpellingNpc");
             mod.WriteToBinary(PluginPath);
 
-            LoadOrder = new LoadOrder(
+            LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _instanceRoot, Release,
                 SnapshotCopies.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
         }

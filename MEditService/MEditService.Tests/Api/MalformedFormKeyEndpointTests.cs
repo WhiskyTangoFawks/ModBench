@@ -1,5 +1,5 @@
-using MEditService.Api;
-using MEditService.Api.Endpoints;
+using MEditService.Http;
+using MEditService.Http.Endpoints;
 using MEditService.Tests.Edits;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;

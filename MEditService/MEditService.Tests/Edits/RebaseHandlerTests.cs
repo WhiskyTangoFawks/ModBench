@@ -1,6 +1,6 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;
@@ -47,7 +47,7 @@ public sealed class RebaseHandlerTests : IDisposable
     }
 
     // The game's own Data directory is nobody's mod folder, so a copy loaded from it names no
-    // repository to rebase (ModFolders).
+    // repository to rebase.
     [Fact]
     public void RebaseEditBranch_DataDirectoryOrigin_IsNull()
     {

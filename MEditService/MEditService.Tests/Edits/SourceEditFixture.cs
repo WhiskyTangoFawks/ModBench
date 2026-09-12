@@ -1,10 +1,10 @@
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -31,7 +31,7 @@ public sealed class SourceEditFixture : IDisposable
     public string GameDirectory { get; }
     public PluginKey Plugin { get; }
     public string ActualPluginName { get; }
-    public LoadOrder LoadOrder { get; }
+    public LoadOrderSnapshot LoadOrder { get; }
     public RenumberRecordHandler RenumberHandler { get; }
     public EditRecordHandler EditHandler { get; }
     public DeleteRecordHandler DeleteHandler { get; }
@@ -72,7 +72,7 @@ public sealed class SourceEditFixture : IDisposable
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
         Entries = [new LoadOrderEntry(pluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)];
-        LoadOrder = new LoadOrder(GameDirectory, InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
+        LoadOrder = new LoadOrderSnapshot(GameDirectory, InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         // Track through the real service, from the load order value: what an edit does to a git
         // working tree is the thing under test, and no mock can answer that.

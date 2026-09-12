@@ -1,7 +1,7 @@
 using DuckDB.NET.Data;
-using MEditService.Core.Edits;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Index;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Indexing;

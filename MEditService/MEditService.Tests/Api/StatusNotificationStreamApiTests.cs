@@ -1,7 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Api;
-using MEditService.Core.Source;
+using MEditService.Http;
+using MEditService.SourceRepo;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

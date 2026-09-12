@@ -13,9 +13,9 @@ public sealed class BannedApiScopeTests
     // In .editorconfig order, which is the rule: a later section narrows an earlier one.
     private static readonly string[] ExemptSections =
     [
-        "MEditService.Core/Serialization/**.cs",
-        "MEditService.Core/Schema/**.cs",
-        "MEditService.Core/PluginAdapter/**.cs",
+        "MEditService.Codec/Serialization/**.cs",
+        "MEditService.Codec/Schema/**.cs",
+        "MEditService.PluginAdapter/**.cs",
         "MEditService.Tests/**.cs",
         "MEditService.Tests.ProcessEnvironment/**.cs",
     ];
@@ -48,10 +48,10 @@ public sealed class BannedApiScopeTests
 
         Assert.Equal(
             ReportDiagnostic.Error,
-            configured.For(Path.Combine("MEditService.Core", "Records", "Probe.cs")));
+            configured.For(Path.Combine("MEditService.Index", "Probe.cs")));
         Assert.Equal(
             ReportDiagnostic.Error,
-            configured.For(Path.Combine("MEditService.Core", "Commands", "Probe.cs")));
+            configured.For(Path.Combine("MEditService.Commands", "Probe.cs")));
         Assert.All(
             ExemptSections.Select(section => section.Replace("/**.cs", "", StringComparison.Ordinal)),
             folder => Assert.Equal(
@@ -97,6 +97,48 @@ public sealed class BannedApiScopeTests
             line, StringComparison.Ordinal));
     }
 
+    // Read off disk rather than listed: a box added tomorrow is banned the moment its project file
+    // exists. Keyed on the project file, so a leftover obj folder is not a box.
+    private static IReadOnlyList<string> ProductionProjects() =>
+        [.. Directory.EnumerateFiles(
+                ArchitectureTests.SolutionDirectory(), "MEditService.*.csproj", SearchOption.AllDirectories)
+            .Select(project => Path.GetFileNameWithoutExtension(project))
+            .Where(name => !name.StartsWith("MEditService.Tests", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)];
+
+    // A game assembly is Mutagen's per-release package. Core carries identity alone and is ambient
+    // in Directory.Build.props; the serialization packages are the codec's JSON kernel (ADR-0007),
+    // not a game.
+    private static bool HoldsAGameAssembly(string project) =>
+        XDocument.Load(Path.Combine(ArchitectureTests.SolutionDirectory(), project, project + ".csproj"))
+            .Descendants("PackageReference")
+            .Select(e => (string?)e.Attribute("Include") ?? "")
+            .Any(id => id.StartsWith("Mutagen.Bethesda.", StringComparison.Ordinal)
+                && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
+                && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal));
+
+    // ADR-0005 rule 2 across the split: naming an IMod needs a game assembly, so only these two
+    // boxes can call the codec's whole-mod doors — which are public now that the adapter is its own
+    // assembly.
+    [Fact]
+    public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndBannedInEveryOtherProject()
+    {
+        var projects = ProductionProjects();
+
+        // Zero projects and a correct answer read the same; this tells them apart.
+        Assert.True(projects.Count > 5, $"The project scan found only {projects.Count} production projects.");
+
+        var holders = projects.Where(HoldsAGameAssembly).ToList();
+
+        Assert.Equal(["MEditService.Codec", "MEditService.PluginAdapter"], holders);
+
+        var configured = ConfiguredSeverities();
+        Assert.All(
+            projects.Except(holders, StringComparer.Ordinal),
+            project => Assert.Equal(
+                ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
+    }
+
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)
     {
         internal ReportDiagnostic Global =>
@@ -104,7 +146,7 @@ public sealed class BannedApiScopeTests
                 ? severity
                 : ReportDiagnostic.Default;
 
-        internal ReportDiagnostic For(string relativePath) =>
+        public ReportDiagnostic For(string relativePath) =>
             Set.GetOptionsForSourcePath(Path.Combine(SolutionDirectory, relativePath)).TreeOptions
                 .TryGetValue(Rs0030, out var severity)
                 ? severity

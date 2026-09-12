@@ -14,14 +14,17 @@ public sealed class GameNamespaceScanTests
 
     private static readonly string[] GameNamespaces = [.. GameNames.Select(game => $"Mutagen.Bethesda.{game}")];
 
-    private static readonly string[] ScannedRoots = ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+    private static readonly string[] ScannedRoots =
+    ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
     // The codec and the Plugin adapter, the two boxes the game assemblies live in.
     private static readonly string[] ExemptFolders =
     [
-        "MEditService.Core/Serialization",
-        "MEditService.Core/Schema",
-        "MEditService.Core/PluginAdapter",
+        "MEditService.Codec/Serialization",
+        "MEditService.Codec/Schema",
+        "MEditService.PluginAdapter",
     ];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/game-namespace-allowlist.txt";

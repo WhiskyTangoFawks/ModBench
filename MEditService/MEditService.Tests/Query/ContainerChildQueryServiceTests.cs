@@ -1,7 +1,7 @@
-using MEditService.Core.Notifications;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Queries;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -69,7 +69,7 @@ public class ContainerChildQueryServiceTests
     private static LoadOrderHolder Holder(params RegisteredCopy[] copies)
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrder(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
         return holder;
     }
 

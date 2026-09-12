@@ -1,14 +1,14 @@
-using MEditService.Api;
-using MEditService.Api.Endpoints;
-using MEditService.Bridge;
-using MEditService.Core.Notifications;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Http;
+using MEditService.Http.Endpoints;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -35,7 +35,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
     public void PutLoadOrder_RestoresThePreviousSnapshot_WhenTheReconcileFails()
     {
         var holder = new LoadOrderHolder();
-        var previous = new LoadOrder(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([]));
+        var previous = new LoadOrderSnapshot(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([]));
         holder.Apply(previous);
 
         var result = LoadOrderEndpoints.PutLoadOrder(

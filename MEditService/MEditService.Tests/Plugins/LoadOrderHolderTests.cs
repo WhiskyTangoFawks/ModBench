@@ -1,4 +1,4 @@
-using MEditService.Core.Plugins;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
@@ -19,7 +19,7 @@ public sealed class LoadOrderHolderTests
     public void Require_AfterApply_ReturnsTheAppliedValue()
     {
         var holder = new LoadOrderHolder();
-        var applied = new LoadOrder(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, []);
+        var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, []);
 
         holder.Apply(applied);
 
@@ -32,9 +32,9 @@ public sealed class LoadOrderHolderTests
         var holder = new LoadOrderHolder();
         // Closing the load order applies Empty; a read after it must refuse exactly as it did
         // before the first snapshot.
-        holder.Apply(new LoadOrder(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
 
-        holder.Apply(LoadOrder.Empty);
+        holder.Apply(LoadOrderSnapshot.Empty);
 
         Assert.Throws<NoLoadOrderException>(() => holder.Require());
     }

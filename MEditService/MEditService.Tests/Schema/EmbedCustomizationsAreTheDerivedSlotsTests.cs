@@ -1,5 +1,5 @@
 using System.Linq.Expressions;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Customizations;
 

@@ -1,9 +1,16 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
-using MEditService.Api;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Http;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
+using MEditService.Queries;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 
 namespace MEditService.Tests.Architecture;
 
@@ -11,14 +18,28 @@ namespace MEditService.Tests.Architecture;
 /// silently. Each test names the ADR it enforces.</summary>
 public sealed class ArchitectureTests
 {
-    private static readonly Assembly Core = typeof(IndexProjector).Assembly;
+    // Every box's own assembly, reached through one type each: a seam is an interface in whichever
+    // box publishes it, and one box's assembly would leave the other nine unscanned.
+    private static readonly Assembly[] Boxes =
+    [
+        typeof(RecordTextCodec).Assembly,
+        typeof(TrackHandler).Assembly,
+        typeof(RecordEditRequest).Assembly,
+        typeof(IndexProjector).Assembly,
+        typeof(LoadOrderSnapshot).Assembly,
+        typeof(IPluginAdapter).Assembly,
+        typeof(INotificationPublisher).Assembly,
+        typeof(IRecordQueryService).Assembly,
+        typeof(SourceRepository).Assembly,
+        typeof(ModFolderWatcher).Assembly,
+    ];
 
     // Where a DTO's own shape decides identity: the read side's models, and the wire records the
     // endpoints bind. A record in either travels to the frontend as it is declared.
     private static readonly (Assembly Assembly, string Namespace)[] DtoBoxes =
     [
-        (Core, "MEditService.Core.Queries"),
-        (typeof(RecordEditRequest).Assembly, "MEditService.Api"),
+        (typeof(IRecordQueryService).Assembly, "MEditService.Queries"),
+        (typeof(RecordEditRequest).Assembly, "MEditService.Http"),
     ];
 
     // ADR-0012: a bare filename compiles and passes single-copy tests, then misidentifies.
@@ -26,7 +47,7 @@ public sealed class ArchitectureTests
     public void PluginIdentity_TravelsAsNameAndOriginTogether_OnEverySeamMemberAndDto()
     {
         var offenders = new List<string>();
-        foreach (var type in Core.GetExportedTypes().Where(t => t.IsInterface))
+        foreach (var type in Boxes.SelectMany(box => box.GetExportedTypes()).Where(t => t.IsInterface))
         {
             foreach (var method in type.GetMethods())
             {
@@ -130,7 +151,7 @@ public sealed class ArchitectureTests
             + string.Join("\n", dead));
     }
 
-    private static readonly string LoadOrderFolder = Path.Combine("MEditService.Core", "Plugins");
+    private const string LoadOrderFolder = "MEditService.LoadOrder";
 
     // ADR-0013 invariant 4: the load order value is built from what Mod Management sent. An
     // adapter type here is a disk read on its construction path.
@@ -138,7 +159,7 @@ public sealed class ArchitectureTests
     public void TheLoadOrderValue_NamesNoPluginAdapterType()
     {
         var offenders = Offenders(
-            SolutionDirectory(), [LoadOrderFolder], "MEditService.Core.PluginAdapter", allowedFiles: []);
+            SolutionDirectory(), [LoadOrderFolder], "MEditService.PluginAdapter", allowedFiles: []);
 
         Assert.True(offenders.Count == 0,
             "The load order folder reaches into the Plugin adapter in:\n" + string.Join("\n", offenders));
@@ -167,7 +188,7 @@ public sealed class ArchitectureTests
             .Select(Path.GetFileName)
             .ToList();
 
-        Assert.Contains("LoadOrder.cs", walked);
+        Assert.Contains("LoadOrderSnapshot.cs", walked);
         Assert.Contains("Registration.cs", walked);
     }
 
@@ -220,7 +241,7 @@ public sealed class ArchitectureTests
     public void TheIndexReadInterface_HoldsOnlyMembersTheQueryServicesCall()
     {
         var queries = SourceTree
-            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Core", "Queries"))
+            .CSharpFiles(Path.Combine(SolutionDirectory(), "MEditService.Queries"))
             .Select(File.ReadAllText)
             .ToList();
         // Property getters travel as get_X methods; naming the property is what a caller does.
@@ -275,7 +296,7 @@ public sealed class ArchitectureTests
         });
 
     private static bool IsALoadOrder(Type? type) =>
-        type is not null && (type == typeof(LoadOrder) || type == typeof(LoadOrderHolder));
+        type is not null && (type == typeof(LoadOrderSnapshot) || type == typeof(LoadOrderHolder));
 
     // ADR-0013: participation is derived — enabled, winning, and named by a plugins.txt line — and
     // the load order value is the one place that rule is spelled. A second spelling is how two
@@ -291,7 +312,7 @@ public sealed class ArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["MEditService.Core/Plugins/Registration.cs"], spellings);
+        Assert.Equal(["MEditService.LoadOrder/Registration.cs"], spellings);
     }
 
     // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning
@@ -410,7 +431,10 @@ public sealed class ArchitectureTests
         Assert.Equal(allowed.Order(), present.Order());
     }
 
-    private static readonly string[] Projects = ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+    private static readonly string[] Projects =
+    ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);

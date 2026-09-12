@@ -1,7 +1,8 @@
-using MEditService.Core.Commands;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests;
 

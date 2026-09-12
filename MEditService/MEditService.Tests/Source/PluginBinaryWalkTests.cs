@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 

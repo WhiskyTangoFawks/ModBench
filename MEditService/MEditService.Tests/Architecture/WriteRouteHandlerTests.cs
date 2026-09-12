@@ -1,5 +1,5 @@
 using System.Reflection;
-using MEditService.Core.Commands;
+using MEditService.Commands;
 using MEditService.Tests.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -36,7 +36,7 @@ public sealed class WriteRouteHandlerTests
         ("GET", "/plugins/{plugin}/records/next-form-key", typeof(PeekNextFreeFormKeyHandler)),
     ];
 
-    private const string CommandsNamespace = "MEditService.Core.Commands";
+    private const string CommandsNamespace = "MEditService.Commands";
 
     // The two prefixes the record and plugin gestures live under. A mutating route under either is a
     // write route whether or not anyone gave it a handler.

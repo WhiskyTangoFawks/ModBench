@@ -4,21 +4,16 @@ using MEditService.Tests.TestSupport;
 namespace MEditService.Tests.Architecture;
 
 /// <summary>The Source repository is entered through its interface (ADR-0007): git and the layout
-/// are named nowhere else. Track, the classifier and its deferral sit in the folder but belong to
-/// Commands, so they are scanned as callers.</summary>
+/// are named nowhere else. Its own project is the whole of the inside; every other project is a
+/// caller.</summary>
 public sealed class SourceRepositoryInterfaceScanTests
 {
     private static readonly string[] ProductionRoots =
-        ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
-    private const string RepositoryRoot = "MEditService.Core/Source";
-
-    private static readonly string[] CallersInsideTheFolder =
-    [
-        "MEditService.Core/Source/TrackService.cs",
-        "MEditService.Core/Source/ExternalChangeClassifier.cs",
-        "MEditService.Core/Source/ExternalChangeDeferral.cs",
-    ];
+    private const string RepositoryRoot = "MEditService.SourceRepo";
 
     // The git CLI and the object name it prints, the meta.ini reader, the unit a path resolves to and
     // the resolver answering one, the tree reader, the writer, then the verbs beneath the documents.
@@ -54,8 +49,7 @@ public sealed class SourceRepositoryInterfaceScanTests
 
         var named = Sites(
             root,
-            [.. SourceTree.CSharpFiles(Path.Combine(root, RepositoryRoot.Replace('/', Path.DirectorySeparatorChar)))
-                .Where(file => !IsCallerInsideTheFolder(root, file))],
+            [.. SourceTree.CSharpFiles(Path.Combine(root, RepositoryRoot.Replace('/', Path.DirectorySeparatorChar)))],
             HiddenMechanism);
 
         Assert.True(
@@ -71,13 +65,8 @@ public sealed class SourceRepositoryInterfaceScanTests
 
         return [.. ProductionRoots
             .SelectMany(r => SourceTree.CSharpFiles(Path.Combine(root, r.Replace('/', Path.DirectorySeparatorChar))))
-            .Where(file => !file.StartsWith(repository, StringComparison.Ordinal)
-                || IsCallerInsideTheFolder(root, file))];
+            .Where(file => !file.StartsWith(repository, StringComparison.Ordinal))];
     }
-
-    private static bool IsCallerInsideTheFolder(string root, string file) =>
-        CallersInsideTheFolder.Contains(
-            Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/'), StringComparer.Ordinal);
 
     // A count per file and needle, not a line number: a reference is the unit of work, and a line
     // number would fail the gate for any unrelated edit above one.

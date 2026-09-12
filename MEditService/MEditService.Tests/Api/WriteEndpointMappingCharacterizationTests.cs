@@ -1,12 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Api.Endpoints;
-using MEditService.Bridge;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Http.Endpoints;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;

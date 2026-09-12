@@ -1,5 +1,5 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Source;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

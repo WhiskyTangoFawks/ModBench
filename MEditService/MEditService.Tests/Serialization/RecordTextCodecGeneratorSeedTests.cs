@@ -1,41 +1,15 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Serialization;
 
 public class RecordTextCodecGeneratorSeedTests
 {
-    // Asserting Fallout4Mod_Serialization never exists does not work: the seed necessarily names a
-    // mod-shaped argument type. Scoped to MEditService.Core.Serialization, since an unscoped version
-    // also flags the indexing and placement doors, which legitimately take a mod.
-    [Fact]
-    public void SerializationNamespace_ExposesNoPublicApiAcceptingAWholeModType()
-    {
-        var candidateTypes = typeof(RecordTextCodec).Assembly.GetTypes()
-            .Where(t => t.IsPublic && t.Namespace == "MEditService.Core.Serialization")
-            .ToList();
-
-        // A namespace typo or a rename of RecordTextCodecCustomization's namespace would leave
-        // candidateTypes empty, and every assertion below would then pass vacuously — over zero
-        // types, not over the surface this test claims to guard. Assert the set is real first.
-        Assert.NotEmpty(candidateTypes);
-
-        var offendingMembers = candidateTypes
-            .SelectMany(t => ((IEnumerable<MethodBase>)t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-                .Concat(t.GetConstructors(BindingFlags.Public | BindingFlags.Instance)))
-            .Where(m => m.GetParameters().Any(p => typeof(IModGetter).IsAssignableFrom(p.ParameterType))
-                || (m is MethodInfo mi && typeof(IModGetter).IsAssignableFrom(mi.ReturnType)))
-            .Select(m => $"{m.DeclaringType!.FullName}.{m.Name}")
-            .ToList();
-
-        Assert.Empty(offendingMembers);
-    }
-
-    // The reflection check above sees only a public signature naming a mod type, never a call, so this
-    // scans source text: the mixin's type name may appear only inside this whitelist of designated
-    // doors (ADR-0007).
+    // The doors are public because the Plugin adapter is a separate assembly; BannedApiScopeTests
+    // holds the package edge that stops another box calling them. This scans source text: the
+    // mixin's name may appear only here (ADR-0007).
     [Fact]
     public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
     {
@@ -46,7 +20,7 @@ public class RecordTextCodecGeneratorSeedTests
             "PluginTrees.cs",                  // a plugin's binary and its tree, composed
         };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -75,7 +49,7 @@ public class RecordTextCodecGeneratorSeedTests
             "HeaderDocument.cs",        // the plugin header's document, both directions
         };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -103,7 +77,7 @@ public class RecordTextCodecGeneratorSeedTests
             "HeaderDocument.cs",       // the plugin header's document, both directions
         };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -123,7 +97,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string bootstrapReceiver = "MutagenJsonConverter.Instance";
         const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        var sourceFiles = ProductionSources();
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
@@ -144,7 +118,7 @@ public class RecordTextCodecGeneratorSeedTests
         const string parallelDropoffName = "ParallelWorkDropoff";
         var doorFiles = new[] { "TrackService.cs", "PluginTrees.cs", "HeaderDocument.cs" };
 
-        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories)
+        var sourceFiles = ProductionSources()
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))
             .ToList();
         Assert.NotEmpty(sourceFiles);
@@ -173,6 +147,19 @@ public class RecordTextCodecGeneratorSeedTests
         Assert.Equal(["Mutagen.Bethesda.Serialization.Newtonsoft.MutagenJsonConverterFallout4ModMixIns"], alienPublicTypes);
     }
 
-    private static string CoreSourceRoot([CallerFilePath] string here = "") =>
-        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", "..", "MEditService.Core"));
+    // Every production project: the doors the whitelists name now sit in three of them, and a scan
+    // scoped to one would stop seeing the other two.
+    private static readonly string[] ProductionProjects =
+    [
+        "MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+        "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+        "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher",
+    ];
+
+    private static string[] ProductionSources([CallerFilePath] string here = "")
+    {
+        var solution = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
+        return [.. ProductionProjects.SelectMany(
+            project => Directory.GetFiles(Path.Combine(solution, project), "*.cs", SearchOption.AllDirectories))];
+    }
 }

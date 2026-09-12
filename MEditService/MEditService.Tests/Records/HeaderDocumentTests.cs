@@ -1,6 +1,6 @@
 using System.Text;
-using MEditService.Core.Records;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
+using MEditService.Index;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

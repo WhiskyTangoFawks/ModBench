@@ -6,7 +6,7 @@ namespace MEditService.Tests.TestSupport;
 /// empty record directory is invisible to status while failing the next ingest.</summary>
 internal static class TreeSnapshot
 {
-    internal static IReadOnlyList<string> Of(string root)
+    public static IReadOnlyList<string> Of(string root)
     {
         var lines = new List<string>();
         foreach (var entry in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))

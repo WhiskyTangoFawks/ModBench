@@ -1,5 +1,5 @@
 using System.Text.Json;
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

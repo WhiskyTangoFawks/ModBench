@@ -1,4 +1,4 @@
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog.WorkEngine;

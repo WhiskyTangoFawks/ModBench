@@ -7,17 +7,19 @@ namespace MEditService.Tests.Architecture;
 /// model.</summary>
 public sealed class ReadSideImportScanTests
 {
-    private const string ReadSideImport = "using MEditService.Core.Queries;";
+    private const string ReadSideImport = "using MEditService.Queries;";
 
-    // The kernel's two boxes, the write side's two, and the Index.
+    // The kernel's three boxes, the write side, and the three driven adapters. Whole projects, so a
+    // new folder in one joins the scan rather than sitting outside it.
     private static readonly string[] ScannedRoots =
     [
-        "MEditService.Core/Schema",
-        "MEditService.Core/Edits",
-        "MEditService.Core/Commands",
-        "MEditService.Core/PluginAdapter",
-        "MEditService.Core/Plugins",
-        "MEditService.Core/Records",
+        "MEditService.Codec",
+        "MEditService.LoadOrder",
+        "MEditService.Ports",
+        "MEditService.Commands",
+        "MEditService.Index",
+        "MEditService.PluginAdapter",
+        "MEditService.SourceRepo",
     ];
 
     [Fact]
@@ -41,7 +43,7 @@ public sealed class ReadSideImportScanTests
             Directory.CreateDirectory(Path.Combine(root, "Schema", "obj"));
             File.WriteAllText(Path.Combine(root, "Schema", "Leaf.cs"), ReadSideImport + "\n");
             File.WriteAllText(Path.Combine(root, "Schema", "obj", "Generated.cs"), ReadSideImport + "\n");
-            File.WriteAllText(Path.Combine(root, "Schema", "Clean.cs"), "using MEditService.Core.Records;\n");
+            File.WriteAllText(Path.Combine(root, "Schema", "Clean.cs"), "using MEditService.Index;\n");
 
             Assert.Equal(["Schema/Leaf.cs"], Importers(root, ["Schema"]));
         }

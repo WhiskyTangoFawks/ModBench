@@ -1,4 +1,5 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
 

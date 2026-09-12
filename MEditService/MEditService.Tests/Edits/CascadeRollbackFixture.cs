@@ -1,13 +1,13 @@
-using MEditService.Api;
-using MEditService.Bridge;
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.Http;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -40,7 +40,7 @@ public sealed class CascadeRollbackFixture : IDisposable
     /// value, and only the projection question needs an Index.</summary>
     public IndexProjector? Index { get; }
 
-    public LoadOrder LoadOrder { get; }
+    public LoadOrderSnapshot LoadOrder { get; }
     public RenumberRecordHandler RenumberHandler { get; }
 
     /// <summary>The same snapshot as a list, for a test reconciling an index over these trees.</summary>
@@ -99,7 +99,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         (Race, HomeNpc, FirstNpc, SecondNpc) = (race, home, first, second);
 
-        LoadOrder = new LoadOrder(_data.GameDirectory, _data.GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins));
+        LoadOrder = new LoadOrderSnapshot(_data.GameDirectory, _data.GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins));
 
         var track = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
         foreach (var origin in new[] { TargetMod, FirstMod, SecondMod })
@@ -126,7 +126,7 @@ public sealed class CascadeRollbackFixture : IDisposable
         _watcher.Rearm(holder.Current);
     }
 
-    public string ModFolderOf(PluginKey plugin) => ModFolders.Of(LoadOrder, plugin)!;
+    public string ModFolderOf(PluginKey plugin) => LoadOrder.ModFolderOf(plugin)!;
 
     public string SourceFileOf(PluginKey plugin, FormKey formKey, string recordType, string editorId) =>
         SourceDocumentPath.Of(

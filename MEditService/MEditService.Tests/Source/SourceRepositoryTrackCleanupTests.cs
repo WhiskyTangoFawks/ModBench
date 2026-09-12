@@ -1,4 +1,5 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 
@@ -16,7 +17,7 @@ public sealed class SourceRepositoryTrackCleanupTests
         {
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,
-                [new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
+                [new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             Assert.True(Directory.Exists(Path.Combine(modFolder, ".git")));
@@ -42,7 +43,7 @@ public sealed class SourceRepositoryTrackCleanupTests
             // disk, so Directory.CreateDirectory throws partway through Track's write loop, after `git init`
             // has run: the half-done state cleanup must undo.
             File.WriteAllText(Path.Combine(modFolder, "Poison"), "not a directory");
-            var poisonedFile = new PristineFile(Path.Combine("Poison", "record.json"), "{}"u8.ToArray());
+            var poisonedFile = new TreeFile(Path.Combine("Poison", "record.json"), "{}"u8.ToArray());
 
             Assert.ThrowsAny<IOException>(() =>
                 SourceRepository.Track(modFolder, SourcePreset.Edits, [poisonedFile], new TrackProvenance(null, null, new Dictionary<string, string>())));
@@ -68,10 +69,10 @@ public sealed class SourceRepositoryTrackCleanupTests
             Directory.CreateDirectory(Path.Combine(modFolder, "source", "Test.esp"));
             File.WriteAllText(Path.Combine(modFolder, "source", "Test.esp", "weap_"), "not a directory");
 
-            IReadOnlyList<PristineFile> pristineFiles =
+            IReadOnlyList<TreeFile> pristineFiles =
             [
-                new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
-                new PristineFile("source/Test.esp/weap_/Test.esp/000002.json", "{}"u8.ToArray()),
+                new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()),
+                new TreeFile("source/Test.esp/weap_/Test.esp/000002.json", "{}"u8.ToArray()),
             ];
 
             Assert.ThrowsAny<IOException>(() =>

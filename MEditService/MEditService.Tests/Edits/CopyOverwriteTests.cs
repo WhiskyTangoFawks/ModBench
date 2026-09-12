@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
 
 namespace MEditService.Tests.Edits;
 

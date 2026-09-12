@@ -1,7 +1,7 @@
 using System.Text.Json;
-using MEditService.Core.Plugins;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -62,7 +62,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         catch (UnauthorizedAccessException) { /* ditto */ }
     }
 
-    private PristineFile[] PristineFiles() =>
+    private TreeFile[] PristineFiles() =>
     [
         new(CellPath, Serialize(_cell)),
         new(QuestPath, Serialize(_quest)),

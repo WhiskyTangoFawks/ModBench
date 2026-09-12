@@ -1,4 +1,4 @@
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
 
 namespace MEditService.Tests.Indexing;
 

@@ -1,5 +1,6 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.TestSupport;
 
@@ -8,6 +9,6 @@ namespace MEditService.Tests.TestSupport;
 internal sealed class ForgedTreeWriteAdapter(TreeDeserializer deserialize) : ReadOnlyPluginAdapter
 {
     public override Task WriteFromTreeAsync(
-        IReadOnlyList<PristineFile> files, string destinationPath, CancellationToken cancel = default) =>
+        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
         PluginTrees.WriteFromTreeAsync(files, destinationPath, deserialize, cancel);
 }

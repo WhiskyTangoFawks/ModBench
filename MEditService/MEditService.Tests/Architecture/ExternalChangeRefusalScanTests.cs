@@ -12,7 +12,9 @@ public sealed class ExternalChangeRefusalScanTests
     private static readonly string[] RetiredStrings = ["Absorb Upstream Update", "Keep as My Edit"];
 
     private static readonly string[] ScannedRoots =
-        ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+        ["MEditService.Codec", "MEditService.Commands", "MEditService.Http", "MEditService.Index",
+         "MEditService.LoadOrder", "MEditService.PluginAdapter", "MEditService.Ports",
+         "MEditService.Queries", "MEditService.SourceRepo", "MEditService.Watcher"];
 
     [Fact]
     public void TheEditingAndSourceStack_NeverNamesARetiredExternalChangeButtonString()

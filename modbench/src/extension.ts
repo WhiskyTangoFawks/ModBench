@@ -255,7 +255,7 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
 function backendOptions(port: number, channel: vscode.LogOutputChannel): BackendLifecycleOptions {
   // Bundled backend binary (see build:backend / .vscodeignore). __dirname is
   // out/ at runtime; the published self-contained executable lives in backend/.
-  const backendExe = process.platform === 'win32' ? 'MEditService.Api.exe' : 'MEditService.Api';
+  const backendExe = process.platform === 'win32' ? 'MEditService.Http.exe' : 'MEditService.Http';
   return {
     port,
     log: (msg) => channel.info(msg),

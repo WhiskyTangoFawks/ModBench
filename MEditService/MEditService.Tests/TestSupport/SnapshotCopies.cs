@@ -1,4 +1,4 @@
-using MEditService.Core.Plugins;
+using MEditService.LoadOrder;
 
 namespace MEditService.Tests;
 
@@ -7,6 +7,6 @@ namespace MEditService.Tests;
 /// API's deriver instead.</summary>
 internal static class SnapshotCopies
 {
-    internal static IReadOnlyList<RegisteredCopy> Of(IReadOnlyList<LoadOrderEntry> entries) =>
+    public static IReadOnlyList<RegisteredCopy> Of(IReadOnlyList<LoadOrderEntry> entries) =>
         [.. entries.Select(entry => RegisteredCopy.Of(entry))];
 }
