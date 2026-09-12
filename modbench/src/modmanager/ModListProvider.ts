@@ -7,7 +7,8 @@ import type { ModStatus, ModStatusResult } from './statusChecker';
 // home would be warranted if a third consumer appears; not worth the churn yet.
 import { dropIndexForMove } from './mo2/pluginsText';
 import type { Reporter } from '../reporter';
-import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from './instance';
+import type { InstanceValue, InstanceView } from './instance';
+import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from '../errorNode';
 import {
   moveModToSeparator as moveModToSeparatorCommand,

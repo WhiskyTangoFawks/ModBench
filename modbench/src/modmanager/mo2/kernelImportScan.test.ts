@@ -32,9 +32,14 @@ function importSpecifiers(sourceText: string, fileName: string): string[] {
   return found;
 }
 
+// The codecs are pure, bytes in and bytes out (ADR-0015): a kernel module never opens a file
+// itself, so these two are disallowed even though every other node: builtin is fine.
+const FS_SPECIFIERS = new Set(['node:fs', 'node:fs/promises', 'fs', 'fs/promises']);
+
 // A relative specifier counts only if it resolves inside mo2/ itself — `../model` is one
 // directory up, so it fails even though it starts with `.`.
 function isAllowedSpecifier(spec: string, fromFile: string): boolean {
+  if (FS_SPECIFIERS.has(spec)) return false;
   if (spec.startsWith('node:')) return true;
   if (!spec.startsWith('.')) return false;
   const resolved = resolve(dirname(fromFile), spec);
@@ -68,6 +73,19 @@ describe('mo2 kernel imports nothing outside mo2/', () => {
       const planted = join(dir, 'planted.ts');
       await writeFile(planted, "import type { ModlistEntry } from '../model';\n");
       expect(disallowedSpecifiers(planted)).toEqual(['../model']);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  // Rival this catches: a codec reaching into node:fs/promises to read the file itself instead
+  // of taking its text as a parameter — the kernel is pure, bytes in and bytes out.
+  it('flags a node:fs or node:fs/promises import planted in a kernel module', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'medit-kernel-import-scan-'));
+    try {
+      const planted = join(dir, 'planted.ts');
+      await writeFile(planted, "import { readFile } from 'node:fs/promises';\nimport { existsSync } from 'node:fs';\n");
+      expect(disallowedSpecifiers(planted)).toEqual(['node:fs/promises', 'node:fs']);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
