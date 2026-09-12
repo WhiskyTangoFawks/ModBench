@@ -12,6 +12,7 @@ mo2files.label: MO2 files
 codecs: @../target-architecture.modbench_kernel.codecs
 codecs.label: MO2 file codecs
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
+toolbox: @../target-architecture.modbench_driving.toolbox
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 
@@ -22,4 +23,5 @@ instance -> codecs: bytes {class: loadout}
 codecs -> instance: "parsed, one codec per file" {class: loadout}
 instance."one immutable value, replaced whole; sequence +1; a parse failure keeps the last"
 instance -> views: value {class: loadout}
-instance -> client: load order snapshot, on change {class: loadout}
+instance -> toolbox: load order snapshot, on change {class: loadout}
+toolbox -> client: load order snapshot, on change {class: loadout}
