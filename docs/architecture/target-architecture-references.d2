@@ -1,0 +1,88 @@
+# The reference view: the zoom-out's boxes with one arrow per reference, from the box that
+# references to the box it references. This picture is each project's reference list. A thin
+# purple arrow is a read or write of a system of record, not a reference. A grey arrow is the
+# user, another tool, or the wire between the two processes. Payloads are the traces' job.
+...@target-architecture
+grid-rows: 7
+grid-columns: 2
+medit_drivers.modbench: null
+modbench_data.medit: null
+medit_drivers: "MEDIT · Drivers — its clients; Modbench is the right column, its client the seam"
+
+# mEdit: driving adapters
+medit_driving.http -> medit_core.commands {class: ref}
+medit_driving.http -> medit_core.queries {class: ref}
+medit_driving.http -> medit_core.port {class: ref}
+medit_driving.http -> medit_kernel.loadorder {class: ref}
+medit_driving.http -> medit_driven.index {class: ref}
+medit_driving.watcher -> medit_core.commands {class: ref}
+medit_driving.watcher -> medit_core.port {class: ref}
+medit_driving.watcher -> medit_driven.index {class: ref}
+medit_driving.watcher -> medit_data.plugin {class: store}
+medit_driving.watcher -> medit_data.source {class: store}
+medit_driving.watcher -> modbench_data.mo2 {class: store}
+# mEdit: core
+medit_core.commands -> medit_driven.sourcerepo {class: ref}
+medit_core.commands -> medit_driven.pluginadapter {class: ref}
+medit_core.commands -> medit_core.port {class: ref}
+medit_core.commands -> medit_kernel.loadorder {class: ref}
+medit_core.commands -> medit_kernel.codec {class: ref}
+medit_core.queries -> medit_driven.index {class: ref}
+# mEdit: driven adapters
+medit_driven.index -> medit_kernel.loadorder {class: ref}
+medit_driven.index -> medit_kernel.codec {class: ref}
+medit_driven.index -> medit_driven.sourcerepo {class: ref}
+medit_driven.index -> medit_driven.pluginadapter {class: ref}
+medit_driven.index -> medit_core.port {class: ref}
+medit_driven.sourcerepo -> medit_data.source {class: store}
+medit_driven.pluginadapter -> medit_data.plugin {class: store}
+# the wire between the processes
+medit_drivers.panel -> medit_driving.http {class: outside}
+medit_drivers.scripts -> medit_driving.http {class: outside}
+modbench_core.client -> medit_driving.http {class: outside}
+medit_drivers.panel -> modbench_kernel.wire {class: ref}
+modbench_core.client -> modbench_kernel.wire {class: ref}
+
+# Modbench: views
+modbench_drivers.user -> modbench_driving {class: outside}
+modbench_driving.toolbox -> modbench_driven.instance {class: ref}
+modbench_driving.mods -> modbench_driven.instance {class: ref}
+modbench_driving.plugins -> modbench_driven.instance {class: ref}
+modbench_driving.downloads -> modbench_driven.instance {class: ref}
+modbench_driving.editor -> modbench_core.client {class: ref}
+modbench_driving.plugins -> modbench_core.client {class: ref}
+modbench_driving.mods -> modbench_core.modlist {class: ref}
+modbench_driving.plugins -> modbench_core.pluginscommands {class: ref}
+modbench_driving.toolbox -> modbench_core.instancecommands {class: ref}
+modbench_driving.downloads -> modbench_core.install {class: ref}
+modbench_driving.toolbox -> modbench_kernel.tables {class: ref}
+modbench_driving.toolbox -> modbench_data.gamedata {class: store}
+# Modbench: core
+modbench_core.modlist -> modbench_kernel.codecs {class: ref}
+modbench_core.pluginscommands -> modbench_kernel.codecs {class: ref}
+modbench_core.instancecommands -> modbench_kernel.codecs {class: ref}
+modbench_core.install -> modbench_kernel.codecs {class: ref}
+modbench_core.modlist -> modbench_driven.instance {class: ref}
+modbench_core.pluginscommands -> modbench_driven.instance {class: ref}
+modbench_core.pluginscommands -> modbench_core.client {class: ref}
+modbench_core.install -> modbench_data.mo2 {class: store}
+modbench_kernel.codecs -> modbench_data.mo2 {class: store}
+# Modbench: driven adapters
+modbench_driven.instance -> modbench_kernel.codecs {class: ref}
+modbench_driven.instance -> modbench_kernel.tables {class: ref}
+modbench_driven.instance -> modbench_core.client {class: ref}
+modbench_driven.instance -> modbench_data.mo2 {class: store}
+modbench_driven.instance -> modbench_data.gamedata {class: store}
+# other tools
+medit_data.tools -> medit_data.plugin {class: outside}
+modbench_data.tools -> modbench_data.mo2 {class: outside}
+
+legend: "One arrow per reference, from the box that references to the box it references." {
+  class: band; grid-rows: 1
+  ref: "a project reference" {class: ref}
+  store: "a read or write of a system of record" {class: store}
+  outside: "the user, another tool, or the wire between the processes" {class: outside}
+}
+reading: "A box's reference list is the arrows that leave it here, plus its column's kernel by the band's rule. A composition root, the HTTP endpoints on mEdit and Toolbox and the activation file on Modbench, references every box below it by definition. A reference this picture does not draw is a question for the maintainer, never a line an agent adds." {
+  class: band
+}

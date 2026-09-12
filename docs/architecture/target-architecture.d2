@@ -1,89 +1,89 @@
 # The zoom-out. Row = layer, column = process; each mEdit layer sits beside its Modbench
-# twin and means the same thing: who drives, the write and read sides, the kernel both
-# read, the adapters over the systems of record, the systems of record. A box carries its
-# interface and what it hides. No arrows here: every data flow is a trace in traces/.
+# twin and means the same thing. A module box carries three lines: its name, its interface,
+# what it hides. A cylinder is a store and carries what it holds. No arrows here: references
+# are target-architecture-references.d2, and every data flow is a trace in traces/.
 ...@styles
 grid-rows: 6
 grid-columns: 2
 grid-gap: 24
 
-me1: "MEDIT · Front end — its clients" {
+medit_drivers: "MEDIT · Drivers — its clients" {
   class: band; grid-rows: 1
   modbench: "Modbench\nthe right column" {class: driving}
   panel: "Record panel\nthe webview; its own read client (ADR-0007)" {class: driving}
   scripts: "Python scripts\na second HTTP client" {class: driving}
 }
-mb1: "MODBENCH · The user — in VS Code's trees, panels and palette" {
+modbench_drivers: "MODBENCH · Drivers — the user, in VS Code's trees, panels and palette" {
   class: band; grid-rows: 1
   user: "The user\nclicks, checks, drags, types" {class: other}
 }
 
-me2: "MEDIT · API — driving adapters" {
+medit_driving: "MEDIT · Driving adapters — the API and the watcher" {
   class: band; grid-rows: 1
-  http: "HTTP endpoints\nand the notification stream, the port's SSE adapter" {class: driving}
-  watcher: "Mod watcher\none per mod in the load order, recursive; the Source repository names its paths (#813)\nroutes: plugin bytes → record index · source → record index · git refs → committed view · anything else in a tracked mod → external change" {class: driving}
+  http: "HTTP endpoints\ninterface: one endpoint per command and query; the notification\nstream\nhides: the port's SSE adapter; the composition root of mEdit" {class: driving}
+  watcher: "Mod watcher\ninterface: watch every mod in the load order; the Source\nrepository names the paths\nhides: one recursive watcher per mod; settle per mod; the route\nper path: plugin bytes, source, git refs, anything else in a\ntracked mod" {class: driving}
 }
-mb2: "MODBENCH · Views — driving adapters: read a value, fire a command" {
+modbench_driving: "MODBENCH · Driving adapters — the views: read a value, fire a command" {
   class: band; grid-rows: 1
-  toolbox: "Toolbox\ninterface: game, profile, deploy, purge, run, refresh, settings\nhides: deploy (hardlinks, manifest, first-deploy consent); the composition root of the MO2 side" {class: driving}
-  mods: Mods {class: driving}
-  plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of Instance and client by plugin name and origin; the external-change dialog" {class: driving}
-  downloads: "Downloads\ninterface: install, upgrade\nhides: the target pick, candidates by Nexus id, always confirmed" {class: driving}
+  toolbox: "Toolbox\ninterface: game, profile, deploy, purge, run, refresh, settings\nhides: deploy: hardlinks, manifest, first-deploy consent; the\ncomposition root of the MO2 side" {class: driving}
+  mods: "Mods\ninterface: enable, reorder, separators, uninstall, new empty\nmod, open folder\nhides: the tree: separators, sort direction, the overwrite row,\nstatus badges" {class: driving}
+  plugins: "Plugins\ninterface: rows and children in one tree; the plugin gestures\nhides: the join of Instance and client by plugin name and\norigin; the external-change dialog" {class: driving}
+  downloads: "Downloads\ninterface: install, upgrade\nhides: the target pick: candidates by Nexus id, always confirmed" {class: driving}
   editor: "Editor\ninterface: open record · active record\nhides: the record panel's host · Referenced By" {class: driving}
 }
 
-me3: "MEDIT · Core — the write side, the read side, the port the front end hears" {
+medit_core: "MEDIT · Core — the write side, the read side, the port the front end hears" {
   class: band; grid-rows: 1
-  cmd: "Commands\none handler per gesture: edit, create, delete, copy, renumber, track, compile, absorb, keep\nhides: resolution under the load order, external-change check, rename" {class: core}
-  qry: "Queries\ncompare, references, children, filter" {class: core}
-  port: "Notification port\npublish: rows changed · plugin changed · load order status · track progress · external change pending, per mod, with its default" {class: core}
+  commands: "Commands\ninterface: one handler per gesture: edit, create, delete, copy,\nrenumber, track, compile, absorb, keep; each answers applied or\nrefusal\nhides: resolution under the load order; the external-change\ncheck; rename" {class: core}
+  queries: "Queries\ninterface: compare, references, children, filter\nhides: the record index's reads" {class: core}
+  port: "Notification port\ninterface: publish: rows changed · plugin changed · load order\nstatus · track progress · external change pending, per mod, with\nits default\nhides: the transport; a test double is the second adapter" {class: core}
 }
-mb3: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes and forgets" {
+modbench_core: "MODBENCH · Core — one command per gesture, beside the codec of the file it writes; each writes and forgets" {
   class: band; grid-rows: 1
-  modlist: "modlist commands\nenable, reorder, separators, uninstall, new empty mod, adopt unlisted folders" {class: core}
-  pluginscmd: "plugins commands\nenable, reorder, reconcile against disk" {class: core}
-  instance: "instance commands\nswitch profile" {class: core}
-  install: "install\nnew mod: staging, then one rename into mods/\nupgrade: replace the folder's contents in place around .git" {class: core}
-  client: "mEdit client\ninterface: commands, one per handler → applied or refusal · queries · subscribe by kind · put load order · start, stop, status\nhides: HTTP adapter and in-memory adapter; the process (ADR-0002)" {class: core}
-}
-
-me4: "MEDIT · Shared kernel — read by every box above it; a kernel box references only Vocabulary" {
-  class: band; grid-rows: 1
-  vocab: "Vocabulary\nthe value types every box shares" {class: core}
-  loadorder: "Load order state\nhome of the winner and participation rules" {class: core}
-  codec: "Codec + schema\nMutagen owns the typing\nhides: the game assemblies live here" {class: core}
-}
-mb4: "MODBENCH · Shared kernel — pure; read by every box above it, the record panel included; a kernel box references nothing" {
-  class: band; grid-rows: 1
-  codecs: "MO2 file codecs\nparse and byte-faithful splice: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini\nhides: installedFiles in MO2's form; game name → release" {class: core}
-  wire: "Wire\nthe generated API types and the webview message protocol" {class: core}
-  tables: "per-release tables\ngame paths · load-order file destination" {class: core}
+  modlist: "modlist commands\ninterface: enable, reorder, separators, uninstall, new empty\nmod, adopt unlisted folders\nhides: the write of modlist.txt" {class: core}
+  pluginscommands: "plugins commands\ninterface: enable, reorder, reconcile against disk\nhides: the write of plugins.txt" {class: core}
+  instancecommands: "instance commands\ninterface: switch profile\nhides: the write of ModOrganizer.ini" {class: core}
+  install: "install\ninterface: new mod, upgrade\nhides: staging, then one rename into mods/; an upgrade replaces\nthe folder's contents in place around .git" {class: core}
+  client: "mEdit client\ninterface: commands, one per handler, each applied or refusal ·\nqueries · subscribe by kind · put load order · start, stop,\nstatus\nhides: the HTTP adapter and the in-memory adapter; the process\n(ADR-0002)" {class: core}
 }
 
-me5: "MEDIT · Access — driven adapters; the record index is a view over the two beside it" {
+medit_kernel: "MEDIT · Kernel — read by every box above it; a kernel box references only Vocabulary" {
   class: band; grid-rows: 1
-  index: "Record index — one deep module, rebuildable" {
-    proj: "Projector\nrefresh keys, validate by hash, sequence\nasks the load order and the schema, decides nothing" {class: driven}
+  vocabulary: "Vocabulary\ninterface: the value types every box shares\nhides: nothing; values only" {class: core}
+  loadorder: "Load order state\ninterface: the snapshot; which copy wins; who participates\nhides: the winner and participation rules" {class: core}
+  codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences and children\nhides: the game assemblies; Mutagen owns the typing" {class: core}
+}
+modbench_kernel: "MODBENCH · Kernel — pure; read by every box above it, the record panel included; a kernel box references nothing" {
+  class: band; grid-rows: 1
+  codecs: "MO2 file codecs\ninterface: parse and byte-faithful splice: modlist.txt ·\nplugins.txt · meta.ini · ModOrganizer.ini\nhides: installedFiles in MO2's form; game name to release" {class: core}
+  wire: "Wire\ninterface: the generated API types; the webview message protocol\nhides: nothing; generated" {class: core}
+  tables: "per-release tables\ninterface: game paths · load-order file destination\nhides: every game name" {class: core}
+}
+
+medit_driven: "MEDIT · Driven adapters — the record index is a view over the two beside it" {
+  class: band; grid-rows: 1
+  index: "Record index — one deep module, rebuildable\ninterface: refresh by keys · validate by hash · reconcile from\nthe load order · the sequence and its await · reads\nhides: the Projector and the Store" {
+    projector: "Projector\nasks the load order and the schema, decides nothing" {class: driven}
     store: "Store\nDuckDB" {class: derived}
   }
-  srcrepo: "Source repository\nget, put, remove, rename; what to watch\nlayout and git hidden" {class: driven}
-  plgadapter: "Plugin adapter\nMutagen read and write\nhides: the game assemblies live here" {class: driven}
+  sourcerepo: "Source repository\ninterface: get, put, remove, rename; what to watch\nhides: layout and git" {class: driven}
+  pluginadapter: "Plugin adapter\ninterface: Mutagen read and write\nhides: the game assemblies" {class: driven}
 }
-mb5: "MODBENCH · Access — the Instance is derived from MO2's files by watching, and nothing else" {
+modbench_driven: "MODBENCH · Driven adapters — the Instance is derived from MO2's files by watching, and nothing else" {
   class: band; grid-rows: 1
-  instance: "Instance\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher, the debounce, the winner and participation rules; a parse failure keeps the last value" {class: driven}
+  instance: "Instance\ninterface: current value · subscribe · refresh · sequence\nhides: every MO2-side watcher; the debounce; the winner and\nparticipation rules; a parse failure keeps the last value" {class: driven}
 }
 
-me6: "MEDIT · Data — systems of record" {
+medit_data: "MEDIT · Systems of record" {
   class: band; grid-rows: 1
   source: "Source tree in git" {class: sor}
   plugin: "Plugin files" {class: sor}
   tools: "Other tools\nMO2, xEdit, CK, the game — at any time" {class: other}
 }
-mb6: "MODBENCH · Data — systems of record; mEdit is the left column and always running" {
+modbench_data: "MODBENCH · Systems of record; mEdit is the left column and always running" {
   class: band; grid-rows: 1
-  mo2: "MO2 instance\nhides: profiles/*/modlist.txt, plugins.txt · ModOrganizer.ini · mods/*/meta.ini · mods/ · overwrite/ · downloads/" {class: sor}
-  gamedata: "Game Data/\nhides: derived; the manifest is its hash" {class: derived}
+  mo2: "MO2 instance\nprofiles/*/modlist.txt, plugins.txt · ModOrganizer.ini ·\nmods/*/meta.ini · mods/ · overwrite/ · downloads/" {class: sor}
+  gamedata: "Game Data/\nderived; the manifest is its hash" {class: derived}
   tools: "Other tools\nMO2, the user, the game — at any time" {class: other}
   medit: "mEdit\nthe left column" {class: driving}
 }
