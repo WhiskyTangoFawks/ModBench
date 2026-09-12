@@ -31,9 +31,9 @@
    the file and the record index exactly as they were.
 6. **The webview decides nothing.** It renders a cell from the metadata, names no game, holds no
    default beyond what an omitted member means, and posts what the user asked for. The codec and
-   a short closed list of metadata-driven pre-checks refuse on the server; anything not on that
-   list is not a check. A value's resolution arrives with it, because a link affordance is decided
-   before the hover
+   a short closed list of pre-checks that need only the schema refuse on the server; anything not
+   on that list is not a check. A value's resolution arrives with it, because a link affordance is
+   decided before the hover
    ([ADR-0019](0019-failures-are-data-the-front-end-decides-how-to-surface-them.md)).
 7. **A cascade idles by removing.** When a governing member's change puts a sibling out of use,
    the write side removes that member, so it reads as its declared default and never the CLR
