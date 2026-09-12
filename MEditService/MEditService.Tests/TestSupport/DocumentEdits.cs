@@ -1,6 +1,5 @@
 using System.Text;
 using MEditService.Core.Edits;
-using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,12 +16,12 @@ internal static class DocumentEdits
 
     internal static RecordEditResult? Apply(
         string text, RecordTableSchema schema, RecordEditEnvelope envelope, out string written,
-        Func<string, RecordLookupEntry?>? resolve = null, IReadOnlyList<PathHop>? prefix = null, string? ownerRecordType = null)
+        IReadOnlyList<PathHop>? prefix = null, string? ownerRecordType = null)
     {
         var recordType = ownerRecordType ?? schema.TableName;
         return DocumentEdit.Patch(
             new DocumentEditRequest(
-                text, prefix ?? [], schema, envelope, GameRelease.Fallout4, resolve ?? (_ => null),
+                text, prefix ?? [], schema, envelope, GameRelease.Fallout4,
                 patched => schema.IsHeader && prefix is null or { Count: 0 }
                     ? Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
                     : RoundTrip(patched, recordType)),

@@ -25,7 +25,6 @@ public enum RecordEditRefusal
     /// <summary>Permanently unwritable (masters are compile-derived, ADR-0008), unlike the state-dependent Partial Form refusal.</summary>
     FieldReadOnly,
 
-    /// <summary>Blocked at edit time rather than reported afterwards: always a data error.</summary>
     InvalidFormLink,
 
     /// <summary>Refused per mod, compile included, until the Absorb/Keep dialog is answered; the way out is answering it.</summary>

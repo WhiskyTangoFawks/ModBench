@@ -75,10 +75,9 @@ public class CheckErrorBuilderTests
         Assert.Equal("[0].Faction: Found a NULL reference, expected: fact", err);
     }
 
-    // A stored document omits an unset non-nullable link, which is a NULL reference worth flagging;
-    // a write payload omitting a member asserts nothing about it.
+    // A stored document omits an unset non-nullable link, which is a NULL reference worth flagging.
     [Fact]
-    public void Build_AbsentNonNullableMember_IsANullReferenceInADocument_AndNothingInAPayload()
+    public void Build_AbsentNonNullableMember_IsANullReference()
     {
         var factionField = new FieldMetadata("Faction", "formKey", false, ["fact"], [], AllowsNull: false);
         var meta = new FieldMetadata("Factions", "array", true, [], [],
@@ -87,7 +86,6 @@ public class CheckErrorBuilderTests
 
         Assert.Equal("[0].Faction: Found a NULL reference, expected: fact",
             CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4));
-        Assert.Null(CheckErrorBuilder.Build(meta, value, _ => null, GameRelease.Fallout4, absentMeansNull: false));
     }
 
     // An absent member with a declared default is checked as that default, not as nothing.

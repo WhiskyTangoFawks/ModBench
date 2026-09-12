@@ -26,8 +26,6 @@ internal static class TestEditService
             .AddSingleton<IPluginAdapter, MutagenPluginAdapter>()
             .AddSingleton<RecordTextCodec>()
             .AddSingleton(SharedSchemaReflector.Instance)
-            .AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
-                held, sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<SchemaReflector>()))
             .AddSingleton<TrackService>()
             .AddSingleton<PluginWriter>()
             .AddSingleton<PluginCompileService>()

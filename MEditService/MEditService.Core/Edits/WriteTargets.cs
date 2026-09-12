@@ -198,7 +198,7 @@ internal sealed class WriteTargets(
     }
 
     // A tracked copy allocates from its source tree; an untracked one has none, so the Plugin
-    // adapter answers from its own bytes, as the form-link resolver's untracked branch does.
+    // adapter answers from its own bytes.
     internal Allocator AllocatorFor(RegisteredCopy copy, PluginKey plugin)
     {
         if (ModFolders.Of(loadOrder.Current, plugin) is { } modFolder

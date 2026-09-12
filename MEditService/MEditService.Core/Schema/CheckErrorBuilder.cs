@@ -8,24 +8,18 @@ namespace MEditService.Core.Schema;
 /// TES5Edit's read (wbImplementation.pas); the resolved/wrong-type/unresolved split is mEdit's own.</summary>
 public static class CheckErrorBuilder
 {
-    // ADR-0005: `resolve` is the O(1) form_lookup read, not a per-table scan. absentMeansNull: a
-    // stored document omits an unset link, a fact about the record; a write payload omitting one
-    // asserts nothing about it.
+    // ADR-0005: `resolve` is a lookup the caller already holds — the Index's O(1) form_lookup read
+    // on the read side, the load order's link cache at compile — never a scan started here.
     public static string? Build(
-        FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release,
-        bool absentMeansNull = true, Func<string, bool>? answersFor = null)
+        FieldMetadata meta, JsonElement? value, Func<string, RecordLookupEntry?> resolve, GameRelease release)
     {
         var entries = new List<string>();
         FormReferences.Walk(meta, value, "",
             (path, raw, allowsNull, validTypes) =>
             {
-                // A record the caller cannot speak for is left unchecked: "unresolved" would be a
-                // claim it has no basis for. The global lookup speaks for every record and passes null.
-                if (raw is not null && raw != "Null" && answersFor is { } answers && !answers(raw)) return;
                 var err = CheckScalar(raw, allowsNull, validTypes, resolve, release);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
-            },
-            absentMeansNull);
+            });
         return entries.Count > 0 ? string.Join("; ", entries) : null;
     }
 

@@ -16,7 +16,6 @@ internal sealed record DocumentEditRequest(
     RecordTableSchema Schema,
     RecordEditEnvelope Envelope,
     GameRelease Release,
-    Func<string, RecordLookupEntry?> Resolve,
     Func<string, string> RoundTrip);
 
 /// <summary>A write is a patch on the document (ADR-0005): resolve, pre-check, cascade, patch, key
@@ -51,8 +50,8 @@ internal static class DocumentEdit
             ? PatchSyntheticBit(record, bit, envelope, spelled, out edited, out editedMeta)
             : envelope.Op switch
             {
-                RecordEditEnvelope.Set => Set(cursor, envelope.Value!.Value, request, spelled, out edited, out editedMeta),
-                RecordEditEnvelope.Add => Add(cursor, envelope.Value, request, spelled, out edited, out editedMeta),
+                RecordEditEnvelope.Set => Set(cursor, envelope.Value!.Value, spelled, out edited, out editedMeta),
+                RecordEditEnvelope.Add => Add(cursor, envelope.Value, spelled, out edited, out editedMeta),
                 RecordEditEnvelope.Remove => Remove(cursor, out edited, out editedMeta),
                 _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
@@ -322,7 +321,7 @@ internal static class DocumentEdit
     // ── the operations ──────────────────────────────────────────────────────
 
     private static RecordEditResult? Set(
-        Cursor cursor, JsonElement value, DocumentEditRequest request, string spelled,
+        Cursor cursor, JsonElement value, string spelled,
         out JsonNode? edited, out FieldMetadata editedMeta)
     {
         edited = null;
@@ -333,8 +332,6 @@ internal static class DocumentEdit
         var node = value.ValueKind == JsonValueKind.Null ? null : JsonNode.Parse(value.GetRawText());
         if (PreCheck(node, cursor.Meta, cursor.Node, spelled) is { } refused) return refused;
         Cascade(node, cursor.Meta, cursor.Node);
-        if (CheckErrorBuilder.Build(cursor.Meta, value, request.Resolve, request.Release, absentMeansNull: false) is { } linkError)
-            return RecordEditResult.RefusedAt(RecordEditRefusal.InvalidFormLink, spelled, $"'{spelled}': {linkError}");
 
         if (cursor.OwnerArray != null)
         {
@@ -442,7 +439,7 @@ internal static class DocumentEdit
               && SameShape(a.ElementType, b.ElementType);
 
     private static RecordEditResult? Add(
-        Cursor cursor, JsonElement? value, DocumentEditRequest request, string spelled,
+        Cursor cursor, JsonElement? value, string spelled,
         out JsonNode? edited, out FieldMetadata editedMeta)
     {
         edited = null;
@@ -460,8 +457,6 @@ internal static class DocumentEdit
             : DefaultElement(elementMeta);
         if (PreCheck(element, elementMeta, null, $"{spelled}[{array.Count}]") is { } refused) return refused;
         Cascade(element, elementMeta, null);
-        if (value is { } v && CheckErrorBuilder.Build(elementMeta, v, request.Resolve, request.Release, absentMeansNull: false) is { } linkError)
-            return RecordEditResult.RefusedAt(RecordEditRefusal.InvalidFormLink, spelled, $"'{spelled}': {linkError}");
         array.Add(element);
         edited = array;
         return null;

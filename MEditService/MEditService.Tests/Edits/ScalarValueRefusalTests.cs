@@ -13,9 +13,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>A non-string JSON value for a nullable FormLink column is the one malformed shape
-/// <c>ValidateFormLinks</c> lets through: <c>CheckErrorBuilder</c> reads a non-string as "no
-/// reference".</summary>
+/// <summary>A value the column's own converter declines is refused before anything is written: the
+/// edit door is a shape gate, and a scalar of the wrong shape never reaches the tree.</summary>
 public sealed class ScalarValueRefusalTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -118,13 +117,15 @@ public sealed class ScalarValueRefusalTests : IDisposable
 
     // ── FormLink column: malformed / wrongly-shaped value ──────────────────────
 
+    // Shape, not resolution: a string that is not a FormKey is not a FormLink at all, and the codec
+    // is what says so.
     [Fact]
-    public void RaceFormLinkColumn_MalformedString_IsRefusedAtTheEditFieldDoor()
+    public void RaceFormLinkColumn_MalformedString_IsRefusedByTheCodec()
     {
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "Race", Json("\"not-a-formkey\""));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
+        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
     }
 
     [Fact]

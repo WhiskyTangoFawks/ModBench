@@ -1,3 +1,4 @@
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
@@ -43,6 +44,15 @@ public interface IPluginAdapter
     /// <summary>What a plugin's own binary says about the FormIDs it holds: its header as a document
     /// (ADR-0007), and every FormKey native to it. No record becomes a document.</summary>
     PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease);
+
+    /// <summary>What each of <paramref name="formKeys"/> names in the files at
+    /// <paramref name="loadOrder"/>, as the game resolves it, and absent for a key they do not
+    /// hold. The link cache is built and dropped here (ADR-0005).</summary>
+    IReadOnlyDictionary<string, RecordLookupEntry> LinkTargets(
+        IReadOnlyList<ModPath> loadOrder,
+        GameRelease gameRelease,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        IReadOnlyCollection<string> formKeys);
 
     /// <summary>Whether any record in the plugin links <paramref name="target"/>,
     /// <paramref name="itself"/> aside. The master list answers first: a plugin that does not master
