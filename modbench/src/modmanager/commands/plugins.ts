@@ -1,11 +1,11 @@
 // Every write to a profile's plugins.txt. Commands return applied-or-refusal, never throw
 // (ADR-0014), and never read the Instance — its watcher is how a write comes back (ADR-0015).
 
-import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { foldPath } from '../fileConflictIndex';
 import { isPluginFile } from '../pluginFile';
 import { pluginsFile } from '../mo2/layout';
 import { appendPluginInText, movePluginsInText, parsePlugins, removePluginFromText, setPluginEnabledInText } from '../mo2/pluginsText';
+import { listDir, putIfChanged } from '../mo2Files';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the plugins.txt watcher. */
@@ -13,29 +13,17 @@ export type PluginsCommandResult =
   | { applied: true; wrote: boolean }
   | { applied: false; refusal: string };
 
-// Serialized: two commands read-modify-writing at once would each splice a stale generation of
-// the text. The chain can never go dead — the task below returns its failures and never rejects.
-let writes: Promise<unknown> = Promise.resolve();
-
-function modifyPlugins(
+async function modifyPlugins(
   instanceRoot: string, profile: string, edit: (text: string) => string,
 ): Promise<PluginsCommandResult> {
-  const task = writes.then(async (): Promise<PluginsCommandResult> => {
-    try {
-      const path = pluginsFile(instanceRoot, profile);
-      const before = await readFile(path, 'utf8');
-      const after = edit(before);
-      // Unchanged text is not written: for `reconcilePlugins` that is the difference between a
-      // loop that settles and one that does not.
-      if (after === before) return { applied: true, wrote: false };
-      await writeFile(path, after);
-      return { applied: true, wrote: true };
-    } catch (err) {
-      return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
-    }
-  });
-  writes = task;
-  return task;
+  try {
+    // Unchanged text is not written: for `reconcilePlugins` that is the difference between a
+    // loop that settles and one that does not.
+    const { wrote } = await putIfChanged(pluginsFile(instanceRoot, profile), edit);
+    return { applied: true, wrote };
+  } catch (err) {
+    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /** Refuses a name with no entry line: there is no marker to toggle, and a silent no-op would
@@ -98,7 +86,7 @@ export function pluginLinesDelta(
 
 // A `.mohidden` file fails the extension test, so MO2's hide-by-rename reads as absent.
 async function rootLevelPlugins(folder: string): Promise<Map<string, string>> {
-  const dirents = await readdir(folder, { withFileTypes: true });
+  const dirents = await listDir(folder);
   return new Map(dirents.filter((d) => d.isFile() && isPluginFile(d.name)).map((d) => [foldPath(d.name), d.name]));
 }
 

@@ -1,7 +1,6 @@
 // A new target is one rename (ADR-0015 invariant 2); an upgrade is never renamed away, so its
 // identity and every watcher armed on it survive the release.
 
-import { access, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile, cp } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { detectRoot } from '../install/detectRoot';
 import { extractArchive, type Runner } from '../install/extractArchive';
@@ -10,6 +9,7 @@ import { modNameCollisionRefusal } from '../modNameCollision';
 import { MOD_META_FILE_NAME, modsDir as modsDirOf, settingsFile } from '../mo2/layout';
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
 import { readGameName } from '../mo2/modOrganizerIni';
+import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename, write } from '../mo2Files';
 
 /** Which install this is, settled by the caller: the folder on disk is checked against this
  *  claim, never consulted to decide it. */
@@ -46,17 +46,6 @@ export interface InstallOptions {
 // watcher's glob, so nothing ever observes the half-built tree.
 const STAGING_PREFIX = '.medit-install-';
 
-const exists = (path: string): Promise<boolean> => access(path).then(() => true, () => false);
-
-async function readTextOrEmpty(path: string): Promise<string> {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return '';
-    throw err;
-  }
-}
-
 // Serialized per instance root: the collision check and the rename must not interleave with
 // another install, or two of the same name both pass the check.
 const installQueues = new Map<string, Promise<unknown>>();
@@ -84,8 +73,8 @@ async function landNewMod(
   modsDir: string, modDir: string, stagedRoot: string, keys: OwnedMetaKeys,
   renameFn: (from: string, to: string) => Promise<void>,
 ): Promise<void> {
-  await writeFile(join(stagedRoot, MOD_META_FILE_NAME), writeMetaIni(keys));
-  await mkdir(modsDir, { recursive: true });
+  await write(join(stagedRoot, MOD_META_FILE_NAME), writeMetaIni(keys));
+  await ensureDir(modsDir);
   await renameFn(stagedRoot, modDir);
 }
 
@@ -109,16 +98,16 @@ async function landUpgrade(
   modDir: string, stagedRoot: string, gameName: string, meta: InstallMeta,
   renameFn: (from: string, to: string) => Promise<void>,
 ): Promise<void> {
-  const oldMetaText = await readTextOrEmpty(join(modDir, MOD_META_FILE_NAME));
+  const oldMetaText = await get(join(modDir, MOD_META_FILE_NAME), '');
   const keys = keysForUpgrade(gameName, meta, oldMetaText);
-  for (const entry of await readdir(modDir)) {
-    if (entry === '.git') continue;
-    await rm(join(modDir, entry), { recursive: true, force: true });
+  for (const entry of await listDir(modDir)) {
+    if (entry.name === '.git') continue;
+    await remove(join(modDir, entry.name));
   }
-  for (const entry of await readdir(stagedRoot)) {
-    await renameFn(join(stagedRoot, entry), join(modDir, entry));
+  for (const entry of await listDir(stagedRoot)) {
+    await renameFn(join(stagedRoot, entry.name), join(modDir, entry.name));
   }
-  await writeFile(join(modDir, MOD_META_FILE_NAME), setOwnedKeysInText(oldMetaText, keys));
+  await write(join(modDir, MOD_META_FILE_NAME), setOwnedKeysInText(oldMetaText, keys));
 }
 
 // The folder can appear or vanish between the caller's decision and this check — MO2, xEdit or
@@ -142,7 +131,7 @@ function landStagedMod(
     const refusal = mismatchRefusal(target, await exists(modDir));
     if (refusal) return { applied: false, refusal };
     try {
-      const gameName = readGameName(await readFile(settingsFile(instanceRoot), 'utf8'));
+      const gameName = readGameName(await get(settingsFile(instanceRoot)));
       if (target.kind === 'new') {
         await landNewMod(modsDir, modDir, stagedRoot, { gameName, ...meta }, renameFn);
         return { applied: true, wrote: true, isFomod };
@@ -164,11 +153,11 @@ function landStagedMod(
 }
 
 async function withStaging<T>(instanceRoot: string, use: (staging: string) => Promise<T>): Promise<T> {
-  const staging = await mkdtemp(join(instanceRoot, STAGING_PREFIX));
+  const staging = await makeTempDir(join(instanceRoot, STAGING_PREFIX));
   try {
     return await use(staging);
   } finally {
-    await rm(staging, { recursive: true, force: true });
+    await remove(staging);
   }
 }
 
@@ -203,7 +192,7 @@ export async function installFromFolder(
   try {
     return await withStaging(instanceRoot, async (staging) => {
       const { sourceDir, isFomod } = await detectRoot(folderPath);
-      await cp(sourceDir, staging, { recursive: true });
+      await copyTree(sourceDir, staging);
       return landStagedMod(instanceRoot, target, staging, metaFor({}, opts), isFomod, opts.renameFn ?? rename);
     });
   } catch (err) {
