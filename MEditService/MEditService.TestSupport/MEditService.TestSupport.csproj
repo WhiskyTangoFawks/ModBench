@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <!-- CA1707: Method_Scenario_Result test naming; CA1711: xUnit collection classes;
+         CA1816: GC.SuppressFinalize not needed in test fixtures;
+         CA1859: interface-typed fields are intentional in tests;
+         CA1861: constant array args are fine in tests -->
+    <NoWarn>$(NoWarn);CA1707;CA1711;CA1816;CA1859;CA1861</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test support draws no arrow: the kernel and the Plugin adapter, referenced in turn by the
+         test projects that need its fixtures. Not production code, so it is not on the
+         target-architecture diagram and grants no InternalsVisibleTo. -->
+    <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
+    <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
+    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
+    <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
+  </ItemGroup>
+
+</Project>

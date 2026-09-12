@@ -1,0 +1,5 @@
+# Every write-side test suite that builds an Index, as file, symbol and count. ADR-0015 invariant 2:
+# a write reaches the Index through the projector, so a write-side test asserts the files it wrote,
+# never rows. The one past exception, the cascade fixture proving the projection lands, moved out
+# of this suite with ticket #901's box split (its Index+Commands+Watcher combination has no single
+# box's test project); none remain.

@@ -410,10 +410,41 @@ dotnet_diagnostic.RS0030.severity = none
 [MEditService.PluginAdapter/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
-# Permanent: the fixture builder constructs plugins with live objects by design.
-[MEditService.Tests/**.cs]
+# Permanent: the fixture builder constructs plugins with live objects by design. One section per
+# test project (ticket #901's split), alphabetical, plus the process-isolated suite.
+[MEditService.Codec.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Commands.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Http.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Index.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.LoadOrder.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.PluginAdapter.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Ports.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Queries.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.SourceRepo.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.TestSupport/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
 [MEditService.Tests.ProcessEnvironment/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
+[MEditService.Watcher.Tests/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
