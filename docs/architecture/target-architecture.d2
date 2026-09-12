@@ -52,7 +52,7 @@ medit_kernel: "MEDIT · Kernel — read by Core and Access; a port lives here; a
   vocabulary: "Vocabulary\ninterface: the value types every box shares\nhides: nothing; values only" {class: kernel}
   loadorder: "Load order state\ninterface: the snapshot; which copy wins; who participates\nhides: the winner and participation rules" {class: kernel}
   codec: "Codec + schema\ninterface: text to document and back; which fields are\nreferences and children\nhides: the game assemblies; Mutagen owns the typing" {class: kernel}
-  ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· load order status · track progress · external change pending,\nper mod, with its default; record index: refresh by keys ·\nvalidate by hash · reconcile · the sequence and its await ·\nreads\nhides: nothing; interfaces and their payloads; the endpoints\nimplement notification, the record index implements its own" {class: kernel}
+  ports: "Ports\ninterface: notification: publish: rows changed · plugin changed\n· index status · track progress · external change pending,\nper mod, with its default; record index: refresh by keys ·\nvalidate by hash · reconcile · the sequence and its await ·\nreads\nhides: nothing; interfaces and their payloads; the endpoints\nimplement notification, the record index implements its own" {class: kernel}
 }
 modbench_kernel: "MODBENCH · Kernel — pure; read by Core and Access, the record panel included; a port lives here; a kernel box references nothing" {
   class: band; grid-rows: 1
