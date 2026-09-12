@@ -542,8 +542,6 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // The binary is still read for a tracked plugin — HeldPlugins asks the adapter for its metadata.
     // What this establishes is only "never consult the binary for a tracked plugin's content".
 
-    // Moving masters and record count onto the tree as well is a further step, not this one.
-
     // A failed source read degrades to the binary, but records a real PluginLoadFailure: a silent
     // fallback would leave the user reading pre-Track binary content believing it was their source.
     private void IndexOnePlugin(

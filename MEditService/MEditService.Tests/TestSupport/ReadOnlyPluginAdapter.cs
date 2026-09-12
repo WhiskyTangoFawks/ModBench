@@ -46,19 +46,21 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<PristineFile> files,
-        ModKey modKey,
+        string registeredName,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        Real.ReadTreeAsync(files, modKey, codec, gameRelease, cancel);
+        Real.ReadTreeAsync(files, registeredName, codec, gameRelease, cancel);
 
     public Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        Real.ReadSourceAsync(modPath, gameRelease, strings, cancel);
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        Real.ReadSourceAsync(modPath, registeredName, gameRelease, strings, cancel);
 
     public Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        Real.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        Real.ReadPristineFilesAsync(modPath, registeredName, gameRelease, strings, cancel);
 
     public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
         ModPath modPath,

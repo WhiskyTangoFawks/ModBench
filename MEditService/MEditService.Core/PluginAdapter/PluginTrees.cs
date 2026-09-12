@@ -23,9 +23,9 @@ internal static class PluginTrees
     /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
     /// which case there are no files.</summary>
     internal static async Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default)
+        ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default)
     {
-        var pluginName = modPath.ModKey.FileName.String;
         var mod = OpenFor(modPath, gameRelease, strings);
 
         // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
@@ -38,9 +38,9 @@ internal static class PluginTrees
     /// <summary>A plugin's binary re-serialized as its whole source tree, with no localization
     /// check: what a re-baseline of an already tracked plugin commits.</summary>
     internal static Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        SerializeToPristineFiles(
-            OpenFor(modPath, gameRelease, strings), modPath.ModKey.FileName.String, cancel);
+        ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        SerializeToPristineFiles(OpenFor(modPath, gameRelease, strings), pluginName, cancel);
 
     /// <summary>A plugin's binary as every record's own document plus the identity a source tree
     /// files it by. The mod is held here, so the caller never has one (ADR-0005 rule 2).</summary>

@@ -45,8 +45,8 @@ public sealed class AbsorbExternalChangeHandler
             {
                 allPristineFiles.AddRange(
                     adapter.ReadPristineFilesAsync(
-                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
-                        PluginStrings.In(modFolder))
+                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name,
+                        loadOrder.GameRelease, PluginStrings.In(modFolder))
                         .GetAwaiter().GetResult());
             }
             catch (Exception ex)

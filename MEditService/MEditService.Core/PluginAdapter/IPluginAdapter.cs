@@ -55,11 +55,14 @@ public interface IPluginAdapter
     /// the target's origin cannot express a link to it.</summary>
     bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself);
 
+    // A source tree's root is the plugin's name as the load order spells it, so registeredName
+    // travels beside the path: a ModKey renders the extension from Mutagen's lowercase constants.
+
     /// <summary>One source tree compiled to the mod it describes, which the tree holds so the caller
     /// does not (ADR-0005 rule 2). A tree that will not read answers with its diagnosis.</summary>
     Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<PristineFile> files,
-        ModKey modKey,
+        string registeredName,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default);
@@ -73,12 +76,14 @@ public interface IPluginAdapter
     /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
     /// which case there are no files.</summary>
     Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default);
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default);
 
     /// <summary>The same binary re-serialized with no localization check: what a re-baseline of an
     /// already tracked plugin commits.</summary>
     Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default);
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default);
 
     /// <summary>A plugin's binary as every record's own document plus the identity a source tree
     /// files it by.</summary>

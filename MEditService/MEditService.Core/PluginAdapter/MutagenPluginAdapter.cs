@@ -22,9 +22,9 @@ internal interface ILoadedMod : IDisposable
 /// release the caller passed and never by a game this code names.</summary>
 public sealed class MutagenPluginAdapter : IPluginAdapter
 {
-    /// <summary>For the adapter's own files — the writer, the tree door and the prepared save —
-    /// which need the adapter without a constructor to inject it through.</summary>
-    public static readonly MutagenPluginAdapter Instance = new();
+    /// <summary>The one instance, for a caller with no constructor to inject the port
+    /// through.</summary>
+    public static readonly IPluginAdapter Instance = new MutagenPluginAdapter();
 
     internal static ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(strings)));
@@ -76,22 +76,24 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<PristineFile> files,
-        ModKey modKey,
+        string registeredName,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
-        PluginTrees.ReadTreeAsync(files, modKey.FileName.String, codec, gameRelease, cancel);
+        PluginTrees.ReadTreeAsync(files, registeredName, codec, gameRelease, cancel);
 
     public Task WriteFromTreeAsync(string treeRoot, string destinationPath, CancellationToken cancel = default) =>
         PluginTrees.WriteFromTreeAsync(treeRoot, destinationPath, deserialize: null, cancel);
 
     public Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadSourceAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        PluginTrees.ReadAsync(modPath, gameRelease, strings, cancel);
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        PluginTrees.ReadAsync(modPath, registeredName, gameRelease, strings, cancel);
 
     public Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        ModPath modPath, GameRelease gameRelease, PluginStrings strings, CancellationToken cancel = default) =>
-        PluginTrees.ReadPristineFilesAsync(modPath, gameRelease, strings, cancel);
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        PluginTrees.ReadPristineFilesAsync(modPath, registeredName, gameRelease, strings, cancel);
 
     public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
         ModPath modPath,

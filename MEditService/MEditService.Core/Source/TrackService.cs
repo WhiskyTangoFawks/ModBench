@@ -77,8 +77,8 @@ public sealed class TrackService(
                 try
                 {
                     tree = await adapter.ReadSourceAsync(
-                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
-                        strings, cancel);
+                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name,
+                        loadOrder.GameRelease, strings, cancel);
                 }
                 catch (Exception ex)
                 {
