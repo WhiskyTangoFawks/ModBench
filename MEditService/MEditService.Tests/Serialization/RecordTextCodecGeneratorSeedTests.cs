@@ -7,9 +7,9 @@ namespace MEditService.Tests.Serialization;
 
 public class RecordTextCodecGeneratorSeedTests
 {
-    // The whole-mod doors are public because the Plugin adapter is a separate assembly; the package
-    // edge stops another box calling them, and BannedApiScopeTests holds it. This scans source text:
-    // the mixin's name may appear only in these doors (ADR-0007).
+    // The doors are public because the Plugin adapter is a separate assembly; BannedApiScopeTests
+    // holds the package edge that stops another box calling them. This scans source text: the
+    // mixin's name may appear only here (ADR-0007).
     [Fact]
     public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
     {

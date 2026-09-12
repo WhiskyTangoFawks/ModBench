@@ -16,10 +16,9 @@ public record PluginDiagnosisReport(
     string Message,
     string Text);
 
-/// <summary>One plugin row as the read side answers it: the load order's registration of the copy,
-/// what reading the file told the Index, and the three facts the read adds. Whether the mod folder
-/// is tracked is not here — that is the Source repository's answer, composed at the endpoint.
-/// </summary>
+/// <summary>One plugin row as the read side answers it: the load order's copy, what reading the file
+/// told the Index, and what a filter and a parse failure add. Tracked is the repository's
+/// answer.</summary>
 public sealed record PluginRow(
     RegisteredCopy Copy,
     PluginContent Content,

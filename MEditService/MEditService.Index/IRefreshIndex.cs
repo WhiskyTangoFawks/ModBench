@@ -39,8 +39,8 @@ public interface IRefreshIndex
     /// holds no validated rows for it — the indexed-binary watch's baseline.</summary>
     string? IndexedContentHash(PluginKey key);
 
-    /// <summary>ADR-0009: the same hash, taken from the file on disk right now, or null when the
-    /// file cannot be read. The Index answers it because the Index is what validates by hash; a
-    /// second reader is a second answer to "did these bytes change".</summary>
+    /// <summary>ADR-0009: the same hash from the file on disk now, or null when it cannot be read.
+    /// The Index answers it because the Index validates by hash, and a second reader would be a
+    /// second answer.</summary>
     string? ContentHashOnDisk(string pluginPath);
 }

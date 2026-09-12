@@ -117,9 +117,9 @@ public sealed class BannedApiScopeTests
                 && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
                 && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal));
 
-    // ADR-0005 rule 2 across the split: the codec's whole-mod doors are public because the Plugin
-    // adapter is its own assembly, and what keeps every other box from calling them is that naming
-    // an IMod needs a game assembly no other box has, under a ban that is an error there.
+    // ADR-0005 rule 2 across the split: naming an IMod needs a game assembly, so only these two
+    // boxes can call the codec's whole-mod doors — which are public now that the adapter is its own
+    // assembly.
     [Fact]
     public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndBannedInEveryOtherProject()
     {
