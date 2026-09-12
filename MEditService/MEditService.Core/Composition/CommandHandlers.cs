@@ -29,7 +29,6 @@ public static class CommandHandlers
         services.AddSingleton(sp => new EditRecordHandler(
             sp.GetRequiredService<WriteTargets>(),
             sp.GetRequiredService<LoadOrderHolder>(),
-            sp.GetRequiredService<Func<LoadOrder, FormLinkResolver>>(),
             sp.GetRequiredService<RecordTextCodec>(),
             sp.GetRequiredService<SchemaReflector>(),
             sp.GetRequiredService<ILogger<EditRecordHandler>>()));

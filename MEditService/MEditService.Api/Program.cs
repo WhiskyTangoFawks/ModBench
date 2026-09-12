@@ -84,11 +84,6 @@ try
     builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
-    // A factory, not a singleton: one resolver per gesture over the load order as it stood when the
-    // gesture started, disposed with it, so no answer outlives the write it was asked for.
-    builder.Services.AddSingleton<Func<LoadOrder, FormLinkResolver>>(sp => held => new FormLinkResolver(
-        held, sp.GetRequiredService<IPluginAdapter>(), sp.GetRequiredService<SchemaReflector>(),
-        sp.GetRequiredService<ILogger<FormLinkResolver>>()));
     // ADR-0014 invariant 3: one handler per gesture, registered where the module they share is
     // visible, and resolved by the route that names the gesture.
     builder.Services.AddCommandHandlers();

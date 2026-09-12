@@ -19,7 +19,6 @@ public sealed class EditRecordHandler
 {
     private readonly WriteTargets _targets;
     private readonly LoadOrderHolder _loadOrder;
-    private readonly Func<LoadOrder, FormLinkResolver> _resolvers;
     private readonly RecordTextCodec _codec;
     private readonly SchemaReflector _schemaReflector;
     private readonly ILogger<EditRecordHandler> _logger;
@@ -29,13 +28,12 @@ public sealed class EditRecordHandler
     internal EditRecordHandler(
         WriteTargets targets,
         LoadOrderHolder loadOrder,
-        Func<LoadOrder, FormLinkResolver> resolvers,
         RecordTextCodec codec,
         SchemaReflector schemaReflector,
         ILogger<EditRecordHandler> logger)
     {
-        (_targets, _loadOrder, _resolvers, _codec, _schemaReflector, _logger) =
-            (targets, loadOrder, resolvers, codec, schemaReflector, logger);
+        (_targets, _loadOrder, _codec, _schemaReflector, _logger) =
+            (targets, loadOrder, codec, schemaReflector, logger);
     }
 
     /// <summary>The single write path (ADR-0007): one envelope, patched onto the record's document
@@ -95,10 +93,7 @@ public sealed class EditRecordHandler
             ? patched => Encoding.UTF8.GetString(HeaderDocument.Write(HeaderDocument.Read(Encoding.UTF8.GetBytes(patched))))
             : patched => _codec.RoundTrip(patched, release, unit.OwnerRecordType);
 
-        // One resolver per gesture over the load order as it stands now, so every link in this record
-        // is answered from one reading of the tree and none outlives the write.
-        using var resolver = _resolvers(_loadOrder.Current);
-        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, resolver.Resolve, roundTrip);
+        var request = new DocumentEditRequest(text, prefix, schema, envelope, release, roundTrip);
 
         string newText;
         RecordEditResult? refused;

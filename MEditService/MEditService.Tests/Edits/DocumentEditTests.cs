@@ -22,7 +22,6 @@ public sealed class DocumentEditTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private readonly Fallout4Mod _mod = new(ModKey.FromFileName("DocEdit.esp"), Fallout4Release.Fallout4);
-    private readonly Dictionary<string, RecordLookupEntry> _lookup = new(StringComparer.Ordinal);
 
     private readonly Keyword _keyword;
     private readonly Keyword _otherKeyword;
@@ -34,13 +33,13 @@ public sealed class DocumentEditTests
 
     public DocumentEditTests()
     {
-        _keyword = Register(_mod.Keywords.AddNew("Kw"), "kywd");
-        _otherKeyword = Register(_mod.Keywords.AddNew("Kw2"), "kywd");
-        _race = Register(_mod.Races.AddNew("Rc"), "race");
-        _quest = Register(_mod.Quests.AddNew("Qu"), "qust");
-        _globalInt = Register(_mod.Globals.AddNewInt("Gi"), "glob");
+        _keyword = _mod.Keywords.AddNew("Kw");
+        _otherKeyword = _mod.Keywords.AddNew("Kw2");
+        _race = _mod.Races.AddNew("Rc");
+        _quest = _mod.Quests.AddNew("Qu");
+        _globalInt = _mod.Globals.AddNewInt("Gi");
 
-        _npc = Register(_mod.Npcs.AddNew("Guy"), "npc_");
+        _npc = _mod.Npcs.AddNew("Guy");
         _npc.Race.SetTo(_race);
         _npc.HeightMax = 1f;
         _npc.Keywords = [_keyword.ToLink<IKeywordGetter>()];
@@ -52,7 +51,7 @@ public sealed class DocumentEditTests
         adapter.Scripts.Add(new ScriptEntry { Name = "Beta", Flags = ScriptEntry.Flag.Local });
         _npc.VirtualMachineAdapter = adapter;
 
-        _cobj = Register(_mod.ConstructibleObjects.AddNew("Recipe"), "cobj");
+        _cobj = _mod.ConstructibleObjects.AddNew("Recipe");
         var stageDone = new FunctionConditionData { Function = Condition.Function.GetStageDone, ParameterTwoNumber = 10 };
         stageDone.ParameterOneRecord.SetTo(_quest.FormKey);
         var onReference = new FunctionConditionData { Function = Condition.Function.GetIsSex, RunOnType = Condition.RunOnType.Reference };
@@ -61,20 +60,12 @@ public sealed class DocumentEditTests
         _cobj.Conditions.Add(new ConditionFloat { CompareOperator = CompareOperator.EqualTo, ComparisonValue = 1f, Data = onReference });
     }
 
-    private T Register<T>(T record, string recordType) where T : IFallout4MajorRecordGetter
-    {
-        _lookup[record.FormKey.ToString()] = new RecordLookupEntry(recordType, record.EditorID);
-        return record;
-    }
-
-    private RecordLookupEntry? Resolve(string formKey) => _lookup.GetValueOrDefault(formKey);
-
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private RecordEditResult? Apply(string text, string table, RecordEditEnvelope envelope, out string written) =>
-        DocumentEdits.Apply(text, Schemas[table], envelope, out written, Resolve);
+    private static RecordEditResult? Apply(string text, string table, RecordEditEnvelope envelope, out string written) =>
+        DocumentEdits.Apply(text, Schemas[table], envelope, out written);
 
-    private string Applied(string text, string table, RecordEditEnvelope envelope)
+    private static string Applied(string text, string table, RecordEditEnvelope envelope)
     {
         var refusal = Apply(text, table, envelope, out var written);
         Assert.Null(refusal);
@@ -420,17 +411,18 @@ public sealed class DocumentEditTests
         Assert.Equal(before, written);
     }
 
+    // Shape is the codec's and nothing else is (ADR-0015 invariant 5): what a FormKey points at is
+    // not a fact the document carries, so the edit lands and the read side reports it.
     [Theory]
-    [InlineData("\"ABCDEF:Nowhere.esp\"")]
+    [InlineData("ABCDEF:Nowhere.esp")]
     [InlineData("kywd")]
-    public void LinkTarget_DanglingOrOfTheWrongType_IsRefused(string target)
+    public void LinkTarget_DanglingOrOfTheWrongType_Lands(string target)
     {
-        var value = target == "kywd" ? $"\"{_keyword.FormKey}\"" : target;
+        var formKey = target == "kywd" ? _keyword.FormKey.ToString() : target;
 
-        var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", SetAt(Json(value), Member("Race")), out _);
+        var after = Applied(DocumentEdits.Serialize(_npc), "npc_", SetAt(Json($"\"{formKey}\""), Member("Race")));
 
-        Assert.Equal(RecordEditRefusal.InvalidFormLink, refusal!.Refusal);
-        Assert.Equal("Race", refusal.Path);
+        Assert.Equal(formKey, Node(after, "Race").GetValue<string>());
     }
 
     [Fact]
@@ -581,7 +573,7 @@ public sealed class DocumentEditTests
 
         var refusal = DocumentEdits.Apply(
             before, Schemas["refr"], SetAt(Json("2.5"), Member("Scale")), out var after,
-            Resolve, prefix: [Member("Temporary"), At(0)], ownerRecordType: "cell");
+            prefix: [Member("Temporary"), At(0)], ownerRecordType: "cell");
 
         Assert.Null(refusal);
         Assert.Equal(["Temporary[0].Scale: 1.0 -> 2.5"], ConditionEditTests.DocumentDiff(before, after));

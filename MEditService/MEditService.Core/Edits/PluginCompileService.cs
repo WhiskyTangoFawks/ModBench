@@ -99,7 +99,7 @@ public sealed class PluginCompileService(
         if (roundTripRefusal != null)
             return CompileResult.Refused(roundTripRefusal);
 
-        var (diagnostics, masters) = ContentFacts(tree, plugin, loadOrder, repository, atRef);
+        var content = ContentFacts(tree, plugin, loadOrder);
 
         var loadOrderNames = loadOrder.Copies
             .Where(c => c.Registration.InLoadOrder)
@@ -141,87 +141,129 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(diagnostics, masters);
+        return CompileResult.Success(Reported(content, plugin, copy, loadOrder, repository, atRef), content.Masters);
     }
 
+    // The binary is written and the snapshot parked, so the report is the only thing left to go
+    // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
+    private List<CompileDiagnostic> Reported(
+        Content content, PluginKey plugin, RegisteredCopy copy, LoadOrder loadOrder,
+        SourceRepository repository, string? atRef)
+    {
+        try
+        {
+            return LinkDiagnostics(content, plugin, copy, loadOrder, repository, atRef);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            logger.LogWarning(ex, "{Plugin} compiled, but its link check did not run", plugin.Name);
+            return [PluginDiagnostic(
+                plugin, $"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
+        }
+    }
+
+    private sealed record SourceRecord(
+        string RecordType, RecordTableSchema Schema, PluginDocument Document, string? EditorId);
+
+    private sealed record Content(
+        IReadOnlyList<SourceRecord> Records, IReadOnlyList<string> Masters, IReadOnlyCollection<string> Links);
+
     // ADR-0015 invariant 1: the write side never reads the Index, so the masters content requires
-    // (ADR-0008) and the check errors the editor shows come from the records here, through the
-    // same collector, schema and link resolver.
-    private (List<CompileDiagnostic> Diagnostics, IReadOnlyList<string> Masters) ContentFacts(
-        CompiledTree tree, PluginKey plugin, LoadOrder loadOrder, SourceRepository repository, string? atRef)
+    // (ADR-0008) come from the records here, through the collector and the schema.
+    private Content ContentFacts(CompiledTree tree, PluginKey plugin, LoadOrder loadOrder)
     {
         // One walk, and the record type is the one RecordTableName gives, so what compile files a
         // record under and what the tree calls it cannot differ. A type no schema claims has no
         // document, so nothing is derived from it.
         var schemas = schemaReflector.GetSchemas(loadOrder.GameRelease);
-        var typed = new List<(string RecordType, RecordTableSchema Schema, PluginDocument Document, string? EditorId)>();
+        var records = new List<SourceRecord>();
         foreach (var document in tree.Documents(schemas))
         {
-            typed.Add((
+            records.Add(new SourceRecord(
                 document.RecordType, schemas[document.RecordType], document,
                 WriteTargets.EditorIdOf(document.Text)));
         }
 
-        var own = new Dictionary<string, RecordLookupEntry>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (recordType, _, document, editorId) in typed)
-            own[document.FormKey] = new RecordLookupEntry(recordType, editorId);
-
-        // The records just read answer for this plugin, at the ref being compiled; the working tree
-        // the resolver reads for a tracked plugin is a different answer at a named ref.
-        using var links = new FormLinkResolver(loadOrder, adapter, schemaReflector);
-        RecordLookupEntry? ResolveOnce(string formKey)
-        {
-            if (own.TryGetValue(formKey, out var entry)) return entry;
-            return IsNative(formKey, plugin) ? null : links.Resolve(formKey);
-        }
-
-        // One answer per distinct FormKey: the resolver walks a tracked target's whole tree per call,
-        // and the same link recurs across a plugin's records.
-        var resolve = FormKeyResolutionCache.Memoize(ResolveOnce);
-
-        // debt #779: the resolver cannot name an embedded child in a tracked plugin, so a link
-        // that plugin's tree does carry is one this pass has no answer for, not a broken one.
-        var trackedTrees = new Dictionary<string, SourceRepository?>(StringComparer.OrdinalIgnoreCase);
-        bool AnswersFor(string formKey) =>
-            resolve(formKey) is not null || !EmbeddedInATrackedPlugin(formKey, plugin, loadOrder, trackedTrees);
-
-        var diagnostics = new List<CompileDiagnostic>();
+        var links = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var masters = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (recordType, schema, record, editorId) in typed)
+        foreach (var record in records)
         {
-            var formKey = record.FormKey;
             // An override carries another plugin's FormKey, which needs that plugin as a master
             // whether or not the record references anything.
-            if (PluginNameIn(formKey) is { } native) masters.Add(native);
+            if (PluginNameIn(record.Document.FormKey) is { } native) masters.Add(native);
 
-            using var document = JsonDocument.Parse(record.Text);
-            foreach (var reference in FormReferences.Collect(document.RootElement, schema))
+            using var document = JsonDocument.Parse(record.Document.Text);
+            var referenced = FormReferences.Collect(document.RootElement, record.Schema)
+                .Select(reference => reference.TargetFormKey);
+            foreach (var target in referenced)
             {
-                if (PluginNameIn(reference.TargetFormKey) is { } target) masters.Add(target);
+                links.Add(target);
+                if (PluginNameIn(target) is { } master) masters.Add(master);
             }
-
-            var errors = CheckErrors(schema, document.RootElement, resolve, loadOrder.GameRelease, AnswersFor);
-            if (errors.Count == 0) continue;
-
-            // Only records with something to report pay for resolution, which keeps a container's
-            // subtree scan off the common path.
-            var relativePath = repository
-                .RelativePathOf(plugin, new RecordIdentity(formKey, recordType, editorId), atRef)
-                ?? string.Empty;
-            diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }
 
         masters.Remove(plugin.Name);
-        return (diagnostics, InLoadOrderOrder(masters, loadOrder));
+        return new Content(records, InLoadOrderOrder(masters, loadOrder), links);
     }
+
+    // ADR-0007 invariant 4: a dangling link is emittable, so compile writes the plugin and reports
+    // it afterwards, answered by the files the game loads with the one just written among them.
+    private List<CompileDiagnostic> LinkDiagnostics(
+        Content content, PluginKey plugin, RegisteredCopy copy, LoadOrder loadOrder,
+        SourceRepository repository, string? atRef)
+    {
+        var answers = adapter.LinkTargets(
+            loadOrder, copy, schemaReflector.GetSchemas(loadOrder.GameRelease), content.Links);
+        RecordLookupEntry? Resolve(string formKey) =>
+            answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
+
+        // A file nothing could be read from answers nothing about the records in it, so a link into
+        // it is unchecked with that reason, never broken (ADR-0019).
+        var unread = answers.UnreadableFiles.ToDictionary(
+            file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
+        string? WhyUnchecked(string formKey) =>
+            PluginNameIn(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
+                ? $"{owner} could not be read, so this link was not checked: {reason}"
+                : null;
+
+        var diagnostics = answers.UnreadableFiles
+            .Select(file => PluginDiagnostic(
+                plugin,
+                $"{file.FileName} is in the load order but could not be read, so no link into it was " +
+                $"checked: {file.Reason}"))
+            .ToList();
+        foreach (var record in content.Records)
+        {
+            var errors = CheckErrors(
+                record.Schema, record.Document.Text, Resolve, WhyUnchecked, loadOrder.GameRelease);
+            if (errors.Count == 0) continue;
+
+            // Only records with something to report pay for their path, which keeps a container's
+            // subtree scan off the common path.
+            var identity = new RecordIdentity(record.Document.FormKey, record.RecordType, record.EditorId);
+            var relativePath = repository.RelativePathOf(plugin, identity, atRef) ?? string.Empty;
+            diagnostics.AddRange(errors.Select(
+                message => new CompileDiagnostic(record.Document.FormKey, relativePath, message)));
+        }
+        return diagnostics;
+    }
+
+    // A plugin-level problem is the header record's: it is the one source unit that stands for the
+    // whole plugin, so the Problems entry lands on a file the author can open.
+    private static CompileDiagnostic PluginDiagnostic(PluginKey plugin, string message) =>
+        new(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)),
+            SourceRepository.HeaderDocumentFor(plugin.Name),
+            message);
 
     // The same fields the editor shows a CheckError on, from the same builder, so compile and the
     // record panel cannot hold two definitions of what is broken.
     private static List<string> CheckErrors(
-        RecordTableSchema schema, JsonElement root, Func<string, RecordLookupEntry?> resolve,
-        GameRelease release, Func<string, bool> answersFor)
+        RecordTableSchema schema, string text, Func<string, RecordLookupEntry?> resolve,
+        Func<string, string?> whyUnchecked, GameRelease release)
     {
         var errors = new List<string>();
+        using var document = JsonDocument.Parse(text);
+        var root = document.RootElement;
         foreach (var column in schema.RecordColumns)
         {
             var meta = column.ToFieldMetadata();
@@ -229,8 +271,8 @@ public sealed class PluginCompileService(
             if (!FormReferences.CarriesFormKeys(meta)) continue;
 
             var checkError = CheckErrorBuilder.Build(
-                DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName),
-                resolve, release, answersFor: answersFor);
+                DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName), resolve, release,
+                whyUnchecked);
             if (checkError != null) errors.Add($"{meta.Name}: {checkError}");
         }
         return errors;
@@ -252,30 +294,6 @@ public sealed class PluginCompileService(
         return [.. masters
             .OrderBy(m => slots.GetValueOrDefault(m, int.MaxValue))
             .ThenBy(m => m, StringComparer.OrdinalIgnoreCase)];
-    }
-
-    private static bool IsNative(string formKey, PluginKey plugin) =>
-        PluginNameIn(formKey) is { } owner && owner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase);
-
-    // One repository per tracked mod folder for the whole pass, so its owner map is built at most
-    // once: every call here has already missed the resolver, which is the uncommon path.
-    private static bool EmbeddedInATrackedPlugin(
-        string formKey, PluginKey plugin, LoadOrder loadOrder, Dictionary<string, SourceRepository?> trackedTrees)
-    {
-        // The same chain the resolver walks, participation included (ADR-0013): a copy the game does
-        // not load holds nothing this link points at, so its tree is not an answer either.
-        if (IsNative(formKey, plugin)
-            || PluginNameIn(formKey) is not { } owner
-            || loadOrder.WinningCopy(owner) is not { } copy
-            || !copy.Registration.Participates
-            || ModFolders.TrackedOf(loadOrder, copy.Key) is not { } modFolder)
-        {
-            return false;
-        }
-
-        if (!trackedTrees.TryGetValue(modFolder, out var repository))
-            trackedTrees[modFolder] = repository = SourceRepository.Open(modFolder, loadOrder.GameRelease);
-        return repository?.CarriesEmbedded(copy.Key, formKey) == true;
     }
 
     // The plugin half of a FormKey, which is how a reference names the master it needs. Mutagen's

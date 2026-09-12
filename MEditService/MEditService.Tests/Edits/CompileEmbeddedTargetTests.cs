@@ -12,8 +12,8 @@ using Noggog;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>A link into another tracked plugin's container document: the target has no name of its
-/// own in that tree, and compile must not call the link broken.</summary>
+/// <summary>A link to a record embedded in another plugin's container: a container's child is a
+/// record of the binary, so the link cache names it and compile must not call the link broken.</summary>
 public sealed class CompileEmbeddedTargetTests : IDisposable
 {
     private const string TargetName = "EmbeddedTarget.esp";
@@ -100,7 +100,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
         catch (UnauthorizedAccessException) { /* ditto */ }
     }
 
-    // The target's own tree carries the record and the resolver names it from there, so a
+    // The target's own file carries the record and the link cache names it from there, so a
     // "could not be resolved" diagnostic would be false.
     [Fact]
     public void Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
@@ -112,7 +112,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             result.Diagnostics, d => d.Message.Contains(_embeddedTarget.ToString(), StringComparison.Ordinal));
     }
 
-    // ADR-0013: a registered copy the game does not load is not where the link points, so its tree
+    // ADR-0013: a registered copy the game does not load is not where the link points, so its file
     // carrying the record proves nothing and the link is dangling like any other.
     [Fact]
     public void Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
@@ -128,16 +128,18 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             d => d.Message.Contains($"[{_embeddedTarget}] <Error: Could not be resolved>", StringComparison.Ordinal));
     }
 
-    // The same tree, asked the way the resolver asks: the silence above is the link resolving, not a
-    // record nothing can name.
+    // The same load order, asked the way compile asks: the silence above is the link resolving, not
+    // a record nothing can name.
     [Fact]
-    public void TheTargetsTree_CarriesTheEmbeddedRecord_AndTheResolverNamesIt()
+    public void TheTargetsFile_CarriesTheEmbeddedRecord_AndTheLinkCacheNamesIt()
     {
-        var target = new PluginKey(TargetName, TargetOrigin);
-        var repository = SourceRepository.Open(_targetFolder, GameRelease.Fallout4)!;
+        var targets = MutagenPluginAdapter.Instance.LinkTargets(
+            _loadOrder,
+            _loadOrder.Copy(_referrer)!,
+            SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
+            [_embeddedTarget.ToString()]);
 
-        Assert.True(repository.CarriesEmbedded(target, _embeddedTarget.ToString()));
-        using var resolver = new FormLinkResolver(_loadOrder, new MutagenPluginAdapter(), SharedSchemaReflector.Instance);
-        Assert.Equal(new RecordLookupEntry("refr", "EmbeddedRef"), resolver.Resolve(_embeddedTarget.ToString()));
+        Assert.Empty(targets.UnreadableFiles);
+        Assert.Equal(new RecordLookupEntry("refr", "EmbeddedRef"), targets.Targets[_embeddedTarget.ToString()]);
     }
 }

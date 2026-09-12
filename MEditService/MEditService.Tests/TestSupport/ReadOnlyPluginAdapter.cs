@@ -1,4 +1,5 @@
 using MEditService.Core.PluginAdapter;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Mutagen.Bethesda;
@@ -38,6 +39,13 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         using var loaded = OpenForRead(modPath, gameRelease);
         return OpenedPlugins.FormIdsIn(loaded.Getter, modPath.ModKey.FileName.String);
     }
+
+    public virtual LinkAnswers LinkTargets(
+        IReadOnlyList<ModPath> loadOrder,
+        GameRelease gameRelease,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        IReadOnlyCollection<string> formKeys) =>
+        LoadOrderLinks.Targets(this, loadOrder, gameRelease, schemas, formKeys);
 
     public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself)
     {

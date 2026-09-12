@@ -10,7 +10,7 @@ namespace MEditService.Tests.TestSupport;
 /// the call, as the process's own holder is when the endpoint runs.</summary>
 public static class CompileServices
 {
-    public static PluginCompileService Over(LoadOrder loadOrder)
+    public static PluginCompileService Over(LoadOrder loadOrder, IPluginAdapter? adapter = null)
     {
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);
@@ -18,7 +18,7 @@ public static class CompileServices
             holder,
             SharedSchemaReflector.Instance,
             new RecordTextCodec(NullLogger<RecordTextCodec>.Instance),
-            new MutagenPluginAdapter(),
+            adapter ?? new MutagenPluginAdapter(),
             new PluginWriter(NullLogger<PluginWriter>.Instance),
             NullLogger<PluginCompileService>.Instance);
     }

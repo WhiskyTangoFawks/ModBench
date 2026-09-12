@@ -40,7 +40,7 @@ public sealed class DocumentEditRealDataTests(CutDownPluginFixture fixture, ITes
             if (!schema.IsHeader)
             {
                 var identity = DocumentEdits.Apply(
-                    before, schema, SetAt(Json(JsonSerializer.Serialize(document.EditorId)), Member("EditorID")), out var settled, reads.Resolve);
+                    before, schema, SetAt(Json(JsonSerializer.Serialize(document.EditorId)), Member("EditorID")), out var settled);
                 if (identity != null) { failures.Add($"{document.RecordType} {document.FormKey}: settling refused, {identity.Refusal} {identity.Message}"); continue; }
                 if (settled != before) settledIntoKeyOrder++;
                 before = settled;
@@ -49,7 +49,7 @@ public sealed class DocumentEditRealDataTests(CutDownPluginFixture fixture, ITes
                 ? (SetAt(Json("true"), Member("IsSmallMaster")), "ModHeader.Flags")
                 : (SetAt(Json("\"MEditProbe\""), Member("EditorID")), "EditorID");
 
-            var refusal = DocumentEdits.Apply(before, schema, envelope, out var after, reads.Resolve);
+            var refusal = DocumentEdits.Apply(before, schema, envelope, out var after);
             if (refusal != null) { failures.Add($"{document.RecordType} {document.FormKey}: {refusal.Refusal} {refusal.Message}"); continue; }
             failures.AddRange(Strays(document, before, after, path));
 
@@ -58,7 +58,7 @@ public sealed class DocumentEditRealDataTests(CutDownPluginFixture fixture, ITes
             foreach (var (gesture, edited) in Gestures(schema, root))
             {
                 gestures++;
-                var refused = DocumentEdits.Apply(before, schema, gesture, out var landed, reads.Resolve);
+                var refused = DocumentEdits.Apply(before, schema, gesture, out var landed);
                 if (refused != null) { failures.Add($"{document.RecordType} {document.FormKey} {gesture.Op} {edited}: {refused.Refusal} {refused.Message}"); continue; }
                 failures.AddRange(Strays(document, before, landed, edited));
             }

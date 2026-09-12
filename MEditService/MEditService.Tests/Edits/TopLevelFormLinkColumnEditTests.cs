@@ -13,8 +13,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Five of these six pass independently of the Apply delegate: FormLink validation and
-/// <c>RefuseIfBlocked</c> run before <c>TryApply</c> checks for a null Apply.</summary>
+/// <summary>The gestures a scalar FormLink column has: a write that lands, and the three
+/// <c>RefuseIfBlocked</c> doors, which close before any column is looked up.</summary>
 public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 {
     private readonly SourceEditFixture _mod = SourceEditFixture.Tracked();
@@ -42,29 +42,17 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
             _mod.Race.ToString(), _mod.Document(_mod.OtherNpc.ToString())!.Body, StringComparison.Ordinal);
     }
 
-    // ValidateFormLinks runs ahead of
-    // the null-Apply ReadOnly check, so a dangling target on this column is never silently blocked
-    // by read-onliness.
+    // Where the target is, and whether it is a RACE, is not a fact this document carries: the value
+    // is well-shaped, so it lands and the read side reports what it points at.
     [Fact]
-    public void EditField_TopLevelFormLinkColumn_RefusesADanglingTarget()
+    public void EditField_TopLevelFormLinkColumn_LandsADanglingTarget()
     {
         var result = Service().Set(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json("\"ABCDEF:NoSuchPlugin.esp\""));
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
-        Assert.Empty(_mod.GitStatus());
-    }
-
-    // Same reasoning: Keyword resolves
-    // (it exists) but is the wrong type for a RACE-typed column, and that check does not consult Apply.
-    [Fact]
-    public void EditField_TopLevelFormLinkColumn_RefusesTheWrongRecordType()
-    {
-        var result = Service().Set(_mod.Plugin, _mod.OtherNpc.ToString(), "Race", Json($"\"{_mod.Keyword}\""));
-
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
-        Assert.Empty(_mod.GitStatus());
+        Assert.True(result.Applied, result.Message);
+        Assert.NotEmpty(_mod.GitStatus());
+        Assert.Contains(
+            "ABCDEF:NoSuchPlugin.esp", _mod.Document(_mod.OtherNpc.ToString())!.Body, StringComparison.Ordinal);
     }
 
     // RefuseIfBlocked runs before any
