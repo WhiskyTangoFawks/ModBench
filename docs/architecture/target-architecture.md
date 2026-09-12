@@ -35,16 +35,21 @@ layers and their ports), [ADR-0015](../adr/0015-edits-reach-the-read-model-throu
 
 Both columns use the same six names. Drivers: who drives the process. Driving adapters: what
 turns a driver's gesture or a file's change into a call. Core: the rules, one command per
-gesture. Kernel: pure, read by every box above it. Driven adapters: what the core calls to reach
-a system of record. Systems of record: the files that are the truth.
+gesture. Kernel: pure, read by Core and Access; a port lives here, so the box that implements
+it and the boxes that call it both reference the kernel and nothing references up or across.
+Driven adapters: what the core calls to reach a system of record, and the only boxes that read
+or write one. Systems of record: the files that are the truth.
 
 ## The pictures are the reference lists
 
 A box is a project. Its reference list is the arrows that leave it in the reference view, plus its
 column's kernel by the band's rule: a kernel box references only Vocabulary on mEdit and nothing on
-Modbench. A composition root, the HTTP endpoints on mEdit, the activation file and Toolbox on
-Modbench, references every box below it by definition. A reference the reference view does not
-draw is a compile error and a question for the maintainer, never a line an agent adds.
+Modbench. Every arrow points down or into the kernel, with three same-band references the captions
+name: the record index reads the two adapters beside it, the Instance reads MO2 files, and plugins
+commands ask the mEdit client which plugins load implicitly. A composition root, the HTTP endpoints on
+mEdit, the activation file and Toolbox on Modbench, references every box below it by definition.
+A reference the reference view does not draw is a compile error and a question for the
+maintainer, never a line an agent adds.
 
 ## Why the two columns match
 
@@ -59,9 +64,12 @@ for its absence; a disconnect is an error the views surface.
 ## Rules the Modbench column draws
 
 Change flows up only through watchers and the notification port. mEdit watches one folder per
-mod, and the Source repository names the paths inside it, so layout has one owner. No command
-reads the Instance; a value a command needs, the folders to adopt or the plugins to reconcile,
-arrives as an argument. Deploy is a module inside Toolbox and reads one value with its sequence.
+mod, and the Source repository names the paths inside it, so layout has one owner; on the
+Modbench side MO2 files is that owner, the one box that reads or writes the instance and Game
+Data/. A command splices through the pure codec and puts through MO2 files. No command reads the
+Instance; a value a command needs, the folders to adopt, the plugins to reconcile or the winners
+to deploy, arrives as an argument. Deploy and purge are commands; Toolbox keeps the gesture and
+the first-deploy consent.
 The Instance is derived from disk and nothing else; it recomputes whole, keeps its last value on
 a parse failure, and validates on activation and Refresh through the same path
 ([the-instance-recomputes](traces/the-instance-recomputes.d2)). Outside two per-release tables,
@@ -103,9 +111,10 @@ The `terrastruct.d2` VS Code extension previews a file live while it is edited.
   story order. An actor that is a set of boxes, `every view`, is declared in the trace with the
   set as its label. A branch, a dialog or a pick is a note on the actor that holds it, not an
   actor.
-- A trace message runs between two boxes the reference view joins, or across the wire, or inside
-  one box. A message between boxes the reference view does not join is a reference the maintainer
-  has not drawn. The one exception is an end-to-end trace that abbreviates another trace as one
+- A trace message runs between two boxes the reference view joins, or through a port, where one
+  end implements it and the other references Ports, or across the wire, or inside one box, or
+  between two boxes a composition root wires, as Toolbox hands the Instance's value to the mEdit
+  client. Any other message is a reference the maintainer has not drawn. The one exception is an end-to-end trace that abbreviates another trace as one
   message named after it, as upgrade-a-mod does with a-tracked-mod-changes-on-disk.
 - A new module is a box in the zoom-out with its three lines. A new reference is an arrow in the
   reference view. A new payload is a message in the trace of its gesture, in that gesture's class.

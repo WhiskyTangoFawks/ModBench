@@ -14,11 +14,15 @@ client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 codecs: @../target-architecture.modbench_kernel.codecs
 codecs.label: MO2 file codecs
+mo2files: @../target-architecture.modbench_driven.mo2files
+mo2files.label: MO2 files
 mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nprofiles/<profile>/plugins.txt · mods/"
 views: "every view" {class: driving}
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: "Load order state\nmEdit"
 
@@ -27,9 +31,12 @@ instance -> pluginscommands: "each value, as an argument: plugins on disk not in
 pluginscommands -> client: which plugins load implicitly? {class: query}
 client -> pluginscommands: the set, or unreachable {class: query}
 pluginscommands -> codecs: "plugins.txt: lines to flip, move, add or drop" {class: loadout}
-codecs -> mo2: bytes, then forget {class: loadout}
+codecs -> pluginscommands: bytes {class: loadout}
+pluginscommands -> mo2files: "put plugins.txt" {class: loadout}
+mo2files -> mo2: bytes, then forget {class: loadout}
 mo2 -> instance: watch {class: signal}
 instance -> views: value {class: loadout}
 instance -> client: load order snapshot {class: loadout}
 client -> http: load order snapshot {class: loadout}
-http -> loadorder: load order snapshot {class: loadout}
+http -> commands: put load order {class: loadout}
+commands -> loadorder: load order snapshot {class: loadout}
