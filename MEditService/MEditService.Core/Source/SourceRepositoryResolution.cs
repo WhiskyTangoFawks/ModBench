@@ -21,11 +21,12 @@ internal readonly record struct SourceUnit(
         && Path.GetFileName(FullPath).Equals(SourceRepository.RecordDataFileName, StringComparison.Ordinal);
 }
 
-/// <summary>The unit holding a record, as a caller outside the repository is told it: whose document
-/// it is, and whether that document is a directory of its own. Which file it is stays the
-/// repository's.</summary>
+/// <summary>The unit holding a record: the document it is, relative to the mod folder, whose record
+/// that document is, and whether it is a directory of its own. One read, so the facts and the path
+/// cannot disagree.</summary>
 public sealed record HoldingUnit(
-    bool IsEmbedded, string OwnerFormKey, string? OwnerRecordType, bool IsDirectoryPerRecord);
+    string RelativePath, bool IsEmbedded, string OwnerFormKey, string? OwnerRecordType,
+    bool IsDirectoryPerRecord);
 
 /// <summary>Where the tree puts a cell: the worldspace whose subtree carries it and the block
 /// directories it sits in. An interior cell has neither; a worldspace's own top cell has a
@@ -43,11 +44,13 @@ public sealed partial class SourceRepository
     private readonly Dictionary<string, string[]> _entriesByScanRoot = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EmbeddedOwners> _ownersBySourceRoot = new(StringComparer.Ordinal);
 
-    /// <summary>The unit holding <paramref name="identity"/>, as its facts rather than as a file. Null
-    /// when no document in the tree holds it.</summary>
+    /// <summary>The unit holding <paramref name="identity"/>, as the document it is and the facts about
+    /// it. Null when no document in the tree holds it, which is a refusal to the caller.</summary>
     public HoldingUnit? UnitHolding(PluginKey plugin, RecordIdentity identity) =>
         Locate(plugin, identity) is { } unit
-            ? new HoldingUnit(unit.IsEmbedded, unit.OwnerFormKey, unit.OwnerRecordType, unit.IsDirectoryPerRecord)
+            ? new HoldingUnit(
+                unit.RelativePath, unit.IsEmbedded, unit.OwnerFormKey, unit.OwnerRecordType,
+                unit.IsDirectoryPerRecord)
             : null;
 
     /// <summary>The document holding <paramref name="identity"/>, and whether that document is another

@@ -27,11 +27,10 @@ internal sealed class WriteTargets(
     /// naming a command the user cannot find is worse than none.</summary>
     internal const string TrackCommandTitle = "Modbench: Track\u2026";
 
-    // DocumentPath is read before anything is written: a rename or a delete this gesture performs
-    // moves the file, and every message and log naming it means the one the gesture found.
+    // The unit is read before anything is written, so a rename or a delete this gesture performs
+    // cannot change the document its messages and logs name.
     internal readonly record struct EditTarget(
-        GameRelease Release, RecordIdentity Identity, HoldingUnit Unit, string? DocumentPath,
-        SourceRepository Repository);
+        GameRelease Release, RecordIdentity Identity, HoldingUnit Unit, SourceRepository Repository);
 
     // The working tree is the only thing asked (ADR-0015 invariant 5): a second edit builds on the
     // first, and no document comes from the Index. The copy gestures read the source instead.
@@ -75,8 +74,7 @@ internal sealed class WriteTargets(
                 "carries it. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
         }
 
-        target = new EditTarget(
-            release, identity, unit, repository.RelativePathOf(plugin, identity, gitRef: null), repository);
+        target = new EditTarget(release, identity, unit, repository);
         return null;
     }
 

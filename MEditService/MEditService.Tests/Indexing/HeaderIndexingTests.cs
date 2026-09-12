@@ -79,7 +79,7 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void Index_Header_BodyIsTheRootDocument_AndContentHashIsItsGitBlobHash()
+    public void Index_Header_BodyIsTheRootDocument_AndContentHashIsTheRepositorys()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("BodyTest.esp"), Fallout4Release.Fallout4);
         mod.ModHeader.Author = "Vault Dweller";
@@ -98,7 +98,7 @@ public class HeaderIndexingTests
         Assert.Contains("\"ModHeader\"", body, StringComparison.Ordinal);
         Assert.Contains("\"Author\": \"Vault Dweller\"", body, StringComparison.Ordinal);
 
-        Assert.Equal(GitBlobHash.Of(Encoding.UTF8.GetBytes(body)), row["content_hash"]);
+        Assert.Equal(SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body)), row["content_hash"]);
     }
 
     // The three fields the record editor renders for a header, read back through the ordinary document

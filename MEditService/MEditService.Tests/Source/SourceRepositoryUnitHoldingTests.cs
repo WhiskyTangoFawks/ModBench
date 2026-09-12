@@ -29,9 +29,8 @@ public sealed class SourceRepositoryUnitHoldingTests
         Assert.Equal(PluginHeader.RecordType, unit.OwnerRecordType);
         // Filename-only, the header's root RecordData.json shares the name a container's document has.
         Assert.False(unit.IsDirectoryPerRecord);
-        Assert.Equal(
-            Path.Combine("source", mod.ActualPluginName, "RecordData.json"),
-            repository.RelativePathOf(mod.Plugin, identity, gitRef: null));
+        // From the same read as the facts, so nothing can move between them and the path a refusal names.
+        Assert.Equal(Path.Combine("source", mod.ActualPluginName, "RecordData.json"), unit.RelativePath);
     }
 
     // An embedded type has no file of its own, so nothing is computed for it: either a document in the

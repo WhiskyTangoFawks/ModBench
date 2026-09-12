@@ -10,9 +10,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Source;
 
-/// <summary><c>content_hash</c> is the git blob hash, so real git is the only honest oracle: a SHA-1
-/// computed the same way would pass with the header format wrong.</summary>
-public class GitBlobHashTests
+/// <summary>The content hash is the name git gives the same bytes, so real git is the only honest
+/// oracle: a SHA-1 computed the same way would pass with the header format wrong.</summary>
+public class SourceRepositoryContentHashTests
 {
     private static string GitHashObject(byte[] content)
     {
@@ -30,7 +30,7 @@ public class GitBlobHashTests
     }
 
     [Fact]
-    public async Task Of_ForARealRecordsSourceText_MatchesGitHashObject()
+    public async Task ContentHash_ForARealRecordsSourceText_MatchesGitHashObject()
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
@@ -40,7 +40,7 @@ public class GitBlobHashTests
             .SerializeToBytesAsync(record, GameRelease.Fallout4);
 
         Assert.NotEmpty(body);
-        Assert.Equal(GitHashObject(body), GitBlobHash.Of(body));
+        Assert.Equal(GitHashObject(body), SourceRepository.ContentHash(body));
     }
 
     [Theory]
@@ -48,20 +48,20 @@ public class GitBlobHashTests
     [InlineData("{}\n")]
     [InlineData("{\n  \"EditorID\": \"Réservé\"\n}\n")]
     [InlineData("{\n  \"Name\": \"日本語テキスト\"\n}\n")]
-    public void Of_ForBodiesGitCanAlsoHash_MatchesGitHashObject(string text)
+    public void ContentHash_ForBodiesGitCanAlsoHash_MatchesGitHashObject(string text)
     {
         var content = Encoding.UTF8.GetBytes(text);
-        Assert.Equal(GitHashObject(content), GitBlobHash.Of(content));
+        Assert.Equal(GitHashObject(content), SourceRepository.ContentHash(content));
     }
 
     [Fact]
-    public void Of_IsStableAcrossCallsAndDistinguishesDifferentBodies()
+    public void ContentHash_IsStableAcrossCallsAndDistinguishesDifferentBodies()
     {
         var a = Encoding.UTF8.GetBytes("{\n  \"Value\": 250\n}\n");
         var alsoA = Encoding.UTF8.GetBytes("{\n  \"Value\": 250\n}\n");
         var b = Encoding.UTF8.GetBytes("{\n  \"Value\": 251\n}\n");
 
-        Assert.Equal(GitBlobHash.Of(a), GitBlobHash.Of(alsoA));
-        Assert.NotEqual(GitBlobHash.Of(a), GitBlobHash.Of(b));
+        Assert.Equal(SourceRepository.ContentHash(a), SourceRepository.ContentHash(alsoA));
+        Assert.NotEqual(SourceRepository.ContentHash(a), SourceRepository.ContentHash(b));
     }
 }

@@ -22,7 +22,7 @@ public sealed class DeleteRecordHandler
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (_, identity, _, documentPath, repository) = target;
+        var (_, identity, unit, repository) = target;
         if (WriteTargets.RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
         // One changed document either way: the owner without the child, or the record's own gone.
@@ -34,7 +34,7 @@ public sealed class DeleteRecordHandler
             // it names lacks it.
             var observed = removal == SourceRemoval.NoDocumentHoldsIt
                 ? $"No document in {plugin.Name}'s tree holds {formKey}."
-                : $"{documentPath} was found holding {formKey}, but its own text does not carry it.";
+                : $"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.";
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
                 $"{observed} If nothing outside Modbench changed that file, this is a defect — please " +
@@ -45,7 +45,7 @@ public sealed class DeleteRecordHandler
         {
             _logger.LogInformation(
                 "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath}",
-                formKey, plugin.Name, plugin.Origin, documentPath);
+                formKey, plugin.Name, plugin.Origin, unit.RelativePath);
         }
         return RecordEditResult.Success();
     }

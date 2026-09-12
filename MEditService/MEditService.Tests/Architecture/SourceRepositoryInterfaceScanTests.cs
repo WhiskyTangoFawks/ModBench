@@ -20,12 +20,12 @@ public sealed class SourceRepositoryInterfaceScanTests
         "MEditService.Core/Source/ExternalChangeDeferral.cs",
     ];
 
-    // The git CLI, the meta.ini reader, the unit a path resolves to and the resolver answering one,
-    // the tree reader, the pristine-file writer, then the git and layout verbs beneath the documents.
+    // The git CLI and the object name it prints, the meta.ini reader, the unit a path resolves to and
+    // the resolver answering one, the tree reader, the writer, then the verbs beneath the documents.
     private static readonly string[] HiddenMechanism =
     [
-        "GitCli", "MetaIni", "SourceUnit", "Locate", "SourceTreeDocuments", "PristineFileWriter",
-        "WorkingTreeStatus", "ReadCommittedSourceText", "CommittedSourceHashes",
+        "GitCli", "GitBlobHash", "MetaIni", "SourceUnit", "Locate", "SourceTreeDocuments",
+        "PristineFileWriter", "WorkingTreeStatus", "ReadCommittedSourceText", "CommittedSourceHashes",
         "TryParseDocumentPath", "RootStringIn", "RecordBodyFromOwnerBytes",
     ];
 

@@ -87,7 +87,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
     }
 
     [Fact]
-    public void Index_ContentHash_IsTheGitBlobHashOfTheStoredBody()
+    public void Index_ContentHash_IsTheRepositorysHashOfTheStoredBody()
     {
         using var cmd = _fixture.Repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT form_key, body, content_hash FROM records";
@@ -98,7 +98,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         while (reader.Read())
         {
             var stored = reader.GetString(2);
-            var recomputed = GitBlobHash.Of(System.Text.Encoding.UTF8.GetBytes(reader.GetString(1)));
+            var recomputed = SourceRepository.ContentHash(System.Text.Encoding.UTF8.GetBytes(reader.GetString(1)));
             if (!string.Equals(stored, recomputed, StringComparison.Ordinal))
                 mismatches.Add($"{reader.GetString(0)}: stored {stored} != {recomputed}");
             checked_++;
