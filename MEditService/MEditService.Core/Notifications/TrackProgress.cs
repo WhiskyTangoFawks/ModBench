@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
-using MEditService.Core.Source;
 
-namespace MEditService.Core.Commands;
+namespace MEditService.Core.Notifications;
 
 /// <summary>The phases a Track moves through, in order. <c>Serializing</c> advances one plugin at a
 /// time: the whole-mod door serializes each plugin as one call with no per-record progress
@@ -15,7 +14,7 @@ public enum TrackPhase
     Committing,
 }
 
-/// <summary>What <see cref="TrackService"/> can say about a Track in flight. One shared instance, not
+/// <summary>What Track can say about itself in flight. One shared instance, not
 /// per-origin: Track is a single user gesture and nothing runs two at once. Counts plugins, not
 /// records.</summary>
 public sealed record TrackProgress(string? Origin, TrackPhase Phase, int PluginsDone, int PluginsTotal)

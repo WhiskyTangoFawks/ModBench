@@ -32,16 +32,12 @@ public sealed class CommandHandlerConventionTests
     ];
 
     // What the gestures answer and report through, each with its own refusal vocabulary. The carrier
-    // is the gesture's own (ADR-0014 invariant 4), so it shares the gesture's namespace.
+    // is the gesture's own (ADR-0014 invariant 4).
     private static readonly Type[] Carriers =
     [
         typeof(AbsorbResult),
         typeof(ExternalChangeLandResult),
         typeof(PluginCreateResult),
-        typeof(RebaseOutcome),
-        typeof(RebaseResult),
-        typeof(TrackPhase),
-        typeof(TrackProgress),
         typeof(TrackRefusal),
         typeof(TrackResult),
     ];
