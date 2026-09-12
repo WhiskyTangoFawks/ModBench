@@ -32,6 +32,37 @@ export default tseslint.config(
         },
     },
 
+    // A narrowing cast is the fastest way past a type error, and the easiest habit to copy. Off
+    // only in the record-document allowlist below, and for tests in their own block further down.
+    {
+        files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
+        rules: {
+            '@typescript-eslint/no-unsafe-type-assertion': 'error',
+        },
+    },
+
+    // Each file below holds exactly one function, and that function is its file's only cast —
+    // named the way the errno reader is, not a suppression widened to a whole client or module.
+    // Pinned by unsafeTypeAssertionAllowlist.test.ts.
+    {
+        files: ['webview/src/columnKey.ts', 'webview/src/parseCompareResult.ts'],
+        rules: {
+            '@typescript-eslint/no-unsafe-type-assertion': 'off',
+        },
+    },
+
+    // The record document's field tree, read one dynamic member/discriminator at a time — not
+    // reducible to one function each. Pinned by unsafeTypeAssertionAllowlist.test.ts.
+    {
+        files: [
+            'webview/src/recordUtils.ts', 'webview/src/presentation.ts', 'webview/src/siblingsInUse.ts',
+            'webview/src/modelValue.ts',
+        ],
+        rules: {
+            '@typescript-eslint/no-unsafe-type-assertion': 'off',
+        },
+    },
+
     // Mod Management never calls the backend (CONTEXT.md).
     {
         files: ['src/modmanager/**/*.ts'],
@@ -101,9 +132,12 @@ export default tseslint.config(
         },
     },
 
-    // Test files — relax unsafe-any rules since mocks legitimately use any
+    // Test files — relax unsafe-any rules since mocks legitimately use any. Tests keep their
+    // narrowing-cast exemption too, until that block shrinks to nothing.
     {
-        files: ['src/test/**/*.ts', 'src/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}'],
+        files: [
+            'src/test/**/*.ts', 'src/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**/*.ts',
+        ],
         rules: {
             '@typescript-eslint/no-explicit-any': 'off',
             '@typescript-eslint/no-unsafe-assignment': 'off',
@@ -113,6 +147,7 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-member-access': 'off',
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/no-base-to-string': 'off',
+            '@typescript-eslint/no-unsafe-type-assertion': 'off',
         },
     },
 

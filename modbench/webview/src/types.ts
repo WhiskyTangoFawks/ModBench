@@ -33,19 +33,8 @@ export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: F
 
 // ADR-0012: a column is (plugin, origin), not plugin alone — two columns can share a filename.
 // The brand makes comparing one against a bare plugin string a compile error; a mapped type
-// erases it.
+// erases it. Minted only by columnKey() (./columnKey.ts).
 export type ColumnKey = string & { readonly __col: unique symbol };
-
-// Mirrors the backend's `ColumnKey.Of`: `|` delimiter (illegal in a Windows filename), Data origin
-// elided. Only the Data check case-folds; the key keeps the caller's casing.
-
-// A `null` origin is tolerated because the wire schema types every string nullable, though the C#
-// field is non-nullable and NOT NULL in DuckDB.
-export function columnKey(plugin: string, origin: string | null): ColumnKey {
-  const resolvedOrigin = origin ?? 'Data';
-  const key = resolvedOrigin.toLowerCase() === 'data' ? plugin : `${plugin}|${resolvedOrigin}`;
-  return key as ColumnKey;
-}
 
 export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: FieldValue[] };
 

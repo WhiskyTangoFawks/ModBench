@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { errnoCode } from '../../errno';
 
 /** Rejects with the spawn error (ENOENT when the binary is absent) or a
  *  non-zero-exit error; `extractArchive` distinguishes the two. */
@@ -30,8 +31,9 @@ export async function extractArchive(
       await run(bin, args);
       return;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') continue; // binary absent — try next name
-      throw new Error(`Failed to extract ${archivePath}: ${(err as Error).message}`, { cause: err });
+      if (errnoCode(err) === 'ENOENT') continue; // binary absent — try next name
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to extract ${archivePath}: ${message}`, { cause: err });
     }
   }
   throw new Error(

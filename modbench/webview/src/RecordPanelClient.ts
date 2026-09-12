@@ -1,7 +1,8 @@
 import createClient from 'openapi-fetch';
 import type { paths } from '../../src/medit/generated/api';
 import type { ColumnKey, CompareResult } from './types';
-import { columnKey } from './types';
+import { columnKey } from './columnKey';
+import { parseCompareResult } from './parseCompareResult';
 // `load` fires compare + plugins + status in parallel: a compare failure fails the whole load
 // (the panel has nothing to show), while a plugins/status failure comes back as `null` so the
 // panel leaves that slice of state untouched.
@@ -47,10 +48,7 @@ export function createRecordPanelClient(port: number): RecordPanelClient {
       const pluginList = plugins.response.ok ? (plugins.data ?? null) : null;
       return {
         ok: true,
-        // A *narrowing* to the webview's own refinement of the wire — `FieldMetadata.type` is a
-        // closed union here and `string` on the wire, so wire -> webview is a downcast by
-        // construction.
-        result: cmp.data as CompareResult,
+        result: parseCompareResult(cmp.data),
         // ADR-0012: keyed by compound column identity, not bare plugin name — two entries sharing
         // a filename but differing in origin must stay distinct Set members, or one origin's
         // mutability silently wins for both.

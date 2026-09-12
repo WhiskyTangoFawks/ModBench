@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { createRecordPanelClient } from './RecordPanelClient';
-import { columnKey } from './types';
+import { columnKey } from './columnKey';
 
 // `fetch` is the genuine external boundary here; everything above the client injects a fake.
 

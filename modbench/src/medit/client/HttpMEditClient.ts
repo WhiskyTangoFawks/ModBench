@@ -35,8 +35,9 @@ export interface HttpMEditClientDeps {
 // An esl-contradiction refusal's `error` never carries this extension on any other refusal, so a
 // truthy check is enough.
 function eslContradictionMessage(error: unknown): string | undefined {
-  const problem = error as { eslContradiction?: boolean; detail?: string } | undefined;
-  return problem?.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
+  if (typeof error !== 'object' || error === null) return undefined;
+  const problem = error as { eslContradiction?: boolean; detail?: string };
+  return problem.eslContradiction ? (problem.detail ?? errorText(error)) : undefined;
 }
 
 /** ADR-0002/ADR-0014: the HTTP adapter, whole — the generated client, `openapi-fetch`, `undici`
@@ -381,11 +382,12 @@ export class HttpMEditClient implements MEditClient {
 
     // The backend's typed discriminator, off the ProblemDetails extension rather than re-derived
     // from the status: only it tells "not tracked" from "no folder", whose ways out differ.
-    const problem = error as { refusal?: string; detail?: string } | undefined;
+    // `refusal` reads through ProblemDetails' own index signature — no cast.
+    const refusal = error?.refusal;
     const outcome: RecordEditOutcome = {
       applied: false,
-      refusal: problem?.refusal ?? 'Unknown',
-      message: problem?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
+      refusal: typeof refusal === 'string' ? refusal : 'Unknown',
+      message: error?.detail ?? (errorText(error) || `Edit failed (${response.status}).`),
     };
     this.log(`[HttpMEditClient] editRecord(${formKey} ${envelope.op} ${spelled}) refused: ${outcome.refusal} — ${outcome.message}`);
     return outcome;

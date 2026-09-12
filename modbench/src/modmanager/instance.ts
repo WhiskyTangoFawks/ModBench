@@ -2,6 +2,7 @@
 // MO2-side watchers, holds one whole value, and is built only by watching.
 
 import type * as vscode from 'vscode';
+import { errnoCode } from '../errno';
 import type { ModlistEntry, PluginEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
@@ -94,7 +95,7 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
   try {
     return parseMetaIni(await get(modMetaFile(instanceRoot, modName)));
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    if (errnoCode(err) === 'ENOENT') return {};
     throw err;
   }
 }
@@ -106,7 +107,7 @@ async function readModFolderNames(instanceRoot: string): Promise<string[]> {
     const dirents = await listDir(modsDir(instanceRoot));
     return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    if (errnoCode(err) === 'ENOENT') return [];
     throw err;
   }
 }

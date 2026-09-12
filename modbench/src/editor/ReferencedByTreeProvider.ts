@@ -4,6 +4,10 @@ import type { MEditClient, ReferenceResult } from '../medit/client';
 /** Rows sharing a FormKey collapse into one node, so one referencer reads as one thing rather
  *  than as several. */
 export class ReferencedByGroupNode extends vscode.TreeItem {
+  // `this.label` is `string | vscode.TreeItemLabel` on the base class; the constructor below
+  // always passes the template-literal string, so this is that same string, kept typed.
+  readonly displayLabel: string;
+
   constructor(
     readonly formKey: string,
     readonly results: ReferenceResult[],
@@ -11,7 +15,9 @@ export class ReferencedByGroupNode extends vscode.TreeItem {
     const first = results.at(0);
     const recordType = first?.recordType ?? '';
     const recordLabel = first?.editorId ?? formKey;
-    super(`${recordType} / ${recordLabel}`, vscode.TreeItemCollapsibleState.Collapsed);
+    const displayLabel = `${recordType} / ${recordLabel}`;
+    super(displayLabel, vscode.TreeItemCollapsibleState.Collapsed);
+    this.displayLabel = displayLabel;
     if (results.length > 1) this.description = `${results.length} plugins`;
     this.contextValue = 'referencedByGroup';
     this.iconPath = new vscode.ThemeIcon('references');
@@ -60,9 +66,7 @@ export type ReferencedByTreeNode =
 export function referencedByCopyText(nodes: readonly ReferencedByTreeNode[]): string {
   return nodes
     .filter((n): n is ReferencedByGroupNode => n instanceof ReferencedByGroupNode)
-    // The constructor always passes a template-literal string, never a TreeItemLabel, so the
-    // cast holds.
-    .map(n => n.label as string)
+    .map(n => n.displayLabel)
     .join('\n');
 }
 

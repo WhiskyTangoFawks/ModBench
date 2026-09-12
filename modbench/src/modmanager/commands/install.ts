@@ -10,6 +10,7 @@ import { MOD_META_FILE_NAME, modsDir as modsDirOf, settingsFile } from '../mo2/l
 import { parseMetaIni, setOwnedKeysInText, writeMetaIni, type OwnedMetaKeys } from '../mo2/metaIni';
 import { readGameName } from '../mo2/modOrganizerIni';
 import { copyTree, ensureDir, exists, get, listDir, makeTempDir, remove, rename, write } from '../mo2Files';
+import { errnoCode } from '../../errno';
 
 /** Which install this is, settled by the caller: the folder on disk is checked against this
  *  claim, never consulted to decide it. */
@@ -58,7 +59,7 @@ function withInstallLock<T>(instanceRoot: string, task: () => Promise<T>): Promi
 }
 
 function crossVolumeOrGenericRefusal(err: unknown, name: string): InstallCommandResult {
-  if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+  if (errnoCode(err) === 'EXDEV') {
     return {
       applied: false,
       refusal: `Cannot install "${name}": the staging folder and mods/ are on different drives, so the mod folder cannot be moved into place in one step.`,

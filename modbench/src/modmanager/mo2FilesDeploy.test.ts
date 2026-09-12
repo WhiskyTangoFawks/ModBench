@@ -367,6 +367,19 @@ describe('deployToGameData', () => {
     await expect(stat(join(fx.gameDirectory.dataFolder, 'mod.esp'))).rejects.toThrow();
   });
 
+  it('refuses (as corrupt) when the manifest is valid JSON of the wrong shape, not just unparseable', async () => {
+    fx = await makeDeployerFixture();
+    const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
+    // Well-formed JSON, but neither `links` nor `preExisting` — parseManifest's own check, not
+    // JSON.parse's.
+    await writeFile(join(fx.instanceRoot, ...MANIFEST), JSON.stringify({ notAManifest: true }));
+
+    const outcome = await deployToGameData(fx.instanceRoot, fx.gameDirectory, toLinks({ 'mod.esp': source }));
+
+    expect(assertRefused(outcome)).toMatch(/manifest/i);
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'mod.esp'))).rejects.toThrow();
+  });
+
   it('still writes the manifest (and warns) when a load-order source is missing, so links stay purgeable', async () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
