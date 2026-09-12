@@ -54,10 +54,12 @@ export function insertIndexAmongEntries(
   isEntry: (line: string) => boolean,
   toIndex: number,
 ): number {
-  const entryLineIdx = [...lines.keys()].filter((i) => isEntry(lines[i]));
+  const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntry(line)).map(([i]) => i);
   const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-  if (clamped < entryLineIdx.length) return entryLineIdx[clamped];
-  return entryLineIdx.length === 0 ? lines.length : entryLineIdx.at(-1)! + 1;
+  const atClamped = entryLineIdx[clamped];
+  if (atClamped !== undefined) return atClamped;
+  const last = entryLineIdx.at(-1);
+  return last !== undefined ? last + 1 : lines.length;
 }
 
 /** Whole-file presence, never a one-line sniff, which could name a bare `\r` the

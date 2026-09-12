@@ -26,8 +26,8 @@ export function parseLibraryFoldersVdf(content: string, appId: string): string |
   const libraryBlocks = content.split(/"\d+"\s*\{/);
   for (const block of libraryBlocks) {
     if (!block.includes(`"${appId}"`)) continue;
-    const match = block.match(/"path"\s+"([^"]+)"/);
-    if (match) return match[1];
+    const path = block.match(/"path"\s+"([^"]+)"/)?.[1];
+    if (path !== undefined) return path;
   }
   return null;
 }
@@ -80,8 +80,8 @@ export async function detectWinePrefix(steamAppId: string): Promise<string | nul
 }
 
 export function parseRegQuerySteamPath(stdout: string): string | null {
-  const match = stdout.match(/SteamPath\s+REG_SZ\s+(.+)/);
-  return match ? match[1].trim() : null;
+  const path = stdout.match(/SteamPath\s+REG_SZ\s+(.+)/)?.[1];
+  return path !== undefined ? path.trim() : null;
 }
 
 /** Exported and injected purely as a test seam: `vi.mock`'s automock of `node:child_process`

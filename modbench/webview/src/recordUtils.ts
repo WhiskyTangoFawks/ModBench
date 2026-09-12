@@ -221,7 +221,7 @@ export function variantFor(meta: FieldMetadata, owner: unknown, ownerMeta: Field
   const discriminator = discriminatorOf(ownerMeta);
   if (!meta.variants || discriminator == null || owner == null || typeof owner !== 'object') return meta;
   const leaf = (owner as Record<string, unknown>)[discriminator];
-  return typeof leaf === 'string' && leaf in meta.variants ? meta.variants[leaf] : meta;
+  return typeof leaf === 'string' ? meta.variants[leaf] ?? meta : meta;
 }
 
 // `fieldMetaMap[rootField].elementType` is the right element type only when the array is the

@@ -29,7 +29,7 @@ function wire(askQuestion = scriptedDialog()) {
   const client = {} as Parameters<typeof wireExternalChangePending>[0];
   const treeProvider = { refresh: vi.fn() } as unknown as Parameters<typeof wireExternalChangePending>[2];
   wireExternalChangePending(client, outputChannel, treeProvider, vi.fn(), askQuestion);
-  return { outputChannel, deps: subscribeExternalChangePending.mock.calls[0][0] };
+  return { outputChannel, deps: subscribeExternalChangePending.mock.calls[0]![0] };
 }
 
 describe('wireExternalChangePending', () => {

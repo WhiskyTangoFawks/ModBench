@@ -20,8 +20,8 @@ function valueSpan(text: string, key: string): { start: number; end: number } | 
 }
 
 function unwrap(raw: string): string {
-  const m = /^@ByteArray\((.*)\)$/.exec(raw.trim());
-  return m ? m[1] : raw.trim();
+  const captured = /^@ByteArray\((.*)\)$/.exec(raw.trim())?.[1];
+  return captured !== undefined ? captured : raw.trim();
 }
 
 export function readSelectedProfile(text: string): string {

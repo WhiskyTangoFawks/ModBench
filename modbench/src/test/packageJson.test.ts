@@ -63,7 +63,7 @@ describe('package.json Toolbox view', () => {
   const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
 
   it('is the first view in the Modbench container, so workspace-scope actions sit above the domain trees', () => {
-    expect(sidebarViews()[0].id).toBe('modbench.toolbox');
+    expect(sidebarViews()[0]!.id).toBe('modbench.toolbox');
   });
 });
 
@@ -99,7 +99,7 @@ describe('package.json retires modbench.viewMode and the second Plugins view', (
   it('there is only one view named for plugins — modbench.pluginTree is gone', () => {
     expect(allViews().find((v) => v.id === 'modbench.pluginTree')).toBeUndefined();
     expect(allViews().filter((v) => v.name === 'Plugins')).toHaveLength(1);
-    expect(allViews().filter((v) => v.name === 'Plugins')[0].id).toBe('modbench.pluginListTree');
+    expect(allViews().filter((v) => v.name === 'Plugins')[0]!.id).toBe('modbench.pluginListTree');
   });
 
   it('Referenced By carries no gate at all — always present, like Mods/Plugins/Downloads', () => {
@@ -234,8 +234,8 @@ describe('package.json Refresh is one command', () => {
   it('puts it at slot 1 of the Toolbox and nowhere else', () => {
     const entries = titleMenus().filter((e) => e.command === 'modbench.refresh');
     expect(entries).toHaveLength(1);
-    expect(entries[0].when).toBe('view == modbench.toolbox');
-    expect(entries[0].group).toBe('navigation@1');
+    expect(entries[0]!.when).toBe('view == modbench.toolbox');
+    expect(entries[0]!.group).toBe('navigation@1');
   });
 
 });

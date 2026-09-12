@@ -397,7 +397,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     ]);
     const rows = (await tree.getChildren()).filter((n): n is PluginNode => n instanceof PluginNode);
     expect(rows.map((n) => n.plugin.name)).toEqual(['Fallout4.esm']);
-    expect(rows[0].iconPath).toBeUndefined(); // no path to open, so nothing to badge
+    expect(rows[0]!.iconPath).toBeUndefined(); // no path to open, so nothing to badge
   });
 
   it('resolvePluginPath returns undefined for a LoadOrderPluginLine, never "undefined" as text', async () => {
@@ -513,7 +513,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(rows[0].label).toBe('⚠ Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
+    expect(rows[0]!.label).toBe('⚠ Failed to load: EISDIR: illegal operation on a directory, read plugins.txt');
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EISDIR: illegal operation on a directory, read plugins.txt' },
     ]);
@@ -773,7 +773,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     source.reorderPluginsError = new Error('disk full');
     const { reports, fired } = await drag(source, ['A.esp'], 'D.esp');
     expect(reports).toHaveLength(1);
-    expect(reports[0].severity).toBe('error');
+    expect(reports[0]!.severity).toBe('error');
     expect(fired).toBe(true); // refresh fired to resync the moved row
   });
 });
@@ -1040,7 +1040,7 @@ describe('PluginsTreeProvider — rows are always collapsible', () => {
     const [empty] = await tree.getChildren();
 
     expect(empty).toBeInstanceOf(EmptyNode);
-    expect(tree.getTreeItem(empty).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+    expect(tree.getTreeItem(empty!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
 
   it('stays collapsible once mEdit starts', async () => {
@@ -1048,7 +1048,7 @@ describe('PluginsTreeProvider — rows are always collapsible', () => {
     await reconcile(h, [held('A.esp')]);
     const [row] = await h.tree.getChildren();
 
-    expect(h.tree.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect(h.tree.getTreeItem(row!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   it('stays collapsible while a fresh load holds nothing yet', async () => {
@@ -1058,7 +1058,7 @@ describe('PluginsTreeProvider — rows are always collapsible', () => {
 
     h.tree.applyIndexed([], []);
 
-    expect(h.tree.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect(h.tree.getTreeItem(row!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   // The rival this guards: collapsibleState quietly reading a held-plugin set again (e.g. `None`
@@ -1069,7 +1069,7 @@ describe('PluginsTreeProvider — rows are always collapsible', () => {
     await reconcile(h, [held('A.esp')]); // B.esp is never held
     const rows = await h.tree.getChildren();
 
-    expect(h.tree.getTreeItem(rows[1]).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect(h.tree.getTreeItem(rows[1]!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 });
 
@@ -1087,7 +1087,7 @@ describe('PluginsTreeProvider — expanding a row, never an empty list', () => {
   it('reads no plugin facts before a reconcile', async () => {
     const { tree, client } = makeTree([A_ROW()]);
     const [row] = await tree.getChildren();
-    tree.getTreeItem(row);
+    tree.getTreeItem(row!);
     expect(callCount(client, 'getPlugins')).toBe(0);
   });
 
@@ -1243,7 +1243,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     await h.tree.applyReconciled([]);
     const [row] = await h.tree.getChildren();
 
-    const item = h.tree.getTreeItem(row);
+    const item = h.tree.getTreeItem(row!);
     expect(item.tooltip).toBeUndefined();
     expect(item.description).toBeUndefined();
     expect(item.iconPath).toBeUndefined();
@@ -1283,7 +1283,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
     const [row] = await h.tree.getChildren();
 
-    expect(h.tree.getTreeItem(row).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect(h.tree.getTreeItem(row!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   // Nothing fetched has to read the same as "no filter active".
@@ -1293,7 +1293,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
     const rows = await h.tree.getChildren();
     expect(rows).toHaveLength(1);
-    expect(h.tree.getTreeItem(rows[0]).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect(h.tree.getTreeItem(rows[0]!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   // The empty-state row stands for no plugin file, so a record filter has nothing to have an
@@ -1376,7 +1376,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
 
     const rows = await h.tree.getChildren();
     expect(rows).toHaveLength(1);
-    expect(h.tree.getTreeItem(rows[0]).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect(h.tree.getTreeItem(rows[0]!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   // A stale answer must lose to a newer request sharing its in-flight window.
@@ -1506,8 +1506,8 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const [row] = await h.tree.getChildren();
     const [recordType] = await h.tree.getChildren(row);
 
-    expect(h.tree.getTreeItem(recordType)).toBe(recordType);
-    expect(h.tree.getTreeItem(recordType).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+    expect(h.tree.getTreeItem(recordType!)).toBe(recordType);
+    expect(h.tree.getTreeItem(recordType!).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   // The record browser answers a failed fetch with an error node (ADR-0019) — the merged tree
@@ -1551,7 +1551,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
 async function rowItem(h: Harness, index = 0): Promise<vscode.TreeItem> {
   const rows = await h.tree.getChildren();
-  return h.tree.getTreeItem(rows[index]);
+  return h.tree.getTreeItem(rows[index]!);
 }
 
 // ADR-0017: read-only-for-editing is never an icon; it is the absent actions and this note.
@@ -2023,7 +2023,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
 
     const rows = await h.tree.getChildren();
     expect(rows).toHaveLength(1);
-    const item = h.tree.getTreeItem(rows[0]);
+    const item = h.tree.getTreeItem(rows[0]!);
     expect(item.iconPath).toBeUndefined();
     expect(item.description).toBeUndefined();
     expect(item.tooltip).toBeUndefined();
@@ -2132,8 +2132,8 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
     const failures = h.logged.filter((l) => l.msg.includes('plugin list failed'));
     expect(failures).toHaveLength(1);
-    expect(failures[0].level).toBe('error');
-    expect(failures[0].msg).toContain('GET /plugins failed (503)');
+    expect(failures[0]!.level).toBe('error');
+    expect(failures[0]!.msg).toContain('GET /plugins failed (503)');
   });
 
   it('reports a failed malformed-plugin scan at warn, below the read that succeeded', async () => {
@@ -2144,7 +2144,7 @@ describe('PluginsTreeProvider — the facts are pulled once and held', () => {
 
     const scan = h.logged.filter((l) => l.msg.includes('malformed-plugin scan'));
     expect(scan).toHaveLength(1);
-    expect(scan[0].level).toBe('warn');
+    expect(scan[0]!.level).toBe('warn');
     expect(h.logged.some((l) => l.level === 'error')).toBe(false);
   });
 

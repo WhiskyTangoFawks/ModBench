@@ -17,9 +17,9 @@ describe('createDebouncedFsWatcher', () => {
     createDebouncedFsWatcher('/instance', 'test/**', onChange);
     const watcher = watchers[0];
 
-    watcher.fireCreate();
-    watcher.fireChange();
-    watcher.fireDelete();
+    watcher!.fireCreate();
+    watcher!.fireChange();
+    watcher!.fireDelete();
     vi.runAllTimers();
 
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -28,17 +28,17 @@ describe('createDebouncedFsWatcher', () => {
   it('disposing the returned Disposable disposes the underlying watcher', () => {
     const disposable = createDebouncedFsWatcher('/instance', 'test/**', () => {});
     const watcher = watchers[0];
-    expect(watcher.disposed).toBe(false);
+    expect(watcher!.disposed).toBe(false);
 
     disposable.dispose();
 
-    expect(watcher.disposed).toBe(true);
+    expect(watcher!.disposed).toBe(true);
   });
 
   it('disposing before the debounce window elapses cancels the in-flight onChange', () => {
     const onChange = vi.fn();
     const disposable = createDebouncedFsWatcher('/instance', 'test/**', onChange);
-    watchers[0].fireCreate();
+    watchers[0]!.fireCreate();
 
     disposable.dispose();
     vi.runAllTimers();
@@ -53,11 +53,11 @@ describe('createDebouncedFsWatcher', () => {
     createDebouncedFsWatcher('/instance', 'mods/**', onChange);
     const watcher = watchers[0];
 
-    watcher.fireChange('/instance/mods/Foo/.git/MEDIT_COMPILE_JOURNAL');
+    watcher!.fireChange('/instance/mods/Foo/.git/MEDIT_COMPILE_JOURNAL');
     vi.runAllTimers();
     expect(onChange).not.toHaveBeenCalled();
 
-    watcher.fireCreate('/instance/mods/Foo/Foo.esp');
+    watcher!.fireCreate('/instance/mods/Foo/Foo.esp');
     vi.runAllTimers();
     expect(onChange).toHaveBeenCalledTimes(1);
   });
@@ -67,13 +67,13 @@ describe('createDebouncedFsWatcher', () => {
   it('does not ignore the .git directory entry itself appearing or disappearing', () => {
     const onCreate = vi.fn();
     createDebouncedFsWatcher('/instance', 'mods/**', onCreate);
-    watchers[0].fireCreate('/instance/mods/Foo/.git');
+    watchers[0]!.fireCreate('/instance/mods/Foo/.git');
     vi.runAllTimers();
     expect(onCreate).toHaveBeenCalledTimes(1);
 
     const onDelete = vi.fn();
     createDebouncedFsWatcher('/instance', 'mods/**', onDelete);
-    watchers[1].fireDelete('/instance/mods/Foo/.git');
+    watchers[1]!.fireDelete('/instance/mods/Foo/.git');
     vi.runAllTimers();
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
@@ -86,8 +86,8 @@ describe('createDebouncedFsWatcher', () => {
     createDebouncedFsWatcher('/instance', 'test/**', onDefault);
     createDebouncedFsWatcher('/instance', 'test/**', onOverridden, 0);
 
-    watchers[0].fireCreate();
-    watchers[1].fireCreate();
+    watchers[0]!.fireCreate();
+    watchers[1]!.fireCreate();
     vi.advanceTimersByTime(50);
 
     expect(onOverridden).toHaveBeenCalledTimes(1);

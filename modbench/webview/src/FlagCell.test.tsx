@@ -68,7 +68,7 @@ describe('FlagCell — read-only column', () => {
   it('clicking a disabled checkbox never commits', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={['A', 'C']} meta={flagMeta} editable={false} onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]!);
     expect(onCommit).not.toHaveBeenCalled();
   });
 });
@@ -78,21 +78,21 @@ describe('FlagCell — editing', () => {
   it('unchecking a name commits the array without it', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getAllByRole('checkbox')[0]!);
     expect(onCommit).toHaveBeenCalledWith(['C']);
   });
 
   it('checking a name commits the array with it appended', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={['A', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[1]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]!);
     expect(onCommit).toHaveBeenCalledWith(['A', 'C', 'B']);
   });
 
   it('sets the first flag from an absent value', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={null} meta={flagMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getAllByRole('checkbox')[0]!);
     expect(onCommit).toHaveBeenCalledWith(['A']);
   });
 
@@ -101,7 +101,7 @@ describe('FlagCell — editing', () => {
   it('keeps a name the metadata does not list when another is toggled', () => {
     const onCommit = vi.fn();
     render(<FlagCell value={['AB', 'C']} meta={flagMeta} editable onCommit={onCommit} />);
-    fireEvent.click(screen.getAllByRole('checkbox')[3]);
+    fireEvent.click(screen.getAllByRole('checkbox')[3]!);
     expect(onCommit).toHaveBeenCalledWith(['AB', 'C', 'D']);
   });
 });

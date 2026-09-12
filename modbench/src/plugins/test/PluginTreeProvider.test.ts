@@ -83,8 +83,8 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
 
     const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
-    expect(typeNode.label).toBe('Activator');
-    expect(typeNode.recordType).toBe('acti');
+    expect(typeNode!.label).toBe('Activator');
+    expect(typeNode!.recordType).toBe('acti');
   });
 });
 
@@ -305,7 +305,7 @@ describe('RecordNode', () => {
     const node = new RecordNode(record);
 
     const args = (node.command as { arguments: { label: string }[] }).arguments;
-    expect(args[0].label).toBe(record.formKey);
+    expect(args[0]!.label).toBe(record.formKey);
   });
 
   // The renumberable row — a master copy whose plugin is tracked — is the only one that
@@ -504,7 +504,7 @@ describe('record rows carry their copy identity', () => {
     const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], undefined);
     const [row] = await provider.getChildren(group) as PlacedNode[];
 
-    expect(row.contextValue).toBe('refrImmutable');
+    expect(row!.contextValue).toBe('refrImmutable');
   });
 
   it('placed rows of a shadowed copy are refrImmutable even when the plugin is not listed immutable', async () => {
@@ -515,7 +515,7 @@ describe('record rows carry their copy identity', () => {
     const group = new PlacedGroupNode('Plugin0.esp', 'cell:fk', 'persistent', [placed], 'ModA');
     const [row] = await provider.getChildren(group) as PlacedNode[];
 
-    expect(row.contextValue).toBe('refrImmutable');
+    expect(row!.contextValue).toBe('refrImmutable');
   });
 });
 
@@ -589,12 +589,12 @@ describe('PluginTreeProvider worldspace tree', () => {
     const cells = await provider.getChildren(subBlocks[0]);
 
     expect(wsChildren).toHaveLength(2); // persistent cell + 1 block
-    expect(topCellNode.label).toBe('<Persistent Worldspace Cell>');
-    expect(blockNode.label).toBe('Block 0, 0');
-    expect(subBlocks[0].label).toBe('Sub-Block 0, 0');
+    expect(topCellNode!.label).toBe('<Persistent Worldspace Cell>');
+    expect(blockNode!.label).toBe('Block 0, 0');
+    expect(subBlocks[0]!.label).toBe('Sub-Block 0, 0');
     expect((cells[0] as CellNode).cell.cellX).toBe(12);
     // xEdit's StrRight right-justifies each coordinate to width 3 inside the angle brackets.
-    expect(cells[0].label).toBe('< 12,  -5>');
+    expect(cells[0]!.label).toBe('< 12,  -5>');
   });
 
   // xEdit's TwbMainRecord.GetDisplayName checks GetFullName unconditionally, before any
@@ -644,8 +644,8 @@ describe('PluginTreeProvider worldspace tree', () => {
     const wsChildren = await provider.getChildren(wsNode);
 
     expect(wsChildren.filter(c => c instanceof CellNode)).toHaveLength(2);
-    expect(wsChildren[0].label).toBe('<Persistent Worldspace Cell>');
-    expect(wsChildren[1].label).toBe('StrayCell');
+    expect(wsChildren[0]!.label).toBe('<Persistent Worldspace Cell>');
+    expect(wsChildren[1]!.label).toBe('StrayCell');
   });
 
   it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
@@ -659,11 +659,11 @@ describe('PluginTreeProvider worldspace tree', () => {
 
     const groups = await provider.getChildren(cellNode);
     expect(groups).toHaveLength(1); // only persistent (temporary empty)
-    expect(groups[0].label).toBe('Persistent');
+    expect(groups[0]!.label).toBe('Persistent');
 
     const placed = await provider.getChildren(groups[0]);
     expect(placed).toHaveLength(1);
-    expect(placed[0].label).toBe('barrelRef [REFR:b]');
+    expect(placed[0]!.label).toBe('barrelRef [REFR:b]');
   });
 
   it('paginates interior cells with a load-more node', async () => {
@@ -815,7 +815,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const [wsNode] = await provider.getChildren(node) as WorldspaceNode[];
 
     expect(repo.calls).toContainEqual({ method: 'getWorldspaces', args: ['Shared.esp', 'ModB'] });
-    expect(wsNode.origin).toBe('ModB');
+    expect(wsNode!.origin).toBe('ModB');
   });
 
   it('fetchWorldspaceChildren: asks the repository for the node\'s own copy, and its TopCell/Block children carry that origin forward', async () => {
@@ -835,7 +835,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const [subBlockNode] = await provider.getChildren(blockNode);
     const [cellNode] = await provider.getChildren(subBlockNode) as CellNode[];
     expect((subBlockNode as SubBlockNode).origin).toBe('ModB');
-    expect(cellNode.origin).toBe('ModB');
+    expect(cellNode!.origin).toBe('ModB');
   });
 
   it('fetchCellGroups: asks the repository for the node\'s own copy, and its PlacedGroup/Placed children carry that origin forward', async () => {
@@ -849,10 +849,10 @@ describe('PluginTreeProvider spatial origin threading', () => {
 
     const [groupNode] = await provider.getChildren(node) as PlacedGroupNode[];
     expect(repo.calls).toContainEqual({ method: 'getCellReferences', args: ['Shared.esp', 'c:M.esp', 'ModB'] });
-    expect(groupNode.origin).toBe('ModB');
+    expect(groupNode!.origin).toBe('ModB');
 
     const [placedNode] = await provider.getChildren(groupNode) as PlacedNode[];
-    expect(placedNode.origin).toBe('ModB');
+    expect(placedNode!.origin).toBe('ModB');
   });
 
   it('fetchInteriorCells: asks the repository for the node\'s own copy, and the CellNodes it builds carry that origin forward', async () => {
@@ -867,7 +867,7 @@ describe('PluginTreeProvider spatial origin threading', () => {
     const [cellNode] = await provider.getChildren(node) as CellNode[];
 
     expect(repo.calls).toContainEqual({ method: 'getInteriorCells', args: ['Shared.esp', 0, 50, 'ModB'] });
-    expect(cellNode.origin).toBe('ModB');
+    expect(cellNode!.origin).toBe('ModB');
   });
 
   // refCache/interiorCache must be keyed by (origin, plugin) like pageCache — a key on plugin
@@ -1123,10 +1123,10 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children', ()
 
     const containerCalls = repo.calls.filter(c => c.method === 'getContainerChildren');
     expect(containerCalls).toHaveLength(2);
-    expect(containerCalls[0].args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModA']);
-    expect(containerCalls[1].args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModB']);
-    expect(childrenA[0].record.editorId).toBe('TopicModA');
-    expect(childrenB[0].record.editorId).toBe('TopicModB');
+    expect(containerCalls[0]!.args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModA']);
+    expect(containerCalls[1]!.args).toEqual(['Shared.esp', 'qust1:Shared.esp', 'ModB']);
+    expect(childrenA[0]!.record.editorId).toBe('TopicModA');
+    expect(childrenB[0]!.record.editorId).toBe('TopicModB');
   });
 });
 
@@ -1141,9 +1141,9 @@ describe('the failure prefix', () => {
 
     const [failed, healthy] = await provider.getChildren(typeNode) as RecordNode[];
 
-    expect((failed.iconPath as ThemeIcon).id).toBe('error');
-    expect(failed.tooltip).toContain('Perk 0000EF — unknown: bad flag');
-    expect(healthy.iconPath).toBeUndefined();
+    expect((failed!.iconPath as ThemeIcon).id).toBe('error');
+    expect(failed!.tooltip).toContain('Perk 0000EF — unknown: bad flag');
+    expect(healthy!.iconPath).toBeUndefined();
   });
 
   it('marks the record-type node holding an unreadable record, and only that node', async () => {
@@ -1157,9 +1157,9 @@ describe('the failure prefix', () => {
 
     const [perk, weap] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
-    expect((perk.iconPath as ThemeIcon).id).toBe('error');
-    expect(perk.description).toBe('2');
-    expect(weap.iconPath).toBeUndefined();
+    expect((perk!.iconPath as ThemeIcon).id).toBe('error');
+    expect(perk!.description).toBe('2');
+    expect(weap!.iconPath).toBeUndefined();
   });
 
   it('marks the whole worldspace chain a failure sits under, and nothing beside it', async () => {
@@ -1188,9 +1188,9 @@ describe('the failure prefix', () => {
     const [placedNode] = await provider.getChildren(persistentGroup);
 
     for (const node of [wsRoot, failing, blockNode, subBlock, cellNode, persistentGroup, placedNode]) {
-      expect((node.iconPath as ThemeIcon | undefined)?.id).toBe('error');
+      expect((node!.iconPath as ThemeIcon | undefined)?.id).toBe('error');
     }
-    expect(healthy.iconPath).toBeUndefined();
+    expect(healthy!.iconPath).toBeUndefined();
   });
 
   it('marks an interior cell that cannot be read, and its group node', async () => {
@@ -1207,9 +1207,9 @@ describe('the failure prefix', () => {
     const [interiorRoot] = await provider.getPluginChildren('Plugin0.esp');
     const [bad, ok] = await provider.getChildren(interiorRoot);
 
-    expect((interiorRoot.iconPath as ThemeIcon).id).toBe('error');
-    expect((bad.iconPath as ThemeIcon).id).toBe('error');
-    expect(ok.iconPath).toBeUndefined();
+    expect((interiorRoot!.iconPath as ThemeIcon).id).toBe('error');
+    expect((bad!.iconPath as ThemeIcon).id).toBe('error');
+    expect(ok!.iconPath).toBeUndefined();
   });
 
   it('marks a container child that cannot be read, and the container row above it', async () => {
@@ -1227,9 +1227,9 @@ describe('the failure prefix', () => {
 
     const [childRow] = await provider.getChildren(questRow);
 
-    expect((questRow.iconPath as ThemeIcon).id).toBe('error');
-    expect((childRow.iconPath as ThemeIcon).id).toBe('error');
-    expect(childRow.tooltip).toContain('INFO 12');
+    expect((questRow!.iconPath as ThemeIcon).id).toBe('error');
+    expect((childRow!.iconPath as ThemeIcon).id).toBe('error');
+    expect(childRow!.tooltip).toContain('INFO 12');
   });
 });
 

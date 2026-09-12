@@ -249,9 +249,10 @@ export class Instance implements vscode.Disposable {
     try {
       next = await this.read();
     } catch (err) {
-      this.options.log(`[instance] recompute failed, keeping the value at sequence ${this.seq}: ${message(err)}`);
-      this.failure = message(err);
-      this.notify(this.failureListeners, (listener) => listener(this.failure!));
+      const failure = message(err);
+      this.options.log(`[instance] recompute failed, keeping the value at sequence ${this.seq}: ${failure}`);
+      this.failure = failure;
+      this.notify(this.failureListeners, (listener) => listener(failure));
       return;
     }
     this.current = next;

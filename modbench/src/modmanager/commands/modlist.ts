@@ -17,6 +17,7 @@ import {
 import { markDownloadUninstalled } from './downloads';
 import { modDir, modlistFile } from '../mo2/layout';
 import { ensureDir, exists, putIfChanged, remove } from '../mo2Files';
+import { present } from '../../present';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -62,10 +63,11 @@ export function insertSeparator(
     const entries = parseModlist(text);
     const entryIdx = entries.findIndex((e) => e.name === afterEntryName);
     if (entryIdx === -1) throw new Error(`Entry not found in modlist: ${afterEntryName}`);
+    const afterEntry = present(entries[entryIdx], `modlist entry at index ${entryIdx}`);
     let afterIndex = entryIdx;
-    if (entries[entryIdx].kind === 'separator') {
-      for (let i = entryIdx + 1; i < entries.length; i++) {
-        if (entries[i].kind === 'separator') break;
+    if (afterEntry.kind === 'separator') {
+      for (const [i, entry] of [...entries.entries()].slice(entryIdx + 1)) {
+        if (entry.kind === 'separator') break;
         afterIndex = i;
       }
     }

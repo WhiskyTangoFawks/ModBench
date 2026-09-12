@@ -60,7 +60,7 @@ function fsModuleAcquired(node: ts.Node): string | undefined {
     || (ts.isIdentifier(node.expression) && node.expression.text === 'require');
   if (!dynamic || node.arguments.length === 0) return undefined;
   const specifier = node.arguments[0];
-  return ts.isStringLiteralLike(specifier) && FS_MODULES.has(specifier.text) ? specifier.text : undefined;
+  return ts.isStringLiteralLike(specifier!) && FS_MODULES.has(specifier.text) ? specifier.text : undefined;
 }
 
 const isFsModule = (node: ts.Expression, aliases: ReadonlySet<string>): boolean => {

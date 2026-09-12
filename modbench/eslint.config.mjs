@@ -41,6 +41,16 @@ export default tseslint.config(
         },
     },
 
+    // `!` asserts an invariant the checker can't see instead of showing it one — the present()
+    // helper (src/present.ts) or a restructuring does that instead. Tests keep the exemption
+    // further down.
+    {
+        files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
+        rules: {
+            '@typescript-eslint/no-non-null-assertion': 'error',
+        },
+    },
+
     // Each file below holds exactly one function, and that function is its file's only cast —
     // named the way the errno reader is, not a suppression widened to a whole client or module.
     // Pinned by unsafeTypeAssertionAllowlist.test.ts.
@@ -133,7 +143,7 @@ export default tseslint.config(
     },
 
     // Test files — relax unsafe-any rules since mocks legitimately use any. Tests keep their
-    // narrowing-cast exemption too, until that block shrinks to nothing.
+    // narrowing-cast and non-null-assertion exemptions too, until those blocks shrink to nothing.
     {
         files: [
             'src/test/**/*.ts', 'src/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**/*.ts',
@@ -148,6 +158,7 @@ export default tseslint.config(
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/no-base-to-string': 'off',
             '@typescript-eslint/no-unsafe-type-assertion': 'off',
+            '@typescript-eslint/no-non-null-assertion': 'off',
         },
     },
 

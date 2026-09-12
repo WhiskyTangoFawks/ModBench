@@ -11,6 +11,6 @@ describe('createOverwriteWatcher', () => {
 
     createOverwriteWatcher('/instance', () => {});
 
-    expect(watchers[0].pattern).toBe('overwrite/**');
+    expect(watchers[0]!.pattern).toBe('overwrite/**');
   });
 });

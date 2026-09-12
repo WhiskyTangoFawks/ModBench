@@ -251,7 +251,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     const restarted = nextAttach(lifecycle);
     state.healthy = false;          // backend died
-    children[0].emit('exit', 1);    // unexpected exit
+    children[0]!.emit('exit', 1);    // unexpected exit
     await restarted;
 
     expect(spawn).toHaveBeenCalledTimes(2);
@@ -272,7 +272,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     const restarted = nextAttach(lifecycle);
     state.healthy = false;
-    children[0].emit('exit', 1);
+    children[0]!.emit('exit', 1);
     await restarted;
 
     expect(statuses).toEqual(['disconnected', 'starting', 'attached']);
@@ -302,7 +302,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     const startP = lifecycle.start();
     await new Promise((r) => setTimeout(r, 15)); // let it spawn + begin polling
     const stopP = lifecycle.stop();
-    children[0].emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
+    children[0]!.emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
     state.healthy = true;                        // backend "comes up" after the user closed
     await Promise.all([startP, stopP]);
     await new Promise((r) => setTimeout(r, 20)); // let any stray poll fire
@@ -344,10 +344,10 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     const restarted = nextAttach(lifecycle);
     state.healthy = false;
-    children[0].emit('exit', 1);
+    children[0]!.emit('exit', 1);
     await restarted;
 
-    children[1].stdout.write('[08:30:50 INF] back up\n');
+    children[1]!.stdout.write('[08:30:50 INF] back up\n');
     await waitForLines(lines, 1);
 
     expect(lines).toEqual(['[08:30:50 INF] back up']);

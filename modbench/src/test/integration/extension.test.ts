@@ -676,8 +676,8 @@ describe('Overwrite row', () => {
 
     const roots = await provider()!.getChildren();
     const last = roots[roots.length - 1];
-    assert.strictEqual(last.kind, 'overwrite', 'Overwrite row should be the very last root');
-    assert.strictEqual(last.label, 'Overwrite');
+    assert.strictEqual(last!.kind, 'overwrite', 'Overwrite row should be the very last root');
+    assert.strictEqual(last!.label, 'Overwrite');
   });
 
   it('reveal action resolves against the overwrite folder without throwing', async () => {
@@ -1674,8 +1674,8 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
         assert.ok(requestLog.some((l) => l === 'GET /plugins'),
           'the command must have actually reached pickCopyDestination\'s getPlugins() call');
         assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
-        assert.ok(errors[0].startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errors[0]}`);
-        assert.ok(!errors[0].includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errors[0]}`);
+        assert.ok(errors[0]!.startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errors[0]}`);
+        assert.ok(!errors[0]!.includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errors[0]}`);
       } finally {
         (vscode.window as { showErrorMessage: unknown }).showErrorMessage = realShowError;
       }

@@ -98,14 +98,15 @@ export function insertSeparatorAtIndexInText(
 ): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
-    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
+    const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
     const newLine = `+${name}${SEPARATOR_SUFFIX}${detectEol(bomless)}`;
     let insertAt: number;
     if (entryLineIdx.length === 0) {
       insertAt = lines.length;
     } else {
       const clamped = Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1));
-      insertAt = entryLineIdx[clamped] + 1;
+      const atClamped = entryLineIdx[clamped];
+      insertAt = atClamped !== undefined ? atClamped + 1 : lines.length;
     }
     lines.splice(insertAt, 0, newLine);
     return lines.join('');
@@ -145,7 +146,8 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
     const lines = splitLinesKeepEol(bomless);
     const firstEntry = lines.findIndex(isEntryLine);
     const insertAt = firstEntry === -1 ? lines.length : firstEntry;
-    if (insertAt > 0 && !/\r\n$|\r$|\n$/.test(lines[insertAt - 1])) {
+    const prevLine = lines[insertAt - 1];
+    if (insertAt > 0 && prevLine !== undefined && !/\r\n$|\r$|\n$/.test(prevLine)) {
       lines[insertAt - 1] += eol; // EOL-terminate the line we insert after
     }
     lines.splice(insertAt, 0, newLine);
@@ -186,8 +188,8 @@ export function removeModFromText(text: string, modName: string): string {
 // Ungrouped means "after the last separator" — the tail of the entry lines —
 // never a position relative to the first separator.
 function ungroupedInsertAt(lines: string[]): number {
-  const last = [...lines.keys()].findLast((i: number) => isEntryLine(lines[i]));
-  return last === undefined ? lines.length : last + 1;
+  const lastEntry = [...lines.entries()].findLast(([, line]) => isEntryLine(line));
+  return lastEntry === undefined ? lines.length : lastEntry[0] + 1;
 }
 
 // A separator's section is the mods that PRECEDE it; its last member sits
@@ -209,9 +211,9 @@ export function moveModToSeparatorEndInText(
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
 
-    const modIdx = lines.findIndex((l) => matchesModLine(l, modName));
-    if (modIdx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
-    const [modLine] = lines.splice(modIdx, 1);
+    const modLine = lines.find((l) => matchesModLine(l, modName));
+    if (modLine === undefined) throw new Error(`Mod not found in modlist: ${modName}`);
+    lines.splice(lines.indexOf(modLine), 1);
 
     const insertAt =
       separatorName === null
@@ -240,8 +242,8 @@ export function moveSeparatorBlockInText(
     // separator, or to the first entry line — falling back to line 0 instead would
     // sweep a leading comment or blank line into the block.
     let prevSepIdx = -1;
-    for (let i = sepIdx - 1; i >= 0; i--) {
-      if (isSeparatorLine(lines[i])) {
+    for (const [i, line] of [...lines.entries()].slice(0, sepIdx).reverse()) {
+      if (isSeparatorLine(line)) {
         prevSepIdx = i;
         break;
       }
@@ -260,10 +262,10 @@ export function moveSeparatorBlockInText(
 export function moveModInText(text: string, modName: string, toIndex: number): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
-    const srcLine = lines.findIndex((l) => matchesModLine(l, modName));
-    if (srcLine === -1) throw new Error(`Mod not found in modlist: ${modName}`);
+    const moved = lines.find((l) => matchesModLine(l, modName));
+    if (moved === undefined) throw new Error(`Mod not found in modlist: ${modName}`);
+    lines.splice(lines.indexOf(moved), 1);
 
-    const [moved] = lines.splice(srcLine, 1);
     const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, moved);
     return lines.join('');

@@ -78,7 +78,7 @@ describe('right-click array ops write one envelope from the host', () => {
     ));
 
     expect(editRecordCalls(meditClient)).toHaveLength(1);
-    expect(editRecordCalls(meditClient)[0].args).toEqual([
+    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'add', path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] },
     ]);
@@ -92,7 +92,7 @@ describe('right-click array ops write one envelope from the host', () => {
       [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }],
     ));
 
-    expect(editRecordCalls(meditClient)[0].args).toEqual([
+    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }] },
     ]);
@@ -109,7 +109,7 @@ describe('right-click array ops write one envelope from the host', () => {
       [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
     ));
 
-    expect(editRecordCalls(meditClient)[0].args).toEqual([
+    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       {
         op: 'move',
@@ -127,7 +127,7 @@ describe('right-click array ops write one envelope from the host', () => {
 
     await handlers.get('modbench.array.moveUp')!(elementContext([{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }]));
 
-    expect(editRecordCalls(meditClient)[0].args).toEqual([
+    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'move', path: [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }], value: -1 },
     ]);
@@ -205,7 +205,7 @@ describe('the extended editor opens and saves from the host', () => {
     await handlers.get('modbench.field.openExtended')!(stringContext({ path }));
     await openedWith().deps.onCommit('edited in the tab');
 
-    expect(editRecordCalls(meditClient)[0].args).toEqual([
+    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'set', path, value: 'edited in the tab' },
     ]);

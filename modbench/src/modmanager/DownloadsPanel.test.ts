@@ -87,7 +87,7 @@ async function writeMeta(root: string, name: string, text = '[General]\r\n'): Pr
 }
 
 function calledFsPath(mockFn: { mock: { calls: unknown[][] } }): string {
-  return (mockFn.mock.calls[0][0] as { fsPath: string }).fsPath;
+  return (mockFn.mock.calls[0]![0] as { fsPath: string }).fsPath;
 }
 
 function invoke(commandId: string, ...args: unknown[]): void {
@@ -235,7 +235,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     invoke('modbench.downloads.visitNexus', node('foo.7z', { modID: '123' }));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    const url = (openExternal.mock.calls[0][0] as { toString(): string }).toString();
+    const url = (openExternal.mock.calls[0]![0] as { toString(): string }).toString();
     expect(url).toBe('https://www.nexusmods.com/fallout4/mods/123');
   });
 
@@ -311,7 +311,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     invoke('modbench.downloads.install', node('foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    const items = showQuickPick.mock.calls[0][0] as { label: string; description?: string; choice: unknown }[];
+    const items = showQuickPick.mock.calls[0]![0] as { label: string; description?: string; choice: unknown }[];
     expect(items).toEqual([
       { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } },
       { label: 'No Match (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'No Match' } },

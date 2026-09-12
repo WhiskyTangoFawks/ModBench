@@ -15,5 +15,6 @@ declare global {
 const port = window.mEditBackendPort;
 const client = createRecordPanelClient(port);
 
-const root = document.getElementById("root")!;
+const root = document.getElementById("root");
+if (!root) throw new Error("webviewHtml.ts's template dropped the #root element");
 createRoot(root).render(<RecordPanel client={client} />);

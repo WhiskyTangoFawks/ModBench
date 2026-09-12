@@ -362,7 +362,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(rows[0].label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
+    expect(rows[0]!.label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'ENOENT: no such file or directory, open modlist.txt' },
     ]);

@@ -57,11 +57,12 @@ function appendEntryLine(bomless: string, pluginName: string, enabled: boolean):
   if (bomless.length === 0) return line;
 
   const lines = splitLinesKeepEol(bomless);
-  const last = lines[lines.length - 1];
-  if (!/\r\n$|\r$|\n$/.test(last)) lines[lines.length - 1] = last + eol;
+  const last = lines.at(-1);
+  if (last !== undefined && !/\r\n$|\r$|\n$/.test(last)) lines[lines.length - 1] = last + eol;
 
-  const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
-  const insertAt = entryLineIdx.length === 0 ? lines.length : entryLineIdx.at(-1)! + 1;
+  const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
+  const lastEntry = entryLineIdx.at(-1);
+  const insertAt = lastEntry !== undefined ? lastEntry + 1 : lines.length;
   lines.splice(insertAt, 0, line);
   return lines.join('');
 }
@@ -119,15 +120,15 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
     const wanted = new Set(pluginNames);
 
     // Collect the moved lines in *source* order (not argument order).
-    const moveIdx = [...lines.keys()].filter(
-      (i) => isEntryLine(lines[i]) && wanted.has(pluginNameOf(lines[i])),
+    const moveEntries = [...lines.entries()].filter(
+      ([, line]) => isEntryLine(line) && wanted.has(pluginNameOf(line)),
     );
-    const found = new Set(moveIdx.map((i) => pluginNameOf(lines[i])));
+    const found = new Set(moveEntries.map(([, line]) => pluginNameOf(line)));
     const missing = pluginNames.find((n) => !found.has(n));
     if (missing !== undefined) throw new Error(`Plugin not found in plugins.txt: ${missing}`);
 
-    const block = moveIdx.map((i) => lines[i]);
-    for (const i of [...moveIdx].reverse()) lines.splice(i, 1); // remove high→low to keep indices valid
+    const block = moveEntries.map(([, line]) => line);
+    for (const [i] of [...moveEntries].reverse()) lines.splice(i, 1); // remove high→low to keep indices valid
 
     const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, ...block);
@@ -147,6 +148,6 @@ export function dropIndexForMove(
   const found = targetName === undefined ? -1 : order.indexOf(targetName);
   const targetIndex = found < 0 ? order.length : found;
   let movedBefore = 0;
-  for (let i = 0; i < targetIndex; i++) if (moved.has(order[i])) movedBefore++;
+  for (const name of order.slice(0, targetIndex)) if (moved.has(name)) movedBefore++;
   return targetIndex - movedBefore;
 }

@@ -365,8 +365,8 @@ export class PluginsTreeProvider
     // One entry per plugins.txt line: the winning copy of every listed name, in file order
     // (ADR-0013) — a losing copy of the same name carries the same slot and is excluded.
     const listed = this.instanceValue.plugins
-      .filter((p) => p.slot !== null && p.winning)
-      .sort((a, b) => a.slot! - b.slot!);
+      .filter((p): p is (typeof this.instanceValue.plugins)[number] & { slot: number } => p.slot !== null && p.winning)
+      .sort((a, b) => a.slot - b.slot);
     this.lastOrder = listed.map((p) => p.name);
 
     // A name in both sets renders once, as the implicit row. Display order only:
@@ -410,12 +410,11 @@ export class PluginsTreeProvider
   private readonly originalDecoration = new WeakMap<object, RowDecoration>();
 
   private captureOriginalDecoration(item: vscode.TreeItem): RowDecoration {
-    if (!this.originalDecoration.has(item)) {
-      this.originalDecoration.set(item, {
-        tooltip: item.tooltip, description: item.description, iconPath: item.iconPath,
-      });
-    }
-    return this.originalDecoration.get(item)!;
+    const existing = this.originalDecoration.get(item);
+    if (existing) return existing;
+    const captured: RowDecoration = { tooltip: item.tooltip, description: item.description, iconPath: item.iconPath };
+    this.originalDecoration.set(item, captured);
+    return captured;
   }
 
   // ADR-0017: appended, never replacing, so a row's own badge survives. A MarkdownString base
