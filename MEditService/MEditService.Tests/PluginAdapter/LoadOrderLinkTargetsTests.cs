@@ -35,13 +35,16 @@ public sealed class LoadOrderLinkTargetsTests
     private static IReadOnlyList<ModPath> Paths(PluginFixtureData data, params string[] names) =>
         [.. names.Select(name => new ModPath(ModKey.FromFileName(name), Path.Combine(data.DataFolder, name)))];
 
-    private static IReadOnlyDictionary<string, RecordLookupEntry> Targets(
-        IReadOnlyList<ModPath> loadOrder, params string[] formKeys) =>
+    private static LinkAnswers Answers(IReadOnlyList<ModPath> loadOrder, params string[] formKeys) =>
         Adapter.LinkTargets(
             loadOrder,
             GameRelease.Fallout4,
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             formKeys);
+
+    private static IReadOnlyDictionary<string, RecordLookupEntry> Targets(
+        IReadOnlyList<ModPath> loadOrder, params string[] formKeys) =>
+        Answers(loadOrder, formKeys).Targets;
 
     [Fact]
     public void AFormKeyAPluginInTheLoadOrderHolds_IsNamedByItsRecordTypeAndEditorId()
@@ -77,17 +80,30 @@ public sealed class LoadOrderLinkTargetsTests
         Assert.Equal(new RecordLookupEntry("kywd", "RenamedByPatch"), targets[_overriddenKeyword.ToString()]);
     }
 
-    // A file the load order names can be gone or malformed by the time compile asks (ADR-0003), and
-    // every link into it is then unresolved — which is what an absent answer says.
+    // A file the load order names can be gone or malformed by the time compile asks (ADR-0003). It
+    // answers nothing, and it is named as unread, because the caller has to say so (ADR-0019).
     [Fact]
-    public void AFileTheLoadOrderNamesButDiskDoesNotHold_AnswersNothing_AndLeavesTheRestAnswered()
+    public void AFileTheLoadOrderNamesButDiskDoesNotHold_IsNamedAsUnread_AndLeavesTheRestAnswered()
     {
         using var data = TwoPluginLoadOrder("link-targets-missing-file");
         var missing = new ModPath(ModKey.FromFileName("Absent.esp"), Path.Combine(data.DataFolder, "Absent.esp"));
+        var absentKey = $"000801:Absent.esp";
 
-        var targets = Targets([.. Paths(data, BaseName), missing], _keyword.ToString());
+        var answers = Answers([.. Paths(data, BaseName), missing], _keyword.ToString(), absentKey);
 
-        Assert.Equal(new RecordLookupEntry("kywd", "BaseKeyword"), targets[_keyword.ToString()]);
+        Assert.Equal(new RecordLookupEntry("kywd", "BaseKeyword"), answers.Targets[_keyword.ToString()]);
+        Assert.False(answers.Targets.ContainsKey(absentKey));
+        var unread = Assert.Single(answers.UnreadableFiles);
+        Assert.Equal("Absent.esp", unread.FileName);
+        Assert.Contains("Absent.esp", unread.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EveryFileTheLoadOrderNamesBeingReadable_LeavesNothingNamedAsUnread()
+    {
+        using var data = TwoPluginLoadOrder("link-targets-all-readable");
+
+        Assert.Empty(Answers(Paths(data, BaseName, PatchName), _keyword.ToString()).UnreadableFiles);
     }
 
     [Fact]

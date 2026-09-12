@@ -139,6 +139,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             [_embeddedTarget.ToString()]);
 
-        Assert.Equal(new RecordLookupEntry("refr", "EmbeddedRef"), targets[_embeddedTarget.ToString()]);
+        Assert.Empty(targets.UnreadableFiles);
+        Assert.Equal(new RecordLookupEntry("refr", "EmbeddedRef"), targets.Targets[_embeddedTarget.ToString()]);
     }
 }

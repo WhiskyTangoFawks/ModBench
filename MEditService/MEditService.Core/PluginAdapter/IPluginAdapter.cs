@@ -46,9 +46,9 @@ public interface IPluginAdapter
     PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease);
 
     /// <summary>What each of <paramref name="formKeys"/> names in the files at
-    /// <paramref name="loadOrder"/>, as the game resolves it, and absent for a key they do not
-    /// hold. The link cache is built and dropped here (ADR-0005).</summary>
-    IReadOnlyDictionary<string, RecordLookupEntry> LinkTargets(
+    /// <paramref name="loadOrder"/>, as the game resolves it, beside the files that could not be
+    /// read. The link cache is built and dropped here (ADR-0005).</summary>
+    LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,

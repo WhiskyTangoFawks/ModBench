@@ -21,7 +21,7 @@ public static class PluginAdapters
 
     /// <summary>The files the game loads, one winning copy per filename in slot order, with
     /// <paramref name="compiled"/> among them however it is registered (ADR-0013).</summary>
-    public static IReadOnlyDictionary<string, RecordLookupEntry> LinkTargets(
+    public static LinkAnswers LinkTargets(
         this IPluginAdapter adapter, LoadOrder loadOrder, RegisteredCopy compiled,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, IReadOnlyCollection<string> formKeys)
     {

@@ -40,7 +40,7 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         return OpenedPlugins.FormIdsIn(loaded.Getter, modPath.ModKey.FileName.String);
     }
 
-    public IReadOnlyDictionary<string, RecordLookupEntry> LinkTargets(
+    public virtual LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,

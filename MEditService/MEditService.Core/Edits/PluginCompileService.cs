@@ -141,8 +141,25 @@ public sealed class PluginCompileService(
             logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
                 plugin.Name, plugin.Origin, tree.FormKeys.Count);
         }
-        return CompileResult.Success(
-            LinkDiagnostics(content, plugin, copy, loadOrder, repository, atRef), content.Masters);
+        return CompileResult.Success(Reported(content, plugin, copy, loadOrder, repository, atRef), content.Masters);
+    }
+
+    // The binary is written and the snapshot parked, so the report is the only thing left to go
+    // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
+    private List<CompileDiagnostic> Reported(
+        Content content, PluginKey plugin, RegisteredCopy copy, LoadOrder loadOrder,
+        SourceRepository repository, string? atRef)
+    {
+        try
+        {
+            return LinkDiagnostics(content, plugin, copy, loadOrder, repository, atRef);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            logger.LogWarning(ex, "{Plugin} compiled, but its link check did not run", plugin.Name);
+            return [PluginDiagnostic(
+                plugin, $"{plugin.Name} compiled, but its links could not be checked: {ex.Message}")];
+        }
     }
 
     private sealed record SourceRecord(
@@ -195,15 +212,30 @@ public sealed class PluginCompileService(
         Content content, PluginKey plugin, RegisteredCopy copy, LoadOrder loadOrder,
         SourceRepository repository, string? atRef)
     {
-        var targets = adapter.LinkTargets(
+        var answers = adapter.LinkTargets(
             loadOrder, copy, schemaReflector.GetSchemas(loadOrder.GameRelease), content.Links);
         RecordLookupEntry? Resolve(string formKey) =>
-            targets.TryGetValue(formKey, out var entry) ? entry : null;
+            answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
 
-        var diagnostics = new List<CompileDiagnostic>();
+        // A file nothing could be read from answers nothing about the records in it, so a link into
+        // it is unchecked with that reason, never broken (ADR-0019).
+        var unread = answers.UnreadableFiles.ToDictionary(
+            file => file.FileName, file => file.Reason, StringComparer.OrdinalIgnoreCase);
+        string? WhyUnchecked(string formKey) =>
+            PluginNameIn(formKey) is { } owner && unread.TryGetValue(owner, out var reason)
+                ? $"{owner} could not be read, so this link was not checked: {reason}"
+                : null;
+
+        var diagnostics = answers.UnreadableFiles
+            .Select(file => PluginDiagnostic(
+                plugin,
+                $"{file.FileName} is in the load order but could not be read, so no link into it was " +
+                $"checked: {file.Reason}"))
+            .ToList();
         foreach (var record in content.Records)
         {
-            var errors = CheckErrors(record.Schema, record.Document.Text, Resolve, loadOrder.GameRelease);
+            var errors = CheckErrors(
+                record.Schema, record.Document.Text, Resolve, WhyUnchecked, loadOrder.GameRelease);
             if (errors.Count == 0) continue;
 
             // Only records with something to report pay for their path, which keeps a container's
@@ -216,10 +248,18 @@ public sealed class PluginCompileService(
         return diagnostics;
     }
 
+    // A plugin-level problem is the header record's: it is the one source unit that stands for the
+    // whole plugin, so the Problems entry lands on a file the author can open.
+    private static CompileDiagnostic PluginDiagnostic(PluginKey plugin, string message) =>
+        new(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)),
+            SourceRepository.HeaderDocumentFor(plugin.Name),
+            message);
+
     // The same fields the editor shows a CheckError on, from the same builder, so compile and the
     // record panel cannot hold two definitions of what is broken.
     private static List<string> CheckErrors(
-        RecordTableSchema schema, string text, Func<string, RecordLookupEntry?> resolve, GameRelease release)
+        RecordTableSchema schema, string text, Func<string, RecordLookupEntry?> resolve,
+        Func<string, string?> whyUnchecked, GameRelease release)
     {
         var errors = new List<string>();
         using var document = JsonDocument.Parse(text);
@@ -231,7 +271,8 @@ public sealed class PluginCompileService(
             if (!FormReferences.CarriesFormKeys(meta)) continue;
 
             var checkError = CheckErrorBuilder.Build(
-                DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName), resolve, release);
+                DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, column.PropertyName), resolve, release,
+                whyUnchecked);
             if (checkError != null) errors.Add($"{meta.Name}: {checkError}");
         }
         return errors;

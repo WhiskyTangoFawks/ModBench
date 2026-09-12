@@ -128,8 +128,7 @@ public sealed class AbstractUnionCompileFixture : IDisposable
         Faction = faction.FormKey;
 
         // Minimal geometry: every list member stays its empty default, and both parent leaves'
-        // FormLinks stay null — no linked Worldspace/Cell record needed, and nothing for
-        // ValidateFormLinks to refuse when a test's payload names none either.
+        // FormLinks stay null — no linked Worldspace/Cell record needed.
         var stat = mod.Statics.AddNew("Static611");
         stat.NavmeshGeometry = new NavmeshGeometry { Parent = new WorldspaceNavmeshParent() };
         Static = stat.FormKey;

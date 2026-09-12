@@ -1,5 +1,8 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
+using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -133,6 +136,57 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
             result.Diagnostics, d => d.Message.Contains("Could not be resolved", StringComparison.Ordinal));
+    }
+
+    // ADR-0019: a file that could not be read is a fact the author is told, not one the records are
+    // blamed for. Both halves: the file is named, and the link into it says why it is unchecked.
+    [Fact]
+    public void Compile_WhenALoadOrderFileCannotBeRead_NamesTheFile_AndReportsItsLinksAsUnchecked()
+    {
+        File.WriteAllText(Path.Combine(_targetFolder, TargetName), "not a plugin at all");
+
+        var result = CompileHost();
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        var aboutTheFile = Assert.Single(
+            result.Diagnostics, d => d.Message.StartsWith(TargetName, StringComparison.Ordinal));
+        Assert.Contains("could not be read", aboutTheFile.Message, StringComparison.Ordinal);
+        var aboutTheLink = Assert.Single(
+            result.Diagnostics, d => d.Message.StartsWith("Keywords:", StringComparison.Ordinal));
+        Assert.Equal(_npc.ToString(), aboutTheLink.FormKey);
+        Assert.Contains($"{TargetName} could not be read", aboutTheLink.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Could not be resolved", aboutTheLink.Message, StringComparison.Ordinal);
+    }
+
+    // The plugin is written and parked before the links are read, so a fault in the check is the
+    // report's failure, never the compile's.
+    [Fact]
+    public void Compile_WhenTheLinkCheckItselfFails_StillSucceeds_AndSaysTheCheckDidNotRun()
+    {
+        var result = CompileServices.Over(_loadOrder, new FaultyLinkAdapter())
+            .Compile(_host, new CompileSource.WorkingTree());
+
+        Assert.True(result.Succeeded, result.RefusalReason);
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Contains("links could not be checked", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains(FaultyLinkAdapter.Fault, diagnostic.Message, StringComparison.Ordinal);
+        Assert.Equal([_targetKeyword], KeywordsInTheBinary());
+    }
+
+    private sealed class FaultyLinkAdapter : ReadOnlyPluginAdapter
+    {
+        internal const string Fault = "the link cache could not be built";
+
+        public override ILoadedMod OpenForRead(
+            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
+            MutagenPluginAdapter.Instance.OpenForRead(modPath, gameRelease, strings);
+
+        public override LinkAnswers LinkTargets(
+            IReadOnlyList<ModPath> loadOrder,
+            GameRelease gameRelease,
+            IReadOnlyDictionary<string, RecordTableSchema> schemas,
+            IReadOnlyCollection<string> formKeys) =>
+            throw new InvalidOperationException(Fault);
     }
 
     // A record this compile's own source holds resolves through the file this compile just wrote,
