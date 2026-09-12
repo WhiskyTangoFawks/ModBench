@@ -4,7 +4,7 @@ namespace MEditService.Core.Source;
 
 /// <summary>Why a rollback left a path as it stood. Every value is a preserved outcome except
 /// <see cref="RestoreFailed"/>, the one that reports damage rather than deference.</summary>
-internal enum UnrestoredReason
+public enum UnrestoredReason
 {
     /// <summary>Something else has written the file since this action did; its bytes are left alone.</summary>
     ChangedByAnother,
@@ -23,7 +23,7 @@ internal enum UnrestoredReason
 
 /// <summary>One path a rollback left standing, relative to the mod folder as the Source Control panel
 /// lists it. ADR-0019: a partial outcome is a structured collection, never a formatted string.</summary>
-internal sealed record UnrestoredPath(
+public sealed record UnrestoredPath(
     string RelativePath, string FullPath, UnrestoredReason Reason, string? Error = null);
 
 /// <summary>Rollback's own filesystem primitives (ADR-0007): nested so undoing a mint or a move reaches
@@ -33,12 +33,12 @@ public sealed partial class SourceRepository
     /// <summary>A batch of puts, removes and moves, each by identity, across one or more repositories,
     /// applied all or restored all (ADR-0007). Conditional by design: a path something else has written
     /// since is preserved and reported, never reverted.</summary>
-    internal sealed class SourceTransaction
+    public sealed class SourceTransaction
     {
         /// <summary>Creates or replaces one repository's document, holding its bytes so a later failure in
         /// this batch puts the file back. A record no document can hold throws before anything is
         /// recorded.</summary>
-        internal void Put(SourceRepository repository, PluginKey plugin, SourceDocument document)
+        public void Put(SourceRepository repository, PluginKey plugin, SourceDocument document)
         {
             var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
 
@@ -64,7 +64,7 @@ public sealed partial class SourceRepository
         /// <summary>Takes one repository's record out of the tree, holding the document's bytes so the
         /// rollback puts it back. The pre-image is that one document, so a shape whose removal takes more
         /// than it is refused.</summary>
-        internal SourceRemoval Remove(SourceRepository repository, PluginKey plugin, RecordIdentity identity)
+        public SourceRemoval Remove(SourceRepository repository, PluginKey plugin, RecordIdentity identity)
         {
             if (repository.Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
@@ -118,7 +118,7 @@ public sealed partial class SourceRepository
 
         /// <summary>Moves a container to <paramref name="newFormKey"/>'s leaf and records what moved. A
         /// no-op — nothing found, not a container, or already at that leaf — logs nothing.</summary>
-        internal void Move(SourceRepository repository, PluginKey plugin, RecordIdentity identity, string newFormKey)
+        public void Move(SourceRepository repository, PluginKey plugin, RecordIdentity identity, string newFormKey)
         {
             if (repository.Move(plugin, identity, newFormKey) is not { } moved) return;
             _log.Add(new EntryMove(repository.ModFolder, moved.From, moved.To));
@@ -127,7 +127,7 @@ public sealed partial class SourceRepository
         /// <summary>Puts every recorded act back, most recent first, so a name this action took is vacated
         /// before an earlier act moves back into it. A restore failure never stops the pass; it is
         /// collected (ADR-0019), not thrown.</summary>
-        internal IReadOnlyList<UnrestoredPath> Rollback()
+        public IReadOnlyList<UnrestoredPath> Rollback()
         {
             var unrestored = new List<UnrestoredPath>();
             for (var i = _log.Count - 1; i >= 0; i--)
@@ -152,7 +152,7 @@ public sealed partial class SourceRepository
         /// <summary>Rolls back, then answers <paramref name="cause"/>'s own message with every repository
         /// this batch could have touched stripped out of it, so a caller's report reads the same whichever
         /// tree the fault named.</summary>
-        internal (IReadOnlyList<UnrestoredPath> Unrestored, string RelativeError) Rollback(
+        public (IReadOnlyList<UnrestoredPath> Unrestored, string RelativeError) Rollback(
             Exception cause, IEnumerable<SourceRepository> repositories)
         {
             var unrestored = Rollback();

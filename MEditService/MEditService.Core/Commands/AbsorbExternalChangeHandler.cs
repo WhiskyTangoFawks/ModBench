@@ -61,7 +61,8 @@ public sealed class AbsorbExternalChangeHandler
         }
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
-        var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), binarySha256ByPlugin);
+        var meta = SourceRepository.MetaFactsIn(modFolder);
+        var trailers = new TrackProvenance(meta.UpstreamVersion, meta.MetaSha256, binarySha256ByPlugin);
 
         try
         {

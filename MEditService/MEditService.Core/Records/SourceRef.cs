@@ -1,4 +1,4 @@
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Records;
 
 /// <summary>Reserved values for the <c>records.ref</c> column, a published SQL contract (user filter
 /// SQL, <c>medit.query</c> scripts). It says which state a row's bytes are, never which of several

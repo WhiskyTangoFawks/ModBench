@@ -58,7 +58,7 @@ public sealed class TrackService(
 
         try
         {
-            GitCli.EnsureOnPath();
+            SourceRepository.EnsureTrackable();
 
             var pristineFiles = new List<PristineFile>();
             var binaryHashesByPlugin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -120,7 +120,8 @@ public sealed class TrackService(
             }
 
             SetProgress(origin, TrackPhase.Committing, plugins.Count, plugins.Count);
-            var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), binaryHashesByPlugin);
+            var meta = SourceRepository.MetaFactsIn(modFolder);
+            var trailers = new TrackProvenance(meta.UpstreamVersion, meta.MetaSha256, binaryHashesByPlugin);
 
             if (logger.IsEnabled(LogLevel.Information))
             {

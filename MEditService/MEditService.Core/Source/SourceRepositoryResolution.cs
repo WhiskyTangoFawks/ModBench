@@ -24,7 +24,7 @@ internal readonly record struct SourceUnit(
 /// <summary>Where the tree puts a cell: the worldspace whose subtree carries it and the block
 /// directories it sits in. An interior cell has neither; a worldspace's own top cell has a
 /// worldspace and no block.</summary>
-internal readonly record struct CellPlacement(
+public readonly record struct CellPlacement(
     string? ParentWorldspace, int? BlockX, int? BlockY, int? SubX, int? SubY, bool IsInterior);
 
 /// <summary>Resolution: which document in the tree holds a record. The listing memo and the
@@ -233,7 +233,7 @@ public sealed partial class SourceRepository
     /// <summary>Where the tree puts the cell <paramref name="identity"/> names, or null when nothing
     /// holds it. The block levels are directories, which is why only the repository reads them back
     /// (ADR-0014 invariant 5).</summary>
-    internal CellPlacement? CellPlacementOf(PluginKey plugin, RecordIdentity identity)
+    public CellPlacement? CellPlacementOf(PluginKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return null;
 

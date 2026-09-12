@@ -58,7 +58,7 @@ public sealed partial class SourceRepository
     /// <summary>The put of an exterior cell, the one record whose directory sits inside another
     /// record's: <paramref name="placement"/> names the worldspace holding it and its block numbers.
     /// Every other record is placed from its identity alone.</summary>
-    internal void Put(PluginKey plugin, SourceDocument document, CellPlacement? placement)
+    public void Put(PluginKey plugin, SourceDocument document, CellPlacement? placement)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
         var unit = Locate(plugin, identity)
@@ -152,6 +152,11 @@ public sealed partial class SourceRepository
 
     private static InvalidOperationException NoLongerCarried(SourceUnit unit, string formKey) =>
         new($"{unit.RelativePath} was found holding {formKey}, but its own text does not carry it.");
+
+    /// <summary>Throws <see cref="GitUnavailableException"/> when no repository can be made here at
+    /// all. Track's own check before the parse loop a failure would waste; the track below makes it
+    /// again for a caller that skipped it.</summary>
+    public static void EnsureTrackable() => GitCli.EnsureOnPath();
 
     /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park
     /// every plugin's last-compile ref there, check out the edit branch. One transaction: a failure

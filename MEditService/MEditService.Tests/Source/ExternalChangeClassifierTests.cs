@@ -191,14 +191,22 @@ public sealed class ExternalChangeClassifierTests
     private static void Track(string modFolder, string plugin)
     {
         var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
-        var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), new Dictionary<string, string> { [plugin] = "0000000000" });
+        var trailers = TrailersOver(modFolder, plugin);
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
     }
 
     private static void TrackEverything(string modFolder, string plugin)
     {
         var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
-        var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), new Dictionary<string, string> { [plugin] = "0000000000" });
+        var trailers = TrailersOver(modFolder, plugin);
         SourceRepository.Track(modFolder, SourcePreset.Everything, files, trailers);
+    }
+
+    // The trailers Track itself writes: the folder's meta facts, plus a stand-in binary hash.
+    private static TrackProvenance TrailersOver(string modFolder, string plugin)
+    {
+        var meta = SourceRepository.MetaFactsIn(modFolder);
+        return new TrackProvenance(
+            meta.UpstreamVersion, meta.MetaSha256, new Dictionary<string, string> { [plugin] = "0000000000" });
     }
 }
