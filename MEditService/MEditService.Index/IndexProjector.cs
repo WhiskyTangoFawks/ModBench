@@ -40,8 +40,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     private bool _conflictsComputed;
     private int _plannedCount;
 
-    /// <summary>The composition root's door: the Index opens its own store, so nothing outside
-    /// <c>Core/Records</c> names the store, its factory or how a file is opened (ADR-0009).</summary>
+    /// <summary>The composition root's door: the Index opens its own store, so nothing outside this
+    /// project names the store, its factory or how a file is opened (ADR-0009).</summary>
     public IndexProjector(
         LoadOrderHolder holder,
         IPluginAdapter adapter,

@@ -60,7 +60,7 @@
       "label": "Start Backend",
       "type": "shell",
       "command": "dotnet run",
-      "options": { "cwd": "${workspaceFolder}/MEditService/MEditService.Api" },
+      "options": { "cwd": "${workspaceFolder}/MEditService/MEditService.Http" },
       "isBackground": true,
       "problemMatcher": {
         "owner": "medit-backend",
@@ -75,7 +75,7 @@
     {
       "label": "Stop Backend",
       "type": "shell",
-      "command": "pkill -f MEditService.Api || true",
+      "command": "pkill -f MEditService.Http || true",
       "problemMatcher": []
     },
     {

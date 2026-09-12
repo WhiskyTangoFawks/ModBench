@@ -11,18 +11,18 @@ the restart because a backend "looks up".
 
 ```bash
 # kill stale backend
-pkill -f "MEditService.Api" 2>/dev/null; sleep 1
+pkill -f "MEditService.Http" 2>/dev/null; sleep 1
 
 # fresh start — no args needed; the web host + /health boot regardless. Detached, so the
 # foreground call returns while the backend keeps running:
-bash .claude/skills/validate/detached.sh start api dotnet run --project MEditService/MEditService.Api
+bash .claude/skills/validate/detached.sh start api dotnet run --project MEditService/MEditService.Http
 
 # wait for boot (rebuilds, so slow)
 until curl -sf http://localhost:5172/health >/dev/null 2>&1; do sleep 1; done
 
 # regen, then stop
 cd modbench && npm run generate-api
-pkill -f "MEditService.Api"
+pkill -f "MEditService.Http"
 ```
 
 Paths are relative to the repo root (`git rev-parse --show-toplevel`).

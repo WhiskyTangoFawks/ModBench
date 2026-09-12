@@ -46,10 +46,10 @@ describe('makeBackendLogForwarder', () => {
 
     forward('[08:30:47 ERR] Reconcile failed', 'stdout');
     forward('System.IO.FileNotFoundException: Could not find Broken.esp', 'stdout');
-    forward('   at MEditService.Core.Load order.LoadOrderManager.Load()', 'stdout');
+    forward('   at MEditService.Index.IndexProjector.Reconcile()', 'stdout');
 
     expect(channel.error).toHaveBeenCalledTimes(3);
-    expect(channel.error).toHaveBeenLastCalledWith('[backend]    at MEditService.Core.Load order.LoadOrderManager.Load()');
+    expect(channel.error).toHaveBeenLastCalledWith('[backend]    at MEditService.Index.IndexProjector.Reconcile()');
     expect(channel.info).not.toHaveBeenCalled();
   });
 

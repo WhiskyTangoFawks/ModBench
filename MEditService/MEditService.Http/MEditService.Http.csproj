@@ -28,16 +28,24 @@
     </AssemblyAttribute>
   </ItemGroup>
 
-  <!-- The composition root of mEdit references every box below it by definition (ADR-0014). -->
   <ItemGroup>
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Watcher\MEditService.Watcher.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Queries\MEditService.Queries.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <!-- The composition root references every box below it by definition (ADR-0014). -->
     <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
   </ItemGroup>
 

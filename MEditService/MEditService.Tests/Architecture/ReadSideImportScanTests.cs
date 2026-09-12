@@ -9,15 +9,17 @@ public sealed class ReadSideImportScanTests
 {
     private const string ReadSideImport = "using MEditService.Queries;";
 
-    // The kernel's two boxes, the write side's two, and the Index.
+    // The kernel's three boxes, the write side, and the three driven adapters. Whole projects, so a
+    // new folder in one joins the scan rather than sitting outside it.
     private static readonly string[] ScannedRoots =
     [
-        "MEditService.Codec/Schema",
-        "MEditService.Commands/Edits",
-        "MEditService.Commands",
-        "MEditService.PluginAdapter",
+        "MEditService.Codec",
         "MEditService.LoadOrder",
+        "MEditService.Ports",
+        "MEditService.Commands",
         "MEditService.Index",
+        "MEditService.PluginAdapter",
+        "MEditService.SourceRepo",
     ];
 
     [Fact]

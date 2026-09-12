@@ -97,12 +97,12 @@ public sealed class BannedApiScopeTests
             line, StringComparison.Ordinal));
     }
 
-    // Read off disk rather than listed: a box added tomorrow is banned the moment its folder exists,
-    // and a list here would be one more place to forget it.
+    // Read off disk rather than listed: a box added tomorrow is banned the moment its project file
+    // exists. Keyed on the project file, so a leftover obj folder is not a box.
     private static IReadOnlyList<string> ProductionProjects() =>
-        [.. Directory.EnumerateDirectories(ArchitectureTests.SolutionDirectory(), "MEditService.*")
-            .Select(Path.GetFileName)
-            .OfType<string>()
+        [.. Directory.EnumerateFiles(
+                ArchitectureTests.SolutionDirectory(), "MEditService.*.csproj", SearchOption.AllDirectories)
+            .Select(project => Path.GetFileNameWithoutExtension(project))
             .Where(name => !name.StartsWith("MEditService.Tests", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)];
 

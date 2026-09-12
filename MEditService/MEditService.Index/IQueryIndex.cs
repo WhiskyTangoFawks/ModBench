@@ -4,7 +4,7 @@ using MEditService.Ports;
 namespace MEditService.Index;
 
 /// <summary>ADR-0014 invariant 3: the Index as its only readers see it. Every member has a caller
-/// in <c>Core/Queries</c>, and an architecture test says so.</summary>
+/// in <c>MEditService.Queries</c>, and an architecture test says so.</summary>
 public interface IQueryIndex
 {
     /// <summary>Where the projection is and what it has established so far (ADR-0013): anything
