@@ -19,8 +19,8 @@ projector: @../target-architecture.medit_driven.index.projector
 projector.label: Projector
 store: @../target-architecture.medit_driven.index.store
 store.label: Store
-port: @../target-architecture.medit_core.port
-port.label: Notification port
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
 
 editor -> client: "edit: one path" {class: edit}
 client -> http: envelope {class: edit}

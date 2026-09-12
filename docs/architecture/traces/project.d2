@@ -9,6 +9,8 @@ client: @../target-architecture.modbench_core.client
 client.label: mEdit client
 http: @../target-architecture.medit_driving.http
 http.label: HTTP endpoints
+commands: @../target-architecture.medit_core.commands
+commands.label: Commands
 loadorder: @../target-architecture.medit_kernel.loadorder
 loadorder.label: Load order state
 projector: @../target-architecture.medit_driven.index.projector
@@ -21,13 +23,14 @@ pluginadapter: @../target-architecture.medit_driven.pluginadapter
 pluginadapter.label: Plugin adapter
 store: @../target-architecture.medit_driven.index.store
 store.label: Store
-port: @../target-architecture.medit_core.port
-port.label: Notification port
+port: @../target-architecture.medit_kernel.ports
+port.label: Ports
 views: "Plugins · Editor" {class: driving}
 
 instance -> client: load order snapshot {class: loadout}
 client -> http: load order snapshot {class: loadout}
-http -> loadorder: load order snapshot {class: query}
+http -> commands: put load order {class: loadout}
+commands -> loadorder: load order snapshot {class: query}
 http -> projector: "reconcile: validate by hash" {class: signal}
 loadorder -> projector: winners {class: query}
 codec -> projector: schema {class: query}

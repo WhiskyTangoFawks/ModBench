@@ -7,18 +7,19 @@ mo2: @../target-architecture.modbench_data.mo2
 mo2.label: "MO2 instance\nprofiles/*/modlist.txt, plugins.txt · ModOrganizer.ini · mods/*/meta.ini · mods/ · overwrite/ · downloads/"
 instance: @../target-architecture.modbench_driven.instance
 instance.label: Instance
+mo2files: @../target-architecture.modbench_driven.mo2files
+mo2files.label: MO2 files
 codecs: @../target-architecture.modbench_kernel.codecs
 codecs.label: MO2 file codecs
 views: "Toolbox · Mods · Plugins · Downloads" {class: driving}
 client: @../target-architecture.modbench_core.client
 client.label: mEdit client
-toolbox: @../target-architecture.modbench_driving.toolbox
-toolbox.label: "Toolbox\ndeploy"
 
 mo2 -> instance: "watch: every file and folder, debounced" {class: signal}
-mo2 -> codecs: "bytes: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini" {class: loadout}
-codecs -> instance: "parse, one codec per file" {class: loadout}
+instance -> mo2files: "get: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini" {class: loadout}
+mo2files -> instance: bytes {class: loadout}
+instance -> codecs: bytes {class: loadout}
+codecs -> instance: "parsed, one codec per file" {class: loadout}
 instance."one immutable value, replaced whole; sequence +1; a parse failure keeps the last"
 instance -> views: value {class: loadout}
 instance -> client: load order snapshot, on change {class: loadout}
-instance -> toolbox: winners and the plugin load order {class: deploy}
