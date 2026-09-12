@@ -9,8 +9,7 @@ public sealed class ReadSideImportScanTests
 {
     private const string ReadSideImport = "using MEditService.Core.Queries;";
 
-    // The kernel's two boxes and the write side's two. Records is absent: the Index projects read
-    // models, which is what the read side asks it for.
+    // The kernel's two boxes, the write side's two, and the Index.
     private static readonly string[] ScannedRoots =
     [
         "MEditService.Core/Schema",
@@ -18,6 +17,7 @@ public sealed class ReadSideImportScanTests
         "MEditService.Core/Commands",
         "MEditService.Core/PluginAdapter",
         "MEditService.Core/Plugins",
+        "MEditService.Core/Records",
     ];
 
     [Fact]

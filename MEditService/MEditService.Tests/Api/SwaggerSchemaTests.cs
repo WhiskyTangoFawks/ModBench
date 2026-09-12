@@ -82,7 +82,7 @@ public sealed class SwaggerSchemaTests
     }
 
     // An anonymous type serializes fine and reaches the TS client as an inline shape no other
-    // code can name; response bodies are named records in Queries/Models.cs.
+    // code can name; response bodies are named records in Queries/ or Records/.
     [Fact]
     public async Task EveryJsonResponseBody_IsANamedSchema()
     {
