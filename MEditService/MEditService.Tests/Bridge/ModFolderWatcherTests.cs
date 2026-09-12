@@ -1,11 +1,12 @@
 using System.Text.Json;
-using MEditService.Bridge;
-using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.Commands;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Bridge;
@@ -800,7 +801,7 @@ public sealed class ModFolderWatcherTests
         try
         {
             var holder = new LoadOrderHolder();
-            holder.Apply(new LoadOrder(modFolder, modFolder, GameRelease.Fallout4,
+            holder.Apply(new LoadOrderSnapshot(modFolder, modFolder, GameRelease.Fallout4,
                 [new RegisteredCopy("Tracked.esp", "TrackedMod", Path.Combine(modFolder, "Tracked.esp"),
                     Slot: 0, Enabled: true, Winning: true)]));
             var index = new RecordingRefreshIndex();
@@ -830,7 +831,7 @@ public sealed class ModFolderWatcherTests
         var pluginPath = Path.Combine(modFolder, plugin);
         File.WriteAllBytes(pluginPath, "a binary no source tree covers yet"u8.ToArray());
         var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrder(modFolder, modFolder, GameRelease.Fallout4,
+        holder.Apply(new LoadOrderSnapshot(modFolder, modFolder, GameRelease.Fallout4,
             [new RegisteredCopy(plugin, origin, pluginPath, Slot: 0, Enabled: true, Winning: true)]));
         return holder;
     }

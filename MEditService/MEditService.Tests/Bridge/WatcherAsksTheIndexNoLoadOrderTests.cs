@@ -1,7 +1,7 @@
 using System.Reflection;
-using MEditService.Bridge;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Watcher;
+using MEditService.LoadOrder;
+using MEditService.Index;
 
 namespace MEditService.Tests.Bridge;
 
@@ -37,7 +37,7 @@ public sealed class WatcherAsksTheIndexNoLoadOrderTests
     public void TheRefreshSurface_HoldsOnlyMembersTheWatcherCalls()
     {
         var watcherSource = File.ReadAllText(
-            Path.Combine(Architecture.ArchitectureTests.SolutionDirectory(), "MEditService.Bridge", "ModFolderWatcher.cs"));
+            Path.Combine(Architecture.ArchitectureTests.SolutionDirectory(), "MEditService.Watcher", "ModFolderWatcher.cs"));
 
         var uncalled = typeof(IRefreshIndex).GetProperties().Select(m => m.Name)
             .Concat(typeof(IRefreshIndex).GetMethods().Where(m => !m.IsSpecialName).Select(m => m.Name))

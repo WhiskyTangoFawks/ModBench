@@ -9,15 +9,15 @@ namespace MEditService.Tests.Architecture;
 public sealed class SourceRepositoryInterfaceScanTests
 {
     private static readonly string[] ProductionRoots =
-        ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+        ["MEditService.Core", "MEditService.Http", "MEditService.Watcher"];
 
-    private const string RepositoryRoot = "MEditService.Core/Source";
+    private const string RepositoryRoot = "MEditService.SourceRepo";
 
     private static readonly string[] CallersInsideTheFolder =
     [
-        "MEditService.Core/Source/TrackService.cs",
-        "MEditService.Core/Source/ExternalChangeClassifier.cs",
-        "MEditService.Core/Source/ExternalChangeDeferral.cs",
+        "MEditService.SourceRepo/TrackService.cs",
+        "MEditService.SourceRepo/ExternalChangeClassifier.cs",
+        "MEditService.SourceRepo/ExternalChangeDeferral.cs",
     ];
 
     // The git CLI and the object name it prints, the meta.ini reader, the unit a path resolves to and

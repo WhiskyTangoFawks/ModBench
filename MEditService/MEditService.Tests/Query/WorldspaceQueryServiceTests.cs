@@ -1,9 +1,9 @@
-using MEditService.Core.Edits;
-using MEditService.Core.Notifications;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Ports;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
+using MEditService.Codec.Schema;
 using MEditService.Tests.RealData;
 using Mutagen.Bethesda;
 
@@ -79,7 +79,7 @@ public class WorldspaceQueryServiceTests
     private static LoadOrderHolder Holder(params RegisteredCopy[] copies)
     {
         var holder = new LoadOrderHolder();
-        holder.Apply(new LoadOrder(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
+        holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, copies));
         return holder;
     }
 

@@ -1,7 +1,7 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Codec.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.TestSupport;
@@ -10,7 +10,7 @@ namespace MEditService.Tests.TestSupport;
 /// the call, as the process's own holder is when the endpoint runs.</summary>
 public static class CompileServices
 {
-    public static PluginCompileService Over(LoadOrder loadOrder, IPluginAdapter? adapter = null)
+    public static PluginCompileService Over(LoadOrderSnapshot loadOrder, IPluginAdapter? adapter = null)
     {
         var holder = new LoadOrderHolder();
         holder.Apply(loadOrder);

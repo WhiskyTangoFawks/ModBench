@@ -131,7 +131,7 @@ public sealed class BackendContentRootTests
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        psi.ArgumentList.Add(Path.Combine(ApiDirectory, "MEditService.Api.dll"));
+        psi.ArgumentList.Add(Path.Combine(ApiDirectory, "MEditService.Http.dll"));
         foreach (var arg in extraArgs) psi.ArgumentList.Add(arg);
 
         var process = new Process { StartInfo = psi };

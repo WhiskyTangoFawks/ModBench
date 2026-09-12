@@ -1,5 +1,5 @@
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 

@@ -1,12 +1,12 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using MEditService.Core.Edits;
-using MEditService.Core.Notifications;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Ports;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -183,7 +183,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         repo.UpdateWinners();
 
         var index = new FakeIndex(repo.At(RecordRef.Effective));
-        holder.Apply(new LoadOrder(
+        holder.Apply(new LoadOrderSnapshot(
             @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4,
             [new RegisteredCopy("Shared.esp", "Data", "", Slot: 0, Enabled: true, Winning: true)]));
         var svc = new RecordQueryService(index, holder, reflector, new ConflictClassifier());

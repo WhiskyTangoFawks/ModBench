@@ -89,7 +89,7 @@ describe('deploy', () => {
     await purge(fx.instanceRoot, fx.gameDirectory, recordingReporter());
 
     // Simulate the mod acquiring a repo: serialization never rewrites the plugin binary (Track
-    // writes only to the source text path — MEditService.Core/Source/TrackService.cs), it only
+    // writes only to the source text path — MEditService.SourceRepo/TrackService.cs), it only
     // adds the text tree alongside the untouched plugin.
     await fx.writeModFile('ModA', 'source/MyMod.esp/records/MyMod.esp/00001E.yaml', 'record: text');
     const afterIndex = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});

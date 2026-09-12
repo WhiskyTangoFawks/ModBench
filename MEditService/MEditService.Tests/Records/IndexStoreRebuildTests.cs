@@ -1,4 +1,4 @@
-using MEditService.Core.Records;
+using MEditService.Index;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Records;

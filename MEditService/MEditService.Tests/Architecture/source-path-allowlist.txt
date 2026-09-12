@@ -4,12 +4,12 @@
 # HeaderDocument writes and reads the plugin header through the whole-mod door in a temp folder that
 # is never under source/. Its RecordData.json names that door's output, not a path in the tree, so
 # the two answer different questions and neither owns the other's name.
-MEditService.Core/Serialization/HeaderDocument.cs: "RecordData.json": 1
+MEditService.Codec/Serialization/HeaderDocument.cs: "RecordData.json": 1
 
 # git ref literals pre-dating the watcher's own git tokens (ADR-0014): a journal and a deferral
 # marker file under .git, and a plumbing arg naming HEAD. None of these is layout the watcher asks
 # the repository for; ModFolderWatcher itself names none of these tokens.
-MEditService.Core/Source/CompileJournal.cs: ".git": 1
-MEditService.Core/Source/ExternalChangeDeferral.cs: ".git": 2
-MEditService.Core/Edits/WriteTargets.cs: "HEAD": 1
-MEditService.Core/Records/SourceIngest.cs: "HEAD": 1
+MEditService.SourceRepo/CompileJournal.cs: ".git": 1
+MEditService.SourceRepo/ExternalChangeDeferral.cs: ".git": 2
+MEditService.Commands/Edits/WriteTargets.cs: "HEAD": 1
+MEditService.Index/SourceIngest.cs: "HEAD": 1

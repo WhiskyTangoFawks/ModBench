@@ -1,6 +1,6 @@
 using System.Text;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using MEditService.Tests.RealData;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

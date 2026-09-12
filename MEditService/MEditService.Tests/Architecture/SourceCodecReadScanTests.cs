@@ -25,7 +25,7 @@ public sealed class SourceCodecReadScanTests
         ("EmptyMajorRecord", new Regex(@"\bEmptyMajorRecord\b", RegexOptions.Compiled)),
     ];
 
-    private static readonly string[] ScannedRoots = ["MEditService.Core/Source"];
+    private static readonly string[] ScannedRoots = ["MEditService.SourceRepo"];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/source-codec-read-allowlist.txt";
 
@@ -73,24 +73,24 @@ public sealed class SourceCodecReadScanTests
                 Path.Combine(root, "MEditService.Core", "Source", "obj", "Generated.cs"),
                 "var codec = new RecordTextCodec(logger);\n");
 
-            var counts = Counts(root, ["MEditService.Core/Source"]);
+            var counts = Counts(root, ["MEditService.SourceRepo"]);
 
             Assert.Equal(
-                ["MEditService.Core/Source/Planted.cs: RecordTextCodec: 1",
-                 "MEditService.Core/Source/Planted.cs: RoundTrip: 1"],
+                ["MEditService.SourceRepo/Planted.cs: RecordTextCodec: 1",
+                 "MEditService.SourceRepo/Planted.cs: RoundTrip: 1"],
                 counts);
 
             var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
-            Assert.Contains("MEditService.Core/Source/Planted.cs: RecordTextCodec: 1", unallowed.Message, StringComparison.Ordinal);
-            Assert.Contains("MEditService.Core/Source/Planted.cs: RoundTrip: 1", unallowed.Message, StringComparison.Ordinal);
+            Assert.Contains("MEditService.SourceRepo/Planted.cs: RecordTextCodec: 1", unallowed.Message, StringComparison.Ordinal);
+            Assert.Contains("MEditService.SourceRepo/Planted.cs: RoundTrip: 1", unallowed.Message, StringComparison.Ordinal);
             Assert.Contains("RecordTypeDispatch", unallowed.Message, StringComparison.Ordinal);
             Assert.Contains("BlankDocument", unallowed.Message, StringComparison.Ordinal);
 
             var stale = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(
-                    counts, [.. counts, "MEditService.Core/Source/Gone.cs: SerializeAsync: 3"], AllowlistPath));
-            Assert.Contains("MEditService.Core/Source/Gone.cs: SerializeAsync: 3", stale.Message, StringComparison.Ordinal);
+                    counts, [.. counts, "MEditService.SourceRepo/Gone.cs: SerializeAsync: 3"], AllowlistPath));
+            Assert.Contains("MEditService.SourceRepo/Gone.cs: SerializeAsync: 3", stale.Message, StringComparison.Ordinal);
         }
         finally
         {

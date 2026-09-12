@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.11.0.117924">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MEditService.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MEditService.Tests.ProcessEnvironment</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- The composition root of mEdit references every box below it by definition (ADR-0014). -->
+  <ItemGroup>
+    <ProjectReference Include="..\MEditService.Watcher\MEditService.Watcher.csproj" />
+    <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
+    <ProjectReference Include="..\MEditService.Queries\MEditService.Queries.csproj" />
+    <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
+    <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
+    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
+    <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
+    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
+  </ItemGroup>
+
+</Project>

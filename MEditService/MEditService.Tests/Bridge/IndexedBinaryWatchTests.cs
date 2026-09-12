@@ -1,8 +1,8 @@
-using MEditService.Bridge;
-using MEditService.Core.Notifications;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Watcher;
+using MEditService.Ports;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Index;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;

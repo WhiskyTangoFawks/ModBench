@@ -1,14 +1,16 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
+using MEditService.Commands;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda;
 using Noggog;
 
 namespace MEditService.Tests.Edits;
@@ -33,7 +35,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     private readonly string _modFolder;
     private readonly string _gameDirectory;
-    private readonly LoadOrder _loadOrder;
+    private readonly LoadOrderSnapshot _loadOrder;
     private readonly PluginKey _plugin = new(PluginName, Origin);
 
     private readonly FormKey _cellA;
@@ -132,7 +134,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         (_worldspace, _topCell, _exteriorCell) = (worldspace.FormKey, topCell.FormKey, exteriorCell.FormKey);
         (_questA, _questB) = (questA.FormKey, questB.FormKey);
 
-        _loadOrder = new LoadOrder(
+        _loadOrder = new LoadOrderSnapshot(
             _gameDirectory, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 

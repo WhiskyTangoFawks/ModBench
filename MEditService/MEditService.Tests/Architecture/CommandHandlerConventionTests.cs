@@ -1,6 +1,6 @@
 using System.Reflection;
-using MEditService.Core.Commands;
-using MEditService.Core.Composition;
+using MEditService.Commands;
+using MEditService.Commands.Composition;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Architecture;
@@ -42,7 +42,7 @@ public sealed class CommandHandlerConventionTests
         typeof(TrackResult),
     ];
 
-    private const string CommandsNamespace = "MEditService.Core.Commands";
+    private const string CommandsNamespace = "MEditService.Commands";
 
     public static IEnumerable<object[]> EveryHandler => Handlers.Select(entry => new object[] { entry.Handler });
 

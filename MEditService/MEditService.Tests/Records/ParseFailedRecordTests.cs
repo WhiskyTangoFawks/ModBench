@@ -1,9 +1,9 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

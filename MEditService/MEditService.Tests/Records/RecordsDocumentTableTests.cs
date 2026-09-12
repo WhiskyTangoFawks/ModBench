@@ -1,8 +1,8 @@
 using System.Globalization;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Index;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using MEditService.Tests.RealData;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;

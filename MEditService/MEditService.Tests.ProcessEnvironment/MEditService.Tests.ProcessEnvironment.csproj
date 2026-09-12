@@ -23,7 +23,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MEditService.Core\MEditService.Core.csproj" />
+    <!-- One test project over every box until #901 splits it, so the reference list is the
+         solution's, not a box's. -->
+    <ProjectReference Include="..\MEditService.Watcher\MEditService.Watcher.csproj" />
+    <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
+    <ProjectReference Include="..\MEditService.Queries\MEditService.Queries.csproj" />
+    <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
+    <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
+    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
+    <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
+    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
   </ItemGroup>
 
 </Project>

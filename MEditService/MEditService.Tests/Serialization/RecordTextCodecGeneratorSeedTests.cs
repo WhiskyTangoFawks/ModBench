@@ -1,6 +1,6 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Serialization;
@@ -8,13 +8,13 @@ namespace MEditService.Tests.Serialization;
 public class RecordTextCodecGeneratorSeedTests
 {
     // Asserting Fallout4Mod_Serialization never exists does not work: the seed necessarily names a
-    // mod-shaped argument type. Scoped to MEditService.Core.Serialization, since an unscoped version
+    // mod-shaped argument type. Scoped to MEditService.Codec.Serialization, since an unscoped version
     // also flags the indexing and placement doors, which legitimately take a mod.
     [Fact]
     public void SerializationNamespace_ExposesNoPublicApiAcceptingAWholeModType()
     {
         var candidateTypes = typeof(RecordTextCodec).Assembly.GetTypes()
-            .Where(t => t.IsPublic && t.Namespace == "MEditService.Core.Serialization")
+            .Where(t => t.IsPublic && t.Namespace == "MEditService.Codec.Serialization")
             .ToList();
 
         // A namespace typo or a rename of RecordTextCodecCustomization's namespace would leave

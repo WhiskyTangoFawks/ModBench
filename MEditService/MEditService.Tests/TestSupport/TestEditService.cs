@@ -1,12 +1,12 @@
-using MEditService.Core.Commands;
-using MEditService.Core.Composition;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Composition;
+using MEditService.Commands.Edits;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Index;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 

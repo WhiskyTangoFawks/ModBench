@@ -1,5 +1,5 @@
-using MEditService.Api.Endpoints;
-using MEditService.Core.Plugins;
+using MEditService.Http.Endpoints;
+using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -162,7 +162,7 @@ public sealed class CreatePluginEndpointTests : IDisposable
         Assert.EndsWith("Editable.esp", edit.NewFormKey!, StringComparison.OrdinalIgnoreCase);
     }
 
-    private LoadOrder Order(params RegisteredCopy[] copies) =>
+    private LoadOrderSnapshot Order(params RegisteredCopy[] copies) =>
         new(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, copies);
 
     private RegisteredCopy Copy(string name) =>

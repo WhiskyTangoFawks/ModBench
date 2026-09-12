@@ -1,4 +1,4 @@
-using MEditService.Core.Plugins;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
@@ -7,7 +7,7 @@ namespace MEditService.Tests.Plugins;
 // filename mean?" has two candidates and one right answer.
 public sealed class PluginOriginResolverTests
 {
-    private static LoadOrder LoadOrderWith(params RegisteredCopy[] copies) =>
+    private static LoadOrderSnapshot LoadOrderWith(params RegisteredCopy[] copies) =>
         new(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, copies);
 
     private static RegisteredCopy Copy(string name, string origin, bool inLoadOrder) =>
@@ -59,6 +59,6 @@ public sealed class PluginOriginResolverTests
     [Fact]
     public void Resolve_NoLoadOrderApplied_FallsBack()
     {
-        Assert.Equal(PluginOrigin.DataDirectory, PluginOriginResolver.Resolve(LoadOrder.Empty, "Anything.esp"));
+        Assert.Equal(PluginOrigin.DataDirectory, PluginOriginResolver.Resolve(LoadOrderSnapshot.Empty, "Anything.esp"));
     }
 }

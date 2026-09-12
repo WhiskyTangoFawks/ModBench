@@ -1,10 +1,10 @@
 using System.Text.Json;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Commands.Edits;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
+using MEditService.Codec.Schema;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -75,7 +75,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // ADR-0012 end to end: a whole load order built via LoadOrder/IndexProjector rather than a
+    // ADR-0012 end to end: a whole load order built via LoadOrderSnapshot/IndexProjector rather than a
     // hand-fed index, where the referenced master is not part of the load order at all, with no
     // plugins.txt line and no file.
     [Fact]

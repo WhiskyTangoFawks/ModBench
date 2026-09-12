@@ -1,10 +1,10 @@
 using System.Security.Cryptography;
-using MEditService.Core.Commands;
-using MEditService.Core.Notifications;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Ports;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -21,7 +21,7 @@ namespace MEditService.Tests.Source;
 /// reported number, not a suite-gating assertion.</summary>
 public sealed class TrackServiceTests
 {
-    private static IReadOnlyCollection<PluginKey> HeldIn(LoadOrder loadOrder) =>
+    private static IReadOnlyCollection<PluginKey> HeldIn(LoadOrderSnapshot loadOrder) =>
         [.. loadOrder.Copies.Select(copy => copy.Key)];
 
     // Track answers with a refusal for every way out it has, so the endpoint maps one value rather
@@ -32,7 +32,7 @@ public sealed class TrackServiceTests
         var gameDir = Directory.CreateTempSubdirectory("medit-track-noorigin-game-").FullName;
         try
         {
-            var loadOrder = new LoadOrder(gameDir, null, GameRelease.Fallout4, []);
+            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4, []);
 
             var result = await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
                 .TrackAsync(loadOrder, [], "NoSuchMod", SourcePreset.Edits);
@@ -64,7 +64,7 @@ public sealed class TrackServiceTests
             var unreadable = Path.Combine(modFolder, "Broken.esp");
             await File.WriteAllTextAsync(unreadable, "not a plugin");
 
-            var loadOrder = new LoadOrder(gameDir, null, GameRelease.Fallout4,
+            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
             [
                 new RegisteredCopy("Fixture.esp", "FixtureMod", pluginPath, 0, Enabled: true, Winning: true),
                 new RegisteredCopy("Broken.esp", "FixtureMod", unreadable, 1, Enabled: true, Winning: true),
@@ -104,7 +104,7 @@ public sealed class TrackServiceTests
             var npc2 = mod.Npcs.AddNew("SecondNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -180,7 +180,7 @@ public sealed class TrackServiceTests
             File.WriteAllBytes(Path.Combine(modFolder, "meta.ini"), metaBytes);
             var expectedHash = Convert.ToHexString(SHA256.HashData(metaBytes));
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -213,7 +213,7 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -245,7 +245,7 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -276,7 +276,7 @@ public sealed class TrackServiceTests
     }
 
     // The only copy under this origin resolves to the game's own Data directory (PluginOrigin.
-    // DataDirectory), which LoadOrder.ModFolderOf returns null for — Track must refuse rather than
+    // DataDirectory), which LoadOrderSnapshot.ModFolderOf returns null for — Track must refuse rather than
     // Path.GetDirectoryName'ing its way to a repository inside Data.
     [Fact]
     public async Task TrackAsync_WithOnlyADataOriginCopy_RefusesWithoutInitializingARepository()
@@ -289,7 +289,7 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(gameDir, null, GameRelease.Fallout4,
+            var loadOrder = new LoadOrderSnapshot(gameDir, null, GameRelease.Fallout4,
             [
                 new RegisteredCopy("Fixture.esp", PluginOrigin.DataDirectory, pluginPath, 0, Enabled: true, Winning: true),
             ]);
@@ -328,7 +328,7 @@ public sealed class TrackServiceTests
             for (var i = 0; i < 400; i++) secondMod.Npcs.AddNew($"Npc{i}");
             secondMod.WriteToBinary(secondPluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([
                     new LoadOrderEntry("First.esp", firstPluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true),
@@ -369,7 +369,7 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -408,7 +408,7 @@ public sealed class TrackServiceTests
             var npc = mod.Npcs.AddNew("OriginalName");
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -454,7 +454,7 @@ public sealed class TrackServiceTests
             npc.HeightMin = 1.5f;
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -507,7 +507,7 @@ public sealed class TrackServiceTests
             mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -554,7 +554,7 @@ public sealed class TrackServiceTests
             setBaseline(mod.ModHeader);
             mod.WriteToBinary(pluginPath);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -596,7 +596,7 @@ public sealed class TrackServiceTests
             mod.WriteToBinary(pluginPath);
             await File.WriteAllBytesAsync(pluginPath, StripFnamAndMnamFromTheOnlyFurnRecord(await File.ReadAllBytesAsync(pluginPath)));
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -681,7 +681,7 @@ public sealed class TrackServiceTests
             // every ".ba2" the scan finds, before asking whether the file applies to this ModKey.
             File.WriteAllBytes(Path.Combine(modFolder, "UnrelatedMod - Main.ba2"), []);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 
@@ -723,7 +723,7 @@ public sealed class TrackServiceTests
             // with the download, or was deleted by hand.
             Directory.Delete(Path.Combine(modFolder, "Strings"), recursive: true);
 
-            var loadOrder = new LoadOrder(
+            var loadOrder = new LoadOrderSnapshot(
                 gameDir, gameDir, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)]));
 

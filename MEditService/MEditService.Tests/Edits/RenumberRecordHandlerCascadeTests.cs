@@ -1,5 +1,5 @@
-using MEditService.Core.Edits;
-using MEditService.Core.Source;
+using MEditService.Commands.Edits;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Edits;
 

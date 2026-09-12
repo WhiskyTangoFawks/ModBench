@@ -13,17 +13,17 @@ BOOT_LOG="$(mktemp /tmp/api-drift-boot.XXXXXX.log)"
 STATUS=1
 
 cleanup() {
-  pkill -f "MEditService.Api" 2>/dev/null
+  pkill -f "MEditService.Http" 2>/dev/null
   rm -f "$BOOT_LOG"
 }
 trap cleanup EXIT
 
 echo "=== Gate 7: API drift (api.ts vs live OpenAPI spec) ==="
 
-pkill -f "MEditService.Api" 2>/dev/null
+pkill -f "MEditService.Http" 2>/dev/null
 sleep 1
 
-(cd "$ROOT/MEditService/MEditService.Api" && exec dotnet run >"$BOOT_LOG" 2>&1) &
+(cd "$ROOT/MEditService/MEditService.Http" && exec dotnet run >"$BOOT_LOG" 2>&1) &
 
 BOOT_TIMEOUT_S=180
 elapsed=0

@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
+using MEditService.Codec.Schema;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;

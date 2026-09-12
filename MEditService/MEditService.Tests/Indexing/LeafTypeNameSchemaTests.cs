@@ -1,4 +1,4 @@
-using MEditService.Core.Schema;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
@@ -8,7 +8,7 @@ namespace MEditService.Tests.Indexing;
 /// discriminator values come from.</summary>
 public class LeafTypeNameSchemaTests
 {
-    private static readonly IReadOnlyDictionary<string, Core.Schema.RecordTableSchema> Schemas =
+    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static FieldMetadata Column(string table, string column) =>

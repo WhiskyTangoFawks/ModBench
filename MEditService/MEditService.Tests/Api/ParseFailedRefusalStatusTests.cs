@@ -1,7 +1,7 @@
 using System.Text.Json;
-using MEditService.Api;
-using MEditService.Api.Endpoints;
-using MEditService.Core.Edits;
+using MEditService.Http;
+using MEditService.Http.Endpoints;
+using MEditService.Commands.Edits;
 using MEditService.Tests.Edits;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;

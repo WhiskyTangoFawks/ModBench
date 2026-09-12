@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="10.11.0.117924">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MEditService.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MEditService.Tests.ProcessEnvironment</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Drawn: the watcher turns a file change into a command (ADR-0015). -->
+    <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />
+    <!-- Drawn: the watcher refreshes the record index (ADR-0015). -->
+    <ProjectReference Include="..\MEditService.Index\MEditService.Index.csproj" />
+    <!-- Drawn: the Source repository names the paths to watch (ADR-0015). -->
+    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
+    <!-- Drawn: a driving adapter's kernel reads are drawn, not the band's rule (ADR-0014). -->
+    <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
+    <!-- Drawn: a driving adapter's kernel reads are drawn, not the band's rule (ADR-0014). -->
+    <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
+    <!-- TEMP DRY-RUN PROBE: undrawn edge, removed before the move lands. -->
+    <ProjectReference Include="..\MEditService.PluginAdapter\MEditService.PluginAdapter.csproj" />
+  </ItemGroup>
+
+</Project>

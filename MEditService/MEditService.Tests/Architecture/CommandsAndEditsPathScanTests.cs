@@ -15,7 +15,7 @@ public sealed class CommandsAndEditsPathScanTests
         + @"|(?<![\w.])new\s+(?:System\.IO\.)?(?:FileInfo|DirectoryInfo|FileStream|FileSystemWatcher)\b",
         RegexOptions.Compiled);
 
-    private static readonly string[] ScannedRoots = ["MEditService.Core/Commands", "MEditService.Core/Edits"];
+    private static readonly string[] ScannedRoots = ["MEditService.Commands", "MEditService.Commands/Edits"];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/commands-and-edits-path-allowlist.txt";
 
@@ -70,26 +70,26 @@ public sealed class CommandsAndEditsPathScanTests
 
             Assert.Equal(
                 [
-                    "MEditService.Core/Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
-                    "MEditService.Core/Edits/PluginCompileService.cs: File.ReadAllBytes: 1",
-                    "MEditService.Core/Edits/PluginCompileService.cs: Path.Combine: 2",
-                    "MEditService.Core/Edits/PluginCompileService.cs: new FileInfo: 1",
-                    "MEditService.Core/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
+                    "MEditService.Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
+                    "MEditService.Commands/Edits/PluginCompileService.cs: File.ReadAllBytes: 1",
+                    "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2",
+                    "MEditService.Commands/Edits/PluginCompileService.cs: new FileInfo: 1",
+                    "MEditService.Commands/Edits/PluginCompileService.cs: new System.IO.DirectoryInfo: 1",
                 ],
                 counts);
 
             var unallowed = Assert.Throws<Xunit.Sdk.TrueException>(
                 () => AssertCountsMatchAllowlist(counts, [], AllowlistPath));
             Assert.Contains(
-                "MEditService.Core/Edits/PluginCompileService.cs: Path.Combine: 2", unallowed.Message, StringComparison.Ordinal);
+                "MEditService.Commands/Edits/PluginCompileService.cs: Path.Combine: 2", unallowed.Message, StringComparison.Ordinal);
             Assert.Contains(
-                "MEditService.Core/Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
+                "MEditService.Commands/KeepExternalChangeHandler.cs: File.ReadAllBytes: 1",
                 unallowed.Message, StringComparison.Ordinal);
 
             var stale = Assert.Throws<Xunit.Sdk.TrueException>(
-                () => AssertCountsMatchAllowlist(counts, [.. counts, "MEditService.Core/Edits/Gone.cs: Directory.CreateDirectory: 1"], AllowlistPath));
+                () => AssertCountsMatchAllowlist(counts, [.. counts, "MEditService.Commands/Edits/Gone.cs: Directory.CreateDirectory: 1"], AllowlistPath));
             Assert.Contains(
-                "MEditService.Core/Edits/Gone.cs: Directory.CreateDirectory: 1", stale.Message, StringComparison.Ordinal);
+                "MEditService.Commands/Edits/Gone.cs: Directory.CreateDirectory: 1", stale.Message, StringComparison.Ordinal);
         }
         finally
         {

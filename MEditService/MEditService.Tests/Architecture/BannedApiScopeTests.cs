@@ -13,9 +13,9 @@ public sealed class BannedApiScopeTests
     // In .editorconfig order, which is the rule: a later section narrows an earlier one.
     private static readonly string[] ExemptSections =
     [
-        "MEditService.Core/Serialization/**.cs",
-        "MEditService.Core/Schema/**.cs",
-        "MEditService.Core/PluginAdapter/**.cs",
+        "MEditService.Codec/Serialization/**.cs",
+        "MEditService.Codec/Schema/**.cs",
+        "MEditService.PluginAdapter/**.cs",
         "MEditService.Tests/**.cs",
         "MEditService.Tests.ProcessEnvironment/**.cs",
     ];
@@ -104,7 +104,7 @@ public sealed class BannedApiScopeTests
                 ? severity
                 : ReportDiagnostic.Default;
 
-        internal ReportDiagnostic For(string relativePath) =>
+        public ReportDiagnostic For(string relativePath) =>
             Set.GetOptionsForSourcePath(Path.Combine(SolutionDirectory, relativePath)).TreeOptions
                 .TryGetValue(Rs0030, out var severity)
                 ? severity

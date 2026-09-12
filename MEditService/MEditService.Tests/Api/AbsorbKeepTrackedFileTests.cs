@@ -1,6 +1,6 @@
-using MEditService.Api.Endpoints;
-using MEditService.Bridge;
-using MEditService.Core.Source;
+using MEditService.Http.Endpoints;
+using MEditService.Watcher;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;

@@ -1,20 +1,21 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda;
 using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
 
 /// <summary>Order damage measured against the tree Track actually wrote, deserialized the way
-/// <see cref="MEditService.Core.Edits.PluginCompileService"/> does, against the original binary's
+/// <see cref="MEditService.Commands.Edits.PluginCompileService"/> does, against the original binary's
 /// own GRUP order. Expected 0 and 0 (ADR-0006 decision 4).</summary>
 public sealed class DialogueOrderDamageTests : IDisposable
 {

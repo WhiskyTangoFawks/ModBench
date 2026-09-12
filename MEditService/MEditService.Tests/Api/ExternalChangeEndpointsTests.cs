@@ -1,14 +1,15 @@
-using MEditService.Api.Endpoints;
-using MEditService.Bridge;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Http.Endpoints;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 

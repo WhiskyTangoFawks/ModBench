@@ -1,6 +1,6 @@
 using System.Text.Json;
-using MEditService.Core.Edits;
-using MEditService.Core.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using MEditService.Core.Source;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Api;
 

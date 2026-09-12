@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Index;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;

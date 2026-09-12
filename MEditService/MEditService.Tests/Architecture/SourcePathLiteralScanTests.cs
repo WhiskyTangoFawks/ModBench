@@ -15,11 +15,11 @@ public sealed class SourcePathLiteralScanTests
          "\".git\"", "\"HEAD\"", "\"packed-refs\"", "\"refs\""];
 
     private static readonly string[] ScannedRoots =
-        ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+        ["MEditService.Core", "MEditService.Http", "MEditService.Watcher"];
 
     // The repository's own files: the partials of SourceRepository — only inside Source itself.
     private const string RepositoryFilePrefix = "SourceRepository";
-    private const string RepositoryFolder = "MEditService.Core/Source";
+    private const string RepositoryFolder = "MEditService.SourceRepo";
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/source-path-allowlist.txt";
 

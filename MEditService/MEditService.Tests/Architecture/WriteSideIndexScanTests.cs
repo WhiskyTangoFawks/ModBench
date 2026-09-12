@@ -27,7 +27,7 @@ public sealed class WriteSideIndexScanTests
     // Not write side: Records is the Index module itself and Queries is the read side, both of which
     // name these types by definition.
     private static readonly string[] NotWriteSide =
-        ["MEditService.Core/Records", "MEditService.Core/Queries"];
+        ["MEditService.Index", "MEditService.Queries"];
 
     private const string AllowlistPath = "MEditService.Tests/Architecture/write-side-index-allowlist.txt";
 
@@ -113,7 +113,7 @@ public sealed class WriteSideIndexScanTests
 
     // Not the write side: an endpoint's read routes name the query services by definition. So the
     // scan here is narrowed to the gate, which a record route can take again in one compiling line.
-    private const string EndpointRoot = "MEditService.Api/Endpoints";
+    private const string EndpointRoot = "MEditService.Http/Endpoints";
 
     private static readonly string[] GateSymbols = ["IndexWriteGate", "IndexWriteGateTimeoutException"];
 

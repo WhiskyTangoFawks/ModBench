@@ -1,9 +1,9 @@
 using System.Text.Json;
-using MEditService.Api.Endpoints;
-using MEditService.Core.Notifications;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.Http.Endpoints;
+using MEditService.Ports;
+using MEditService.Queries;
+using MEditService.Index;
+using MEditService.SourceRepo;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;

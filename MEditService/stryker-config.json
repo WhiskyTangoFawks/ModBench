@@ -16,8 +16,8 @@
     },
     "mutate": [
       "**/MEditService.Core/**/*.cs",
-      "!**/MEditService.Core/Queries/RecordQueryService.cs",
-      "!**/MEditService.Core/Notifications/LoadOrderStatus.cs"
+      "!**/MEditService.Queries/RecordQueryService.cs",
+      "!**/MEditService.Ports/LoadOrderStatus.cs"
     ],
     "ignore-methods": [
       "Log*"

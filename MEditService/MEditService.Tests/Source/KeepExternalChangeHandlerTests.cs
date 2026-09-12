@@ -1,12 +1,13 @@
 using System.Text.Json;
-using MEditService.Core.Edits;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.Commands.Edits;
+using MEditService.Commands;
+using MEditService.Index;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
 

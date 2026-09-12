@@ -1,13 +1,13 @@
 using System.Collections.Concurrent;
-using MEditService.Api;
-using MEditService.Bridge;
-using MEditService.Core.Notifications;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
+using MEditService.Http;
+using MEditService.Watcher;
+using MEditService.Ports;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -64,11 +64,11 @@ public sealed class IndexProjectorTests
             })
             .BuildScattered();
 
-    private static LoadOrder Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
-        new LoadOrder(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
+    private static LoadOrderSnapshot Snapshot(ScatteredFixtureData fx, IReadOnlyList<LoadOrderEntry>? plugins = null) =>
+        new LoadOrderSnapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
 
     // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
-    private static void Reconcile(IndexProjector projector, LoadOrderHolder holder, LoadOrder snapshot)
+    private static void Reconcile(IndexProjector projector, LoadOrderHolder holder, LoadOrderSnapshot snapshot)
     {
         holder.Apply(snapshot);
         projector.Reconcile(snapshot);

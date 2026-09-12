@@ -1,5 +1,5 @@
 using System.Reflection;
-using MEditService.Core.Records;
+using MEditService.Index;
 
 namespace MEditService.Tests.Records;
 

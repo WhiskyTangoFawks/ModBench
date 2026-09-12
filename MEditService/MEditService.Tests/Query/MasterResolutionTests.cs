@@ -1,5 +1,6 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
+using MEditService.LoadOrder;
+using MEditService.Ports;
+using MEditService.Queries;
 
 namespace MEditService.Tests.Query;
 

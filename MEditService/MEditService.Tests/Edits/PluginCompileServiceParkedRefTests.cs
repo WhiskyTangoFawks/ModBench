@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Commands.Edits;
+using MEditService.PluginAdapter;
+using MEditService.Codec.Schema;
+using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

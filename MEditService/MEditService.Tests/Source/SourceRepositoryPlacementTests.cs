@@ -1,5 +1,5 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;

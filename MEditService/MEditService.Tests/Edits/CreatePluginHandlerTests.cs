@@ -1,6 +1,6 @@
-using MEditService.Core.Commands;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -19,7 +19,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
 
     public CreatePluginHandlerTests() =>
-        _holder.Apply(new LoadOrder(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins)));
+        _holder.Apply(new LoadOrderSnapshot(_data.DataFolder, _data.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins)));
 
     public void Dispose() => _data.Dispose();
 

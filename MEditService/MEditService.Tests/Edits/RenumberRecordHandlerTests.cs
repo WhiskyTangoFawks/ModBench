@@ -1,8 +1,8 @@
-using MEditService.Core.Edits;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
+using MEditService.Index;
+using MEditService.Codec.Schema;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
 

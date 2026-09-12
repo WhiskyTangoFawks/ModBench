@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
-using MEditService.Core.Queries;
-using MEditService.Core.Schema;
+using MEditService.Queries;
+using MEditService.Codec.Schema;
 using MEditService.Tests.Api;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
@@ -41,7 +41,7 @@ public sealed class RealInstallSmokeTests
             if (!locator.TryGetDataDirectory(release, out var dataDir))
                 continue;
 
-            // LoadOrder loads the implicit base masters present in the game directory, so an empty explicit
+            // LoadOrderSnapshot loads the implicit base masters present in the game directory, so an empty explicit
             // list exercises a real vanilla load without guessing order. The instance is a temp one: a real
             // install is not an MO2 instance.
             var instanceRoot = Path.Combine(Path.GetTempPath(), $"medit-smoke-{Guid.NewGuid():N}");

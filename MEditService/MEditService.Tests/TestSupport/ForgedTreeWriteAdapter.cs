@@ -1,6 +1,6 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.PluginAdapter;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 
 namespace MEditService.Tests.TestSupport;
 

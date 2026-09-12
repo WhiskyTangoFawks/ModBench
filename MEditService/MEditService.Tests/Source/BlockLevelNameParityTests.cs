@@ -1,6 +1,6 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.LoadOrder;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;

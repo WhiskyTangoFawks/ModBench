@@ -1,7 +1,7 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Index;
+using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
@@ -9,11 +9,11 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Tests.Plugins;
 
 /// <summary>A Data-directory-origin plugin, deliberately: the one case with no mod folder, where
-/// <see cref="MEditService.Core.PluginAdapter.PluginStrings"/> must fall back to the game Data
+/// <see cref="MEditService.PluginAdapter.PluginStrings"/> must fall back to the game Data
 /// folder.</summary>
 public sealed class LoadOrderLocalizedTests
 {
-    // LoadOrder.OpenAll never lets a plugin's open failure escape, recording a PluginLoadFailure and
+    // LoadOrderSnapshot.OpenAll never lets a plugin's open failure escape, recording a PluginLoadFailure and
     // skipping it, so the defect surfaces as a silently-skipped plugin rather than a throw.
     [Fact]
     public void Load_ALocalizedPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()

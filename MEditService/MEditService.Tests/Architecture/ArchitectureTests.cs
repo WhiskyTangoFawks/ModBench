@@ -1,8 +1,8 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
-using MEditService.Api;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
+using MEditService.Http;
+using MEditService.LoadOrder;
+using MEditService.Index;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
@@ -17,8 +17,8 @@ public sealed class ArchitectureTests
     // endpoints bind. A record in either travels to the frontend as it is declared.
     private static readonly (Assembly Assembly, string Namespace)[] DtoBoxes =
     [
-        (Core, "MEditService.Core.Queries"),
-        (typeof(RecordEditRequest).Assembly, "MEditService.Api"),
+        (Core, "MEditService.Queries"),
+        (typeof(RecordEditRequest).Assembly, "MEditService.Http"),
     ];
 
     // ADR-0012: a bare filename compiles and passes single-copy tests, then misidentifies.
@@ -138,7 +138,7 @@ public sealed class ArchitectureTests
     public void TheLoadOrderValue_NamesNoPluginAdapterType()
     {
         var offenders = Offenders(
-            SolutionDirectory(), [LoadOrderFolder], "MEditService.Core.PluginAdapter", allowedFiles: []);
+            SolutionDirectory(), [LoadOrderFolder], "MEditService.PluginAdapter", allowedFiles: []);
 
         Assert.True(offenders.Count == 0,
             "The load order folder reaches into the Plugin adapter in:\n" + string.Join("\n", offenders));
@@ -167,7 +167,7 @@ public sealed class ArchitectureTests
             .Select(Path.GetFileName)
             .ToList();
 
-        Assert.Contains("LoadOrder.cs", walked);
+        Assert.Contains("LoadOrderSnapshot.cs", walked);
         Assert.Contains("Registration.cs", walked);
     }
 
@@ -275,7 +275,7 @@ public sealed class ArchitectureTests
         });
 
     private static bool IsALoadOrder(Type? type) =>
-        type is not null && (type == typeof(LoadOrder) || type == typeof(LoadOrderHolder));
+        type is not null && (type == typeof(LoadOrderSnapshot) || type == typeof(LoadOrderHolder));
 
     // ADR-0013: participation is derived — enabled, winning, and named by a plugins.txt line — and
     // the load order value is the one place that rule is spelled. A second spelling is how two
@@ -291,7 +291,7 @@ public sealed class ArchitectureTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
-        Assert.Equal(["MEditService.Core/Plugins/Registration.cs"], spellings);
+        Assert.Equal(["MEditService.LoadOrder/Registration.cs"], spellings);
     }
 
     // The three facts joined, in C# or in SQL: `Enabled && Winning &&` and `x.enabled AND x.winning
@@ -410,7 +410,7 @@ public sealed class ArchitectureTests
         Assert.Equal(allowed.Order(), present.Order());
     }
 
-    private static readonly string[] Projects = ["MEditService.Core", "MEditService.Api", "MEditService.Bridge"];
+    private static readonly string[] Projects = ["MEditService.Core", "MEditService.Http", "MEditService.Watcher"];
 
     internal static List<string> Offenders(string root, string[] projects, string needle, string[] allowedFiles) =>
         Offenders(root, projects, [needle], allowedFiles);

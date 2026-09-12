@@ -1,6 +1,6 @@
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.LoadOrder;
+using MEditService.Index;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;

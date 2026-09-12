@@ -1,4 +1,4 @@
-using MEditService.Core.PluginAdapter;
+using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;

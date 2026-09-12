@@ -1,9 +1,9 @@
-using MEditService.Core.Edits;
-using MEditService.Core.Notifications;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Ports;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Index;
+using MEditService.Codec.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

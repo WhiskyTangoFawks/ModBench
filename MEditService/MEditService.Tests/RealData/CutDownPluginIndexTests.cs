@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 

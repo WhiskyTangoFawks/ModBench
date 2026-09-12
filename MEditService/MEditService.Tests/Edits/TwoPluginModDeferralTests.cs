@@ -1,9 +1,9 @@
 using System.Text.Json;
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -49,7 +49,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
             new(PluginA, pathA, Origin, Slot: 0, Enabled: true, Winning: true),
             new(PluginB, pathB, Origin, Slot: 1, Enabled: true, Winning: true),
         };
-        var loadOrder = new LoadOrder(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
+        var loadOrder = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(loadOrder, [new PluginKey(PluginA, Origin), new PluginKey(PluginB, Origin)], Origin, SourcePreset.Edits)

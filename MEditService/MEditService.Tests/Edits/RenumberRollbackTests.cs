@@ -1,7 +1,8 @@
-using MEditService.Core.Source;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Edits;
 

@@ -1,6 +1,7 @@
-using MEditService.Core.Source;
-using Mutagen.Bethesda;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda.Installs;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
 

@@ -1,8 +1,8 @@
 using System.Text.Json;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Queries;
-using MEditService.Core.Records;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Queries;
+using MEditService.Index;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;

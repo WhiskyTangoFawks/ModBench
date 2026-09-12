@@ -1,8 +1,8 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Serialization;
-using MEditService.Core.Source;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
+using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 

@@ -1,5 +1,5 @@
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Schema;
+using MEditService.PluginAdapter;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;

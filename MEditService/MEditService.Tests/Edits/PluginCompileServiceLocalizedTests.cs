@@ -1,15 +1,16 @@
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Commands;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Edits;
 
@@ -22,7 +23,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-compile-localized-").FullName;
     private readonly string _gameDir = Directory.CreateTempSubdirectory("medit-compile-localized-game-").FullName;
-    private readonly LoadOrder _loadOrder;
+    private readonly LoadOrderSnapshot _loadOrder;
 
     public PluginCompileServiceLocalizedTests()
     {
@@ -33,7 +34,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         mod.UsingLocalization = true;
         mod.WriteToBinary(pluginPath);
 
-        _loadOrder = new LoadOrder(
+        _loadOrder = new LoadOrderSnapshot(
             _gameDir, instanceRoot: null, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 

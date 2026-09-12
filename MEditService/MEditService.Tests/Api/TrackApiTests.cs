@@ -1,9 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Core.Plugins;
-using MEditService.Core.Records;
-using MEditService.Core.Source;
+using MEditService.LoadOrder;
+using MEditService.Index;
+using MEditService.SourceRepo;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;

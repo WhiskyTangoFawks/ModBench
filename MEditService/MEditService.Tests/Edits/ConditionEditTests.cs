@@ -1,11 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using MEditService.Core.Commands;
-using MEditService.Core.Edits;
-using MEditService.Core.PluginAdapter;
-using MEditService.Core.Plugins;
-using MEditService.Core.Schema;
-using MEditService.Core.Source;
+using MEditService.Commands;
+using MEditService.Commands.Edits;
+using MEditService.PluginAdapter;
+using MEditService.LoadOrder;
+using MEditService.Codec.Schema;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -256,7 +256,7 @@ public sealed class ConditionEditTests : IDisposable
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-692-game-").FullName;
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
-        public LoadOrder LoadOrder { get; }
+        public LoadOrderSnapshot LoadOrder { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Cobj { get; }
         public FormKey Perk { get; }
@@ -322,7 +322,7 @@ public sealed class ConditionEditTests : IDisposable
 
             mod.WriteToBinary(pluginPath);
 
-            LoadOrder = new LoadOrder(
+            LoadOrder = new LoadOrderSnapshot(
                 _gameDirectory, _gameDirectory, GameRelease.Fallout4,
                 SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)

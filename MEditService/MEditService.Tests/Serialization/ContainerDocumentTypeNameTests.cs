@@ -1,5 +1,5 @@
 using System.Text;
-using MEditService.Core.Serialization;
+using MEditService.Codec.Serialization;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
