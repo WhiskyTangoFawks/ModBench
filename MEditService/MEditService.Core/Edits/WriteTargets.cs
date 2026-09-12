@@ -27,8 +27,11 @@ internal sealed class WriteTargets(
     /// naming a command the user cannot find is worse than none.</summary>
     internal const string TrackCommandTitle = "Modbench: Track\u2026";
 
+    // DocumentPath is read before anything is written: a rename or a delete this gesture performs
+    // moves the file, and every message and log naming it means the one the gesture found.
     internal readonly record struct EditTarget(
-        GameRelease Release, RecordIdentity Identity, SourceUnit Unit, SourceRepository Repository);
+        GameRelease Release, RecordIdentity Identity, HoldingUnit Unit, string? DocumentPath,
+        SourceRepository Repository);
 
     // The working tree is the only thing asked (ADR-0015 invariant 5): a second edit builds on the
     // first, and no document comes from the Index. The copy gestures read the source instead.
@@ -64,7 +67,7 @@ internal sealed class WriteTargets(
         }
 
         // An embedded child (a placed ref, landscape, navmesh, top cell) resolves to its parent's file.
-        if (repository.Locate(plugin, identity) is not { } unit)
+        if (repository.UnitHolding(plugin, identity) is not { } unit)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
@@ -72,7 +75,8 @@ internal sealed class WriteTargets(
                 "carries it. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
         }
 
-        target = new EditTarget(release, identity, unit, repository);
+        target = new EditTarget(
+            release, identity, unit, repository.RelativePathOf(plugin, identity, gitRef: null), repository);
         return null;
     }
 
@@ -381,7 +385,7 @@ internal sealed class WriteTargets(
             $"{formKey}'s document cannot be read, so nothing can be written to it: {why}", Path: spelled);
 
     // Refused before any write. Not folded into ResolveEditTarget because Edit reaches the
-    // header deliberately. Without it, SourceUnit.IsDirectoryPerRecord (filename-only) answers true
+    // header deliberately. Without it, HoldingUnit.IsDirectoryPerRecord (filename-only) answers true
     // for the header and DeleteRecord deletes the plugin's whole source root.
     internal static RecordEditResult? RefuseIfHeader(string recordType) =>
         recordType == PluginHeader.RecordType

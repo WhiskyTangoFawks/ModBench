@@ -44,7 +44,7 @@ public sealed class RenumberRecordHandler
     public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (release, identity, unit, repository) = target;
+        var (release, identity, unit, documentPath, repository) = target;
         if (WriteTargets.RefuseIfHeader(identity.RecordType) is { } headerRefusal) return headerRefusal;
 
         // Canonicalised once: two ordinal comparisons below (the exclusion predicate and the
@@ -79,7 +79,7 @@ public sealed class RenumberRecordHandler
         // returned with the tree exactly as this method found it.
         if (ComputeReferencerRewrites(formKey, targetFormKey, release, referencers, out var rewrites)
             is { } refusedReferencer) return refusedReferencer;
-        if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var targetRewrite)
+        if (ComputeTargetRewrite(plugin, repository, identity, unit, documentPath, formKey, targetFormKey, release, out var targetRewrite)
             is { } refusedSelf) return refusedSelf;
 
         // Phase two: everything that can still fail is genuine I/O, recorded in one transaction
@@ -272,14 +272,15 @@ public sealed class RenumberRecordHandler
     // Text is the target's own document renumbered — the owner's whole text when embedded — and
     // Written is that document's identity. Held is the target's own identity, as the tree has it.
     private sealed record ComputedTarget(
-        SourceRepository Repository, SourceUnit Unit, RecordIdentity Written, RecordIdentity Held,
+        SourceRepository Repository, HoldingUnit Unit, RecordIdentity Written, RecordIdentity Held,
         string Text);
 
     // The referencer pass skips the target, so this is the only place a self-link is remapped.
     // Nothing here writes; every failure mode is a typed refusal.
     private RecordEditResult? ComputeTargetRewrite(
-        PluginKey plugin, SourceRepository repository, RecordIdentity identity, SourceUnit unit,
-        string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget target)
+        PluginKey plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
+        string? documentPath, string oldFormKey, string newFormKey, GameRelease release,
+        out ComputedTarget target)
     {
         target = null!;
         var schemas = _schemaReflector.GetSchemas(release);
@@ -292,7 +293,7 @@ public sealed class RenumberRecordHandler
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
                     $"No document in {plugin.Name}'s tree holds {unit.OwnerFormKey}, the record " +
-                    $"{unit.RelativePath} carries {oldFormKey} inside. Nothing was written.");
+                    $"{documentPath} carries {oldFormKey} inside. Nothing was written.");
             }
 
             if (RecordDocumentEdits.WithEmbeddedChildRenumbered(
@@ -301,7 +302,7 @@ public sealed class RenumberRecordHandler
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
-                    $"{unit.RelativePath} was found holding {oldFormKey}, but its own text does not carry it. " +
+                    $"{documentPath} was found holding {oldFormKey}, but its own text does not carry it. " +
                     "Nothing was written.");
             }
 

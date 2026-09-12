@@ -42,7 +42,7 @@ public sealed class EditRecordHandler
     public RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
-        var (release, identity, unit, repository) = editTarget;
+        var (release, identity, unit, documentPath, repository) = editTarget;
         var spelled = RecordEditEnvelope.Spell(envelope.Path);
 
         var schemas = _schemaReflector.GetSchemas(release);
@@ -61,7 +61,7 @@ public sealed class EditRecordHandler
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.SourceUnitNotFound,
-                $"{unit.RelativePath} does not hold {formKey} — it was moved or removed outside " +
+                $"{documentPath} does not hold {formKey} — it was moved or removed outside " +
                 "Modbench. Check the Source Control panel.");
         }
 
@@ -82,7 +82,7 @@ public sealed class EditRecordHandler
                     RecordEditRefusal.SourceUnitNotFound,
                     // Deliberately does not blame an external change: a defect reads identically, and a
                     // wrong explanation sends the user hunting a problem that is not there.
-                    $"{unit.RelativePath} was found holding {formKey}, but its own text does not " +
+                    $"{documentPath} was found holding {formKey}, but its own text does not " +
                     "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
@@ -127,7 +127,7 @@ public sealed class EditRecordHandler
         {
             _logger.LogInformation(
                 "Edited {Op} {Path} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
-                envelope.Op, spelled, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
+                envelope.Op, spelled, formKey, plugin.Name, plugin.Origin, documentPath);
         }
         return RecordEditResult.Success();
     }
