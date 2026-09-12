@@ -1,8 +1,7 @@
 import { Agent, fetch as undiciFetch } from 'undici';
 
 /** Undici's default Agent times out a fetch with no response after ~300s; blocking backend calls
- *  run for minutes, so 0 disables both. Own file: `undici` is Node-only and webview also imports
- *  apiClient.ts. */
+ *  run for minutes, so 0 disables both. Own file: `undici` is Node-only. */
 export function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
   // Handed a global `Request`, undici's own `fetch` coerces it to a URL string and fails, so it is
