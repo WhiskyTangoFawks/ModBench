@@ -41,6 +41,7 @@ mb3.pluginscmd -> mb3.client {class: query}
 mb3.client -> mb3.pluginscmd {class: query}
 # push
 me5.index -> me3.port {class: push}
+me3.cmd -> me3.port {class: push}
 me2.watcher -> me3.port {class: push}
 me3.port -> me2.http {class: push}
 me2.http -> mb3.client {class: push}
@@ -51,6 +52,7 @@ mb3.client -> mb2.editor {class: push}
 me6.plugin -> me2.watcher {class: signal}
 me6.source -> me2.watcher {class: signal}
 me2.watcher -> me5.index.proj {class: signal}
+me2.watcher -> me3.cmd {class: signal}
 me2.http -> me5.index {class: signal}
 mb6.mo2 -> mb5.instance {class: signal}
 mb6.gamedata -> mb5.instance {class: signal}
@@ -67,19 +69,13 @@ mb2.toolbox -> mb3.instance {class: loadout}
 mb2.downloads -> mb3.install {class: loadout}
 mb5.instance -> mb3.modlist {class: loadout}
 mb5.instance -> mb3.pluginscmd {class: loadout}
-mb3.modlist -> mb4.modlist {class: loadout}
-mb3.pluginscmd -> mb4.plugins {class: loadout}
-mb3.instance -> mb4.ini {class: loadout}
-mb3.install -> mb4.meta {class: loadout}
+mb3.modlist -> mb4.codecs {class: loadout}
+mb3.pluginscmd -> mb4.codecs {class: loadout}
+mb3.instance -> mb4.codecs {class: loadout}
+mb3.install -> mb4.codecs {class: loadout}
 mb3.install -> mb6.mo2 {class: loadout}
-mb4.modlist -> mb6.mo2 {class: loadout}
-mb4.plugins -> mb6.mo2 {class: loadout}
-mb4.ini -> mb6.mo2 {class: loadout}
-mb4.meta -> mb6.mo2 {class: loadout}
-mb4.modlist -> mb5.instance {class: loadout}
-mb4.plugins -> mb5.instance {class: loadout}
-mb4.meta -> mb5.instance {class: loadout}
-mb4.ini -> mb5.instance {class: loadout}
+mb4.codecs -> mb6.mo2 {class: loadout}
+mb4.codecs -> mb5.instance {class: loadout}
 mb4.tables -> mb5.instance {class: loadout}
 mb5.instance -> mb3.client {class: loadout}
 mb3.client -> me2.http {class: loadout}

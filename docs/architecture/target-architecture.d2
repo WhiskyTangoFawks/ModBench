@@ -47,17 +47,16 @@ mb3: "MODBENCH · Core — one command per gesture, beside the codec of the file
   client: "mEdit client\ninterface: commands, one per handler → applied or refusal · queries · subscribe by kind · put load order · start, stop, status\nhides: HTTP adapter and in-memory adapter; the process (ADR-0002)" {class: core}
 }
 
-me4: "MEDIT · Shared kernel — read by both sides and by the adapters" {
+me4: "MEDIT · Shared kernel — read by every box above it; a kernel box references only Vocabulary" {
   class: band; grid-rows: 1
+  vocab: "Vocabulary\nthe value types every box shares" {class: core}
   loadorder: "Load order state\nhome of the winner and participation rules" {class: core}
   codec: "Codec + schema\nMutagen owns the typing\nhides: the game assemblies live here" {class: core}
 }
-mb4: "MODBENCH · Shared kernel — pure; parse and byte-faithful splice, one module per MO2 file" {
+mb4: "MODBENCH · Shared kernel — pure; read by every box above it, the record panel included; a kernel box references nothing" {
   class: band; grid-rows: 1
-  modlist: modlist.txt {class: core}
-  plugins: plugins.txt {class: core}
-  meta: "meta.ini\nhides: installedFiles in MO2's form" {class: core}
-  ini: "ModOrganizer.ini\nhides: game name → release" {class: core}
+  codecs: "MO2 file codecs\nparse and byte-faithful splice: modlist.txt · plugins.txt · meta.ini · ModOrganizer.ini\nhides: installedFiles in MO2's form; game name → release" {class: core}
+  wire: "Wire\nthe generated API types and the webview message protocol" {class: core}
   tables: "per-release tables\ngame paths · load-order file destination" {class: core}
 }
 
