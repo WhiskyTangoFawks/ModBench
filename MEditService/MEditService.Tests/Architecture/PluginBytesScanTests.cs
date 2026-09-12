@@ -16,7 +16,15 @@ public sealed class PluginBytesScanTests
     // also exposes are constants, and name no content.
     private static readonly string[] RepositoryOpens = [@"SourceRepository\.Open", @"SourceRepository\.Over"];
 
-    private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite"];
+    private static readonly string[] PluginOpens = ["OpenForRead", "OpenForWrite", "CreateEmpty"];
+
+    // The tree door's implementation and the seam its write takes: both are entered through the
+    // port, so a caller naming either has reached past it.
+    private static readonly string[] TreeDoorInternals = ["PluginTrees", "TreeDeserializer"];
+
+    // The composition root names the implementation it builds, and nothing else does
+    // (docs/architecture/target-architecture.md, "The pictures are the reference lists").
+    private const string CompositionRoot = "MEditService.Api/Program.cs";
 
     [Fact]
     public void NothingOutsideThePluginAdapter_OpensAPlugin()
@@ -34,6 +42,51 @@ public sealed class PluginBytesScanTests
             + "answer as data instead:\n"
             + string.Join("\n", named));
     }
+
+    [Fact]
+    public void NothingOutsideThePluginAdapter_NamesTheTreeDoorsImplementation()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        var walked = Files(root, ProductionRoots, [AdapterRoot]);
+        var named = Sites(root, walked, TreeDoorInternals);
+
+        Assert.True(walked.Count > 50, $"The tree-door scan walked only {walked.Count} files.");
+        Assert.True(
+            named.Count == 0,
+            "A type outside the Plugin adapter names the tree door's implementation. Reading a source "
+            + "tree into a mod and writing one back are the port's two members (ADR-0005 rule 2), so "
+            + "ask the adapter:\n"
+            + string.Join("\n", named));
+    }
+
+    [Fact]
+    public void NothingButTheCompositionRoot_NamesTheAdaptersImplementation()
+    {
+        var root = ArchitectureTests.SolutionDirectory();
+
+        var walked = Files(root, ProductionRoots, [AdapterRoot]).Where(file => !IsCompositionRoot(root, file)).ToList();
+        var named = Sites(root, walked, ["MutagenPluginAdapter"]);
+
+        Assert.True(walked.Count > 50, $"The implementation scan walked only {walked.Count} files.");
+        Assert.True(
+            named.Count == 0,
+            "A type outside the Plugin adapter names its implementation. Every caller takes the port, "
+            + "and only the composition root names what it builds:\n"
+            + string.Join("\n", named));
+
+        var exempted = Sites(
+            root, [Path.Combine(root, CompositionRoot.Replace('/', Path.DirectorySeparatorChar))],
+            ["MutagenPluginAdapter"]);
+        Assert.True(
+            exempted.Count > 0,
+            $"{CompositionRoot} names no implementation — delete the exemption rather than leaving it "
+            + "pre-authorized.");
+    }
+
+    private static bool IsCompositionRoot(string root, string file) =>
+        Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/')
+            .Equals(CompositionRoot, StringComparison.Ordinal);
 
     [Fact]
     public void ThePluginAdapter_OpensNoSourceRepository()

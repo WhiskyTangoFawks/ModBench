@@ -1,6 +1,7 @@
 using MEditService.Api;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -32,7 +33,7 @@ public sealed class HeldPluginsTests
             .WithPlugin(UserPlugin)
             .Build();
 
-        using var held = Open(data);
+        var held = Open(data);
 
         var fo4 = held.Plugins.Single(p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
         var user = held.Plugins.Single(p => p.Name == UserPlugin);
@@ -52,7 +53,7 @@ public sealed class HeldPluginsTests
             "NonExistent.esp", Path.Combine(data.DataFolder, "NonExistent.esp"),
             PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
 
-        using var held = Open(data, entries);
+        var held = Open(data, entries);
 
         Assert.Contains(held.Plugins, p => p.Name == "Present.esp");
         Assert.DoesNotContain(held.Plugins, p => p.Name == "NonExistent.esp");
@@ -70,7 +71,7 @@ public sealed class HeldPluginsTests
         var entries = data.Plugins.Append(new LoadOrderEntry(
             "Bad.esp", badPath, PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
 
-        using var held = Open(data, entries);
+        var held = Open(data, entries);
 
         Assert.Contains(held.Plugins, p => p.Name == "Good.esp");
         Assert.DoesNotContain(held.Plugins, p => p.Name == "Bad.esp");
@@ -88,7 +89,7 @@ public sealed class HeldPluginsTests
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
         File.WriteAllBytes(loser.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
-        using var held = new HeldPlugins(MutagenPluginAdapter.Instance, fx.GameDirectory, null, GameRelease.Fallout4);
+        var held = new HeldPlugins(MutagenPluginAdapter.Instance, fx.GameDirectory, null, GameRelease.Fallout4);
 
         foreach (var plugin in ForcedPlugins.Prepend(fx.GameDirectory, GameRelease.Fallout4, [winner, loser]))
             held.Open(plugin);
@@ -106,7 +107,6 @@ public sealed class HeldPluginsTests
             .WithPlugin("Fixed.esp")
             .Build();
         var held = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4);
-        using var _ = held;
         var resolved = ForcedPlugins.Prepend(data.DataFolder, GameRelease.Fallout4, data.Plugins).Single();
         var missing = resolved with { Path = Path.Combine(data.DataFolder, "Elsewhere.esp") };
 
@@ -124,7 +124,7 @@ public sealed class HeldPluginsTests
     public void Open_ExtensionFlags(string name, bool isLight, bool isMaster)
     {
         using var data = new PluginFixtureBuilder("lo-ext").WithPlugin(name).Build();
-        using var held = Open(data);
+        var held = Open(data);
 
         var plugin = held.Plugins.Single(p => p.Name == name);
         Assert.Equal(isLight, plugin.IsLight);
@@ -140,7 +140,7 @@ public sealed class HeldPluginsTests
             .WithPlugin("EslFlagged.esp", mod => mod.IsSmallMaster = true)
             .WithPlugin("EsmFlagged.esp", mod => mod.IsMaster = true)
             .Build();
-        using var held = Open(data);
+        var held = Open(data);
 
         Assert.True(held.Plugins.Single(p => p.Name == "EslFlagged.esp").IsLight);
         Assert.True(held.Plugins.Single(p => p.Name == "EsmFlagged.esp").IsMaster);
@@ -157,21 +157,21 @@ public sealed class HeldPluginsTests
                 mod.Npcs.AddNew("Npc3");
             })
             .Build();
-        using var held = Open(data);
+        var held = Open(data);
 
         Assert.Equal(3, held.Plugins.Single(p => p.Name == "WithRecords.esp").RecordCount);
     }
 
     [Fact]
-    public void GetMod_IsCaseInsensitive_AndNullForAnUnknownCopy()
+    public void Find_IsCaseInsensitive_AndNullForAnUnknownCopy()
     {
-        using var data = new PluginFixtureBuilder("lo-getmod").WithPlugin("CaseMod.esp").Build();
-        using var held = Open(data);
+        using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();
+        var held = Open(data);
 
-        Assert.NotNull(held.GetMod("CASEMOD.ESP", PluginOrigin.DataDirectory));
-        Assert.NotNull(held.GetMod("casemod.esp", PluginOrigin.DataDirectory));
-        Assert.Null(held.GetMod("Unknown.esp", PluginOrigin.DataDirectory));
-        Assert.Null(held.GetMod("CaseMod.esp", "SomeOtherOrigin"));
+        Assert.NotNull(held.Find(new PluginKey("CASEMOD.ESP", PluginOrigin.DataDirectory)));
+        Assert.NotNull(held.Find(new PluginKey("casemod.esp", PluginOrigin.DataDirectory)));
+        Assert.Null(held.Find(new PluginKey("Unknown.esp", PluginOrigin.DataDirectory)));
+        Assert.Null(held.Find(new PluginKey("CaseMod.esp", "SomeOtherOrigin")));
     }
 
     // ── Mutation in place ───────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ public sealed class HeldPluginsTests
     public void Update_MovesTheRegistration_AndTheDerivedFactsFollow()
     {
         using var data = new PluginFixtureBuilder("lo-update").WithPlugin("A.esp").Build();
-        using var held = Open(data);
+        var held = Open(data);
         var copy = held.Plugins.Single();
         Assert.True(copy.Participates);
 
@@ -195,26 +195,18 @@ public sealed class HeldPluginsTests
     }
 
     [Fact]
-    public void Remove_DropsTheCopy_AndItsOverlay()
+    public void Remove_DropsTheCopy_AndWhatItAnswered()
     {
         using var data = new PluginFixtureBuilder("lo-remove").WithPlugin("A.esp").WithPlugin("B.esp").Build();
-        using var held = Open(data);
+        var held = Open(data);
+        var removed = new PluginKey("A.esp", PluginOrigin.DataDirectory);
 
-        Assert.True(held.Remove(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.True(held.Remove(removed));
 
         Assert.Equal(["B.esp"], held.Plugins.Select(p => p.Name));
-        Assert.Null(held.GetMod("A.esp", PluginOrigin.DataDirectory));
-        Assert.False(held.Remove(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
-    }
-
-    [Fact]
-    public void Dispose_CalledTwice_DoesNotThrow()
-    {
-        using var data = new PluginFixtureBuilder("lo-dispose").WithPlugin("DisposeTest.esp").Build();
-        var held = Open(data);
-        held.Dispose();
-
-        Assert.Null(Record.Exception(() => held.Dispose()));
+        Assert.Null(held.Find(removed));
+        Assert.DoesNotContain(removed, held.OpenedCopies.Keys);
+        Assert.False(held.Remove(removed));
     }
 
     [Fact]
@@ -223,7 +215,7 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-logger").WithPlugin("LogTest.esp").Build();
         var logger = new CapturingLogger();
 
-        using var held = Open(data, logger: logger);
+        var held = Open(data, logger: logger);
 
         Assert.True(logger.WasCalled);
     }

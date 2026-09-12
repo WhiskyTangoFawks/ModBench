@@ -1,5 +1,6 @@
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
@@ -138,7 +139,7 @@ public sealed class AbstractUnionCompileFixture : IDisposable
         LoadOrder = new LoadOrder(
             _gameDirectory, _gameDirectory, GameRelease.Fallout4,
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

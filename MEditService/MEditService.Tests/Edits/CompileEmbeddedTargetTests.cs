@@ -65,7 +65,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
                 Referrer,
             ]));
 
-        var trackService = new TrackService(NullLogger<TrackService>.Instance);
+        var trackService = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
         trackService.TrackAsync(_loadOrder, [new PluginKey(TargetName, TargetOrigin)], TargetOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
         trackService.TrackAsync(_loadOrder, [_referrer], ReferrerOrigin, SourcePreset.Edits)

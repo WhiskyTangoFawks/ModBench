@@ -10,10 +10,11 @@ namespace MEditService.Core.Commands;
 /// plugins.txt.</summary>
 public sealed class CreatePluginHandler
 {
+    private readonly IPluginAdapter _adapter;
     private readonly TrackHandler _track;
 
     // Internal so only CommandHandlers.AddCommandHandlers builds one, like every other handler.
-    internal CreatePluginHandler(TrackHandler track) => _track = track;
+    internal CreatePluginHandler(IPluginAdapter adapter, TrackHandler track) => (_adapter, _track) = (adapter, track);
 
     /// <summary>Asynchronous because Track is: the destination is tracked in this same gesture, so a
     /// created plugin is editable the moment it exists. <paramref name="loadOrder"/> already
@@ -25,7 +26,7 @@ public sealed class CreatePluginHandler
         // header field afterward. An explicit .esl is already light, an explicit .esm asked for a
         // full master.
         var modKey = ModKey.FromFileName(copy.Name);
-        await MutagenPluginAdapter.Instance.CreateAndWriteAsync(
+        await _adapter.CreateAndWriteAsync(
             modKey, copy.Path, loadOrder.GameRelease, smallMaster: modKey.Type == ModType.Plugin);
 
         var modFolder = ModFolders.Of(copy.Origin, copy.Path);

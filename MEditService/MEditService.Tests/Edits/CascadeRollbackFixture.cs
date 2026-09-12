@@ -101,7 +101,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         LoadOrder = new LoadOrder(_data.GameDirectory, _data.GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(_data.Plugins));
 
-        var track = new TrackService(NullLogger<TrackService>.Instance);
+        var track = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
         foreach (var origin in new[] { TargetMod, FirstMod, SecondMod })
         {
             track.TrackAsync(LoadOrder, [.. LoadOrder.Copies.Select(c => c.Key)], origin, SourcePreset.Edits)

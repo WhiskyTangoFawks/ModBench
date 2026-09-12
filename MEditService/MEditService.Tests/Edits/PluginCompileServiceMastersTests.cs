@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Source;
@@ -77,7 +78,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
                 new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin!, Slot: 3, Enabled: true, Winning: true),
             ]));
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(_loadOrder, [_plugin], _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

@@ -1,6 +1,7 @@
 using System.Text;
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
@@ -116,7 +117,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
             inputs.Add(new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, inputs.Count, Enabled: true, Winning: true));
 
             var loadOrder = new LoadOrder(_gameDirectory, _gameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(inputs));
-            new TrackService(NullLogger<TrackService>.Instance)
+            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
                 .TrackAsync(loadOrder, [DestinationPlugin], DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
 
             holder.Apply(loadOrder);

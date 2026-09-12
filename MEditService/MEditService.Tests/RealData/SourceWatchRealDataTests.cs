@@ -52,7 +52,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
 
         // The endpoint's own order: the registration upgrades the watch before Track writes.
         _watcher.WatchSourceOf(Origin);
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(Index, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 

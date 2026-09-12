@@ -212,7 +212,7 @@ public sealed class WarmReconcileTests
             using (var cold = MakeManager(holder))
             {
                 cold.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
-                await new TrackService(NullLogger<TrackService>.Instance)
+                await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
                     .TrackAsync(cold, holder, origin, SourcePreset.Edits);
             }
 

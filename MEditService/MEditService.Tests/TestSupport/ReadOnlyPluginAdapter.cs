@@ -1,69 +1,83 @@
 using MEditService.Core.PluginAdapter;
-using MEditService.Core.Records;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>A stand-in for the read verb alone, throwing on every write verb so a test that
-/// reaches one names itself rather than passing on a silent stub.</summary>
+/// <summary>The real adapter's reads, throwing on every write verb so a test that reaches one names
+/// itself rather than passing on a silent stub.</summary>
 public abstract class ReadOnlyPluginAdapter : IPluginAdapter
 {
-    public abstract ILoadedMod OpenForRead(
-        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null);
+    private static IPluginAdapter Real => MutagenPluginAdapter.Instance;
 
     public IPluginDocuments OpenDocuments(
         ModPath modPath,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
-        PluginStrings? strings = null)
-    {
-        var loaded = OpenForRead(modPath, gameRelease, strings);
-        return ModDocuments.Of(loaded.Getter, schemas, loaded);
-    }
+        PluginStrings? strings = null) =>
+        Real.OpenDocuments(modPath, gameRelease, schemas, strings);
 
     public IPluginRecordLookup OpenRecordLookup(
         ModPath modPath,
         GameRelease gameRelease,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        var loaded = OpenForRead(modPath, gameRelease);
-        return ModDocuments.LookupOf(loaded.Getter, schemas, loaded);
-    }
+        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Real.OpenRecordLookup(modPath, gameRelease, schemas);
 
-    public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease)
-    {
-        using var loaded = OpenForRead(modPath, gameRelease);
-        return OpenedPlugins.FormIdsIn(loaded.Getter, modPath.ModKey.FileName.String);
-    }
+    public virtual (PluginContent Content, Exception? Unreachable) ReadContent(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
+        Real.ReadContent(modPath, gameRelease, strings);
+
+    public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease) =>
+        Real.ReadFormIds(modPath, gameRelease);
 
     public virtual LinkAnswers LinkTargets(
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys) =>
-        LoadOrderLinks.Targets(this, loadOrder, gameRelease, schemas, formKeys);
+        Real.LinkTargets(loadOrder, gameRelease, schemas, formKeys);
 
-    public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself)
-    {
-        using var loaded = OpenForRead(modPath, gameRelease);
-        return OpenedPlugins.LinksTo(loaded.Getter, modPath.ModKey.FileName.String, target, itself);
-    }
+    public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself) =>
+        Real.LinksTo(modPath, gameRelease, target, itself);
 
-    public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
-        throw new NotSupportedException($"{GetType().Name} answers reads only.");
+    public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
+        IReadOnlyList<PristineFile> files,
+        string registeredName,
+        RecordTextCodec codec,
+        GameRelease gameRelease,
+        CancellationToken cancel = default) =>
+        Real.ReadTreeAsync(files, registeredName, codec, gameRelease, cancel);
 
-    public IMod CreateEmpty(ModKey modKey, GameRelease gameRelease) =>
+    public Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadSourceAsync(
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        Real.ReadSourceAsync(modPath, registeredName, gameRelease, strings, cancel);
+
+    public Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        Real.ReadPristineFilesAsync(modPath, registeredName, gameRelease, strings, cancel);
+
+    public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
+        ModPath modPath,
+        GameRelease gameRelease,
+        PluginStrings strings,
+        RecordTextCodec codec,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        Real.RecordDocumentsOf(modPath, gameRelease, strings, codec, schemas);
+
+    public string? DivergenceBetween(
+        ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
+        Real.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
+
+    public virtual Task WriteFromTreeAsync(string treeRoot, string destinationPath, CancellationToken cancel = default) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
     public Task CreateAndWriteAsync(
         ModKey modKey, string destinationPath, GameRelease gameRelease, bool smallMaster) =>
-        throw new NotSupportedException($"{GetType().Name} answers reads only.");
-
-    public Task WriteAsync(
-        IMod plugin, string destinationPath, IReadOnlyList<string>? masterOrder = null, string? stringsFolder = null) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 }

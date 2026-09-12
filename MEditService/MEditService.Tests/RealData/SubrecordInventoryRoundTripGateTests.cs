@@ -80,7 +80,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Holder, "TrueStormsMod", SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance).TrackAsync(_index, Holder, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()
         {

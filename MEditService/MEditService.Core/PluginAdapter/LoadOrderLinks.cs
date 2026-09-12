@@ -25,7 +25,6 @@ public sealed record LinkAnswers(
 internal static class LoadOrderLinks
 {
     internal static LinkAnswers Targets(
-        IPluginAdapter adapter,
         IReadOnlyList<ModPath> loadOrder,
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
@@ -41,7 +40,7 @@ internal static class LoadOrderLinks
             {
                 // A file the load order names can be malformed or gone by now (ADR-0003). It answers
                 // nothing, which is a fact about the file rather than about the links into it.
-                try { opened.Add(adapter.OpenForRead(modPath, gameRelease)); }
+                try { opened.Add(MutagenPluginAdapter.OpenForRead(modPath, gameRelease)); }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
                     unreadable.Add(new UnreadablePlugin(modPath.ModKey.FileName.String, Why(ex)));

@@ -7,12 +7,11 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.PluginAdapter;
 
 // ADR-0005 rule 2: the four verbs a plugin's bytes reach a live Mutagen mod through, and go back to
-// bytes through. Every one takes the release, so nothing here names a game to do its work.
+// bytes through — the adapter's own internals. Every one takes the release, so nothing here names a
+// game.
 public sealed class PluginAdapterTests
 {
     private const string PluginName = "Adapter.esp";
-
-    private static readonly IPluginAdapter Adapter = MutagenPluginAdapter.Instance;
 
     private static PluginFixtureData TwoNpcPlugin(string prefix) =>
         new PluginFixtureBuilder(prefix)
@@ -31,7 +30,7 @@ public sealed class PluginAdapterTests
     {
         using var data = TwoNpcPlugin("adapter-read");
 
-        using var loaded = Adapter.OpenForRead(PathOf(data), GameRelease.Fallout4);
+        using var loaded = MutagenPluginAdapter.OpenForRead(PathOf(data), GameRelease.Fallout4);
 
         Assert.Equal(ModKey.FromFileName(PluginName), loaded.Getter.ModKey);
         Assert.Equal(GameRelease.Fallout4, loaded.Getter.GameRelease);
@@ -47,11 +46,11 @@ public sealed class PluginAdapterTests
         var written = Path.Combine(data.DataFolder, "Written", PluginName);
         Directory.CreateDirectory(Path.GetDirectoryName(written)!);
 
-        var mod = (IFallout4Mod)Adapter.OpenForWrite(PathOf(data), GameRelease.Fallout4);
+        var mod = (IFallout4Mod)MutagenPluginAdapter.OpenForWrite(PathOf(data), GameRelease.Fallout4);
         mod.Npcs.AddNew("AdapterNpc03");
-        await Adapter.WriteAsync(mod, written);
+        await MutagenPluginAdapter.WriteAsync(mod, written);
 
-        using var reread = Adapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), written), GameRelease.Fallout4);
+        using var reread = MutagenPluginAdapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), written), GameRelease.Fallout4);
         Assert.Equal(
             ["AdapterNpc01", "AdapterNpc02", "AdapterNpc03"],
             reread.Getter.EnumerateMajorRecords().Select(r => r.EditorID).Order(StringComparer.Ordinal));
@@ -60,7 +59,7 @@ public sealed class PluginAdapterTests
     [Fact]
     public void CreateEmpty_CarriesTheReleaseAndKeyItWasGiven_AndNoRecords()
     {
-        var mod = Adapter.CreateEmpty(ModKey.FromFileName(PluginName), GameRelease.Fallout4);
+        var mod = MutagenPluginAdapter.CreateEmpty(ModKey.FromFileName(PluginName), GameRelease.Fallout4);
 
         Assert.Equal(ModKey.FromFileName(PluginName), mod.ModKey);
         Assert.Equal(GameRelease.Fallout4, mod.GameRelease);
@@ -76,11 +75,11 @@ public sealed class PluginAdapterTests
         try
         {
             var path = Path.Combine(scratch, PluginName);
-            var mod = Adapter.CreateEmpty(ModKey.FromFileName(PluginName), GameRelease.Fallout4);
+            var mod = MutagenPluginAdapter.CreateEmpty(ModKey.FromFileName(PluginName), GameRelease.Fallout4);
 
-            await Adapter.WriteAsync(mod, path);
+            await MutagenPluginAdapter.WriteAsync(mod, path);
 
-            using var reread = Adapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4);
+            using var reread = MutagenPluginAdapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4);
             Assert.Equal(ModKey.FromFileName(PluginName), reread.Getter.ModKey);
             Assert.Empty(reread.Getter.EnumerateMajorRecords());
             Assert.Equal(mod.NextFormID, reread.Getter.NextFormID);
@@ -108,13 +107,13 @@ public sealed class PluginAdapterTests
         var written = Path.Combine(data.DataFolder, "Reordered", "Patch.esp");
         Directory.CreateDirectory(Path.GetDirectoryName(written)!);
 
-        var mod = Adapter.OpenForWrite(patch, GameRelease.Fallout4);
+        var mod = MutagenPluginAdapter.OpenForWrite(patch, GameRelease.Fallout4);
         var reversed = mod.MasterReferences.Select(m => m.Master.FileName.ToString()).Reverse().ToList();
         Assert.Equal(["BetaBase.esm", "AlphaBase.esm"], reversed);
 
-        await Adapter.WriteAsync(mod, written, reversed);
+        await MutagenPluginAdapter.WriteAsync(mod, written, reversed);
 
-        using var reread = Adapter.OpenForRead(new ModPath(patch.ModKey, written), GameRelease.Fallout4);
+        using var reread = MutagenPluginAdapter.OpenForRead(new ModPath(patch.ModKey, written), GameRelease.Fallout4);
         Assert.Equal(reversed, reread.Getter.MasterReferences.Select(m => m.Master.FileName.ToString()));
     }
 }

@@ -59,7 +59,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
         _index.Reconcile(holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(_index, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

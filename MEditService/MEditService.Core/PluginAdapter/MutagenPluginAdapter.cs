@@ -1,6 +1,7 @@
-using MEditService.Core.Records;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
@@ -10,15 +11,22 @@ using Mutagen.Bethesda.Strings.DI;
 
 namespace MEditService.Core.PluginAdapter;
 
+/// <summary>A mod opened for reading, disposed when the caller is done with its bytes. Internal:
+/// the live mod is the adapter's own, and the port answers in documents and facts.</summary>
+internal interface ILoadedMod : IDisposable
+{
+    IModGetter Getter { get; }
+}
+
 /// <summary>The one implementation: Mutagen's own mod factory and write builder, reached by the
 /// release the caller passed and never by a game this code names.</summary>
 public sealed class MutagenPluginAdapter : IPluginAdapter
 {
-    /// <summary>For the gestures with no seam of their own — create, absorb, keep, Track and the
-    /// prepared save — which need the adapter without a constructor to inject it through.</summary>
+    /// <summary>The one instance, for a caller with no constructor to inject the port
+    /// through.</summary>
     public static readonly IPluginAdapter Instance = new MutagenPluginAdapter();
 
-    public ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
+    internal static ILoadedMod OpenForRead(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         => new LoadedMod(ModFactory.ImportGetter(modPath, gameRelease, ReadParameters(strings)));
 
     public IPluginDocuments OpenDocuments(
@@ -40,6 +48,13 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         return ModDocuments.LookupOf(loaded.Getter, schemas, loaded);
     }
 
+    public (PluginContent Content, Exception? Unreachable) ReadContent(
+        ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
+    {
+        using var loaded = OpenForRead(modPath, gameRelease, strings);
+        return OpenedPlugins.ContentIn(loaded.Getter, modPath.ModKey.FileName.String);
+    }
+
     public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease)
     {
         using var loaded = OpenForRead(modPath, gameRelease);
@@ -51,7 +66,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         IReadOnlyCollection<string> formKeys) =>
-        LoadOrderLinks.Targets(this, loadOrder, gameRelease, schemas, formKeys);
+        LoadOrderLinks.Targets(loadOrder, gameRelease, schemas, formKeys);
 
     public bool LinksTo(ModPath modPath, GameRelease gameRelease, FormKey target, FormKey? itself)
     {
@@ -59,13 +74,46 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         return OpenedPlugins.LinksTo(loaded.Getter, modPath.ModKey.FileName.String, target, itself);
     }
 
-    public IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
+    public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
+        IReadOnlyList<PristineFile> files,
+        string registeredName,
+        RecordTextCodec codec,
+        GameRelease gameRelease,
+        CancellationToken cancel = default) =>
+        PluginTrees.ReadTreeAsync(files, registeredName, codec, gameRelease, cancel);
+
+    public Task WriteFromTreeAsync(string treeRoot, string destinationPath, CancellationToken cancel = default) =>
+        PluginTrees.WriteFromTreeAsync(treeRoot, destinationPath, deserialize: null, cancel);
+
+    public Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadSourceAsync(
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        PluginTrees.ReadAsync(modPath, registeredName, gameRelease, strings, cancel);
+
+    public Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
+        ModPath modPath, string registeredName, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        PluginTrees.ReadPristineFilesAsync(modPath, registeredName, gameRelease, strings, cancel);
+
+    public IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
+        ModPath modPath,
+        GameRelease gameRelease,
+        PluginStrings strings,
+        RecordTextCodec codec,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
+        PluginTrees.RecordDocumentsOf(modPath, gameRelease, strings, codec, schemas);
+
+    public string? DivergenceBetween(
+        ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings) =>
+        PluginTrees.DivergenceBetween(modPath, recompiledPath, gameRelease, strings)?.Describe();
+
+    internal static IMod OpenForWrite(ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         => ModFactory.ImportSetter(modPath, gameRelease, ReadParameters(strings));
 
     private static BinaryReadParameters? ReadParameters(PluginStrings? strings) =>
         strings is { } named ? LocalizedStrings.ForRead(named) : null;
 
-    public IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
+    internal static IMod CreateEmpty(ModKey modKey, GameRelease gameRelease)
         => ModFactory.Activator(modKey, gameRelease);
 
     public async Task CreateAndWriteAsync(
@@ -82,7 +130,10 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         await WriteAsync(plugin, destinationPath);
     }
 
-    public async Task WriteAsync(
+    /// <summary>Bytes at <paramref name="destinationPath"/>, with neither backup nor rename — what
+    /// <see cref="PluginWriter"/> adds to replace a plugin in place. Null takes Mutagen's
+    /// own master order (ADR-0008) and strings folder.</summary>
+    internal static async Task WriteAsync(
         IMod plugin,
         string destinationPath,
         IReadOnlyList<string>? masterOrder = null,

@@ -1,5 +1,4 @@
 using MEditService.Core.Commands;
-using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Source;
@@ -11,9 +10,6 @@ namespace MEditService.Tests;
 internal static class TrackHeldCopies
 {
     internal static Task<TrackResult> TrackAsync(
-        this TrackService track, IndexProjector index, LoadOrderHolder holder, string origin, SourcePreset preset,
-        TreeDeserializer? deserializeForVerification = null) =>
-        track.TrackAsync(
-            holder.Current, [.. index.RequireReads().OpenedCopies.Keys], origin, preset,
-            deserializeForVerification);
+        this TrackService track, IQueryIndex index, LoadOrderHolder holder, string origin, SourcePreset preset) =>
+        track.TrackAsync(holder.Current, [.. index.RequireReads().OpenedCopies.Keys], origin, preset);
 }

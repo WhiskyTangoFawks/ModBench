@@ -1,28 +1,27 @@
 using System.Diagnostics;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Core.PluginAdapter;
+namespace MEditService.Core.Records;
 
-/// <summary>The copies the Index has open (ADR-0013), keyed by identity: what it read out of each
-/// file. Not a load order — who wins and who participates is the kernel's value. Reconcile mutates
-/// it in place.</summary>
-internal sealed class HeldPlugins : IDisposable
+/// <summary>The copies the Index has open (ADR-0013), keyed by identity: what the adapter read out
+/// of each file. Not a load order — who wins and who participates is the kernel's value. Reconcile
+/// mutates it in place.</summary>
+internal sealed class HeldPlugins
 {
-    // ADR-0012: keyed by the compound (origin, filename) identity — two copies of one filename are
-    // ordinarily held at once, and a filename-keyed dictionary would silently drop one. Joined into
-    // one string so a single OrdinalIgnoreCase comparer covers both halves.
-    private readonly Dictionary<string, ILoadedMod> _modsByKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<PluginMetadata> _plugins = [];
     private readonly Dictionary<string, PluginLoadFailure> _loadFailures = new(StringComparer.OrdinalIgnoreCase);
     private readonly IPluginAdapter _adapter;
     private readonly ILogger _logger;
 
+    // ADR-0012: keyed by the compound (origin, filename) identity — two copies of one filename are
+    // ordinarily held at once, and a filename-keyed key would silently drop one. Joined into one
+    // string so a single OrdinalIgnoreCase comparer covers both halves.
     private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
     private static string KeyOf(PluginKey key) => KeyOf(key.Origin!, key.Name);
 
@@ -62,14 +61,6 @@ internal sealed class HeldPlugins : IDisposable
         GameRelease = gameRelease;
     }
 
-    public IModGetter? GetMod(string pluginName, string origin)
-    {
-        // Under the same lock as the writes: a Dictionary read concurrent with a write is not merely
-        // stale, it can spin or throw. Cheap — this is per-save and per-index, not per-read.
-        lock (_mutation)
-            return _modsByKey.TryGetValue(KeyOf(origin, pluginName), out var mod) ? mod.Getter : null;
-    }
-
     public PluginMetadata? Find(PluginKey key) =>
         Plugins.FirstOrDefault(p =>
             p.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
@@ -93,35 +84,37 @@ internal sealed class HeldPlugins : IDisposable
                 plugin.Name, plugin.Origin, plugin.Registration.LoadOrderIndex, plugin.Registration.Enabled, plugin.Registration.Winning);
         }
 
-        ILoadedMod? mod = null;
         try
         {
             // The binary path — the "binary is for untracked plugins" overlay (ADR-0007
             // amendment) — needs the same explicit strings parameters Track does, or a Localized
             // untracked plugin throws instead of opening.
-            var importTimer = Stopwatch.StartNew();
-            mod = _adapter.OpenForRead(
+            var readTimer = Stopwatch.StartNew();
+            var (content, unreachable) = _adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), GameRelease,
                 new PluginStrings(ModFolders.Of(plugin.Origin, plugin.Path), DataFolderPath));
-            var importMs = importTimer.ElapsedMilliseconds;
+            var readMs = readTimer.ElapsedMilliseconds;
 
-            var metadataTimer = Stopwatch.StartNew();
-            var metadata = BuildPluginMetadata(mod.Getter, plugin);
-            var metadataMs = metadataTimer.ElapsedMilliseconds;
+            if (unreachable is { } stoppedWalk)
+            {
+                // The ingest walks the same records per type and reports the one it could not finish,
+                // so this only keeps a readout from becoming a refusal to open the plugin.
+                _logger.LogWarning(stoppedWalk,
+                    "Could not walk all of {FileName}'s records for its count; reporting the {Count} that were reachable",
+                    plugin.Name, content.RecordCount);
+            }
 
-            Hold(mod, metadata);
+            var metadata = BuildPluginMetadata(content, plugin);
+            Hold(metadata);
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation("{FileName}: {RecordCount} records, masters: [{Masters}]",
                     plugin.Name, metadata.RecordCount, string.Join(", ", metadata.Masters));
             }
-            // Per-phase timing — the binary open is lazy, so the record count in
-            // BuildPluginMetadata is where most of the parse cost actually lands.
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("{FileName} opened in {ImportMs} ms + {MetadataMs} ms metadata",
-                    plugin.Name, importMs, metadataMs);
+                _logger.LogDebug("{FileName} read in {ReadMs} ms", plugin.Name, readMs);
             }
             return metadata;
         }
@@ -129,7 +122,6 @@ internal sealed class HeldPlugins : IDisposable
         {
             _logger.LogWarning(ex, "Failed to open plugin {FileName} ({Origin}); it is held in an error state", plugin.Name, plugin.Origin);
             SetFailure(plugin.Key, PluginLoadFailure.ReasonFor(ex));
-            mod?.Dispose();
             return null;
         }
     }
@@ -137,17 +129,12 @@ internal sealed class HeldPlugins : IDisposable
     // Republishes the snapshot readers see, so a copy is never half-held from a reader's point of
     // view. Replaces any copy already held under the same key: two PluginMetadata under one
     // (origin, filename) would make every keyed lookup ambiguous.
-    private void Hold(ILoadedMod mod, PluginMetadata metadata)
+    private void Hold(PluginMetadata metadata)
     {
         lock (_mutation)
         {
             var key = KeyOf(metadata.Origin, metadata.Name);
-            if (_modsByKey.Remove(key, out var stale))
-            {
-                stale.Dispose();
-                _plugins.RemoveAll(p => KeyOf(p.Origin, p.Name).Equals(key, StringComparison.OrdinalIgnoreCase));
-            }
-            _modsByKey[key] = mod;
+            _plugins.RemoveAll(p => KeyOf(p.Origin, p.Name).Equals(key, StringComparison.OrdinalIgnoreCase));
             _plugins.Add(metadata);
             PublishPlugins();
             _loadFailures.Remove(key);
@@ -171,7 +158,6 @@ internal sealed class HeldPlugins : IDisposable
         {
             var joined = KeyOf(key);
             var removed = _plugins.RemoveAll(p => KeyOf(p.Origin, p.Name).Equals(joined, StringComparison.OrdinalIgnoreCase)) > 0;
-            if (_modsByKey.Remove(joined, out var mod)) mod.Dispose();
             if (_loadFailures.Remove(joined))
             {
                 Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
@@ -226,58 +212,17 @@ internal sealed class HeldPlugins : IDisposable
         }
     }
 
-    private PluginMetadata BuildPluginMetadata(IModGetter mod, RegisteredCopy plugin)
-    {
-        var masters = mod.MasterReferences
-            .Select(r => r.Master.FileName.ToString())
-            .ToList();
-
-        return new PluginMetadata(
+    private static PluginMetadata BuildPluginMetadata(PluginContent content, RegisteredCopy plugin) =>
+        new(
             Name: plugin.Name,
             Path: plugin.Path,
             LoadOrderIndex: plugin.Registration.LoadOrderIndex,
-            IsLight: PluginFlagPredicates.IsLight(mod, plugin.Name),
-            IsMaster: PluginFlagPredicates.IsMaster(mod, plugin.Name),
-            Masters: masters,
-            RecordCount: ReachableRecordCount(mod, plugin.Name),
+            IsLight: content.IsLight,
+            IsMaster: content.IsMaster,
+            Masters: content.Masters,
+            RecordCount: content.RecordCount,
             IsForced: plugin.IsForced,
             Origin: plugin.Origin,
             Enabled: plugin.Registration.Enabled,
             Winning: plugin.Registration.Winning);
-    }
-
-    // A group whose location scan Mutagen refuses stops the walk, and the count is a readout, not a
-    // gate: the plugin opens on what was reachable and the ingest reports the type that was not.
-    private int ReachableRecordCount(IModGetter mod, string plugin)
-    {
-        var count = 0;
-        try
-        {
-            foreach (var _ in mod.EnumerateMajorRecords()) count++;
-        }
-        catch (Exception ex)
-        {
-            // The ingest walks the same records per type and reports the one it could not finish,
-            // so this only keeps a readout from becoming a refusal to open the plugin.
-            _logger.LogWarning(ex,
-                "Could not walk all of {Plugin}'s records for its count; reporting the {Count} that were reachable",
-                plugin, count);
-        }
-        return count;
-    }
-
-    /// <summary>Idempotent: a cancelled reconcile and the projector's own teardown can both reach here
-    /// for one load order, and disposing a Mutagen overlay twice is not benign.</summary>
-    public void Dispose()
-    {
-        lock (_mutation)
-        {
-            foreach (var mod in _modsByKey.Values)
-            {
-                // Stryker disable once Statement : verifying per-mod disposal requires OS-level resource checks beyond the public API
-                mod.Dispose();
-            }
-            _modsByKey.Clear();
-        }
-    }
 }

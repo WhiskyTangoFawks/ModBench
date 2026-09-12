@@ -99,7 +99,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
         }
 
         public Task<TrackResult> TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_index, Holder, Origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance).TrackAsync(_index, Holder, Origin, SourcePreset.Edits);
 
         public void Dispose()
         {

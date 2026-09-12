@@ -413,26 +413,4 @@ public class IndexScopeTests(TestPluginFixture fixture)
         m.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }
-
-    private sealed class SpyAdapter : ReadOnlyPluginAdapter
-    {
-        private readonly List<SpyLoadedMod> _mods = [];
-        public IReadOnlyList<SpyLoadedMod> LoadedMods => _mods;
-
-        public override ILoadedMod OpenForRead(
-            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
-        {
-            var real = ModFactory.ImportGetter(modPath, gameRelease);
-            var spy = new SpyLoadedMod(real);
-            _mods.Add(spy);
-            return spy;
-        }
-    }
-
-    private sealed class SpyLoadedMod(IModDisposeGetter inner) : ILoadedMod
-    {
-        public bool IsDisposed { get; private set; }
-        public IModGetter Getter => inner;
-        public void Dispose() { IsDisposed = true; inner.Dispose(); }
-    }
 }

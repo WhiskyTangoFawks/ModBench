@@ -20,42 +20,37 @@ internal delegate Task<IMod> TreeDeserializer(string treeRoot, CancellationToken
 internal static class PluginTrees
 {
     /// <summary>A plugin's own binary read as the documents its tree would hold.
-    /// <see cref="PluginTree.MissingStringsFile"/> names the localization file it declares and the
-    /// disk does not have, in which case there are no files.</summary>
-    internal readonly record struct PluginTree(IReadOnlyList<PristineFile> Files, string? MissingStringsFile);
-
-    internal static async Task<PluginTree> ReadAsync(
-        string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings,
+    /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in
+    /// which case there are no files.</summary>
+    internal static async Task<(IReadOnlyList<PristineFile> Files, string? MissingStringsFile)> ReadAsync(
+        ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default)
     {
-        var mod = OpenFor(pluginName, pluginPath, gameRelease, strings);
+        var mod = OpenFor(modPath, gameRelease, strings);
 
         // Refuse by name before any serialize: TranslatedString.TryLookup returns false for a missing
         // file with no exception.
         return LocalizedStrings.FindMissingStringsFile(mod, pluginName, strings, gameRelease) is { } missing
-            ? new PluginTree([], missing)
-            : new PluginTree(await SerializeToPristineFiles(mod, pluginName, cancel), null);
+            ? ([], missing)
+            : (await SerializeToPristineFiles(mod, pluginName, cancel), null);
     }
 
     /// <summary>A plugin's binary re-serialized as its whole source tree, with no localization
     /// check: what a re-baseline of an already tracked plugin commits.</summary>
     internal static Task<IReadOnlyList<PristineFile>> ReadPristineFilesAsync(
-        string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings,
+        ModPath modPath, string pluginName, GameRelease gameRelease, PluginStrings strings,
         CancellationToken cancel = default) =>
-        SerializeToPristineFiles(OpenFor(pluginName, pluginPath, gameRelease, strings), pluginName, cancel);
+        SerializeToPristineFiles(OpenFor(modPath, gameRelease, strings), pluginName, cancel);
 
     /// <summary>A plugin's binary as every record's own document plus the identity a source tree
     /// files it by. The mod is held here, so the caller never has one (ADR-0005 rule 2).</summary>
     internal static IEnumerable<(RecordIdentity Identity, string Text)> RecordDocumentsOf(
-        string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings,
+        ModPath modPath, GameRelease gameRelease, PluginStrings strings,
         RecordTextCodec codec, IReadOnlyDictionary<string, RecordTableSchema> schemas) =>
-        ModDocuments.IdentifiedRecordsOf(
-            OpenFor(pluginName, pluginPath, gameRelease, strings), codec, schemas);
+        ModDocuments.IdentifiedRecordsOf(OpenFor(modPath, gameRelease, strings), codec, schemas);
 
-    private static IMod OpenFor(
-        string pluginName, string pluginPath, GameRelease gameRelease, PluginStrings strings) =>
-        MutagenPluginAdapter.Instance.OpenForWrite(
-            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, strings);
+    private static IMod OpenFor(ModPath modPath, GameRelease gameRelease, PluginStrings strings) =>
+        MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings);
 
     /// <summary>One plugin's complete source tree, ready to commit — the one implementation of the
     /// door's write. A second serializer that dropped the root RecordData.json would delete the header
@@ -102,23 +97,21 @@ internal static class PluginTrees
         CancellationToken cancel = default)
     {
         var recompiled = await (deserialize ?? DeserializeTree)(treeRoot, cancel);
-        await MutagenPluginAdapter.Instance.WriteAsync(recompiled, destinationPath);
+        await MutagenPluginAdapter.WriteAsync(recompiled, destinationPath);
     }
 
     private static async Task<IMod> DeserializeTree(string treeRoot, CancellationToken cancel) =>
         await RecordTextCodecGeneratorSeed.DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, cancel);
 
     /// <summary>The codec's verdict on the plugin written at <paramref name="recompiledPath"/> against
-    /// the one at <paramref name="originalPath"/>; null when they are model-identical. Both are
+    /// the one at <paramref name="modPath"/>; null when they are model-identical. Both are
     /// reparsed, since only written bytes show what the writer does.</summary>
     internal static ModelIdentity.Divergence? DivergenceBetween(
-        string pluginName, string originalPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings)
+        ModPath modPath, string recompiledPath, GameRelease gameRelease, PluginStrings strings)
     {
-        var modKey = ModKey.FromFileName(pluginName);
-        var original = MutagenPluginAdapter.Instance.OpenForWrite(
-            new ModPath(modKey, originalPath), gameRelease, strings);
-        var recompiled = MutagenPluginAdapter.Instance.OpenForWrite(
-            new ModPath(modKey, recompiledPath), gameRelease);
+        var original = MutagenPluginAdapter.OpenForWrite(modPath, gameRelease, strings);
+        var recompiled = MutagenPluginAdapter.OpenForWrite(
+            new ModPath(modPath.ModKey, recompiledPath), gameRelease);
 
         return ModelIdentity.FindFirstDivergence(original, recompiled);
     }
@@ -127,14 +120,10 @@ internal static class PluginTrees
     /// watching for a leak knows what to look for.</summary>
     internal const string ReadScratchPrefix = "medit-readtree-";
 
-    /// <summary>A read that produced a mod, or the diagnosis of why it could not.
-    /// <see cref="Error"/> is that failure's own exception, for the log.</summary>
-    internal readonly record struct TreeRead(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error);
-
     /// <summary>One source tree's files read into the mod they compile to, in a scratch folder of the
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005 rule
     /// 2).</summary>
-    internal static async Task<TreeRead> ReadTreeAsync(
+    internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
         IReadOnlyList<PristineFile> files, string pluginName, RecordTextCodec codec, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
@@ -150,11 +139,11 @@ internal static class PluginTrees
             try
             {
                 var mod = await DeserializeTree(Path.Combine(scratchDir, SourceRepository.RootFor(pluginName)), cancel);
-                return new TreeRead(new CompiledTree(mod, codec, gameRelease), null, null);
+                return (new CompiledTree(mod, codec, gameRelease), null, null);
             }
             catch (Exception ex)
             {
-                return new TreeRead(null, PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
+                return (null, PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
             }
         }
         finally
@@ -172,48 +161,59 @@ internal static class PluginTrees
 
 /// <summary>One compile's source tree as the mod it becomes: the only box that mod lives in, which
 /// answers the compile in header facts, FormKeys and documents.</summary>
-internal sealed class CompiledTree(IMod mod, RecordTextCodec codec, GameRelease gameRelease)
+public sealed class CompiledTree
 {
-    private readonly Lazy<IReadOnlyList<FormKey>> _formKeys =
-        new(() => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
+    private readonly IMod _mod;
+    private readonly RecordTextCodec _codec;
+    private readonly GameRelease _gameRelease;
+    private readonly Lazy<IReadOnlyList<FormKey>> _formKeys;
+
+    internal CompiledTree(IMod mod, RecordTextCodec codec, GameRelease gameRelease)
+    {
+        _mod = mod;
+        _codec = codec;
+        _gameRelease = gameRelease;
+        _formKeys = new Lazy<IReadOnlyList<FormKey>>(
+            () => mod.EnumerateMajorRecords().Select(record => record.FormKey).ToList());
+    }
 
     /// <summary>The plugin the tree describes, which is whose records count as native.</summary>
-    internal ModKey ModKey => mod.ModKey;
+    public ModKey ModKey => _mod.ModKey;
 
     /// <summary>The removable ESL header flag, as opposed to light by <c>.esl</c> extension.</summary>
-    internal bool IsSmallMaster => mod.IsSmallMaster;
+    public bool IsSmallMaster => _mod.IsSmallMaster;
 
-    internal bool IsLight(string fileName) => PluginFlagPredicates.IsLight(mod, fileName);
+    public bool IsLight(string fileName) => PluginFlagPredicates.IsLight(_mod, fileName);
 
     /// <summary>The local FormID range an ESL-addressable plugin may use, or null when the header
     /// declares none.</summary>
-    internal (uint Min, uint Max)? SmallMasterRange =>
-        RecordCompactionCompatibilityDetection.GetSmallMasterRange(mod) is { } range
+    public (uint Min, uint Max)? SmallMasterRange =>
+        RecordCompactionCompatibilityDetection.GetSmallMasterRange(_mod) is { } range
             ? (range.Min, range.Max)
             : null;
 
     /// <summary>Every record the tree holds, in the order the mod enumerates them.</summary>
-    internal IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
+    public IReadOnlyList<FormKey> FormKeys => _formKeys.Value;
 
     /// <summary>Each record as its own document, under the schema table it belongs to. A record no
     /// table claims has no document, so nothing is derived from it.</summary>
-    internal IEnumerable<PluginDocument> Documents(IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    public IEnumerable<PluginDocument> Documents(IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        foreach (var record in mod.EnumerateMajorRecords())
+        foreach (var record in _mod.EnumerateMajorRecords())
         {
             var recordType = RecordTableName.Of(record, schemas);
             if (!schemas.ContainsKey(recordType)) continue;
-            yield return new PluginDocument(recordType, record.FormKey.ToString(), codec.SerializeToText(record, gameRelease));
+            yield return new PluginDocument(recordType, record.FormKey.ToString(), _codec.SerializeToText(record, _gameRelease));
         }
     }
 
     /// <summary>What the current codec would write for this mod, which is what the round-trip gate
     /// compares the tree against.</summary>
-    internal Task<IReadOnlyList<PristineFile>> SerializeToPristineFilesAsync(string pluginName) =>
-        PluginTrees.SerializeToPristineFiles(mod, pluginName);
+    public Task<IReadOnlyList<PristineFile>> SerializeToPristineFilesAsync(string pluginName) =>
+        PluginTrees.SerializeToPristineFiles(_mod, pluginName);
 
     /// <summary>The mod handed straight to the write, through the backup-and-rename discipline
     /// every plugin replacement shares.</summary>
-    internal Task<string> SaveThroughAsync(PluginWriter writer, string pluginPath, IReadOnlyList<string> loadOrder) =>
-        writer.SaveFromModAsync(mod, pluginPath, loadOrder);
+    public Task<string> SaveThroughAsync(PluginWriter writer, string pluginPath, IReadOnlyList<string> loadOrder) =>
+        writer.SaveFromModAsync(_mod, pluginPath, loadOrder);
 }

@@ -148,8 +148,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         }
 
         public Task<TrackResult> TrackAsync(TreeDeserializer? deserialize = null) =>
-            new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_index, Holder, Plugin.Origin!, SourcePreset.Edits, deserialize);
+            new TrackService(
+                    NullLogger<TrackService>.Instance,
+                    deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : MutagenPluginAdapter.Instance)
+                .TrackAsync(_index, Holder, Plugin.Origin!, SourcePreset.Edits);
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(Holder.Current);

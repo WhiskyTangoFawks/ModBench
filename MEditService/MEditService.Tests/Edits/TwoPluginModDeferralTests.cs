@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Core.Commands;
 using MEditService.Core.Edits;
+using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
@@ -50,7 +51,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         };
         var loadOrder = new LoadOrder(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
 
-        new TrackService(NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(loadOrder, [new PluginKey(PluginA, Origin), new PluginKey(PluginB, Origin)], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
