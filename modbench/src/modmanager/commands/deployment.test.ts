@@ -1,22 +1,15 @@
-// The deployer itself is covered by deployer.test.ts; this covers what the command adds — winners
-// come from the caller, not a walk; refuses instead of throwing; and asks once before a first
-// deploy into a manifest-less directory.
+// The mechanics (hardlinking, the manifest, purge) are mo2FilesDeploy.test.ts's; this covers
+// what the command decides: winners come from the value, not a walk; root/ never reaches
+// Data/; and it refuses instead of throwing.
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { deployMods, purgeMods, DEPLOY_CONFIRM_BUTTON } from './deployment';
+import { deployMods, purgeMods } from './deployment';
 import { makeDeployerFixture, makeIndex, type DeployerFixture } from '../test/deployerFixture';
-import { recordingReporter } from '../../test/surfacingDoubles';
 
 const PROFILE = 'Default';
 const MANIFEST = join('mods', '.medit-manifest.json');
-
-// Never asked: used by every test whose fixture already has a manifest, or that predates the
-// prompt existing — a call here is itself a failure of "asks only on an absent manifest".
-const neverAsk = () => { throw new Error('deployMods asked its question when it had no reason to'); };
-const accept = vi.fn().mockResolvedValue(DEPLOY_CONFIRM_BUTTON);
-const decline = vi.fn().mockResolvedValue(undefined);
 
 const exists = (path: string): Promise<boolean> => stat(path).then(() => true, () => false);
 
@@ -29,8 +22,7 @@ describe('deployMods / purgeMods', () => {
     const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
     const files = makeIndex({ 'textures/foo.dds': source }).files;
 
-    const outcome = await deployMods(
-      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
+    const outcome = await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(true);
@@ -46,7 +38,7 @@ describe('deployMods / purgeMods', () => {
     await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'modlist.txt'), '-ModB\n');
     const files = makeIndex({ 'textures/bar.dds': winner }).files;
 
-    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
 
     // modlist.txt disables ModB; a rebuild would deploy nothing. The handed-in `files` wins.
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/bar.dds'))).toBe(true);
@@ -58,9 +50,31 @@ describe('deployMods / purgeMods', () => {
     await writeFile(join(fx.instanceRoot, 'profiles', PROFILE, 'plugins.txt'), '*Foo.esp\n');
     const target = join(fx.gameDirectory.root, 'plugins.txt');
 
-    await deployMods(fx.instanceRoot, PROFILE, makeIndex({}).files, fx.gameDirectory, target, recordingReporter(), accept);
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files: makeIndex({}).files, gameDirectory: fx.gameDirectory }, target);
 
     expect(await exists(target)).toBe(true);
+  });
+
+  it('skips a mod\'s root/ files — they map to the game root, not Data/', async () => {
+    fx = await makeDeployerFixture();
+    const dataFile = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDS');
+    const rootFile = await fx.writeModFile('F4SE', 'root/f4se_loader.exe', 'EXE');
+    const files = makeIndex({ 'textures/foo.dds': dataFile, 'root/f4se_loader.exe': rootFile }).files;
+
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
+
+    await expect(stat(join(fx.gameDirectory.dataFolder, 'root/f4se_loader.exe'))).rejects.toThrow();
+    expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(true);
+  });
+
+  it('deploys a mod file literally named "root" (no slash) normally into Data/root', async () => {
+    fx = await makeDeployerFixture();
+    const rootFile = await fx.writeModFile('ModA', 'root', 'ROOTFILE');
+    const files = makeIndex({ root: rootFile }).files;
+
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
+
+    expect(await exists(join(fx.gameDirectory.dataFolder, 'root'))).toBe(true);
   });
 
   // Rival: throw, or resolve applied with an unresolved game directory. Either way the caller
@@ -68,57 +82,10 @@ describe('deployMods / purgeMods', () => {
   it('refuses without a game directory, and touches nothing', async () => {
     fx = await makeDeployerFixture();
 
-    const outcome = await deployMods(
-      fx.instanceRoot, PROFILE, makeIndex({}).files, undefined, undefined, recordingReporter(), neverAsk);
+    const outcome = await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files: makeIndex({}).files, gameDirectory: undefined }, undefined);
 
     expect(outcome).toMatchObject({ applied: false });
     expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(false);
-  });
-
-  // Rival: deploy without asking. Accepting deploys and writes the manifest; declining refuses
-  // and touches nothing — proven against the same fixture so only the answer differs.
-  describe('first deploy into a directory with no manifest', () => {
-    it('asks once, and accepting deploys and writes the manifest', async () => {
-      fx = await makeDeployerFixture();
-      const source = await fx.writeModFile('ModA', 'a.esp', 'BYTES');
-      const files = makeIndex({ 'a.esp': source }).files;
-      const showWarning = vi.fn().mockResolvedValue(DEPLOY_CONFIRM_BUTTON);
-
-      const outcome = await deployMods(
-        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), showWarning);
-
-      expect(showWarning).toHaveBeenCalledOnce();
-      expect(outcome).toEqual({ applied: true, wrote: true });
-      expect(await exists(join(fx.gameDirectory.dataFolder, 'a.esp'))).toBe(true);
-      expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(true);
-    });
-
-    it('declining refuses and writes nothing', async () => {
-      fx = await makeDeployerFixture();
-      const source = await fx.writeModFile('ModA', 'a.esp', 'BYTES');
-      const files = makeIndex({ 'a.esp': source }).files;
-
-      const outcome = await deployMods(
-        fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), decline);
-
-      expect(outcome).toMatchObject({ applied: false });
-      expect(await exists(join(fx.gameDirectory.dataFolder, 'a.esp'))).toBe(false);
-      expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(false);
-    });
-  });
-
-  // Rival: ask unconditionally. A second deploy against a manifest the first one just wrote must
-  // never raise the prompt.
-  it('a directory that already has a manifest does not ask', async () => {
-    fx = await makeDeployerFixture();
-    const source = await fx.writeModFile('ModA', 'a.esp', 'BYTES');
-    const files = makeIndex({ 'a.esp': source }).files;
-    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
-
-    const outcome = await deployMods(
-      fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), neverAsk);
-
-    expect(outcome).toEqual({ applied: true, wrote: true });
   });
 
   // Rival: report `wrote: true` unconditionally. A purge with nothing deployed would then
@@ -126,7 +93,7 @@ describe('deployMods / purgeMods', () => {
   it('purge reports it wrote nothing when there is no manifest', async () => {
     fx = await makeDeployerFixture();
 
-    const outcome = await purgeMods(fx.instanceRoot, fx.gameDirectory, recordingReporter());
+    const outcome = await purgeMods(fx.instanceRoot, { gameDirectory: fx.gameDirectory });
 
     expect(outcome).toEqual({ applied: true, wrote: false });
   });
@@ -135,25 +102,25 @@ describe('deployMods / purgeMods', () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
     const files = makeIndex({ 'textures/foo.dds': source }).files;
-    await deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept);
+    await deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined);
 
-    const outcome = await purgeMods(fx.instanceRoot, fx.gameDirectory, recordingReporter());
+    const outcome = await purgeMods(fx.instanceRoot, { gameDirectory: fx.gameDirectory });
 
     expect(outcome).toEqual({ applied: true, wrote: true });
     expect(await exists(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).toBe(false);
     expect(await exists(join(fx.instanceRoot, MANIFEST))).toBe(false);
   });
 
-  // Rival: drop the shared queue. The purge would read the manifest the deploy is still
-  // writing, and Data/'s live links would be snapshotted as the vanilla baseline.
+  // Rival: drop the shared queue the adapter serializes on. A purge issued alongside a deploy
+  // would read the manifest mid-write, snapshotting Data/'s live links as the vanilla baseline.
   it('a purge issued during a deploy runs after it, never inside it', async () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'textures/foo.dds', 'DDSDATA');
     const files = makeIndex({ 'textures/foo.dds': source }).files;
 
     const [deployed, purged] = await Promise.all([
-      deployMods(fx.instanceRoot, PROFILE, files, fx.gameDirectory, undefined, recordingReporter(), accept),
-      purgeMods(fx.instanceRoot, fx.gameDirectory, recordingReporter()),
+      deployMods(fx.instanceRoot, { activeProfile: PROFILE, files, gameDirectory: fx.gameDirectory }, undefined),
+      purgeMods(fx.instanceRoot, { gameDirectory: fx.gameDirectory }),
     ]);
 
     expect(deployed).toEqual({ applied: true, wrote: true });

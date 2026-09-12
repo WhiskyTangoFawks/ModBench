@@ -21,6 +21,23 @@ export interface ToolboxCommandDeps {
   ask: AskQuestion;
 }
 
+// Keyed on the Instance's own `deployed` field, so a directory that already has a manifest
+// never asks again.
+export const DEPLOY_CONFIRM_BUTTON = 'Deploy';
+
+export const DEPLOY_DECLINED = 'Deploy declined — Modbench was not confirmed as the deployer; nothing was written.';
+
+async function confirmFirstDeploy(ask: AskQuestion): Promise<boolean> {
+  const choice = await ask(
+    'Modbench has never deployed into this game directory. Deploying now hardlinks your enabled ' +
+      'mods into Data/ and makes Modbench the deployer — if MO2 or another tool also deploys here, ' +
+      'the two will conflict. Continue?',
+    { modal: true },
+    DEPLOY_CONFIRM_BUTTON,
+  );
+  return choice === DEPLOY_CONFIRM_BUTTON;
+}
+
 // `wrote` false means the command reported its own abort, so the success message is withheld
 // rather than announcing a deployment that did not happen.
 async function runDeployment(
@@ -36,6 +53,7 @@ async function runDeployment(
     reporter.report('error', failure, outcome.refusal);
     return;
   }
+  for (const warning of outcome.warnings ?? []) reporter.report('warning', warning.message, warning.detail);
   if (!outcome.wrote) return;
   // The manifest lands under mods/, which the Instance watches — its own recompute is what moves
   // the Toolbox's deployment row, never this command.
@@ -72,19 +90,15 @@ export function registerToolboxCommands(deps: ToolboxCommandDeps): vscode.Dispos
       // watches — its own recompute reaches the load order and the Toolbox's profile row.
     }),
     vscode.commands.registerCommand('modbench.toolbox.deploy', () =>
-      runDeployment(deployReporter, 'Deploy failed.', 'Mods deployed.', async () =>
-        deployMods(
-          instanceRoot,
-          instance.value.activeProfile,
-          instance.value.files,
-          instance.value.gameDirectory,
-          await loadOrderTarget(),
-          deployReporter,
-          ask,
-        ))),
+      runDeployment(deployReporter, 'Deploy failed.', 'Mods deployed.', async () => {
+        if (!instance.value.deployed && !(await confirmFirstDeploy(ask))) {
+          return { applied: false, refusal: DEPLOY_DECLINED };
+        }
+        return deployMods(instanceRoot, instance.value, await loadOrderTarget());
+      })),
     vscode.commands.registerCommand('modbench.toolbox.purge', () =>
       runDeployment(deployReporter, 'Purge failed.', 'Deployed mods purged.', () =>
-        purgeMods(instanceRoot, instance.value.gameDirectory, deployReporter))),
+        purgeMods(instanceRoot, instance.value))),
     // One affordance however many executables exist, because MO2's registry decides what is
     // launchable. Tasks are read at invocation, so an executable added in MO2 appears without a
     // reload; resolving a binary here would lock the command to one game.
