@@ -2,7 +2,6 @@ using System.Diagnostics;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
 
 namespace MEditService.Queries;

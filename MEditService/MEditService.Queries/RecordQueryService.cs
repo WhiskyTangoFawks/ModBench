@@ -17,7 +17,7 @@ public sealed class RecordQueryService(
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
 
-    public IReadOnlyList<PluginResponse> GetPlugins()
+    public IReadOnlyList<PluginRow> GetPlugins()
     {
         var reads = RequireReads();
         var opened = reads.OpenedCopies;
@@ -33,19 +33,18 @@ public sealed class RecordQueryService(
                 ? MasterResolution.Classify(opened, status.Failures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
         var parseFailures = reads.GetPluginsWithParseFailures();
-        PluginResponse ToResponse(RegisteredCopy copy, bool hasMatchingRecords) =>
-            PluginResponse.Of(
-                copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Name), hasMatchingRecords,
+        PluginRow ToRow(RegisteredCopy copy, bool hasMatchingRecords) =>
+            new(copy, opened[copy.Key], masterIssues.GetValueOrDefault(copy.Name) ?? [], hasMatchingRecords,
                 parseFailures.Contains(ColumnKey.Of(copy.Name, copy.Origin)));
 
         if (_index.FilterSql is null)
-            return [.. rows.Select(c => ToResponse(c, hasMatchingRecords: true))];
+            return [.. rows.Select(c => ToRow(c, hasMatchingRecords: true))];
 
         // plugins.md: a record filter prunes records and record types, never
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
         // a caller decides expandability from, not row presence.
         var matchingPlugins = reads.GetPluginsWithMatchingRecords(RequireSchemas().Keys);
-        return [.. rows.Select(c => ToResponse(c, matchingPlugins.Contains(c.Name)))];
+        return [.. rows.Select(c => ToRow(c, matchingPlugins.Contains(c.Name)))];
     }
 
     // The header is not a browsable record type: it stays a schemas.Keys entry so GetRecord/

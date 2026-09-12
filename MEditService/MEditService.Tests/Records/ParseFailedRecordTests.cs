@@ -93,8 +93,8 @@ public sealed class ParseFailedRecordTests
 
         var plugins = scratch.Query.GetPlugins();
 
-        Assert.True(plugins.Single(p => p.Name == Fixture).HasParseFailure);
-        Assert.All(plugins.Where(p => p.Name != Fixture), p => Assert.False(p.HasParseFailure));
+        Assert.True(plugins.Single(p => p.Copy.Name == Fixture).HasParseFailure);
+        Assert.All(plugins.Where(p => p.Copy.Name != Fixture), p => Assert.False(p.HasParseFailure));
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public sealed class ParseFailedRecordTests
 
         Assert.True(counts.Single(t => t.Type == "npc_").HasParseFailure);
         Assert.False(counts.Single(t => t.Type == "weap").HasParseFailure);
-        Assert.True(plugins.Single(p => p.Name == CorruptGroupFixture.PluginName).HasParseFailure);
+        Assert.True(plugins.Single(p => p.Copy.Name == CorruptGroupFixture.PluginName).HasParseFailure);
     }
 
     [Fact]

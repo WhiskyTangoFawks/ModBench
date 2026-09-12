@@ -43,8 +43,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         var plugins = _svc.GetPlugins();
 
         Assert.Single(plugins);
-        Assert.Equal(TestPluginFixture.PluginName, plugins[0].Name);
-        Assert.Equal(TestPluginFixture.RecordCount, plugins[0].RecordCount);
+        Assert.Equal(TestPluginFixture.PluginName, plugins[0].Copy.Name);
+        Assert.Equal(TestPluginFixture.RecordCount, plugins[0].Content.RecordCount);
     }
 
     // ADR-0012: a plugin whose master is absent from the whole load order is flagged on the
@@ -69,7 +69,7 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         var plugins = svc.GetPlugins();
 
-        var patch = Assert.Single(plugins, p => p.Name == "Patch.esp");
+        var patch = Assert.Single(plugins, p => p.Copy.Name == "Patch.esp");
         var issue = Assert.Single(patch.MasterIssues);
         Assert.Equal("Ghost.esm", issue.MasterName);
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
@@ -865,7 +865,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         try
         {
             var plugins = _svc.GetPlugins();
-            var plugin = Assert.Single(plugins, p => p.Name == TestPluginFixture.PluginName);
+            var plugin = Assert.Single(plugins, p => p.Copy.Name == TestPluginFixture.PluginName);
             Assert.True(plugin.HasMatchingRecords);
         }
         finally { _manager.ClearFilter(); }
@@ -880,7 +880,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         try
         {
             var plugins = _svc.GetPlugins();
-            var plugin = Assert.Single(plugins, p => p.Name == TestPluginFixture.PluginName);
+            var plugin = Assert.Single(plugins, p => p.Copy.Name == TestPluginFixture.PluginName);
             Assert.False(plugin.HasMatchingRecords);
         }
         finally { _manager.ClearFilter(); }
@@ -894,7 +894,7 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         var plugins = _svc.GetPlugins();
         var plugin = Assert.Single(plugins);
-        Assert.Equal(TestPluginFixture.PluginName, plugin.Name);
+        Assert.Equal(TestPluginFixture.PluginName, plugin.Copy.Name);
         Assert.True(plugin.HasMatchingRecords);
     }
 

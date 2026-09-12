@@ -35,8 +35,6 @@
     <ProjectReference Include="..\MEditService.Codec\MEditService.Codec.csproj" />
     <!-- The kernel, by the band's rule (ADR-0014): every Core box and driven adapter reads all three. -->
     <ProjectReference Include="..\MEditService.Ports\MEditService.Ports.csproj" />
-    <!-- TEMP DRY-RUN PROBE: undrawn edge, removed before the move lands. -->
-    <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
   </ItemGroup>
 
 </Project>

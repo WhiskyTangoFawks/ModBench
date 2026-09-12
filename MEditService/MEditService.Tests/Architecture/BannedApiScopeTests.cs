@@ -97,6 +97,48 @@ public sealed class BannedApiScopeTests
             line, StringComparison.Ordinal));
     }
 
+    // Read off disk rather than listed: a box added tomorrow is banned the moment its folder exists,
+    // and a list here would be one more place to forget it.
+    private static IReadOnlyList<string> ProductionProjects() =>
+        [.. Directory.EnumerateDirectories(ArchitectureTests.SolutionDirectory(), "MEditService.*")
+            .Select(Path.GetFileName)
+            .OfType<string>()
+            .Where(name => !name.StartsWith("MEditService.Tests", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)];
+
+    // A game assembly is Mutagen's per-release package. Core carries identity alone and is ambient
+    // in Directory.Build.props; the serialization packages are the codec's JSON kernel (ADR-0007),
+    // not a game.
+    private static bool HoldsAGameAssembly(string project) =>
+        XDocument.Load(Path.Combine(ArchitectureTests.SolutionDirectory(), project, project + ".csproj"))
+            .Descendants("PackageReference")
+            .Select(e => (string?)e.Attribute("Include") ?? "")
+            .Any(id => id.StartsWith("Mutagen.Bethesda.", StringComparison.Ordinal)
+                && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
+                && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal));
+
+    // ADR-0005 rule 2 across the split: the codec's whole-mod doors are public because the Plugin
+    // adapter is its own assembly, and what keeps every other box from calling them is that naming
+    // an IMod needs a game assembly no other box has, under a ban that is an error there.
+    [Fact]
+    public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndBannedInEveryOtherProject()
+    {
+        var projects = ProductionProjects();
+
+        // Zero projects and a correct answer read the same; this tells them apart.
+        Assert.True(projects.Count > 5, $"The project scan found only {projects.Count} production projects.");
+
+        var holders = projects.Where(HoldsAGameAssembly).ToList();
+
+        Assert.Equal(["MEditService.Codec", "MEditService.PluginAdapter"], holders);
+
+        var configured = ConfiguredSeverities();
+        Assert.All(
+            projects.Except(holders, StringComparer.Ordinal),
+            project => Assert.Equal(
+                ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
+    }
+
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)
     {
         internal ReportDiagnostic Global =>

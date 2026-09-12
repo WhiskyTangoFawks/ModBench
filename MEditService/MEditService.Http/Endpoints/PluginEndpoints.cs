@@ -14,7 +14,8 @@ public static class PluginEndpoints
 
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/plugins", (IRecordQueryService svc) => Results.Ok(svc.GetPlugins()))
+        app.MapGet("/plugins", (IRecordQueryService svc) =>
+            Results.Ok(svc.GetPlugins().Select(PluginResponse.Of).ToList()))
             .WithName("GetPlugins")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();

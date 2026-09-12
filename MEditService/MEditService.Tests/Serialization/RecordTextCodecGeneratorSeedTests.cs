@@ -7,35 +7,9 @@ namespace MEditService.Tests.Serialization;
 
 public class RecordTextCodecGeneratorSeedTests
 {
-    // Asserting Fallout4Mod_Serialization never exists does not work: the seed necessarily names a
-    // mod-shaped argument type. Scoped to MEditService.Codec.Serialization, since an unscoped version
-    // also flags the indexing and placement doors, which legitimately take a mod.
-    [Fact]
-    public void SerializationNamespace_ExposesNoPublicApiAcceptingAWholeModType()
-    {
-        var candidateTypes = typeof(RecordTextCodec).Assembly.GetTypes()
-            .Where(t => t.IsPublic && t.Namespace == "MEditService.Codec.Serialization")
-            .ToList();
-
-        // A namespace typo or a rename of RecordTextCodecCustomization's namespace would leave
-        // candidateTypes empty, and every assertion below would then pass vacuously — over zero
-        // types, not over the surface this test claims to guard. Assert the set is real first.
-        Assert.NotEmpty(candidateTypes);
-
-        var offendingMembers = candidateTypes
-            .SelectMany(t => ((IEnumerable<MethodBase>)t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
-                .Concat(t.GetConstructors(BindingFlags.Public | BindingFlags.Instance)))
-            .Where(m => m.GetParameters().Any(p => typeof(IModGetter).IsAssignableFrom(p.ParameterType))
-                || (m is MethodInfo mi && typeof(IModGetter).IsAssignableFrom(mi.ReturnType)))
-            .Select(m => $"{m.DeclaringType!.FullName}.{m.Name}")
-            .ToList();
-
-        Assert.Empty(offendingMembers);
-    }
-
-    // The reflection check above sees only a public signature naming a mod type, never a call, so this
-    // scans source text: the mixin's type name may appear only inside this whitelist of designated
-    // doors (ADR-0007).
+    // The whole-mod doors are public because the Plugin adapter is a separate assembly; the package
+    // edge stops another box calling them, and BannedApiScopeTests holds it. This scans source text:
+    // the mixin's name may appear only in these doors (ADR-0007).
     [Fact]
     public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
     {

@@ -123,6 +123,10 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         lock (_lock) return _index?.IndexedContentHash(key);
     }
 
+    /// <summary>See <see cref="IRefreshIndex.ContentHashOnDisk"/>. No lock: it reads the file, not
+    /// the store.</summary>
+    public string? ContentHashOnDisk(string pluginPath) => PluginBinaryHash.OfFile(pluginPath);
+
     /// <summary>One per projector, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
     /// <c>_lock</c> first and then waiting here would deadlock.</summary>

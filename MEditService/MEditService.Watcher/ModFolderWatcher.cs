@@ -3,7 +3,6 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging;
@@ -627,7 +626,7 @@ public sealed class ModFolderWatcher : IDisposable
             }
             else
             {
-                if (PluginBinaryHash.OfFile(pluginPath) is not { } observed || observed == previousHash) return;
+                if (_index.ContentHashOnDisk(pluginPath) is not { } observed || observed == previousHash) return;
                 reportedHash = observed;
                 settled = new IndexedBinaryEvent(plugin.Name, plugin.Origin ?? "", IndexedBinaryChange.Modified);
             }

@@ -78,6 +78,13 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
     // No rows for any copy: the recorder is a listener, never a store with a baseline to compare.
     public string? IndexedContentHash(PluginKey key) => null;
 
+    // The real hash of the real file: the watcher's binary settle is about the bytes on disk, and a
+    // recorder that invented one would decide the test's outcome.
+    public string? ContentHashOnDisk(string pluginPath) =>
+        File.Exists(pluginPath)
+            ? Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(pluginPath)))
+            : null;
+
     private void Refuse()
     {
         if (Refuses) throw new NoLoadOrderException();

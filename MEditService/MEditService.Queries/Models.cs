@@ -1,7 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.SourceRepo;
 
 namespace MEditService.Queries;
 
@@ -17,56 +16,22 @@ public record PluginDiagnosisReport(
     string Message,
     string Text);
 
-public record PluginResponse(
-    string Name,
-    string Path,
-    // ADR-0013: the plugins.txt slot past the forced masters, or null when no line names this
-    // copy; record-level LoadOrderIndex values are sort keys and put such a copy last.
-    int? LoadOrderIndex,
-    bool IsLight,
-    bool IsMaster,
-    IReadOnlyList<string> Masters,
-    int RecordCount,
-    bool IsImmutable,
-    // Participates (ADR-0013): Registration.Participates, as the wire sees it — the only copies
-    // that compete for winner or count in a conflict.
-    bool Participates,
-    string Origin,
+/// <summary>One plugin row as the read side answers it: the load order's registration of the copy,
+/// what reading the file told the Index, and the three facts the read adds. Whether the mod folder
+/// is tracked is not here — that is the Source repository's answer, composed at the endpoint.
+/// </summary>
+public sealed record PluginRow(
+    RegisteredCopy Copy,
+    PluginContent Content,
     // MasterIssues (ADR-0012): this plugin's own unresolvable masters, never a transitive fact.
     // Empty rather than null when every master resolved.
     IReadOnlyList<MasterIssue> MasterIssues,
-    // InLoadOrder (ADR-0013, ADR-0013): derived — the winning copy of a listed name, enabled
-    // or not. False for a losing copy or an unlisted file. See PluginMetadata.InLoadOrder.
-    bool InLoadOrder,
-    // Enabled / Winning (ADR-0013): the two registration facts beside the slot, as Mod Management
-    // stated them — what lets a row say *why* it does not participate (disabled, or overridden).
-    bool Enabled,
-    bool Winning,
-    // HasMatchingRecords (plugins.md): a record filter prunes records, never a
-    // plugin row, so this is what a caller uses to decide whether to offer a chevron. Defaults
-    // to true: only the plugin listing answers inside a filter.
-    bool HasMatchingRecords = true,
-    // IsTracked (ADR-0007): whether the mod folder holds a git directory, which editing requires
-    // and viewing never does. False with no mod folder at all (IsImmutable tells the two apart).
-    // Derived on every read: the directory can vanish outside Modbench.
-    bool IsTracked = false,
+    // HasMatchingRecords (plugins.md): a record filter prunes records, never a plugin row, so this
+    // is what a caller uses to decide whether to offer a chevron.
+    bool HasMatchingRecords,
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
-    bool HasParseFailure = false)
-{
-    /// <summary>One row: its registration from the load order's copy, what reading the file told
-    /// the Index from <paramref name="content"/> (ADR-0013).</summary>
-    public static PluginResponse Of(
-        RegisteredCopy copy, PluginContent content, IReadOnlyList<MasterIssue>? masterIssues = null,
-        bool hasMatchingRecords = true, bool hasParseFailure = false)
-    {
-        var registration = copy.Registration;
-        return new(copy.Name, copy.Path, copy.Slot, content.IsLight, content.IsMaster, content.Masters,
-            content.RecordCount, copy.IsImmutable, registration.Participates, copy.Origin,
-            masterIssues ?? [], registration.InLoadOrder, copy.Enabled, copy.Winning, hasMatchingRecords,
-            SourceRepository.IsEditable(copy.Origin, copy.Path), hasParseFailure);
-    }
-}
+    bool HasParseFailure);
 
 public record RecordDetail(
     string FormKey,
