@@ -35,6 +35,24 @@ public static class PluginAdapters
         return adapter.LinkTargets(files, loadOrder.GameRelease, schemas, formKeys);
     }
 
+    /// <summary>The source-tree door for a caller holding the load order's record of the copy.
+    /// Building the mod path is building a Mutagen value, and this is the box that owns those
+    /// (ADR-0005 rule 2).</summary>
+    public static Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceOfAsync(
+        this IPluginAdapter adapter, RegisteredCopy copy, GameRelease gameRelease, PluginStrings strings,
+        CancellationToken cancel = default) =>
+        adapter.ReadSourceAsync(
+            new ModPath(ModKey.FromFileName(copy.Name), copy.Path), copy.Name, gameRelease, strings, cancel);
+
+    /// <summary>How the plugin at <paramref name="recompiledPath"/> differs from the one whose file
+    /// name and path are named here, for a caller that holds neither a copy nor a mod path.</summary>
+    public static string? DivergenceFrom(
+        this IPluginAdapter adapter, string pluginFileName, string pluginFilePath, string recompiledPath,
+        GameRelease gameRelease, PluginStrings strings) =>
+        adapter.DivergenceBetween(
+            new ModPath(ModKey.FromFileName(pluginFileName), pluginFilePath), recompiledPath, gameRelease,
+            strings);
+
     private static bool SameFile(RegisteredCopy copy, RegisteredCopy other) =>
         copy.Name.Equals(other.Name, StringComparison.OrdinalIgnoreCase);
 

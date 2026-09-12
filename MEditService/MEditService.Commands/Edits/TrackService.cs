@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.LoadOrder;
@@ -78,9 +77,7 @@ public sealed class TrackService(
                 (IReadOnlyList<TreeFile> Files, string? MissingStringsFile) tree;
                 try
                 {
-                    tree = await adapter.ReadSourceAsync(
-                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), plugin.Name,
-                        loadOrder.GameRelease, strings, cancel);
+                    tree = await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel);
                 }
                 catch (Exception ex)
                 {
@@ -119,7 +116,7 @@ public sealed class TrackService(
 
                 pristineFiles.AddRange(pluginPristineFiles);
 
-                binaryHashesByPlugin[plugin.Name] = ComputeSha256(plugin.Path);
+                binaryHashesByPlugin[plugin.Name] = PluginBinaryHash.TrailerFormOfFile(plugin.Path);
                 SetProgress(origin, TrackPhase.Serializing, parsedDone, plugins.Count);
             }
 
@@ -163,61 +160,53 @@ public sealed class TrackService(
         PluginStrings strings,
         CancellationToken cancel)
     {
-        var scratchDir = Directory.CreateTempSubdirectory("medit-trackverify-").FullName;
+        using var scratch = SourceRepository.ScratchFor(pluginName);
+        var recompiledPath = scratch.PluginPath;
         try
         {
-            var recompiledPath = Path.Combine(scratchDir, pluginName);
-            try
-            {
-                await adapter.WriteFromTreeAsync(pristineFilesForThisPlugin, recompiledPath, cancel);
-            }
-            catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
-            {
-                // ADR-0008's content-derived master pass prunes a master this write still needs when the only
-                // reference lives in a VMAD struct-list property Mutagen never walks (upstream issue 688). Never
-                // widen this catch.
-                var diagnosis = PluginDiagnosis.FromWriteException(ex);
-                logger.LogWarning(ex, "Refused to track {Plugin}: its round-trip write dropped a needed master", pluginName);
-                return $"{pluginName} does not round-trip through its own tracked source: {diagnosis.Describe()}";
-            }
-
-            var originalBytes = await File.ReadAllBytesAsync(originalPluginPath, cancel);
-            var recompiledBytes = await File.ReadAllBytesAsync(recompiledPath, cancel);
-            if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
-                return null;
-
-            if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
-            {
-                // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
-                var kindB = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
-                    d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
-                return $"{pluginName} does not round-trip through its own tracked source: " + (kindB != null
-                    ? $"{kindB.Describe()} — parsing the malformed subrecord dropped " +
-                      $"{string.Join(", ", loss.Signatures)} before Track ever wrote its source."
-                    : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
-                      "present in the original — dropped during parsing, before Track ever wrote its source.");
-            }
-
-            if (adapter.DivergenceBetween(
-                    new ModPath(ModKey.FromFileName(pluginName), originalPluginPath), recompiledPath,
-                    gameRelease, strings) is { } divergence)
-            {
-                return $"{pluginName} does not round-trip through its own tracked source: {divergence}";
-            }
-
-            // Model-identical but not byte-identical: an encoding-only difference ADR-0006 decision 2
-            // documents rather than gates. Reported, never a refusal.
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation(
-                    "{Plugin} is model-identical to its own tracked source but not byte-identical — " +
-                    "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006 decision 2).",
-                    pluginName);
-            }
+            await adapter.WriteFromTreeAsync(pristineFilesForThisPlugin, recompiledPath, cancel);
         }
-        finally
+        catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
         {
-            Directory.Delete(scratchDir, recursive: true);
+            // ADR-0008's content-derived master pass prunes a master this write still needs when the only
+            // reference lives in a VMAD struct-list property Mutagen never walks (upstream issue 688). Never
+            // widen this catch.
+            var diagnosis = PluginDiagnosis.FromWriteException(ex);
+            logger.LogWarning(ex, "Refused to track {Plugin}: its round-trip write dropped a needed master", pluginName);
+            return $"{pluginName} does not round-trip through its own tracked source: {diagnosis.Describe()}";
+        }
+
+        var originalBytes = await PluginBinaryHash.ExactBytesOfFileAsync(originalPluginPath, cancel);
+        var recompiledBytes = await PluginBinaryHash.ExactBytesOfFileAsync(recompiledPath, cancel);
+        if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
+            return null;
+
+        if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
+        {
+            // A Kind B diagnosis on the record names the cause ahead of the drop it produced.
+            var kindB = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
+                d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
+            return $"{pluginName} does not round-trip through its own tracked source: " + (kindB != null
+                ? $"{kindB.Describe()} — parsing the malformed subrecord dropped " +
+                  $"{string.Join(", ", loss.Signatures)} before Track ever wrote its source."
+                : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
+                  "present in the original — dropped during parsing, before Track ever wrote its source.");
+        }
+
+        if (adapter.DivergenceFrom(
+                pluginName, originalPluginPath, recompiledPath, gameRelease, strings) is { } divergence)
+        {
+            return $"{pluginName} does not round-trip through its own tracked source: {divergence}";
+        }
+
+        // Model-identical but not byte-identical: an encoding-only difference ADR-0006 decision 2
+        // documents rather than gates. Reported, never a refusal.
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "{Plugin} is model-identical to its own tracked source but not byte-identical — " +
+                "Save & Compile will not reproduce this plugin's exact bytes (ADR-0006 decision 2).",
+                pluginName);
         }
 
         return null;
@@ -230,7 +219,4 @@ public sealed class TrackService(
         Volatile.Write(ref _progress, progress);
         _notifications?.Publish(new TrackProgressNotification(progress));
     }
-
-    private static string ComputeSha256(string filePath) =>
-        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath)));
 }

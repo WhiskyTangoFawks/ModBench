@@ -1,9 +1,16 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using MEditService.Codec.Serialization;
+using MEditService.Commands;
 using MEditService.Http;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Ports;
+using MEditService.Queries;
+using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
+using MEditService.Watcher;
 
 namespace MEditService.Tests.Architecture;
 
@@ -11,13 +18,27 @@ namespace MEditService.Tests.Architecture;
 /// silently. Each test names the ADR it enforces.</summary>
 public sealed class ArchitectureTests
 {
-    private static readonly Assembly Core = typeof(IndexProjector).Assembly;
+    // Every box's own assembly, reached through one type each: a seam is an interface in whichever
+    // box publishes it, and one box's assembly would leave the other nine unscanned.
+    private static readonly Assembly[] Boxes =
+    [
+        typeof(RecordTextCodec).Assembly,
+        typeof(TrackHandler).Assembly,
+        typeof(RecordEditRequest).Assembly,
+        typeof(IndexProjector).Assembly,
+        typeof(LoadOrderSnapshot).Assembly,
+        typeof(IPluginAdapter).Assembly,
+        typeof(INotificationPublisher).Assembly,
+        typeof(IRecordQueryService).Assembly,
+        typeof(SourceRepository).Assembly,
+        typeof(ModFolderWatcher).Assembly,
+    ];
 
     // Where a DTO's own shape decides identity: the read side's models, and the wire records the
     // endpoints bind. A record in either travels to the frontend as it is declared.
     private static readonly (Assembly Assembly, string Namespace)[] DtoBoxes =
     [
-        (Core, "MEditService.Queries"),
+        (typeof(IRecordQueryService).Assembly, "MEditService.Queries"),
         (typeof(RecordEditRequest).Assembly, "MEditService.Http"),
     ];
 
@@ -26,7 +47,7 @@ public sealed class ArchitectureTests
     public void PluginIdentity_TravelsAsNameAndOriginTogether_OnEverySeamMemberAndDto()
     {
         var offenders = new List<string>();
-        foreach (var type in Core.GetExportedTypes().Where(t => t.IsInterface))
+        foreach (var type in Boxes.SelectMany(box => box.GetExportedTypes()).Where(t => t.IsInterface))
         {
             foreach (var method in type.GetMethods())
             {

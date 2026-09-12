@@ -29,6 +29,11 @@ public static class PluginBinaryHash
         return Convert.ToHexString(SHA256.HashData(stream));
     }
 
+    /// <summary>Every byte of the file for a caller comparing two plugins byte for byte, which needs
+    /// the bytes or an exception rather than the no-evidence null below.</summary>
+    public static Task<byte[]> ExactBytesOfFileAsync(string path, CancellationToken cancel = default) =>
+        File.ReadAllBytesAsync(path, cancel);
+
     /// <summary>Every byte of the file, for a caller that hashes several plugins as one classification
     /// pass rather than one at a time. Null on the same no-evidence terms as <see cref="OfFile"/>.
     /// </summary>
