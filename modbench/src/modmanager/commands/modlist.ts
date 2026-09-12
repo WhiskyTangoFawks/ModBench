@@ -2,7 +2,6 @@
 // instance root, the profile and its own inputs, returning applied or a refusal. No class,
 // no interface, no base type.
 
-import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import {
   deleteSeparatorInText,
   insertModAtWinningEnd,
@@ -17,7 +16,7 @@ import {
 } from '../mo2/modlistText';
 import { markDownloadUninstalled } from './downloads';
 import { modDir, modlistFile } from '../mo2/layout';
-import { createWriteQueue, type WriteQueue } from './writeQueue';
+import { ensureDir, exists, putIfChanged, remove } from '../mo2Files';
 
 /** `wrote` is false when the gesture was already true of the file: a command that changes no
  *  byte writes none, so it never fires the modlist.txt watcher. */
@@ -25,35 +24,19 @@ export type ModlistCommandResult =
   | { applied: true; wrote: boolean }
   | { applied: false; refusal: string };
 
-const exists = (path: string): Promise<boolean> =>
-  access(path).then(
-    () => true,
-    () => false,
-  );
-
-/** The one queue every modlist.txt write for an instance passes through, keyed by instance root
- *  so every profile under it serializes together. */
-export const withModlistWriteLock: WriteQueue = createWriteQueue();
-
 // The one splice point every verb below goes through. A thrown "not found" becomes `refusal`
 // rather than an exception; unchanged text is not written, so a no-op never fires the watcher.
-function spliceModlist(
+async function spliceModlist(
   instanceRoot: string,
   profile: string,
   transform: (text: string) => string,
 ): Promise<ModlistCommandResult> {
-  return withModlistWriteLock(instanceRoot, async () => {
-    const path = modlistFile(instanceRoot, profile);
-    try {
-      const before = await readFile(path, 'utf8');
-      const after = transform(before);
-      if (after === before) return { applied: true, wrote: false };
-      await writeFile(path, after);
-      return { applied: true, wrote: true };
-    } catch (err) {
-      return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
-    }
-  });
+  try {
+    const { wrote } = await putIfChanged(modlistFile(instanceRoot, profile), transform);
+    return { applied: true, wrote };
+  } catch (err) {
+    return { applied: false, refusal: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 /** Flip a mod's `+`/`-` prefix — the Mods tree checkbox. */
@@ -127,7 +110,7 @@ export async function uninstallMod(
   // De-list before deleting: a failed delete leaves a recoverable orphan, not a dangling entry.
   const outcome = await spliceModlist(instanceRoot, profile, (text) => removeModFromText(text, modName));
   if (!outcome.applied) return outcome;
-  await rm(modDir(instanceRoot, modName), { recursive: true, force: true }).catch(() => undefined);
+  await remove(modDir(instanceRoot, modName)).catch(() => undefined);
   return outcome;
 }
 
@@ -138,7 +121,7 @@ export async function createEmptyMod(instanceRoot: string, profile: string, name
   if (await exists(dir)) {
     return { applied: false, refusal: `A mod named "${name}" already exists.` };
   }
-  await mkdir(dir, { recursive: true });
+  await ensureDir(dir);
   return spliceModlist(instanceRoot, profile, (text) => insertModAtWinningEnd(text, name));
 }
 

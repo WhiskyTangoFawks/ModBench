@@ -6,7 +6,6 @@ import { pluginsFile } from '../mo2/layout';
 import type { Reporter } from '../../reporter';
 import type { FileWinners } from '../fileConflictIndex';
 import type { GameDirectory } from '../gameDirectory';
-import { createWriteQueue } from './writeQueue';
 import type { AskQuestion } from '../../dialog';
 
 /** `wrote` is false when a precondition aborted the run, or when purge found nothing deployed —
@@ -36,7 +35,17 @@ async function confirmFirstDeploy(ask: AskQuestion): Promise<boolean> {
 
 // Deploy and purge share one queue per instance root: both read-modify-write the same manifest,
 // and an overlapping pair would snapshot Data/ as vanilla while it still holds live links.
-const withDeploymentLock = createWriteQueue();
+const deploymentChains = new Map<string, Promise<unknown>>();
+function withDeploymentLock<T>(key: string, task: () => Promise<T>): Promise<T> {
+  const prior = deploymentChains.get(key) ?? Promise.resolve();
+  const next = prior.then(task, task);
+  const settled = next.then(() => undefined, () => undefined);
+  deploymentChains.set(key, settled);
+  void settled.then(() => {
+    if (deploymentChains.get(key) === settled) deploymentChains.delete(key);
+  });
+  return next;
+}
 
 const refuse = (err: unknown): DeploymentCommandResult => ({
   applied: false,
