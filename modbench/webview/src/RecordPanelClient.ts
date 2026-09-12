@@ -1,4 +1,5 @@
-import { createApiClient } from '../../src/medit/client/apiClient';
+import createClient from 'openapi-fetch';
+import type { paths } from '../../src/medit/generated/api';
 import type { ColumnKey, CompareResult } from './types';
 import { columnKey } from './types';
 // `load` fires compare + plugins + status in parallel: a compare failure fails the whole load
@@ -30,7 +31,7 @@ export interface RecordPanelClient {
 }
 
 export function createRecordPanelClient(port: number): RecordPanelClient {
-  const client = createApiClient(port);
+  const client = createClient<paths>({ baseUrl: `http://localhost:${port}` });
 
   return {
     async load(formKey) {

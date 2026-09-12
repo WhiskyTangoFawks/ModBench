@@ -18,7 +18,7 @@ import { vscode } from './vscode';
 import { editField } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, type ExtensionToWebview } from './messages';
 import type { RecordPanelClient } from './RecordPanelClient';
-import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress';
+import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey?: string;
