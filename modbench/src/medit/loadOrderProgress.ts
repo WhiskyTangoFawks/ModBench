@@ -1,4 +1,4 @@
-import type { LoadOrderProgress, PluginLoadFailure } from './client/MEditClient';
+import type { LoadOrderProgress, PluginLoadFailure } from './client';
 
 /** A tick is never the last word: the subscription stops before `putLoadOrder` returns, so the
  *  completed reconcile's hand-off always follows the final tick — otherwise read-only state and
