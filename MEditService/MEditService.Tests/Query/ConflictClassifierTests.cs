@@ -1023,9 +1023,9 @@ public class ConflictClassifierTests
 
         var diff = result.Diffs.First(d => d.FieldName == "Race");
         Assert.NotNull(diff.Resolutions);
-        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.ResolvedValidType, diff.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Core.Schema.FormKeyResolutionState.ResolvedValidType, diff.Resolutions!["A.esp"].State);
         Assert.Equal("GoodRace", diff.Resolutions["A.esp"].EditorId);
-        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, diff.Resolutions["B.esp"].State);
+        Assert.Equal(MEditService.Core.Schema.FormKeyResolutionState.Unresolved, diff.Resolutions["B.esp"].State);
     }
 
     [Fact]
@@ -1048,8 +1048,8 @@ public class ConflictClassifierTests
         var kw1 = arrayDiff.Children!.First(c => c.FieldName == "000AAA:Test.esp");
         var kw2 = arrayDiff.Children!.First(c => c.FieldName == "000BBB:Test.esp");
 
-        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.ResolvedValidType, kw1.Resolutions!["A.esp"].State);
-        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, kw2.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Core.Schema.FormKeyResolutionState.ResolvedValidType, kw1.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Core.Schema.FormKeyResolutionState.Unresolved, kw2.Resolutions!["A.esp"].State);
     }
 
     // --- CheckErrors, per column, at every depth ---
@@ -1130,7 +1130,7 @@ public class ConflictClassifierTests
         var factionChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "Faction");
         var rankChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "Rank");
 
-        Assert.Equal(MEditService.Core.Records.FormKeyResolutionState.Unresolved, factionChild.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Core.Schema.FormKeyResolutionState.Unresolved, factionChild.Resolutions!["A.esp"].State);
         Assert.Null(rankChild.Resolutions); // non-formKey sibling never gets a Resolutions entry
     }
 

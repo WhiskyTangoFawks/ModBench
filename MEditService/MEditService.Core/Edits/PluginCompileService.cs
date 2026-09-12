@@ -1,7 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
-using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
@@ -214,8 +213,12 @@ public sealed class PluginCompileService(
     {
         var answers = adapter.LinkTargets(
             loadOrder, copy, schemaReflector.GetSchemas(loadOrder.GameRelease), content.Links);
-        RecordLookupEntry? Resolve(string formKey) =>
-            answers.Targets.TryGetValue(formKey, out var entry) ? entry : null;
+        // The check builder is kernel code; the Plugin adapter's answer converts to its lookup
+        // value at this call, rather than the write side naming the Index's lookup entry.
+        ResolvedFormKey? Resolve(string formKey) =>
+            answers.Targets.TryGetValue(formKey, out var entry)
+                ? new ResolvedFormKey(entry.RecordType, entry.EditorId)
+                : null;
 
         // A file nothing could be read from answers nothing about the records in it, so a link into
         // it is unchecked with that reason, never broken (ADR-0019).
@@ -258,7 +261,7 @@ public sealed class PluginCompileService(
     // The same fields the editor shows a CheckError on, from the same builder, so compile and the
     // record panel cannot hold two definitions of what is broken.
     private static List<string> CheckErrors(
-        RecordTableSchema schema, string text, Func<string, RecordLookupEntry?> resolve,
+        RecordTableSchema schema, string text, Func<string, ResolvedFormKey?> resolve,
         Func<string, string?> whyUnchecked, GameRelease release)
     {
         var errors = new List<string>();

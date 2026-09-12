@@ -1,13 +1,13 @@
 using System.Diagnostics;
 using MEditService.Core.Plugins;
-using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Core.Source;
+namespace MEditService.Core.Records;
 
 /// <summary>A tracked plugin's read model is seeded from its source, never the compiled artifact
 /// (ADR-0003). The tree reads as documents, so tracked and untracked plugins share one

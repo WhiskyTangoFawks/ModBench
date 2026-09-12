@@ -1,7 +1,7 @@
-using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Tests.Schema;
 
 public class FormKeyResolutionTests
 {
@@ -17,7 +17,7 @@ public class FormKeyResolutionTests
     [Fact]
     public void From_EntryOfWrongType_ReturnsResolvedWrongType()
     {
-        var entry = new RecordLookupEntry("npc_", "SomeNpc");
+        var entry = new ResolvedFormKey("npc_", "SomeNpc");
         var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["race"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.ResolvedWrongType, resolution.State);
         Assert.Equal("npc_", resolution.RecordType);
@@ -27,7 +27,7 @@ public class FormKeyResolutionTests
     [Fact]
     public void From_EntryOfValidType_ReturnsResolvedValidType()
     {
-        var entry = new RecordLookupEntry("race", "SomeRace");
+        var entry = new ResolvedFormKey("race", "SomeRace");
         var resolution = FormKeyResolution.From("001234:Test.esp", entry, ["race"], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
         Assert.Equal("race", resolution.RecordType);
@@ -37,7 +37,7 @@ public class FormKeyResolutionTests
     [Fact]
     public void From_NoValidTypesConstraint_AnyResolvedTypeIsValid()
     {
-        var entry = new RecordLookupEntry("npc_", "AnyRecord");
+        var entry = new ResolvedFormKey("npc_", "AnyRecord");
         var resolution = FormKeyResolution.From("001234:Test.esp", entry, [], GameRelease.Fallout4);
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
     }

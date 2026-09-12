@@ -1345,6 +1345,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         RecordTableSchema schema, JsonElement root,
         Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
     {
+        // The check builder is kernel code and takes its lookup answer as a value the kernel
+        // declares, never the Index's own lookup entry; converted once here rather than threading a
+        // second resolver type through the read path.
+        ResolvedFormKey? Resolve(string formKey) =>
+            resolveFormKey(formKey) is { } entry ? new ResolvedFormKey(entry.RecordType, entry.EditorId) : null;
+
         var fields = new List<FieldValue>(schema.RecordColumns.Count);
         foreach (var col in schema.RecordColumns)
         {
@@ -1355,7 +1361,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             var meta = col.ToFieldMetadata();
             // The check reads the shape this record's own class gives the column; the wire keeps the
             // column's whole metadata, variants included, so the editor can pick the same.
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, resolveFormKey, release)));
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(DocumentNodes.VariantFor(meta, root), value, Resolve, release)));
         }
         return fields;
     }

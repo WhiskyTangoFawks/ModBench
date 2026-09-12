@@ -17,6 +17,7 @@ public sealed class WriteSideIndexScanTests
         "IRecordReads", "RecordRef", "IndexProjector", "IQueryIndex", "IndexStore", "IndexWriteGate",
         "IRecordQueryService", "RecordQueryService", "MalformedPluginQueryService",
         "IWorldspaceQueryService", "WorldspaceQueryService", "ContainerChildQueryService",
+        "FormKeyResolutionCache",
     ];
 
     // The whole shared-kernel-and-write-side assembly, not a list of folders: a folder literal means
