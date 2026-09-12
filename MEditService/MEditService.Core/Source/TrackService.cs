@@ -43,9 +43,9 @@ public sealed class TrackService(
         if (plugins.Count == 0)
             return TrackResult.Refused(TrackRefusal.NoPluginWithOrigin, $"No loaded plugin has origin '{origin}' to track.");
 
-        // ModFolders is the one rule for a plugin's mod folder: null for the game's own Data
+        // The load order is the one rule for a plugin's mod folder: null for the game's own Data
         // directory (PluginOrigin.DataDirectory), where Track must not git-init.
-        if (ModFolders.OfOrigin(loadOrder, origin) is not { } modFolder)
+        if (loadOrder.ModFolderOfOrigin(origin) is not { } modFolder)
         {
             return TrackResult.Refused(
                 TrackRefusal.DataDirectoryOrigin,
@@ -61,7 +61,7 @@ public sealed class TrackService(
         {
             SourceRepository.EnsureTrackable();
 
-            var pristineFiles = new List<PristineFile>();
+            var pristineFiles = new List<TreeFile>();
             var binaryHashesByPlugin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             var strings = new PluginStrings(modFolder, loadOrder.DataFolderPath);
@@ -157,7 +157,7 @@ public sealed class TrackService(
     private async Task<string?> VerifyRoundTrip(
         string pluginName,
         string originalPluginPath,
-        IReadOnlyList<PristineFile> pristineFilesForThisPlugin,
+        IReadOnlyList<TreeFile> pristineFilesForThisPlugin,
         GameRelease gameRelease,
         PluginStrings strings,
         CancellationToken cancel)

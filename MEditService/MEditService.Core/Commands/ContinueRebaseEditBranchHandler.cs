@@ -15,7 +15,7 @@ public sealed class ContinueRebaseEditBranchHandler
     /// <summary>Null when no registered copy carries the origin: there is no repository to name,
     /// which is an addressing failure rather than one of the three rebase outcomes.</summary>
     public RebaseResult? ContinueRebase(string origin) =>
-        ModFolders.OfOrigin(_loadOrder.Current, origin) is { } modFolder
+        _loadOrder.Current.ModFolderOfOrigin(origin) is { } modFolder
             ? SourceRepository.ContinueRebase(modFolder)
             : null;
 }

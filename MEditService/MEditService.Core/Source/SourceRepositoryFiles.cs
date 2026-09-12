@@ -1,13 +1,14 @@
 using System.Text;
 using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
 /// <summary>A plugin's whole source tree, and the file the read stopped at. Files is empty when one
 /// is named: half a tree compiles to a binary missing records.</summary>
-public sealed record PluginSourceFiles(IReadOnlyList<PristineFile> Files, string? Unreadable);
+public sealed record PluginSourceFiles(IReadOnlyList<TreeFile> Files, string? Unreadable);
 
 /// <summary>A plugin's source as files rather than as documents, and the two questions asked of that
 /// same tree. Each answers at the working tree or at a named ref, and a ref needs no
@@ -97,23 +98,23 @@ public sealed partial class SourceRepository
         var root = RootIn(_modFolder, plugin.Name);
         if (!Directory.Exists(root)) return new PluginSourceFiles([], null);
 
-        var files = new List<PristineFile>();
+        var files = new List<TreeFile>();
         foreach (var path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
         {
             var relativePath = Path.GetRelativePath(_modFolder, path);
             if (RawBytesOrNull(path) is not { } content)
                 return new PluginSourceFiles([], relativePath);
-            files.Add(new PristineFile(relativePath, content));
+            files.Add(new TreeFile(relativePath, content));
         }
         return new PluginSourceFiles(Ordered(files), null);
     }
 
-    private static IReadOnlyList<PristineFile> Ordered(IEnumerable<PristineFile> files) =>
+    private static IReadOnlyList<TreeFile> Ordered(IEnumerable<TreeFile> files) =>
         [.. files.OrderBy(file => file.RelativePath, StringComparer.Ordinal)];
 
-    private IEnumerable<PristineFile> CommittedFiles(PluginKey plugin, string gitRef) =>
+    private IEnumerable<TreeFile> CommittedFiles(PluginKey plugin, string gitRef) =>
         BlobsAtRef(plugin.Name, gitRef)
-            .Select(blob => new PristineFile(blob.RelativePath, Encoding.UTF8.GetBytes(blob.Text)));
+            .Select(blob => new TreeFile(blob.RelativePath, Encoding.UTF8.GetBytes(blob.Text)));
 
     // Never exclusive owners of the file: it may have been deleted, moved or locked since the listing.
     private static byte[]? RawBytesOrNull(string path)
@@ -128,11 +129,11 @@ public sealed partial class SourceRepository
         }
     }
 
-    private static string Text(PristineFile file) => Encoding.UTF8.GetString(StripUtf8Bom(file.Content));
+    private static string Text(TreeFile file) => Encoding.UTF8.GetString(StripUtf8Bom(file.Content));
 
     // One name per entry under the tree's own root: every file, and every directory once however many
     // files it holds. A directory counted twice would read as a collision.
-    private static IEnumerable<string> EntryNamesIn(IReadOnlyList<PristineFile> files, string treeRoot)
+    private static IEnumerable<string> EntryNamesIn(IReadOnlyList<TreeFile> files, string treeRoot)
     {
         var directories = new HashSet<string>(StringComparer.Ordinal);
         foreach (var relativePath in files.Select(file => file.RelativePath))

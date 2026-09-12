@@ -443,7 +443,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
         try
         {
-            var report = index.Validate(plugin.Key, ModFolders.Of(plugin.Origin, plugin.Path));
+            var report = index.Validate(plugin.Key, LoadOrder.ModFolderOf(plugin.Origin, plugin.Path));
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Validating {Plugin} at load: {Failure}", plugin.Name, failure);
             return !report.NeedsRebuild;
@@ -564,7 +564,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
                 _logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
             SourceIngest.Ingest(
-                index, ModFolders.Of(plugin.Origin, plugin.Path)!,
+                index, LoadOrder.ModFolderOf(plugin.Origin, plugin.Path)!,
                 plugin.Registration, plugin.Key, plugin.Path, held.GameRelease,
                 _schemaReflector, _logger, token);
             return;
@@ -603,7 +603,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             new ModPath(ModKey.FromFileName(Path.GetFileName(plugin.Path)), plugin.Path),
             gameRelease,
             _schemaReflector.GetSchemas(gameRelease),
-            new PluginStrings(ModFolders.Of(plugin.Origin, plugin.Path), dataFolderPath));
+            new PluginStrings(LoadOrder.ModFolderOf(plugin.Origin, plugin.Path), dataFolderPath));
 
     /// <summary>ADR-0015 invariant 4's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
@@ -623,7 +623,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         var reports = new List<ValidationReport>(keys.Count);
         foreach (var key in keys)
         {
-            var report = index.Validate(key, ModFolders.Of(order, key));
+            var report = index.Validate(key, order.ModFolderOf(key));
             foreach (var failure in report.Failures)
                 _logger.LogWarning("Reconciling {Plugin}: {Failure}", key.Name, failure);
 
@@ -651,7 +651,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
         // Re-derived every call, never remembered from when the watch started: the repository can be
         // deleted or replaced between the event and this line, and then there is no truth to read.
-        if (ModFolders.TrackedOf(_holder.Current, key) is not { } modFolder) return;
+        if (SourceRepository.TrackedModFolderOf(_holder.Current, key) is not { } modFolder) return;
 
         index.RefreshByKeys(key, modFolder, formKeys);
         ReapplyFilter();
@@ -724,7 +724,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             try
             {
                 SourceIngest.Ingest(
-                    index, ModFolders.Of(metadata.Origin, metadata.Path)!,
+                    index, LoadOrder.ModFolderOf(metadata.Origin, metadata.Path)!,
                     metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
             }
             catch (Exception ex)

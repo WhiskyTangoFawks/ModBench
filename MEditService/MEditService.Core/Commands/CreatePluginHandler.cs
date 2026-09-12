@@ -29,7 +29,7 @@ public sealed class CreatePluginHandler
         await _adapter.CreateAndWriteAsync(
             modKey, copy.Path, loadOrder.GameRelease, smallMaster: modKey.Type == ModType.Plugin);
 
-        var modFolder = ModFolders.Of(copy.Origin, copy.Path);
+        var modFolder = LoadOrder.ModFolderOf(copy.Origin, copy.Path);
         if (modFolder is null || SourceRepository.IsTracked(modFolder)) return new PluginCreateResult(null);
 
         // Held by construction: this gesture wrote the file, so Track's own "which copies are

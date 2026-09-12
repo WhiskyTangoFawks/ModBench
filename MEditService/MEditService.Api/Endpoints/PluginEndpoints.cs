@@ -421,14 +421,14 @@ public static class PluginEndpoints
         LoadOrderHolder holder, string origin, ILogger logger)
     {
         var loadOrder = holder.Current;
-        var plugins = ModFolders.PluginsOfOrigin(loadOrder, origin);
+        var plugins = loadOrder.CopiesOfOrigin(origin);
         if (plugins.Count == 0)
         {
             logger.LogWarning("No loaded plugin has origin {Origin}", origin);
             return ([], loadOrder, null);
         }
 
-        var modFolder = ModFolders.Of(plugins[0].Origin, plugins[0].Path);
+        var modFolder = LoadOrder.ModFolderOf(plugins[0].Origin, plugins[0].Path);
         return modFolder is null || !SourceRepository.IsTracked(modFolder)
             ? (plugins, loadOrder, null)
             : (plugins, loadOrder, modFolder);

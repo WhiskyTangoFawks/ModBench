@@ -61,7 +61,7 @@ public interface IPluginAdapter
     /// <summary>One source tree compiled to the mod it describes, which the tree holds so the caller
     /// does not (ADR-0005 rule 2). A tree that will not read answers with its diagnosis.</summary>
     Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<PristineFile> files,
+        IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default);
@@ -70,7 +70,7 @@ public interface IPluginAdapter
     /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification
     /// must not drop a .bak beside the real plugin.</summary>
     Task WriteFromTreeAsync(
-        IReadOnlyList<PristineFile> files, string destinationPath, CancellationToken cancel = default);
+        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default);
 
     /// <summary>A plugin's binary read as the source tree it would commit.
     /// <c>MissingStringsFile</c> names the localization file it declares and the disk has not, in

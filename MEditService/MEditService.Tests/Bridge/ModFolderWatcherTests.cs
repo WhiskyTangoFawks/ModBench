@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -32,7 +33,7 @@ public sealed class ModFolderWatcherTests
     private static void TrackTree(string modFolder, params string[] plugins)
     {
         var files = plugins
-            .Select(p => new PristineFile($"source/{p}/npc_/{p}/000001.json", "{}"u8.ToArray()))
+            .Select(p => new TreeFile($"source/{p}/npc_/{p}/000001.json", "{}"u8.ToArray()))
             .ToArray();
         var trailers = new TrackProvenance(
             null, null, plugins.ToDictionary(p => p, _ => "unused-at-track-time", StringComparer.Ordinal));

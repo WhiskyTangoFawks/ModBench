@@ -132,7 +132,7 @@ internal sealed class WriteTargets(
         modFolder = "";
         repository = null!;
 
-        if (ModFolders.Of(loadOrder.Current, plugin) is not { } folder) return RefuseUntracked(plugin);
+        if (loadOrder.Current.ModFolderOf(plugin) is not { } folder) return RefuseUntracked(plugin);
         if (SourceRepository.Open(folder, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin);
 
         (modFolder, repository) = (folder, opened);
@@ -167,7 +167,7 @@ internal sealed class WriteTargets(
         var plugins = new List<(string, byte[])>();
         foreach (var copy in loadOrder.Current.Copies)
         {
-            if (!string.Equals(ModFolders.Of(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal)) continue;
+            if (!string.Equals(LoadOrder.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal)) continue;
             if (PluginBinaryHash.BytesOfFile(copy.Path) is not { } bytes) return null;
             plugins.Add((copy.Name, bytes));
         }
@@ -177,7 +177,7 @@ internal sealed class WriteTargets(
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.
     private RecordEditResult RefuseUntracked(PluginKey plugin) =>
-        ModFolders.Of(loadOrder.Current, plugin) is null
+        loadOrder.Current.ModFolderOf(plugin) is null
             ? RecordEditResult.Refused(
                 RecordEditRefusal.PluginHasNoModFolder,
                 $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
@@ -203,7 +203,7 @@ internal sealed class WriteTargets(
     // adapter answers from its own bytes.
     internal Allocator AllocatorFor(RegisteredCopy copy, PluginKey plugin)
     {
-        if (ModFolders.Of(loadOrder.Current, plugin) is { } modFolder
+        if (loadOrder.Current.ModFolderOf(plugin) is { } modFolder
             && SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is { } repository)
         {
             return AllocatorOver(repository, plugin);

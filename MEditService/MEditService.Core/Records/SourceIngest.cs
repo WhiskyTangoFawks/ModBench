@@ -17,7 +17,7 @@ internal static class SourceIngest
     /// <summary>Whether this copy has a tree to ingest from; false reads the binary instead.
     /// Re-derived every call — MO2's Replace install shell-deletes the folder.</summary>
     internal static bool HoldsTree(string origin, string pluginPath, string pluginName) =>
-        ModFolders.Of(origin, pluginPath) is { } modFolder
+        LoadOrder.ModFolderOf(origin, pluginPath) is { } modFolder
         && SourceRepository.HoldsTreeFor(modFolder, pluginName);
 
     /// <summary>Indexes the whole tree as the key. Throws whatever the tree throws: "quietly served the

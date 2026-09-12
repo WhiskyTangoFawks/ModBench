@@ -126,7 +126,7 @@ public sealed class CascadeRollbackFixture : IDisposable
         _watcher.Rearm(holder.Current);
     }
 
-    public string ModFolderOf(PluginKey plugin) => ModFolders.Of(LoadOrder, plugin)!;
+    public string ModFolderOf(PluginKey plugin) => LoadOrder.ModFolderOf(plugin)!;
 
     public string SourceFileOf(PluginKey plugin, FormKey formKey, string recordType, string editorId) =>
         SourceDocumentPath.Of(

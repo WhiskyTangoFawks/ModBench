@@ -75,7 +75,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     // The four documents the whole-mod door writes for this graph.
-    private PristineFile[] PristineFiles() =>
+    private TreeFile[] PristineFiles() =>
     [
         new(InteriorCellPath, Serialize(_interiorCell)),
         new(WorldspacePath, Serialize(_worldspace)),

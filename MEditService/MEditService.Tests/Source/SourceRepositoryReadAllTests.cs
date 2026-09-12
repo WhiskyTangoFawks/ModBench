@@ -1,5 +1,6 @@
 using System.Text;
 using MEditService.Core.Plugins;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
 
@@ -39,7 +40,7 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
     {
         SourceRepository.Track(
             _modFolder, SourcePreset.Edits,
-            [new PristineFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))],
+            [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))],
             new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
         return SourceRepository.Open(_modFolder, Release)!;
     }

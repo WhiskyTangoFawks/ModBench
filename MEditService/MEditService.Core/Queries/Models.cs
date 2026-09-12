@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Source;
 
 namespace MEditService.Core.Queries;
 
@@ -63,7 +64,7 @@ public record PluginResponse(
         return new(copy.Name, copy.Path, copy.Slot, content.IsLight, content.IsMaster, content.Masters,
             content.RecordCount, copy.IsImmutable, registration.Participates, copy.Origin,
             masterIssues ?? [], registration.InLoadOrder, copy.Enabled, copy.Winning, hasMatchingRecords,
-            Source.ModFolders.IsEditable(copy.Origin, copy.Path), hasParseFailure);
+            SourceRepository.IsEditable(copy.Origin, copy.Path), hasParseFailure);
     }
 }
 

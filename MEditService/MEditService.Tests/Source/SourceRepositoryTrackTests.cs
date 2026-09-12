@@ -1,3 +1,4 @@
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
@@ -15,7 +16,7 @@ public sealed class SourceRepositoryTrackTests
         {
             var relativePath = Path.Combine("source", "StillHere.esp", "npc_", "StillHere.esp", "000800.json");
             var content = "{\"formKey\":\"000800:StillHere.esp\"}"u8.ToArray();
-            var files = new[] { new PristineFile(relativePath, content) };
+            var files = new[] { new TreeFile(relativePath, content) };
             var trailers = new TrackProvenance(null, null, new Dictionary<string, string>());
 
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
@@ -36,7 +37,7 @@ public sealed class SourceRepositoryTrackTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var trailers = new TrackProvenance(
                 UpstreamVersion: "1.2.3",
                 MetaSha256: null,

@@ -75,14 +75,14 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     }
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<PristineFile> files,
+        IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
         PluginTrees.ReadTreeAsync(files, codec, gameRelease, cancel);
 
     public Task WriteFromTreeAsync(
-        IReadOnlyList<PristineFile> files, string destinationPath, CancellationToken cancel = default) =>
+        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
         PluginTrees.WriteFromTreeAsync(files, destinationPath, deserialize: null, cancel);
 
     public Task<(IReadOnlyList<TreeFile> Files, string? MissingStringsFile)> ReadSourceAsync(

@@ -1,5 +1,6 @@
 using MEditService.Core.PluginAdapter;
 using MEditService.Core.Plugins;
+using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
@@ -33,7 +34,7 @@ public sealed class AbsorbExternalChangeHandler
     private static AbsorbResult Run(
         IPluginAdapter adapter, string modFolder, IReadOnlyList<RegisteredCopy> plugins, LoadOrder loadOrder)
     {
-        var allPristineFiles = new List<PristineFile>();
+        var allPristineFiles = new List<TreeFile>();
         var binarySha256ByPlugin = new Dictionary<string, string>();
 
         foreach (var plugin in plugins)

@@ -52,10 +52,10 @@ public sealed partial class SourceRepository
     /// <summary>One plugin's serialized tree as the files a mod folder holds — what Track and a
     /// re-baseline commit. The name is verbatim: that is how the load order spells the root a reader
     /// looks under.</summary>
-    public static IReadOnlyList<PristineFile> PristineFilesOf(
+    public static IReadOnlyList<TreeFile> PristineFilesOf(
         string pluginFileName, IEnumerable<TreeFile> treeFiles) =>
         [.. treeFiles.Select(file =>
-            new PristineFile(Path.Combine(RootFor(pluginFileName), file.RelativePath), file.Content))];
+            new TreeFile(Path.Combine(RootFor(pluginFileName), file.RelativePath), file.Content))];
 
     /// <summary>Whether this folder holds source for the plugin at all: tracked, and a tree written for
     /// this one. A tracked mod folder holds a tree per plugin, and may hold none for a given

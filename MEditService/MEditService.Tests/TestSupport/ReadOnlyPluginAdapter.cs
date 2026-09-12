@@ -45,7 +45,7 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         Real.LinksTo(modPath, gameRelease, target, itself);
 
     public Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<PristineFile> files,
+        IReadOnlyList<TreeFile> files,
         RecordTextCodec codec,
         GameRelease gameRelease,
         CancellationToken cancel = default) =>
@@ -74,7 +74,7 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         Real.DivergenceBetween(modPath, recompiledPath, gameRelease, strings);
 
     public virtual Task WriteFromTreeAsync(
-        IReadOnlyList<PristineFile> files, string destinationPath, CancellationToken cancel = default) =>
+        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
         throw new NotSupportedException($"{GetType().Name} answers reads only.");
 
     public Task CreateAndWriteAsync(

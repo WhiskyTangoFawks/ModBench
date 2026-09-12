@@ -68,9 +68,9 @@ public sealed class ModFolderWatcher : IDisposable
             var key = plugin.Key;
             // Before anything under it is registered: a registration then upgrades a watch that is
             // already running, which is what lets Track's own tree land under one.
-            if (ModFolders.Of(plugin.Origin, plugin.Path) is { } folder) WatchTopLevelOf(folder);
+            if (LoadOrder.ModFolderOf(plugin.Origin, plugin.Path) is { } folder) WatchTopLevelOf(folder);
 
-            if (ModFolders.TrackedOf(order, key) is not { } modFolder)
+            if (SourceRepository.TrackedModFolderOf(order, key) is not { } modFolder)
             {
                 // ADR-0009: every other indexed binary, the game's Data/ masters included, gets an
                 // indexed-binary watch: a write by another tool is answered by re-reading it, not by
@@ -147,8 +147,8 @@ public sealed class ModFolderWatcher : IDisposable
     public void WatchSourceOf(string origin)
     {
         var order = _holder.Current;
-        if (ModFolders.OfOrigin(order, origin) is not { } modFolder) return;
-        foreach (var copy in ModFolders.PluginsOfOrigin(order, origin))
+        if (order.ModFolderOfOrigin(origin) is not { } modFolder) return;
+        foreach (var copy in order.CopiesOfOrigin(origin))
             Watch(modFolder, SourceRepository.RootIn(modFolder, copy.Name), copy.Name, copy.Origin);
     }
 
@@ -279,12 +279,12 @@ public sealed class ModFolderWatcher : IDisposable
     // A change's own Plugins list can be empty (a tracked-file-only change), so origin resolves off
     // the mod folder alone.
     private static string OriginOf(LoadOrder loadOrder, string modFolder) =>
-        loadOrder.Copies.FirstOrDefault(copy => ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
+        loadOrder.Copies.FirstOrDefault(copy => LoadOrder.ModFolderOf(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
     private static string OriginOf(LoadOrder loadOrder, string modFolder, string pluginName) =>
         loadOrder.Copies.FirstOrDefault(copy =>
             copy.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
-            && ModFolders.Of(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
+            && LoadOrder.ModFolderOf(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
     // Called under _gate. Lazily arms the mod's watcher, recursive only once needed — the game's
     // Data/ folder never needs it. A vanished mod folder gets no watch, and no throw.

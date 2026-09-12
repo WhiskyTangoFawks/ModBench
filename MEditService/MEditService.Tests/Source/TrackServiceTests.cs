@@ -254,7 +254,7 @@ public sealed class TrackServiceTests
             // for this test: only IsTracked's answer does.
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,
-                [new PristineFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
+                [new TreeFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             // The load order already parsed a good copy; the file on disk is corrupted afterward —
@@ -276,7 +276,7 @@ public sealed class TrackServiceTests
     }
 
     // The only copy under this origin resolves to the game's own Data directory (PluginOrigin.
-    // DataDirectory), which ModFolders.Of returns null for — Track must refuse rather than
+    // DataDirectory), which LoadOrder.ModFolderOf returns null for — Track must refuse rather than
     // Path.GetDirectoryName'ing its way to a repository inside Data.
     [Fact]
     public async Task TrackAsync_WithOnlyADataOriginCopy_RefusesWithoutInitializingARepository()

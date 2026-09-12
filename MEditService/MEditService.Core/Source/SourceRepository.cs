@@ -39,6 +39,16 @@ public sealed partial class SourceRepository
     /// tracked) and nothing narrower (no registry lookup, no cached answer).</summary>
     public static bool IsTracked(string modFolder) => Directory.Exists(Path.Combine(modFolder, ".git"));
 
+    /// <summary>"Editing requires tracking; viewing never does" (ADR-0007), asked of a copy's origin
+    /// and path.</summary>
+    public static bool IsEditable(string origin, string pluginPath) =>
+        LoadOrder.ModFolderOf(origin, pluginPath) is { } modFolder && IsTracked(modFolder);
+
+    /// <summary>The mod folder only when it is tracked — the single condition under which a plugin
+    /// has source text at all.</summary>
+    public static string? TrackedModFolderOf(LoadOrder loadOrder, PluginKey plugin) =>
+        loadOrder.ModFolderOf(plugin) is { } modFolder && IsTracked(modFolder) ? modFolder : null;
+
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>
@@ -161,7 +171,7 @@ public sealed partial class SourceRepository
     /// <summary>Track's git mechanics: init, .gitignore, commit the baseline to main with trailers, park
     /// every plugin's last-compile ref there, check out the edit branch. One transaction: a failure
     /// removes .git, the .gitignore and the source tree.</summary>
-    public static void Track(string modFolder, SourcePreset preset, IReadOnlyList<PristineFile> pristineFiles, TrackProvenance trailers)
+    public static void Track(string modFolder, SourcePreset preset, IReadOnlyList<TreeFile> pristineFiles, TrackProvenance trailers)
     {
         GitCli.EnsureOnPath();
 
@@ -310,7 +320,7 @@ public sealed partial class SourceRepository
     /// <summary>Absorb's git mechanics: commits to main by plumbing, edit branch untouched.
     /// <paramref name="trackedFileChanges"/> ride along; a deleted one stages as removed.</summary>
     public static void CommitPristineToMain(
-        string modFolder, IReadOnlyList<PristineFile> pristineFiles, TrackProvenance trailers,
+        string modFolder, IReadOnlyList<TreeFile> pristineFiles, TrackProvenance trailers,
         IReadOnlyList<TrackedFileChange>? trackedFileChanges = null)
     {
         GitCli.EnsureOnPath();

@@ -80,6 +80,29 @@ public sealed class LoadOrder : IEquatable<LoadOrder>
     public LoadOrder Without(PluginKey key) =>
         new(DataFolderPath, InstanceRoot, GameRelease, [.. Copies.Where(c => !SameKey(c, key))]);
 
+    /// <summary>The folder holding the plugin's file, or null for a master resolved from the game's
+    /// own Data directory (Track does not apply there) or a plugin no copy here names.</summary>
+    public string? ModFolderOf(PluginKey plugin) =>
+        Copy(plugin) is { } copy ? ModFolderOf(copy.Origin, copy.Path) : null;
+
+    /// <summary>The same rule for a caller already holding a copy's origin and path.</summary>
+    public static string? ModFolderOf(string origin, string pluginPath) =>
+        string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : Path.GetDirectoryName(pluginPath);
+
+    /// <summary>The folder every copy under one origin shares, for a gesture the mod folder is the
+    /// unit of. Null when no registered copy carries the origin.</summary>
+    public string? ModFolderOfOrigin(string origin) =>
+        Copies.FirstOrDefault(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)) is { } copy
+            ? ModFolderOf(copy.Origin, copy.Path)
+            : null;
+
+    /// <summary>Every copy the mod holds, for a gesture the mod is the unit of — Absorb and
+    /// Keep.</summary>
+    public IReadOnlyList<RegisteredCopy> CopiesOfOrigin(string origin) =>
+        [.. Copies.Where(c => c.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase))];
+
     /// <summary>ADR-0012: origin is required, not optional — the load order can register two copies
     /// of one filename, so the filename alone does not say which.</summary>
     public RegisteredCopy? Copy(PluginKey key) => Copies.FirstOrDefault(c => SameKey(c, key));

@@ -28,7 +28,7 @@ public sealed class PluginCompileService(
             return CompileResult.Refused("No load order has been received.");
         if (loadOrder.Copy(plugin) is not { } copy)
             return CompileResult.Refused($"{plugin.Name} is not in the load order.");
-        if (ModFolders.TrackedOf(loadOrder, plugin) is not { } modFolder)
+        if (SourceRepository.TrackedModFolderOf(loadOrder, plugin) is not { } modFolder)
             return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
 
         // One repository for the whole pass, so the tree it answers from is read once: everything below
@@ -303,7 +303,7 @@ public sealed class PluginCompileService(
     // Whatever is wrong with the source, the remedy is re-Track (ADR-0006), so the catch is
     // deliberately unfiltered and the message uniform.
     private (CompiledTree? Tree, string? RefusalReason) DeserializeSource(
-        IReadOnlyList<PristineFile> files, string pluginName, GameRelease release)
+        IReadOnlyList<TreeFile> files, string pluginName, GameRelease release)
     {
         var read = adapter.ReadTreeAsync(files, codec, release).GetAwaiter().GetResult();
         if (read.Tree is { } tree) return (tree, null);
@@ -321,7 +321,7 @@ public sealed class PluginCompileService(
     // No live subrecord-inventory gate here, deliberately: that loss class arises only when Track
     // parses an external binary, never from Compile.
     private static string? RefuseIfSourceDoesNotRoundTrip(
-        CompiledTree tree, string pluginName, IReadOnlyList<PristineFile> sourceFiles)
+        CompiledTree tree, string pluginName, IReadOnlyList<TreeFile> sourceFiles)
     {
         var regeneratedFiles = SourceRepository.PristineFilesOf(
             pluginName, tree.SerializeTreeAsync().GetAwaiter().GetResult());

@@ -42,7 +42,7 @@ internal sealed class ReferencerScan(
             var plugin = copy.Key;
             FormKey? itself = plugin == targetPlugin ? target : null;
 
-            if (ModFolders.TrackedOf(loadOrder, plugin) is { } modFolder
+            if (SourceRepository.TrackedModFolderOf(loadOrder, plugin) is { } modFolder
                 && SourceRepository.Open(modFolder, release) is { } repository)
             {
                 tracked.AddRange(InTree(repository, plugin, target, itself, schemas, containers));

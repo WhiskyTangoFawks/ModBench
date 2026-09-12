@@ -62,7 +62,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         catch (UnauthorizedAccessException) { /* ditto */ }
     }
 
-    private PristineFile[] PristineFiles() =>
+    private TreeFile[] PristineFiles() =>
     [
         new(CellPath, Serialize(_cell)),
         new(QuestPath, Serialize(_quest)),

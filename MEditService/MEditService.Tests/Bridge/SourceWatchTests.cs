@@ -292,7 +292,7 @@ public sealed class SourceWatchTests : IDisposable
         WaitOutTheWatcher();
 
         Assert.False(SourceRepository.IsTracked(_mod.ModFolder));
-        Assert.False(ModFolders.IsEditable(IndexedModFixture.ModFolderOrigin, Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName)));
+        Assert.False(SourceRepository.IsEditable(IndexedModFixture.ModFolderOrigin, Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName)));
         Assert.Equal(before, _mod.Index.Sequence);
         Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
     }

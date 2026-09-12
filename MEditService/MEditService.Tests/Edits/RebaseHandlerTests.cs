@@ -47,7 +47,7 @@ public sealed class RebaseHandlerTests : IDisposable
     }
 
     // The game's own Data directory is nobody's mod folder, so a copy loaded from it names no
-    // repository to rebase (ModFolders).
+    // repository to rebase.
     [Fact]
     public void RebaseEditBranch_DataDirectoryOrigin_IsNull()
     {

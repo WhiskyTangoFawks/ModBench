@@ -1,14 +1,12 @@
+using MEditService.Core.Serialization;
+
 namespace MEditService.Core.Source;
 
-/// <summary>One file Track writes into the mod folder and commits as part of the pristine baseline.
-/// <paramref name="RelativePath"/> is relative to the mod folder and forward-slash-shaped.</summary>
-public sealed record PristineFile(string RelativePath, byte[] Content);
-
-/// <summary>The one way a list of <see cref="PristineFile"/>s becomes real files under a base
+/// <summary>The one way a list of <see cref="TreeFile"/>s becomes real files under a base
 /// directory, shared so the call sites cannot drift.</summary>
 internal static class PristineFileWriter
 {
-    internal static void WriteAll(IEnumerable<PristineFile> files, string baseDirectory)
+    internal static void WriteAll(IEnumerable<TreeFile> files, string baseDirectory)
     {
         foreach (var file in files)
         {

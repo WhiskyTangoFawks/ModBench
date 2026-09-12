@@ -93,7 +93,7 @@ internal static class PluginTrees
     /// <paramref name="destinationPath"/>, with neither backup nor rename: a scratch verification must
     /// not drop a .bak beside the real plugin.</summary>
     internal static async Task WriteFromTreeAsync(
-        IReadOnlyList<PristineFile> files, string destinationPath, TreeDeserializer? deserialize = null,
+        IReadOnlyList<TreeFile> files, string destinationPath, TreeDeserializer? deserialize = null,
         CancellationToken cancel = default)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
@@ -111,7 +111,7 @@ internal static class PluginTrees
 
     // The files written under baseDirectory, answering the root the door reads from.
     private static async Task<string> MaterializeTree(
-        IReadOnlyList<PristineFile> files, string baseDirectory, CancellationToken cancel)
+        IReadOnlyList<TreeFile> files, string baseDirectory, CancellationToken cancel)
     {
         foreach (var file in files)
         {
@@ -124,7 +124,7 @@ internal static class PluginTrees
 
     // Every file of one plugin's tree sits under that tree's root, so their common directory is it.
     // Nothing here spells that root: where a tree lives in a mod folder is the repository's layout.
-    private static string SharedDirectoryOf(IReadOnlyList<PristineFile> files)
+    private static string SharedDirectoryOf(IReadOnlyList<TreeFile> files)
     {
         var shared = Path.GetDirectoryName(files.Count > 0 ? files[0].RelativePath : "") ?? "";
         foreach (var file in files)
@@ -164,7 +164,7 @@ internal static class PluginTrees
     /// door's own. The mod is held in the tree, so the compile holds documents (ADR-0005 rule
     /// 2).</summary>
     internal static async Task<(CompiledTree? Tree, PluginDiagnosis? Diagnosis, Exception? Error)> ReadTreeAsync(
-        IReadOnlyList<PristineFile> files, RecordTextCodec codec, GameRelease gameRelease,
+        IReadOnlyList<TreeFile> files, RecordTextCodec codec, GameRelease gameRelease,
         CancellationToken cancel = default)
     {
         var scratchDir = Directory.CreateTempSubdirectory(ReadScratchPrefix).FullName;

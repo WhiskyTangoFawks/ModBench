@@ -92,7 +92,7 @@ internal sealed class HeldPlugins
             var readTimer = Stopwatch.StartNew();
             var (content, unreachable) = _adapter.ReadContent(
                 new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), GameRelease,
-                new PluginStrings(ModFolders.Of(plugin.Origin, plugin.Path), DataFolderPath));
+                new PluginStrings(LoadOrder.ModFolderOf(plugin.Origin, plugin.Path), DataFolderPath));
             var readMs = readTimer.ElapsedMilliseconds;
 
             if (unreachable is { } stoppedWalk)
