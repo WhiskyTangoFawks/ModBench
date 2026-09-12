@@ -11,7 +11,8 @@ import {
   type DownloadStatus,
 } from './mo2/downloads';
 import { downloadFile } from './mo2/layout';
-import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from './instance';
+import type { InstanceValue, InstanceView } from './instance';
+import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from '../errorNode';
 import type { Reporter } from '../reporter';
 

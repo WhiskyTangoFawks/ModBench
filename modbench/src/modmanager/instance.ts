@@ -2,8 +2,6 @@
 // MO2-side watchers, holds one whole value, and is built only by watching.
 
 import type * as vscode from 'vscode';
-import { readdir, readFile } from 'node:fs/promises';
-import type { Reporter } from '../reporter';
 import type { ModlistEntry, PluginEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
@@ -27,6 +25,7 @@ import {
 import { isDeployed } from './deployer';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
+import { get, listDir } from './mo2Files';
 
 // A change here must recompute exactly as a file event does — the Instance's own replacement
 // for the memoized resolver's invalidation.
@@ -94,7 +93,7 @@ const message = (err: unknown): string => (err instanceof Error ? err.message : 
 // A mod with no meta.ini has no metadata; a present-but-unreadable one is a real failure.
 async function readMeta(instanceRoot: string, modName: string): Promise<Partial<ModlistEntry>> {
   try {
-    return parseMetaIni(await readFile(modMetaFile(instanceRoot, modName), 'utf8'));
+    return parseMetaIni(await get(modMetaFile(instanceRoot, modName)));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
     throw err;
@@ -105,7 +104,7 @@ async function readMeta(instanceRoot: string, modName: string): Promise<Partial<
 // not a failed read. Any other listing failure is a real one and fails the recompute.
 async function readModFolderNames(instanceRoot: string): Promise<string[]> {
   try {
-    const dirents = await readdir(modsDir(instanceRoot), { withFileTypes: true });
+    const dirents = await listDir(modsDir(instanceRoot));
     return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
@@ -114,13 +113,13 @@ async function readModFolderNames(instanceRoot: string): Promise<string[]> {
 }
 
 async function readModlistEntries(instanceRoot: string, profile: string): Promise<ModlistEntry[]> {
-  const entries = parseModlist(await readFile(modlistFile(instanceRoot, profile), 'utf8'));
+  const entries = parseModlist(await get(modlistFile(instanceRoot, profile)));
   return Promise.all(entries.map(async (entry) =>
     (entry.kind === 'mod' ? { ...entry, ...(await readMeta(instanceRoot, entry.name)) } : entry)));
 }
 
 async function readPluginEntries(instanceRoot: string, profile: string): Promise<PluginEntry[]> {
-  return parsePlugins(await readFile(pluginsFile(instanceRoot, profile), 'utf8'));
+  return parsePlugins(await get(pluginsFile(instanceRoot, profile)));
 }
 
 const EMPTY: InstanceValue = {
@@ -291,7 +290,7 @@ export class Instance implements vscode.Disposable {
     const { instanceRoot, config, detectPaths, detectWinePrefix, log } = this.options;
     // The ini is read first and every later read is against the profile it names, so a profile
     // switch mid-recompute cannot mix one profile's modlist with another's plugins.txt.
-    const iniText = await readFile(settingsFile(instanceRoot), 'utf8');
+    const iniText = await get(settingsFile(instanceRoot));
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
@@ -341,49 +340,6 @@ export class Instance implements vscode.Disposable {
       overwriteFileCount,
     };
   }
-}
-
-/** A tree's first-render gate: `settled` resolves on the first landed value or the first failed
- *  read — never "nothing here" before a read (ADR-0002), never an endless spinner (ADR-0019).
- *  `failure` holds until a value lands. */
-export interface FirstRead extends vscode.Disposable {
-  readonly settled: Promise<void>;
-  readonly failure: string | undefined;
-}
-
-/** The reporter hears the first failed read once; a later failure before any value has landed
- *  is the Instance's log line, nothing more, so a retrying watcher cannot toast per attempt. */
-export function firstReadOf(
-  instance: Pick<Instance, 'sequence' | 'readFailure' | 'subscribe' | 'onReadFailure'>,
-  reporter: Reporter | undefined,
-): FirstRead {
-  const unread = () => instance.sequence === 0;
-  let reported = false;
-  const report = (reason: string) => {
-    if (reported) return;
-    reported = true;
-    reporter?.report('error', 'Failed to read the MO2 instance.', reason);
-  };
-  let resolve = () => {};
-  const settled = unread() ? new Promise<void>((r) => { resolve = r; }) : Promise.resolve();
-  // Constructed after the first read already failed: the failure is held, not just fired.
-  if (unread() && instance.readFailure !== undefined) {
-    report(instance.readFailure);
-    resolve();
-  }
-  const subscriptions = [
-    instance.subscribe(() => resolve()),
-    instance.onReadFailure((reason) => {
-      if (!unread()) return;
-      report(reason);
-      resolve();
-    }),
-  ];
-  return {
-    settled,
-    get failure() { return unread() ? instance.readFailure : undefined; },
-    dispose: () => { for (const subscription of subscriptions) subscription.dispose(); },
-  };
 }
 
 /** ADR-0013's snapshot, read from the current value (ADR-0015) rather than a fresh walk.

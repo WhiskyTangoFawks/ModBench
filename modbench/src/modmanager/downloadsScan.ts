@@ -1,12 +1,12 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DownloadEntry } from './mo2/downloads';
 import { DOWNLOAD_SIDECAR_SUFFIX, downloadsDir } from './mo2/layout';
+import { factsOf, get, listDir } from './mo2Files';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.
 async function readMetaText(path: string): Promise<string | undefined> {
   try {
-    return await readFile(path, 'utf8');
+    return await get(path);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw err;
@@ -18,7 +18,7 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
   const dir = downloadsDir(instanceRoot);
   let names: string[];
   try {
-    names = await readdir(dir);
+    names = (await listDir(dir)).map((dirent) => dirent.name);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw err;
@@ -28,8 +28,8 @@ export async function scanDownloads(instanceRoot: string): Promise<DownloadEntry
   return Promise.all(
     names.map(async (name) => {
       const filePath = join(dir, name);
-      const [info, metaText] = await Promise.all([stat(filePath), readMetaText(filePath + DOWNLOAD_SIDECAR_SUFFIX)]);
-      return { name, size: info.size, mtimeMs: info.mtimeMs, metaText };
+      const [facts, metaText] = await Promise.all([factsOf(filePath), readMetaText(filePath + DOWNLOAD_SIDECAR_SUFFIX)]);
+      return { name, size: facts.size, mtimeMs: facts.mtimeMs, metaText };
     }),
   );
 }
