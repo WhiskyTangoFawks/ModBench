@@ -14,7 +14,7 @@ vi.mock('./nativeBridge', () => ({
 import { DiffRow } from './DiffRow';
 import type { Column, PathSegment } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
-import { columnKey } from './types';
+import { columnKey } from './columnKey';
 import { DIMMED_OPACITY } from './gridStyles';
 import { diffNode, fieldMeta } from './test/fixtures';
 

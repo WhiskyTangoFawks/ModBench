@@ -11,7 +11,7 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
-import { columnKey } from './types';
+import { columnKey } from './columnKey';
 import { fieldMeta, panelClient, type PanelOpts } from './test/fixtures';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });

@@ -41,13 +41,22 @@ export default tseslint.config(
         },
     },
 
-    // The record document's field tree is read one dynamic member/discriminator at a time, and
-    // addressed by a branded `ColumnKey` a cast mints. Pinned by
-    // unsafeTypeAssertionAllowlist.test.ts.
+    // Each file below holds exactly one function, and that function is its file's only cast —
+    // named the way the errno reader is, not a suppression widened to a whole client or module.
+    // Pinned by unsafeTypeAssertionAllowlist.test.ts.
+    {
+        files: ['webview/src/columnKey.ts', 'webview/src/parseCompareResult.ts'],
+        rules: {
+            '@typescript-eslint/no-unsafe-type-assertion': 'off',
+        },
+    },
+
+    // The record document's field tree, read one dynamic member/discriminator at a time — not
+    // reducible to one function each. Pinned by unsafeTypeAssertionAllowlist.test.ts.
     {
         files: [
             'webview/src/recordUtils.ts', 'webview/src/presentation.ts', 'webview/src/siblingsInUse.ts',
-            'webview/src/modelValue.ts', 'webview/src/types.ts', 'webview/src/RecordPanelClient.ts',
+            'webview/src/modelValue.ts',
         ],
         rules: {
             '@typescript-eslint/no-unsafe-type-assertion': 'off',

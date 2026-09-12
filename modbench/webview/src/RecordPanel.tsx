@@ -13,7 +13,7 @@ import { idleMembers } from './siblingsInUse';
 import type {
   ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata, RecordEditEnvelope,
 } from './types';
-import { columnKey } from './types';
+import { columnKey } from './columnKey';
 import { vscode } from './vscode';
 import { editField } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, moveEnvelope, parseExtensionToWebview } from './messages';

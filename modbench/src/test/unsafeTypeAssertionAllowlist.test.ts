@@ -1,5 +1,6 @@
-// The record-document allowlist is the one folder-scoped exemption from
-// `no-unsafe-type-assertion`, the way BannedApiScopeTests pins RS0030's exemptions in the service.
+// Two folder-scoped exemptions from `no-unsafe-type-assertion`, the way BannedApiScopeTests pins
+// RS0030's exemptions in the service: single-function helper modules, and the record document's
+// traversal folder, which a helper can't reduce to one function.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,9 +8,11 @@ import ts from 'typescript';
 
 const RULE = '@typescript-eslint/no-unsafe-type-assertion';
 
-const RECORD_DOCUMENT_ALLOWLIST = [
+const HELPER_FILES = ['webview/src/columnKey.ts', 'webview/src/parseCompareResult.ts'];
+
+const RECORD_DOCUMENT_TRAVERSAL_FILES = [
   'webview/src/recordUtils.ts', 'webview/src/presentation.ts', 'webview/src/siblingsInUse.ts',
-  'webview/src/modelValue.ts', 'webview/src/types.ts', 'webview/src/RecordPanelClient.ts',
+  'webview/src/modelValue.ts',
 ];
 
 interface RuleBlock {
@@ -55,10 +58,14 @@ function loadConfigBlocks(): RuleBlock[] {
   return ruleBlocksFor(source, RULE);
 }
 
-// A test glob names a `.test.` file or a `test/` folder — the other place this rule turns off,
+// A test glob names a `.test.` file or a `test/` folder — the third place this rule turns off,
 // out of scope here (it shrinks to nothing on its own ticket).
 function isTestGlob(files: string[]): boolean {
   return files.some((f) => f.includes('.test.') || f.includes('/test/'));
+}
+
+function nonTestOffBlocks(): RuleBlock[] {
+  return loadConfigBlocks().filter((b) => b.severity === 'off' && !isTestGlob(b.files));
 }
 
 describe('the no-unsafe-type-assertion allowlist', () => {
@@ -68,16 +75,21 @@ describe('the no-unsafe-type-assertion allowlist', () => {
     expect(errorBlock?.files).toEqual(['src/**/*.ts', 'webview/src/**/*.{ts,tsx}']);
   });
 
-  it('turns the rule off in exactly two places: the record document, and tests', () => {
+  it('turns the rule off in exactly three places: helpers, record-document traversal, and tests', () => {
     const offBlocks = loadConfigBlocks().filter((b) => b.severity === 'off');
 
-    expect(offBlocks).toHaveLength(2);
+    expect(offBlocks).toHaveLength(3);
   });
 
-  it('names exactly these six files as the record document, and no others', () => {
-    const offBlocks = loadConfigBlocks().filter((b) => b.severity === 'off');
-    const allowlistBlock = offBlocks.find((b) => !isTestGlob(b.files));
+  it('names exactly these two single-function modules as helpers, each its own file', () => {
+    const helperBlock = nonTestOffBlocks().find((b) => b.files.includes('webview/src/columnKey.ts'));
 
-    expect(allowlistBlock?.files).toEqual(RECORD_DOCUMENT_ALLOWLIST);
+    expect(helperBlock?.files).toEqual(HELPER_FILES);
+  });
+
+  it('names exactly these four files as the record document\'s traversal, and no others', () => {
+    const traversalBlock = nonTestOffBlocks().find((b) => b.files.includes('webview/src/recordUtils.ts'));
+
+    expect(traversalBlock?.files).toEqual(RECORD_DOCUMENT_TRAVERSAL_FILES);
   });
 });
