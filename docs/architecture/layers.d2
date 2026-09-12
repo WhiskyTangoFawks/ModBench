@@ -1,0 +1,42 @@
+# The layer rules the gate reads. Six layers, one arrow per permitted reference direction: a
+# box may reference any layer below it, or the kernel of its own column, never up and never
+# across a column. Two channels carry change up instead of a reference, watch and push, styled
+# as the signal and push classes so a diagram tells them apart from a reference at a glance.
+# The same-band pairs below are the layer rule's own named exceptions, drawn with the zoom-out's
+# ids so the checker matches them by name; a diagram that needs a different one asks the
+# maintainer, never adds a line here.
+...@styles
+grid-rows: 6
+
+drivers: "Drivers" {class: band}
+driving: "Driving adapters" {class: band}
+core: "Core" {class: band}
+kernel: "Kernel" {class: band}
+driven: "Driven adapters" {class: band}
+data: "Systems of record" {class: band}
+
+drivers -> driving: {class: ref}
+drivers -> core: {class: ref}
+drivers -> kernel: {class: ref}
+drivers -> driven: {class: ref}
+drivers -> data: {class: ref}
+driving -> core: {class: ref}
+driving -> kernel: {class: ref}
+driving -> driven: {class: ref}
+driving -> data: {class: ref}
+core -> kernel: {class: ref}
+core -> driven: {class: ref}
+core -> data: {class: ref}
+driven -> data: {class: ref}
+
+data -> driving: "watch" {class: signal}
+kernel -> driving: "push" {class: push}
+
+exceptions: "Same-band references the layer rule alone would forbid, named by the zoom-out's own ids" {
+  class: band
+}
+medit_driven.index -> medit_driven.sourcerepo: "same band"
+medit_driven.index -> medit_driven.pluginadapter: "same band"
+medit_kernel.ports -> medit_kernel.loadorder: "same band"
+modbench_driven.instance -> modbench_driven.mo2files: "same band"
+modbench_core.pluginscommands -> modbench_core.client: "same band"

@@ -64,6 +64,21 @@ done <<< "$MJS"
 (cd "$ROOT" && python3 -m unittest discover -q -s .claude/hooks -p 'test_*.py') || COMMENT_OK=false
 $COMMENT_OK || { echo "--- COMMENT GATE FAILED ---"; FAILED=true; }
 
+echo "=== Gate 1: Architecture diagrams ==="
+D2="$(bash "$ROOT/.claude/skills/validate/install-d2.sh")"
+DIAGRAM_OK=true
+D2_BUILD="$ROOT/tools/d2-build"
+rm -rf "$D2_BUILD" && mkdir -p "$D2_BUILD"
+while IFS= read -r f; do
+  [[ -n "$f" ]] || continue
+  rel="${f#docs/architecture/}"
+  out="$D2_BUILD/${rel%.d2}.svg"
+  mkdir -p "$(dirname "$out")"
+  (cd "$ROOT" && "$D2" "$f" "$out") || DIAGRAM_OK=false
+done <<< "$(tracked '*.d2')"
+(cd "$ROOT" && python3 .claude/skills/validate/check_layers.py) || DIAGRAM_OK=false
+$DIAGRAM_OK || { echo "--- ARCHITECTURE DIAGRAM GATE FAILED ---"; FAILED=true; }
+
 echo "=== Gate runner tests ==="
 (cd "$ROOT" && python3 -m unittest discover -q -s .claude/skills/validate -p 'test_*.py') \
   || { echo "--- GATE RUNNER TESTS FAILED ---"; FAILED=true; }
