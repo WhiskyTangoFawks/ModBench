@@ -96,7 +96,7 @@ internal static class PluginTrees
         IReadOnlyList<PristineFile> files, string destinationPath, TreeDeserializer? deserialize = null,
         CancellationToken cancel = default)
     {
-        var scratchDir = Directory.CreateTempSubdirectory(WriteScratchPrefix).FullName;
+        var scratchDir = Directory.CreateTempSubdirectory("medit-writetree-").FullName;
         try
         {
             var recompiled = await (deserialize ?? DeserializeTree)(
@@ -108,8 +108,6 @@ internal static class PluginTrees
             Directory.Delete(scratchDir, recursive: true);
         }
     }
-
-    internal const string WriteScratchPrefix = "medit-writetree-";
 
     // The files written under baseDirectory, answering the root the door reads from.
     private static async Task<string> MaterializeTree(
