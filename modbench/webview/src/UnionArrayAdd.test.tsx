@@ -76,7 +76,7 @@ describe('RecordPanel — Add on an abstract-union array', () => {
   it('posts add at the array, carrying no element of its own', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('aliases'));
-    const cell = screen.getAllByText('[1]')[0].closest('td')!;
+    const cell = screen.getAllByText('[1]')[0]!.closest('td')!;
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 

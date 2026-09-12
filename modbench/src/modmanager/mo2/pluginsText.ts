@@ -3,7 +3,6 @@
 // string, so EOLs, BOM and unmodelled lines survive untouched.
 
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
-import { present } from '../../present';
 
 /** A single plugins.txt line (a plugin file), in Plugin load order. The `*`
  *  prefix (MO2's enabled marker) is modelled as `enabled`; the marker itself is
@@ -58,11 +57,12 @@ function appendEntryLine(bomless: string, pluginName: string, enabled: boolean):
   if (bomless.length === 0) return line;
 
   const lines = splitLinesKeepEol(bomless);
-  const last = present(lines[lines.length - 1], 'last line of a non-empty plugins.txt');
-  if (!/\r\n$|\r$|\n$/.test(last)) lines[lines.length - 1] = last + eol;
+  const last = lines.at(-1);
+  if (last !== undefined && !/\r\n$|\r$|\n$/.test(last)) lines[lines.length - 1] = last + eol;
 
   const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntryLine(line)).map(([i]) => i);
-  const insertAt = entryLineIdx.length === 0 ? lines.length : present(entryLineIdx.at(-1), 'last entry line index') + 1;
+  const lastEntry = entryLineIdx.at(-1);
+  const insertAt = lastEntry !== undefined ? lastEntry + 1 : lines.length;
   lines.splice(insertAt, 0, line);
   return lines.join('');
 }

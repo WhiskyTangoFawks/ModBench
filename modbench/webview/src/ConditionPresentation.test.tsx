@@ -123,7 +123,7 @@ function compareResult(
 ) {
   const columns = Object.keys(byColumn);
   const at = (column: string, index: number, path: string[]): unknown =>
-    path.reduce<unknown>((v, name) => (v as Condition | undefined)?.[name], byColumn[column][index]);
+    path.reduce<unknown>((v, name) => (v as Condition | undefined)?.[name], byColumn[column]![index]);
 
   const resolutionsFor = (path: string[], index: number) => {
     const entries = columns
@@ -160,7 +160,7 @@ function compareResult(
       fieldName: 'Conditions',
       values: Object.fromEntries(columns.map(c => [c, byColumn[c]])),
       winnerColumn: columns[0], cellStates: {},
-      children: byColumn[columns[0]].map((_, i) => ({
+      children: byColumn[columns[0]!]!.map((_, i) => ({
         fieldName: `[${i}]`,
         values: valuesFor([], i),
         winnerColumn: columns[0], cellStates: {},
@@ -184,14 +184,14 @@ function renderPanel() {
 
 async function expandConditions() {
   await waitFor(() => screen.getByText('Conditions'));
-  fireEvent.click(screen.getAllByText('▶')[0]);
+  fireEvent.click(screen.getAllByText('▶')[0]!);
   await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
 }
 
 function summaryOf(index: number): string {
   const td = screen.getAllByText(`[${index}]`).find(el => el.tagName === 'TD')!;
   const cells = Array.from(td.closest('tr')!.querySelectorAll('td'));
-  return cells[1].textContent;
+  return cells[1]!.textContent;
 }
 
 // A row's label cell: the member's own name, which a value cell can also read as (the Kind row
@@ -211,8 +211,8 @@ async function expandFirstConditionData() {
 async function openMemberEditor(memberName: string): Promise<HTMLTableCellElement> {
   await expandFirstConditionData();
   const cell = labelCell(memberName)!.closest('tr')!.querySelectorAll('td')[1];
-  fireEvent.doubleClick(cell.querySelector('[data-open-trigger]')!);
-  return cell;
+  fireEvent.doubleClick(cell!.querySelector('[data-open-trigger]')!);
+  return cell!;
 }
 
 const postedEnvelopes = () => sharedPostedEnvelopes(vscode.postMessage);
@@ -343,8 +343,8 @@ describe('a collapsed condition reads as xEdit prose', () => {
 
     const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
     const cells = Array.from(td.closest('tr')!.querySelectorAll('td'));
-    expect(cells[1].textContent).toBe('Subject.IsSneaking = 1.000000 AND');
-    expect(cells[2].textContent).toBe('Subject.IsSneaking = 1.000000');
+    expect(cells[1]!.textContent).toBe('Subject.IsSneaking = 1.000000 AND');
+    expect(cells[2]!.textContent).toBe('Subject.IsSneaking = 1.000000');
   });
 
   it('the leaf with no function member of its own is named by its own leaf type', async () => {
@@ -363,7 +363,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await expandConditions();
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
 
     await waitFor(() => screen.getByText('Data'));
     expect(summaryOf(0)).toBe('');
@@ -526,8 +526,8 @@ describe('switching a condition\'s leaf', () => {
     await waitFor(() => expect(labelCell('Kind')).toBeDefined());
 
     const cell = labelCell('Kind')!.closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(cell.querySelector('[data-open-trigger]')!);
-    const select = cell.querySelector('select')!;
+    fireEvent.doubleClick(cell!.querySelector('[data-open-trigger]')!);
+    const select = cell!.querySelector('select')!;
     fireEvent.change(select, { target: { value: 'ConditionGlobal' } });
     fireEvent.blur(select);
 
@@ -556,8 +556,8 @@ describe('a type-varying member takes its cell from each column\'s own leaf', ()
     await waitFor(() => expect(labelCell('ComparisonValue')).toBeDefined());
 
     const cells = labelCell('ComparisonValue')!.closest('tr')!.querySelectorAll('td');
-    expect(cells[1].textContent).toBe('2.5');
-    expect(cells[2].textContent).toBe('MyGlobal [00000ABC:MyMod.esp]');
+    expect(cells[1]!.textContent).toBe('2.5');
+    expect(cells[2]!.textContent).toBe('MyGlobal [00000ABC:MyMod.esp]');
   });
 });
 
@@ -566,7 +566,7 @@ describe('the function picker comes from the schema', () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await waitFor(() => screen.getByText('Conditions'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
     const el0 = screen.getAllByText('[0]').find(e => e.tagName === 'TD')!;
     fireEvent.click(el0.closest('tr')!.querySelector('button')!);
@@ -575,8 +575,8 @@ describe('the function picker comes from the schema', () => {
     await waitFor(() => expect(labelCell('Function')).toBeDefined());
 
     const cell = labelCell('Function')!.closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(cell.querySelector('[data-open-trigger]')!);
-    const options = Array.from(cell.querySelector('select')!.options).map(o => o.value);
+    fireEvent.doubleClick(cell!.querySelector('[data-open-trigger]')!);
+    const options = Array.from(cell!.querySelector('select')!.options).map(o => o.value);
     expect(options).toEqual(Object.keys(FUNCTION_SLOTS));
   });
 });

@@ -5,7 +5,6 @@
 import { OVERWRITE_DIR_NAME } from './layout';
 import type { InstalledFileId } from './metaIni';
 import { detectEol, insertIndexAmongEntries, lineContent, lineRanges, splitLinesKeepEol, stripBom, withBomPreserved } from './lineScan';
-import { present } from '../../present';
 
 export interface Mod {
   kind: 'mod';
@@ -106,7 +105,8 @@ export function insertSeparatorAtIndexInText(
       insertAt = lines.length;
     } else {
       const clamped = Math.max(0, Math.min(afterIndex, entryLineIdx.length - 1));
-      insertAt = present(entryLineIdx[clamped], `entry line index at position ${clamped}`) + 1;
+      const atClamped = entryLineIdx[clamped];
+      insertAt = atClamped !== undefined ? atClamped + 1 : lines.length;
     }
     lines.splice(insertAt, 0, newLine);
     return lines.join('');
@@ -146,7 +146,8 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
     const lines = splitLinesKeepEol(bomless);
     const firstEntry = lines.findIndex(isEntryLine);
     const insertAt = firstEntry === -1 ? lines.length : firstEntry;
-    if (insertAt > 0 && !/\r\n$|\r$|\n$/.test(present(lines[insertAt - 1], `line before index ${insertAt}`))) {
+    const prevLine = lines[insertAt - 1];
+    if (insertAt > 0 && prevLine !== undefined && !/\r\n$|\r$|\n$/.test(prevLine)) {
       lines[insertAt - 1] += eol; // EOL-terminate the line we insert after
     }
     lines.splice(insertAt, 0, newLine);
@@ -210,9 +211,9 @@ export function moveModToSeparatorEndInText(
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
 
-    const modIdx = lines.findIndex((l) => matchesModLine(l, modName));
-    if (modIdx === -1) throw new Error(`Mod not found in modlist: ${modName}`);
-    const modLine = present(lines.splice(modIdx, 1)[0], `mod line at index ${modIdx}`);
+    const modLine = lines.find((l) => matchesModLine(l, modName));
+    if (modLine === undefined) throw new Error(`Mod not found in modlist: ${modName}`);
+    lines.splice(lines.indexOf(modLine), 1);
 
     const insertAt =
       separatorName === null
@@ -261,10 +262,10 @@ export function moveSeparatorBlockInText(
 export function moveModInText(text: string, modName: string, toIndex: number): string {
   return withBomPreserved(text, (bomless) => {
     const lines = splitLinesKeepEol(bomless);
-    const srcLine = lines.findIndex((l) => matchesModLine(l, modName));
-    if (srcLine === -1) throw new Error(`Mod not found in modlist: ${modName}`);
+    const moved = lines.find((l) => matchesModLine(l, modName));
+    if (moved === undefined) throw new Error(`Mod not found in modlist: ${modName}`);
+    lines.splice(lines.indexOf(moved), 1);
 
-    const moved = present(lines.splice(srcLine, 1)[0], `mod line at index ${srcLine}`);
     const insertAt = insertIndexAmongEntries(lines, isEntryLine, toIndex);
     lines.splice(insertAt, 0, moved);
     return lines.join('');

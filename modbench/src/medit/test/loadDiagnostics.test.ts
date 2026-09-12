@@ -40,10 +40,10 @@ describe('publishLoadDiagnoses', () => {
       report('TrueStorms.esp', 'TS Mod', 'REGN … — fixed-size-subrecord-short, repairable (lossless): …'),
     ]);
 
-    const [path, list] = [...collection.sets][0];
+    const [path, list] = [...collection.sets][0]!;
     expect(path).toBe('/instance/mods/TS Mod/TrueStorms.esp');
-    expect(list[0].message).toBe('REGN … — fixed-size-subrecord-short, repairable (lossless): …');
-    expect(list[0].severity).toBe(1); // Warning — a Malformed plugin still loads and plays
+    expect(list[0]!.message).toBe('REGN … — fixed-size-subrecord-short, repairable (lossless): …');
+    expect(list[0]!.severity).toBe(1); // Warning — a Malformed plugin still loads and plays
   });
 
   // Rival: `mods/<origin>`, which put an overwrite copy's Problems entry on a path that
@@ -85,7 +85,7 @@ describe('publishLoadDiagnoses', () => {
       report('A.esp', 'M', 'first'), report('A.esp', 'M', 'second'),
     ]);
 
-    expect([...collection.sets.values()][0].map((d) => d.message)).toEqual(['first', 'second']);
+    expect([...collection.sets.values()][0]!.map((d) => d.message)).toEqual(['first', 'second']);
   });
 });
 

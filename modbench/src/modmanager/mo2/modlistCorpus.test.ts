@@ -58,7 +58,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     const entries = await readModlistEntries(dir);
-    expect(entries[0].name).toBe('ENBoost - 12k');
+    expect(entries[0]!.name).toBe('ENBoost - 12k');
   });
 
   it('insertSeparator adds a new separator marker, touching only modlist.txt', async () => {
@@ -105,7 +105,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
 
     const entries = await readModlistEntries(dir);
     const sepIdx = entries.findIndex((e) => e.kind === 'separator' && e.name === 'Unassigned (Modlist Development)');
-    expect(entries[sepIdx - 1].name).toBe('Cracked and Smudged Pip-Boy Screen');
+    expect(entries[sepIdx - 1]!.name).toBe('Cracked and Smudged Pip-Boy Screen');
   });
 
   it('reorderSeparatorBlock moves a separator and its (preceding) children as a unit, touching only modlist.txt', async () => {

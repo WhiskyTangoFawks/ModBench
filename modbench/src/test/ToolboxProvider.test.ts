@@ -42,8 +42,8 @@ describe('ToolboxProvider', () => {
   it('reads the active profile out of the value as a row that activates Switch Profile', () => {
     const [profile] = makeProvider({ state: () => ({ activeProfile: 'Survival', deployed: false }) }).getChildren();
 
-    expect(profile.description).toBe('Survival');
-    expect((profile.command as { command: string }).command).toBe('modbench.toolbox.switchProfile');
+    expect(profile!.description).toBe('Survival');
+    expect((profile!.command as { command: string }).command).toBe('modbench.toolbox.switchProfile');
   });
 
   // Rival: a row that reads the profile from anywhere but the value — the pre-first-read value
@@ -51,21 +51,21 @@ describe('ToolboxProvider', () => {
   it('reads out an em-dash while the value names no profile yet', () => {
     const [profile] = makeProvider({ state: () => ({ activeProfile: '', deployed: false }) }).getChildren();
 
-    expect(profile.description).toBe('—');
+    expect(profile!.description).toBe('—');
   });
 
   it('offers Deploy from the deployment row while the value says nothing is deployed', () => {
     const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: false }) }).getChildren();
 
     expect(rows).toHaveLength(2);
-    expect(rows[1].description).toBe('not deployed');
-    expect((rows[1].command as { command: string }).command).toBe('modbench.toolbox.deploy');
+    expect(rows[1]!.description).toBe('not deployed');
+    expect((rows[1]!.command as { command: string }).command).toBe('modbench.toolbox.deploy');
   });
 
   it('reads out a live deployment without offering Purge from the row — destructive actions stay in overflow behind a modal', () => {
     const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: true }) }).getChildren();
 
-    expect(rows[1].description).toBe('deployed');
-    expect(rows[1].command).toBeUndefined();
+    expect(rows[1]!.description).toBe('deployed');
+    expect(rows[1]!.command).toBeUndefined();
   });
 });

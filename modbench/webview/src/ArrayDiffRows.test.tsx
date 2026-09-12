@@ -228,9 +228,9 @@ describe('RecordPanel — array child rows (sorted)', () => {
     const kwdBTd = screen.getAllByText('KwdB').find(el => el.tagName === 'TD');
     expect(kwdBTd).toBeTruthy();
     const cells = kwdBTd!.closest('tr')!.querySelectorAll('td');
-    expect(cells[1].textContent).toBe('KwdB');
-    expect(cells[2].textContent).toBe('');
-    expect(cells[2].querySelector('[data-open-trigger]')).toBeNull();
+    expect(cells[1]!.textContent).toBe('KwdB');
+    expect(cells[2]!.textContent).toBe('');
+    expect(cells[2]!.querySelector('[data-open-trigger]')).toBeNull();
   });
 });
 
@@ -286,14 +286,14 @@ describe('RecordPanel — a struct member that is itself an array of structs', (
 
   async function expandToDepth4() {
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand Container -> Entries
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand Container -> Entries
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand Entries -> [0]
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand Entries -> [0]
     await waitFor(() => {
       const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
       if (!td) throw new Error('[0] TD not found yet');
     });
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand [0] -> Id/Weight
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand [0] -> Id/Weight
     await waitFor(() => screen.getByText('Weight'));
   }
 
@@ -353,7 +353,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Insert on the focused array-parent cell posts add at the array, carrying no value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    const cell = screen.getAllByText('[3]')[0].closest('td')!;
+    const cell = screen.getAllByText('[3]')[0]!.closest('td')!;
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
@@ -364,7 +364,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Delete on a focused array-element cell posts remove at its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
     await waitFor(() => screen.getByText('[1]'));
     const cell = screen.getByText('2').closest('td')!;
     fireEvent.click(cell);
@@ -376,7 +376,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowDown on a focused element posts move with the next position as its value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('[0]'));
     const cell = screen.getByText('1').closest('td')!;
     fireEvent.click(cell);
@@ -388,7 +388,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowUp on a focused element posts move with the previous position as its value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('[2]'));
     const cell = screen.getByText('3').closest('td')!;
     fireEvent.click(cell);
@@ -402,7 +402,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowUp on the first element still posts the move, to the position before it', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('[0]'));
     const cell = screen.getByText('1').closest('td')!;
     fireEvent.click(cell);
@@ -491,7 +491,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = editableIntArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
     await waitFor(() => screen.getByText('[1]'));
 
     editLastCellOfRow('[1]', '22', '99');
@@ -503,7 +503,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = structCollapseExpandResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('ObjectBounds'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
     await waitFor(() => screen.getByText('X1'));
 
     editLastCellOfRow('X1', '5', '7');
@@ -516,11 +516,11 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Weight'));
 
     editLastCellOfRow('Weight', '1', '7');
@@ -534,9 +534,9 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
@@ -552,9 +552,9 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
@@ -670,7 +670,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await waitFor(() => screen.getByText(label));
     // The row's own label cell comes first; once expanded, the key text also appears as the value
     // of the element's own `name` member.
-    fireEvent.click(screen.getAllByText(label)[0].closest('tr')!.querySelector('button')!);
+    fireEvent.click(screen.getAllByText(label)[0]!.closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getAllByText('flags'));
   }
 
@@ -678,7 +678,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // it in both, where a position could name only one.
   it('a value edit on a keyed element posts set through the key hop', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('flags')[0].closest('tr')!;
+    const row = screen.getAllByText('flags')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
     const cell = cells[cells.length - 1] as HTMLElement;
     fireEvent.doubleClick(within(cell).getByText('g'));
@@ -693,7 +693,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
 
   it('Delete on a keyed element posts remove naming the key', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
     const cell = cells[cells.length - 1] as HTMLElement;
     fireEvent.click(cell);
@@ -745,7 +745,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // inert on its rows.
   it('Ctrl+ArrowDown on a keyed element posts nothing', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
     const cell = cells[cells.length - 1] as HTMLElement;
     fireEvent.click(cell);
@@ -758,7 +758,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // a row that offered it would swallow the key and still post nothing, indistinguishable above.
   it('Ctrl+ArrowDown on a keyed element leaves the key unhandled', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
     const cell = cells[cells.length - 1] as HTMLElement;
     fireEvent.click(cell);

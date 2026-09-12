@@ -24,6 +24,6 @@ describe('PLUGIN_DESTINATION_OPTIONS (New Plugin\'s destination QuickPick)', () 
   });
 
   it('lists overwrite/ first, so it is the pre-highlighted default', () => {
-    expect(PLUGIN_DESTINATION_OPTIONS[0].choice).toBe('overwrite');
+    expect(PLUGIN_DESTINATION_OPTIONS[0]!.choice).toBe('overwrite');
   });
 });

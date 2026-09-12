@@ -13,6 +13,6 @@ describe('createPluginsTxtWatcher', () => {
 
     // Every profile, not the active one: switching profiles changes which file matters, and a
     // path resolved once at registration would stop watching the moment it did.
-    expect(watchers[0].pattern).toBe('profiles/*/plugins.txt');
+    expect(watchers[0]!.pattern).toBe('profiles/*/plugins.txt');
   });
 });

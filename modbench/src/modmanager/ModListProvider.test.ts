@@ -139,13 +139,13 @@ describe('ModListProvider', () => {
     const roots = await provider.getChildren();
 
     expect(roots[0]).toBeInstanceOf(CountNode);
-    expect(roots[0].label).toBe('2 active / 4 installed');
+    expect(roots[0]!.label).toBe('2 active / 4 installed');
     expect(roots[1]).toBeInstanceOf(SeparatorNode);
-    expect(roots[1].label).toBe('Section 1');
+    expect(roots[1]!.label).toBe('Section 1');
     expect(roots[2]).toBeInstanceOf(ModNode);
-    expect(roots[2].label).toBe('Delta');
+    expect(roots[2]!.label).toBe('Delta');
     expect(roots[3]).toBeInstanceOf(ModNode);
-    expect(roots[3].label).toBe('Gamma');
+    expect(roots[3]!.label).toBe('Gamma');
   });
 
   // Rival: the provider ignores the injected value and falls back to a read of its own — with
@@ -185,12 +185,12 @@ describe('ModListProvider', () => {
     // Default losing-at-top view reverses each sibling list, so the later file
     // entry (Disabled Mod) renders first.
     const [disabled, enabled] = children as ModNode[];
-    expect(enabled.label).toBe('UFO4P');
-    expect(enabled.description).toBe('v2.1.5');
-    expect(enabled.checkboxState).toBe(1); // Checked
-    expect(enabled.tooltip).toBe('UFO4P · v2.1.5 · 4598 · UFO4P.7z');
-    expect(disabled.checkboxState).toBe(0); // Unchecked
-    expect(disabled.tooltip).toBe('Disabled Mod'); // no extra fields
+    expect(enabled!.label).toBe('UFO4P');
+    expect(enabled!.description).toBe('v2.1.5');
+    expect(enabled!.checkboxState).toBe(1); // Checked
+    expect(enabled!.tooltip).toBe('UFO4P · v2.1.5 · 4598 · UFO4P.7z');
+    expect(disabled!.checkboxState).toBe(0); // Unchecked
+    expect(disabled!.tooltip).toBe('Disabled Mod'); // no extra fields
   });
 
   it('setModEnabled calls the setModEnabled command with the instance root, active profile and inputs, and fires a refresh', async () => {
@@ -281,7 +281,7 @@ describe('ModListProvider', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(rows[0].label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
+    expect(rows[0]!.label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EACCES: permission denied, open modlist.txt' },
     ]);
@@ -720,13 +720,13 @@ describe('ModListProvider', () => {
 
       expect(roots[0]).toBeInstanceOf(CountNode);
       expect(roots[1]).toBeInstanceOf(ModNode);
-      expect(roots[1].label).toBe('Solo A');
+      expect(roots[1]!.label).toBe('Solo A');
       expect(roots[2]).toBeInstanceOf(ModNode);
-      expect(roots[2].label).toBe('Solo B');
+      expect(roots[2]!.label).toBe('Solo B');
       expect(roots[3]).toBeInstanceOf(SeparatorNode);
-      expect(roots[3].label).toBe('Section 1');
+      expect(roots[3]!.label).toBe('Section 1');
       expect(roots[4]).toBeInstanceOf(SeparatorNode);
-      expect(roots[4].label).toBe('Section 2');
+      expect(roots[4]!.label).toBe('Section 2');
     });
 
     it('toggled to winning-at-top: mods within a separator are in file order', async () => {
@@ -777,7 +777,7 @@ describe('ModListProvider', () => {
 
       // winning-at-top: ungrouped (Alpha) first, then grouped (Group A).
       expect(roots[0]).toBeInstanceOf(ModNode);
-      expect(roots[0].label).toBe('Alpha');
+      expect(roots[0]!.label).toBe('Alpha');
       expect(roots[1]).toBeInstanceOf(SeparatorNode);
       const sepNode = roots[1] as SeparatorNode;
       const children = await provider.getChildren(sepNode);

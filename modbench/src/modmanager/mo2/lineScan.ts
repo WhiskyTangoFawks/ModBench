@@ -2,8 +2,6 @@
 // CRLF lookahead, the leading-BOM convention, and the splice arithmetic that the
 // modlist and plugins transforms would otherwise each re-implement.
 
-import { present } from '../../present';
-
 export interface LineRange {
   start: number;
   /** Index just past the line content, before any EOL. */
@@ -58,8 +56,10 @@ export function insertIndexAmongEntries(
 ): number {
   const entryLineIdx = [...lines.entries()].filter(([, line]) => isEntry(line)).map(([i]) => i);
   const clamped = Math.max(0, Math.min(toIndex, entryLineIdx.length));
-  if (clamped < entryLineIdx.length) return present(entryLineIdx[clamped], `entry line index at position ${clamped}`);
-  return entryLineIdx.length === 0 ? lines.length : present(entryLineIdx.at(-1), 'last entry line index') + 1;
+  const atClamped = entryLineIdx[clamped];
+  if (atClamped !== undefined) return atClamped;
+  const last = entryLineIdx.at(-1);
+  return last !== undefined ? last + 1 : lines.length;
 }
 
 /** Whole-file presence, never a one-line sniff, which could name a bare `\r` the

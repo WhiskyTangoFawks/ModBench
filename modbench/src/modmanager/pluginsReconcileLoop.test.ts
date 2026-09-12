@@ -30,7 +30,7 @@ afterEach(async () => {
 const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
-  return found[0];
+  return found[0]!;
 };
 
 // How a test learns a recompute landed: no sleep and no poll.
@@ -113,7 +113,7 @@ async function driveToQuiescence(
     const landed = await pastSequenceWithin(instance, instance.sequence, 5000);
     if (landed === TIMED_OUT) return { writes, quiescent: true }; // no recompute left to run
     const result = await reconciles[reconciles.length - 1];
-    if (!(result.applied && result.wrote)) return { writes, quiescent: true };
+    if (!(result!.applied && result!.wrote)) return { writes, quiescent: true };
     writes++;
     watcherFor('profiles/*/plugins.txt').fireChange();
   }

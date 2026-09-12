@@ -116,7 +116,7 @@ function pastSequenceWithin(instance: Instance, sequence: number, ms: number): P
 const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
-  return found[0];
+  return found[0]!;
 };
 
 // MO2, xEdit or the user rewriting the file, with Modbench none the wiser.

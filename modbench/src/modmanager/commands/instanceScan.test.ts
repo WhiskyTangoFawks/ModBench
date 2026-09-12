@@ -7,7 +7,7 @@ import { extname, join } from 'node:path';
 const READ_MODEL = 'instance';
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
 }
 
 const commandModules = (): string[] =>
