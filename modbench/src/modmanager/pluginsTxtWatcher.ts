@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import { createDebouncedFsWatcher } from './fsWatcher';
-import { PLUGINS_GLOB } from './mo2/layout';
+import { PLUGINS_GLOB } from './mo2Files';
 
 /** Every profile, not the active one: switching profiles changes which file matters. Anything
  *  that moves the Plugin load order rewrites this file, Modbench or not (ADR-0013). */

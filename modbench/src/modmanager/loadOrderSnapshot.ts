@@ -2,14 +2,14 @@
 // of any plugins.txt line no mod provides (ADR-0013). Vanilla masters and .ccc content are
 // prepended by the backend, never listed here.
 
-import { readdir } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import type { ModlistEntry } from './model';
 import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
 import { OVERWRITE_DIR_NAME, overwriteDir } from './mo2/layout';
-import { isPluginFile } from './pluginFile';
+import { isPluginFile } from './mo2/pluginFile';
 import { findUnlistedPlugins } from './unlistedPlugins';
 import { pluginSlots } from './mo2/pluginsText';
+import { listDir } from './mo2Files';
 
 // Reserved origin values (ADR-0012), matching their literal directory names. Never a real mod
 // folder name: mod folders live under `mods/`.
@@ -88,7 +88,7 @@ export function resolvePluginPaths(
 // too, not just origin classification. Empty until a purge first creates the folder.
 async function overwritePluginFiles(instanceRoot: string): Promise<Map<string, string>> {
   try {
-    const entries = await readdir(overwriteDir(instanceRoot), { withFileTypes: true });
+    const entries = await listDir(overwriteDir(instanceRoot));
     return new Map(entries.filter((e) => e.isFile()).map((e) => [foldPath(e.name), e.name]));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map(); // no overwrite folder — nothing wins from it

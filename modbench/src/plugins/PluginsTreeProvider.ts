@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../medit/client';
-import { firstReadOf, type FirstRead, type InstanceValue, type InstanceView } from '../modmanager/instance';
+import type { InstanceValue, InstanceView } from '../modmanager/instance';
+import { firstReadOf, type FirstRead } from '../modmanager/instanceFirstRead';
 import type { PluginEntry } from '../modmanager/model';
 import type { Reporter } from '../reporter';
 import { dropIndexForMove } from '../modmanager/mo2/pluginsText';

@@ -1,8 +1,11 @@
-// MO2 files: the one writer of the instance (target-architecture.d2's `mo2files` box). A command
-// splices a file's text through its own codec and puts the result through here.
+// MO2 files: the one reader and writer of the instance (target-architecture.d2's `mo2files`
+// box). A command splices a file's text through its own codec and puts the result through here.
 
 import type { Dirent } from 'node:fs';
 import { access, cp, mkdir, mkdtemp, readFile, readdir, rename as fsRename, rm, writeFile } from 'node:fs/promises';
+
+// The Instance's watcher modules ask here rather than naming MO2's layout themselves.
+export { MODS_GLOB, MODLIST_GLOB, PLUGINS_GLOB, OVERWRITE_GLOB, DOWNLOADS_GLOB } from './mo2/layout';
 
 // One chain per path in flight: a file with no writer pending costs nothing, and two different
 // paths never serialize against each other. Module-level, so every command shares one adapter.
