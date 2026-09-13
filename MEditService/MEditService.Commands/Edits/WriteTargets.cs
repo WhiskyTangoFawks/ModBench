@@ -139,10 +139,10 @@ internal sealed class WriteTargets(
         // Checked before anything else, so the source file is never reached. The marker caches the
         // classifier's last verdict (ADR-0003): present means classify again, and a verdict
         // of nothing drops it and lets the write through.
-        if (ExternalChangeDeferral.Unanswered(folder) is not { } question) return null;
+        if (SourceRepository.UnansweredExternalChange(folder) is not { } question) return null;
 
         // A plugin caught mid-write is no verdict, and no verdict keeps the question open.
-        if (PluginBytesIn(folder) is not { } plugins)
+        if (ExternalChangeClassifier.PluginBytesIn(loadOrder.Current, folder) is not { } plugins)
             return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
 
         switch (ExternalChangeClassifier.ClassifyMod(folder, plugins))
@@ -150,27 +150,13 @@ internal sealed class WriteTargets(
             case ExternalChangeClassification.ExternalChange:
                 return RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question);
             case null:
-                ExternalChangeDeferral.Clear(folder);
+                SourceRepository.ClearExternalChangeQuestion(folder);
                 return null;
             default:
                 // An interrupted compile is the repair offer's state, not this question's; the marker
                 // waits for a verdict either way.
                 return null;
         }
-    }
-
-    // Every copy the load order holds in this mod folder, as the load-time check hashes them, or
-    // null when one cannot be read: a partial set would classify the rest as the whole mod.
-    private List<(string PluginName, byte[] ObservedBytes)>? PluginBytesIn(string modFolder)
-    {
-        var plugins = new List<(string, byte[])>();
-        foreach (var copy in loadOrder.Current.Copies)
-        {
-            if (!string.Equals(LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal)) continue;
-            if (PluginBinaryHash.BytesOfFile(copy.Path) is not { } bytes) return null;
-            plugins.Add((copy.Name, bytes));
-        }
-        return plugins;
     }
 
     // Two refusals, because there are two different ways out and a message that named neither

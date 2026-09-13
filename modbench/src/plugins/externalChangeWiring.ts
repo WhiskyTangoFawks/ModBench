@@ -2,20 +2,20 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import type { MEditClient } from '../medit/client';
 import {
-  subscribeExternalChangePending, type OpenMergeEditor,
+  subscribeQuestionOpen, type OpenMergeEditor,
 } from '../medit/externalChangeCoordinator';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { makeReporter } from '../reporter';
 import type { AskQuestion } from '../dialog';
 
-// Its own file, not externalChangeGestures.ts: `subscribeExternalChangePending` (a value import)
+// Its own file, not externalChangeGestures.ts: `subscribeQuestionOpen` (a value import)
 // lives in medit/externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —
 // importing back from here would cycle the two modules.
 
 /** ADR-0014 invariant 2: the plugin watcher's signal drives the one dialog directly — no poll,
  *  no health gate, since `client.subscribe` already follows the backend's lifecycle. Returns the
  *  unsubscribe. */
-export function wireExternalChangePending(
+export function wireQuestionOpen(
   client: Pick<MEditClient, 'getPlugins' | 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain' | 'subscribe'>,
   outputChannel: vscode.LogOutputChannel,
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
@@ -25,7 +25,7 @@ export function wireExternalChangePending(
   // here at the boundary so the flat shape stops at the collaborator that needs it.
   const log = (msg: string) => outputChannel.info(msg);
   const reporter = makeReporter(outputChannel, 'externalChange');
-  return subscribeExternalChangePending({
+  return subscribeQuestionOpen({
     client,
     showDialog: askQuestion,
     openMergeEditor: makeMergeEditorOpener(client, outputChannel),

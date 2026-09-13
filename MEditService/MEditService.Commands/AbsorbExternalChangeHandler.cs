@@ -81,7 +81,7 @@ public sealed class AbsorbExternalChangeHandler
 
         // The question this exit path answers is answered: every plugin the mod holds is unblocked
         // again.
-        ExternalChangeDeferral.Clear(modFolder);
+        SourceRepository.ClearExternalChangeQuestion(modFolder);
         // A refused or conflicted rebase still leaves this Absorb applied: main already moved.
         return AbsorbResult.Success(SourceRepository.RebaseEditBranch(modFolder));
     }

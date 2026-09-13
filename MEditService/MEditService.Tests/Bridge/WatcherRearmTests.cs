@@ -1,5 +1,3 @@
-using MEditService.Commands;
-using MEditService.Commands.Edits;
 using MEditService.Ports;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
@@ -11,9 +9,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Bridge;
 
-/// <summary>A binary changed while no watcher was running (Modbench closed) is caught when a load
-/// order reconciles, through the same classifier the live watcher calls; crash-repair offers are
-/// routed away from the external-change dialog's queue.</summary>
+/// <summary>A binary changed with no watcher running is caught at the next reconcile, through the
+/// same "a tracked mod settled" verb the live watcher sends.</summary>
 public sealed class WatcherRearmTests : IDisposable
 {
     private readonly InMemoryNotificationPublisher _notifications = new();
@@ -42,9 +39,11 @@ public sealed class WatcherRearmTests : IDisposable
         using var watcher = Watching();
         watcher.Rearm(_mod.Holder.Current);
 
-        var unanswered = Assert.Single(watcher.Unanswered());
-        Assert.Equal(_mod.ModFolder, unanswered.ModFolder);
-        Assert.Equal([IndexedModFixture.PluginName], unanswered.Classification.Plugins);
+        var question = SourceRepository.UnansweredExternalChange(_mod.ModFolder);
+        Assert.NotNull(question);
+        Assert.Contains(IndexedModFixture.PluginName, question, StringComparison.Ordinal);
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        Assert.Equal([IndexedModFixture.PluginName], pending.Plugins);
     }
 
     // The question reaches the front end as one notification, and the origin on it is the load
@@ -57,7 +56,7 @@ public sealed class WatcherRearmTests : IDisposable
         using var watcher = Watching();
         watcher.Rearm(_mod.Holder.Current);
 
-        var pending = Assert.Single(_notifications.Notifications.OfType<ExternalChangePendingNotification>());
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
         Assert.Equal(IndexedModFixture.ModFolderOrigin, pending.Origin);
         Assert.Equal([IndexedModFixture.PluginName], pending.Plugins);
     }
@@ -74,13 +73,40 @@ public sealed class WatcherRearmTests : IDisposable
         File.WriteAllBytes(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName), "changed-by-xedit"u8.ToArray());
 
         var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && watcher.Unanswered().Count == 0) Thread.Sleep(20);
+        while (DateTime.UtcNow < deadline && _notifications.Notifications.Count == 0) Thread.Sleep(20);
         // Past the quiet window, so a second settle would have landed its own question by now.
         Thread.Sleep(400);
 
-        var pending = Assert.Single(_notifications.Notifications.OfType<ExternalChangePendingNotification>());
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
         Assert.Equal(IndexedModFixture.ModFolderOrigin, pending.Origin);
         Assert.Equal([IndexedModFixture.PluginName], pending.Plugins);
+    }
+
+    // ADR-0015 invariant 2: a restart's classify and a live change's classify are the same call in
+    // Commands, so the two ask the identical question.
+    [Fact]
+    public void ARestartAndALiveChange_PublishTheIdenticalQuestion()
+    {
+        File.WriteAllBytes(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName), "changed-by-xedit"u8.ToArray());
+        using var restarted = Watching();
+        restarted.Rearm(_mod.Holder.Current);
+        var fromRestart = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
+
+        using var live = IndexedModFixture.Tracked();
+        var liveNotifications = new InMemoryNotificationPublisher();
+        using var liveWatcher = TestWatcher.Over(live.Holder, live.Index, liveNotifications, TimeSpan.FromMilliseconds(100));
+        liveWatcher.Rearm(live.Holder.Current);
+        File.WriteAllBytes(Path.Combine(live.ModFolder, IndexedModFixture.PluginName), "changed-by-xedit"u8.ToArray());
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (DateTime.UtcNow < deadline && liveNotifications.Notifications.Count == 0) Thread.Sleep(20);
+        Thread.Sleep(400);
+        var fromLiveChange = Assert.Single(liveNotifications.Notifications.OfType<QuestionOpenNotification>());
+
+        Assert.Equal(fromRestart.Plugins, fromLiveChange.Plugins);
+        Assert.Equal(fromRestart.TrackedFiles, fromLiveChange.TrackedFiles);
+        Assert.Equal(fromRestart.MetaChanged, fromLiveChange.MetaChanged);
+        Assert.Equal(fromRestart.OldVersion, fromLiveChange.OldVersion);
+        Assert.Equal(fromRestart.NewVersion, fromLiveChange.NewVersion);
     }
 
     [Fact]
@@ -90,7 +116,7 @@ public sealed class WatcherRearmTests : IDisposable
 
         var offers = watcher.Rearm(_mod.Holder.Current);
 
-        Assert.Empty(watcher.Unanswered());
+        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
         Assert.Empty(offers); // clean state produces no repair activity either.
     }
 
@@ -100,27 +126,27 @@ public sealed class WatcherRearmTests : IDisposable
     [Fact]
     public void Rearm_DropsAStaleMarker_AndQueuesNothing_WhenTheBytesMatchTheParkedSnapshot()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, "a question whose change is gone");
+        SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question whose change is gone");
         using var watcher = Watching();
 
         watcher.Rearm(_mod.Holder.Current);
 
-        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
-        Assert.Empty(watcher.Unanswered());
+        Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
+        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
     }
 
     // An unreadable binary is a repair offer, and no verdict: the marker it would have cleared stands.
     [Fact]
     public void Rearm_KeepsAStaleMarker_WhenTheTrackedPluginCannotBeRead()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, "a question the binary cannot answer for now");
+        SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "a question the binary cannot answer for now");
         File.Delete(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName));
         using var watcher = Watching();
 
         var offers = watcher.Rearm(_mod.Holder.Current);
 
         Assert.Equal(CrashRepairReason.MissingOrUnreadableBinary, Assert.Single(offers).Reason);
-        Assert.NotNull(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+        Assert.NotNull(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
     // A crash between the journal's marker write and its clear is offered for repair and never
@@ -140,7 +166,8 @@ public sealed class WatcherRearmTests : IDisposable
         Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
         Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
         Assert.Equal(CrashRepairReason.InterruptedCompile, offer.Reason);
-        Assert.Empty(watcher.Unanswered()); // never the external-change dialog's own question.
+        // Never the external-change dialog's own question.
+        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
     }
 
     // The repo and source survive, only the plugin's own binary is gone — reachable
@@ -158,7 +185,7 @@ public sealed class WatcherRearmTests : IDisposable
         Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
         Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
         Assert.Equal(CrashRepairReason.MissingOrUnreadableBinary, offer.Reason);
-        Assert.Empty(watcher.Unanswered());
+        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
     }
 
     // TrackedOf's early-continue makes the rest of the re-arm's body unreachable for an untracked
@@ -173,7 +200,7 @@ public sealed class WatcherRearmTests : IDisposable
         var offers = watcher.Rearm(untracked.Holder.Current);
 
         Assert.Empty(offers);
-        Assert.Empty(watcher.Unanswered());
+        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
     }
 
     [Fact]
@@ -183,13 +210,14 @@ public sealed class WatcherRearmTests : IDisposable
         using var watcher = Watching(TimeSpan.FromMilliseconds(100));
 
         watcher.Rearm(_mod.Holder.Current);
-        Assert.Empty(watcher.Unanswered());
+        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
 
         File.WriteAllBytes(pluginPath, "changed-live-after-load"u8.ToArray());
 
         var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && watcher.Unanswered().Count == 0) Thread.Sleep(20);
+        while (DateTime.UtcNow < deadline && !_notifications.Notifications.OfType<QuestionOpenNotification>().Any())
+            Thread.Sleep(20);
 
-        Assert.Single(watcher.Unanswered());
+        Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
     }
 }

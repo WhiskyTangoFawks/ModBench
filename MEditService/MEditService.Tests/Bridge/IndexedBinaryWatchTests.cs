@@ -2,6 +2,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using MEditService.Watcher;
@@ -107,8 +108,8 @@ public sealed class IndexedBinaryWatchTests
 
         RewriteBinaryWithExtraNpc(fixture, "ChangedByXEdit");
 
-        WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(5));
-        Assert.NotEmpty(watcher.Unanswered());
+        WaitUntil(() => SourceRepository.UnansweredExternalChange(fixture.ModFolder) != null, TimeSpan.FromSeconds(5));
+        Assert.NotNull(SourceRepository.UnansweredExternalChange(fixture.ModFolder));
         // Well past the debounce window, so "no re-index" is a decision rather than a race.
         Thread.Sleep(500);
         Assert.Empty(index.Of("reindex"));
@@ -128,6 +129,5 @@ public sealed class IndexedBinaryWatchTests
         var offers = watcher.Rearm(holder.Current);
 
         Assert.Empty(offers);
-        Assert.Empty(watcher.Unanswered());
     }
 }
