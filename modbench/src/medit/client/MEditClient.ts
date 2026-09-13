@@ -57,9 +57,9 @@ export interface LoadOrderPluginInput {
 }
 
 /** A tagged union, not a sentinel value. `abandoned` means the reconcile was superseded or the
- *  user closed mEdit; `failed`'s `message` is the whole toast the load-order sync shows. */
+ *  user closed mEdit; failures and any offer ride other notifications, never this. */
 export type LoadOrderOutcome =
-  | { outcome: 'reconciled'; failures: PluginLoadFailure[]; crashRepairOffers: CrashRepairOffer[] }
+  | { outcome: 'applied' }
   | { outcome: 'failed'; message: string }
   | { outcome: 'abandoned' };
 

@@ -40,10 +40,17 @@ export interface UnansweredExternalChange {
 /** ADR-0013: names the copy that failed — two copies of one name are two registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
-/** Rides `PUT /load-order`'s own response: either reason can newly arise only from a compile this
- *  process drives, or from a restart, and every reconcile observes both (ADR-0019). */
-export type CrashRepairReason = Schemas['CrashRepairReason'];
-export type CrashRepairOffer = Schemas['CrashRepairOffer'];
+/** A transform of `question-open`'s own `crashRepairReason` string, honest since the enum left
+ *  the wire with the load-order response's failures. */
+export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';
+
+/** One `question-open` notification's crash-repair verdict, exploded to one offer per plugin it
+ *  named — the shape the dialog presents one modal per. */
+export interface CrashRepairOffer {
+  plugin: string;
+  origin: string;
+  reason: CrashRepairReason;
+}
 
 /** Baseline / apply's shared result — a refusal (e.g. apply's same-record collision) is a typed,
  *  successful answer, the same posture {@link CompileResult} uses. */

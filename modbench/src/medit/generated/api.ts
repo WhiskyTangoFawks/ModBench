@@ -683,13 +683,6 @@ export interface components {
             parseDiagnosis?: string | null;
             hasParseFailure: boolean;
         };
-        CrashRepairOffer: {
-            plugin: string;
-            origin: string;
-            reason: components["schemas"]["CrashRepairReason"];
-        };
-        /** @enum {string} */
-        CrashRepairReason: "InterruptedCompile" | "MissingOrUnreadableBinary";
         CreatePluginRequest: {
             name: string;
             path: string;
@@ -786,9 +779,7 @@ export interface components {
             gameRelease: string;
         };
         LoadOrderResponse: {
-            status: string;
-            failures: components["schemas"]["PluginLoadFailure"][];
-            crashRepairOffers: components["schemas"]["CrashRepairOffer"][];
+            applied: boolean;
         };
         /** @enum {string} */
         LoadOrderState: "None" | "Reconciling" | "Ready";
@@ -822,6 +813,7 @@ export interface components {
             externalChangeOldVersion?: string | null;
             externalChangeNewVersion?: string | null;
             externalChangeTrackedFiles?: string[] | null;
+            crashRepairReason?: string | null;
         };
         PathHop: {
             kind: string;
@@ -1185,24 +1177,6 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Locked */
-            423: {
                 headers: {
                     [name: string]: unknown;
                 };

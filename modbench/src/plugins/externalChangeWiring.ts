@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { MEditClient } from '../medit/client';
+import type { CrashRepairOffer, MEditClient } from '../medit/client';
 import {
   subscribeQuestionOpen, type OpenMergeEditor,
 } from '../medit/externalChangeCoordinator';
@@ -20,6 +20,7 @@ export function wireQuestionOpen(
   outputChannel: vscode.LogOutputChannel,
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
   askQuestion: AskQuestion,
+  presentCrashRepair: (offers: CrashRepairOffer[]) => Promise<void>,
 ): () => void {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.
@@ -32,6 +33,7 @@ export function wireQuestionOpen(
     showError: (message) => reporter.report('error', message),
     refreshTree: () => treeProvider.refresh(),
     refreshMatchingPlugins,
+    presentCrashRepair,
     log,
   }, client);
 }

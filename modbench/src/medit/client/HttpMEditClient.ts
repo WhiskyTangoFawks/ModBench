@@ -182,23 +182,13 @@ export class HttpMEditClient implements MEditClient {
     } finally {
       unsubscribe();
     }
-    const { data, error, response } = result;
-    // 409 is the backend saying this snapshot was superseded: treating it as a failure would make
-    // the caller act on a load order the newer snapshot now owns. Checked before `!response.ok`,
-    // which would otherwise swallow it.
-    if (response.status === 409) {
-      this.log(`[HttpMEditClient] putLoadOrder was superseded (409): ${errorText(error)}`);
-      return { outcome: 'abandoned' };
-    }
+    const { error, response } = result;
     if (!response.ok) {
       const text = errorText(error);
       this.log(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
       return { outcome: 'failed', message: `mEdit: Failed to send the load order — ${text}` };
     }
-    // `data` is undefined only on a non-ok response, already returned above; both lists are
-    // non-nullable on the wire, so there is nothing left to coalesce per field.
-    const reconciled = data ?? { failures: [], crashRepairOffers: [] };
-    return { outcome: 'reconciled', failures: reconciled.failures, crashRepairOffers: reconciled.crashRepairOffers };
+    return { outcome: 'applied' };
   }
 
   // An abort is the one rejection that is not a failure: the teardown is already underway.

@@ -1,4 +1,4 @@
-import type { MEditClient, UnansweredExternalChange } from './client';
+import type { CrashRepairOffer, CrashRepairReason, MEditClient, UnansweredExternalChange } from './client';
 import type { AskQuestion } from '../dialog';
 import { handleUnanswered } from '../plugins/externalChangeGestures';
 
@@ -16,6 +16,8 @@ export interface ExternalChangeCoordinatorDeps {
   /** A landed Keep/Absorb/Rebase is a working-tree change (ADR-0017). */
   refreshTree: () => void;
   refreshMatchingPlugins: () => void;
+  /** The other question-open verdict: a repair offer, never Absorb/Keep's own dialog. */
+  presentCrashRepair: (offers: CrashRepairOffer[]) => Promise<void>;
   log?: (msg: string) => void;
 }
 
@@ -27,6 +29,16 @@ export function subscribeQuestionOpen(
 ): () => void {
   const log = deps.log ?? (() => {});
   return notificationSubscriber.subscribe('question-open', (event) => {
+    // Never both: a genuine external change and a repair offer are the two verdicts one
+    // question-open notification carries, one or the other.
+    if (event.crashRepairReason) {
+      const reason = event.crashRepairReason as CrashRepairReason;
+      const offers: CrashRepairOffer[] = event.keys.map((plugin) => ({ plugin, origin: event.origin, reason }));
+      deps.presentCrashRepair(offers).catch((e: unknown) => {
+        log(`[externalChangeCoordinator] presenting the repair offer for ${event.origin} failed: ${e instanceof Error ? e.message : String(e)}`);
+      });
+      return;
+    }
     // `keys` carries the changed plugin names — the generic field every notification kind
     // already has, repurposed rather than a second copy of the same list.
     const change: UnansweredExternalChange = {
