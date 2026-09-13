@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -19,14 +20,22 @@ public sealed class ModFolderWatcherTests
 
     // A repository with a source root per plugin: the routing under test only reaches the Index for
     // a mod git still calls its own.
+    // A plugin with a real binary on disk is parked at its real hash, so Commands' own classify
+    // finds self-echo rather than a spurious external change on the next settle.
     private static void TrackTree(string modFolder, params string[] plugins)
     {
         var files = plugins
             .Select(p => new TreeFile($"source/{p}/npc_/{p}/000001.json", "{}"u8.ToArray()))
             .ToArray();
         var trailers = new TrackProvenance(
-            null, null, plugins.ToDictionary(p => p, _ => "unused-at-track-time", StringComparer.Ordinal));
+            null, null, plugins.ToDictionary(p => p, p => RealOrPlaceholderHash(modFolder, p), StringComparer.Ordinal));
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
+    }
+
+    private static string RealOrPlaceholderHash(string modFolder, string plugin)
+    {
+        var path = Path.Combine(modFolder, plugin);
+        return File.Exists(path) ? PluginBinaryHash.TrailerFormOfFile(path) : "unused-at-track-time";
     }
 
     private static ModFolderWatcher Projecting(
