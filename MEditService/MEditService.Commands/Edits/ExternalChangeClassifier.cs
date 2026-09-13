@@ -1,4 +1,5 @@
-using System.Security.Cryptography;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 
 namespace MEditService.Commands.Edits;
@@ -20,19 +21,10 @@ public static class ExternalChangeClassifier
         if (CompileJournal.UnfinishedBatch(modFolder) != null)
             return new ExternalChangeClassification.CrashRecovery();
 
-        var changedPlugins = new List<string>();
-        foreach (var (name, bytes) in plugins)
-        {
-            var observedSha256 = Convert.ToHexStringLower(SHA256.HashData(bytes));
-            var parkedSha256 = SourceRepository.ParkedCompileBinarySha256(modFolder, name);
-
-            // A missing parked ref is never a match — degrade to reporting a change, never guess
-            // self-echo from an absent ref.
-            if (parkedSha256 != null && string.Equals(observedSha256, parkedSha256, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            changedPlugins.Add(name);
-        }
+        var changedPlugins = plugins
+            .Where(p => !SourceRepository.MatchesParkedCompileBinary(modFolder, p.PluginName, p.ObservedBytes))
+            .Select(p => p.PluginName)
+            .ToList();
 
         var trackedFileChanges = SourceRepository.ChangedTrackedFilesOutsideSource(modFolder);
         if (changedPlugins.Count == 0 && trackedFileChanges.Count == 0) return null;
@@ -48,6 +40,23 @@ public static class ExternalChangeClassifier
 
         return new ExternalChangeClassification.ExternalChange(
             changedPlugins, [.. trackedFileChanges.Select(c => c.RelativePath)], metaChanged, baseline?.UpstreamVersion, meta.UpstreamVersion);
+    }
+
+    /// <summary>Every plugin the load order holds in <paramref name="modFolder"/>, read fresh off
+    /// disk, or null when one cannot be read — a partial set would classify the rest as the whole
+    /// mod.</summary>
+    public static List<(string PluginName, byte[] ObservedBytes)>? PluginBytesIn(
+        LoadOrderSnapshot loadOrder, string modFolder)
+    {
+        var plugins = new List<(string, byte[])>();
+        foreach (var copy in loadOrder.Copies)
+        {
+            if (!string.Equals(LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path), modFolder, StringComparison.Ordinal))
+                continue;
+            if (PluginBinaryHash.BytesOfFile(copy.Path) is not { } bytes) return null;
+            plugins.Add((copy.Name, bytes));
+        }
+        return plugins;
     }
 }
 

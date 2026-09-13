@@ -49,8 +49,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
         var watcher = TestWatcher.Inert();
-        watcher.ReportExternalChange(_mod.ModFolder,
-            new ExternalChangeClassification.ExternalChange([IndexedModFixture.PluginName], [], false, null, null));
+        SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
@@ -59,7 +58,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.True(ok.Value!.Succeeded);
-        Assert.Empty(watcher.Unanswered());
+        Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
     [Fact]
@@ -83,8 +82,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
         var watcher = TestWatcher.Inert();
-        watcher.ReportExternalChange(_mod.ModFolder,
-            new ExternalChangeClassification.ExternalChange([IndexedModFixture.PluginName], [], false, null, null));
+        SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
@@ -94,7 +92,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.False(ok.Value!.Succeeded);
         Assert.Contains(IndexedModFixture.PluginName, ok.Value.RefusalReason, StringComparison.Ordinal);
-        Assert.NotEmpty(watcher.Unanswered());
+        Assert.NotNull(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
     [Fact]

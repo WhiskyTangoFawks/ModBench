@@ -26,7 +26,7 @@ export function subscribeExternalChangePending(
   deps: ExternalChangeCoordinatorDeps, notificationSubscriber: Pick<MEditClient, 'subscribe'>,
 ): () => void {
   const log = deps.log ?? (() => {});
-  return notificationSubscriber.subscribe('external-change-pending', (event) => {
+  return notificationSubscriber.subscribe('question-open', (event) => {
     // `keys` carries the changed plugin names — the generic field every notification kind
     // already has, repurposed rather than a second copy of the same list.
     const change: UnansweredExternalChange = {

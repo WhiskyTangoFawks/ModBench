@@ -1,5 +1,4 @@
 using System.Timers;
-using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
@@ -23,8 +22,6 @@ public sealed class ModFolderWatcher : IDisposable
     private readonly TimeSpan _maxWindow;
     private readonly object _gate = new();
     private readonly Dictionary<string, ModEntry> _mods = new(StringComparer.Ordinal);
-    // Keyed by mod folder alone: the unit of a question is the mod (ADR-0003).
-    private readonly Dictionary<string, UnansweredExternalChange> _unanswered = new(StringComparer.Ordinal);
 
     // Past this many documents in one window the batch is projected whole: one git listing for the
     // copy costs less than asking git per named record.
@@ -58,11 +55,9 @@ public sealed class ModFolderWatcher : IDisposable
         UnwatchAllIndexed();
 
         var offers = new List<CrashRepairOffer>();
-        // Grouped by mod folder: the classifier runs once per mod (ADR-0003), covering every tracked
+        // Grouped by mod folder: Commands settles once per mod (ADR-0003), covering every tracked
         // plugin the mod holds in one pass, exactly as the live watcher's settle does.
-        var byModFolder = new Dictionary<string, List<(string Name, string Origin, byte[] Bytes)>>(StringComparer.Ordinal);
-        // A mod with a plugin nobody could hash has no whole verdict, so nothing of its is cleared.
-        var unreadable = new HashSet<string>(StringComparer.Ordinal);
+        var byModFolder = new Dictionary<string, List<(string Name, string Origin)>>(StringComparer.Ordinal);
 
         foreach (var plugin in order.Copies)
         {
@@ -83,61 +78,49 @@ public sealed class ModFolderWatcher : IDisposable
 
             Watch(modFolder, SourceRepository.RootIn(modFolder, plugin.Name), plugin.Name, plugin.Origin);
 
-            byte[] bytes;
             try
             {
-                bytes = File.ReadAllBytes(plugin.Path);
+                File.ReadAllBytes(plugin.Path);
             }
             catch (IOException ex)
             {
-                // Nothing to hash: an unreadable tracked binary is a repair offer, not classified,
-                // and gets no classification watch.
+                // Unreadable: a repair offer, never Commands' own question.
                 _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
                 offers.Add(new CrashRepairOffer(plugin.Name, plugin.Origin, CrashRepairReason.MissingOrUnreadableBinary));
-                unreadable.Add(modFolder);
                 continue;
             }
 
             if (!byModFolder.TryGetValue(modFolder, out var entries))
                 byModFolder[modFolder] = entries = [];
-            entries.Add((plugin.Name, plugin.Origin, bytes));
+            entries.Add((plugin.Name, plugin.Origin));
 
             Watch(modFolder, plugin.Name, plugin.Path);
         }
 
         foreach (var (modFolder, entries) in byModFolder)
-            ClassifyAtLoad(modFolder, entries, unreadable, offers);
+            SettleAtLoad(modFolder, entries, offers);
 
         return offers;
     }
 
-    private void ClassifyAtLoad(
-        string modFolder,
-        List<(string Name, string Origin, byte[] Bytes)> entries,
-        HashSet<string> unreadable,
-        List<CrashRepairOffer> offers)
+    // "A tracked mod settled" (ADR-0015), fired once per mod at load. A crash-recovery verdict
+    // becomes this mod's repair offers; any other verdict is Commands' own affair.
+    private void SettleAtLoad(string modFolder, List<(string Name, string Origin)> entries, List<CrashRepairOffer> offers)
     {
-        switch (ExternalChangeClassifier.ClassifyMod(modFolder, [.. entries.Select(e => (e.Name, e.Bytes))]))
+        switch (TrackedModSettled.Handle(_holder.Current, modFolder, _notifications))
         {
-            case ExternalChangeClassification.ExternalChange change:
+            case TrackedModSettledOutcome.QuestionOpened:
                 if (_logger.IsEnabled(LogLevel.Information))
                     _logger.LogInformation("External change detected at load for {ModFolder}", modFolder);
-                ReportExternalChange(modFolder, change);
                 break;
-            case ExternalChangeClassification.CrashRecovery:
-                // Never ReportExternalChange — the two prompts must never both fire for one event,
-                // and this one already routes to the repair offer instead.
-                foreach (var entry in entries)
+
+            case TrackedModSettledOutcome.CrashRecovery:
+                foreach (var (name, origin) in entries)
                 {
                     if (_logger.IsEnabled(LogLevel.Information))
-                        _logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", entry.Name, entry.Origin);
-                    offers.Add(new CrashRepairOffer(entry.Name, entry.Origin, CrashRepairReason.InterruptedCompile));
+                        _logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", name, origin);
+                    offers.Add(new CrashRepairOffer(name, origin, CrashRepairReason.InterruptedCompile));
                 }
-                break;
-            case null when !unreadable.Contains(modFolder):
-                // The classifier is the authority and the marker only its cache (ADR-0007
-                // amendment): a question whose change is gone is not asked again, or kept.
-                ExternalChangeDeferral.Clear(modFolder);
                 break;
         }
     }
@@ -160,9 +143,8 @@ public sealed class ModFolderWatcher : IDisposable
         lock (_gate) ModEntryFor(modFolder, recursive: false);
     }
 
-    /// <summary>Registers <paramref name="pluginName"/> for classification: self-echo, crash recovery
-    /// or a genuine external change, decided at settle by <see cref="ExternalChangeClassifier"/>.
-    /// Arms the mod's watcher if this is its first registration.</summary>
+    /// <summary>Registers <paramref name="pluginName"/> so a settle sends Commands "a tracked mod
+    /// settled" for this mod. Arms the mod's watcher if this is its first registration.</summary>
     public void Watch(string modFolder, string pluginName, string pluginPath)
     {
         lock (_gate)
@@ -233,54 +215,6 @@ public sealed class ModFolderWatcher : IDisposable
                 }
         }
     }
-
-    /// <summary>Never CrashRecovery, which is filtered before a question is queued. One entry per
-    /// mod folder, and the queue follows the marker: a question whose marker was cleared elsewhere
-    /// is dropped here, so the two never disagree.</summary>
-    public IReadOnlyList<UnansweredExternalChange> Unanswered()
-    {
-        lock (_gate)
-        {
-            foreach (var modFolder in _unanswered.Keys.Where(m => ExternalChangeDeferral.Unanswered(m) == null).ToList())
-                _unanswered.Remove(modFolder);
-            return [.. _unanswered.Values];
-        }
-    }
-
-    /// <summary>Both triggers — the live watch and the load-time check — get
-    /// <see cref="ExternalChangeDeferral"/>'s marker here, and publish the same question.</summary>
-    internal void ReportExternalChange(string modFolder, ExternalChangeClassification.ExternalChange classification)
-    {
-        UnansweredExternalChange change;
-        lock (_gate)
-        {
-            var modName = Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
-            var named = classification.Plugins.Concat(classification.TrackedFiles).ToList();
-            var changed = named.Count > 0 ? string.Join(", ", named) : modName;
-            ExternalChangeDeferral.Set(modFolder,
-                $"{changed} (in {modName}) changed outside Modbench and is awaiting an answer — " +
-                "Commit to main as new baseline, or Apply to working tree on edit; the question is " +
-                "asked again on the next change or load.");
-            change = new UnansweredExternalChange(modFolder, classification);
-            _unanswered[modFolder] = change;
-        }
-        RaiseSafely(() => PublishPending(change));
-    }
-
-    // The watch carries only the bare mod folder, so origin is resolved here, off the load order the
-    // kernel holds.
-    private void PublishPending(UnansweredExternalChange change)
-    {
-        var classification = change.Classification;
-        _notifications.Publish(new ExternalChangePendingNotification(
-            OriginOf(_holder.Current, change.ModFolder), classification.Plugins, classification.TrackedFiles,
-            classification.MetaChanged, classification.OldVersion, classification.NewVersion));
-    }
-
-    // A change's own Plugins list can be empty (a tracked-file-only change), so origin resolves off
-    // the mod folder alone.
-    private static string OriginOf(LoadOrderSnapshot loadOrder, string modFolder) =>
-        loadOrder.Copies.FirstOrDefault(copy => LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
     private static string OriginOf(LoadOrderSnapshot loadOrder, string modFolder, string pluginName) =>
         loadOrder.Copies.FirstOrDefault(copy =>
@@ -446,7 +380,6 @@ public sealed class ModFolderWatcher : IDisposable
     private void Settle(ModEntry mod)
     {
         List<SourceChangeEvent> batch;
-        List<PluginEntry> classificationArmed;
         List<PluginEntry> indexedTouched;
         bool classify;
         lock (_gate)
@@ -457,7 +390,6 @@ public sealed class ModFolderWatcher : IDisposable
             mod.MaxWindowTimer.Stop();
 
             batch = [];
-            classificationArmed = [];
             indexedTouched = [];
             classify = mod.OtherCandidateTouched;
             mod.OtherCandidateTouched = false;
@@ -474,7 +406,6 @@ public sealed class ModFolderWatcher : IDisposable
                 plugin.DocumentPaths.Clear();
                 plugin.WholePlugin = false;
 
-                if (plugin.ClassificationArmed) classificationArmed.Add(plugin);
                 if (plugin.FileTouched)
                 {
                     if (plugin.ClassificationArmed) classify = true;
@@ -485,7 +416,7 @@ public sealed class ModFolderWatcher : IDisposable
         }
 
         if (batch.Count > 0) RaiseSafely(() => ProjectSourceBatch(batch));
-        if (classify) RaiseSafely(() => SettleExternalChange(mod.ModFolder, classificationArmed));
+        if (classify) RaiseSafely(() => TrackedModSettled.Handle(_holder.Current, mod.ModFolder, _notifications));
         foreach (var plugin in indexedTouched) SettleIndexed(plugin);
     }
 
@@ -572,36 +503,6 @@ public sealed class ModFolderWatcher : IDisposable
         return formKeys;
     }
 
-    // One classification per mod per settle. Every armed plugin is hashed, not only the touched
-    // ones, so a verdict of nothing is whole and clears the marker; an unread plugin leaves no
-    // whole verdict, and the marker stands.
-    private void SettleExternalChange(string modFolder, IReadOnlyList<PluginEntry> armedPlugins)
-    {
-        var plugins = new List<(string PluginName, byte[] ObservedBytes)>();
-        var whole = true;
-        foreach (var plugin in armedPlugins)
-        {
-            try
-            {
-                plugins.Add((plugin.Name, File.ReadAllBytes(plugin.Path!)));
-            }
-            catch (IOException)
-            {
-                // Caught mid-write; the load-time hash check is the backstop if this is missed.
-                whole = false;
-            }
-        }
-
-        switch (ExternalChangeClassifier.ClassifyMod(modFolder, plugins))
-        {
-            case ExternalChangeClassification.ExternalChange change:
-                ReportExternalChange(modFolder, change);
-                break;
-            case null when whole:
-                ExternalChangeDeferral.Clear(modFolder);
-                break;
-        }
-    }
 
     // Content, never events: identical bytes raise nothing, so a touch is free. The remembered hash
     // moves ahead of the projection and is put back on failure only if nothing newer has landed.
@@ -778,10 +679,6 @@ internal enum IndexedBinaryChange
 
 /// <summary>ADR-0009: one indexed binary's disk event, as the settle observed it.</summary>
 internal sealed record IndexedBinaryEvent(string PluginName, string Origin, IndexedBinaryChange Change);
-
-/// <summary>One mod's unanswered external-change question, as the watcher (or the load-time
-/// check, via the same classification) last observed it — the notification's own source.</summary>
-public sealed record UnansweredExternalChange(string ModFolder, ExternalChangeClassification.ExternalChange Classification);
 
 /// <summary>Which projection the batch asks for: the named documents, or the whole copy when a ref
 /// moved, the operating system dropped events, or the burst was wider than one batch is worth.</summary>

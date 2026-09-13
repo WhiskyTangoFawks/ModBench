@@ -31,7 +31,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
         npc.HeightMax = 0.9f;
         mod.Npcs.AddNew(SourceEditFixture.OtherNpcEditorId);
         mod.WriteToBinary(PluginPath);
-        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
+        SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public sealed class CompilePluginHandlerDeferralTests : IDisposable
 
         Assert.False(result.Succeeded);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
-        Assert.Equal(ExternalChangeDeferral.Unanswered(_mod.ModFolder), result.RefusalReason);
+        Assert.Equal(SourceRepository.UnansweredExternalChange(_mod.ModFolder), result.RefusalReason);
         Assert.Equal(upstreamBytes, File.ReadAllBytes(PluginPath));
     }
 

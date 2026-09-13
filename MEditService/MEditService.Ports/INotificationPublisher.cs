@@ -48,12 +48,13 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
     public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
 }
 
-/// <summary>The watcher (or the load-time check) recorded a mod's change awaiting the user's
-/// Absorb/Keep answer. The mod folder is never on the wire — Origin names it.</summary>
-public sealed record ExternalChangePendingNotification(
+/// <summary>A question is open for this mod, with its default: Commands classified a genuine
+/// external change and is awaiting the user's Absorb/Keep answer. The mod folder is never on the
+/// wire — Origin names it.</summary>
+public sealed record QuestionOpenNotification(
     string Origin, IReadOnlyList<string> Plugins, IReadOnlyList<string> TrackedFiles,
     bool MetaChanged, string? OldVersion, string? NewVersion)
-    : Notification("external-change-pending")
+    : Notification("question-open")
 {
     // Keys carries Plugins: the generic string list every other kind already has, repurposed rather
     // than adding a field only this kind would fill.

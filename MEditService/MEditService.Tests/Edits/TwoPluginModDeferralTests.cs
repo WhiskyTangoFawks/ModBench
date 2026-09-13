@@ -68,7 +68,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
     private void RaiseExternalChangeOnA()
     {
         File.WriteAllBytes(Path.Combine(_modFolder, PluginA), "changed-by-xedit"u8.ToArray());
-        ExternalChangeDeferral.Set(_modFolder, "unanswered");
+        SourceRepository.RaiseExternalChangeQuestion(_modFolder, "unanswered");
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
     public void ClearingTheDeferral_UnblocksBothPluginsAtOnce()
     {
         RaiseExternalChangeOnA();
-        ExternalChangeDeferral.Clear(_modFolder);
+        SourceRepository.ClearExternalChangeQuestion(_modFolder);
 
         var resultA = _editHandler.Set(new PluginKey(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
         var resultB = _editHandler.Set(new PluginKey(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
