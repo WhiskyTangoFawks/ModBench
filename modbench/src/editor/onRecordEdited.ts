@@ -16,7 +16,7 @@ export interface RecordTreeSync {
  *  converges back to the committed bytes shows a stale M until an unrelated refresh. */
 export function makeOnRecordEdited(
   treeSync: RecordTreeSync,
-  recordDecorationProvider: RecordDecorationProvider,
+  recordDecorationProvider: Pick<RecordDecorationProvider, 'refresh'>,
   refreshMatchingPlugins: () => void,
   refreshSourceControl: (plugin: string) => void,
 ): (formKey: string, plugin: string, origin: string) => void {
