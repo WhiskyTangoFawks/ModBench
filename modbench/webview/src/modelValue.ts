@@ -26,6 +26,10 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
     case 'color':
     case 'vector':
       return toStr(value);
+    // meta.type narrows the wire's plain string at compile time only (types.ts); a type this
+    // union has not caught up with still reaches here and stringifies like any other scalar.
+    default:
+      return toStr(value);
   }
 }
 
