@@ -29,6 +29,7 @@ import { registerCreatePluginCommand, registerRevealInExplorerCommand } from '..
 import { appendPlugin } from '../../modmanager/commands/plugins';
 import { InMemoryMEditClient } from '../../medit/client';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
 
 beforeEach(() => {
   handlers.clear();
@@ -37,14 +38,14 @@ beforeEach(() => {
 
 function makeMo2() {
   return {
-    instance: { value: { mods: [] } },
+    instance: { value: instanceValueFixture() },
     instanceRoot: '/instance',
     pluginsTree: { invalidate: vi.fn() },
-  } as any;
+  };
 }
 
 describe('registerCreatePluginCommand', () => {
-  function invoke(client: InMemoryMEditClient, mo2: any) {
+  function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined) {
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2, reporter);
     return { run: handlers.get('modbench.newPlugin')!, reporter };
@@ -56,13 +57,13 @@ describe('registerCreatePluginCommand', () => {
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ choice: 'overwrite' });
-    vi.mocked(appendPlugin).mockResolvedValue({ applied: true } as any);
+    vi.mocked(appendPlugin).mockResolvedValue({ applied: true, wrote: true });
 
     const { run, reporter } = invoke(client, mo2);
     await run();
 
     expect(client.calls).toContainEqual({ method: 'createPlugin', args: ['MyPatch.esp', '/instance/overwrite', 'overwrite'] });
-    expect(appendPlugin).toHaveBeenCalledWith('/instance', undefined, 'MyPatch.esp');
+    expect(appendPlugin).toHaveBeenCalledWith('/instance', 'Default', 'MyPatch.esp');
     expect(reporter.landings).toEqual(['Created "MyPatch.esp".']);
     expect(reporter.reports).toEqual([]);
   });
@@ -94,7 +95,7 @@ describe('registerCreatePluginCommand', () => {
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ choice: 'overwrite' });
-    vi.mocked(appendPlugin).mockResolvedValue({ applied: false, refusal: 'plugins.txt is read-only' } as any);
+    vi.mocked(appendPlugin).mockResolvedValue({ applied: false, refusal: 'plugins.txt is read-only' });
 
     const { run, reporter } = invoke(client, mo2);
     await run();
@@ -122,7 +123,7 @@ describe('registerCreatePluginCommand', () => {
 describe('registerRevealInExplorerCommand', () => {
   function invoke(resolvePluginPath: () => Promise<string | undefined>) {
     const reporter = recordingReporter();
-    registerRevealInExplorerCommand({ resolvePluginPath } as any, reporter);
+    registerRevealInExplorerCommand({ resolvePluginPath }, reporter);
     return { run: handlers.get('modbench.pluginListTree.revealInExplorer')!, reporter };
   }
 
