@@ -6,19 +6,18 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
 import type { PluginMetadata } from '../../medit/client';
+import type { ActivateExports } from '../../extension';
+import { DownloadNode, type DownloadsTreeNode } from '../../modmanager/DownloadsProvider';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
-let ext: vscode.Extension<unknown> | undefined;
+let ext: vscode.Extension<ActivateExports> | undefined;
 
 // The Instance's own read model (ADR-0015): a test that writes plugins.txt and then reads the
 // Plugins tree awaits past a sequence with this, rather than assuming the write is visible the
 // instant the write call returns.
-interface InstanceLike {
-  sequence: number;
-  subscribe(subscriber: (value: unknown, sequence: number) => void): { dispose(): void };
-}
-const instanceExport = () => (ext?.exports as { instance?: InstanceLike } | undefined)?.instance;
+type InstanceLike = NonNullable<ActivateExports['instance']>;
+const instanceExport = () => ext?.exports.instance;
 function pastSequence(instance: InstanceLike, sequence: number): Promise<void> {
   if (instance.sequence > sequence) return Promise.resolve();
   return new Promise((resolve) => {
@@ -40,17 +39,16 @@ async function writeAndAwaitInstance(write: () => void): Promise<void> {
 
 // The backend launches with the extension, so tests drive the lifecycle through activate()'s
 // test-API exports: a launch failure is logged-and-swallowed after tearing editing down.
-const editingApi = () =>
-  ext?.exports as { enterEditing?: () => Promise<void>; exitEditing?: () => void } | undefined;
+const editingApi = () => ext?.exports;
 async function enterEditing(): Promise<void> {
   try {
     await editingApi()?.enterEditing?.();
   } catch {
-    editingApi()?.exitEditing?.();
+    editingApi()?.exitEditing();
   }
 }
 function exitEditing(): void {
-  editingApi()?.exitEditing?.();
+  editingApi()?.exitEditing();
 }
 
 // Models the real backend: GET /plugins fails with 503 until PUT /load-order arrives. The
@@ -371,7 +369,7 @@ describe('the loaded extension bundle is not older than its sources', () => {
 
 describe('Modbench output channel', () => {
   it('is created as a leveled LogOutputChannel, not a plain text channel', () => {
-    const channel = (ext?.exports as { outputChannel?: vscode.LogOutputChannel } | undefined)?.outputChannel;
+    const channel = ext?.exports.outputChannel;
     assert.ok(channel, 'activate() should return { outputChannel }');
     // A plain vscode.OutputChannel has none of these — only { log: true } adds them.
     assert.strictEqual(typeof channel.debug, 'function', 'expected a .debug() method');
@@ -388,9 +386,9 @@ describe('modbench command registration', () => {
   // Derived from package.json rather than hand-copied, so a contributed command that was never
   // registered fails here instead of matching a hand-written list that forgot it too. __dirname is
   // three levels under the package root once compiled.
-  const pkg = JSON.parse(
+  const pkg: { contributes: { commands: { command: string }[] } } = JSON.parse(
     fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'),
-  ) as { contributes: { commands: { command: string }[] } };
+  );
   const EXPECTED_COMMANDS = pkg.contributes.commands.map((c) => c.command);
 
   it('registers all expected commands on activation', async () => {
@@ -563,11 +561,14 @@ import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../pl
 // esbuild bundles the running extension's own `PluginTreeProvider` inline, so a class imported
 // here from source is a distinct constructor — `.kind` is what identifies a node across that
 // boundary, the same discriminant `PluginsTreeProvider.ts` switches on internally.
-const nodeKind = (node: unknown): unknown => (node as { kind?: unknown } | undefined)?.kind;
+function nodeKind(node: unknown): unknown {
+  const fields: { kind?: unknown } = typeof node === 'object' && node !== null ? node : {};
+  return fields.kind;
+}
 
 describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree', () => {
   it('opens a header tab from an ordinary plugin row (PluginsTreeProvider.PluginNode)', async () => {
-    const node = new PluginListPluginNode({ name: 'TestMod.esp', path: '/data/TestMod.esp', enabled: true } as any);
+    const node = new PluginListPluginNode({ name: 'TestMod.esp', enabled: true });
     await vscode.commands.executeCommand('modbench.openHeader', node);
     await new Promise(r => setTimeout(r, 300));
     const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
@@ -585,15 +586,14 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
 
 // ── modbench.downloads tree ─────────────────────────────────────────────────
 
-interface DownloadsProviderLike {
-  invalidate(): void;
-  getChildren(element?: unknown): Promise<Array<{ label?: unknown; row?: { name: string } }>>;
-}
+// A row this tree does not own (an ErrorNode) carries no archive name — undefined, not thrown.
+const archiveNameOf = (row: DownloadsTreeNode): string | undefined =>
+  row instanceof DownloadNode ? row.row.name : undefined;
 
 describe('modbench.downloads tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const downloadsDir = root ? path.join(root, 'downloads') : '';
-  const provider = () => (ext?.exports as { downloadsProvider?: DownloadsProviderLike } | undefined)?.downloadsProvider;
+  const provider = () => ext?.exports.downloadsProvider;
 
   // The committed test workspace fixture has no downloads/ folder — created and torn down
   // here (mirrors the Overwrite suite's overwriteDir cleanup).
@@ -616,7 +616,7 @@ describe('modbench.downloads tree', () => {
     });
 
     const rows = await provider()!.getChildren();
-    assert.deepStrictEqual(rows.map((r) => r.row?.name), ['foo.zip']);
+    assert.deepStrictEqual(rows.map((r) => archiveNameOf(r)), ['foo.zip']);
   });
 
   it('reflects a new archive dropped into downloads/ via the file-watcher, with no manual refresh', async () => {
@@ -624,13 +624,13 @@ describe('modbench.downloads tree', () => {
 
     // The watcher debounces 200ms before calling invalidate() itself, so poll for the row rather
     // than sleeping a fixed time. Never calls invalidate() directly: the watcher must do it alone.
-    const rows = await new Promise<Array<{ row?: { name: string } }>>((resolve, reject) => {
+    const rows = await new Promise<DownloadsTreeNode[]>((resolve, reject) => {
       const deadline = Date.now() + 10000;
       const check = () => {
         provider()!
           .getChildren()
           .then((found) => {
-            if (found.some((r) => r.row?.name === 'bar.zip')) return resolve(found);
+            if (found.some((r) => archiveNameOf(r) === 'bar.zip')) return resolve(found);
             if (Date.now() > deadline) return reject(new Error('bar.zip did not appear via the watcher within 10s'));
             setTimeout(check, 200);
           })
@@ -638,20 +638,16 @@ describe('modbench.downloads tree', () => {
       };
       check();
     });
-    assert.ok(rows.some((r) => r.row?.name === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
+    assert.ok(rows.some((r) => archiveNameOf(r) === 'bar.zip'), 'expected bar.zip among the watcher-refreshed rows');
   });
 });
 
 // ── Overwrite row ──────────────────────────────────────────────────────────────
 
-interface ModListLike {
-  getChildren(element?: unknown): Promise<Array<{ label?: unknown; kind?: string; resourceUri?: vscode.Uri }>>;
-}
-
 describe('Overwrite row', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const overwriteDir = root ? path.join(root, 'overwrite') : '';
-  const provider = () => (ext?.exports as { modListProvider?: ModListLike } | undefined)?.modListProvider;
+  const provider = () => ext?.exports.modListProvider;
 
   // The pinned Overwrite row is appended only once the modlist loads (it sits
   // after the mod roots). The committed test workspace fixture is
@@ -745,13 +741,9 @@ describe('Notification stream connects only while the backend is up', () => {
 
 // ── Launch mEdit → editing plugin tree populated ────────────────────────────────
 
-interface TreeLike {
-  getChildren(element?: unknown): Promise<Array<{ kind?: string; plugin?: { name?: string } }>>;
-}
-
 describe('Launch mEdit populates the editing plugin tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  const treeProvider = () => (ext?.exports as { treeProvider?: TreeLike } | undefined)?.treeProvider;
+  const treeProvider = () => ext?.exports.treeProvider;
   let gameDir = '';
 
   // enterEditing needs a resolvable game directory and an enabled plugin in the active profile to
@@ -795,14 +787,14 @@ describe('Launch mEdit populates the editing plugin tree', () => {
 
     // TestMod.esp's row expands into real record types only once GET /plugins has landed, so
     // real children (not an error/indexing placeholder) prove the fetch happened after load.
-    const pluginsTreeExport = (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
+    const pluginsTreeExport = ext?.exports.pluginsTree;
     assert.ok(pluginsTreeExport, 'activate() should return { pluginsTree } for the merged view');
     const rows = await pluginsTreeExport.getChildren();
     assert.ok(rows.length > 0, 'the merged plugins tree should not be empty after a successful launch');
     const testMod = findRow(rows, 'TestMod.esp');
     const children = await pluginsTreeExport.getChildren(testMod);
     assert.deepStrictEqual(
-      children.map((c) => (c as vscode.TreeItem).label), ['Weapon'],
+      children.map((c) => c.label), ['Weapon'],
       'TestMod.esp should expand into its record types once the load order has loaded and GET /plugins has landed',
     );
   });
@@ -812,20 +804,10 @@ describe('Launch mEdit populates the editing plugin tree', () => {
 // These prove the two consequences only a live host can show: load-order state survives a
 // round trip, and its write path stays reachable while the backend runs.
 
-interface PluginListNodeLike { plugin?: { name?: string; enabled?: boolean } }
-interface PluginsTreeProviderLike {
-  setFilter(text: string): void;
-  setPluginEnabled(name: string, enabled: boolean): Promise<void>;
-  handleDrop(target: unknown, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void>;
-  invalidate(): void;
-  getChildren(element?: unknown): Promise<PluginListNodeLike[]>;
-}
-
 describe('The Toolbox stack stays visible through an editing backend', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginListProvider = () =>
-    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
+  const pluginListProvider = () => ext?.exports.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -858,7 +840,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
     provider.setFilter('TestMod');
     const before = await provider.getChildren();
     assert.deepStrictEqual(
-      before.map((n) => n.plugin?.name), ['TestMod.esp'],
+      before.map((n) => rowName(n)), ['TestMod.esp'],
       'the filter should narrow to the one matching row before entering editing',
     );
 
@@ -867,7 +849,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 
     const after = await provider.getChildren();
     assert.deepStrictEqual(
-      after.map((n) => n.plugin?.name), ['TestMod.esp'],
+      after.map((n) => rowName(n)), ['TestMod.esp'],
       'the filter set before Launch mEdit must still be applied after Close mEdit — the Plugins view was never torn down',
     );
   });
@@ -917,26 +899,26 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
 // Rows are collapsible from launch (ADR-0002): mEdit is always running, so a chevron encodes no
 // absence. Launch/close changes a row's content on expand, never its collapsibleState.
 
-interface PluginsTreeLike {
-  getChildren(element?: unknown): Promise<unknown[]>;
-  getTreeItem(element: unknown): vscode.TreeItem;
-}
-
 // plugins.txt lines carry `plugin.name`; the game's implicitly-loaded masters carry `name`.
-const rowName = (row: unknown): string | undefined =>
-  (row as PluginListNodeLike).plugin?.name ?? (row as { name?: string }).name;
-const findRow = (rows: unknown[], name: string): unknown => {
+function rowFields(row: unknown): { name?: unknown; plugin?: { name?: unknown; enabled?: unknown } } {
+  return typeof row === 'object' && row !== null ? row : {};
+}
+const rowName = (row: unknown): string | undefined => {
+  const fields = rowFields(row);
+  const pluginName = fields.plugin?.name;
+  if (typeof pluginName === 'string') return pluginName;
+  return typeof fields.name === 'string' ? fields.name : undefined;
+};
+function findRow<T>(rows: readonly T[], name: string): T {
   const row = rows.find((r) => rowName(r) === name);
   assert.ok(row, `expected a row for ${name}`);
   return row;
-};
+}
 
 describe('Plugin load-order rows expand into records', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const pluginListProviderOf = () =>
-    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
+  const pluginsTree = () => ext?.exports.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -948,7 +930,7 @@ describe('Plugin load-order rows expand into records', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n'));
-    pluginListProviderOf()?.invalidate();
+    pluginsTree()?.invalidate();
       // Setting the game directory just now fired the production config-change relaunch
     // (backend down + a directory appeared). Settle it and tear editing down so the
     // tests below still start from the pre-editing state they assert.
@@ -975,20 +957,20 @@ describe('Plugin load-order rows expand into records', () => {
     const tree = pluginsTree()!;
     mockImplicitMasters = ['Fallout4.esm'];
     try {
-      pluginListProviderOf()!.invalidate();
+      pluginsTree()!.invalidate();
       const rows = await tree.getChildren();
 
       assert.strictEqual(rowName(rows[0]), 'Fallout4.esm', 'the backend-named implicit master leads the rows');
-      assert.strictEqual(tree.getTreeItem(rows[0]).contextValue, 'pluginImplicit');
+      assert.strictEqual(tree.getTreeItem(rows[0]!).contextValue, 'pluginImplicit');
     } finally {
       mockImplicitMasters = [];
-      pluginListProviderOf()!.invalidate();
+      pluginsTree()!.invalidate();
     }
   });
 
   it('renders no implicit row when the backend names none', async () => {
     const tree = pluginsTree()!;
-    pluginListProviderOf()!.invalidate();
+    pluginsTree()!.invalidate();
     const rows = await tree.getChildren();
 
     assert.ok(!rows.some((r) => tree.getTreeItem(r).contextValue === 'pluginImplicit'));
@@ -1027,7 +1009,7 @@ describe('Plugin load-order rows expand into records', () => {
     );
     const children = await tree.getChildren(findRow(after, 'TestMod.esp'));
     assert.deepStrictEqual(
-      children.map((c) => (c as vscode.TreeItem).label), ['Weapon'],
+      children.map((c) => c.label), ['Weapon'],
       'a row whose plugin is in the load order now expands into its record types',
     );
   });
@@ -1039,7 +1021,7 @@ describe('Plugin load-order rows expand into records', () => {
     const children = await tree.getChildren(testMod);
 
     assert.deepStrictEqual(
-      children.map((c) => (c as vscode.TreeItem).label), ['Weapon'],
+      children.map((c) => c.label), ['Weapon'],
       'expanding a row shows the record types the backend reports, with xEdit display names',
     );
   });
@@ -1052,7 +1034,7 @@ describe('Plugin load-order rows expand into records', () => {
       tree.getTreeItem(other).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'a disabled plugin is indexed and browsable, just non-participating',
     );
-    assert.deepStrictEqual((await tree.getChildren(other)).map((c) => (c as vscode.TreeItem).label), ['Weapon']);
+    assert.deepStrictEqual((await tree.getChildren(other)).map((c) => c.label), ['Weapon']);
   });
 
   // ADR-0002: the view has no shape to revert to, so a backend that goes takes nothing with it —
@@ -1082,9 +1064,7 @@ describe('Plugin load-order rows expand into records', () => {
 describe('A read-only plugin\'s tooltip says so once the backend is running', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const pluginListProviderOf = () =>
-    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
+  const pluginsTree = () => ext?.exports.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -1096,7 +1076,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
-    pluginListProviderOf()?.invalidate();
+    pluginsTree()?.invalidate();
       // Setting the game directory just now fired the production config-change relaunch
     // (backend down + a directory appeared). Settle it and tear editing down so the
     // tests below still start from the pre-editing state they assert.
@@ -1130,9 +1110,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
 describe('A plugin with a missing master is flagged, never deactivated', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const pluginListProviderOf = () =>
-    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
+  const pluginsTree = () => ext?.exports.pluginsTree;
   let gameDir = '';
 
   before(async () => {
@@ -1149,7 +1127,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n'));
-    pluginListProviderOf()?.invalidate();
+    pluginsTree()?.invalidate();
     await enterEditing();
   });
 
@@ -1171,7 +1149,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
       `expected a missing-master tooltip, got: ${String(item.tooltip)}`);
     // Never deactivated, excluded or hidden — still expandable (in the load order) and checked.
     assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
-    assert.strictEqual((row as PluginListNodeLike).plugin?.enabled, true);
+    assert.strictEqual(rowFields(row).plugin?.enabled, true);
     // The leading slot (checkbox) is untouched by this decoration — a real TreeItemCheckboxState
     // read, not just the underlying model's `enabled` flag, so a regression in the decoration
     // logic itself (not just in plugins.txt writing) would be caught here.
@@ -1196,9 +1174,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
 describe('An instance change sends a fresh load order snapshot (ADR-0013)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const pluginListProviderOf = () =>
-    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
+  const pluginsTree = () => ext?.exports.pluginsTree;
   let gameDir = '';
   let pluginsTxtTrailer = '';
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
@@ -1229,7 +1205,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
-    pluginListProviderOf()?.invalidate();
+    pluginsTree()?.invalidate();
     await enterEditing();
   });
 
@@ -1324,9 +1300,8 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 describe('a client that reports stopped outside exitEditing leaves the Plugins tree\'s shape alone', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const clientOf = () =>
-    (ext?.exports as { client?: { stop(): Promise<void>; status: string } } | undefined)?.client;
+  const pluginsTree = () => ext?.exports.pluginsTree;
+  const clientOf = () => ext?.exports.client;
   let gameDir = '';
 
   before(() => {
@@ -1438,9 +1413,7 @@ async function waitFor<T>(label: string, read: () => Promise<T | false | undefin
 describe('Progressive load', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
-  const pluginListProviderOf = () =>
-    (ext?.exports as { pluginsTree?: PluginsTreeProviderLike } | undefined)?.pluginsTree;
+  const pluginsTree = () => ext?.exports.pluginsTree;
   let gameDir = '';
 
   const childrenFor = async (name: string) => {
@@ -1487,7 +1460,7 @@ describe('Progressive load', () => {
   beforeEach(() => {
     resetMockBackend();
     holdPutLoadOrder = true;
-    pluginListProviderOf()?.invalidate();
+    pluginsTree()?.invalidate();
   });
 
   afterEach(() => {
@@ -1572,7 +1545,7 @@ describe('Progressive load', () => {
     const children = await childrenFor('TestMod.esp');
     assert.strictEqual(children.length, 1, 'expanding after an abandoned load answers exactly one node, never an empty list');
     assert.strictEqual(
-      (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
+      ext?.exports.pluginListView?.message,
       undefined,
       'the view must stop claiming a load that is not running',
     );
@@ -1587,8 +1560,10 @@ describe('Progressive load', () => {
     const realShowError = vscode.window.showErrorMessage;
     // The test and the extension share one vscode module instance in the extension host, so this
     // is the only way to observe a toast — there is no API to read notifications back.
-    (vscode.window as { showErrorMessage: unknown }).showErrorMessage =
-      (message: string) => { errors.push(message); return Promise.resolve(undefined); };
+    Object.defineProperty(vscode.window, 'showErrorMessage', {
+      configurable: true,
+      value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
+    });
     try {
       const launch = enterEditing();
       await waitFor('the launch to reach the backend health probe', () =>
@@ -1604,7 +1579,7 @@ describe('Progressive load', () => {
         'an abandoned launch must not go on to load a load order the user has closed',
       );
     } finally {
-      (vscode.window as { showErrorMessage: unknown }).showErrorMessage = realShowError;
+      Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
     }
   });
 
@@ -1664,8 +1639,10 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
     it(`${command} resolves (not rejects) and shows a Modbench-authored error when the plugins request is refused`, async () => {
       const errors: string[] = [];
       const realShowError = vscode.window.showErrorMessage;
-      (vscode.window as { showErrorMessage: unknown }).showErrorMessage =
-        (message: string) => { errors.push(message); return Promise.resolve(undefined); };
+      Object.defineProperty(vscode.window, 'showErrorMessage', {
+        configurable: true,
+        value: (message: string) => { errors.push(message); return Promise.resolve(undefined); },
+      });
       try {
         // An escaped rejection out of the command callback fails executeCommand's own returned promise,
         // so awaiting with no try/catch is the assertion.
@@ -1677,7 +1654,7 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
         assert.ok(errors[0]!.startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errors[0]}`);
         assert.ok(!errors[0]!.includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errors[0]}`);
       } finally {
-        (vscode.window as { showErrorMessage: unknown }).showErrorMessage = realShowError;
+        Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
       }
     });
   }

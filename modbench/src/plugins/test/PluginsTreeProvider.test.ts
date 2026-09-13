@@ -6,10 +6,13 @@ import { reorderPlugins, setPluginEnabled } from '../../modmanager/commands/plug
 import { parsePlugins } from '../../modmanager/mo2/pluginsText';
 import type { LoadOrderPlugin, LoadOrderPluginLine } from '../../modmanager/loadOrderSnapshot';
 import type { InstanceValue } from '../../modmanager/instance';
-import { InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage } from '../../medit/client';
+import {
+  InMemoryMEditClient, type PluginDiagnosisReport, type PluginLoadFailure, type PluginMetadata, type RecordPage,
+  type WorldspaceSummary, type WorldspaceBlocks, type CellPage, type RecordSummary,
+} from '../../medit/client';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
-  uriFilePlain, uriFrom, DataTransferItem, DataTransfer,
+  uriFilePlain, uriFrom, DataTransferItem, DataTransfer, FakeCancellationToken,
 } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
@@ -19,7 +22,7 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import {
-  PluginsTreeProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf,
+  PluginsTreeProvider, PluginNode, ImplicitMasterNode, EmptyNode, pluginFileOf, isDropPayload,
   type PluginListSource, type PluginsTreeProviderOptions,
 } from '../PluginsTreeProvider';
 import {
@@ -28,6 +31,8 @@ import {
 } from '../PluginTreeProvider';
 import { ErrorNode } from '../../errorNode';
 import { recordingReporter } from '../../test/surfacingDoubles';
+import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
+import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
 
@@ -50,7 +55,7 @@ function plugin(
 // Only `.plugins` is ever read for rows — the rest of InstanceValue is Mods-tree/Downloads
 // territory.
 function valueOf(plugins: (LoadOrderPlugin | LoadOrderPluginLine)[]): InstanceValue {
-  return { plugins } as unknown as InstanceValue;
+  return instanceValueFixture({ plugins });
 }
 
 // The double the provider's row contract needs: `.value` plus `.subscribe`, structurally
@@ -148,6 +153,15 @@ function held(name: string, overrides: Partial<PluginMetadata> = {}): PluginMeta
   };
 }
 
+function recordSummary(overrides: Partial<RecordSummary> = {}): RecordSummary {
+  return {
+    formKey: '000001:A.esp', plugin: 'A.esp', loadOrderIndex: 0, isWinner: true,
+    editorId: 'TheWeapon', origin: 'SomeMod', workingTreeState: 'None',
+    hasContainerChildren: false, hasParseFailure: false,
+    ...overrides,
+  };
+}
+
 function diagnosis(pluginName: string, text: string, origin = 'SomeMod'): PluginDiagnosisReport {
   return { plugin: pluginName, origin, defectClass: 'fixed-size-subrecord-short', message: text, text };
 }
@@ -157,9 +171,9 @@ function makeClient(overrides: Partial<{
   diagnoses: PluginDiagnosisReport[];
   recordTypes: { type: string; count: number; displayName?: string; hasParseFailure?: boolean }[];
   records: RecordPage;
-  worldspaces: unknown[];
-  worldspaceBlocks: unknown;
-  interiorCells: unknown;
+  worldspaces: WorldspaceSummary[];
+  worldspaceBlocks: WorldspaceBlocks;
+  interiorCells: CellPage;
 }> = {}): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
   client.setQueryAnswer('getPlugins', overrides.plugins ?? []);
@@ -168,11 +182,11 @@ function makeClient(overrides: Partial<{
     type: rt.type, count: rt.count, displayName: rt.displayName ?? rt.type, hasParseFailure: rt.hasParseFailure ?? false,
   })));
   client.setQueryAnswer('getRecords', overrides.records ?? { items: [], total: 0 });
-  client.setQueryAnswer('getWorldspaces', (overrides.worldspaces ?? []) as never);
-  client.setQueryAnswer('getWorldspaceBlocks', (overrides.worldspaceBlocks ?? { blocks: [], topCells: [] }) as never);
+  client.setQueryAnswer('getWorldspaces', overrides.worldspaces ?? []);
+  client.setQueryAnswer('getWorldspaceBlocks', overrides.worldspaceBlocks ?? { blocks: [], topCells: [] });
   client.setQueryAnswer('getCellReferences', { persistent: [], temporary: [] });
   client.setQueryAnswer('getContainerChildren', []);
-  client.setQueryAnswer('getInteriorCells', (overrides.interiorCells ?? { items: [], total: 0 }) as never);
+  client.setQueryAnswer('getInteriorCells', overrides.interiorCells ?? { items: [], total: 0 });
   return client;
 }
 
@@ -320,10 +334,10 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     expect(rows).toHaveLength(2);
     expect(rows[0]).toBeInstanceOf(PluginNode);
-    expect((rows[0] as PluginNode).label).toBe('A.esp');
-    expect((rows[0] as PluginNode).checkboxState).toBe(0); // Unchecked
-    expect((rows[1] as PluginNode).label).toBe('B.esp');
-    expect((rows[1] as PluginNode).checkboxState).toBe(1); // Checked
+    expect(expectInstanceOf(rows[0], PluginNode).label).toBe('A.esp');
+    expect(expectInstanceOf(rows[0], PluginNode).checkboxState).toBe(0); // Unchecked
+    expect(expectInstanceOf(rows[1], PluginNode).label).toBe('B.esp');
+    expect(expectInstanceOf(rows[1], PluginNode).checkboxState).toBe(1); // Checked
   });
 
   it('renders a single "No plugins" node when the Instance value carries none', async () => {
@@ -332,7 +346,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(EmptyNode);
-    expect((rows[0] as EmptyNode).label).toBe('No plugins');
+    expect(expectInstanceOf(rows[0], EmptyNode).label).toBe('No plugins');
   });
 
   // Rival: the provider falls back to some read path of its own instead of the injected value.
@@ -343,7 +357,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
       plugin({ name: 'Aardvark.esp', slot: 1, enabled: false }),
     ]);
     const rows = await tree.getChildren();
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Zed.esp', 'Aardvark.esp']); // file order
+    expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Zed.esp', 'Aardvark.esp']); // file order
   });
 
   it('carries each row\'s own origin from the Instance value', async () => {
@@ -351,7 +365,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
       plugin({ name: 'A.esp', slot: 0, origin: 'ModA' }),
       plugin({ name: 'B.esp', slot: 1, origin: 'overwrite' }),
     ]);
-    const rows = await tree.getChildren() as PluginNode[];
+    const rows = expectInstancesOf(await tree.getChildren(), PluginNode);
     expect(rows.map((r) => r.origin)).toEqual(['ModA', 'overwrite']);
   });
 
@@ -410,14 +424,14 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   it('re-renders on a new value published after construction', async () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
     const { tree } = makeTree([], { instance });
-    expect((await tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
 
     let fired = false;
     tree.onDidChangeTreeData(() => { fired = true; });
     instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]));
 
     expect(fired).toBe(true); // not just the first render — a second, later value re-renders too
-    expect((await tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['A.esp', 'B.esp']);
+    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
 
   it('setPluginEnabled delegates to the source and fires a refresh', async () => {
@@ -469,13 +483,13 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
   it('invalidate() clears the cache and re-pulls the current instance value', async () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
     const { tree } = makeTree([], { instance });
-    expect((await tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
 
     instance.value = valueOf([plugin({ name: 'A.esp', slot: 0 }), plugin({ name: 'B.esp', slot: 1 })]); // no publish()
 
     tree.invalidate();
 
-    expect((await tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['A.esp', 'B.esp']);
+    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
 
   // sequence === 0 means "the Instance has not read yet", never "genuinely empty" — a real
@@ -497,7 +511,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     const rows = await pending;
 
     expect(settled).toBe(true);
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+    expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
   });
 
   // The timeout is the finding: a gate that settles only on a landed value leaves a first read
@@ -521,7 +535,7 @@ describe('PluginsTreeProvider — rows come from the Instance value', () => {
     instance.publish(valueOf([plugin({ name: 'A.esp', slot: 0 })]));
     const after = await within(tree.getChildren(), 500);
 
-    expect(after.map((r) => (r as PluginNode).label)).toEqual(['A.esp']);
+    expect(after.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp']);
     expect(reporter.reports).toHaveLength(1);
   });
 
@@ -545,7 +559,7 @@ describe('PluginsTreeProvider — name filter', () => {
     tree.setFilter('ALPHA');
     const rows = await tree.getChildren();
 
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Alpha.esp', 'AlphaExtra.esp']);
+    expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'AlphaExtra.esp']);
   });
 
   it('restores the full list when the filter is cleared', async () => {
@@ -554,7 +568,7 @@ describe('PluginsTreeProvider — name filter', () => {
     expect(await tree.getChildren()).toHaveLength(1);
 
     tree.setFilter('');
-    expect((await tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['Alpha.esp', 'Beta.esp']);
+    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'Beta.esp']);
   });
 
   it('returns an empty list (not the "No plugins" node) when the filter matches nothing', async () => {
@@ -572,14 +586,14 @@ describe('PluginsTreeProvider — name filter', () => {
     const instance = new FakeInstance(valueOf([plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 })]));
     const { tree } = makeTree([], { instance });
     tree.setFilter('alpha');
-    expect((await tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['Alpha.esp']);
+    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp']);
 
     instance.value = valueOf([
       plugin({ name: 'Alpha.esp', slot: 0 }), plugin({ name: 'Beta.esp', slot: 1 }), plugin({ name: 'AlphaTwo.esp', slot: 2 }),
     ]);
     tree.invalidate();
 
-    expect((await tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['Alpha.esp', 'AlphaTwo.esp']);
+    expect((await tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'AlphaTwo.esp']);
   });
 
   it('fires onDidChangeTreeData when the filter is set', () => {
@@ -601,7 +615,7 @@ describe('PluginsTreeProvider — name filter', () => {
     tree.setFilter('a');
     const rows = await tree.getChildren();
 
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Alpha.esp', 'Beta.esp']); // the stale cache
+    expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'Beta.esp']); // the stale cache
   });
 
   it('clearing the filter restores all cached rows, without rebuilding', async () => {
@@ -615,19 +629,20 @@ describe('PluginsTreeProvider — name filter', () => {
     tree.setFilter('');
     const rows = await tree.getChildren();
 
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Alpha.esp', 'Beta.esp']);
+    expect(rows.map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['Alpha.esp', 'Beta.esp']);
   });
 });
 
 // ── drag and drop ────────────────────────────────────────────────────────────
 
-// Minimal DataTransfer double: handleDrag writes a DataTransferItem, handleDrop reads it.
-class FakeDataTransfer {
-  private readonly map = new Map<string, { value: unknown }>();
-  set(mime: string, item: { value: unknown }) { this.map.set(mime, item); }
-  get(mime: string) { return this.map.get(mime); }
+const NONE = new FakeCancellationToken(); // the drag/drop methods ignore the token
+
+// handleDrag's own payload shape, read back the same way handleDrop reads it (isDropPayload).
+function namesFrom(item: unknown): string[] {
+  const { value } = expectInstanceOf(item, DataTransferItem);
+  if (!isDropPayload(value)) throw new Error('Expected a names payload');
+  return value.names;
 }
-const NONE = undefined as never; // the drag/drop methods ignore the CancellationToken
 
 describe('PluginsTreeProvider — drag-and-drop reorder', () => {
   const ORDER = ['A.esp', 'B.esp', 'C.esp', 'D.esp', 'E.esp'];
@@ -645,26 +660,26 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     let fired = false;
     tree.onDidChangeTreeData(() => { fired = true; });
 
-    const dt = new FakeDataTransfer();
-    tree.handleDrag(moved.map(node), dt as never, NONE);
-    await tree.handleDrop(target === undefined ? undefined : node(target), dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag(moved.map(node), dt, NONE);
+    await tree.handleDrop(target === undefined ? undefined : node(target), dt, NONE);
     return { reports: reporter.reports, fired };
   }
 
   it('handleDrag serialises the whole selection, not just the grabbed row', () => {
     const { tree } = makeTree(fixturePlugins());
-    const dt = new FakeDataTransfer();
-    tree.handleDrag([node('A.esp'), node('C.esp')], dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp'), node('C.esp')], dt, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
-    expect((item?.value as { names: string[] }).names).toEqual(['A.esp', 'C.esp']);
+    expect(namesFrom(item)).toEqual(['A.esp', 'C.esp']);
   });
 
   it('handleDrag ignores non-plugin nodes (Empty) in the selection', () => {
     const { tree } = makeTree(fixturePlugins());
-    const dt = new FakeDataTransfer();
-    tree.handleDrag([new EmptyNode(), node('B.esp')], dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag([new EmptyNode(), node('B.esp')], dt, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
-    expect((item?.value as { names: string[] }).names).toEqual(['B.esp']);
+    expect(namesFrom(item)).toEqual(['B.esp']);
   });
 
   it('single-row down-drag onto a lower row reorders with the post-removal index', async () => {
@@ -684,9 +699,9 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const source = new FakeSource();
     const { tree } = makeTree([plugin({ name: 'A.esp', slot: 0 })], { source });
     await tree.getChildren();
-    const dt = new FakeDataTransfer();
-    tree.handleDrag([node('A.esp')], dt as never, NONE);
-    await tree.handleDrop(new EmptyNode(), dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp')], dt, NONE);
+    await tree.handleDrop(new EmptyNode(), dt, NONE);
     expect(source.reorderPluginsCalls).toEqual([{ names: ['A.esp'], toIndex: 0 }]);
   });
 
@@ -702,10 +717,10 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const source = new FakeSource();
     const { tree } = makeTree(fixturePlugins(), { source });
     await tree.getChildren();
-    const dt = new FakeDataTransfer();
-    tree.handleDrag([node('A.esp')], dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp')], dt, NONE);
 
-    await tree.handleDrop({ kind: 'record' } as never, dt as never, NONE);
+    await tree.handleDrop(new RecordNode(recordSummary()), dt, NONE);
 
     expect(source.reorderPluginsCalls).toEqual([]);
   });
@@ -716,10 +731,10 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const source = new FakeSource();
     const { tree } = makeTree(fixturePlugins(), { source });
     await tree.getChildren();
-    const dt = new FakeDataTransfer();
-    tree.handleDrag([node('A.esp')], dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp')], dt, NONE);
 
-    await tree.handleDrop(new RecordTypeNode('A.esp', 'weap', 5, 'Weapon'), dt as never, NONE);
+    await tree.handleDrop(new RecordTypeNode('A.esp', 'weap', 5, 'Weapon'), dt, NONE);
 
     expect(source.reorderPluginsCalls).toEqual([]);
   });
@@ -740,7 +755,7 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     const source = new FakeSource();
     const { tree } = makeTree(fixturePlugins(), { source });
     await tree.getChildren();
-    await tree.handleDrop(node('A.esp'), new FakeDataTransfer() as never, NONE);
+    await tree.handleDrop(node('A.esp'), new DataTransfer(), NONE);
     expect(source.reorderPluginsCalls).toEqual([]);
   });
 
@@ -759,11 +774,11 @@ describe('PluginsTreeProvider — drag-and-drop reorder', () => {
     await tree.getChildren(); // populate the cached order
     tree.setFilter('m'); // matches M1/M2/M3 only — X1.esp sits hidden between the drag and its target
     const visible = await tree.getChildren();
-    expect(visible.map((n) => (n as PluginNode).plugin.name)).toEqual(['M1.esp', 'M2.esp', 'M3.esp']);
+    expect(visible.map((n) => expectInstanceOf(n, PluginNode).plugin.name)).toEqual(['M1.esp', 'M2.esp', 'M3.esp']);
 
-    const dt = new FakeDataTransfer();
-    tree.handleDrag([node('M1.esp')], dt as never, NONE);
-    await tree.handleDrop(node('M3.esp'), dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag([node('M1.esp')], dt, NONE);
+    await tree.handleDrop(node('M3.esp'), dt, NONE);
 
     expect(filteredSource.reorderPluginsCalls).toEqual(baselineSource.reorderPluginsCalls);
   });
@@ -803,9 +818,9 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
   async function dragToDisk(moved: string[], target: string | undefined) {
     const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
     await tree.getChildren(); // cache the rendered order
-    const dt = new FakeDataTransfer();
-    tree.handleDrag(moved.map(node), dt as never, NONE);
-    await tree.handleDrop(target === undefined ? undefined : node(target), dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag(moved.map(node), dt, NONE);
+    await tree.handleDrop(target === undefined ? undefined : node(target), dt, NONE);
   }
 
   it('single-row down-drag lands the row before the target and keeps the comment header', async () => {
@@ -831,10 +846,10 @@ describe('PluginsTreeProvider — drag reorder round-trips through plugins.txt o
       instance: new FakeInstance(valueOf(fixturePlugins())), source, client: makeDisconnectedClient(),
     });
     await tree.getChildren();
-    const dt = new FakeDataTransfer();
-    tree.handleDrag([node('A.esp')], dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag([node('A.esp')], dt, NONE);
 
-    await tree.handleDrop(node('D.esp'), dt as never, NONE);
+    await tree.handleDrop(node('D.esp'), dt, NONE);
 
     expect(await readFile(pluginsTxt(), 'utf8')).toBe('# header\r\nB.esp\r\n*C.esp\r\n*A.esp\r\nD.esp\r\nE.esp\r\n');
   });
@@ -892,17 +907,17 @@ describe('PluginsTreeProvider — implicit master rows', () => {
       [plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm', 'DLCCoast.esm'],
     ).getChildren();
 
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Fallout4.esm', 'DLCCoast.esm', 'Mod.esp']);
+    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm', 'DLCCoast.esm', 'Mod.esp']);
     expect(rows[0]).toBeInstanceOf(ImplicitMasterNode);
     expect(rows[1]).toBeInstanceOf(ImplicitMasterNode);
-    expect((rows[0] as ImplicitMasterNode).contextValue).toBe('pluginImplicit');
-    expect((rows[0] as ImplicitMasterNode).checkboxState).toBeUndefined();
+    expect(expectInstanceOf(rows[0], ImplicitMasterNode).contextValue).toBe('pluginImplicit');
+    expect(expectInstanceOf(rows[0], ImplicitMasterNode).checkboxState).toBeUndefined();
     expect(rows[2]).toBeInstanceOf(PluginNode);
   });
 
   it('resolves each implicit row file inside the Data folder, for the graying decoration to key on', async () => {
     const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']).getChildren();
-    expect((rows[0] as ImplicitMasterNode).resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
+    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri).toEqual({ fsPath: '/game/Data/Fallout4.esm' });
   });
 
   it('a name the backend calls implicit which plugins.txt also lists renders exactly once, as the implicit row (real LitR CC .esl case)', async () => {
@@ -911,14 +926,14 @@ describe('PluginsTreeProvider — implicit master rows', () => {
       plugin({ name: 'ccBGSFO4044-HellfirePowerArmor.esl', slot: 1 }),
     ], ['Fallout4.esm', 'ccBGSFO4044-HellfirePowerArmor.esl']).getChildren();
 
-    const labels = rows.map((r) => (r as PluginNode).label);
+    const labels = rows.map((r) => r.label);
     expect(labels).toEqual(['Fallout4.esm', 'ccBGSFO4044-HellfirePowerArmor.esl']);
     expect(rows.every((r) => r instanceof ImplicitMasterNode)).toBe(true);
   });
 
   it('matches a plugins.txt line to an implicit name case-insensitively', async () => {
     const rows = await treeFor([plugin({ name: 'FALLOUT4.ESM', slot: 0 })], ['Fallout4.esm']).getChildren();
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Fallout4.esm']);
+    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
   it('publishes the implicit names, lowercased, for the graying decoration provider', async () => {
@@ -934,27 +949,27 @@ describe('PluginsTreeProvider — implicit master rows', () => {
     const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], null).getChildren();
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Mod.esp']);
+    expect(rows.map((r) => r.label)).toEqual(['Mod.esp']);
     expect([...treeFor([], null).implicitMasterNames()]).toEqual([]);
   });
 
   it('renders only implicit rows when plugins.txt is empty, rather than the empty state', async () => {
     const rows = await treeFor([], ['Fallout4.esm']).getChildren();
-    expect(rows.map((r) => (r as PluginNode).label)).toEqual(['Fallout4.esm']);
+    expect(rows.map((r) => r.label)).toEqual(['Fallout4.esm']);
   });
 
   it('leaves an implicit row without a resourceUri when the Data folder is unresolved', async () => {
     const rows = await treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm'], null).getChildren();
-    expect((rows[0] as ImplicitMasterNode).resourceUri).toBeUndefined();
+    expect(expectInstanceOf(rows[0], ImplicitMasterNode).resourceUri).toBeUndefined();
   });
 
   it('handleDrag still filters to only PluginNode rows, excluding implicit rows for free', async () => {
     const tree = treeFor([plugin({ name: 'Mod.esp', slot: 0 })], ['Fallout4.esm']);
     const rows = await tree.getChildren();
-    const dt = new FakeDataTransfer();
-    tree.handleDrag(rows, dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag(rows, dt, NONE);
     const item = dt.get('application/vnd.medit.pluginlist-node');
-    expect((item?.value as { names: string[] }).names).toEqual(['Mod.esp']);
+    expect(namesFrom(item)).toEqual(['Mod.esp']);
   });
 });
 
@@ -982,9 +997,9 @@ describe('PluginsTreeProvider — implicit master drop-index mapping', () => {
     const source = writesTo(dir);
     const tree = new PluginsTreeProvider({ instance: new FakeInstance(valueOf(fixturePlugins())), source });
     await tree.getChildren();
-    const dt = new FakeDataTransfer();
-    tree.handleDrag(moved.map(node), dt as never, NONE);
-    await tree.handleDrop(target, dt as never, NONE);
+    const dt = new DataTransfer();
+    tree.handleDrag(moved.map(node), dt, NONE);
+    await tree.handleDrop(target, dt, NONE);
   }
 
   it('dropping onto the implicit block lands the moved plugin at file-index 0, and the file never gains an implicit-master line', async () => {
@@ -1224,7 +1239,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
     const h = makeTree([A_ROW(), B_ROW()], { client: makeDisconnectedClient() });
     await h.tree.applyReconciled([]);
 
-    expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['A.esp', 'B.esp']);
+    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
 
   it('expanding a row yields exactly one error node', async () => {
@@ -1264,7 +1279,7 @@ describe('PluginsTreeProvider with the client reporting disconnected', () => {
 
     expect(discChild).toBeInstanceOf(ErrorNode);
     expect(idxChild).toBeInstanceOf(IndexingNode);
-    expect((discChild as vscode.TreeItem).label).not.toBe((idxChild as vscode.TreeItem).label);
+    expect(expectInstanceOf(discChild, ErrorNode).label).not.toBe(expectInstanceOf(idxChild, IndexingNode).label);
   });
 });
 
@@ -1275,7 +1290,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
 
-    expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['B.esp']);
+    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
   });
 
   it('keeps a plugin the filter still matches visible and expandable', async () => {
@@ -1308,13 +1323,13 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
   it('restores a hidden plugin immediately, in load order, once the filter clears', async () => {
     const h = makeTree([A_ROW(), B_ROW()]);
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-    expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['B.esp']);
+    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
 
     // Stands in for clearFilter's real hand-off: refreshMatchingPlugins re-reads the facts.
     h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
     await h.tree.refreshFacts();
 
-    expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['A.esp', 'B.esp']);
+    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['A.esp', 'B.esp']);
   });
 
   // A reorder made while a row is hidden lands in its new position once the filter clears:
@@ -1323,7 +1338,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     const instance = new FakeInstance(valueOf([A_ROW(), B_ROW()]));
     const h = makeTree([], { instance });
     await reconcile(h, [held('A.esp', { hasMatchingRecords: false }), held('B.esp')]);
-    expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['B.esp']);
+    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp']);
 
     instance.publish(valueOf([
       plugin({ name: 'B.esp', slot: 0 }), plugin({ name: 'A.esp', slot: 1 }),
@@ -1331,7 +1346,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     h.client.setQueryAnswer('getPlugins', [held('A.esp'), held('B.esp')]);
     await h.tree.refreshFacts();
 
-    expect((await h.tree.getChildren()).map((r) => (r as PluginNode).label)).toEqual(['B.esp', 'A.esp']);
+    expect((await h.tree.getChildren()).map((r) => expectInstanceOf(r, PluginNode).label)).toEqual(['B.esp', 'A.esp']);
   });
 
   // The hide decision reads `hasMatchingRecords` alone — never a master issue or a load
@@ -1389,7 +1404,7 @@ describe('PluginsTreeProvider — a record filter hides a plugin with no matches
     const slow = new Promise<PluginMetadata[]>((resolve) => { resolveSlow = resolve; });
     // The first call answers with the still-pending `slow`; every call after falls through to
     // the fixed answer below, once the queued step is drained.
-    h.client.setQueryAnswerOnce('getPlugins', slow as unknown as PluginMetadata[]);
+    h.client.setQueryAnswerOnce('getPlugins', slow);
     h.client.setQueryAnswer('getPlugins', [held('A.esp')]);
 
     // Setting the filter starts a fact re-read the backend is slow to answer.
@@ -1422,19 +1437,15 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     expect(client.calls).toContainEqual({ method: 'getRecordTypes', args: ['A.esp', undefined] });
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(RecordTypeNode);
-    expect((children[0] as RecordTypeNode).label).toBe('Weapon');
-    expect((children[0] as RecordTypeNode).description).toBe('5');
+    expect(expectInstanceOf(children[0], RecordTypeNode).label).toBe('Weapon');
+    expect(expectInstanceOf(children[0], RecordTypeNode).description).toBe('5');
   });
 
   it('renders the records under a record type', async () => {
-    const record = {
-      formKey: '000001:A.esp', plugin: 'A.esp', loadOrderIndex: 0, isWinner: true,
-      editorId: 'TheWeapon', origin: 'SomeMod', workingTreeState: 'None',
-      hasContainerChildren: false, hasParseFailure: false,
-    };
+    const record = recordSummary();
     const client = makeClient({
       recordTypes: [{ type: 'weap', count: 1, displayName: 'Weapon' }],
-      records: { items: [record], total: 1 } as never,
+      records: { items: [record], total: 1 },
     });
     const h = withRecords(client);
     await reconcile(h, [held('A.esp')]);
@@ -1444,7 +1455,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const records = await h.tree.getChildren(recordType);
 
     expect(records[0]).toBeInstanceOf(RecordNode);
-    expect((records[0] as RecordNode).label).toBe('TheWeapon [000001:A.esp]');
+    expect(expectInstanceOf(records[0], RecordNode).label).toBe('TheWeapon [000001:A.esp]');
   });
 
   it('renders the worldspace and cell hierarchy under a row', async () => {
@@ -1454,8 +1465,11 @@ describe('PluginsTreeProvider — a row expands into the record browser children
       worldspaceBlocks: {
         topCells: [],
         blocks: [{
-          x: 0, y: 0,
-          subBlocks: [{ x: 1, y: 1, cells: [{ formKey: 'c:A.esp', editorId: 'TheCell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }] }],
+          x: 0, y: 0, hasParseFailure: false,
+          subBlocks: [{
+            x: 1, y: 1, hasParseFailure: false,
+            cells: [{ formKey: 'c:A.esp', editorId: 'TheCell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, hasParseFailure: false }],
+          }],
         }],
       },
     });
@@ -1469,18 +1483,18 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     expect(worldspace).toBeInstanceOf(WorldspaceNode);
     const [block] = await h.tree.getChildren(worldspace);
     expect(block).toBeInstanceOf(BlockNode);
-    expect((block as BlockNode).label).toBe('Block 0, 0');
+    expect(expectInstanceOf(block, BlockNode).label).toBe('Block 0, 0');
     const [subBlock] = await h.tree.getChildren(block);
     expect(subBlock).toBeInstanceOf(SubBlockNode);
-    expect((subBlock as SubBlockNode).label).toBe('Sub-Block 1, 1');
+    expect(expectInstanceOf(subBlock, SubBlockNode).label).toBe('Sub-Block 1, 1');
     const [cell] = await h.tree.getChildren(subBlock);
     expect(cell).toBeInstanceOf(CellNode);
-    expect((cell as CellNode).label).toBe('< 12,  -5>');
+    expect(expectInstanceOf(cell, CellNode).label).toBe('< 12,  -5>');
   });
 
   it('pages the interior cells, with a load-more leaf carrying the remainder', async () => {
     const items = Array.from({ length: 50 }, (_, i) => ({
-      formKey: `i${i}:A.esp`, editorId: `IntCell${i}`, cellX: i, cellY: 0, isPersistentWorldspaceCell: false,
+      formKey: `i${i}:A.esp`, editorId: `IntCell${i}`, cellX: i, cellY: 0, isPersistentWorldspaceCell: false, hasParseFailure: false,
     }));
     const client = makeClient({
       recordTypes: [{ type: 'cell', count: 120, displayName: 'Cell' }],
@@ -1496,7 +1510,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 
     expect(cells).toHaveLength(51);
     expect(cells[50]).toBeInstanceOf(InteriorLoadMoreNode);
-    expect((cells[50] as InteriorLoadMoreNode).label).toBe('$(sync) Load more… (70 remaining)');
+    expect(expectInstanceOf(cells[50], InteriorLoadMoreNode).label).toBe('$(sync) Load more… (70 remaining)');
   });
 
   it('renders a child tree item through the record browser, not the row path', async () => {
@@ -1522,7 +1536,7 @@ describe('PluginsTreeProvider — a row expands into the record browser children
     const children = await h.tree.getChildren(row);
 
     expect(children).toHaveLength(1);
-    expect((children[0] as { label: string }).label).toBe('⚠ Failed to load: boom');
+    expect(expectInstanceOf(children[0], ErrorNode).label).toBe('⚠ Failed to load: boom');
   });
 
   it('forwards the record browser targeted change events, so a load-more refreshes one parent', async () => {
@@ -1552,6 +1566,13 @@ describe('PluginsTreeProvider — a row expands into the record browser children
 async function rowItem(h: Harness, index = 0): Promise<vscode.TreeItem> {
   const rows = await h.tree.getChildren();
   return h.tree.getTreeItem(rows[index]!);
+}
+
+// `TreeItem.tooltip` is `string | MarkdownString | undefined` — every row here sets a plain
+// string, so a test reading it back narrows through this instead of an `as`.
+function expectString(value: unknown): string {
+  if (typeof value !== 'string') throw new Error(`Expected a string, got ${String(value)}`);
+  return value;
 }
 
 // ADR-0017: read-only-for-editing is never an icon; it is the absent actions and this note.
@@ -1601,7 +1622,7 @@ describe('PluginsTreeProvider — read-only tooltip', () => {
     const h = makeTree([], { implicitMasters: () => Promise.resolve(['Fallout4.esm']) });
     await reconcile(h, [held('Fallout4.esm', { origin: 'Data', isImmutable: true })]);
 
-    const tooltip = (await rowItem(h)).tooltip as string;
+    const tooltip = expectString((await rowItem(h)).tooltip);
     expect(tooltip).toContain("can't be disabled or moved (enforced by the game)");
     expect(tooltip).toContain('read-only');
 
@@ -1629,7 +1650,7 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
     // The same red the Problems panel uses, not the plain foreground color a colorless
     // ThemeIcon renders in — otherwise indistinguishable at a glance in a large load order.
-    expect((item.iconPath as vscode.ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
     expect(item.tooltip).toContain('Missing master: Ghost.esm');
   });
 
@@ -1637,7 +1658,7 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
     const h = makeTree([A_ROW()]);
     await withIssues(h, [{ masterName: 'Broken.esm', kind: 'Unloadable' }]);
 
-    const tooltip = (await rowItem(h)).tooltip as string;
+    const tooltip = expectString((await rowItem(h)).tooltip);
     expect(tooltip).toContain('Master Broken.esm cannot be loaded');
     expect(tooltip).not.toContain('Missing master');
   });
@@ -1693,7 +1714,7 @@ describe('PluginsTreeProvider — master-issue decoration (ADR-0017 AC1/AC2/AC4)
   // bypasses the type at the call site.
   it('degrades to undecorated, without throwing, when a plugin issue list is absent', async () => {
     const h = makeTree([A_ROW()]);
-    await reconcile(h, [held('A.esp', { masterIssues: undefined as never })]);
+    await reconcile(h, [held('A.esp', { masterIssues: undefined })]);
 
     const item = await rowItem(h);
     expect(item.tooltip).toBeUndefined();
@@ -1733,7 +1754,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () =>
 
     const item = await rowItem(h);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
-    expect((item.iconPath as vscode.ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    expect(expectInstanceOf(item.iconPath, ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
     expect(item.description).toBe('✗ Failed to load');
     expect(item.tooltip).toContain('Failed to load: InvalidOperationException: Malformed record');
     expect(item.tooltip).toContain('FormatException: bad subrecord at offset 12');
@@ -1749,7 +1770,7 @@ describe('PluginsTreeProvider — load-failure decoration (ADR-0017 AC7)', () =>
     const [row] = await h.tree.getChildren();
     const children = await h.tree.getChildren(row);
     expect(children).toEqual([expect.any(ErrorNode)]);
-    expect((children[0] as vscode.TreeItem).tooltip).toBe('Malformed record');
+    expect(expectInstanceOf(children[0], ErrorNode).tooltip).toBe('Malformed record');
   });
 
   it('matches the copy, name and origin, case-insensitively', async () => {
@@ -1789,7 +1810,7 @@ describe('PluginsTreeProvider — parse-failure decoration', () => {
     await reconcile(h, [held('A.esp', { hasParseFailure: true }), held('B.esp')]);
 
     const flagged = await rowItem(h);
-    expect((flagged.iconPath as vscode.ThemeIcon).id).toBe('error');
+    expect(expectInstanceOf(flagged.iconPath, ThemeIcon).id).toBe('error');
     expect(flagged.description).toBe('✗ Unreadable records');
     expect(flagged.tooltip).toContain('could not be read');
     expect((await rowItem(h, 1)).iconPath).toBeUndefined();
@@ -1967,7 +1988,7 @@ describe('PluginsTreeProvider — a name under two origins joins to the row own 
       held('Shared.esp', { origin: 'ModB', masterIssues: [{ masterName: 'BMaster.esm', kind: 'DirectlyMissing' }] }),
     ]);
 
-    const tooltip = (await rowItem(h)).tooltip as string;
+    const tooltip = expectString((await rowItem(h)).tooltip);
     expect(tooltip).toContain('Missing master: AMaster.esm');
     expect(tooltip).not.toContain('BMaster.esm');
   });

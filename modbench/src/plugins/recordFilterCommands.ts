@@ -14,7 +14,7 @@ export function registerLoadMoreCommand(treeProvider: PluginTreeProvider): vscod
 export interface FilterCommandDeps {
   scriptsPath: string;
   client: Pick<MEditClient, 'setFilter' | 'clearFilter'>;
-  treeProvider: PluginTreeProvider;
+  treeProvider: Pick<PluginTreeProvider, 'refresh'>;
   /** Symmetric on purpose: a stale `false` surviving a clear would leave a plugin permanently
    *  unexpandable (plugins.md). */
   refreshMatchingPlugins: () => void;

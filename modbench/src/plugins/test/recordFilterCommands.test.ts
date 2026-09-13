@@ -42,7 +42,7 @@ function makeDeps(client: InMemoryMEditClient): FilterCommandDeps & {
   return {
     scriptsPath: '/scripts',
     client,
-    treeProvider: { refresh: vi.fn() } as any,
+    treeProvider: { refresh: vi.fn() },
     refreshMatchingPlugins: vi.fn(),
     setFilterActive: vi.fn(),
     reporter: recordingReporter(),

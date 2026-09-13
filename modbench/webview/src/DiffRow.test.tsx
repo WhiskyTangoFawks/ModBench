@@ -510,7 +510,8 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
     const td = screen.getAllByText(text)[index]!.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();
-    return JSON.parse(attr!) as Record<string, unknown>;
+    const parsed: Record<string, unknown> = JSON.parse(attr!);
+    return parsed;
   }
 
   it('a mutable string cell carries a stringValue context with readOnly: false and its current value', () => {
@@ -569,7 +570,8 @@ describe('DiffRow — array parent/element right-click context', () => {
     const td = screen.getAllByText(text)[index]!.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();
-    return JSON.parse(attr!) as Record<string, unknown>;
+    const parsed: Record<string, unknown> = JSON.parse(attr!);
+    return parsed;
   }
 
   const intArrayMeta = fieldMeta({

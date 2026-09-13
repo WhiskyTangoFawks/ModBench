@@ -729,8 +729,9 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     const value = await pastSequenceWithin(instance, before, 2000);
 
     expect(value).not.toBe(TIMED_OUT);
+    if (value === TIMED_OUT) throw new Error('expected a landed recompute, not a timeout');
     expect(instance.sequence).toBe(before + 1);
-    expect((value as InstanceValue).gameDirectory).toEqual({ root: explicitDir, dataFolder: join(explicitDir, 'Data') });
+    expect(value.gameDirectory).toEqual({ root: explicitDir, dataFolder: join(explicitDir, 'Data') });
   });
 
   it('does not recompute for a config change affecting an unrelated setting', async () => {

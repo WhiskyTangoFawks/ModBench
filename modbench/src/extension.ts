@@ -65,6 +65,8 @@ function wireAutoLaunch(
   );
 }
 
+export type ActivateExports = ReturnType<typeof activate>;
+
 export function activate(context: vscode.ExtensionContext) {
   const session: ExtensionSession = {};
   const port: number = meditConfig().get('backendPort') ?? 5172;

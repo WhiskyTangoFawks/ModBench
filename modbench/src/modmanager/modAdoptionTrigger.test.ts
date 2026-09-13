@@ -10,6 +10,7 @@ import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeW
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from './instance';
+import { instanceValueFixture } from './test/instanceValueFixture';
 import { registerModAdoption, type ModAdoptionOutcome } from './modAdoptionTrigger';
 import { adoptMods } from './commands/modlist';
 import { installFromFolder } from './commands/install';
@@ -146,7 +147,7 @@ describe('registerModAdoption — driven by the Instance value', () => {
 });
 
 // Only `activeProfile` and `unlistedFolders` are read; the rest is unused filler cast through.
-const FAKE_VALUE = { activeProfile: 'Default', unlistedFolders: [] } as unknown as InstanceValue;
+const FAKE_VALUE: InstanceValue = instanceValueFixture({ activeProfile: 'Default', unlistedFolders: [] });
 
 function fakeInstance(): { subscribe: Instance['subscribe']; fire: () => void } {
   let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;

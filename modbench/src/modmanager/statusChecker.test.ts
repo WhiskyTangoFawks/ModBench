@@ -120,7 +120,7 @@ describe('computeModStatuses — non-ENOENT existence-check failures propagate',
         if (String(path).endsWith(restrictedPath)) {
           throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
         }
-        return actualAccess(path, ...(rest as []));
+        return actualAccess(path, ...rest);
       });
 
       try {

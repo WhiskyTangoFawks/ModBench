@@ -244,7 +244,7 @@ const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descen
 
 /** A quick pick rather than column headers, which a tree does not have. Escape is a silent
  *  no-op, matching the profile picker. */
-export function registerDownloadsSortCommand(downloadsProvider: DownloadsProvider): vscode.Disposable {
+export function registerDownloadsSortCommand(downloadsProvider: Pick<DownloadsProvider, 'setSort'>): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.downloads.sortBy', async () => {
     const picked = await vscode.window.showQuickPick(SORT_OPTIONS, { placeHolder: 'Sort downloads by' });
     if (!picked) return;
@@ -254,7 +254,9 @@ export function registerDownloadsSortCommand(downloadsProvider: DownloadsProvide
 
 /** Two commands over one context key, as the Mods tree's sort-direction toggle does: state
  *  lives on the provider, the handler owns the key package.json's `when` clauses gate on. */
-export function registerDownloadsHiddenToggleCommands(downloadsProvider: DownloadsProvider): vscode.Disposable[] {
+export function registerDownloadsHiddenToggleCommands(
+  downloadsProvider: Pick<DownloadsProvider, 'setShowHidden'>,
+): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.showHidden', () => {
       downloadsProvider.setShowHidden(true);

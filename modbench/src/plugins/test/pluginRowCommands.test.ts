@@ -4,15 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // the same idiom recordPanelContextCommands.test.ts already establishes.
 const {
   handlers, registerCommand, showQuickPick, withProgress,
-  TreeItem, ThemeIcon, EventEmitter, TreeItemCollapsibleState,
 } = vi.hoisted(() => {
   const handlers = new Map<string, (ctx?: unknown) => Promise<void> | void>();
-  // `PluginTreeProvider.ts` is a value import three hops down (for its node classes' own
-  // `vscode.TreeItem` base) — these stubs exist only so that module chain loads, not for this
-  // file's own assertions.
-  class TreeItem { label?: unknown; collapsibleState?: unknown; constructor(label?: unknown, collapsibleState?: unknown) { this.label = label; this.collapsibleState = collapsibleState; } }
-  class ThemeIcon { id: string; constructor(id: string) { this.id = id; } }
-  class EventEmitter { event = () => {}; fire = () => {}; }
   return {
     handlers,
     registerCommand: vi.fn((command: string, handler: (ctx?: unknown) => Promise<void> | void) => {
@@ -21,19 +14,21 @@ const {
     }),
     showQuickPick: vi.fn(),
     withProgress: vi.fn((_options: unknown, work: () => Promise<unknown>) => work()),
-    TreeItem, ThemeIcon, EventEmitter,
-    TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
   };
 });
+
+// Every one of this file's own vscode needs, real fakes rather than this file's own stubs.
+import {
+  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
+  Diagnostic, DiagnosticSeverity, Range, uriFile,
+} from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   commands: { registerCommand },
   window: { showQuickPick, withProgress },
-  TreeItem, ThemeIcon, EventEmitter, TreeItemCollapsibleState,
-  Diagnostic: class { constructor(public range: unknown, public message: string, public severity: number) {} },
-  Range: class { constructor(public a: number, public b: number, public c: number, public d: number) {} },
-  DiagnosticSeverity: { Warning: 1 },
-  Uri: { file: (p: string) => ({ fsPath: p }) },
+  TreeItem, ThemeIcon, ThemeColor, EventEmitter, TreeItemCollapsibleState, TreeItemCheckboxState,
+  Diagnostic, DiagnosticSeverity, Range,
+  Uri: { file: uriFile },
 }));
 
 import {
@@ -42,53 +37,51 @@ import {
 } from '../pluginRowCommands';
 import { originFolder } from '../../modmanager/loadOrderSnapshot';
 import { InMemoryMEditClient } from '../../medit/client';
-import type { PluginListNode } from '../PluginsTreeProvider';
+import { PluginNode } from '../PluginsTreeProvider';
+import { PluginTreeProvider } from '../PluginTreeProvider';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
+import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
+import { FakeDiagnosticCollection } from '../../test/vscodeMock';
+import { pluginMetadataFixture, compileResultFixture } from '../../medit/client/test/fixtures';
+import type { ExtensionSession } from '../../session';
 
 beforeEach(() => {
   handlers.clear();
   vi.clearAllMocks();
 });
 
-function fakeOutputChannel() {
-  return { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as any;
-}
-
-function fakeDiagnostics() {
-  return { delete: vi.fn(), set: vi.fn(), [Symbol.iterator]: function* () {} } as any;
-}
-
-function pluginNode(name = 'MyMod.esp'): PluginListNode {
-  return { kind: 'plugin', plugin: { name } } as any;
+function pluginNode(name = 'MyMod.esp'): PluginNode {
+  return new PluginNode({ name, enabled: true });
 }
 
 function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
-  client.setQueryAnswer('getPlugins', [{ name, origin, inLoadOrder: true } as any]);
+  client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name, origin, inLoadOrder: true })]);
   return client;
 }
 
 // ── registerTrackCommand ──────────────────────────────────────────────────
 
 describe('registerTrackCommand', () => {
-  function invokeTrack(client: InMemoryMEditClient, treeProvider: any, onTracked = vi.fn().mockResolvedValue(undefined)) {
-    const session = { pluginsTreeView: undefined, pluginsNameFilter: undefined } as any;
+  function invokeTrack(client: InMemoryMEditClient, onTracked = vi.fn().mockResolvedValue(undefined)) {
+    const session: ExtensionSession = { pluginsTreeView: undefined, pluginsNameFilter: undefined };
     const reporter = recordingReporter();
-    registerTrackCommand(session, client, fakeOutputChannel(), reporter, treeProvider, onTracked);
-    return { handler: handlers.get('modbench.pluginListTree.track')!, onTracked, reporter };
+    const treeProvider = new PluginTreeProvider(client);
+    const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
+    registerTrackCommand(session, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked);
+    return { handler: handlers.get('modbench.pluginListTree.track')!, onTracked, reporter, refresh };
   }
 
   it('refreshes the tree and lands the tracked toast on a landed track', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
     client.setCommandResult('track', { origin: 'ModA' });
-    const treeProvider = { refresh: vi.fn() };
     showQuickPick.mockResolvedValue({ label: 'Edits' });
-    const { handler, onTracked, reporter } = invokeTrack(client, treeProvider);
+    const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
     await handler(pluginNode());
 
     expect(client.calls).toContainEqual({ method: 'track', args: ['ModA', 'Edits', expect.anything()] });
-    expect(treeProvider.refresh).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledOnce();
     expect(reporter.landings).toEqual(['Tracked "ModA".']);
     expect(onTracked).toHaveBeenCalledOnce();
   });
@@ -97,10 +90,9 @@ describe('registerTrackCommand', () => {
   // landed when the backend actually said "already tracked."
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the track', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('track', { refused: true, message: 'mEdit: Could not track "ModA" — already tracked' } as any);
-    const treeProvider = { refresh: vi.fn() };
+    client.setCommandResult('track', { refused: true, message: 'mEdit: Could not track "ModA" — already tracked' });
     showQuickPick.mockResolvedValue({ label: 'Edits' });
-    const { handler, onTracked, reporter } = invokeTrack(client, treeProvider);
+    const { handler, onTracked, reporter, refresh } = invokeTrack(client);
 
     await handler(pluginNode());
 
@@ -108,14 +100,14 @@ describe('registerTrackCommand', () => {
       { severity: 'error', message: 'mEdit: Could not track "ModA" — already tracked', detail: undefined },
     ]);
     expect(reporter.landings).toEqual([]);
-    expect(treeProvider.refresh).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
     expect(onTracked).not.toHaveBeenCalled();
   });
 
   it('reports an unresolvable origin at error and never asks what the .gitignore should hold', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
-    const { handler, reporter } = invokeTrack(client, { refresh: vi.fn() });
+    const { handler, reporter } = invokeTrack(client);
 
     await handler(pluginNode());
 
@@ -130,24 +122,25 @@ describe('registerTrackCommand', () => {
 
 describe('registerRebaseCommand', () => {
   function invokeRebase(client: InMemoryMEditClient) {
-    const treeProvider = { refresh: vi.fn() } as any;
+    const treeProvider = new PluginTreeProvider(client);
+    const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
-    registerRebaseCommand(client, fakeOutputChannel(), reporter, treeProvider, refreshMatchingPlugins);
-    return { handler: handlers.get('modbench.pluginListTree.rebase')!, treeProvider, refreshMatchingPlugins, reporter };
+    registerRebaseCommand(client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins);
+    return { handler: handlers.get('modbench.pluginListTree.rebase')!, refresh, refreshMatchingPlugins, reporter };
   }
 
   it('lands the clean-rebase toast and refreshes on a landed rebase', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] } as any);
-    const { handler, treeProvider, refreshMatchingPlugins, reporter } = invokeRebase(client);
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
+    const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
     expect(client.calls).toContainEqual({ method: 'rebaseOntoMain', args: ['ModA'] });
     expect(reporter.landings).toEqual(['Rebased "ModA" onto the updated baseline.']);
     expect(reporter.reports).toEqual([]);
-    expect(treeProvider.refresh).toHaveBeenCalledOnce();
+    expect(refresh).toHaveBeenCalledOnce();
     expect(refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
@@ -166,21 +159,21 @@ describe('registerRebaseCommand', () => {
 
   it('reports the ready-to-show message at error and refreshes nothing when the backend refuses the rebase outright', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'mEdit: Could not rebase "ModA" — boom' } as any);
-    const { handler, treeProvider, refreshMatchingPlugins, reporter } = invokeRebase(client);
+    client.setCommandResult('rebaseOntoMain', { refused: true, message: 'mEdit: Could not rebase "ModA" — boom' });
+    const { handler, refresh, refreshMatchingPlugins, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Could not rebase "ModA" — boom', detail: undefined },
     ]);
-    expect(treeProvider.refresh).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
     expect(refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('reports a typed rebase refusal at warning, in the reason the backend gave', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason: 'the working tree is dirty', conflictedPaths: [] } as any);
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Refused', refusalReason: 'the working tree is dirty', conflictedPaths: [] });
     const { handler, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
@@ -191,7 +184,7 @@ describe('registerRebaseCommand', () => {
 
   it('reports a conflicted rebase at warning, naming the gesture that resumes it', async () => {
     const client = clientWithOrigin('MyMod.esp', 'ModA');
-    client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: [] } as any);
+    client.setCommandResult('rebaseOntoMain', { outcome: 'Conflicted', refusalReason: null, conflictedPaths: [] });
     const { handler, reporter } = invokeRebase(client);
 
     await handler(pluginNode());
@@ -213,13 +206,13 @@ describe('compileAndReport', () => {
 
   function compile(client: InMemoryMEditClient, atRef: string | undefined, ask = scriptedDialog()) {
     const reporter = recordingReporter();
-    const run = compileAndReport(client, fakeDiagnostics(), () => undefined, reporter, ask, TARGET, atRef);
+    const run = compileAndReport(client, new FakeDiagnosticCollection(), () => undefined, reporter, ask, TARGET, atRef);
     return { run, reporter, ask };
   }
 
   it('reports the ready-to-show message at error on a transport-level refusal (WriteRefused), never the typed-refusal wording', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' } as any);
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' });
 
     const { run, reporter } = compile(client, undefined);
     await run;
@@ -233,7 +226,7 @@ describe('compileAndReport', () => {
 
   it('reports a failed compile at error, naming the ref it was asked for', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', { succeeded: false, refusalReason: 'papyrus said no', eslContradiction: false, diagnostics: [] } as any);
+    client.setCommandResult('compile', compileResultFixture({ succeeded: false, refusalReason: 'papyrus said no' }));
 
     const { run, reporter } = compile(client, 'main');
     await run;
@@ -246,7 +239,7 @@ describe('compileAndReport', () => {
 
   it('lands a clean compile', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', { succeeded: true, refusalReason: null, eslContradiction: false, diagnostics: [] } as any);
+    client.setCommandResult('compile', compileResultFixture());
 
     const { run, reporter } = compile(client, undefined);
     await run;
@@ -257,10 +250,9 @@ describe('compileAndReport', () => {
 
   it('lands a compile that produced diagnostics, counting them and pointing at the Problems panel', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', {
-      succeeded: true, refusalReason: null, eslContradiction: false,
-      diagnostics: [{ sourceRelativePath: 'Source/A.psc', message: 'bad' }],
-    } as any);
+    client.setCommandResult('compile', compileResultFixture({
+      diagnostics: [{ formKey: '000000:MyPatch.esp', sourceRelativePath: 'Source/A.psc', message: 'bad' }],
+    }));
 
     const { run, reporter } = compile(client, undefined);
     await run;
@@ -273,9 +265,9 @@ describe('compileAndReport', () => {
   it('asks the ESL-flag question through the injected dialog and retries the compile once it is accepted', async () => {
     const client = new InMemoryMEditClient();
     let attempt = 0;
-    client.setCommandHandler('compile', () => Promise.resolve((attempt++ === 0
-      ? { succeeded: false, refusalReason: 'exhausted the ESL range', eslContradiction: true, diagnostics: [] }
-      : { succeeded: true, refusalReason: null, eslContradiction: false, diagnostics: [] }) as any));
+    client.setCommandHandler('compile', () => Promise.resolve(attempt++ === 0
+      ? compileResultFixture({ succeeded: false, refusalReason: 'exhausted the ESL range', eslContradiction: true })
+      : compileResultFixture()));
     client.setCommandResult('editRecord', { applied: true });
     const ask = scriptedDialog('Remove ESL Flag and Compile');
 
@@ -298,7 +290,7 @@ describe('compileAndReport', () => {
 
   it('reports the failure without retrying when the ESL-flag question is declined', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('compile', { succeeded: false, refusalReason: 'exhausted the ESL range', eslContradiction: true, diagnostics: [] } as any);
+    client.setCommandResult('compile', compileResultFixture({ succeeded: false, refusalReason: 'exhausted the ESL range', eslContradiction: true }));
     const ask = scriptedDialog(undefined);
 
     const { run, reporter } = compile(client, undefined, ask);
@@ -315,32 +307,29 @@ describe('compileAndReport', () => {
 // ── publishCompileDiagnostics ──────────────────────────────────────────────
 
 describe('publishCompileDiagnostics', () => {
-  const compiled = (sourceRelativePath: string) => ({
-    succeeded: true, diagnostics: [{ sourceRelativePath, message: 'bad' }],
-  } as any);
+  const compiled = (sourceRelativePath: string) => compileResultFixture({
+    diagnostics: [{ formKey: '000000:MyPatch.esp', sourceRelativePath, message: 'bad' }],
+  });
 
-  function collectingDiagnostics() {
-    const set = new Map<string, unknown>();
-    return { set: (uri: any, list: unknown) => set.set(uri.fsPath, list), delete: vi.fn(), [Symbol.iterator]: function* () {}, seen: set };
-  }
+  const publishedPaths = (diagnostics: FakeDiagnosticCollection) => [...diagnostics].map(([uri]) => uri.fsPath);
 
   // Rival this catches: the old guess, the mods directory joined with the origin, which put an
   // overwrite-origin plugin's diagnostics under a folder that does not exist.
   it('targets the folder the value gave for the origin, overwrite included', () => {
-    const diagnostics = collectingDiagnostics();
+    const diagnostics = new FakeDiagnosticCollection();
     const row = { name: 'Stray.esp', path: '/instance/overwrite/Stray.esp', origin: 'overwrite', slot: null, enabled: false, winning: true };
 
-    publishCompileDiagnostics(diagnostics as any, originFolder([row], 'overwrite'), compiled('Source/Stray.psc'));
+    publishCompileDiagnostics(diagnostics, originFolder([row], 'overwrite'), compiled('Source/Stray.psc'));
 
-    expect([...diagnostics.seen.keys()]).toEqual(['/instance/overwrite/Source/Stray.psc']);
+    expect(publishedPaths(diagnostics)).toEqual(['/instance/overwrite/Source/Stray.psc']);
   });
 
   it('publishes nothing when the value knows no folder for the origin', () => {
-    const diagnostics = collectingDiagnostics();
+    const diagnostics = new FakeDiagnosticCollection();
 
-    publishCompileDiagnostics(diagnostics as any, undefined, compiled('Source/A.psc'));
+    publishCompileDiagnostics(diagnostics, undefined, compiled('Source/A.psc'));
 
-    expect([...diagnostics.seen.keys()]).toEqual([]);
+    expect(publishedPaths(diagnostics)).toEqual([]);
   });
 });
 
@@ -350,17 +339,17 @@ describe('registerSaveAndCompileCommand', () => {
   function invokeSaveAndCompile(client: InMemoryMEditClient) {
     const reporter = recordingReporter();
     registerSaveAndCompileCommand(
-      client, { current: () => undefined }, fakeOutputChannel(), reporter, scriptedDialog(),
-      fakeDiagnostics(), () => undefined);
+      client, { current: () => undefined }, new FakeLogOutputChannel(), reporter, scriptedDialog(),
+      new FakeDiagnosticCollection(), () => undefined);
     return { handler: handlers.get('modbench.saveAndCompile')!, reporter };
   }
 
   it('drives a tree-row compile through the registered command, recording the compile call and surfacing the refusal', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' } as any);
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" — boom' });
     const { handler, reporter } = invokeSaveAndCompile(client);
 
-    await handler({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+    await handler(pluginNode('MyPatch.esp'));
 
     expect(client.calls).toContainEqual({ method: 'compile', args: ['MyPatch.esp', 'ModA', undefined] });
     expect(reporter.reports).toEqual([
@@ -370,7 +359,7 @@ describe('registerSaveAndCompileCommand', () => {
 
   it('reports a picked plugin with no mod folder at error and compiles nothing', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [{ name: 'Orphan.esp', origin: undefined, inLoadOrder: true } as any]);
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'Orphan.esp', origin: undefined, inLoadOrder: true })]);
     showQuickPick.mockResolvedValue({ label: 'Orphan.esp', description: undefined });
     const { handler, reporter } = invokeSaveAndCompile(client);
 
@@ -387,7 +376,7 @@ describe('registerSaveAndCompileCommand', () => {
     client.setQueryAnswer('getPlugins', []);
     const { handler, reporter } = invokeSaveAndCompile(client);
 
-    await handler({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+    await handler(pluginNode('MyPatch.esp'));
 
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);
     expect(reporter.reports).toEqual([
@@ -402,16 +391,16 @@ describe('registerCompileAtRefCommand', () => {
   function invokeCompileAtRef(client: InMemoryMEditClient, answer: string | undefined) {
     const reporter = recordingReporter();
     const ask = scriptedDialog(answer);
-    registerCompileAtRefCommand(client, fakeOutputChannel(), reporter, ask, fakeDiagnostics(), () => undefined);
+    registerCompileAtRefCommand(client, new FakeLogOutputChannel(), reporter, ask, new FakeDiagnosticCollection(), () => undefined);
     return { handler: handlers.get('modbench.pluginListTree.compileAtMain')!, reporter, ask };
   }
 
   it('drives a compile-at-main through the registered command once the dialog confirms, recording the compile call at "main" and surfacing the refusal', async () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
-    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom' } as any);
+    client.setCommandResult('compile', { refused: true, message: 'mEdit: Could not compile "MyPatch.esp" at "main" — boom' });
     const { handler, reporter, ask } = invokeCompileAtRef(client, 'Compile at main');
 
-    await handler({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+    await handler(pluginNode('MyPatch.esp'));
 
     expect(ask.asked).toEqual([{
       message: 'Compile "MyPatch.esp" at ref "main"?',
@@ -430,7 +419,7 @@ describe('registerCompileAtRefCommand', () => {
     client.setQueryAnswer('getPlugins', []);
     const { handler, reporter, ask } = invokeCompileAtRef(client, 'Compile at main');
 
-    await handler({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+    await handler(pluginNode('MyPatch.esp'));
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not resolve which mod "MyPatch.esp" belongs to.', detail: undefined },
@@ -444,7 +433,7 @@ describe('registerCompileAtRefCommand', () => {
     const client = clientWithOrigin('MyPatch.esp', 'ModA');
     const { handler, reporter, ask } = invokeCompileAtRef(client, undefined);
 
-    await handler({ kind: 'plugin', plugin: { name: 'MyPatch.esp' } });
+    await handler(pluginNode('MyPatch.esp'));
 
     expect(ask.asked).toHaveLength(1);
     expect(client.calls.filter((c) => c.method === 'compile')).toEqual([]);

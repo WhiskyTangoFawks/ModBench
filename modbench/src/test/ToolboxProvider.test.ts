@@ -43,7 +43,7 @@ describe('ToolboxProvider', () => {
     const [profile] = makeProvider({ state: () => ({ activeProfile: 'Survival', deployed: false }) }).getChildren();
 
     expect(profile!.description).toBe('Survival');
-    expect((profile!.command as { command: string }).command).toBe('modbench.toolbox.switchProfile');
+    expect(profile!.command!.command).toBe('modbench.toolbox.switchProfile');
   });
 
   // Rival: a row that reads the profile from anywhere but the value — the pre-first-read value
@@ -59,7 +59,7 @@ describe('ToolboxProvider', () => {
 
     expect(rows).toHaveLength(2);
     expect(rows[1]!.description).toBe('not deployed');
-    expect((rows[1]!.command as { command: string }).command).toBe('modbench.toolbox.deploy');
+    expect(rows[1]!.command!.command).toBe('modbench.toolbox.deploy');
   });
 
   it('reads out a live deployment without offering Purge from the row — destructive actions stay in overflow behind a modal', () => {
