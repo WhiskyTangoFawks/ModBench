@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { firstReadOf } from './instanceFirstRead';
-import type { InstanceSubscriber, InstanceValue, ReadFailureListener } from './instance';
+import type { InstanceSubscriber, ReadFailureListener } from './instance';
+import { instanceValueFixture } from './test/instanceValueFixture';
 
 // ADR-0013: the one path from a landed recompute to a PUT — no gesture, command or view calls
 // `request()` itself (asserted by a scan elsewhere); this is the sole wiring that does.
@@ -15,7 +16,7 @@ describe('firstReadOf', () => {
       subscribe: (fn: InstanceSubscriber) => { subscriber = fn; return { dispose: () => {} }; },
       onReadFailure: (fn: ReadFailureListener) => { failureListener = fn; return { dispose: () => {} }; },
       fail: (reason: string) => { instance.readFailure = reason; failureListener?.(reason); },
-      land: () => { instance.readFailure = undefined; instance.sequence++; subscriber?.({} as InstanceValue, instance.sequence); },
+      land: () => { instance.readFailure = undefined; instance.sequence++; subscriber?.(instanceValueFixture(), instance.sequence); },
     };
     return instance;
   }
