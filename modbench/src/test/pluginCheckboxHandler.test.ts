@@ -6,33 +6,33 @@ const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
 }));
+
+import { TreeItem, TreeItemCollapsibleState, EventEmitter, uriFrom } from './vscodeMock';
+
 vi.mock('vscode', () => ({
   window: { showErrorMessage, showWarningMessage },
   TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
+  TreeItem, TreeItemCollapsibleState, EventEmitter,
+  Uri: { from: uriFrom },
 }));
 
 import { onPluginCheckboxChanged } from '../pluginCheckboxHandler';
-import type { PluginListNode } from '../plugins/PluginsTreeProvider';
+import { PluginNode } from '../plugins/PluginsTreeProvider';
+import { RecordNode } from '../plugins/PluginTreeProvider';
+import { FakeLogOutputChannel } from './fakeOutputChannel';
+import { recordSummaryFixture } from '../medit/client/test/fixtures';
 
 beforeEach(() => { showErrorMessage.mockClear(); showWarningMessage.mockClear(); });
-
-function fakeChannel() {
-  return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-}
-
-function pluginNode(name: string): PluginListNode {
-  return { kind: 'plugin', plugin: { name } } as unknown as PluginListNode;
-}
 
 describe('onPluginCheckboxChanged', () => {
   it('enables/disables the plugin and does nothing else on success', async () => {
     const setPluginEnabled = vi.fn().mockResolvedValue(undefined);
     const invalidate = vi.fn();
-    const provider = { setPluginEnabled, invalidate } as never;
-    const channel = fakeChannel();
+    const provider = { setPluginEnabled, invalidate };
+    const channel = new FakeLogOutputChannel();
 
     await onPluginCheckboxChanged(
-      { items: [[pluginNode('TestMod.esp'), 1]] } as never, provider, channel as never,
+      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: true }), 1]] }, provider, channel,
     );
 
     expect(setPluginEnabled).toHaveBeenCalledWith('TestMod.esp', true);
@@ -44,11 +44,11 @@ describe('onPluginCheckboxChanged', () => {
   it('reports and invalidates so the checkbox resyncs when the toggle fails', async () => {
     const setPluginEnabled = vi.fn().mockRejectedValue(new Error('disk full'));
     const invalidate = vi.fn();
-    const provider = { setPluginEnabled, invalidate } as never;
-    const channel = fakeChannel();
+    const provider = { setPluginEnabled, invalidate };
+    const channel = new FakeLogOutputChannel();
 
     await onPluginCheckboxChanged(
-      { items: [[pluginNode('TestMod.esp'), 0]] } as never, provider, channel as never,
+      { items: [[new PluginNode({ name: 'TestMod.esp', enabled: false }), 0]] }, provider, channel,
     );
 
     expect(channel.error).toHaveBeenCalledWith(
@@ -59,10 +59,10 @@ describe('onPluginCheckboxChanged', () => {
 
   it('ignores a non-plugin row (a record-tree row sharing the merged view)', async () => {
     const setPluginEnabled = vi.fn();
-    const provider = { setPluginEnabled, invalidate: vi.fn() } as never;
-    const recordNode = { kind: 'record' } as never;
+    const provider = { setPluginEnabled, invalidate: vi.fn() };
+    const recordNode = new RecordNode(recordSummaryFixture());
 
-    await onPluginCheckboxChanged({ items: [[recordNode, 1]] } as never, provider, fakeChannel() as never);
+    await onPluginCheckboxChanged({ items: [[recordNode, 1]] }, provider, new FakeLogOutputChannel());
 
     expect(setPluginEnabled).not.toHaveBeenCalled();
   });
