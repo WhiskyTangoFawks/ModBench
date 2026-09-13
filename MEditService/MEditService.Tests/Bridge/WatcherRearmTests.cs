@@ -114,10 +114,9 @@ public sealed class WatcherRearmTests : IDisposable
     {
         using var watcher = Watching();
 
-        var offers = watcher.Rearm(_mod.Holder.Current);
+        watcher.Rearm(_mod.Holder.Current);
 
-        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
-        Assert.Empty(offers); // clean state produces no repair activity either.
+        Assert.Empty(_notifications.Notifications);
     }
 
     // The marker outlived its change (bytes restored by hand, a re-Track, a superseding settle):
@@ -143,9 +142,10 @@ public sealed class WatcherRearmTests : IDisposable
         File.Delete(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName));
         using var watcher = Watching();
 
-        var offers = watcher.Rearm(_mod.Holder.Current);
+        watcher.Rearm(_mod.Holder.Current);
 
-        Assert.Equal(CrashRepairReason.MissingOrUnreadableBinary, Assert.Single(offers).Reason);
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        Assert.Equal(nameof(CrashRepairReason.MissingOrUnreadableBinary), pending.CrashRepairReason);
         Assert.NotNull(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
@@ -160,14 +160,14 @@ public sealed class WatcherRearmTests : IDisposable
         Assert.NotNull(CompileJournal.UnfinishedBatch(_mod.ModFolder)); // sanity: the marker really is there.
 
         using var watcher = Watching();
-        var offers = watcher.Rearm(_mod.Holder.Current);
+        watcher.Rearm(_mod.Holder.Current);
 
-        var offer = Assert.Single(offers);
-        Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
-        Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
-        Assert.Equal(CrashRepairReason.InterruptedCompile, offer.Reason);
-        // Never the external-change dialog's own question.
-        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        // Assert.Single is also "never both": the repair offer and the external-change dialog's
+        // own question must never fire together for one event.
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        Assert.Equal(IndexedModFixture.ModFolderOrigin, pending.Origin);
+        Assert.Equal([IndexedModFixture.PluginName], pending.Plugins);
+        Assert.Equal(nameof(CrashRepairReason.InterruptedCompile), pending.CrashRepairReason);
     }
 
     // The repo and source survive, only the plugin's own binary is gone — reachable
@@ -179,13 +179,12 @@ public sealed class WatcherRearmTests : IDisposable
         File.Delete(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName));
 
         using var watcher = Watching();
-        var offers = watcher.Rearm(_mod.Holder.Current);
+        watcher.Rearm(_mod.Holder.Current);
 
-        var offer = Assert.Single(offers);
-        Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
-        Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
-        Assert.Equal(CrashRepairReason.MissingOrUnreadableBinary, offer.Reason);
-        Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        Assert.Equal(IndexedModFixture.ModFolderOrigin, pending.Origin);
+        Assert.Equal([IndexedModFixture.PluginName], pending.Plugins);
+        Assert.Equal(nameof(CrashRepairReason.MissingOrUnreadableBinary), pending.CrashRepairReason);
     }
 
     // TrackedOf's early-continue makes the rest of the re-arm's body unreachable for an untracked
@@ -197,9 +196,8 @@ public sealed class WatcherRearmTests : IDisposable
         File.Delete(Path.Combine(untracked.ModFolder, IndexedModFixture.PluginName));
 
         using var watcher = TestWatcher.Over(untracked.Holder, untracked.Index, _notifications);
-        var offers = watcher.Rearm(untracked.Holder.Current);
+        watcher.Rearm(untracked.Holder.Current);
 
-        Assert.Empty(offers);
         Assert.Empty(_notifications.Notifications.OfType<QuestionOpenNotification>());
     }
 

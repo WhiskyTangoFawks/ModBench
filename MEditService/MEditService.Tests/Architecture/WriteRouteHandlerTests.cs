@@ -31,6 +31,7 @@ public sealed class WriteRouteHandlerTests
         ("POST", "/plugins/external-change/keep", typeof(KeepExternalChangeHandler)),
         ("POST", "/plugins/rebase", typeof(RebaseEditBranchHandler)),
         ("POST", "/plugins/rebase/continue", typeof(ContinueRebaseEditBranchHandler)),
+        ("PUT", "/load-order", typeof(PutLoadOrderHandler)),
         // A read, and still a gesture: what Create and Renumber would allocate, asked without
         // allocating it (ruling 7).
         ("GET", "/plugins/{plugin}/records/next-form-key", typeof(PeekNextFreeFormKeyHandler)),

@@ -31,16 +31,8 @@ public interface IRefreshIndex
     /// names a copy this call re-derived whole.</summary>
     IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin);
 
-    Task ReindexPlugin(PluginKey key);
-
-    void UnindexPlugin(PluginKey key);
-
-    /// <summary>ADR-0009: the hash the store's rows for this copy were built from, or null when it
-    /// holds no validated rows for it — the indexed-binary watch's baseline.</summary>
-    string? IndexedContentHash(PluginKey key);
-
-    /// <summary>ADR-0009: the same hash from the file on disk now, or null when it cannot be read.
-    /// The Index answers it because the Index validates by hash, and a second reader would be a
-    /// second answer.</summary>
-    string? ContentHashOnDisk(string pluginPath);
+    /// <summary>ADR-0009: a binary watch's own settle, key and path only — the Index owns the
+    /// comparison, indexed already or not yet (ADR-0003), or gone from disk. False for the one
+    /// case nothing landed: identical bytes.</summary>
+    Task<bool> RefreshBinary(PluginKey key, string path);
 }

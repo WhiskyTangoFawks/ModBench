@@ -4,9 +4,6 @@ namespace MEditService.Commands;
 public enum PutLoadOrderRefusal
 {
     None,
-    GameDirectoryNotFound,
-    InstanceRootNotFound,
-    UnknownGameRelease,
 
     /// <summary>A release this build has no Mutagen assembly for.</summary>
     UnsupportedGameRelease,

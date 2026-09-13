@@ -235,7 +235,6 @@ public sealed class SwaggerSchemaTests
     [Theory]
     [InlineData("WorkingTreeState", new[] { "None", "Modified", "Added" })]
     [InlineData("TrackPhase", new[] { "Idle", "Parsing", "Serializing", "Committing" })]
-    [InlineData("CrashRepairReason", new[] { "InterruptedCompile", "MissingOrUnreadableBinary" })]
     [InlineData("LoadOrderState", new[] { "None", "Reconciling", "Ready" })]
     // RebaseOutcome reaches the wire only because RebaseResponse.Outcome names the enum; it was a
     // bare `string` filled by `.ToString()`, so the schema could say nothing better than "string".

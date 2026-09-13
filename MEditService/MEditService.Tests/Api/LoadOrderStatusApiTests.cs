@@ -82,7 +82,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
         // before the sweep would leave every caller reading unswept winners.
         Assert.Equal(HttpStatusCode.OK, load.StatusCode);
         var body = await load.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("reconciled", body.GetProperty("status").GetString());
+        Assert.True(body.GetProperty("applied").GetBoolean());
 
         var status = await _client.GetFromJsonAsync<JsonElement>("/load-order/status");
         Assert.Equal("Ready", status.GetProperty("state").GetString());

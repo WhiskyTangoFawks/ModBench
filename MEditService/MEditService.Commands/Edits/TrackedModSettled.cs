@@ -4,8 +4,8 @@ using MEditService.SourceRepo;
 
 namespace MEditService.Commands.Edits;
 
-/// <summary>What handling "a tracked mod settled" found. <see cref="CrashRecovery"/> is the repair
-/// offer's own territory — the caller decides what, if anything, to do with it.</summary>
+/// <summary>What handling "a tracked mod settled" found, for the caller's own logging: whichever
+/// question or repair offer it names is already published by the time this returns.</summary>
 public enum TrackedModSettledOutcome
 {
     NoQuestion,
@@ -31,8 +31,11 @@ public static class TrackedModSettled
                 return TrackedModSettledOutcome.QuestionOpened;
 
             case ExternalChangeClassification.CrashRecovery:
-                // Never opened or cleared here — the repair offer's own state, and the two prompts
-                // must never both fire for one event.
+                // Never opened or cleared as the external-change question is — the repair offer's
+                // own state, and the two prompts must never both fire for one event.
+                RaiseCrashRepair(
+                    loadOrder, modFolder, [.. plugins.Select(p => p.PluginName)],
+                    CrashRepairReason.InterruptedCompile, notifications);
                 return TrackedModSettledOutcome.CrashRecovery;
 
             default:
@@ -40,6 +43,16 @@ public static class TrackedModSettled
                 return TrackedModSettledOutcome.NoQuestion;
         }
     }
+
+    /// <summary>The repair offer's own verdict of the same question-open notification kind
+    /// (ADR-0009): a tracked binary the load-time check found unreadable, or an interrupted
+    /// compile above, each naming the plugins it found.</summary>
+    public static void RaiseCrashRepair(
+        LoadOrderSnapshot loadOrder, string modFolder, IReadOnlyList<string> plugins, CrashRepairReason reason,
+        INotificationPublisher notifications) =>
+        notifications.Publish(new QuestionOpenNotification(
+            OriginOf(loadOrder, modFolder), plugins, TrackedFiles: [], MetaChanged: false, OldVersion: null,
+            NewVersion: null, CrashRepairReason: reason.ToString()));
 
     private static void Raise(
         LoadOrderSnapshot loadOrder, string modFolder,

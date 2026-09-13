@@ -34,7 +34,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
 
         var response = await Put(fx, fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }));
         response.EnsureSuccessStatusCode();
-        Assert.Equal("reconciled", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("status").GetString());
+        Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
 
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
         var byName = plugins.EnumerateArray().ToDictionary(p => p.GetProperty("name").GetString()!);

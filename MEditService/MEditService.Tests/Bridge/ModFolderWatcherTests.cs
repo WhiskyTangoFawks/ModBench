@@ -69,11 +69,14 @@ public sealed class ModFolderWatcherTests
         return new IndexedFixture(folder, pluginPath, Sha256Of(bytes));
     }
 
+    // Seeded as already indexed with the bytes on disk now — the state a prior reconcile would
+    // have left, since the comparison this route settles against is the Index's own.
     private static (ModFolderWatcher Watcher, RecordingRefreshIndex Index) WatchingIndexed(IndexedFixture fixture)
     {
         var index = new RecordingRefreshIndex();
+        index.SeedIndexed(IndexedCopy, fixture.ContentHash);
         var watcher = Projecting(index, TimeSpan.FromMilliseconds(100));
-        watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath, fixture.ContentHash);
+        watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath);
         return (watcher, index);
     }
 
@@ -183,8 +186,9 @@ public sealed class ModFolderWatcherTests
         {
             // The load order was torn down, the file was still held, …
             var index = new RecordingRefreshIndex { Refuses = true };
+            index.SeedIndexed(IndexedCopy, fixture.ContentHash);
             using var watcher = Projecting(index, TimeSpan.FromMilliseconds(100));
-            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath, fixture.ContentHash);
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath);
 
             File.WriteAllBytes(fixture.PluginPath, "changed-by-xedit"u8.ToArray());
             WaitUntil(() => index.Of("reindex").Count > 0, TimeSpan.FromSeconds(3));
@@ -431,8 +435,9 @@ public sealed class ModFolderWatcherTests
             var original = "original"u8.ToArray();
             File.WriteAllBytes(pluginPath, original);
             var index = new RecordingRefreshIndex();
+            index.SeedIndexed(IndexedCopy, Sha256Of(original));
             using var watcher = Projecting(index, TimeSpan.FromMilliseconds(100));
-            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, pluginPath, Sha256Of(original));
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, pluginPath);
 
             Directory.CreateDirectory(Path.Combine(folder, "Textures"));
             File.WriteAllText(Path.Combine(folder, "Textures", "unrelated.txt"), "loose asset");
@@ -461,8 +466,9 @@ public sealed class ModFolderWatcherTests
             var indexedPath = Path.Combine(folder, IndexedPlugin);
             File.WriteAllBytes(indexedPath, "original"u8.ToArray());
             var index = new RecordingRefreshIndex();
+            index.SeedIndexed(IndexedCopy, Sha256Of("original"u8.ToArray()));
             using var watcher = Projecting(index, TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(5));
-            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, indexedPath, Sha256Of("original"u8.ToArray()));
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, indexedPath);
 
             var sourceRoot = SourceRepository.RootIn(folder, "Tracked.esp");
             watcher.Watch(folder, sourceRoot, "Tracked.esp", "TrackedOrigin");

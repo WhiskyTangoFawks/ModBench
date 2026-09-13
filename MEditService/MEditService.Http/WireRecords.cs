@@ -13,11 +13,9 @@ public record FilterResponse(string? Sql);
 /// observed at the moment of that answer, not necessarily equal to the awaited bound.</summary>
 public record SequenceAwaitResponse(bool Reached, long Sequence);
 
-// CrashRepairOffers: tracked plugins found stale/missing against Modbench's own record, surfaced
-// the same structured way Failures is (ADR-0019), never a second endpoint or poller: either
-// condition can only appear through a compile this process drives or a restart.
-public record LoadOrderResponse(
-    string Status, IReadOnlyList<PluginLoadFailure> Failures, IReadOnlyList<CrashRepairOffer> CrashRepairOffers);
+/// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, and a repair
+/// offer is a question-open notification, so this names neither.</summary>
+public record LoadOrderResponse(bool Applied);
 // ADR-0013: Mod Management's snapshot. InstanceRoot (ADR-0009) must be the MO2 instance rather
 // than anything wider, because Origin is a mod folder name unique only within one.
 public record LoadOrderRequest(

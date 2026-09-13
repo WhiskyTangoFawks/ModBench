@@ -1,8 +1,9 @@
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Order;
 
-namespace MEditService.LoadOrder;
+namespace MEditService.Http;
 
 /// <summary>The plugins an install loads with no plugins.txt line of their own (ADR-0013). The one
 /// place a game directory is read for them: the load-order snapshot and the implicit-masters

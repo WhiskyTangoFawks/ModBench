@@ -1,8 +1,7 @@
-using MEditService.Codec.Schema;
+using MEditService.Commands;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
-using MEditService.Watcher;
 using Mutagen.Bethesda;
 
 namespace MEditService.Http.Endpoints;
@@ -28,9 +27,7 @@ public static class LoadOrderEndpoints
                 "Vanilla masters are prepended by the backend and need not be listed. Blocks until " +
                 "the sweep has run; poll GET /load-order/status alongside for progress.")
             .Produces<LoadOrderResponse>()
-            .ProducesProblem(423)
             .ProducesProblem(400)
-            .ProducesProblem(409)
             .ProducesProblem(500);
 
         // ADR-0013: polled alongside an in-flight PUT, so it answers 200 in every state
@@ -101,22 +98,6 @@ public static class LoadOrderEndpoints
         return app;
     }
 
-    // 409 rather than 500: nothing went wrong, and the caller must tell "your snapshot was
-    // superseded" (ignore it) from "the reconcile failed" (surface it).
-    private static IResult SupersededReconcile(ILogger logger, OperationCanceledException ex)
-    {
-        logger.LogWarning(ex, "Load order reconcile was cancelled before it completed");
-        return Results.Problem("The load order snapshot was superseded by a newer one or by closing the load order.", statusCode: 409);
-    }
-
-    // A release this build has no Mutagen assembly for is a bad request, not a server fault:
-    // 400 with the exception's own message naming the release and the missing assembly.
-    private static IResult UnsupportedGameRelease(ILogger logger, UnsupportedGameReleaseException ex)
-    {
-        logger.LogWarning(ex, "Rejected load order for unsupported game release {Release}", ex.Release);
-        return Results.Problem(ex.Message, statusCode: 400);
-    }
-
     // ADR-0009 point 5: another Modbench window holds this instance's index. 423 Locked, distinct
     // from a failed reconcile (500) and a superseded snapshot (409): nothing is wrong, the
     // instance is simply in use.
@@ -133,7 +114,7 @@ public static class LoadOrderEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    internal static IResult PutLoadOrder(LoadOrderRequest req, IndexProjector index, LoadOrderHolder holder, ModFolderWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
+    internal static IResult PutLoadOrder(LoadOrderRequest req, PutLoadOrderHandler handler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
         if (logger.IsEnabled(LogLevel.Information))
@@ -154,50 +135,18 @@ public static class LoadOrderEndpoints
         if (req.Plugins?.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin) || p.Enabled is null || p.Winning is null) != false)
             return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400);
 
-        // A copy whose file is gone by the time the snapshot arrives is not a bad request but a
-        // row in an error state (ADR-0013).
         try
         {
             var entries = req.Plugins
                 .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled!.Value, p.Winning!.Value))
                 .ToList();
-            // ADR-0013 invariant 4: the state lands in the shared kernel first, so a reader asking
-            // "which copy wins" during the reconcile is answered by the snapshot, not by the Index.
             var snapshot = ForcedPlugins.Snapshot(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
-            var previous = holder.Current;
-            holder.Apply(snapshot);
-            try
-            {
-                index.Reconcile(snapshot);
-            }
-            catch
-            {
-                // A superseded or failed reconcile leaves the index registering the previous
-                // snapshot, so the kernel goes back to it too.
-                holder.Apply(previous);
-                throw;
-            }
-            // The hash check and the live watches for every plugin now held, in one pass after the
-            // sweep. Read from the holder, so a copy the create endpoint registered during the
-            // reconcile is watched too.
-            var crashRepairOffers = externalChangeWatcher.Rearm(holder.Current);
-            return Results.Ok(new LoadOrderResponse("reconciled", index.Status.Failures, crashRepairOffers));
-        }
-        catch (OperationCanceledException ex)
-        {
-            return SupersededReconcile(logger, ex);
-        }
-        catch (UnsupportedGameReleaseException ex)
-        {
-            return UnsupportedGameRelease(logger, ex);
-        }
-        catch (IndexHeldElsewhereException ex)
-        {
-            return IndexHeldElsewhere(logger, ex);
+            var result = handler.Put(snapshot);
+            return result.Applied ? Results.Ok(new LoadOrderResponse(true)) : Results.Problem(result.Message, statusCode: 400);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to reconcile the load order for {InstanceRoot}", req.InstanceRoot);
+            logger.LogError(ex, "Failed to apply the load order for {InstanceRoot}", req.InstanceRoot);
             return Results.Problem(ex.Message, statusCode: 500);
         }
     }

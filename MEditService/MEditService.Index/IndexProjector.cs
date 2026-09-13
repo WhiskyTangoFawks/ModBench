@@ -117,15 +117,13 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     /// <summary>ADR-0009: the hash the store's rows for this copy were built from, or null when it
-    /// holds no validated rows for it — the watch registration's one question of the store.</summary>
+    /// holds no validated rows for it.</summary>
     public string? IndexedContentHash(PluginKey key)
     {
         lock (_lock) return _index?.IndexedContentHash(key);
     }
 
-    /// <summary>See <see cref="IRefreshIndex.ContentHashOnDisk"/>. No lock: it reads the file, not
-    /// the store.</summary>
-    public string? ContentHashOnDisk(string pluginPath) => PluginBinaryHash.OfFile(pluginPath);
+    private static string? ContentHashOnDisk(string pluginPath) => PluginBinaryHash.OfFile(pluginPath);
 
     /// <summary>One per projector, never replaced — a reconcile swaps the store underneath it, which
     /// is when the ordering matters most. By construction the outer of the two locks: taking
@@ -795,6 +793,58 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             _index.Unindex(key);
             // A removal moves winners for every FormKey it held, exactly as a re-index does.
             _index.UpdateWinners(Participating());
+            ReapplyFilter();
+        }
+    }
+
+    /// <summary>See <see cref="IRefreshIndex.RefreshBinary"/>.</summary>
+    public async Task<bool> RefreshBinary(PluginKey key, string path)
+    {
+        if (!File.Exists(path))
+        {
+            UnindexPlugin(key);
+            return true;
+        }
+
+        if (IndexedContentHash(key) is { } indexedHash)
+        {
+            if (ContentHashOnDisk(path) == indexedHash) return false;
+            await ReindexPlugin(key).ConfigureAwait(false);
+            return true;
+        }
+
+        IndexNotYetHeld(key);
+        return true;
+    }
+
+    // A copy the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
+    // the single-copy counterpart of ReconcileProgressively's own arriving loop.
+    private void IndexNotYetHeld(PluginKey key)
+    {
+        using var _ = WriteGate.Enter();
+
+        HeldPlugins held;
+        IRecordIndex index;
+        lock (_lock)
+        {
+            if (_heldPlugins is not { } h || _index is not { } i) return;
+            (held, index) = (h, i);
+        }
+
+        if (_holder.Current.Copy(key) is not { } copy) return;
+
+        if (held.Open(copy) is not { } metadata)
+        {
+            lock (_lock) _failedHashes[KeyOf(key)] = (key, PluginBinaryHash.OfFile(copy.Path));
+            return;
+        }
+        lock (_lock) _failedHashes.Remove(KeyOf(key));
+
+        RegisterOrIndex(held, index, metadata, CancellationToken.None);
+
+        lock (_lock)
+        {
+            index.UpdateWinners(Participating());
             ReapplyFilter();
         }
     }

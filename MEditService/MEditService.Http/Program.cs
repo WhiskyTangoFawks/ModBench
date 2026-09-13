@@ -101,6 +101,34 @@ try
 
     var app = builder.Build();
 
+    // ADR-0013/ADR-0014 invariant 3: the Index and the watcher each subscribe to Load order state
+    // independently, here, so the endpoint that applies a snapshot never names either.
+    var subscriptionLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("LoadOrderSubscriptions");
+    var indexProjector = app.Services.GetRequiredService<IndexProjector>();
+    var modFolderWatcher = app.Services.GetRequiredService<ModFolderWatcher>();
+    app.Services.GetRequiredService<LoadOrderHolder>().Changed += snapshot =>
+    {
+        try
+        {
+            indexProjector.Reconcile(snapshot);
+        }
+        catch (Exception ex)
+        {
+            subscriptionLogger.LogError(ex, "Reconciling the load order failed");
+        }
+    };
+    app.Services.GetRequiredService<LoadOrderHolder>().Changed += snapshot =>
+    {
+        try
+        {
+            modFolderWatcher.Rearm(snapshot);
+        }
+        catch (Exception ex)
+        {
+            subscriptionLogger.LogError(ex, "Re-arming the watcher after a load order change failed");
+        }
+    };
+
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings
     // Microsoft.AspNetCore override is a different category and does not touch this line.

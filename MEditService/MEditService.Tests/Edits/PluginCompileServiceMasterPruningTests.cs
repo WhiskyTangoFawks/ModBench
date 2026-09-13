@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
+using MEditService.Http;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;

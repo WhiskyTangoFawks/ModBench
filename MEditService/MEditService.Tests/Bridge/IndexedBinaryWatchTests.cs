@@ -12,8 +12,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Bridge;
 
-/// <summary>Wired the way the composition root wires it (ADR-0009); what is asserted is what the
-/// load order answers afterwards, while the backend runs, with no reload anywhere.</summary>
+/// <summary>ADR-0009, over a real Index: what the load order answers while the backend runs, with
+/// no reload anywhere.</summary>
 public sealed class IndexedBinaryWatchTests
 {
     private static void WaitUntil(Func<bool> condition, TimeSpan timeout)
@@ -116,8 +116,7 @@ public sealed class IndexedBinaryWatchTests
         Assert.DoesNotContain("ChangedByXEdit", EditorIds(fixture, fixture.Plugin));
     }
 
-    // A change to a plugin the index holds no rows for is not this route's business — there is
-    // nothing to compare against and nothing to refresh.
+    // An empty snapshot names no copy, so there is nothing to watch and nothing to throw over.
     [Fact]
     public void Rearm_WatchesNothing_WhenThereIsNoLoadOrder()
     {
@@ -126,8 +125,6 @@ public sealed class IndexedBinaryWatchTests
         using var watcher = TestWatcher.Over(
             holder, noLoadOrder, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(100));
 
-        var offers = watcher.Rearm(holder.Current);
-
-        Assert.Empty(offers);
+        watcher.Rearm(holder.Current);
     }
 }
