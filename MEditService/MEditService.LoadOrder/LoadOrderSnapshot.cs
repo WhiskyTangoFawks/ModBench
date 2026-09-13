@@ -91,6 +91,11 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
             ? null
             : Path.GetDirectoryName(pluginPath);
 
+    /// <summary>The mod's own display name: its folder's leaf, for a caller naming it in a
+    /// user-facing message without reaching for the path itself.</summary>
+    public static string ModNameOf(string modFolder) =>
+        Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
+
     /// <summary>The folder every copy under one origin shares, for a gesture the mod folder is the
     /// unit of. Null when no registered copy carries the origin.</summary>
     public string? ModFolderOfOrigin(string origin) =>
