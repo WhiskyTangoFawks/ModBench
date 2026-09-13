@@ -12,15 +12,14 @@ function plugin(over: Partial<{ enabled: boolean; winning: boolean; slot: number
   return { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true, ...over };
 }
 
-function reconciled(failures: components['schemas']['PluginLoadFailure'][] = []) {
-  return { outcome: 'reconciled' as const, failures, crashRepairOffers: [] };
-}
+const applied = { outcome: 'applied' as const };
+type PluginLoadFailure = components['schemas']['PluginLoadFailure'];
 
-describe('reportLoadOrderResult — reconciled', () => {
+describe('reportLoadOrderResult — applied', () => {
   it('writes the ready status text with the sent plugin count', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin(), plugin()], reconciled(), deps);
+    reportLoadOrderResult([plugin(), plugin()], applied, [], deps);
 
     expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (2 plugin copies)');
   });
@@ -30,7 +29,7 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('refreshes the tree', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin()], reconciled(), deps);
+    reportLoadOrderResult([plugin()], applied, [], deps);
 
     expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
@@ -38,15 +37,16 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('announces that conflicts are computed', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin()], reconciled(), deps);
+    reportLoadOrderResult([plugin()], applied, [], deps);
 
     expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
   });
 
   it('warns and logs a skipped plugin, never silently (ADR-0019)', () => {
     const deps = makeDeps();
+    const failures: PluginLoadFailure[] = [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }];
 
-    reportLoadOrderResult([plugin()], reconciled([{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }]), deps);
+    reportLoadOrderResult([plugin()], applied, failures, deps);
 
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('Bad.esp'));
     expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('Bad.esp'));
@@ -55,7 +55,7 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('does not warn about skipped plugins when there are none', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin()], reconciled(), deps);
+    reportLoadOrderResult([plugin()], applied, [], deps);
 
     expect(deps.warn).not.toHaveBeenCalled();
   });
@@ -63,7 +63,7 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('warns when the active profile has zero enabled plugins', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([], reconciled(), deps);
+    reportLoadOrderResult([], applied, [], deps);
 
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
   });
@@ -73,7 +73,7 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('warns when plugins were sent but none of them participate', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin({ enabled: false })], reconciled(), deps);
+    reportLoadOrderResult([plugin({ enabled: false })], applied, [], deps);
 
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
   });
@@ -81,7 +81,7 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('does not warn about participation when at least one plugin participates', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin({ enabled: false }), plugin()], reconciled(), deps);
+    reportLoadOrderResult([plugin({ enabled: false }), plugin()], applied, [], deps);
 
     expect(deps.warn).not.toHaveBeenCalled();
   });
@@ -91,7 +91,7 @@ describe('reportLoadOrderResult — reconciled', () => {
   it('still writes the ready text, refreshes and announces conflicts even when nothing participates', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([], reconciled(), deps);
+    reportLoadOrderResult([], applied, [], deps);
 
     expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (0 plugin copies)');
     expect(deps.refreshTree).toHaveBeenCalledOnce();
@@ -103,7 +103,7 @@ describe('reportLoadOrderResult — failed', () => {
   it('shows the ready-to-show message verbatim', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin()], { outcome: 'failed', message: 'mEdit: Failed to send the load order — bad dir' }, deps);
+    reportLoadOrderResult([plugin()], { outcome: 'failed', message: 'mEdit: Failed to send the load order — bad dir' }, [], deps);
 
     expect(deps.error).toHaveBeenCalledWith('mEdit: Failed to send the load order — bad dir');
   });
@@ -111,7 +111,7 @@ describe('reportLoadOrderResult — failed', () => {
   it('touches nothing else — a failed PUT tore nothing down (ADR-0013)', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin()], { outcome: 'failed', message: 'boom' }, deps);
+    reportLoadOrderResult([plugin()], { outcome: 'failed', message: 'boom' }, [], deps);
 
     expect(deps.setStatusText).not.toHaveBeenCalled();
     expect(deps.refreshTree).not.toHaveBeenCalled();
@@ -124,7 +124,7 @@ describe('reportLoadOrderResult — abandoned', () => {
   it('reports nothing — a superseded or closed reconcile owns no view to update', () => {
     const deps = makeDeps();
 
-    reportLoadOrderResult([plugin()], { outcome: 'abandoned' }, deps);
+    reportLoadOrderResult([plugin()], { outcome: 'abandoned' }, [], deps);
 
     expect(deps.error).not.toHaveBeenCalled();
     expect(deps.warn).not.toHaveBeenCalled();
@@ -192,14 +192,13 @@ describe('syncActiveFilter', () => {
   });
 });
 
-// ADR-0013: a settled PUT is reported first, then applied. `failed` tore nothing down and
-// `abandoned` owns no view, so neither reaches the filter, the tree or a crash-repair offer.
+// ADR-0013: a settled PUT is reported first, then applied. A repair offer is the question-open
+// coordinator's own affair (externalChangeCoordinator.test.ts), never this outcome's.
 describe('applyLoadOrderOutcome', () => {
   const makeApplyDeps = () => ({
     ...makeDeps(),
     syncFilterState: vi.fn().mockResolvedValue(undefined),
     applyReconciled: vi.fn().mockResolvedValue(undefined),
-    presentCrashRepairOffers: vi.fn().mockResolvedValue(undefined),
   });
 
   it('syncs the filter state, then hands the tree the failures and the backend\'s own count', async () => {
@@ -208,36 +207,33 @@ describe('applyLoadOrderOutcome', () => {
     deps.syncFilterState.mockImplementation(() => { order.push('syncFilterState'); return Promise.resolve(); });
     deps.applyReconciled.mockImplementation(() => { order.push('applyReconciled'); return Promise.resolve(); });
 
-    await applyLoadOrderOutcome([plugin()], reconciled(), 42, deps);
+    await applyLoadOrderOutcome([plugin()], applied, [], 42, deps);
 
     expect(order).toEqual(['syncFilterState', 'applyReconciled']);
     expect(deps.applyReconciled).toHaveBeenCalledWith([], 42);
   });
 
-  it('reports the reconciled load order as well as applying it', async () => {
+  it('reports the applied load order as well as applying it', async () => {
     const deps = makeApplyDeps();
 
-    await applyLoadOrderOutcome([plugin()], reconciled(), 1, deps);
+    await applyLoadOrderOutcome([plugin()], applied, [], 1, deps);
 
     expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (1 plugin copies)');
   });
 
-  it('presents crash-repair offers only when the backend found any', async () => {
-    const none = makeApplyDeps();
-    await applyLoadOrderOutcome([plugin()], reconciled(), 1, none);
-    expect(none.presentCrashRepairOffers).not.toHaveBeenCalled();
+  it('passes the caller\'s own failures through to applyReconciled, never a copy of its own', async () => {
+    const deps = makeApplyDeps();
+    const failures: PluginLoadFailure[] = [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }];
 
-    const offers = [{ plugin: 'Foo.esp', origin: 'A', reason: 'InterruptedCompile' as const }];
-    const found = makeApplyDeps();
-    await applyLoadOrderOutcome(
-      [plugin()], { outcome: 'reconciled', failures: [], crashRepairOffers: offers }, 1, found);
-    expect(found.presentCrashRepairOffers).toHaveBeenCalledWith(offers);
+    await applyLoadOrderOutcome([plugin()], applied, failures, 1, deps);
+
+    expect(deps.applyReconciled).toHaveBeenCalledWith(failures, 1);
   });
 
   it('applies nothing when the send failed, and surfaces the failure', async () => {
     const deps = makeApplyDeps();
 
-    await applyLoadOrderOutcome([plugin()], { outcome: 'failed', message: 'no backend' }, 1, deps);
+    await applyLoadOrderOutcome([plugin()], { outcome: 'failed', message: 'no backend' }, [], 1, deps);
 
     expect(deps.error).toHaveBeenCalledWith('no backend');
     expect(deps.syncFilterState).not.toHaveBeenCalled();
@@ -247,7 +243,7 @@ describe('applyLoadOrderOutcome', () => {
   it('applies nothing and says nothing when the send was abandoned', async () => {
     const deps = makeApplyDeps();
 
-    await applyLoadOrderOutcome([plugin()], { outcome: 'abandoned' }, 1, deps);
+    await applyLoadOrderOutcome([plugin()], { outcome: 'abandoned' }, [], 1, deps);
 
     expect(deps.error).not.toHaveBeenCalled();
     expect(deps.setStatusText).not.toHaveBeenCalled();

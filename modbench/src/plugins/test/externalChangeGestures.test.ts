@@ -82,6 +82,7 @@ function makeDispatchDeps(client: RebaseClient, showDialogChoice: string | undef
     showError: vi.fn(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
+    presentCrashRepair: vi.fn().mockResolvedValue(undefined),
   };
 }
 

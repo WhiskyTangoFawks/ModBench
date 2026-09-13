@@ -1,6 +1,6 @@
 import type { components } from '../generated/api';
 import type {
-  CompileResult, RebaseResult, CrashRepairOffer, ExternalChangeActionResult, NotificationEvent,
+  CompileResult, RebaseResult, CrashRepairOffer, CrashRepairReason, ExternalChangeActionResult, NotificationEvent,
   TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue,
   WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
   PlacedSummary, ContainerChildSummary, RecordSummary, LoadOrderStatus, UnansweredExternalChange, PluginLoadFailure,
@@ -38,6 +38,14 @@ const NOTIFICATION_KINDS = new Set<string>([
  *  (the schema's honest `string`) is narrowed to `NotificationKind` for dispatch. */
 export function isNotificationKind(kind: string): kind is NotificationKind {
   return NOTIFICATION_KINDS.has(kind);
+}
+
+const CRASH_REPAIR_REASONS = new Set<string>(['InterruptedCompile', 'MissingOrUnreadableBinary']);
+
+/** `question-open`'s `crashRepairReason` (the schema's honest `string`) narrowed to
+ *  `CrashRepairReason`, on the port for the same reason `isRefused` is. */
+export function isCrashRepairReason(reason: string): reason is CrashRepairReason {
+  return CRASH_REPAIR_REASONS.has(reason);
 }
 
 /** Re-exported under its own name because it is a callback contract, not merely a query return
@@ -172,7 +180,7 @@ export interface MEditClient {
 }
 
 export type {
-  CrashRepairOffer, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
+  CrashRepairOffer, CrashRepairReason, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult,
   ExternalChangeActionResult, LoadOrderStatus, UnansweredExternalChange, PluginLoadFailure,

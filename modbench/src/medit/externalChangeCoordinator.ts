@@ -1,4 +1,4 @@
-import type { CrashRepairOffer, CrashRepairReason, MEditClient, UnansweredExternalChange } from './client';
+import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from './client';
 import type { AskQuestion } from '../dialog';
 import { handleUnanswered } from '../plugins/externalChangeGestures';
 
@@ -31,8 +31,8 @@ export function subscribeQuestionOpen(
   return notificationSubscriber.subscribe('question-open', (event) => {
     // Never both: a genuine external change and a repair offer are the two verdicts one
     // question-open notification carries, one or the other.
-    if (event.crashRepairReason) {
-      const reason = event.crashRepairReason as CrashRepairReason;
+    if (event.crashRepairReason && isCrashRepairReason(event.crashRepairReason)) {
+      const reason = event.crashRepairReason;
       const offers: CrashRepairOffer[] = event.keys.map((plugin) => ({ plugin, origin: event.origin, reason }));
       deps.presentCrashRepair(offers).catch((e: unknown) => {
         log(`[externalChangeCoordinator] presenting the repair offer for ${event.origin} failed: ${e instanceof Error ? e.message : String(e)}`);

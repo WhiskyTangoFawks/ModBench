@@ -213,18 +213,19 @@ describe('HttpMEditClient — the not-OK response text', () => {
 });
 
 // putLoadOrder's own transport: the wire shape, the wait for the stream, the tick subscription's
-// lifetime, and the two outcomes ('abandoned') that are not WriteRefused-shaped failures.
+// lifetime, and the deliberate-abort outcome ('abandoned') that is not a WriteRefused-shaped
+// failure.
 describe('HttpMEditClient — putLoadOrder', () => {
   const plugins = [
     { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true },
   ];
-  const reconciledBody = { status: 'reconciled', failures: [], crashRepairOffers: [] };
+  const appliedBody = { applied: true };
 
   it('PUTs the ordered plugin list, game directory and instance root', async () => {
     let putBody: unknown;
     const fetch = routedFetch([
       ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/load-order', async (req) => { putBody = await req.clone().json(); return jsonResponse(200, reconciledBody); }],
+      ['/load-order', async (req) => { putBody = await req.clone().json(); return jsonResponse(200, appliedBody); }],
     ]);
     const client = makeClient(fetch);
     await client.start();
@@ -239,7 +240,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
   it('holds the PUT until the notification stream has connected', async () => {
     let resolveStream!: (r: Response) => void;
     const streamPromise = new Promise<Response>((r) => { resolveStream = r; });
-    const putFetch = vi.fn(() => Promise.resolve(jsonResponse(200, reconciledBody)));
+    const putFetch = vi.fn(() => Promise.resolve(jsonResponse(200, appliedBody)));
     const fetch = routedFetch([['/notifications/stream', () => streamPromise], ['/load-order', putFetch]]);
     const client = makeClient(fetch);
     await client.start();
@@ -275,27 +276,12 @@ describe('HttpMEditClient — putLoadOrder', () => {
     pushFrame(new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`));
     await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
 
-    resolvePut(jsonResponse(200, reconciledBody));
+    resolvePut(jsonResponse(200, appliedBody));
     await load;
 
     pushFrame(new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`));
     await new Promise((r) => setTimeout(r, 10));
     expect(onProgress).toHaveBeenCalledTimes(1); // still 1 — the settled PUT's subscription is gone
-  });
-
-  // The rival this guards: checking `!response.ok` before 409 would read a superseded snapshot
-  // as a plain failure, and the caller would act on a load order a newer snapshot now owns.
-  it('reports a superseded load (409) as abandoned, not a failure', async () => {
-    const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
-      ['/load-order', () => Promise.resolve(jsonResponse(409, { detail: 'superseded' }))],
-    ]);
-    const client = makeClient(fetch);
-    await client.start();
-
-    const result = await client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
-
-    expect(result).toEqual({ outcome: 'abandoned' });
   });
 
   it('reports a deliberately aborted PUT as abandoned, not a failure', async () => {

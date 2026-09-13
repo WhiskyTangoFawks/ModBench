@@ -3,7 +3,7 @@ import { InMemoryMEditClient } from '../InMemoryMEditClient';
 import { createLoadOrderSender, type LoadOrderSnapshot } from '../loadOrderSender';
 import type { LoadOrderOutcome, LoadOrderPluginInput } from '../MEditClient';
 
-const RECONCILED: LoadOrderOutcome = { outcome: 'reconciled', failures: [], crashRepairOffers: [] };
+const APPLIED: LoadOrderOutcome = { outcome: 'applied' };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
 
 function snapshot(name: string): LoadOrderSnapshot {
@@ -31,7 +31,7 @@ const sentNames = (client: InMemoryMEditClient) =>
 
 function attached(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
-  client.setCommandResult('putLoadOrder', RECONCILED);
+  client.setCommandResult('putLoadOrder', APPLIED);
   client.setStatus('attached');
   return client;
 }
@@ -42,7 +42,7 @@ function attached(): InMemoryMEditClient {
 describe('createLoadOrderSender — connect precedes the first put', () => {
   it('holds a snapshot handed over before the backend attaches, and sends it on connect', async () => {
     const client = new InMemoryMEditClient(); // 'starting' — never attached
-    client.setCommandResult('putLoadOrder', RECONCILED);
+    client.setCommandResult('putLoadOrder', APPLIED);
     const sender = createLoadOrderSender(client);
 
     const sent = sender.send(snapshot('A.esp'));
@@ -51,7 +51,7 @@ describe('createLoadOrderSender — connect precedes the first put', () => {
 
     client.setStatus('attached');
 
-    await expect(sent).resolves.toEqual(RECONCILED);
+    await expect(sent).resolves.toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['A.esp']);
   });
 
@@ -59,7 +59,7 @@ describe('createLoadOrderSender — connect precedes the first put', () => {
     const client = attached();
     const sender = createLoadOrderSender(client);
 
-    await expect(sender.send(snapshot('A.esp'))).resolves.toEqual(RECONCILED);
+    await expect(sender.send(snapshot('A.esp'))).resolves.toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['A.esp']);
   });
 
@@ -80,7 +80,7 @@ describe('createLoadOrderSender — connect precedes the first put', () => {
 describe('createLoadOrderSender — the last snapshot lands and the superseded ones are dropped', () => {
   it('sends only the newest of the snapshots that piled up before the backend attached', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('putLoadOrder', RECONCILED);
+    client.setCommandResult('putLoadOrder', APPLIED);
     const sender = createLoadOrderSender(client);
 
     const first = sender.send(snapshot('A.esp'));
@@ -90,7 +90,7 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
 
     expect(await first).toEqual(ABANDONED);
     expect(await second).toEqual(ABANDONED);
-    expect(await third).toEqual(RECONCILED);
+    expect(await third).toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['C.esp']);
   });
 
@@ -98,7 +98,7 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
     const client = attached();
     let releaseFirst!: () => void;
     client.setCommandHandler('putLoadOrder', () =>
-      new Promise<LoadOrderOutcome>((resolve) => { releaseFirst = () => resolve(RECONCILED); }));
+      new Promise<LoadOrderOutcome>((resolve) => { releaseFirst = () => resolve(APPLIED); }));
     const sender = createLoadOrderSender(client);
 
     const first = sender.send(snapshot('A.esp'));
@@ -108,11 +108,11 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
     expect(sentNames(client)).toEqual(['A.esp']); // still in flight — nothing concurrent
 
     releaseFirst();
-    client.setCommandHandler('putLoadOrder', () => Promise.resolve(RECONCILED));
+    client.setCommandHandler('putLoadOrder', () => Promise.resolve(APPLIED));
 
-    expect(await first).toEqual(RECONCILED);
+    expect(await first).toEqual(APPLIED);
     expect(await second).toEqual(ABANDONED);
-    expect(await third).toEqual(RECONCILED);
+    expect(await third).toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['A.esp', 'C.esp']);
   });
 
@@ -124,8 +124,8 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
     const failed = await sender.send(snapshot('A.esp'));
     expect(failed).toEqual({ outcome: 'failed', message: expect.stringContaining('boom') });
 
-    client.setCommandHandler('putLoadOrder', () => Promise.resolve(RECONCILED));
-    await expect(sender.send(snapshot('B.esp'))).resolves.toEqual(RECONCILED);
+    client.setCommandHandler('putLoadOrder', () => Promise.resolve(APPLIED));
+    await expect(sender.send(snapshot('B.esp'))).resolves.toEqual(APPLIED);
     expect(sentNames(client)).toEqual(['A.esp', 'B.esp']);
   });
 });
@@ -192,7 +192,7 @@ describe('createLoadOrderSender — arm and abandon', () => {
 
   it('drops the snapshot still waiting on connect, so a closed backend leaves nothing queued for the next one', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('putLoadOrder', RECONCILED);
+    client.setCommandResult('putLoadOrder', APPLIED);
     const sender = createLoadOrderSender(client);
 
     const sent = sender.send(snapshot('A.esp'));
@@ -209,7 +209,7 @@ describe('createLoadOrderSender — arm and abandon', () => {
     sender.arm();
     sender.abandon();
 
-    await expect(sender.send(snapshot('A.esp'))).resolves.toEqual(RECONCILED);
+    await expect(sender.send(snapshot('A.esp'))).resolves.toEqual(APPLIED);
   });
 });
 
@@ -229,7 +229,7 @@ describe('createLoadOrderSender — dispose', () => {
 
   it('drops a snapshot still waiting on connect', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('putLoadOrder', RECONCILED);
+    client.setCommandResult('putLoadOrder', APPLIED);
     const sender = createLoadOrderSender(client);
     const onProgress = vi.fn();
 
