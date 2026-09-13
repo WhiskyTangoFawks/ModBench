@@ -68,7 +68,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
    *  of {@link setQueryAnswer}. */
-  setQueryFailure<K extends QueryMethod>(method: K, error: Error): void {
+  setQueryFailure(method: QueryMethod, error: Error): void {
     this.queryFailures.set(method, error);
   }
 
@@ -80,7 +80,7 @@ export class InMemoryMEditClient implements MEditClient {
   }
 
   /** {@link setQueryAnswerOnce}'s failure-shaped sibling — queues one rejection. */
-  setQueryFailureOnce<K extends QueryMethod>(method: K, error: Error): void {
+  setQueryFailureOnce(method: QueryMethod, error: Error): void {
     this.pushQueryStep(method, { kind: 'failure', error });
   }
 
@@ -98,7 +98,7 @@ export class InMemoryMEditClient implements MEditClient {
 
   /** Every call to `method` rejects with `error` until re-scripted — the failure-shaped sibling
    *  of {@link setCommandResult}. */
-  setCommandFailure<K extends CommandMethod>(method: K, error: Error): void {
+  setCommandFailure(method: CommandMethod, error: Error): void {
     this.commandFailures.set(method, error);
   }
 

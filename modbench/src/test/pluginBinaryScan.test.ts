@@ -84,7 +84,7 @@ function fsAliases(source: ts.SourceFile): Set<string> {
   for (let size = -1; size !== aliases.size;) {
     size = aliases.size;
     walk(source, (node) => {
-      if (ts.isImportDeclaration(node) && fsSpecifierOf(node) !== undefined && node.importClause?.isTypeOnly !== true) {
+      if (ts.isImportDeclaration(node) && fsSpecifierOf(node) !== undefined && node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword) {
         const clause = node.importClause;
         if (clause?.name) aliases.add(clause.name.text);
         if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)) aliases.add(clause.namedBindings.name.text);
@@ -160,7 +160,7 @@ function scan(sourceText: string, fileName: string): Offences {
   const undecodedReads: string[] = [];
 
   walk(source, (node) => {
-    if (ts.isImportDeclaration(node) && fsSpecifierOf(node) !== undefined && node.importClause?.isTypeOnly !== true) {
+    if (ts.isImportDeclaration(node) && fsSpecifierOf(node) !== undefined && node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword) {
       const bindings = node.importClause?.namedBindings;
       if (bindings && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {

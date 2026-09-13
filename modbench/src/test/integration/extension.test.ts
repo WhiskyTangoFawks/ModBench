@@ -453,7 +453,7 @@ describe('modbench.openEditor', () => {
     await new Promise(r => setTimeout(r, 300));
 
     const tabs = vscode.window.tabGroups.all.flatMap(g => g.tabs);
-    const editTab = tabs.find(t => String(t.label).startsWith('First Record') || String(t.label).startsWith('Second Record'));
+    const editTab = tabs.find(t => t.label.startsWith('First Record') || t.label.startsWith('Second Record'));
     assert.ok(editTab, 'Expected an mEdit tab to exist');
     assert.strictEqual(editTab.label, 'Second Record', 'Panel title should update to the most recently opened record');
   });

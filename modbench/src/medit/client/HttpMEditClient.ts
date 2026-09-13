@@ -111,7 +111,7 @@ export class HttpMEditClient implements MEditClient {
       if (!response.ok) {
         const onEslContradiction = spec.onEslContradiction;
         const eslMessage = onEslContradiction && eslContradictionMessage(error);
-        if (eslMessage) return onEslContradiction(eslMessage);
+        if (eslMessage) return await onEslContradiction(eslMessage);
         const text = errorText(error);
         this.log(`[HttpMEditClient] ${spec.op} failed (${response.status}): ${text}`);
         return { refused: true, message: `${spec.failMsg} — ${text}` };

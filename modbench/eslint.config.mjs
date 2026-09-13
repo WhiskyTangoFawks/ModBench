@@ -20,7 +20,7 @@ export default tseslint.config(
     { ignores: ['src/medit/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
     eslint.configs.recommended,
-    tseslint.configs.recommendedTypeChecked,
+    tseslint.configs.strictTypeChecked,
 
     // Standard convention: _-prefixed params are intentionally unused
     {
@@ -29,6 +29,13 @@ export default tseslint.config(
             // The generated schema reports nullability honestly, so a `??` or `?.` on a wire
             // field the schema calls non-nullable is a bug, not defensive coding.
             '@typescript-eslint/no-unnecessary-condition': 'error',
+            '@typescript-eslint/switch-exhaustiveness-check': ['error', { requireDefaultForNonUnion: true }],
+            // A void-returning callback passed by shorthand arrow (`onClick={() => doThing()}`) is
+            // idiomatic React and VS Code API usage here, not a confusing expression.
+            '@typescript-eslint/no-confusing-void-expression': 'off',
+            // Interpolating a number, enum or nullish value into a log or error message is the
+            // normal case in this codebase, not a stringification bug.
+            '@typescript-eslint/restrict-template-expressions': 'off',
         },
     },
 
