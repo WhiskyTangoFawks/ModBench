@@ -45,7 +45,8 @@ function statusIconId(status?: ModStatusResult): string {
       return 'warning';
     case 'missingMod':
       return 'error';
-    default:
+    case 'ok':
+    case undefined:
       return 'package';
   }
 }
@@ -105,7 +106,7 @@ export class ModNode extends vscode.TreeItem {
  *  the sole context action both reveal the folder in the Explorer. */
 export class OverwriteNode extends vscode.TreeItem {
   readonly kind = OVERWRITE_DIR_NAME;
-  constructor(public readonly resourceUri: vscode.Uri, fileCount: number) {
+  constructor(public override readonly resourceUri: vscode.Uri, fileCount: number) {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
     this.contextValue = OVERWRITE_DIR_NAME;
     // No explicit icon or color here: the spec scopes the row's look to a reddish

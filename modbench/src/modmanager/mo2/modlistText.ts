@@ -119,7 +119,9 @@ export function renameSeparatorInText(text: string, oldName: string, newName: st
       const content = bomless.slice(start, contentEnd);
       if (matchesModLine(content, oldName + SEPARATOR_SUFFIX)) {
         const eol = bomless.slice(contentEnd, end);
-        return bomless.slice(0, start) + bomless[start] + newName + SEPARATOR_SUFFIX + eol + bomless.slice(end);
+        // content matched `+`/`-` above, so its first character is that prefix, never absent.
+        const prefix = content.slice(0, 1);
+        return bomless.slice(0, start) + prefix + newName + SEPARATOR_SUFFIX + eol + bomless.slice(end);
       }
     }
     throw new Error(`Separator not found in modlist: ${oldName}`);
@@ -148,7 +150,7 @@ export function insertModAtWinningEnd(text: string, modName: string): string {
     const insertAt = firstEntry === -1 ? lines.length : firstEntry;
     const prevLine = lines[insertAt - 1];
     if (insertAt > 0 && prevLine !== undefined && !/\r\n$|\r$|\n$/.test(prevLine)) {
-      lines[insertAt - 1] += eol; // EOL-terminate the line we insert after
+      lines[insertAt - 1] = prevLine + eol; // EOL-terminate the line we insert after
     }
     lines.splice(insertAt, 0, newLine);
     return lines.join('');

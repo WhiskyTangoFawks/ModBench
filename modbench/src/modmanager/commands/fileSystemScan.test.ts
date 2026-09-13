@@ -45,7 +45,7 @@ function exportedNames(sourceText: string, fileName: string): string[] {
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
     const hasExport = (n: ts.Node): boolean =>
-      !!ts.canHaveModifiers(n) && !!ts.getModifiers(n)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+      ts.canHaveModifiers(n) && !!ts.getModifiers(n)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
     if (ts.isFunctionDeclaration(node) && node.name && hasExport(node)) found.push(node.name.text);
     if (ts.isInterfaceDeclaration(node) && hasExport(node)) found.push(node.name.text);
     if (ts.isVariableStatement(node) && hasExport(node)) {
