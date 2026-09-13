@@ -4,32 +4,33 @@ const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
 }));
+
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, fakeUri } from '../test/vscodeMock';
+
 vi.mock('vscode', () => ({
   window: { showErrorMessage, showWarningMessage },
   TreeItemCheckboxState: { Unchecked: 0, Checked: 1 },
+  TreeItem, TreeItemCollapsibleState, ThemeIcon,
 }));
 
 import { onModCheckboxChanged } from './modCheckboxHandler';
-import type { ModNode } from './ModListProvider';
+import { ModNode, OverwriteNode } from './ModListProvider';
+import { FakeLogOutputChannel } from '../test/fakeOutputChannel';
 
 beforeEach(() => { showErrorMessage.mockClear(); showWarningMessage.mockClear(); });
 
-function fakeChannel() {
-  return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
-}
-
-function modNode(name: string): ModNode {
-  return { kind: 'mod', mod: { name } } as unknown as ModNode;
+function modNode(name: string, enabled = true): ModNode {
+  return new ModNode({ kind: 'mod', name, enabled });
 }
 
 describe('onModCheckboxChanged', () => {
   it('enables/disables the mod and does nothing else on success', async () => {
     const setModEnabled = vi.fn().mockResolvedValue(undefined);
     const invalidate = vi.fn();
-    const modListProvider = { setModEnabled, invalidate } as never;
-    const channel = fakeChannel();
+    const modListProvider = { setModEnabled, invalidate };
+    const channel = new FakeLogOutputChannel();
 
-    await onModCheckboxChanged({ items: [[modNode('TestMod'), 1]] } as never, modListProvider, channel as never);
+    await onModCheckboxChanged({ items: [[modNode('TestMod'), 1]] }, modListProvider, channel);
 
     expect(setModEnabled).toHaveBeenCalledWith('TestMod', true);
     expect(invalidate).not.toHaveBeenCalled();
@@ -40,10 +41,10 @@ describe('onModCheckboxChanged', () => {
   it('reports and invalidates so the checkbox resyncs when the toggle fails', async () => {
     const setModEnabled = vi.fn().mockRejectedValue(new Error('permission denied'));
     const invalidate = vi.fn();
-    const modListProvider = { setModEnabled, invalidate } as never;
-    const channel = fakeChannel();
+    const modListProvider = { setModEnabled, invalidate };
+    const channel = new FakeLogOutputChannel();
 
-    await onModCheckboxChanged({ items: [[modNode('TestMod'), 0]] } as never, modListProvider, channel as never);
+    await onModCheckboxChanged({ items: [[modNode('TestMod', false), 0]] }, modListProvider, channel);
 
     expect(channel.error).toHaveBeenCalledWith(
       '[modList.checkbox] error: Failed to update "TestMod". — permission denied');
@@ -53,10 +54,10 @@ describe('onModCheckboxChanged', () => {
 
   it('ignores a non-mod row (the pinned Overwrite row sharing the tree)', async () => {
     const setModEnabled = vi.fn();
-    const modListProvider = { setModEnabled, invalidate: vi.fn() } as never;
-    const overwriteNode = { kind: 'overwrite' } as never;
+    const modListProvider = { setModEnabled, invalidate: vi.fn() };
+    const overwriteNode = new OverwriteNode(fakeUri('/instance/Overwrite'), 1);
 
-    await onModCheckboxChanged({ items: [[overwriteNode, 1]] } as never, modListProvider, fakeChannel() as never);
+    await onModCheckboxChanged({ items: [[overwriteNode, 1]] }, modListProvider, new FakeLogOutputChannel());
 
     expect(setModEnabled).not.toHaveBeenCalled();
   });

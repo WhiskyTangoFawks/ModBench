@@ -10,6 +10,8 @@ const { executeCommand, registerCommand, showErrorMessage, showTextDocument, sho
   fsDelete: vi.fn(),
 }));
 
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../test/vscodeMock';
+
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
   window: { showErrorMessage, showTextDocument, showQuickPick },
@@ -20,6 +22,7 @@ vi.mock('vscode', () => ({
     parse: (s: string) => ({ toString: () => s }),
   },
   ViewColumn: { One: 1 },
+  TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString,
 }));
 
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
@@ -32,20 +35,22 @@ import {
   registerDownloadsSingleRowCommands,
   registerDownloadsSortCommand,
 } from './DownloadsPanel';
-import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
+import { DownloadNode, type DownloadsProvider } from './DownloadsProvider';
 import type { DownloadRow } from './mo2/downloads';
 import type { Instance, InstanceValue } from './instance';
 import { recordingReporter, scriptedDialog } from '../test/surfacingDoubles';
+import { downloadRowFixture } from './test/downloadRowFixture';
+import { instanceValueFixture } from './test/instanceValueFixture';
 
 const node = (name: string, row: Partial<DownloadRow> = {}): DownloadNode =>
-  ({ row: { name, ...row } } as DownloadNode);
+  new DownloadNode(downloadRowFixture(name, row), '/instance');
 
 // No installed mods by default, so `selectUpgradeCandidates` finds none and the pick never
 // shows — the shape every install test not about the pick itself relies on.
 const fakeInstance = (
   mods: InstanceValue['mods'] = [], downloads: InstanceValue['downloads'] = [], gameRelease = 'Fallout4',
 ): Pick<Instance, 'value'> => ({
-  value: { mods, downloads, gameRelease } as unknown as InstanceValue,
+  value: instanceValueFixture({ mods, downloads, gameRelease }),
 });
 
 const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): InstanceValue['mods'][number] => ({
@@ -54,8 +59,9 @@ const mod = (over: Partial<InstanceValue['mods'][number]> & { name: string }): I
   ...over,
 });
 
-const fakeDownloadsProvider = (): DownloadsProvider & { setSort: ReturnType<typeof vi.fn>; setShowHidden: ReturnType<typeof vi.fn> } =>
-  ({ setSort: vi.fn(), setShowHidden: vi.fn() } as unknown as DownloadsProvider & { setSort: ReturnType<typeof vi.fn>; setShowHidden: ReturnType<typeof vi.fn> });
+const fakeDownloadsProvider = (): Pick<DownloadsProvider, 'setSort' | 'setShowHidden'> => ({
+  setSort: vi.fn(), setShowHidden: vi.fn(),
+});
 
 // tmpdirs created via makeInstanceRoot() this test, cleaned up in afterEach even
 // if the test fails partway through (an inline rm() at the end of a test body
@@ -86,8 +92,8 @@ async function writeMeta(root: string, name: string, text = '[General]\r\n'): Pr
   return path;
 }
 
-function calledFsPath(mockFn: { mock: { calls: unknown[][] } }): string {
-  return (mockFn.mock.calls[0]![0] as { fsPath: string }).fsPath;
+function calledFsPath(mockFn: { mock: { calls: FakeUri[][] } }): string {
+  return mockFn.mock.calls[0]![0]!.fsPath;
 }
 
 function invoke(commandId: string, ...args: unknown[]): void {
@@ -235,7 +241,8 @@ describe('registerDownloadsSingleRowCommands', () => {
     invoke('modbench.downloads.visitNexus', node('foo.7z', { modID: '123' }));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    const url = (openExternal.mock.calls[0]![0] as { toString(): string }).toString();
+    const target: { toString(): string } = openExternal.mock.calls[0]![0];
+    const url = target.toString();
     expect(url).toBe('https://www.nexusmods.com/fallout4/mods/123');
   });
 
@@ -311,7 +318,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     invoke('modbench.downloads.install', node('foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    const items = showQuickPick.mock.calls[0]![0] as { label: string; description?: string; choice: unknown }[];
+    const items: { label: string; description?: string; choice: unknown }[] = showQuickPick.mock.calls[0]![0];
     expect(items).toEqual([
       { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } },
       { label: 'No Match (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'No Match' } },
@@ -521,7 +528,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     invoke('modbench.downloads.delete', node('foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
-    const trashedPaths = fsDelete.mock.calls.map((c) => (c[0] as { fsPath: string }).fsPath);
+    const trashedPaths: string[] = fsDelete.mock.calls.map((c): string => { const uri: FakeUri = c[0]; return uri.fsPath; });
     expect(trashedPaths).toEqual(expect.arrayContaining([archive, meta]));
   });
 });
@@ -542,7 +549,7 @@ describe('deleteArchives', () => {
     expect(ask.asked).toEqual([
       { message: expect.stringContaining('2 items'), detail: undefined, buttons: ['Delete'] },
     ]);
-    const trashedPaths = fsDelete.mock.calls.map((c) => (c[0] as { fsPath: string }).fsPath);
+    const trashedPaths: string[] = fsDelete.mock.calls.map((c): string => { const uri: FakeUri = c[0]; return uri.fsPath; });
     expect(trashedPaths).toEqual(expect.arrayContaining([a, b]));
   });
 

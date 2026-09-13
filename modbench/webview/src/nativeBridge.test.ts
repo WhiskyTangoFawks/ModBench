@@ -10,7 +10,10 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 // near-identical bridges; further bridges extend this file rather than re-prove it.
 
 function postedRequestId(): string {
-  const call = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+  const call = vi.mocked(vscode.postMessage).mock.calls.at(-1)?.[0];
+  if (call === undefined || call.type !== WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
+    throw new Error('Expected an OPEN_FORM_KEY_PICKER post');
+  }
   return call.requestId;
 }
 

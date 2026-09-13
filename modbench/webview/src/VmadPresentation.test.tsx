@@ -91,6 +91,17 @@ const aliasesMeta = fieldMeta({
 
 type Obj = Record<string, unknown>;
 
+// Every field/element/property lookup below walks a plain JS structure this file itself built —
+// `Reflect.get` on the guarded `object` reads a member without narrowing away from `unknown`.
+function propertyOf(value: unknown, name: string): unknown {
+  return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
+}
+
+function stringValueAt(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === 'string' ? value : '';
+}
+
 // The document's own spelling: the discriminator first, then only the members the leaf carries.
 const property = (name: string, concreteType: string, over: Obj = {}): Obj => ({
   MutagenObjectType: concreteType, Name: name, Flags: ['Edited'],
@@ -107,7 +118,7 @@ const PLUGIN = 'MyMod.esp';
 // Joined the way the backend joins them; a key member may be dotted, so each one is a path.
 const keyTextOf = (keyMembers: string[], element: unknown): string =>
   keyMembers
-    .map(m => m.split('.').reduce<unknown>((v, name) => (v as Obj | null)?.[name], element))
+    .map(m => m.split('.').reduce<unknown>((v, name) => propertyOf(v, name), element))
     .map(v => String(v ?? ''))
     .join(' / ');
 
@@ -140,14 +151,14 @@ function buildDiff(
     values,
     winnerColumn: columns[0],
     resolutions: resolved.length === 0 ? undefined : Object.fromEntries(resolved.map(c => [c, {
-      state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[values[c] as string],
+      state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[stringValueAt(values, c)],
     }])),
     children:
       meta.type === 'array' && meta.elementType
         ? each(keysOf(meta, values).map(k =>
           [k, meta.elementType!, (c: string) => elementAt(meta, values[c], k)]))
         : meta.type === 'struct'
-          ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => (values[c] as Obj | null)?.[f.name]]))
+          ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => propertyOf(values[c], f.name)]))
           : undefined,
   });
 }
@@ -179,9 +190,9 @@ function renderPanel() {
 }
 
 function fieldCell(field: string): HTMLTableCellElement {
-  const td = screen.getAllByText(field).find(el => el.tagName === 'TD');
+  const td = screen.getAllByText(field).find((el): el is HTMLTableCellElement => el.tagName === 'TD');
   expect(td, `no row named ${field}`).toBeDefined();
-  return td as HTMLTableCellElement;
+  return td!;
 }
 
 const summaryOf = (field: string): string =>
@@ -206,7 +217,7 @@ function reloadWith(compare: unknown) {
 
 beforeEach(() => {
   vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
-  (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  vi.mocked(vscode.postMessage).mockClear();
 });
 afterEach(() => vi.unstubAllGlobals());
 

@@ -9,8 +9,11 @@ const { showErrorMessage, showWarningMessage, subscribeQuestionOpen } = vi.hoist
     (_deps: { showError: (message: string) => void; showDialog: unknown }, _client: unknown) => () => {}),
 }));
 
+import { EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor } from '../../test/vscodeMock';
+
 vi.mock('vscode', () => ({
   window: { showErrorMessage, showWarningMessage },
+  EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor,
 }));
 
 vi.mock('../../medit/externalChangeCoordinator', () => ({
@@ -18,16 +21,15 @@ vi.mock('../../medit/externalChangeCoordinator', () => ({
 }));
 
 import { wireQuestionOpen } from '../externalChangeWiring';
+import { PluginTreeProvider } from '../PluginTreeProvider';
+import { InMemoryMEditClient } from '../../medit/client';
+import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { scriptedDialog } from '../../test/surfacingDoubles';
 
-function fakeOutputChannel() {
-  return { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as import('vscode').LogOutputChannel;
-}
-
 function wire(askQuestion = scriptedDialog()) {
-  const outputChannel = fakeOutputChannel();
-  const client = {} as Parameters<typeof wireQuestionOpen>[0];
-  const treeProvider = { refresh: vi.fn() } as unknown as Parameters<typeof wireQuestionOpen>[2];
+  const outputChannel = new FakeLogOutputChannel();
+  const client = new InMemoryMEditClient();
+  const treeProvider = new PluginTreeProvider(client);
   wireQuestionOpen(client, outputChannel, treeProvider, vi.fn(), askQuestion);
   return { outputChannel, deps: subscribeQuestionOpen.mock.calls[0]![0] };
 }

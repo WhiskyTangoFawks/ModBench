@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
+import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from './messages';
 import { at, fieldMeta, keyed, lastPostedEnvelope, member, panelClient } from './test/fixtures';
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
@@ -346,7 +346,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = intArrayCompareResult;
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -472,10 +472,10 @@ function renderEditablePanel() {
 function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
   const row = screen.getByText(rowLabel).closest('tr')!;
   const cells = row.querySelectorAll('td');
-  const cell = cells[cells.length - 1];
+  const cell = cells[cells.length - 1]!;
   // xEdit's own gesture (ADR-0018): a double click opens the editor on a resting cell.
-  fireEvent.doubleClick(within(cell as HTMLElement).getByText(shownValue));
-  const input = (cell as HTMLElement).querySelector('input')!;
+  fireEvent.doubleClick(within(cell).getByText(shownValue));
+  const input = cell.querySelector('input')!;
   fireEvent.change(input, { target: { value: typed } });
   fireEvent.keyDown(input, { key: 'Enter' });
 }
@@ -483,7 +483,7 @@ function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) 
 describe('RecordPanel — a value edit posts one set envelope addressing the leaf', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -541,7 +541,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -559,7 +559,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
@@ -584,7 +584,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
 
     editLastCellOfRow('Level', '4', '6');
 
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = vi.mocked(vscode.postMessage).mock.calls;
     const posted = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)![0];
     expect(posted).toEqual({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
@@ -659,7 +659,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -680,7 +680,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await expandTo('Guard');
     const row = screen.getAllByText('flags')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.doubleClick(within(cell).getByText('g'));
     const input = cell.querySelector('input')!;
     fireEvent.change(input, { target: { value: 'EDITED' } });
@@ -695,7 +695,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await expandTo('Guard');
     const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -734,7 +734,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await waitFor(() => screen.getByText('Fragments'));
     fireEvent.click(screen.getByText('Fragments').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText('10 / 0'));
-    const cell = screen.getByText('10 / 0').closest('tr')!.querySelectorAll('td')[1] as HTMLElement;
+    const cell = screen.getByText('10 / 0').closest('tr')!.querySelectorAll('td')[1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -747,7 +747,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await expandTo('Guard');
     const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
@@ -760,7 +760,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await expandTo('Guard');
     const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
 
     expect(fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true })).toBe(true);
@@ -779,7 +779,7 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -792,14 +792,16 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
     // KwdC is element 1 of MyMod.esp's own ['KwdA', 'KwdC'].
     const row = screen.getAllByText('KwdC').find(el => el.tagName === 'TD')!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.doubleClick(within(cell).getByText('KwdC'));
 
     // The native QuickPick answers through the bridge; this is its reply.
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const request = [...calls].reverse()
-      .find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER)![0] as { requestId: string };
+    type OpenFormKeyPicker = Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>;
+    const isOpenFormKeyPicker = (call: [WebviewToExtension]): call is [OpenFormKeyPicker] =>
+      call[0].type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER;
+    const calls = vi.mocked(vscode.postMessage).mock.calls;
+    const request = [...calls].reverse().find(isOpenFormKeyPicker)![0];
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: request.requestId, formKey: '000123:Fallout4.esm' },

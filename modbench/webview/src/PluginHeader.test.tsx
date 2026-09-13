@@ -98,8 +98,8 @@ describe('PluginHeader', () => {
         </th>
       </tr></thead></table>,
     );
-    const pluginHeaderRoot = container.querySelector('th > div');
-    expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
+    const pluginHeaderRoot = container.querySelector<HTMLElement>('th > div');
+    expect(pluginHeaderRoot!.style.opacity).toBe('');
   });
 
   // ADR-0012: origin is never what the user reads by default — only the filename.

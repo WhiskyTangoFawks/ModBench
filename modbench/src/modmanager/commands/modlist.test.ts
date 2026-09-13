@@ -7,13 +7,15 @@ import ts from 'typescript';
 // Delay is 0 by default (a passthrough), so only the concurrent-write test below opts in.
 const fsState = vi.hoisted(() => {
   type ReadFile = typeof import('node:fs/promises')['readFile'];
-  return { real: undefined as unknown as ReadFile, delayMs: 0 };
+  const state: { real: ReadFile | undefined; delayMs: number } = { real: undefined, delayMs: 0 };
+  return state;
 });
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   fsState.real = actual.readFile;
   const readFile = vi.fn(async (...args: Parameters<typeof actual.readFile>) => {
-    const result = await fsState.real(...args);
+    // Set immediately above, before any test can call through the mock.
+    const result = await fsState.real!(...args);
     if (fsState.delayMs > 0) await new Promise((resolve) => setTimeout(resolve, fsState.delayMs));
     return result;
   });

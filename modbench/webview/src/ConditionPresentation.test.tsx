@@ -98,6 +98,12 @@ const conditionsMeta = fieldMeta({
 
 type Condition = Record<string, unknown>;
 
+// Every member lookup below walks a plain JS structure this file itself built — `Reflect.get`
+// on the guarded `object` reads a member without narrowing away from `unknown`.
+function propertyOf(value: unknown, name: string): unknown {
+  return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
+}
+
 // The document's own spelling: a member at its default is omitted, flags are the names carried.
 const condition = (over: Condition = {}, data: Condition = {}): Condition => ({
   MutagenObjectType: 'ConditionFloat',
@@ -123,13 +129,13 @@ function compareResult(
 ) {
   const columns = Object.keys(byColumn);
   const at = (column: string, index: number, path: string[]): unknown =>
-    path.reduce<unknown>((v, name) => (v as Condition | undefined)?.[name], byColumn[column]![index]);
+    path.reduce<unknown>((v, name) => propertyOf(v, name), byColumn[column]![index]);
 
   const resolutionsFor = (path: string[], index: number) => {
     const entries = columns
       .map(c => [c, at(c, index, path)] as const)
       .filter(([, v]) => typeof v === 'string' && resolutions[v])
-      .map(([c, v]) => [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[v as string] }]);
+      .map(([c, v]) => [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[String(v)] }]);
     return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   };
 
@@ -139,7 +145,10 @@ function compareResult(
   // A row exists for any member some column carries, as the backend's classifier aligns them; a
   // document omits a member at its default, so the keys are the union across columns.
   const memberDiffs = (path: string[], index: number): unknown[] => {
-    const keys = [...new Set(columns.flatMap(c => Object.keys((at(c, index, path) as Condition | undefined) ?? {})))];
+    const keys = [...new Set(columns.flatMap(c => {
+      const value = at(c, index, path);
+      return Object.keys(typeof value === 'object' && value !== null ? value : {});
+    }))];
     return keys.map(name => ({
       fieldName: name,
       values: valuesFor([...path, name], index),
@@ -224,7 +233,7 @@ const dataMember = (name: string) => [
 
 beforeEach(() => {
   vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
-  (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  vi.mocked(vscode.postMessage).mockClear();
 });
 afterEach(() => vi.unstubAllGlobals());
 

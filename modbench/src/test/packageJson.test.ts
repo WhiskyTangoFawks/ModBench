@@ -12,8 +12,8 @@ describe('package.json activation', () => {
 
 describe('package.json viewsWelcome', () => {
   it('gates the "not an MO2 instance" message on a workspace actually being open, so no-workspace stays a neutral no-op (AC4)', () => {
-    const welcome = (pkg.contributes.viewsWelcome as { view: string; when: string }[])
-      .find((w) => w.view === 'modbench.modList');
+    const viewsWelcome: { view: string; when: string }[] = pkg.contributes.viewsWelcome;
+    const welcome = viewsWelcome.find((w) => w.view === 'modbench.modList');
     expect(welcome, 'expected a viewsWelcome entry for modbench.modList').toBeTruthy();
     // workspaceIsMo2Instance is never set with no folder open, so without this guard the
     // wrong-folder message shows on a bare window. workspaceFolderCount is VS Code's own key.
@@ -24,8 +24,8 @@ describe('package.json viewsWelcome', () => {
   // tell "not yet checked" from "checked, not an instance"; workspaceMo2CheckDone is set only once
   // the check has run. Exact-match, not .toContain, so a negated term cannot pass.
   it('cannot render before the MO2 check has actually run', () => {
-    const welcome = (pkg.contributes.viewsWelcome as { view: string; when: string }[])
-      .find((w) => w.view === 'modbench.modList');
+    const viewsWelcome: { view: string; when: string }[] = pkg.contributes.viewsWelcome;
+    const welcome = viewsWelcome.find((w) => w.view === 'modbench.modList');
     expect(welcome!.when).toBe(
       'workspaceFolderCount != 0 && modbench.workspaceMo2CheckDone && !modbench.workspaceIsMo2Instance',
     );
@@ -34,22 +34,21 @@ describe('package.json viewsWelcome', () => {
 
 describe('package.json Referenced By panel migration', () => {
   it('lives in a Panel-location viewsContainer, not stacked under the modbench activity-bar container', () => {
-    const panelContainerIds = new Set(
-      (pkg.contributes.viewsContainers.panel as { id: string }[]).map((c) => c.id),
-    );
-    const views = pkg.contributes.views as Record<string, { id: string }[]>;
+    const panel: { id: string }[] = pkg.contributes.viewsContainers.panel;
+    const panelContainerIds = new Set(panel.map((c) => c.id));
+    const views: Record<string, { id: string }[]> = pkg.contributes.views;
     const referencedByContainer = Object.entries(views)
       .find(([, entries]) => entries.some((v) => v.id === 'modbench.referencedByTree'))?.[0];
 
     expect(referencedByContainer, 'expected a views entry for modbench.referencedByTree').toBeTruthy();
     expect(panelContainerIds.has(referencedByContainer!)).toBe(true);
 
-    const sidebarViews = pkg.contributes.views.modbench as { id: string }[];
+    const sidebarViews: { id: string }[] = pkg.contributes.views.modbench;
     expect(sidebarViews.some((v) => v.id === 'modbench.referencedByTree')).toBe(false);
   });
 
   it('is never a right-click entry point — modbench.showReferencedBy appears in no menu contribution', () => {
-    const menus = pkg.contributes.menus as Record<string, { command: string }[]>;
+    const menus: Record<string, { command: string }[]> = pkg.contributes.menus;
     for (const [menuId, entries] of Object.entries(menus)) {
       expect(
         entries.some((e) => e.command === 'modbench.showReferencedBy'),
@@ -60,7 +59,7 @@ describe('package.json Referenced By panel migration', () => {
 });
 
 describe('package.json Toolbox view', () => {
-  const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
+  const sidebarViews = (): { id: string; name: string; when?: string }[] => pkg.contributes.views.modbench;
 
   it('is the first view in the Modbench container, so workspace-scope actions sit above the domain trees', () => {
     expect(sidebarViews()[0]!.id).toBe('modbench.toolbox');
@@ -72,14 +71,14 @@ describe('package.json Toolbox view', () => {
 // sibling of equal standing (ADR-0017).
 describe('package.json "Plugins - …" naming for Referenced By', () => {
   it('names the Referenced By view "Plugins - Referenced By"', () => {
-    const referencedByViews = pkg.contributes.views.modbenchReferencedBy as { id: string; name: string }[];
+    const referencedByViews: { id: string; name: string }[] = pkg.contributes.views.modbenchReferencedBy;
     const view = referencedByViews.find((v) => v.id === 'modbench.referencedByTree');
     expect(view!.name).toBe('Plugins - Referenced By');
   });
 });
 
 describe('package.json the Toolbox stack stays visible through an editing backend', () => {
-  const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
+  const welcome = (): { view: string; when: string }[] => pkg.contributes.viewsWelcome;
 
   it('drops the now-redundant view-mode clause from the "not an MO2 instance" welcome message', () => {
     const entry = welcome().find((w) => w.view === 'modbench.modList' && w.when.includes('workspaceIsMo2Instance'));
@@ -89,12 +88,13 @@ describe('package.json the Toolbox stack stays visible through an editing backen
 });
 
 describe('package.json retires modbench.viewMode and the second Plugins view', () => {
-  const allViews = () => [
-    ...(pkg.contributes.views.modbench as { id: string; name: string; when?: string }[]),
-    ...(pkg.contributes.views.modbenchReferencedBy as { id: string; name: string; when?: string }[]),
+  const allViews = (): { id: string; name: string; when?: string }[] => [
+    ...pkg.contributes.views.modbench, ...pkg.contributes.views.modbenchReferencedBy,
   ];
-  const allMenuEntries = () =>
-    Object.values(pkg.contributes.menus as Record<string, { when?: string }[]>).flat();
+  const allMenuEntries = (): { when?: string }[] => {
+    const menus: Record<string, { when?: string }[]> = pkg.contributes.menus;
+    return Object.values(menus).flat();
+  };
 
   it('there is only one view named for plugins — modbench.pluginTree is gone', () => {
     expect(allViews().find((v) => v.id === 'modbench.pluginTree')).toBeUndefined();
@@ -110,8 +110,8 @@ describe('package.json retires modbench.viewMode and the second Plugins view', (
   it('no view, menu entry or keybinding references modbench.viewMode anywhere', () => {
     const offendingViews = allViews().filter((v) => (v.when ?? '').includes('modbench.viewMode'));
     const offendingMenus = allMenuEntries().filter((e) => (e.when ?? '').includes('modbench.viewMode'));
-    const offendingKeybindings = (pkg.contributes.keybindings as { when?: string }[])
-      .filter((k) => (k.when ?? '').includes('modbench.viewMode'));
+    const keybindingsWithWhen: { when?: string }[] = pkg.contributes.keybindings;
+    const offendingKeybindings = keybindingsWithWhen.filter((k) => (k.when ?? '').includes('modbench.viewMode'));
     expect(offendingViews).toEqual([]);
     expect(offendingMenus).toEqual([]);
     expect(offendingKeybindings).toEqual([]);
@@ -119,7 +119,7 @@ describe('package.json retires modbench.viewMode and the second Plugins view', (
 });
 
 describe('package.json New Plugin / record filter reachable from the merged tree', () => {
-  const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
+  const titleMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/title'];
   const entryFor = (command: string) => titleMenus().find((e) => e.command === command && e.when.includes('modbench.pluginListTree'));
 
   // Rule 5 — docs/specs/containers.md.
@@ -143,22 +143,22 @@ describe('package.json New Plugin / record filter reachable from the merged tree
 // its File Header as a matter of course) means clicking a plugin row opens its header directly,
 // through the row's own `.command`.
 describe('package.json Open Header has no button of its own — row click replaces it', () => {
-  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+  const contextMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/item/context'];
 
   it('contributes no context-menu or inline entry for modbench.openHeader', () => {
     expect(contextMenus().filter((e) => e.command === 'modbench.openHeader')).toEqual([]);
   });
 
   it('modbench.openHeader itself is still declared — the row-click bridge command, not a button', () => {
-    const commands = pkg.contributes.commands as { command: string }[];
+    const commands: { command: string }[] = pkg.contributes.commands;
     expect(commands.some((c) => c.command === 'modbench.openHeader')).toBe(true);
   });
 });
 
 describe('package.json filtering is one UX', () => {
-  const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
-  const commandTitle = (id: string) =>
-    (pkg.contributes.commands as { command: string; title: string; icon?: string }[]).find((c) => c.command === id);
+  const titleMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/title'];
+  const commandOf = (): { command: string; title: string; icon?: string }[] => pkg.contributes.commands;
+  const commandTitle = (id: string) => commandOf().find((c) => c.command === id);
 
   // Rule 6 — docs/specs/containers.md.
   const FILTERED_VIEWS = [
@@ -206,7 +206,7 @@ describe('package.json filtering is one UX', () => {
   // unbound when `list.find` moved to `ctrl+alt+F` in 1.89, so a per-view `focusedView` binding
   // conflicts with nothing.
   it.each(DURABLE_FILTERS)('%s opens its filter on ctrl+F while focused', (view, openCommand) => {
-    const keybindings = pkg.contributes.keybindings as { command: string; key: string; when: string }[];
+    const keybindings: { command: string; key: string; when: string }[] = pkg.contributes.keybindings;
     const entry = keybindings.find((k) => k.command === openCommand);
     expect(entry, `expected a ctrl+F binding for ${openCommand}`).toBeTruthy();
     expect(entry!.key).toBe('ctrl+f');
@@ -216,18 +216,18 @@ describe('package.json filtering is one UX', () => {
   // Scoped to the focused view, never the container or the window: an unscoped ctrl+F would
   // shadow the editor's own Find for the whole workbench.
   it('never binds ctrl+F outside a specific focused view', () => {
-    const keybindings = pkg.contributes.keybindings as { command: string; key: string; when?: string }[];
+    const keybindings: { command: string; key: string; when?: string }[] = pkg.contributes.keybindings;
     const unscoped = keybindings.filter((k) => k.key === 'ctrl+f' && !k.when?.startsWith('focusedView == '));
     expect(unscoped.map((k) => k.command)).toEqual([]);
   });
 });
 
 describe('package.json Refresh is one command', () => {
-  const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
+  const titleMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/title'];
 
   it('declares exactly one refresh command', () => {
-    const refreshCommands = (pkg.contributes.commands as { command: string; icon?: string }[])
-      .filter((c) => c.icon === '$(refresh)');
+    const commandsWithIcon: { command: string; icon?: string }[] = pkg.contributes.commands;
+    const refreshCommands = commandsWithIcon.filter((c) => c.icon === '$(refresh)');
     expect(refreshCommands.map((c) => c.command)).toEqual(['modbench.refresh']);
   });
 
@@ -242,9 +242,9 @@ describe('package.json Refresh is one command', () => {
 
 describe('package.json title-bar rubric', () => {
   type MenuEntry = { command: string; when: string; group: string };
-  const titleMenus = () => pkg.contributes.menus['view/title'] as MenuEntry[];
+  const titleMenus = (): MenuEntry[] => pkg.contributes.menus['view/title'];
   const viewsOf = (entries: MenuEntry[]) =>
-    new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter(Boolean) as string[]);
+    new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter((v): v is string => v !== undefined));
 
   // Rule 1 — docs/specs/containers.md.
   const WORKSPACE_ACTIONS = [
@@ -288,7 +288,8 @@ describe('package.json title-bar rubric', () => {
 
   // Rule 7 — docs/specs/containers.md.
   it('the Mods tree and the merged Plugins tree are the hierarchical ones', () => {
-    const sidebar = (pkg.contributes.views.modbench as { id: string }[]).map((v) => v.id);
+    const sidebarIds: { id: string }[] = pkg.contributes.views.modbench;
+    const sidebar = sidebarIds.map((v) => v.id);
     expect(sidebar).toContain('modbench.modList');
     expect(sidebar).toContain('modbench.pluginListTree');
   });
@@ -299,7 +300,7 @@ describe('package.json title-bar rubric', () => {
 // at its four-icon maximum.
 describe('package.json Deploy/Purge/Launch gating', () => {
   it('gates Deploy/Purge/Launch Game in the command palette the same as the title bar, closing the Ctrl+Shift+P hole', () => {
-    const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
+    const palette: { command: string; when: string }[] = pkg.contributes.menus.commandPalette;
     expect(palette, 'expected a contributes.menus.commandPalette section').toBeTruthy();
 
     // modbench.toolbox.launch runs a contributed task, never a hardcoded game exe. Same
@@ -308,8 +309,8 @@ describe('package.json Deploy/Purge/Launch gating', () => {
       const entry = palette.find((e) => e.command === command);
       expect(entry, `expected a commandPalette entry for ${command}`).toBeTruthy();
       // Same gate as the view/title button for this command, so palette and title bar can never diverge.
-      const titleBarEntry = (pkg.contributes.menus['view/title'] as { command: string; when: string }[])
-        .find((e) => e.command === command);
+      const titleBarMenus: { command: string; when: string }[] = pkg.contributes.menus['view/title'];
+      const titleBarEntry = titleBarMenus.find((e) => e.command === command);
       expect(titleBarEntry, `expected a view/title entry for ${command}`).toBeTruthy();
       expect(titleBarEntry!.when).toContain(entry!.when);
     }
@@ -320,8 +321,8 @@ describe('package.json Deploy/Purge/Launch gating', () => {
 // `category: "Modbench"` with a bare `title` lets VS Code compose the palette label while
 // context menus render the bare title, so every command carries a category.
 describe('package.json command titles and categories', () => {
-  const commands = pkg.contributes.commands as { command: string; title: string; category?: string }[];
-  const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
+  const commands: { command: string; title: string; category?: string }[] = pkg.contributes.commands;
+  const palette: { command: string; when: string }[] = pkg.contributes.menus.commandPalette;
 
   it('no title carries the hardcoded "Modbench: " palette prefix — category supplies it instead', () => {
     const offenders = commands.filter((c) => c.title.startsWith('Modbench: '));
@@ -400,7 +401,7 @@ describe('package.json command titles and categories', () => {
 // not offered-then-refused — everywhere else. Both halves are contextValue facts the row states
 // for itself.
 describe('package.json record-row context menu — renumber gated to native tracked rows', () => {
-  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string }[];
+  const contextMenus = (): { command: string; when: string }[] => pkg.contributes.menus['view/item/context'];
   const whenOf = (command: string) => contextMenus().find((e) => e.command === command)!.when;
 
   it('offers Change FormID only on viewItem == recordTracked', () => {
@@ -427,7 +428,7 @@ describe('package.json record-row context menu — renumber gated to native trac
 // a plugin row to be, or offer, beyond the two contextValues `PluginsTreeProvider` itself produces
 // (`plugin`, `pluginImplicit`); there is no manual re-read gesture.
 describe('package.json plugin-row context menu', () => {
-  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+  const contextMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/item/context'];
   const forPluginRows = () => contextMenus().filter((e) => e.when.includes('viewItem == plugin'));
 
   // Every command reachable from a plugin row, listed, with exactly one contextValue (`plugin`).
@@ -445,7 +446,7 @@ describe('package.json plugin-row context menu', () => {
 
 // ADR-0007: the Track gesture's own menu contribution.
 describe('package.json per-plugin Track', () => {
-  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+  const contextMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/item/context'];
 
   it('sits below the other row actions in the same row-action group', () => {
     const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.track');
@@ -457,8 +458,8 @@ describe('package.json per-plugin Track', () => {
   // not a quick inline action.
   it('never appears as an inline or navigation icon', () => {
     const inline = contextMenus().filter((e) => e.command === 'modbench.pluginListTree.track' && e.group === 'inline');
-    const title = (pkg.contributes.menus['view/title'] as { command: string }[])
-      .filter((e) => e.command === 'modbench.pluginListTree.track');
+    const trackTitleMenus: { command: string }[] = pkg.contributes.menus['view/title'];
+    const title = trackTitleMenus.filter((e) => e.command === 'modbench.pluginListTree.track');
     expect([...inline, ...title]).toEqual([]);
   });
 });
@@ -466,7 +467,7 @@ describe('package.json per-plugin Track', () => {
 // "Open Editor to the Side" is reachable from the Referenced By tree's group rows and from
 // the Plugins tree's record and placed-reference rows — single or multi-selected.
 describe('package.json "Open Editor to the Side" reachable from Plugins tree record rows', () => {
-  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+  const contextMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/item/context'];
 
   it('offers modbench.openEditorBeside on every record and placed-reference row', () => {
     const entry = contextMenus().find((e) =>

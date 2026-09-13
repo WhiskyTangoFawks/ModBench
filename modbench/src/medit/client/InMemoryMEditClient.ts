@@ -28,9 +28,9 @@ export interface RecordedCall {
   args: unknown[];
 }
 
-// One scripted step, queued per method: resolves an answer or rejects with an error. `query`
-// below drains the queue, in order, before falling back to the fixed script.
-type ScriptedStep<T> = { kind: 'answer'; value: T } | { kind: 'failure'; error: Error };
+// One scripted step, queued per method: resolves an answer or rejects with an error. An answer
+// may be a pending `PromiseLike`, held in flight on a test's own schedule.
+type ScriptedStep<T> = { kind: 'answer'; value: T | PromiseLike<T> } | { kind: 'failure'; error: Error };
 
 // Homomorphic over `QueryMethod`, for the same reason `Answers` is: `QueryQueues[K]` (not
 // `ScriptedStep<Answer<K>>[]` inline) is what keeps a generic-keyed write sound.
@@ -73,9 +73,8 @@ export class InMemoryMEditClient implements MEditClient {
   }
 
   /** Queues one answer, consumed by the next call to `method` and then discarded — for a test
-   *  re-scripting a call sequence rather than a fixed answer. Drains before the fixed
-   *  answer/failure above are consulted. */
-  setQueryAnswerOnce<K extends QueryMethod>(method: K, answer: Answer<K>): void {
+   *  re-scripting a call sequence, or holding this one call in flight with a pending `answer`. */
+  setQueryAnswerOnce<K extends QueryMethod>(method: K, answer: Answer<K> | PromiseLike<Answer<K>>): void {
     this.pushQueryStep(method, { kind: 'answer', value: answer });
   }
 

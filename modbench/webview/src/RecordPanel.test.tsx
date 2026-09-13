@@ -450,8 +450,8 @@ describe('RecordPanel — a copy the load order does not name (ADR-0013)', () =>
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
     // CSS opacity compounds on nesting (two 0.55s render at ~0.30), so the PluginHeader root
     // inside this dimmed <th> must not carry a second opacity.
-    const pluginHeaderRoot = th!.querySelector(':scope > div');
-    expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
+    const pluginHeaderRoot = th!.querySelector<HTMLElement>(':scope > div');
+    expect(pluginHeaderRoot!.style.opacity).toBe('');
   });
 
   it('does not dim a vanilla-master column (immutable, still in the load order)', async () => {
@@ -558,7 +558,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
     fireEvent.click(screen.getByRole('button', { name: '▶' }));
     // The immutable master column's flags expand too, its checkboxes disabled.
-    const enabled = screen.getAllByRole('checkbox').filter(b => !(b as HTMLInputElement).disabled);
+    const enabled = screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled);
     expect(enabled).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('button', { name: '▼' }));
@@ -574,7 +574,7 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
     // uncheck A in the tracked column — the first *enabled* box, since the master column's
     // disabled checkboxes render first in column order.
-    fireEvent.click(screen.getAllByRole('checkbox').filter(b => !(b as HTMLInputElement).disabled)[0]!);
+    fireEvent.click(screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled)[0]!);
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
@@ -787,7 +787,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   it('re-loads data when LOAD_RECORD arrives with the same formKey', async () => {
     const { client } = renderPanel(compareResult);
     await waitFor(() => screen.getByText(/TestNPC/));
-    const callsBefore = (client.load as ReturnType<typeof vi.fn>).mock.calls.length;
+    const callsBefore = vi.mocked(client.load).mock.calls.length;
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
@@ -795,7 +795,7 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
       }));
     });
 
-    await waitFor(() => expect((client.load as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(callsBefore));
+    await waitFor(() => expect(vi.mocked(client.load).mock.calls.length).toBeGreaterThan(callsBefore));
     await waitFor(() => screen.getByText(/TestNPC/));
   });
 
@@ -1215,7 +1215,7 @@ describe('RecordPanel — an absent member reads as its default', () => {
   it('editing an absent int from its default posts one set with the typed value', async () => {
     await renderExpanded();
     vi.mocked(vscode.postMessage).mockClear();
-    const cell = cellsOf('Weight')[2] as HTMLElement;
+    const cell = cellsOf('Weight')[2]!;
     fireEvent.doubleClick(within(cell).getByText('0'));
     const input = cell.querySelector('input')!;
     fireEvent.change(input, { target: { value: '5' } });

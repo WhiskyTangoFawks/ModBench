@@ -20,8 +20,8 @@ function fakeTreeProvider(markResult = true): RecordTreeSync {
   };
 }
 
-function fakeDecorationProvider(): RecordDecorationProvider {
-  return { refresh: vi.fn() } as unknown as RecordDecorationProvider;
+function fakeDecorationProvider(): Pick<RecordDecorationProvider, 'refresh'> {
+  return { refresh: vi.fn() };
 }
 
 // `hasMatchingRecords` (plugins.md) needs a re-derive on every edit, since a
@@ -109,7 +109,7 @@ describe('a write and the stream, together (ADR-0015 invariant 3)', () => {
   it('after a write, the panel re-reads exactly once, on rows-changed', () => {
     const meditClient = new InMemoryMEditClient();
     const panel = fakePanel();
-    const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
+    const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(meditClient, recordPanels, tracker);

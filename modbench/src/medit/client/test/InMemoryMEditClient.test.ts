@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from '../InMemoryMEditClient';
-import type { NotificationEvent } from '../MEditClient';
+import { pluginMetadataFixture, notificationEventFixture } from './fixtures';
 
 describe('InMemoryMEditClient — recorded calls', () => {
   it('records a query call with its arguments', async () => {
@@ -53,9 +53,10 @@ describe('InMemoryMEditClient — a queued once-form script', () => {
   it('setQueryAnswerOnce answers the next call, then falls back to the fixed answer', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('getPlugins', []);
-    client.setQueryAnswerOnce('getPlugins', [{ name: 'A.esp' } as never]);
+    const scripted = pluginMetadataFixture({ name: 'A.esp' });
+    client.setQueryAnswerOnce('getPlugins', [scripted]);
 
-    await expect(client.getPlugins()).resolves.toEqual([{ name: 'A.esp' }]);
+    await expect(client.getPlugins()).resolves.toEqual([scripted]);
     await expect(client.getPlugins()).resolves.toEqual([]);
   });
 
@@ -70,13 +71,15 @@ describe('InMemoryMEditClient — a queued once-form script', () => {
 
   it('drains a mixed sequence in the order scripted — answer, then failure, then answer', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswerOnce('getPlugins', [{ name: 'first' } as never]);
+    const first = pluginMetadataFixture({ name: 'first' });
+    const retry = pluginMetadataFixture({ name: 'retry' });
+    client.setQueryAnswerOnce('getPlugins', [first]);
     client.setQueryFailureOnce('getPlugins', new Error('mid-sequence failure'));
-    client.setQueryAnswerOnce('getPlugins', [{ name: 'retry' } as never]);
+    client.setQueryAnswerOnce('getPlugins', [retry]);
 
-    await expect(client.getPlugins()).resolves.toEqual([{ name: 'first' }]);
+    await expect(client.getPlugins()).resolves.toEqual([first]);
     await expect(client.getPlugins()).rejects.toThrow('mid-sequence failure');
-    await expect(client.getPlugins()).resolves.toEqual([{ name: 'retry' }]);
+    await expect(client.getPlugins()).resolves.toEqual([retry]);
   });
 });
 
@@ -144,7 +147,7 @@ describe('InMemoryMEditClient — subscribe/emit', () => {
     const pluginListener = vi.fn();
     client.subscribe('rows-changed', rowsListener);
     client.subscribe('plugin-changed', pluginListener);
-    const event = { kind: 'rows-changed' } as NotificationEvent;
+    const event = notificationEventFixture({ kind: 'rows-changed' });
     client.emit(event);
     expect(rowsListener).toHaveBeenCalledWith(event);
     expect(pluginListener).not.toHaveBeenCalled();
@@ -155,7 +158,7 @@ describe('InMemoryMEditClient — subscribe/emit', () => {
     const listener = vi.fn();
     const unsubscribe = client.subscribe('track-progress', listener);
     unsubscribe();
-    client.emit({ kind: 'track-progress' } as NotificationEvent);
+    client.emit(notificationEventFixture({ kind: 'track-progress' }));
     expect(listener).not.toHaveBeenCalled();
   });
 });

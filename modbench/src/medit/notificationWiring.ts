@@ -14,11 +14,11 @@ export function subscribeTreeToNotifications(
 
 // One FormKey spans its whole override chain, so matching it alone is enough — no plugin/origin
 // check. LOAD_RECORD already re-reads unconditionally, even for an already-shown FormKey.
-// `activeRecordTracker` is structural, Editor's own type unnamed here.
-export function subscribeRecordPanelsToNotifications(
+// `activeRecordTracker` and `Panel` are both structural — Editor's own types unnamed here.
+export function subscribeRecordPanelsToNotifications<Panel extends { webview: Pick<vscode.Webview, 'postMessage'> }>(
   client: Pick<MEditClient, 'subscribe'>,
-  recordPanels: Set<vscode.WebviewPanel>,
-  activeRecordTracker: { formKeyOf(panel: vscode.WebviewPanel): string | undefined },
+  recordPanels: Set<Panel>,
+  activeRecordTracker: { formKeyOf(panel: Panel): string | undefined },
 ): () => void {
   return client.subscribe('rows-changed', (event) => {
     for (const panel of recordPanels) {

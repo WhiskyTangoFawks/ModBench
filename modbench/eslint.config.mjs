@@ -39,8 +39,8 @@ export default tseslint.config(
         },
     },
 
-    // A narrowing cast is the fastest way past a type error, and the easiest habit to copy. Off
-    // only in the record-document allowlist below, and for tests in their own block further down.
+    // A narrowing cast is the fastest way past a type error, and the easiest habit to copy —
+    // in a test as much as in production. Off only in the two allowlists below.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
         rules: {
@@ -149,8 +149,8 @@ export default tseslint.config(
         },
     },
 
-    // Test files — relax unsafe-any rules since mocks legitimately use any. Tests keep their
-    // narrowing-cast and non-null-assertion exemptions too, until those blocks shrink to nothing.
+    // Test files — relax unsafe-any rules since mocks legitimately use any. The non-null-assertion
+    // exemption stays here too, until that block shrinks to nothing.
     {
         files: [
             'src/test/**/*.ts', 'src/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**/*.ts',
@@ -164,7 +164,6 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-member-access': 'off',
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/no-base-to-string': 'off',
-            '@typescript-eslint/no-unsafe-type-assertion': 'off',
             '@typescript-eslint/no-non-null-assertion': 'off',
         },
     },

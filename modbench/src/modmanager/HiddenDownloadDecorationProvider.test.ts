@@ -8,10 +8,11 @@ vi.mock('vscode', () => ({
 
 import * as vscode from 'vscode';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
+import { fakeUri } from '../test/vscodeMock';
 
 describe('HiddenDownloadDecorationProvider', () => {
   const instanceRoot = '/instance';
-  const downloadUri = (name: string) => ({ fsPath: join(instanceRoot, 'downloads', name) } as never);
+  const downloadUri = (name: string) => fakeUri(join(instanceRoot, 'downloads', name));
 
   it('dims a hidden download row with the disabled-foreground colour (colour only, no badge)', () => {
     const provider = new HiddenDownloadDecorationProvider(instanceRoot, () => new Set(['hidden.zip']));
@@ -29,7 +30,7 @@ describe('HiddenDownloadDecorationProvider', () => {
 
   it('returns undefined for a URI outside downloads/', () => {
     const provider = new HiddenDownloadDecorationProvider(instanceRoot, () => new Set(['hidden.zip']));
-    expect(provider.provideFileDecoration({ fsPath: join(instanceRoot, 'mods', 'SomeMod') } as never)).toBeUndefined();
+    expect(provider.provideFileDecoration(fakeUri(join(instanceRoot, 'mods', 'SomeMod')))).toBeUndefined();
   });
 
   // A sibling path that merely shares the "downloads" string prefix must not read as inside
@@ -37,7 +38,7 @@ describe('HiddenDownloadDecorationProvider', () => {
   it('returns undefined for a sibling path that only shares the downloads/ string prefix', () => {
     const downloadsDir = join(instanceRoot, 'downloads');
     const provider = new HiddenDownloadDecorationProvider(instanceRoot, () => new Set(['evil.zip']));
-    const uri = { fsPath: `${downloadsDir}Xevil.zip` } as never;
+    const uri = fakeUri(`${downloadsDir}Xevil.zip`);
 
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
   });

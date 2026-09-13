@@ -18,6 +18,8 @@ import {
 } from '../test/corpusFixture';
 import type { Mod, Separator } from '../model';
 
+const isMod = (name: string) => (e: { kind: string; name: string }): e is Mod => e.kind === 'mod' && e.name === name;
+
 const PROFILE = 'Default';
 const separatorNames = async (dir: string): Promise<string[]> =>
   (await readModlistEntries(dir)).filter((e) => e.kind === 'separator').map((e) => e.name);
@@ -36,8 +38,8 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     const after = await snapshotTree(dir);
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
-    const entry = (await readModlistEntries(dir)).find((e) => e.name === "Ñoño's Retexture") as Mod;
-    expect(entry.enabled).toBe(false);
+    const entry = (await readModlistEntries(dir)).find(isMod("Ñoño's Retexture"));
+    expect(entry?.enabled).toBe(false);
   });
 
   // Rival this catches: a handler that unconditionally re-renders the line (e.g.
@@ -117,9 +119,10 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     const entries = await readModlistEntries(dir);
-    const last = entries.at(-1) as Separator;
-    expect(last.kind).toBe('separator');
-    expect(last.name).toBe('Unassigned (Modlist Development)');
+    const last = entries.at(-1);
+    if (last?.kind !== 'separator') throw new Error('expected the last entry to be a separator');
+    const lastSeparator: Separator = last;
+    expect(lastSeparator.name).toBe('Unassigned (Modlist Development)');
     // Its three (preceding) children moved with it, immediately above it, in order.
     expect(entries.slice(-4).map((e) => e.name)).toEqual([
       "Ñoño's Retexture",
@@ -139,8 +142,8 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     // An empty directory holds no files, so the whole change is visible in modlist.txt.
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
-    const entry = (await readModlistEntries(dir)).find((e) => e.name === 'QA Empty Mod') as Mod;
-    expect(entry.enabled).toBe(false);
+    const entry = (await readModlistEntries(dir)).find(isMod('QA Empty Mod'));
+    expect(entry?.enabled).toBe(false);
   });
 
   // The fixture ships one unlisted folder. Rival: an adoption that also writes into the folder

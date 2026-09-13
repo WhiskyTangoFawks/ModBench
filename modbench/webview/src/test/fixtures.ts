@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
-import { WEBVIEW_TO_EXTENSION } from '../messages';
-import type { LoadResult, RecordPanelClient } from '../RecordPanelClient';
-import type { FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from '../types';
+import { WEBVIEW_TO_EXTENSION, type WebviewToExtension } from '../messages';
+import type { RecordPanelClient } from '../RecordPanelClient';
+import type { CompareResult, FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from '../types';
 import { columnKey } from '../columnKey';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
@@ -40,6 +40,12 @@ export interface PanelOpts {
   load?: RecordPanelClient['load'];
 }
 
+// A fixture builds its compare result freehand (plain object literals, not always every wire
+// field), so it crosses to `CompareResult` the way a real one crosses the wire: as JSON.
+function asCompareResult(value: unknown): CompareResult {
+  return JSON.parse(JSON.stringify(value));
+}
+
 // `compare` is a thunk so a test that edits and reloads gets the new document on the second load.
 export function panelClient(compare: () => unknown, opts: PanelOpts = {}): RecordPanelClient {
   const plugins = opts.plugins ?? [];
@@ -49,26 +55,29 @@ export function panelClient(compare: () => unknown, opts: PanelOpts = {}): Recor
   return {
     load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,
-      result: compare(),
+      result: asCompareResult(compare()),
       immutableSet: columnsWhere(p => p.isImmutable === true),
       // ADR-0013/ADR-0007: an unstated plugin is in the load order, and untracked.
       notInLoadOrderSet: columnsWhere(p => p.inLoadOrder === false),
       trackedSet: columnsWhere(p => p.isTracked === true),
       conflictsComputed: opts.conflictsComputed ?? true,
-    } as unknown as LoadResult)),
+    })),
   };
 }
 
 /** Every gesture posts one envelope: an operation, the hops from the record's own member down to
  *  the row, and a value where the operation takes one. */
-export function postedEnvelopes(postMessage: unknown): RecordEditEnvelope[] {
-  return (postMessage as ReturnType<typeof vi.fn>).mock.calls
-    .filter(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)
-    .map(([m]) => (m as { envelope: RecordEditEnvelope }).envelope);
+export function postedEnvelopes(postMessage: (msg: WebviewToExtension) => void): RecordEditEnvelope[] {
+  return vi.mocked(postMessage).mock.calls
+    .map(([m]) => m)
+    .filter((m): m is Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.EDIT_FIELD }> =>
+      m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)
+    .map((m) => m.envelope);
 }
 
-export const lastPostedEnvelope = (postMessage: unknown): RecordEditEnvelope | undefined =>
-  postedEnvelopes(postMessage).at(-1);
+export const lastPostedEnvelope = (
+  postMessage: (msg: WebviewToExtension) => void,
+): RecordEditEnvelope | undefined => postedEnvelopes(postMessage).at(-1);
 
 /** A leaf whose `type` arrives as a plain string, the shape a schema fixture reads most naturally. */
 export const leafMeta = (

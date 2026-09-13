@@ -35,6 +35,9 @@ export interface BackendLifecycleOptions {
   /** How long stop() waits after SIGTERM before escalating to SIGKILL. Defaults to 5s, matching
    *  .NET's Generic Host shutdown budget (HostOptions.ShutdownTimeout). */
   stopGracePeriodMs?: number;
+  /** Polled at `pollIntervalMs` while attaching/starting; defaults to a real GET `/health`
+   *  against `port`. Injectable so a test drives attach/restart timing without a real socket. */
+  checkHealth?: () => Promise<boolean>;
 }
 
 /** The backend process, as the HTTP adapter's own internals (ADR-0002). The only module that
@@ -49,6 +52,7 @@ export class BackendLifecycle {
   private readonly spawnFn?: SpawnFn;
   private readonly executablePath?: string;
   private readonly serilogLevelArgs?: () => string[];
+  private readonly checkHealthFn: () => Promise<boolean>;
 
   private _status: BackendStatus = 'starting';
   private readonly listeners = new Set<(status: BackendStatus) => void>();
@@ -73,6 +77,7 @@ export class BackendLifecycle {
     this.spawnFn = opts.spawn;
     this.executablePath = opts.executablePath;
     this.serilogLevelArgs = opts.serilogLevelArgs;
+    this.checkHealthFn = opts.checkHealth ?? (() => this.checkHealthOverHttp());
   }
 
   get status(): BackendStatus { return this._status; }
@@ -93,7 +98,7 @@ export class BackendLifecycle {
   private async doStart(): Promise<void> {
     const gen = this.generation;
 
-    if (await this.checkHealth()) {
+    if (await this.checkHealthFn()) {
       if (gen !== this.generation) return; // stopped mid-check — don't attach
       this.restartAttempts = 0;
       this.setStatus('attached');
@@ -184,7 +189,7 @@ export class BackendLifecycle {
 
       const attempt = async () => {
         if (gen !== this.generation) { resolve(); return; } // cancelled by stop()
-        const healthy = await this.checkHealth();
+        const healthy = await this.checkHealthFn();
         if (gen !== this.generation) { resolve(); return; }
         if (healthy) {
           this.setStatus('attached');
@@ -206,7 +211,7 @@ export class BackendLifecycle {
     });
   }
 
-  private checkHealth(): Promise<boolean> {
+  private checkHealthOverHttp(): Promise<boolean> {
     return new Promise((resolve) => {
       const req = http.get(`http://localhost:${this.port}/health`, (res) => {
         resolve(res.statusCode === 200);
