@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // `showError` must go through the injected reporter (ADR-0019) — the log line and the toast
 // come from the same call, not a raw `vscode.window.showErrorMessage`.
-const { showErrorMessage, showWarningMessage, subscribeExternalChangePending } = vi.hoisted(() => ({
+const { showErrorMessage, showWarningMessage, subscribeQuestionOpen } = vi.hoisted(() => ({
   showErrorMessage: vi.fn(),
   showWarningMessage: vi.fn(),
-  subscribeExternalChangePending: vi.fn(
+  subscribeQuestionOpen: vi.fn(
     (_deps: { showError: (message: string) => void; showDialog: unknown }, _client: unknown) => () => {}),
 }));
 
@@ -17,10 +17,10 @@ vi.mock('vscode', () => ({
 }));
 
 vi.mock('../../medit/externalChangeCoordinator', () => ({
-  subscribeExternalChangePending,
+  subscribeQuestionOpen,
 }));
 
-import { wireExternalChangePending } from '../externalChangeWiring';
+import { wireQuestionOpen } from '../externalChangeWiring';
 import { PluginTreeProvider } from '../PluginTreeProvider';
 import { InMemoryMEditClient } from '../../medit/client';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
@@ -30,11 +30,11 @@ function wire(askQuestion = scriptedDialog()) {
   const outputChannel = new FakeLogOutputChannel();
   const client = new InMemoryMEditClient();
   const treeProvider = new PluginTreeProvider(client);
-  wireExternalChangePending(client, outputChannel, treeProvider, vi.fn(), askQuestion);
-  return { outputChannel, deps: subscribeExternalChangePending.mock.calls[0]![0] };
+  wireQuestionOpen(client, outputChannel, treeProvider, vi.fn(), askQuestion);
+  return { outputChannel, deps: subscribeQuestionOpen.mock.calls[0]![0] };
 }
 
-describe('wireExternalChangePending', () => {
+describe('wireQuestionOpen', () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
   it('hands the coordinator the dialog it was given, never one of its own', () => {

@@ -540,6 +540,16 @@ public sealed partial class SourceRepository
         return values.FirstOrDefault(value => !value.Contains('=', StringComparison.Ordinal));
     }
 
+    /// <summary>Whether <paramref name="observedBytes"/> is the exact binary Modbench's own last
+    /// compile parked for <paramref name="plugin"/>. A missing parked ref is never a match.</summary>
+    public static bool MatchesParkedCompileBinary(string modFolder, string plugin, byte[] observedBytes)
+    {
+        var observedSha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(observedBytes));
+        var parkedSha256 = ParkedCompileBinarySha256(modFolder, plugin);
+        return parkedSha256 != null
+            && string.Equals(observedSha256, parkedSha256, StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>The trailers off main's tip — explicitly refs/heads/main, never HEAD, since the edit
     /// branch is what is checked out (ADR-0007). Per-plugin for the binary hash; folder-wide otherwise.
     /// Null when untracked.</summary>

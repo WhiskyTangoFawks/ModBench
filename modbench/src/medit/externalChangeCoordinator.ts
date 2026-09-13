@@ -22,11 +22,11 @@ export interface ExternalChangeCoordinatorDeps {
 // Decides *when* to raise the dialog (ADR-0014 invariant 2: the plugin watcher's own signal,
 // no poll); the dialog and the gestures it dispatches to are the Plugins view's
 // (plugins/externalChangeGestures.ts). Returns the unsubscribe function.
-export function subscribeExternalChangePending(
+export function subscribeQuestionOpen(
   deps: ExternalChangeCoordinatorDeps, notificationSubscriber: Pick<MEditClient, 'subscribe'>,
 ): () => void {
   const log = deps.log ?? (() => {});
-  return notificationSubscriber.subscribe('external-change-pending', (event) => {
+  return notificationSubscriber.subscribe('question-open', (event) => {
     // `keys` carries the changed plugin names — the generic field every notification kind
     // already has, repurposed rather than a second copy of the same list.
     const change: UnansweredExternalChange = {

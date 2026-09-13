@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>Load-order status, track progress and external-change pending: the three status polls
+/// <summary>Load-order status, track progress and a question open: the three status polls
 /// the extension retired, proven end to end on the same SSE stream
 /// <see cref="NotificationStreamApiTests"/> exercises for rows-changed.</summary>
 [Collection(WebHostCollection.Name)]
@@ -84,7 +84,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
     private static async Task AssertNoExternalChangeAsync(StreamReader reader, TimeSpan window)
     {
         await Assert.ThrowsAsync<OperationCanceledException>(
-            () => ReadEventsUntilAsync(reader, "external-change-pending", _ => true, window));
+            () => ReadEventsUntilAsync(reader, "question-open", _ => true, window));
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
     }
 
     [Fact]
-    public async Task AnExternalWriteToATrackedBinary_PublishesExternalChangePending()
+    public async Task AnExternalWriteToATrackedBinary_PublishesQuestionOpen()
     {
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -142,7 +142,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         changed.Npcs.AddNew("ExternallyAddedNpc");
         changed.WriteToBinary(pluginPath);
 
-        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        var events = await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
 
         var pending = Assert.Single(events);
         Assert.Contains(Plugin, pending.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
@@ -197,7 +197,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         var changedPlugin = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
         changedPlugin.Npcs.AddNew("ExternallyAddedNpc");
         changedPlugin.WriteToBinary(pluginPath);
-        var pending = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        var pending = await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
 
         var one = Assert.Single(pending);
         Assert.Contains(Plugin, one.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
@@ -207,7 +207,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
     // ── The mod-level classifier: git's view of tracked files, meta.ini the tell. ──
 
     [Fact]
-    public async Task AChangedAssetUnderEverything_PublishesExternalChangePending_NamingThePath()
+    public async Task AChangedAssetUnderEverything_PublishesQuestionOpen_NamingThePath()
     {
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
@@ -221,7 +221,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
 
         File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "changed-by-the-release");
 
-        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        var events = await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
 
         var pending = Assert.Single(events);
         Assert.Empty(pending.GetProperty("keys").EnumerateArray());
@@ -284,7 +284,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         changed.Npcs.AddNew("ExternallyAddedNpc");
         changed.WriteToBinary(pluginPath);
 
-        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        var events = await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
 
         var pending = Assert.Single(events);
         Assert.True(pending.GetProperty("externalChangeMetaChanged").GetBoolean());
@@ -313,7 +313,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         changed.Npcs.AddNew("ExternallyAddedNpc");
         changed.WriteToBinary(pluginPath);
 
-        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        var events = await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
         Assert.Single(events);
 
         // No second notification trails the first once the burst finishes settling.
@@ -343,7 +343,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
 
         (await PutLoadOrder(fx, client2)).EnsureSuccessStatusCode();
 
-        var events = await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+        var events = await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
         var pending = Assert.Single(events);
         Assert.Contains("texture.dds",
             pending.GetProperty("externalChangeTrackedFiles").EnumerateArray().Select(k => k.GetString()));
@@ -364,7 +364,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         changed.WriteToBinary(pluginPath);
         using (var reader = await OpenStreamAsync())
         {
-            await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+            await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
         }
 
         (await _client.PostAsJsonAsync("/plugins/external-change/absorb", new { origin = Origin }))
@@ -397,7 +397,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         changed.WriteToBinary(pluginPath);
         using (var reader = await OpenStreamAsync())
         {
-            await ReadEventsUntilAsync(reader, "external-change-pending", _ => true, TimeSpan.FromSeconds(10));
+            await ReadEventsUntilAsync(reader, "question-open", _ => true, TimeSpan.FromSeconds(10));
         }
 
         (await _client.PostAsJsonAsync("/plugins/external-change/keep", new { origin = Origin }))

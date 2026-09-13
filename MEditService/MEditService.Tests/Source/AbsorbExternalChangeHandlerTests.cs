@@ -67,13 +67,13 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
     [Fact]
     public void Absorb_ClearsTheModsUnansweredDeferral()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, "unanswered");
+        SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
 
         _mod.AbsorbHandler.Absorb(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
 
-        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+        Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
     // Absorb shares Track's own serializer rather than a per-record tree writer, because the pristine

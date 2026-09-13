@@ -3,6 +3,7 @@ using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -11,41 +12,29 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Bridge;
 
-/// <summary>ADR-0014: one recursive watcher per mod folder, tracked or not — classification,
-/// the indexed-binary route and per-mod batching, each asserted by what the watcher then asked of
-/// the Index.</summary>
+/// <summary>ADR-0014: one recursive watcher per mod folder, tracked or not — the indexed-binary
+/// route and per-mod batching, each asserted by what the watcher then asked of the Index.</summary>
 public sealed class ModFolderWatcherTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-modwatch-").FullName;
 
-    private static string Track(string modFolder, string plugin, byte[] parkedBinary)
-    {
-        TrackTree(modFolder, plugin);
-
-        var pluginPath = Path.Combine(modFolder, plugin);
-        File.WriteAllBytes(pluginPath, parkedBinary);
-        var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(parkedBinary));
-        SourceRepository.ParkCompileSnapshot(modFolder, plugin, atRef: null, binarySha256);
-        return pluginPath;
-    }
-
-    // A repository with a source root per plugin: the routing under test only reaches the Index for
-    // a mod git still calls its own.
+    // A repository with a source root per plugin, each parked at its real hash if a binary exists
+    // on disk, so Commands' own classify finds self-echo rather than a spurious external change.
     private static void TrackTree(string modFolder, params string[] plugins)
     {
         var files = plugins
             .Select(p => new TreeFile($"source/{p}/npc_/{p}/000001.json", "{}"u8.ToArray()))
             .ToArray();
         var trailers = new TrackProvenance(
-            null, null, plugins.ToDictionary(p => p, _ => "unused-at-track-time", StringComparer.Ordinal));
+            null, null, plugins.ToDictionary(p => p, p => RealOrPlaceholderHash(modFolder, p), StringComparer.Ordinal));
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
     }
 
-    // The classifier and the deferral marker are the subject here, so the Index is a recorder
-    // nothing is expected to reach.
-    private static ModFolderWatcher Classifying(TimeSpan quiet) =>
-        TestWatcher.Over(
-            new LoadOrderHolder(), new RecordingRefreshIndex(), new InMemoryNotificationPublisher(), quiet);
+    private static string RealOrPlaceholderHash(string modFolder, string plugin)
+    {
+        var path = Path.Combine(modFolder, plugin);
+        return File.Exists(path) ? PluginBinaryHash.TrailerFormOfFile(path) : "unused-at-track-time";
+    }
 
     private static ModFolderWatcher Projecting(
         RecordingRefreshIndex index, TimeSpan quiet, TimeSpan? maxWindow = null) =>
@@ -59,245 +48,6 @@ public sealed class ModFolderWatcherTests
         {
             if (condition()) return;
             Thread.Sleep(20);
-        }
-    }
-
-    // ---- classification: retired from ExternalChangeWatcherTests ----
-
-    [Fact]
-    public void Watch_QueuesAnUnansweredExternalChange_WhenTheWatchedBinaryChanges()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-
-            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-
-            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
-
-            var unanswered = Assert.Single(watcher.Unanswered());
-            Assert.Equal(modFolder, unanswered.ModFolder);
-            Assert.Equal(["Test.esp"], unanswered.Classification.Plugins);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Watch_SetsTheExternalChangeDeferralMarker_AssoonAsAQuestionIsQueued()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-            Assert.Null(ExternalChangeDeferral.Unanswered(modFolder));
-
-            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
-
-            var question = ExternalChangeDeferral.Unanswered(modFolder);
-            Assert.NotNull(question);
-            Assert.Contains("Test.esp", question, StringComparison.Ordinal);
-            // The dialog's own two current actions.
-            Assert.Contains("Commit to main as new baseline", question, StringComparison.Ordinal);
-            Assert.Contains("Apply to working tree on edit", question, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    // Absorb and Keep clear the marker in Core, where the watcher cannot be reached: the queue reads
-    // the marker as its authority rather than holding a third copy that disagrees.
-    [Fact]
-    public void Unanswered_DropsAQuestion_OnceItsMarkerIsClearedElsewhere()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
-
-            ExternalChangeDeferral.Clear(modFolder);
-
-            Assert.Empty(watcher.Unanswered());
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    // A later settle superseding the change: the bytes are back to what the parked snapshot names,
-    // so the classifier finds nothing and the marker goes with the question.
-    [Fact]
-    public void Settle_DropsTheMarkerAndTheQuestion_WhenTheBytesAreRestored()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var original = "original"u8.ToArray();
-            var pluginPath = Track(modFolder, "Test.esp", original);
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
-            Assert.NotNull(ExternalChangeDeferral.Unanswered(modFolder));
-
-            File.WriteAllBytes(pluginPath, original);
-            WaitUntil(() => ExternalChangeDeferral.Unanswered(modFolder) == null, TimeSpan.FromSeconds(3));
-
-            Assert.Null(ExternalChangeDeferral.Unanswered(modFolder));
-            Assert.Empty(watcher.Unanswered());
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    // A settle that could not read the plugin has no verdict to clear on; the next one that can does.
-    [Fact]
-    public void Settle_KeepsTheMarker_WhileThePluginCannotBeRead_AndClearsOnceItCan()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var original = "original"u8.ToArray();
-            var pluginPath = Track(modFolder, "Test.esp", original);
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
-
-            using (var held = new FileStream(pluginPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            {
-                held.SetLength(0);
-                held.Write(original);
-                held.Flush(flushToDisk: true);
-                Thread.Sleep(500);
-                Assert.NotNull(ExternalChangeDeferral.Unanswered(modFolder));
-            }
-
-            File.WriteAllBytes(pluginPath, original);
-            WaitUntil(() => ExternalChangeDeferral.Unanswered(modFolder) == null, TimeSpan.FromSeconds(3));
-
-            Assert.Null(ExternalChangeDeferral.Unanswered(modFolder));
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    // A candidate touch alone (an asset, not a plugin) settles with every plugin hashed, so a mod
-    // whose plugin still differs keeps its question rather than losing it to a partial verdict.
-    [Fact]
-    public void Settle_OverAnUnrelatedFile_KeepsTheQuestion_WhileThePluginStillDiffers()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-            WaitUntil(() => watcher.Unanswered().Count > 0, TimeSpan.FromSeconds(3));
-
-            File.WriteAllText(Path.Combine(modFolder, "readme.txt"), "an asset, not the plugin");
-            Thread.Sleep(400);
-
-            Assert.NotNull(ExternalChangeDeferral.Unanswered(modFolder));
-            Assert.Single(watcher.Unanswered());
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Watch_DoesNotQueueAnythingBeforeTheQuietWindowElapses()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(300));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-
-            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
-            Thread.Sleep(30); // well inside the 300ms quiet window
-
-            Assert.Empty(watcher.Unanswered());
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Watch_DoesNotQueueASelfEcho()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var binary = "original"u8.ToArray();
-            var pluginPath = Track(modFolder, "Test.esp", binary);
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-
-            // Re-writing the exact bytes the parked ref already names — Save & Compile's own write,
-            // not an external change.
-            File.WriteAllBytes(pluginPath, binary);
-            Thread.Sleep(400);
-
-            Assert.Empty(watcher.Unanswered());
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
-
-    [Fact]
-    public void Watch_DoesNotQueueTheBinary_ARealCompileJustWrote()
-    {
-        var mod = IndexedModFixture.Tracked();
-        try
-        {
-            var pluginPath = Path.Combine(mod.ModFolder, IndexedModFixture.PluginName);
-            using var watcher = Classifying(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(mod.ModFolder, IndexedModFixture.PluginName, pluginPath);
-
-            var editService = ProjectingEditService.Over(mod.Index, mod.Holder);
-            editService.Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", JsonDocument.Parse("0.75").RootElement);
-            var compileService = CompileServices.Over(mod.Holder.Current);
-            var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
-            Assert.True(result.Succeeded, result.RefusalReason);
-
-            // Bounded, foreground wait past the quiet window — long enough that a real suppression
-            // failure would show up as a queued item by the time this reads, short enough to stay a
-            // fast test.
-            Thread.Sleep(500);
-
-            Assert.Empty(watcher.Unanswered());
-        }
-        finally
-        {
-            mod.Dispose();
         }
     }
 
@@ -661,7 +411,7 @@ public sealed class ModFolderWatcherTests
             Thread.Sleep(400);
 
             Assert.Empty(index.Projections);
-            Assert.Empty(watcher.Unanswered());
+            Assert.Null(SourceRepository.UnansweredExternalChange(modFolder));
         }
         finally
         {

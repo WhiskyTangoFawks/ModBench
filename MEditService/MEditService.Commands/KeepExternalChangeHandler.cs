@@ -74,7 +74,7 @@ public sealed class KeepExternalChangeHandler
         // Index matches the working tree for every changed tracked file, so the same bytes cannot
         // re-raise the question next load.
         SourceRepository.StageTrackedFileChanges(modFolder, trackedFileChanges);
-        ExternalChangeDeferral.Clear(modFolder);
+        SourceRepository.ClearExternalChangeQuestion(modFolder);
 
         return ExternalChangeLandResult.Success(landed);
     }

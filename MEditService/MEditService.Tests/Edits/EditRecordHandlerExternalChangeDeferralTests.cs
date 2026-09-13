@@ -70,7 +70,7 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+        Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
     // A plugin caught mid-write gives no verdict: the marker stands and the edit stays refused, since
@@ -88,14 +88,14 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
-        Assert.NotNull(ExternalChangeDeferral.Unanswered(_mod.ModFolder));
+        Assert.NotNull(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
     [Fact]
     public void EditField_SucceedsAgain_OnceTheDeferralIsCleared()
     {
         _mod.RaiseExternalChange();
-        ExternalChangeDeferral.Clear(_mod.ModFolder);
+        SourceRepository.ClearExternalChangeQuestion(_mod.ModFolder);
 
         var result = Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
