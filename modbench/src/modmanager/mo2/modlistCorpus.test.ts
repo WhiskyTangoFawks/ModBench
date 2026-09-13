@@ -122,7 +122,6 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     const last = entries.at(-1);
     if (last?.kind !== 'separator') throw new Error('expected the last entry to be a separator');
     const lastSeparator: Separator = last;
-    expect(lastSeparator.kind).toBe('separator');
     expect(lastSeparator.name).toBe('Unassigned (Modlist Development)');
     // Its three (preceding) children moved with it, immediately above it, in order.
     expect(entries.slice(-4).map((e) => e.name)).toEqual([

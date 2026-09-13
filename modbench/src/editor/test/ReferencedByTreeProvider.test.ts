@@ -208,7 +208,7 @@ describe('referencedByCopyText — the clipboard copy command\'s text', () => {
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
     const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
-    const [field] = await provider.getChildren(group) as ReferencedByFieldNode[];
+    const [field] = expectInstancesOf(await provider.getChildren(group), ReferencedByFieldNode);
     expect(referencedByCopyText([group!, field!])).toBe('NPC_ / TestNPC');
   });
 
@@ -217,7 +217,7 @@ describe('referencedByCopyText — the clipboard copy command\'s text', () => {
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
     const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
-    const [field] = await provider.getChildren(group) as ReferencedByFieldNode[];
+    const [field] = expectInstancesOf(await provider.getChildren(group), ReferencedByFieldNode);
     expect(referencedByCopyText([field!])).toBe('');
   });
 });

@@ -1,9 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 import { BackendLifecycle } from '../backendLifecycle';
 import type { BackendStatus } from '../MEditClient';
+
+// `Server.address()` types as `string | AddressInfo | null` for the pipe/unbound cases neither
+// test below hits, since both bind to 127.0.0.1 on an OS-assigned port.
+function addressInfo(address: ReturnType<Server['address']>): AddressInfo {
+  if (address === null || typeof address === 'string') {
+    throw new Error(`expected an AddressInfo, got ${String(address)}`);
+  }
+  return address;
+}
 
 function record(lifecycle: BackendLifecycle): BackendStatus[] {
   const statuses: BackendStatus[] = [];
@@ -372,5 +383,46 @@ describe('BackendLifecycle crash-restart / stop', () => {
     await stopped;
 
     expect(statuses).toEqual(['stopped']);
+  });
+});
+
+// Every other suite in this file injects `checkHealth`, so the real default adapter —
+// `checkHealthOverHttp`'s GET `/health` — needs its own coverage, over a real local server.
+describe('BackendLifecycle (no checkHealth injected — the real GET /health adapter)', () => {
+  let server: Server | undefined;
+
+  afterEach(async () => {
+    if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
+    server = undefined;
+  });
+
+  it('attaches when a real GET /health answers 200', async () => {
+    server = createServer((_req, res) => { res.writeHead(200); res.end(); });
+    const port = await new Promise<number>((resolve) => {
+      server!.listen(0, '127.0.0.1', () => resolve(addressInfo(server!.address()).port));
+    });
+
+    const lifecycle = new BackendLifecycle({ port });
+    await lifecycle.start();
+
+    expect(lifecycle.status).toBe('attached');
+  });
+
+  // The rival: inverting the status check (`!== 200`) would report attached for a refused
+  // connection and disconnected for a real 200 — this and the test above catch either flip.
+  it('reports disconnected when the connection is refused', async () => {
+    // Listens just long enough to claim a free port, then closes it — nothing answers next.
+    const port = await new Promise<number>((resolve) => {
+      const probe = createServer();
+      probe.listen(0, '127.0.0.1', () => {
+        const claimed = addressInfo(probe.address()).port;
+        probe.close(() => resolve(claimed));
+      });
+    });
+
+    const lifecycle = new BackendLifecycle({ port, pollIntervalMs: 5, pollTimeoutMs: 30 });
+    await lifecycle.start();
+
+    expect(lifecycle.status).toBe('disconnected');
   });
 });

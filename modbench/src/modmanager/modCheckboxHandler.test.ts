@@ -5,7 +5,7 @@ const { showErrorMessage, showWarningMessage } = vi.hoisted(() => ({
   showWarningMessage: vi.fn(),
 }));
 
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon } from '../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, fakeUri } from '../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   window: { showErrorMessage, showWarningMessage },
@@ -14,8 +14,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { onModCheckboxChanged } from './modCheckboxHandler';
-import { ModNode } from './ModListProvider';
-import { ErrorNode } from '../errorNode';
+import { ModNode, OverwriteNode } from './ModListProvider';
 import { FakeLogOutputChannel } from '../test/fakeOutputChannel';
 
 beforeEach(() => { showErrorMessage.mockClear(); showWarningMessage.mockClear(); });
@@ -56,7 +55,7 @@ describe('onModCheckboxChanged', () => {
   it('ignores a non-mod row (the pinned Overwrite row sharing the tree)', async () => {
     const setModEnabled = vi.fn();
     const modListProvider = { setModEnabled, invalidate: vi.fn() };
-    const overwriteNode = new ErrorNode('not a mod row');
+    const overwriteNode = new OverwriteNode(fakeUri('/instance/Overwrite'), 1);
 
     await onModCheckboxChanged({ items: [[overwriteNode, 1]] }, modListProvider, new FakeLogOutputChannel());
 

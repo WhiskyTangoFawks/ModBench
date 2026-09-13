@@ -11,7 +11,7 @@ import { failurePrefixIcon } from '../failurePrefixIcon';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../errorNode';
 
-export const DND_MIME = 'application/vnd.medit.pluginlist-node';
+const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
 // only writer of it. Exported so a test narrows the same payload the same way, instead of a

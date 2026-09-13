@@ -40,7 +40,7 @@ export default tseslint.config(
     },
 
     // A narrowing cast is the fastest way past a type error, and the easiest habit to copy —
-    // in a test as much as in production. Off only in the record-document allowlist below.
+    // in a test as much as in production. Off only in the two allowlists below.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
         rules: {
