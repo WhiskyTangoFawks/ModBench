@@ -46,7 +46,7 @@ vi.mock('vscode', () => ({
       return { dispose: () => h.state.commands.delete(id) };
     },
     executeCommand: (command: string, ...args: unknown[]) => {
-      if (command === 'setContext') h.state.contextKeys.set(args[0] as string, args[1]);
+      if (command === 'setContext' && typeof args[0] === 'string') h.state.contextKeys.set(args[0], args[1]);
       return Promise.resolve();
     },
   },
