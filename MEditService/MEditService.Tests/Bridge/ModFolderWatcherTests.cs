@@ -18,10 +18,8 @@ public sealed class ModFolderWatcherTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-modwatch-").FullName;
 
-    // A repository with a source root per plugin: the routing under test only reaches the Index for
-    // a mod git still calls its own.
-    // A plugin with a real binary on disk is parked at its real hash, so Commands' own classify
-    // finds self-echo rather than a spurious external change on the next settle.
+    // A repository with a source root per plugin, each parked at its real hash if a binary exists
+    // on disk, so Commands' own classify finds self-echo rather than a spurious external change.
     private static void TrackTree(string modFolder, params string[] plugins)
     {
         var files = plugins
