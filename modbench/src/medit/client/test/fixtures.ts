@@ -1,4 +1,4 @@
-import type { PluginMetadata, RecordSummary, ReferenceResult } from '../index';
+import type { CompileResult, PluginMetadata, RecordSummary, ReferenceResult } from '../index';
 
 /** A `PluginMetadata` with every required wire member at its neutral value — a test naming only
  *  the fields it cares about needs no cast to reach the wire type. */
@@ -49,6 +49,20 @@ export function recordSummaryFixture(overrides: Partial<RecordSummary> = {}): Re
     workingTreeState: 'None',
     hasContainerChildren: false,
     hasParseFailure: false,
+    ...overrides,
+  };
+}
+
+/** A `CompileResult` with every required wire member at its neutral (successful, no-diagnostic)
+ *  value. */
+export function compileResultFixture(overrides: Partial<CompileResult> = {}): CompileResult {
+  return {
+    succeeded: true,
+    refusalReason: null,
+    diagnostics: [],
+    masters: [],
+    eslContradiction: false,
+    refusal: 'None',
     ...overrides,
   };
 }
