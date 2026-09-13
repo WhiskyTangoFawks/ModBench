@@ -1,8 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as http from 'node:http';
-import { EventEmitter } from 'node:events';
-
-vi.mock('node:http');
 
 import { HttpMEditClient } from '../HttpMEditClient';
 
@@ -10,20 +6,20 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 }
 
-// A fetch double that never answers — the health check below (mocked `http.get`) is what
-// actually drives lifecycle in these tests; nothing here calls the API client.
+// A fetch double that never answers — the health check below (backendLifecycle.ts's own
+// injectable) is what actually drives lifecycle in these tests; nothing here calls the API client.
 function neverFetch(): (input: Request) => Promise<Response> {
   return () => new Promise<Response>(() => {});
 }
 
 function makeClient(fetch: (input: Request) => Promise<Response>, health: 'up' | 'down' = 'up', timeoutMs?: number) {
-  vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
-    const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
-    if (health === 'up') cb(Object.assign(new EventEmitter(), { statusCode: 200 }));
-    else process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
-    return req as any;
+  return new HttpMEditClient({
+    backend: {
+      port: 5172, pollIntervalMs: 5, pollTimeoutMs: 20,
+      checkHealth: () => Promise.resolve(health === 'up'),
+    },
+    fetch, timeoutMs,
   });
-  return new HttpMEditClient({ backend: { port: 5172, pollIntervalMs: 5, pollTimeoutMs: 20 }, fetch, timeoutMs });
 }
 
 // A stream response that stays open (a reader on it never settles) — for the notification
