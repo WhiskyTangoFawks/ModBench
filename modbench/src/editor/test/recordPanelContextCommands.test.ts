@@ -10,16 +10,19 @@ vi.mock('vscode', () => ({
   commands: { registerCommand: (...args: [string, (ctx?: unknown) => void]) => registerCommand(...args) },
 }));
 
+import type { ExtendedFieldEditorDeps, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
+
 // Stubbed so the command's own wiring is what this file observes: which tab the gesture asks for,
 // and what its save writes. The tab's fs/chmod mechanics are extendedFieldEditor.test.ts's.
-const openExtendedFieldEditor = vi.fn();
+const openExtendedFieldEditor =
+  vi.fn<(params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps) => Promise<void>>();
 vi.mock('../extendedFieldEditor', () => ({
-  openExtendedFieldEditor: (...args: unknown[]) => openExtendedFieldEditor(...args),
+  openExtendedFieldEditor: (...args: [OpenExtendedFieldEditorParams, ExtendedFieldEditorDeps]) =>
+    openExtendedFieldEditor(...args),
 }));
 
 import { registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../medit/messages';
-import type { ExtendedFieldEditorDeps, OpenExtendedFieldEditorParams } from '../extendedFieldEditor';
 import { InMemoryMEditClient } from '../../medit/client';
 
 beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); });
@@ -44,6 +47,15 @@ const IDENTITY = { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 
 
 function editRecordCalls(client: InMemoryMEditClient) {
   return client.calls.filter(c => c.method === 'editRecord');
+}
+
+// A recorded call carries only `unknown[]` — the envelope's own `value` is `unknown` on the wire
+// too (messages.ts), so a test reading one back narrows through this either way.
+function envelopeValue(args: unknown[]): string {
+  const envelope = args[3];
+  const value = typeof envelope === 'object' && envelope !== null ? Reflect.get(envelope, 'value') : undefined;
+  if (typeof value !== 'string') throw new Error('expected an editRecord envelope carrying a string value');
+  return value;
 }
 
 function parentContext(path: ArrayParentContext['path']): ArrayParentContext {
@@ -167,8 +179,7 @@ describe('right-click array ops write one envelope from the host', () => {
 // context it is handed rather than asking the panel for anything.
 describe('the extended editor opens and saves from the host', () => {
   function openedWith(): { params: OpenExtendedFieldEditorParams; deps: ExtendedFieldEditorDeps } {
-    const [params, editorDeps] = openExtendedFieldEditor.mock.calls.at(-1) as
-      [OpenExtendedFieldEditorParams, ExtendedFieldEditorDeps];
+    const [params, editorDeps] = openExtendedFieldEditor.mock.calls.at(-1)!;
     return { params, deps: editorDeps };
   }
 
@@ -220,6 +231,6 @@ describe('the extended editor opens and saves from the host', () => {
     await openedWith().deps.onCommit('first save');
     await openedWith().deps.onCommit('second save');
 
-    expect(editRecordCalls(meditClient).map(c => (c.args[3] as { value: string }).value)).toEqual(['first save', 'second save']);
+    expect(editRecordCalls(meditClient).map(c => envelopeValue(c.args))).toEqual(['first save', 'second save']);
   });
 });
