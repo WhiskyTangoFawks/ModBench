@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type * as vscode from 'vscode';
 import { FilterCodeLensProvider } from '../FilterCodeLensProvider';
+import { fakeUri } from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   CodeLens: class {
@@ -18,13 +20,24 @@ vi.mock('vscode', () => ({
   },
 }));
 
-function makeDocument(text: string, fsPath: string) {
+// Every member `vscode.TextDocument` declares — `provideCodeLenses` reads only `.uri` and
+// `.getText()`, but it implements `vscode.CodeLensProvider`, so the double has to satisfy the
+// real (large) interface, not a narrowed one.
+function makeDocument(text: string, fsPath: string): vscode.TextDocument {
+  const uri = fakeUri(fsPath);
+  const notImplemented = (): never => { throw new Error('not implemented in this fixture'); };
   return {
+    uri, fileName: fsPath, isUntitled: false, languageId: 'sql', encoding: 'utf8',
+    version: 1, isDirty: false, isClosed: false, eol: 1, lineCount: 1,
+    save: () => Promise.resolve(true),
+    lineAt: notImplemented,
+    offsetAt: notImplemented,
+    positionAt: notImplemented,
     getText: () => text,
-    uri: { fsPath },
-    lineAt: () => ({ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } } }),
-    lineCount: 1,
-  } as any;
+    getWordRangeAtPosition: notImplemented,
+    validateRange: notImplemented,
+    validatePosition: notImplemented,
+  };
 }
 
 describe('FilterCodeLensProvider', () => {
@@ -50,7 +63,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect((lenses[0] as any).command.command).toBe('modbench.setFilterFromDocument');
+      expect(lenses[0]!.command!.command).toBe('modbench.setFilterFromDocument');
     });
 
     it('returns Clear lens when the document sql matches the active filter', () => {
@@ -64,7 +77,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect((lenses[0] as any).command.command).toBe('modbench.clearFilter');
+      expect(lenses[0]!.command!.command).toBe('modbench.clearFilter');
     });
 
     it('returns Apply lens when document sql differs from active filter', () => {
@@ -78,7 +91,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect((lenses[0] as any).command.command).toBe('modbench.setFilterFromDocument');
+      expect(lenses[0]!.command!.command).toBe('modbench.setFilterFromDocument');
     });
 
     it('ignores leading/trailing whitespace when comparing sql', () => {
@@ -91,7 +104,7 @@ describe('FilterCodeLensProvider', () => {
 
       const lenses = provider.provideCodeLenses(doc);
 
-      expect((lenses[0] as any).command.command).toBe('modbench.clearFilter');
+      expect(lenses[0]!.command!.command).toBe('modbench.clearFilter');
     });
   });
 
@@ -107,7 +120,7 @@ describe('FilterCodeLensProvider', () => {
 
       const lenses = provider.provideCodeLenses(doc);
 
-      expect((lenses[0] as any).command.command).toBe('modbench.setFilterFromDocument');
+      expect(lenses[0]!.command!.command).toBe('modbench.setFilterFromDocument');
     });
   });
 });
