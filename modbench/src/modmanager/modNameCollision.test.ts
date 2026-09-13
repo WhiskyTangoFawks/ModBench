@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { collidingModName } from './modNameCollision';
 import type { Instance, InstanceValue } from './instance';
+import { instanceValueFixture } from './test/instanceValueFixture';
 
 const instanceWith = (mods: InstanceValue['mods']): Pick<Instance, 'value'> => ({
-  value: { mods } as unknown as InstanceValue,
+  value: instanceValueFixture({ mods }),
 });
 
 const mod = (name: string): InstanceValue['mods'][number] => ({ kind: 'mod', name, enabled: true });
