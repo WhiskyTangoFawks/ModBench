@@ -7,6 +7,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
+import { fakeUri } from '../test/vscodeMock';
 
 describe('OverwriteDecorationProvider', () => {
   const instanceRoot = '/instance';
@@ -14,7 +15,7 @@ describe('OverwriteDecorationProvider', () => {
 
   it('tints the overwrite folder URI reddish (gitDecoration.deletedResourceForeground)', () => {
     const provider = new OverwriteDecorationProvider(instanceRoot);
-    const decoration = provider.provideFileDecoration({ fsPath: overwriteDir } as never);
+    const decoration = provider.provideFileDecoration(fakeUri(overwriteDir));
 
     expect(decoration).toBeDefined();
     expect(decoration!.color).toEqual({ id: 'gitDecoration.deletedResourceForeground' });
@@ -25,6 +26,6 @@ describe('OverwriteDecorationProvider', () => {
   it('returns undefined for any other URI so mod rows are unaffected', () => {
     const provider = new OverwriteDecorationProvider(instanceRoot);
     const otherPath = join(instanceRoot, 'mods', 'SomeMod');
-    expect(provider.provideFileDecoration({ fsPath: otherPath } as never)).toBeUndefined();
+    expect(provider.provideFileDecoration(fakeUri(otherPath))).toBeUndefined();
   });
 });
