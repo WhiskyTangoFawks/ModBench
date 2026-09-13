@@ -45,7 +45,7 @@ public static class TrackedModSettled
         LoadOrderSnapshot loadOrder, string modFolder,
         ExternalChangeClassification.ExternalChange change, INotificationPublisher notifications)
     {
-        var modName = OriginOf(loadOrder, modFolder);
+        var modName = SourceRepository.ModNameOf(modFolder);
         var named = change.Plugins.Concat(change.TrackedFiles).ToList();
         var changed = named.Count > 0 ? string.Join(", ", named) : modName;
         SourceRepository.RaiseExternalChangeQuestion(modFolder,
@@ -54,7 +54,8 @@ public static class TrackedModSettled
             "asked again on the next change or load.");
 
         notifications.Publish(new QuestionOpenNotification(
-            modName, change.Plugins, change.TrackedFiles, change.MetaChanged, change.OldVersion, change.NewVersion));
+            OriginOf(loadOrder, modFolder), change.Plugins, change.TrackedFiles,
+            change.MetaChanged, change.OldVersion, change.NewVersion));
     }
 
     // A change's own Plugins list can be empty (a tracked-file-only change), so origin resolves off

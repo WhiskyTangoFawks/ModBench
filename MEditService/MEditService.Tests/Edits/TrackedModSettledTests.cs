@@ -1,4 +1,5 @@
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
@@ -86,6 +87,24 @@ public sealed class TrackedModSettledTests : IDisposable
         Assert.Equal(TrackedModSettledOutcome.CrashRecovery, outcome);
         Assert.Equal("a question already open before the crash", SourceRepository.UnansweredExternalChange(_mod.ModFolder));
         Assert.Empty(_notifications.Notifications);
+    }
+
+    // The rival this pins: naming the mod from the load-order copy that raised the question,
+    // which reads as "(in )" the moment a tracked-file-only change has no copy left to name it.
+    [Fact]
+    public void Handle_NamesTheModByItsFolder_ForATrackedFileOnlyChange_WithNoLoadOrderCopy()
+    {
+        using var mod = IndexedModFixture.TrackedEverything(
+            folder => File.WriteAllText(Path.Combine(folder, "texture.dds"), "original"));
+        File.WriteAllText(Path.Combine(mod.ModFolder, "texture.dds"), "changed-by-the-release");
+        var noCopies = new LoadOrderSnapshot(mod.GameDirectory, mod.InstanceRoot, GameRelease.Fallout4, []);
+
+        var outcome = TrackedModSettled.Handle(noCopies, mod.ModFolder, _notifications);
+
+        Assert.Equal(TrackedModSettledOutcome.QuestionOpened, outcome);
+        var question = SourceRepository.UnansweredExternalChange(mod.ModFolder);
+        Assert.NotNull(question);
+        Assert.Contains($"in {IndexedModFixture.ModFolderOrigin}", question, StringComparison.Ordinal);
     }
 
     // The rival this pins: a second call site re-deriving its own verdict, which would let a

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-  subscribeExternalChangePending,
+  subscribeQuestionOpen,
   type ExternalChangeCoordinatorDeps,
 } from '../externalChangeCoordinator';
 import { BASELINE_BUTTON, APPLY_BUTTON } from '../../plugins/externalChangeDialog';
@@ -47,11 +47,11 @@ function flush(): Promise<void> {
   return new Promise((resolve) => { setTimeout(resolve, 0); });
 }
 
-describe('subscribeExternalChangePending', () => {
+describe('subscribeQuestionOpen', () => {
   it('does nothing until a notification arrives', () => {
     const client = clientScriptedForKeepAndAbsorb();
     const deps = makeDeps(client);
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     expect(deps.showDialog).not.toHaveBeenCalled();
   });
@@ -59,7 +59,7 @@ describe('subscribeExternalChangePending', () => {
   it('runs the dialog and dispatches Apply to working tree', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(APPLY_BUTTON) });
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
@@ -71,7 +71,7 @@ describe('subscribeExternalChangePending', () => {
   it('dispatches Absorb; a clean rebase is silent', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
@@ -91,7 +91,7 @@ describe('subscribeExternalChangePending', () => {
       rebase: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/x.json'] },
     });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
@@ -102,12 +102,12 @@ describe('subscribeExternalChangePending', () => {
   it('a deferred (Esc) answer calls neither absorb nor keep', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(undefined) });
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
 
-    // `subscribe` itself is the one call `subscribeExternalChangePending` makes up front;
+    // `subscribe` itself is the one call `subscribeQuestionOpen` makes up front;
     // a deferred answer dispatches neither Keep nor Absorb on top of it.
     expect(client.calls.filter((c) => c.method !== 'subscribe')).toEqual([]);
   });
@@ -116,7 +116,7 @@ describe('subscribeExternalChangePending', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('absorbUpstreamUpdate', undefined); // transport failure
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
@@ -128,7 +128,7 @@ describe('subscribeExternalChangePending', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('absorbUpstreamUpdate', { succeeded: false, refusalReason: 'Fixture.esp could not be parsed.' });
     const deps = makeDeps(client, { showDialog: vi.fn().mockResolvedValue(BASELINE_BUTTON) });
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
@@ -143,7 +143,7 @@ describe('subscribeExternalChangePending', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('keepAsMyEdit', Promise.reject(new Error('backend down')) as never);
     const deps = makeDeps(client, { log });
-    subscribeExternalChangePending(deps, client);
+    subscribeQuestionOpen(deps, client);
 
     client.emit(pendingEvent());
     await flush();
@@ -154,7 +154,7 @@ describe('subscribeExternalChangePending', () => {
   it('reports nothing further once unsubscribed', async () => {
     const client = clientScriptedForKeepAndAbsorb();
     const deps = makeDeps(client);
-    const unsubscribe = subscribeExternalChangePending(deps, client);
+    const unsubscribe = subscribeQuestionOpen(deps, client);
     unsubscribe();
 
     client.emit(pendingEvent());

@@ -98,16 +98,17 @@ public sealed class ModFolderWatcher : IDisposable
         }
 
         foreach (var (modFolder, entries) in byModFolder)
-            SettleAtLoad(modFolder, entries, offers);
+            SettleAtLoad(order, modFolder, entries, offers);
 
         return offers;
     }
 
     // "A tracked mod settled" (ADR-0015), fired once per mod at load. A crash-recovery verdict
     // becomes this mod's repair offers; any other verdict is Commands' own affair.
-    private void SettleAtLoad(string modFolder, List<(string Name, string Origin)> entries, List<CrashRepairOffer> offers)
+    private void SettleAtLoad(
+        LoadOrderSnapshot order, string modFolder, List<(string Name, string Origin)> entries, List<CrashRepairOffer> offers)
     {
-        switch (TrackedModSettled.Handle(_holder.Current, modFolder, _notifications))
+        switch (TrackedModSettled.Handle(order, modFolder, _notifications))
         {
             case TrackedModSettledOutcome.QuestionOpened:
                 if (_logger.IsEnabled(LogLevel.Information))
@@ -271,8 +272,8 @@ public sealed class ModFolderWatcher : IDisposable
     }
 
     // Called under _gate. A ref move, a document under a registered plugin's source root, a
-    // load-order plugin's own binary, or any other path, which makes the mod a candidate for the
-    // classifier when it settles.
+    // load-order plugin's own binary, or any other path — each makes the mod a candidate for the
+    // next settle to tell Commands about.
     private void Observe(ModEntry mod, string fullPath)
     {
         lock (_gate)
@@ -296,8 +297,8 @@ public sealed class ModFolderWatcher : IDisposable
             else
             {
                 // Neither source, refs nor a registered plugin's own binary: an external-change
-                // candidate. The classifier re-checks git's status at settle rather than trusting
-                // this path, so which file it was does not matter here.
+                // candidate. Commands re-checks git's status at settle rather than trusting this
+                // path, so which file it was does not matter here.
                 mod.OtherCandidateTouched = true;
             }
 
@@ -632,7 +633,7 @@ public sealed class ModFolderWatcher : IDisposable
         public Timer MaxWindowTimer { get; } = maxWindowTimer;
         public bool BatchOpen { get; set; }
         // A path that is neither source, refs nor a registered plugin's own binary — an asset, a
-        // meta.ini edit — set mod-wide since the classifier checks git's status, not this flag.
+        // meta.ini edit — set mod-wide since Commands checks git's status, not this flag.
         public bool OtherCandidateTouched { get; set; }
         public Dictionary<string, PluginEntry> Plugins { get; } = new(StringComparer.Ordinal);
 

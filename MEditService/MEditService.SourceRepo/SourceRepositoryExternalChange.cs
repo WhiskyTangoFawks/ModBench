@@ -38,4 +38,9 @@ public sealed partial class SourceRepository
         var path = ExternalChangeMarkerPath(modFolder);
         return File.Exists(path) ? File.ReadAllText(path) : null;
     }
+
+    /// <summary>The mod's own display name: its folder's leaf, for a caller naming it in a
+    /// user-facing message without reaching for the path itself.</summary>
+    public static string ModNameOf(string modFolder) =>
+        Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar));
 }

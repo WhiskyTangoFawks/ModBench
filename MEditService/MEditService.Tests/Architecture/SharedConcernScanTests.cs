@@ -13,7 +13,7 @@ public sealed class SharedConcernScanTests
     private static readonly (string Concern, string Needle)[] Concerns =
     [
         ("target resolution", @"\bUnreadableDocumentFor\b"),
-        ("the pre-write deferral check", @"\bSourceRepository\.UnansweredExternalChange\b"),
+        ("the pre-write open-question check", @"\bSourceRepository\.UnansweredExternalChange\b"),
         ("rename on an EditorID change", @"\bRename\("),
         ("FormKey allocation", @"\bHighRangeFormIdFloor\b"),
         ("FormKey allocation", @"\bFullIdMask\b"),
