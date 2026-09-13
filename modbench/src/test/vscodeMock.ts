@@ -113,10 +113,10 @@ export function fakeUri(fsPath: string): FakeUri {
   return uri;
 }
 
-/** Every member `vscode.DiagnosticCollection` declares — a test asserts on which URIs it holds,
- *  not on a raw call log. */
 type FakeDiagnostics = readonly vscode.Diagnostic[];
 
+/** Every member `vscode.DiagnosticCollection` declares — a test asserts on which URIs it holds,
+ *  not on a raw call log. */
 export class FakeDiagnosticCollection {
   readonly name = 'fake';
   private readonly entries = new Map<string, { uri: FakeUri; diagnostics: FakeDiagnostics }>();
