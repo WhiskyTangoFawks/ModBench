@@ -31,12 +31,12 @@ export class EventEmitter<T = unknown> {
   dispose() { /* no-op */ }
 }
 
-export class ThemeIcon {
-  constructor(public id: string, public color?: unknown) {}
-}
-
 export class ThemeColor {
   constructor(public id: string) {}
+}
+
+export class ThemeIcon {
+  constructor(public id: string, public color?: ThemeColor) {}
 }
 
 export class MarkdownString {

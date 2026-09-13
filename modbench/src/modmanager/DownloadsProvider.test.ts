@@ -15,11 +15,13 @@ vi.mock('vscode', () => ({
 import { DownloadsProvider, DownloadNode, type DownloadsProviderOptions, type DownloadsTreeNode } from './DownloadsProvider';
 import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../test/surfacingDoubles';
+import { expectInstanceOf } from '../test/expectInstanceOf';
+import { instanceValueFixture } from './test/instanceValueFixture';
 import type { DownloadRow } from './mo2/downloads';
 import type { InstanceValue } from './instance';
 
-// The cast is deliberate: a read-failure row here has no `row`, and the throw is the finding.
-const rowNames = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => (n as DownloadNode).row.name);
+// The narrowing is deliberate: a read-failure row here has no `row`, and the throw is the finding.
+const rowNames = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
 
 const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
   name: 'foo.zip',
@@ -35,7 +37,7 @@ const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
 // Only `.downloads` is ever read by the row provider — the rest of InstanceValue is other
 // views' territory this ticket does not touch.
 function valueOf(downloads: DownloadRow[]): InstanceValue {
-  return { downloads } as unknown as InstanceValue;
+  return instanceValueFixture({ downloads });
 }
 
 // The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
@@ -112,21 +114,21 @@ describe('DownloadNode', () => {
   describe('status icon + colour', () => {
     it('Downloaded -> archive icon, green', () => {
       const node = new DownloadNode(row({ status: 'Downloaded' }), '/instance');
-      const icon = node.iconPath as { id: string; color?: { id: string } };
+      const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('archive');
       expect(icon.color?.id).toBe('charts.green');
     });
 
     it('Installed -> check icon, no explicit colour', () => {
       const node = new DownloadNode(row({ status: 'Installed' }), '/instance');
-      const icon = node.iconPath as { id: string; color?: unknown };
+      const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('check');
       expect(icon.color).toBeUndefined();
     });
 
     it('Uninstalled -> circle-slash icon, yellow', () => {
       const node = new DownloadNode(row({ status: 'Uninstalled' }), '/instance');
-      const icon = node.iconPath as { id: string; color?: { id: string } };
+      const icon = expectInstanceOf(node.iconPath, ThemeIcon);
       expect(icon.id).toBe('circle-slash');
       expect(icon.color?.id).toBe('charts.yellow');
     });
@@ -163,7 +165,7 @@ describe('DownloadNode', () => {
         }),
         '/instance',
       );
-      const tooltip = node.tooltip as { value: string };
+      const tooltip = expectInstanceOf(node.tooltip, MarkdownString);
       expect(tooltip.value).toContain('foo.zip');
       expect(tooltip.value).toContain('Sleep or Save');
       expect(tooltip.value).toContain('2.2.1');
@@ -175,7 +177,7 @@ describe('DownloadNode', () => {
 
     it('a minimal row (filename only) omits every optional field without erroring', () => {
       const node = new DownloadNode(row(), '/instance');
-      const tooltip = node.tooltip as { value: string };
+      const tooltip = expectInstanceOf(node.tooltip, MarkdownString);
       expect(tooltip.value).toContain('foo.zip');
       expect(tooltip.value).not.toContain('undefined');
     });
@@ -188,7 +190,7 @@ describe('DownloadNode', () => {
 
   it('resourceUri points at the archive under <instanceRoot>/downloads/<name>', () => {
     const node = new DownloadNode(row({ name: 'foo.zip' }), '/instance');
-    expect((node.resourceUri as { fsPath: string }).fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
+    expect(node.resourceUri!.fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
   });
 
   it('exposes the source row for command handlers to act on', () => {
