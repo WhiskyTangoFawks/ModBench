@@ -58,37 +58,29 @@ function loadConfigBlocks(): RuleBlock[] {
   return ruleBlocksFor(source, RULE);
 }
 
-// A test glob names a `.test.` file or a `test/` folder — the third place this rule turns off,
-// out of scope here (it shrinks to nothing on its own ticket).
-function isTestGlob(files: string[]): boolean {
-  return files.some((f) => f.includes('.test.') || f.includes('/test/'));
-}
-
-function nonTestOffBlocks(): RuleBlock[] {
-  return loadConfigBlocks().filter((b) => b.severity === 'off' && !isTestGlob(b.files));
+function offBlocks(): RuleBlock[] {
+  return loadConfigBlocks().filter((b) => b.severity === 'off');
 }
 
 describe('the no-unsafe-type-assertion allowlist', () => {
-  it('is at error for production TypeScript, on both sides of the wire', () => {
+  it('is at error for production and test TypeScript alike, on both sides of the wire', () => {
     const errorBlock = loadConfigBlocks().find((b) => b.severity === 'error');
 
     expect(errorBlock?.files).toEqual(['src/**/*.ts', 'webview/src/**/*.{ts,tsx}']);
   });
 
-  it('turns the rule off in exactly three places: helpers, record-document traversal, and tests', () => {
-    const offBlocks = loadConfigBlocks().filter((b) => b.severity === 'off');
-
-    expect(offBlocks).toHaveLength(3);
+  it('turns the rule off in exactly two places: helpers and the record document\'s traversal', () => {
+    expect(offBlocks()).toHaveLength(2);
   });
 
   it('names exactly these two single-function modules as helpers, each its own file', () => {
-    const helperBlock = nonTestOffBlocks().find((b) => b.files.includes('webview/src/columnKey.ts'));
+    const helperBlock = offBlocks().find((b) => b.files.includes('webview/src/columnKey.ts'));
 
     expect(helperBlock?.files).toEqual(HELPER_FILES);
   });
 
   it('names exactly these four files as the record document\'s traversal, and no others', () => {
-    const traversalBlock = nonTestOffBlocks().find((b) => b.files.includes('webview/src/recordUtils.ts'));
+    const traversalBlock = offBlocks().find((b) => b.files.includes('webview/src/recordUtils.ts'));
 
     expect(traversalBlock?.files).toEqual(RECORD_DOCUMENT_TRAVERSAL_FILES);
   });
