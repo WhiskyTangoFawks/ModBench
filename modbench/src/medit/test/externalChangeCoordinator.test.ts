@@ -141,7 +141,7 @@ describe('subscribeQuestionOpen', () => {
   it('a rejected dispatch logs rather than throwing', async () => {
     const log = vi.fn();
     const client = new InMemoryMEditClient();
-    client.setCommandResult('keepAsMyEdit', Promise.reject(new Error('backend down')) as never);
+    client.setCommandFailure('keepAsMyEdit', new Error('backend down'));
     const deps = makeDeps(client, { log });
     subscribeQuestionOpen(deps, client);
 
