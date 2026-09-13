@@ -1,9 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as http from 'node:http';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-
-vi.mock('node:http');
 
 import { BackendLifecycle } from '../backendLifecycle';
 import type { BackendStatus } from '../MEditClient';
@@ -22,20 +19,10 @@ function nextAttach(lifecycle: BackendLifecycle): Promise<void> {
   });
 }
 
-function makeHealthyHttpGet() {
-  vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
-    const res = Object.assign(new EventEmitter(), { statusCode: 200 });
-    cb(res);
-    return Object.assign(new EventEmitter(), { destroy: vi.fn() }) as any;
-  });
-}
-
-function makeFailingHttpGet() {
-  vi.mocked(http.get).mockImplementation(() => {
-    const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
-    process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
-    return req as any;
-  });
+// `checkHealth` (backendLifecycle.ts's own injectable) answers from this shared flag, toggled
+// by a test the same moment the real backend's own health would have flipped.
+function healthCheck(state: { healthy: boolean }): () => Promise<boolean> {
+  return () => Promise.resolve(state.healthy);
 }
 
 describe('BackendLifecycle', () => {
@@ -43,9 +30,7 @@ describe('BackendLifecycle', () => {
   afterEach(() => { vi.restoreAllMocks(); });
 
   it('attaches when a backend is already running', async () => {
-    makeHealthyHttpGet();
-
-    const lifecycle = new BackendLifecycle({ port: 5172 });
+    const lifecycle = new BackendLifecycle({ port: 5172, checkHealth: () => Promise.resolve(true) });
     const statuses = record(lifecycle);
 
     await lifecycle.start();
@@ -56,31 +41,22 @@ describe('BackendLifecycle', () => {
 
   it('polls until backend becomes healthy', async () => {
     let call = 0;
-    vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
-      const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
-      if (call++ < 2) {
-        process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
-      } else {
-        const res = Object.assign(new EventEmitter(), { statusCode: 200 });
-        cb(res);
-      }
-      return req as any;
-    });
+    const checkHealth = vi.fn(() => Promise.resolve(call++ >= 2));
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 10 });
+    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 10, checkHealth });
     const statuses = record(lifecycle);
 
     await lifecycle.start();
 
     expect(lifecycle.status).toBe('attached');
     expect(statuses).toEqual(['attached']);
-    expect(http.get).toHaveBeenCalledTimes(3);
+    expect(checkHealth).toHaveBeenCalledTimes(3);
   });
 
   it('reports disconnected when backend never starts within timeout', async () => {
-    makeFailingHttpGet();
-
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 10, pollTimeoutMs: 50 });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 10, pollTimeoutMs: 50, checkHealth: () => Promise.resolve(false),
+    });
     const statuses = record(lifecycle);
 
     await lifecycle.start();
@@ -100,28 +76,17 @@ function makeChild() {
   });
 }
 
-function makeToggleableHttpGet(state: { healthy: boolean }) {
-  vi.mocked(http.get).mockImplementation((_url: any, cb: any) => {
-    const req = Object.assign(new EventEmitter(), { destroy: vi.fn() });
-    if (state.healthy) {
-      cb(Object.assign(new EventEmitter(), { statusCode: 200 }));
-    } else {
-      process.nextTick(() => req.emit('error', new Error('ECONNREFUSED')));
-    }
-    return req as any;
-  });
-}
-
 describe('BackendLifecycle.start', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   afterEach(() => vi.restoreAllMocks());
 
   it('spawns the backend with --urls and attaches once healthy', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend', checkHealth: healthCheck(state),
+    });
     await lifecycle.start();
 
     expect(spawn).toHaveBeenCalledWith('/x/backend', ['--urls', 'http://localhost:5172']);
@@ -129,10 +94,11 @@ describe('BackendLifecycle.start', () => {
   });
 
   it('attaches to an already-healthy backend without spawning', async () => {
-    makeHealthyHttpGet();
     const spawn = vi.fn(() => makeChild());
 
-    const lifecycle = new BackendLifecycle({ port: 5172, spawn, executablePath: '/x/backend' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, spawn, executablePath: '/x/backend', checkHealth: () => Promise.resolve(true),
+    });
     await lifecycle.start();
 
     expect(spawn).not.toHaveBeenCalled();
@@ -143,11 +109,10 @@ describe('BackendLifecycle.start', () => {
   // spawn args, rides along on the same argv as --urls.
   it('appends the injected Serilog level args when spawning', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
     const lifecycle = new BackendLifecycle({
-      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend', checkHealth: healthCheck(state),
       serilogLevelArgs: () => ['--Serilog:MinimumLevel:Default', 'Debug'],
     });
     await lifecycle.start();
@@ -160,11 +125,10 @@ describe('BackendLifecycle.start', () => {
 
   it('spawns with just --urls when serilogLevelArgs yields no override (e.g. channel at Off)', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
     const lifecycle = new BackendLifecycle({
-      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend',
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x/backend', checkHealth: healthCheck(state),
       serilogLevelArgs: () => [],
     });
     await lifecycle.start();
@@ -180,13 +144,12 @@ async function waitForLines(lines: string[], n: number) {
 
 async function startWithOutput() {
   const state = { healthy: false };
-  makeToggleableHttpGet(state);
   const child = makeChild();
   const spawn = vi.fn(() => { state.healthy = true; return child; });
   const lines: string[] = [];
 
   const lifecycle = new BackendLifecycle({
-    port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x',
+    port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
     onOutput: (line, source) => lines.push(`${line} ${source}`),
   });
   await lifecycle.start();
@@ -222,11 +185,12 @@ describe('BackendLifecycle output forwarding', () => {
 
   it('drains the streams even with no onOutput — an unread pipe would block the backend', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
     await lifecycle.start();
 
     child.stdout.write('[08:30:45 INF] nobody is listening\n');
@@ -242,11 +206,12 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
   it('re-spawns and reaches attached again when the backend exits unexpectedly', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
     await lifecycle.start();
 
     const restarted = nextAttach(lifecycle);
@@ -262,11 +227,12 @@ describe('BackendLifecycle crash-restart / stop', () => {
   // so, rather than the tree silently holding a load order no process is behind.
   it('reports disconnected the moment the backend dies, before the restart is attempted', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
     await lifecycle.start();
     const statuses = record(lifecycle);
 
@@ -280,10 +246,11 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
   it('does not double-spawn when start() is called concurrently', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const spawn = vi.fn(() => { state.healthy = true; return makeChild(); });
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
     await Promise.all([lifecycle.start(), lifecycle.start()]);
 
     expect(spawn).toHaveBeenCalledTimes(1);
@@ -292,11 +259,12 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
   it('stop() during an in-flight start() cancels it — a late healthy response does not resurrect the load order', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; }); // spawn does NOT make it healthy → connect keeps polling
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, pollTimeoutMs: 1000, spawn, executablePath: '/x' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, pollTimeoutMs: 1000, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
     const statuses = record(lifecycle);
 
     const startP = lifecycle.start();
@@ -314,11 +282,12 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
   it('caps crash-restarts instead of looping forever, then reports disconnected', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     // Every spawned child dies immediately and never becomes healthy.
     const spawn = vi.fn(() => { const c = makeChild(); process.nextTick(() => c.emit('exit', 1)); return c; });
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 3, pollTimeoutMs: 10, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
     const statuses = record(lifecycle);
 
     await lifecycle.start();
@@ -331,13 +300,12 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
   it('forwards output from the restarted child, not just the first one', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const children: ReturnType<typeof makeChild>[] = [];
     const spawn = vi.fn(() => { const c = makeChild(); children.push(c); state.healthy = true; return c; });
     const lines: string[] = [];
 
     const lifecycle = new BackendLifecycle({
-      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x',
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
       onOutput: (l) => lines.push(l),
     });
     await lifecycle.start();
@@ -357,11 +325,12 @@ describe('BackendLifecycle crash-restart / stop', () => {
   // reference to this child — before the old child is gone.
   it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed', async () => {
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const child = makeChild();
     const spawn = vi.fn(() => { state.healthy = true; return child; });
 
-    const lifecycle = new BackendLifecycle({ port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    const lifecycle = new BackendLifecycle({
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', checkHealth: healthCheck(state),
+    });
     await lifecycle.start();
     const statuses = record(lifecycle);
 
@@ -380,12 +349,11 @@ describe('BackendLifecycle crash-restart / stop', () => {
   it('escalates to SIGKILL if the child never exits within the grace period, then confirms exit', async () => {
     vi.useFakeTimers();
     const state = { healthy: false };
-    makeToggleableHttpGet(state);
     const child = makeChild(); // never emits 'exit' on its own — models a hung, non-yielding backend
     const spawn = vi.fn(() => { state.healthy = true; return child; });
 
     const lifecycle = new BackendLifecycle({
-      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', stopGracePeriodMs: 3000,
+      port: 5172, pollIntervalMs: 5, spawn, executablePath: '/x', stopGracePeriodMs: 3000, checkHealth: healthCheck(state),
     });
     await lifecycle.start();
     const statuses = record(lifecycle);
