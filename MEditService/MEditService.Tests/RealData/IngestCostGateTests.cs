@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Http;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;

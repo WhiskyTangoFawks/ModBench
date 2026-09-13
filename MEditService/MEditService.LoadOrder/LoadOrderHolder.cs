@@ -11,7 +11,15 @@ public sealed class LoadOrderHolder
 
     public LoadOrderSnapshot Current => Volatile.Read(ref _current);
 
-    public void Apply(LoadOrderSnapshot snapshot) => Volatile.Write(ref _current, snapshot);
+    /// <summary>Every reader of a snapshot change subscribes here, wired at composition, rather than
+    /// being named by an endpoint.</summary>
+    public event Action<LoadOrderSnapshot>? Changed;
+
+    public void Apply(LoadOrderSnapshot snapshot)
+    {
+        Volatile.Write(ref _current, snapshot);
+        Changed?.Invoke(snapshot);
+    }
 
     /// <summary>The value a read must have. The one place a read refuses for want of a load order:
     /// no snapshot has a data folder to name, so an empty one means none has arrived.</summary>
