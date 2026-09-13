@@ -11,11 +11,12 @@ import { failurePrefixIcon } from '../failurePrefixIcon';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../errorNode';
 
-const DND_MIME = 'application/vnd.medit.pluginlist-node';
+export const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
 // `DataTransferItem.value` is `any` — handleDrag, above `handleDrop` below, is this provider's
-// only writer of it.
-function isDropPayload(value: unknown): value is { names: string[] } {
+// only writer of it. Exported so a test narrows the same payload the same way, instead of a
+// second cast of its own.
+export function isDropPayload(value: unknown): value is { names: string[] } {
   if (typeof value !== 'object' || value === null) return false;
   const witness = value as { names?: unknown };
   return Array.isArray(witness.names) && witness.names.every((n): n is string => typeof n === 'string');

@@ -25,7 +25,7 @@ export class EventEmitter<T = unknown> {
       return { dispose: () => { /* no-op */ } };
     };
   }
-  fire(e?: T) { this.handlers.forEach((h) => h(e as T)); }
+  fire(e: T) { this.handlers.forEach((h) => h(e)); }
   dispose() { /* no-op */ }
 }
 
@@ -52,12 +52,29 @@ export const uriFilePlain = (p: string) => ({ fsPath: p });
 export const uriFrom = (opts: { scheme: string; path: string; query?: string }) =>
   ({ scheme: opts.scheme, path: opts.path, query: opts.query ?? '' });
 
+// Every member `vscode.DataTransferItem`/`vscode.DataTransfer` declare, so a test can pass one
+// where production code's own parameter is typed `vscode.DataTransfer` — no cast at the seam.
 export class DataTransferItem {
-  constructor(public value: unknown) {}
+  constructor(public readonly value: unknown) {}
+  asString(): Promise<string> { return Promise.resolve(String(this.value)); }
+  asFile(): undefined { return undefined; }
 }
 
 export class DataTransfer {
-  private readonly map = new Map<string, unknown>();
-  set(mime: string, item: unknown) { this.map.set(mime, item); }
+  private readonly map = new Map<string, DataTransferItem>();
+  set(mime: string, item: DataTransferItem) { this.map.set(mime, item); }
   get(mime: string) { return this.map.get(mime); }
+  forEach(callback: (item: DataTransferItem, mime: string, dataTransfer: DataTransfer) => void) {
+    this.map.forEach((item, mime) => callback(item, mime, this));
+  }
+  [Symbol.iterator](): IterableIterator<[string, DataTransferItem]> {
+    return this.map.entries();
+  }
+}
+
+/** A `vscode.CancellationToken` that is never cancelled — for a call whose token parameter it
+ *  ignores, so a test states that plainly instead of casting past the parameter. */
+export class FakeCancellationToken {
+  readonly isCancellationRequested = false;
+  onCancellationRequested() { return { dispose: () => { /* no-op */ } }; }
 }
