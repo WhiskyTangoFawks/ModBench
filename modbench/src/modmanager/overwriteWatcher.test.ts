@@ -4,6 +4,7 @@ import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { createOverwriteWatcher } from './overwriteWatcher';
+import { present } from '../present';
 
 describe('createOverwriteWatcher', () => {
   it('watches overwrite/** under the instance root', () => {
@@ -11,6 +12,6 @@ describe('createOverwriteWatcher', () => {
 
     createOverwriteWatcher('/instance', () => {});
 
-    expect(watchers[0]!.pattern).toBe('overwrite/**');
+    expect(present(watchers[0], 'the watcher createOverwriteWatcher registers').pattern).toBe('overwrite/**');
   });
 });

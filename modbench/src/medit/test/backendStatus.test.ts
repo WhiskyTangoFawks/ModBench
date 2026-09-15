@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { backendStatusText, wireBackendStatus, enterEditingAcrossRestarts } from '../backendStatus';
 import { InMemoryMEditClient, createLoadOrderSender } from '../client';
+import { present } from '../../present';
 
 function makeViews() {
   return { setStatusText: vi.fn(), abandonReconcile: vi.fn(), refreshTree: vi.fn() };
@@ -110,7 +111,9 @@ describe('a backend that disconnects mid-send', () => {
     // connection would be 'failed'.
     client.setCommandHandler('putLoadOrder', (...args) => new Promise((resolve) => {
       putStarted();
-      args[4]!.signal!.addEventListener('abort', () => resolve({ outcome: 'abandoned' }));
+      const options = present(args[4], 'the options the sender always passes to putLoadOrder');
+      const signal = present(options.signal, 'the abort signal the sender always arms');
+      signal.addEventListener('abort', () => resolve({ outcome: 'abandoned' }));
     }));
     const sender = createLoadOrderSender(client);
     wireBackendStatus(client, {

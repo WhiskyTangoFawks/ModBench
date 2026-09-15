@@ -90,11 +90,11 @@ describe('detectGamePaths (Linux)', () => {
     vi.mocked(fs.access).mockResolvedValue(undefined);
 
     const result = await detectGamePaths('linux', FO4);
+    if (result === null) throw new Error('detectGamePaths found the library, so it should not return null');
 
-    expect(result).not.toBeNull();
-    expect(result!.dataFolder).toBe('/mnt/games/steam/steamapps/common/Fallout 4/Data');
-    expect(result!.pluginsTxt).toContain('Fallout4/Plugins.txt');
-    expect(result!.pluginsTxt).toContain('/mnt/games/steam/steamapps/compatdata');
+    expect(result.dataFolder).toBe('/mnt/games/steam/steamapps/common/Fallout 4/Data');
+    expect(result.pluginsTxt).toContain('Fallout4/Plugins.txt');
+    expect(result.pluginsTxt).toContain('/mnt/games/steam/steamapps/compatdata');
   });
 
   it('returns null when the VDF cannot be read', async () => {

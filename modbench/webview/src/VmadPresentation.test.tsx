@@ -145,6 +145,7 @@ function buildDiff(
   const each = (children: [string, FieldMetadata, (column: string) => unknown][]): FieldDiff[] =>
     children.map(([name, childMeta, pick]) => buildDiff(
       name, childMeta, Object.fromEntries(columns.map(c => [c, pick(c) ?? null])), editorIds));
+  const { elementType } = meta;
 
   return diffNode({
     fieldName,
@@ -154,9 +155,9 @@ function buildDiff(
       state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[stringValueAt(values, c)],
     }])),
     children:
-      meta.type === 'array' && meta.elementType
+      meta.type === 'array' && elementType
         ? each(keysOf(meta, values).map(k =>
-          [k, meta.elementType!, (c: string) => elementAt(meta, values[c], k)]))
+          [k, elementType, (c: string) => elementAt(meta, values[c], k)]))
         : meta.type === 'struct'
           ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => propertyOf(values[c], f.name)]))
           : undefined,
@@ -191,19 +192,39 @@ function renderPanel() {
 
 function fieldCell(field: string): HTMLTableCellElement {
   const td = screen.getAllByText(field).find((el): el is HTMLTableCellElement => el.tagName === 'TD');
-  expect(td, `no row named ${field}`).toBeDefined();
-  return td!;
+  if (!td) throw new Error(`no row named ${field}`);
+  return td;
 }
 
-const summaryOf = (field: string): string =>
-  fieldCell(field).closest('tr')!.querySelectorAll('td')[1]!.textContent;
+function rowOf(el: Element): HTMLTableRowElement {
+  const row = el.closest('tr');
+  if (!row) throw new Error('no <tr> ancestor');
+  return row;
+}
 
-const expandRow = (field: string) =>
-  fireEvent.click(fieldCell(field).closest('tr')!.querySelector('button')!);
+function cellAt(row: Element, index: number): HTMLTableCellElement {
+  const cell = row.querySelectorAll('td')[index];
+  if (!cell) throw new Error(`no <td> at index ${index} in this row`);
+  return cell;
+}
+
+function firstChevron(): HTMLElement {
+  const chevron = screen.getAllByText('▶')[0];
+  if (!chevron) throw new Error('no ▶ chevron to expand');
+  return chevron;
+}
+
+const summaryOf = (field: string): string => cellAt(rowOf(fieldCell(field)), 1).textContent;
+
+const expandRow = (field: string) => {
+  const button = rowOf(fieldCell(field)).querySelector('button');
+  if (!button) throw new Error(`no expand button in ${field}'s row`);
+  fireEvent.click(button);
+};
 
 async function expandScripts() {
   await waitFor(() => screen.getByText('Scripts'));
-  fireEvent.click(screen.getAllByText('▶')[0]!);
+  fireEvent.click(firstChevron());
 }
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
@@ -326,12 +347,18 @@ describe('a collapsed script reads as xEdit prose', () => {
   it('an element of a passed-through list whose leaf has no reading at all still occupies its place', async () => {
     // Nothing may vanish from a passthrough: a dropped element would make a script with two
     // properties read exactly like a script with one.
+    const { elementType: scriptElementType } = scriptsMeta;
+    if (!scriptElementType) throw new Error("scriptsMeta's elementType is missing");
+    const { fields: scriptElementFields } = scriptElementType;
+    if (!scriptElementFields) throw new Error("scriptsMeta's elementType has no fields");
+    const { fields: propertyFields } = propertyMeta;
+    if (!propertyFields) throw new Error('propertyMeta has no fields');
     const unknownBase: FieldMetadata = {
       ...scriptsMeta,
       elementType: {
-        ...scriptsMeta.elementType!,
-        fields: scriptsMeta.elementType!.fields!.map(f => (f.name !== 'Properties' ? f : {
-          ...f, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyMeta.fields!.filter(m => !m.isDiscriminator) },
+        ...scriptElementType,
+        fields: scriptElementFields.map(f => (f.name !== 'Properties' ? f : {
+          ...f, elementType: { ...propertyMeta, leafTypeName: 'SomethingElse', fields: propertyFields.filter(m => !m.isDiscriminator) },
         })),
       },
     };
@@ -403,7 +430,7 @@ describe('a row of a keyed array is identified by its key', () => {
     currentCompare = oneColumn([alias(0, 'First'), alias(1, 'Second')], {}, aliasesMeta);
     renderPanel();
     await waitFor(() => screen.getByText('Aliases'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(firstChevron());
     await waitFor(() => screen.getByText('1'));
     expandRow('1');
     await waitFor(() => screen.getByText('Scripts'));
@@ -454,9 +481,9 @@ describe('a member the column\'s own leaf does not declare', () => {
     expandRow('Owner');
     await waitFor(() => screen.getByText('Data'));
 
-    const cells = fieldCell('Data').closest('tr')!.querySelectorAll('td');
-    expect(cells[1]!.textContent).toBe('3');
-    expect(cells[2]!.textContent).toBe('');
+    const dataRow = rowOf(fieldCell('Data'));
+    expect(cellAt(dataRow, 1).textContent).toBe('3');
+    expect(cellAt(dataRow, 2).textContent).toBe('');
   });
 });
 
@@ -468,7 +495,10 @@ describe('Add Script is the generic array gesture', () => {
     renderPanel();
     await waitFor(() => screen.getByText('Scripts'));
 
-    const cell = screen.getAllByText('[1]')[0]!.closest('td')!;
+    const marker = screen.getAllByText('[1]')[0];
+    if (!marker) throw new Error("no '[1]' key marker rendered");
+    const cell = marker.closest('td');
+    if (!cell) throw new Error("no <td> ancestor for the '[1]' key marker");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Insert' });
 
@@ -487,17 +517,25 @@ describe('Add Script is the generic array gesture', () => {
 
     // First of the two script rows, since the empty key sorts before every named one.
     const added = document.querySelectorAll('tbody tr')[1];
+    if (!added) throw new Error('no second script row after the reload');
     // Its Field column holds nothing but the disclosure control: the key is still empty.
-    expect(added!.querySelectorAll('td')[0]!.textContent).toBe('▶');
-    expect(added!.querySelectorAll('td')[1]!.textContent).toBe('()');
+    expect(cellAt(added, 0).textContent).toBe('▶');
+    expect(cellAt(added, 1).textContent).toBe('()');
 
     // Nameable: its own `name` cell takes an edit like any other string cell, addressed through
     // the empty key — the only handle the element has until it is named.
-    fireEvent.click(added!.querySelector('button')!);
+    const expandButton = added.querySelector('button');
+    if (!expandButton) throw new Error("no expand button on the added script's row");
+    fireEvent.click(expandButton);
     await waitFor(() => screen.getAllByText('Name'));
-    const nameCell = screen.getAllByText('Name')[0]!.closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(nameCell!.querySelector('[data-open-trigger]')!);
-    const input = nameCell!.querySelector('input')!;
+    const nameLabel = screen.getAllByText('Name')[0];
+    if (!nameLabel) throw new Error("no 'Name' row rendered");
+    const nameCell = cellAt(rowOf(nameLabel), 1);
+    const openTrigger = nameCell.querySelector('[data-open-trigger]');
+    if (!openTrigger) throw new Error("no open trigger in Name's value cell");
+    fireEvent.doubleClick(openTrigger);
+    const input = nameCell.querySelector('input');
+    if (!input) throw new Error("no input in Name's value cell");
     fireEvent.change(input, { target: { value: 'Ambush' } });
     fireEvent.blur(input);
 
@@ -521,9 +559,12 @@ describe('Add Script is the generic array gesture', () => {
     expandRow('Radius');
     await waitFor(() => screen.getByText('Data'));
 
-    const dataCell = fieldCell('Data').closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(dataCell!.querySelector('[data-open-trigger]')!);
-    const input = dataCell!.querySelector('input')!;
+    const dataCell = cellAt(rowOf(fieldCell('Data')), 1);
+    const openTrigger = dataCell.querySelector('[data-open-trigger]');
+    if (!openTrigger) throw new Error("no open trigger in Data's value cell");
+    fireEvent.doubleClick(openTrigger);
+    const input = dataCell.querySelector('input');
+    if (!input) throw new Error("no input in Data's value cell");
     fireEvent.change(input, { target: { value: '25' } });
     fireEvent.blur(input);
 
@@ -548,9 +589,9 @@ describe('Add Script is the generic array gesture', () => {
     expandRow('Properties');
     await waitFor(() => screen.getByText('Radius'));
 
-    const cell = fieldCell('Radius').closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.click(cell!);
-    fireEvent.keyDown(cell!, { key: 'Delete' });
+    const cell = cellAt(rowOf(fieldCell('Radius')), 1);
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
 
     expect(lastEnvelope()).toEqual({
       op: 'remove',
@@ -569,9 +610,9 @@ describe('Add Script is the generic array gesture', () => {
     expandRow('Guard');
     await waitFor(() => screen.getByText('Properties'));
 
-    const cell = fieldCell('Properties').closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.click(cell!);
-    fireEvent.keyDown(cell!, { key: 'Insert' });
+    const cell = cellAt(rowOf(fieldCell('Properties')), 1);
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Insert' });
 
     expect(lastEnvelope()).toEqual({
       op: 'add',

@@ -10,6 +10,7 @@ import { installFromArchive, installFromFolder } from './install';
 import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../test/corpusFixture';
 import type { Runner } from '../install/extractArchive';
 import { writeMetaIni } from '../mo2/metaIni';
+import { present } from '../../present';
 
 const MOD = 'Freshly Installed Mod';
 
@@ -66,7 +67,7 @@ async function makeExistingMod(root: string, name: string, tracked: boolean): Pr
 
 function runnerFor(payloadRoot = 'Wrapper'): Runner {
   return async (_bin, args) => {
-    const dest = args.find((a) => a.startsWith('-o'))!.slice(2);
+    const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
     await writePayload(join(dest, payloadRoot));
   };
 }
@@ -134,7 +135,7 @@ describe('install commands', () => {
   it('the meta.ini carries the instance gameName, and an archive install its installationFile', async () => {
     const archive = join(root, 'downloads', 'Freshly-1-0.7z');
     const run: Runner = async (_bin, args) => {
-      const dest = args.find((a) => a.startsWith('-o'))!.slice(2);
+      const dest = present(args.find((a) => a.startsWith('-o')), "the runner's -o argument").slice(2);
       await writePayload(join(dest, 'Wrapper'));
     };
 

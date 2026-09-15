@@ -248,7 +248,9 @@ describe('ScalarCell — a translated string', () => {
   it('commits a bare object from an absent value', () => {
     const onCommit = vi.fn();
     const { container } = render(<ScalarCell value={null} meta={nameMeta} editable isFocused onCommit={onCommit} />);
-    fireEvent.doubleClick(container.querySelector('[data-open-trigger]')!);
+    const openTrigger = container.querySelector('[data-open-trigger]');
+    if (!openTrigger) throw new Error('expected an open trigger on a bare-object cell with an absent value');
+    fireEvent.doubleClick(openTrigger);
     const input = screen.getByRole('textbox');
     fireEvent.change(input, { target: { value: 'Named' } });
     fireEvent.keyDown(input, { key: 'Enter' });

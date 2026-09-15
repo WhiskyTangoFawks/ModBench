@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
+import { present } from '../present';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from './test/corpusFixture';
 import { setEnabledInText } from './mo2/modlistText';
 import { setSelectedProfileInText } from './mo2/modOrganizerIni';
@@ -116,7 +117,7 @@ function pastSequenceWithin(instance: Instance, sequence: number, ms: number): P
 const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
-  return found[0]!;
+  return present(found[0], `the sole watcher for ${glob}`);
 };
 
 // MO2, xEdit or the user rewriting the file, with Modbench none the wiser.

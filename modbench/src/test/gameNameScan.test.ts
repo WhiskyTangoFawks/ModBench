@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
 import { knownReleases, gamePathInfoForRelease } from '../modmanager/mo2/gamePaths';
 import { loadOrderAppDataFolder } from '../modmanager/mo2/loadOrderDestination';
+import { present } from '../present';
 
 const SRC = join(__dirname, '..');
 const SELF = 'gameNameScan.test.ts';
@@ -132,7 +133,7 @@ describe('no extension file names a game outside the two tables', () => {
   // Rival: the allowlisted file's own tokens — proof the exemption is load-bearing, not
   // decorative.
   it('the allowlisted file would fail the scan without its exemption', () => {
-    const text = readFileSync(join(SRC, ALLOWLIST[0]!), 'utf8');
+    const text = readFileSync(join(SRC, present(ALLOWLIST[0], 'the allowlist\'s sole exemption')), 'utf8');
     expect(gameNameLiteralsIn(text)).toEqual(expect.arrayContaining(['f4se', 'skse']));
   });
 

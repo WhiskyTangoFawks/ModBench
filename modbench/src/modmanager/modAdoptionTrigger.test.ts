@@ -17,6 +17,7 @@ import { installFromFolder } from './commands/install';
 import { cloneCorpusFixture, DEFAULT_MODLIST } from './test/corpusFixture';
 import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
 import type { ConfigChangeEvent } from './gameDirectory';
+import { present } from '../present';
 
 const MOD = 'Freshly Installed Mod';
 const DATA_FOLDER = '/game/Data';
@@ -35,7 +36,7 @@ afterEach(async () => {
 const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
-  return found[0]!;
+  return present(found[0], 'the sole watcher registered for this glob');
 };
 
 // How a test learns a recompute landed: no sleep and no poll.
@@ -192,7 +193,7 @@ describe('registerModAdoption — outcome handling', () => {
     }, invalidate, channel);
 
     expect(() => instance.fire()).not.toThrow();
-    await calls[calls.length - 1]!.catch(() => undefined);
+    await present(calls[calls.length - 1], 'the adoption run the fire triggered').catch(() => undefined);
 
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
     expect(invalidate).not.toHaveBeenCalled();

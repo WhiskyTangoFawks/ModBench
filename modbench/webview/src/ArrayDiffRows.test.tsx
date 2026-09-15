@@ -12,6 +12,12 @@ import { at, fieldMeta, keyed, lastPostedEnvelope, member, panelClient } from '.
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 
+// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
+function required<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(`expected ${what}`);
+  return value;
+}
+
 
 const sortedArrayMeta = fieldMeta({
   name: 'Keywords',
@@ -225,12 +231,14 @@ describe('RecordPanel — array child rows (sorted)', () => {
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getAllByText('KwdB').length > 0);
-    const kwdBTd = screen.getAllByText('KwdB').find(el => el.tagName === 'TD');
-    expect(kwdBTd).toBeTruthy();
-    const cells = kwdBTd!.closest('tr')!.querySelectorAll('td');
-    expect(cells[1]!.textContent).toBe('KwdB');
-    expect(cells[2]!.textContent).toBe('');
-    expect(cells[2]!.querySelector('[data-open-trigger]')).toBeNull();
+    const kwdBTd = required(screen.getAllByText('KwdB').find(el => el.tagName === 'TD'), 'a KwdB TD');
+    const row = required(kwdBTd.closest('tr'), "the KwdB TD's row");
+    const cells = row.querySelectorAll('td');
+    const secondCell = required(cells[1], "the KwdB row's second cell");
+    const thirdCell = required(cells[2], "the KwdB row's third cell");
+    expect(secondCell.textContent).toBe('KwdB');
+    expect(thirdCell.textContent).toBe('');
+    expect(thirdCell.querySelector('[data-open-trigger]')).toBeNull();
   });
 });
 
@@ -245,7 +253,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
   it('collapsed: the struct row shows the aggregate tint from its conflicting child', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('▶'));
-    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
     expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
   });
 
@@ -255,9 +263,9 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X1'));
 
-    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
-    const x1Row = screen.getByText('X1').closest('tr')!;
-    const x2Row = screen.getByText('X2').closest('tr')!;
+    const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
+    const x1Row = required(screen.getByText('X1').closest('tr'), "X1's row");
+    const x2Row = required(screen.getByText('X2').closest('tr'), "X2's row");
     expect(structRow.style.backgroundColor).toBe('');
     expect(x1Row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
     expect(x2Row.style.backgroundColor).toBe('');
@@ -271,7 +279,7 @@ describe('RecordPanel — struct row conflict color follows collapse state', () 
     fireEvent.click(screen.getByText('▼')); // collapse again
     await waitFor(() => expect(screen.queryByText('X1')).not.toBeInTheDocument());
 
-    const structRow = screen.getByText('ObjectBounds').closest('tr')!;
+    const structRow = required(screen.getByText('ObjectBounds').closest('tr'), "ObjectBounds's row");
     expect(structRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
   });
 });
@@ -286,14 +294,14 @@ describe('RecordPanel — a struct member that is itself an array of structs', (
 
   async function expandToDepth4() {
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]!); // expand Container -> Entries
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle")); // expand Container -> Entries
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]!); // expand Entries -> [0]
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle")); // expand Entries -> [0]
     await waitFor(() => {
       const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
       if (!td) throw new Error('[0] TD not found yet');
     });
-    fireEvent.click(screen.getAllByText('▶')[0]!); // expand [0] -> Id/Weight
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle")); // expand [0] -> Id/Weight
     await waitFor(() => screen.getByText('Weight'));
   }
 
@@ -353,7 +361,8 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Insert on the focused array-parent cell posts add at the array, carrying no value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    const cell = screen.getAllByText('[3]')[0]!.closest('td')!;
+    const label = required(screen.getAllByText('[3]')[0], 'the [3] index label');
+    const cell = required(label.closest('td'), "the [3] index label's cell");
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
@@ -364,7 +373,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Delete on a focused array-element cell posts remove at its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle")); // expand
     await waitFor(() => screen.getByText('[1]'));
     const cell = screen.getByText('2').closest('td')!;
     fireEvent.click(cell);
@@ -376,7 +385,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowDown on a focused element posts move with the next position as its value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('[0]'));
     const cell = screen.getByText('1').closest('td')!;
     fireEvent.click(cell);
@@ -388,7 +397,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowUp on a focused element posts move with the previous position as its value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('[2]'));
     const cell = screen.getByText('3').closest('td')!;
     fireEvent.click(cell);
@@ -402,7 +411,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowUp on the first element still posts the move, to the position before it', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('[0]'));
     const cell = screen.getByText('1').closest('td')!;
     fireEvent.click(cell);
@@ -470,12 +479,12 @@ function renderEditablePanel() {
 // The same number can appear in more than one column, so the editable last cell is addressed
 // by row rather than by value text.
 function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
-  const row = screen.getByText(rowLabel).closest('tr')!;
+  const row = required(screen.getByText(rowLabel).closest('tr'), `${rowLabel}'s row`);
   const cells = row.querySelectorAll('td');
-  const cell = cells[cells.length - 1]!;
+  const cell = required(cells[cells.length - 1], `${rowLabel}'s last cell`);
   // xEdit's own gesture (ADR-0018): a double click opens the editor on a resting cell.
   fireEvent.doubleClick(within(cell).getByText(shownValue));
-  const input = cell.querySelector('input')!;
+  const input = required(cell.querySelector('input'), `${rowLabel}'s open editor input`);
   fireEvent.change(input, { target: { value: typed } });
   fireEvent.keyDown(input, { key: 'Enter' });
 }
@@ -491,7 +500,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = editableIntArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle")); // expand
     await waitFor(() => screen.getByText('[1]'));
 
     editLastCellOfRow('[1]', '22', '99');
@@ -503,7 +512,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = structCollapseExpandResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('ObjectBounds'));
-    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle")); // expand
     await waitFor(() => screen.getByText('X1'));
 
     editLastCellOfRow('X1', '5', '7');
@@ -516,11 +525,11 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('Weight'));
 
     editLastCellOfRow('Weight', '1', '7');
@@ -534,9 +543,9 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
@@ -552,9 +561,9 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;

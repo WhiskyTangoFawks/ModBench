@@ -128,8 +128,11 @@ function compareResult(
   meta: FieldMetadata = conditionsMeta,
 ) {
   const columns = Object.keys(byColumn);
-  const at = (column: string, index: number, path: string[]): unknown =>
-    path.reduce<unknown>((v, name) => propertyOf(v, name), byColumn[column]![index]);
+  const at = (column: string, index: number, path: string[]): unknown => {
+    const rows = byColumn[column];
+    if (!rows) throw new Error(`compareResult: no rows recorded for column "${column}"`);
+    return path.reduce<unknown>((v, name) => propertyOf(v, name), rows[index]);
+  };
 
   const resolutionsFor = (path: string[], index: number) => {
     const entries = columns
@@ -158,6 +161,11 @@ function compareResult(
     }));
   };
 
+  const [firstColumn] = columns;
+  if (!firstColumn) throw new Error('compareResult: at least one column expected');
+  const firstColumnRows = byColumn[firstColumn];
+  if (!firstColumnRows) throw new Error(`compareResult: no rows recorded for column "${firstColumn}"`);
+
   return {
     conflictAll: 'NoConflict',
     overrides: columns.map((plugin, i) => ({
@@ -169,7 +177,7 @@ function compareResult(
       fieldName: 'Conditions',
       values: Object.fromEntries(columns.map(c => [c, byColumn[c]])),
       winnerColumn: columns[0], cellStates: {},
-      children: byColumn[columns[0]!]!.map((_, i) => ({
+      children: firstColumnRows.map((_, i) => ({
         fieldName: `[${i}]`,
         values: valuesFor([], i),
         winnerColumn: columns[0], cellStates: {},
@@ -193,14 +201,21 @@ function renderPanel() {
 
 async function expandConditions() {
   await waitFor(() => screen.getByText('Conditions'));
-  fireEvent.click(screen.getAllByText('▶')[0]!);
+  const [trigger] = screen.getAllByText('▶');
+  if (!trigger) throw new Error('the collapse triangle getAllByText should have found');
+  fireEvent.click(trigger);
   await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
 }
 
 function summaryOf(index: number): string {
-  const td = screen.getAllByText(`[${index}]`).find(el => el.tagName === 'TD')!;
-  const cells = Array.from(td.closest('tr')!.querySelectorAll('td'));
-  return cells[1]!.textContent;
+  const td = screen.getAllByText(`[${index}]`).find(el => el.tagName === 'TD');
+  if (!td) throw new Error(`the [${index}] row cell`);
+  const row = td.closest('tr');
+  if (!row) throw new Error(`the [${index}] row`);
+  const cells = Array.from(row.querySelectorAll('td'));
+  const summaryCell = cells[1];
+  if (!summaryCell) throw new Error(`the [${index}] row's summary cell`);
+  return summaryCell.textContent;
 }
 
 // A row's label cell: the member's own name, which a value cell can also read as (the Kind row
@@ -208,20 +223,40 @@ function summaryOf(index: number): string {
 const labelCell = (name: string): HTMLElement | undefined =>
   screen.queryAllByText(name).find(el => el.tagName === 'TD');
 
+// The row a `labelCell` names, and the expand button in its own row — the shape every "click to
+// expand this member" step below shares.
+function expandButtonFor(cell: HTMLElement): HTMLButtonElement {
+  const row = cell.closest('tr');
+  if (!row) throw new Error("the label cell's row");
+  const button = row.querySelector('button');
+  if (!button) throw new Error("the row's expand button");
+  return button;
+}
+
 async function expandFirstConditionData() {
   await expandConditions();
-  const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
-  fireEvent.click(element.closest('tr')!.querySelector('button')!);
+  const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
+  if (!element) throw new Error('the [0] row cell');
+  fireEvent.click(expandButtonFor(element));
   await waitFor(() => expect(labelCell('Data')).toBeDefined());
-  fireEvent.click(labelCell('Data')!.closest('tr')!.querySelector('button')!);
+  const dataCell = labelCell('Data');
+  if (!dataCell) throw new Error('the Data row label cell');
+  fireEvent.click(expandButtonFor(dataCell));
   await waitFor(() => expect(labelCell('Function')).toBeDefined());
 }
 
 async function openMemberEditor(memberName: string): Promise<HTMLTableCellElement> {
   await expandFirstConditionData();
-  const cell = labelCell(memberName)!.closest('tr')!.querySelectorAll('td')[1];
-  fireEvent.doubleClick(cell!.querySelector('[data-open-trigger]')!);
-  return cell!;
+  const labelled = labelCell(memberName);
+  if (!labelled) throw new Error(`the ${memberName} row label cell`);
+  const row = labelled.closest('tr');
+  if (!row) throw new Error(`the ${memberName} row`);
+  const cell = row.querySelectorAll('td')[1];
+  if (!cell) throw new Error(`the ${memberName} row's value cell`);
+  const trigger = cell.querySelector('[data-open-trigger]');
+  if (!trigger) throw new Error(`the ${memberName} value cell's open trigger`);
+  fireEvent.doubleClick(trigger);
+  return cell;
 }
 
 const postedEnvelopes = () => sharedPostedEnvelopes(vscode.postMessage);
@@ -350,10 +385,16 @@ describe('a collapsed condition reads as xEdit prose', () => {
     renderPanel();
     await expandConditions();
 
-    const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
-    const cells = Array.from(td.closest('tr')!.querySelectorAll('td'));
-    expect(cells[1]!.textContent).toBe('Subject.IsSneaking = 1.000000 AND');
-    expect(cells[2]!.textContent).toBe('Subject.IsSneaking = 1.000000');
+    const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
+    if (!td) throw new Error('the [0] row cell');
+    const row = td.closest('tr');
+    if (!row) throw new Error('the [0] row');
+    const cells = Array.from(row.querySelectorAll('td'));
+    const firstColumnCell = cells[1];
+    const secondColumnCell = cells[2];
+    if (!firstColumnCell || !secondColumnCell) throw new Error("both columns' [0] row cells");
+    expect(firstColumnCell.textContent).toBe('Subject.IsSneaking = 1.000000 AND');
+    expect(secondColumnCell.textContent).toBe('Subject.IsSneaking = 1.000000');
   });
 
   it('the leaf with no function member of its own is named by its own leaf type', async () => {

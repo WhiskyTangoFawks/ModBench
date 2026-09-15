@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { FilterCodeLensProvider } from '../FilterCodeLensProvider';
 import { fakeUri } from '../../test/vscodeMock';
+import { present } from '../../present';
 
 vi.mock('vscode', () => ({
   CodeLens: class {
@@ -40,6 +41,12 @@ function makeDocument(text: string, fsPath: string): vscode.TextDocument {
   };
 }
 
+// Reads the command id off the sole lens a `provideCodeLenses` call returned.
+function soleLensCommand(lenses: readonly vscode.CodeLens[]): string {
+  const lens = present(lenses[0], 'the sole code lens returned');
+  return present(lens.command, "the lens's command").command;
+}
+
 describe('FilterCodeLensProvider', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -63,7 +70,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect(lenses[0]!.command!.command).toBe('modbench.setFilterFromDocument');
+      expect(soleLensCommand(lenses)).toBe('modbench.setFilterFromDocument');
     });
 
     it('returns Clear lens when the document sql matches the active filter', () => {
@@ -77,7 +84,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect(lenses[0]!.command!.command).toBe('modbench.clearFilter');
+      expect(soleLensCommand(lenses)).toBe('modbench.clearFilter');
     });
 
     it('returns Apply lens when document sql differs from active filter', () => {
@@ -91,7 +98,7 @@ describe('FilterCodeLensProvider', () => {
       const lenses = provider.provideCodeLenses(doc);
 
       expect(lenses).toHaveLength(1);
-      expect(lenses[0]!.command!.command).toBe('modbench.setFilterFromDocument');
+      expect(soleLensCommand(lenses)).toBe('modbench.setFilterFromDocument');
     });
 
     it('ignores leading/trailing whitespace when comparing sql', () => {
@@ -104,7 +111,7 @@ describe('FilterCodeLensProvider', () => {
 
       const lenses = provider.provideCodeLenses(doc);
 
-      expect(lenses[0]!.command!.command).toBe('modbench.clearFilter');
+      expect(soleLensCommand(lenses)).toBe('modbench.clearFilter');
     });
   });
 
@@ -120,7 +127,7 @@ describe('FilterCodeLensProvider', () => {
 
       const lenses = provider.provideCodeLenses(doc);
 
-      expect(lenses[0]!.command!.command).toBe('modbench.setFilterFromDocument');
+      expect(soleLensCommand(lenses)).toBe('modbench.setFilterFromDocument');
     });
   });
 });

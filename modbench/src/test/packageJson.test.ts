@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { present } from '../present';
 
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
 
@@ -13,11 +14,13 @@ describe('package.json activation', () => {
 describe('package.json viewsWelcome', () => {
   it('gates the "not an MO2 instance" message on a workspace actually being open, so no-workspace stays a neutral no-op (AC4)', () => {
     const viewsWelcome: { view: string; when: string }[] = pkg.contributes.viewsWelcome;
-    const welcome = viewsWelcome.find((w) => w.view === 'modbench.modList');
-    expect(welcome, 'expected a viewsWelcome entry for modbench.modList').toBeTruthy();
+    const welcome = present(
+      viewsWelcome.find((w) => w.view === 'modbench.modList'),
+      'a viewsWelcome entry for modbench.modList',
+    );
     // workspaceIsMo2Instance is never set with no folder open, so without this guard the
     // wrong-folder message shows on a bare window. workspaceFolderCount is VS Code's own key.
-    expect(welcome!.when).toContain('workspaceFolderCount != 0');
+    expect(welcome.when).toContain('workspaceFolderCount != 0');
   });
 
   // Unset context keys read falsy under `!key`, so `!modbench.workspaceIsMo2Instance` alone cannot
@@ -25,8 +28,11 @@ describe('package.json viewsWelcome', () => {
   // the check has run. Exact-match, not .toContain, so a negated term cannot pass.
   it('cannot render before the MO2 check has actually run', () => {
     const viewsWelcome: { view: string; when: string }[] = pkg.contributes.viewsWelcome;
-    const welcome = viewsWelcome.find((w) => w.view === 'modbench.modList');
-    expect(welcome!.when).toBe(
+    const welcome = present(
+      viewsWelcome.find((w) => w.view === 'modbench.modList'),
+      'a viewsWelcome entry for modbench.modList',
+    );
+    expect(welcome.when).toBe(
       'workspaceFolderCount != 0 && modbench.workspaceMo2CheckDone && !modbench.workspaceIsMo2Instance',
     );
   });
@@ -37,11 +43,12 @@ describe('package.json Referenced By panel migration', () => {
     const panel: { id: string }[] = pkg.contributes.viewsContainers.panel;
     const panelContainerIds = new Set(panel.map((c) => c.id));
     const views: Record<string, { id: string }[]> = pkg.contributes.views;
-    const referencedByContainer = Object.entries(views)
-      .find(([, entries]) => entries.some((v) => v.id === 'modbench.referencedByTree'))?.[0];
+    const referencedByContainer = present(
+      Object.entries(views).find(([, entries]) => entries.some((v) => v.id === 'modbench.referencedByTree'))?.[0],
+      'a views entry for modbench.referencedByTree',
+    );
 
-    expect(referencedByContainer, 'expected a views entry for modbench.referencedByTree').toBeTruthy();
-    expect(panelContainerIds.has(referencedByContainer!)).toBe(true);
+    expect(panelContainerIds.has(referencedByContainer)).toBe(true);
 
     const sidebarViews: { id: string }[] = pkg.contributes.views.modbench;
     expect(sidebarViews.some((v) => v.id === 'modbench.referencedByTree')).toBe(false);
@@ -62,7 +69,7 @@ describe('package.json Toolbox view', () => {
   const sidebarViews = (): { id: string; name: string; when?: string }[] => pkg.contributes.views.modbench;
 
   it('is the first view in the Modbench container, so workspace-scope actions sit above the domain trees', () => {
-    expect(sidebarViews()[0]!.id).toBe('modbench.toolbox');
+    expect(present(sidebarViews()[0], 'the first view of the Modbench container').id).toBe('modbench.toolbox');
   });
 });
 
@@ -72,8 +79,11 @@ describe('package.json Toolbox view', () => {
 describe('package.json "Plugins - …" naming for Referenced By', () => {
   it('names the Referenced By view "Plugins - Referenced By"', () => {
     const referencedByViews: { id: string; name: string }[] = pkg.contributes.views.modbenchReferencedBy;
-    const view = referencedByViews.find((v) => v.id === 'modbench.referencedByTree');
-    expect(view!.name).toBe('Plugins - Referenced By');
+    const view = present(
+      referencedByViews.find((v) => v.id === 'modbench.referencedByTree'),
+      'the modbench.referencedByTree view entry',
+    );
+    expect(view.name).toBe('Plugins - Referenced By');
   });
 });
 
@@ -81,9 +91,11 @@ describe('package.json the Toolbox stack stays visible through an editing backen
   const welcome = (): { view: string; when: string }[] => pkg.contributes.viewsWelcome;
 
   it('drops the now-redundant view-mode clause from the "not an MO2 instance" welcome message', () => {
-    const entry = welcome().find((w) => w.view === 'modbench.modList' && w.when.includes('workspaceIsMo2Instance'));
-    expect(entry, 'expected the not-an-MO2-instance welcome entry').toBeTruthy();
-    expect(entry!.when).not.toMatch(/modbench\.viewMode/);
+    const entry = present(
+      welcome().find((w) => w.view === 'modbench.modList' && w.when.includes('workspaceIsMo2Instance')),
+      'the not-an-MO2-instance welcome entry',
+    );
+    expect(entry.when).not.toMatch(/modbench\.viewMode/);
   });
 });
 
@@ -99,12 +111,17 @@ describe('package.json retires modbench.viewMode and the second Plugins view', (
   it('there is only one view named for plugins — modbench.pluginTree is gone', () => {
     expect(allViews().find((v) => v.id === 'modbench.pluginTree')).toBeUndefined();
     expect(allViews().filter((v) => v.name === 'Plugins')).toHaveLength(1);
-    expect(allViews().filter((v) => v.name === 'Plugins')[0]!.id).toBe('modbench.pluginListTree');
+    expect(
+      present(allViews().filter((v) => v.name === 'Plugins')[0], 'the sole view named Plugins').id,
+    ).toBe('modbench.pluginListTree');
   });
 
   it('Referenced By carries no gate at all — always present, like Mods/Plugins/Downloads', () => {
-    const view = allViews().find((v) => v.id === 'modbench.referencedByTree');
-    expect(view!.when).toBeUndefined();
+    const view = present(
+      allViews().find((v) => v.id === 'modbench.referencedByTree'),
+      'the modbench.referencedByTree view entry',
+    );
+    expect(view.when).toBeUndefined();
   });
 
   it('no view, menu entry or keybinding references modbench.viewMode anywhere', () => {
@@ -120,22 +137,29 @@ describe('package.json retires modbench.viewMode and the second Plugins view', (
 
 describe('package.json New Plugin / record filter reachable from the merged tree', () => {
   const titleMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/title'];
-  const entryFor = (command: string) => titleMenus().find((e) => e.command === command && e.when.includes('modbench.pluginListTree'));
+  const entryFor = (command: string) =>
+    present(
+      titleMenus().find((e) => e.command === command && e.when.includes('modbench.pluginListTree')),
+      `a view/title entry for ${command} on modbench.pluginListTree`,
+    );
 
   // Rule 5 — docs/specs/containers.md.
   it('keeps modbench.pluginListTree.filter at slot 1 (unchanged by this slice)', () => {
-    expect(entryFor('modbench.pluginListTree.filter')!.group).toBe('navigation@1');
+    expect(entryFor('modbench.pluginListTree.filter').group).toBe('navigation@1');
   });
 
   it('places the record filter (setFilter/clearFilter) at slot 2', () => {
-    expect(entryFor('modbench.setFilter')!.group).toBe('navigation@2');
-    const clear = titleMenus().find((e) => e.command === 'modbench.clearFilter' && e.when.includes('modbench.pluginListTree'));
-    expect(clear!.group).toBe('navigation@2');
-    expect(clear!.when).toBe('view == modbench.pluginListTree && modbench.filterActive');
+    expect(entryFor('modbench.setFilter').group).toBe('navigation@2');
+    const clear = present(
+      titleMenus().find((e) => e.command === 'modbench.clearFilter' && e.when.includes('modbench.pluginListTree')),
+      'a view/title entry for modbench.clearFilter on modbench.pluginListTree',
+    );
+    expect(clear.group).toBe('navigation@2');
+    expect(clear.when).toBe('view == modbench.pluginListTree && modbench.filterActive');
   });
 
   it('places New Plugin… at slot 3', () => {
-    expect(entryFor('modbench.newPlugin')!.group).toBe('navigation@3');
+    expect(entryFor('modbench.newPlugin').group).toBe('navigation@3');
   });
 });
 
@@ -158,7 +182,8 @@ describe('package.json Open Header has no button of its own — row click replac
 describe('package.json filtering is one UX', () => {
   const titleMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/title'];
   const commandOf = (): { command: string; title: string; icon?: string }[] => pkg.contributes.commands;
-  const commandTitle = (id: string) => commandOf().find((c) => c.command === id);
+  const commandTitle = (id: string) =>
+    present(commandOf().find((c) => c.command === id), `a command entry for ${id}`);
 
   // Rule 6 — docs/specs/containers.md.
   const FILTERED_VIEWS = [
@@ -168,17 +193,19 @@ describe('package.json filtering is one UX', () => {
   ] as const;
 
   it.each(FILTERED_VIEWS)('%s narrows by name from slot 1', (view, command) => {
-    const entry = titleMenus().find((e) => e.command === command && e.when.includes(view));
-    expect(entry, `expected ${command} on ${view}`).toBeTruthy();
-    expect(entry!.group).toBe('navigation@1');
+    const entry = present(
+      titleMenus().find((e) => e.command === command && e.when.includes(view)),
+      `${command} on ${view}`,
+    );
+    expect(entry.group).toBe('navigation@1');
   });
 
   it.each(FILTERED_VIEWS)('%s uses $(search) — narrowing by name, not by condition', (_view, command) => {
-    expect(commandTitle(command)!.icon).toBe('$(search)');
+    expect(commandTitle(command).icon).toBe('$(search)');
   });
 
   it('keeps $(filter) for the record filter, so the two never read as the same action', () => {
-    expect(commandTitle('modbench.setFilter')!.icon).toBe('$(filter)');
+    expect(commandTitle('modbench.setFilter').icon).toBe('$(filter)');
   });
 
   // The filter is durable, so it needs a way out: the two-command + context-key toggle template,
@@ -190,16 +217,21 @@ describe('package.json filtering is one UX', () => {
   ] as const;
 
   it.each(DURABLE_FILTERS)('%s swaps slot 1 to its clear variant while a filter is active', (view, open, clearCommand, key) => {
-    const openEntry = titleMenus().find((e) => e.command === open && e.when.includes(`view == ${view}`));
-    const clearEntry = titleMenus().find((e) => e.command === clearCommand && e.when.includes(`view == ${view}`));
-    expect(clearEntry, `expected ${clearCommand} on ${view}`).toBeTruthy();
-    expect(openEntry!.when).toBe(`view == ${view} && !${key}`);
-    expect(clearEntry!.when).toBe(`view == ${view} && ${key}`);
-    expect(clearEntry!.group).toBe('navigation@1');
+    const openEntry = present(
+      titleMenus().find((e) => e.command === open && e.when.includes(`view == ${view}`)),
+      `${open} on ${view}`,
+    );
+    const clearEntry = present(
+      titleMenus().find((e) => e.command === clearCommand && e.when.includes(`view == ${view}`)),
+      `${clearCommand} on ${view}`,
+    );
+    expect(openEntry.when).toBe(`view == ${view} && !${key}`);
+    expect(clearEntry.when).toBe(`view == ${view} && ${key}`);
+    expect(clearEntry.group).toBe('navigation@1');
   });
 
   it.each(DURABLE_FILTERS)('%s clears with $(clear-all)', (_view, _open, clearCommand) => {
-    expect(commandTitle(clearCommand)!.icon).toBe('$(clear-all)');
+    expect(commandTitle(clearCommand).icon).toBe('$(clear-all)');
   });
 
   // `ctrl+F` means find-within-the-focused-surface everywhere else in VS Code. Trees left it
@@ -207,10 +239,12 @@ describe('package.json filtering is one UX', () => {
   // conflicts with nothing.
   it.each(DURABLE_FILTERS)('%s opens its filter on ctrl+F while focused', (view, openCommand) => {
     const keybindings: { command: string; key: string; when: string }[] = pkg.contributes.keybindings;
-    const entry = keybindings.find((k) => k.command === openCommand);
-    expect(entry, `expected a ctrl+F binding for ${openCommand}`).toBeTruthy();
-    expect(entry!.key).toBe('ctrl+f');
-    expect(entry!.when).toBe(`focusedView == ${view}`);
+    const entry = present(
+      keybindings.find((k) => k.command === openCommand),
+      `a ctrl+F binding for ${openCommand}`,
+    );
+    expect(entry.key).toBe('ctrl+f');
+    expect(entry.when).toBe(`focusedView == ${view}`);
   });
 
   // Scoped to the focused view, never the container or the window: an unscoped ctrl+F would
@@ -234,8 +268,9 @@ describe('package.json Refresh is one command', () => {
   it('puts it at slot 1 of the Toolbox and nowhere else', () => {
     const entries = titleMenus().filter((e) => e.command === 'modbench.refresh');
     expect(entries).toHaveLength(1);
-    expect(entries[0]!.when).toBe('view == modbench.toolbox');
-    expect(entries[0]!.group).toBe('navigation@1');
+    const entry = present(entries[0], 'the sole modbench.refresh view/title entry');
+    expect(entry.when).toBe('view == modbench.toolbox');
+    expect(entry.group).toBe('navigation@1');
   });
 
 });
@@ -306,13 +341,14 @@ describe('package.json Deploy/Purge/Launch gating', () => {
     // modbench.toolbox.launch runs a contributed task, never a hardcoded game exe. Same
     // MO2-instance-only gate as Deploy/Purge — there is no separate standalone mode.
     for (const command of ['modbench.toolbox.deploy', 'modbench.toolbox.purge', 'modbench.toolbox.launch']) {
-      const entry = palette.find((e) => e.command === command);
-      expect(entry, `expected a commandPalette entry for ${command}`).toBeTruthy();
+      const entry = present(palette.find((e) => e.command === command), `a commandPalette entry for ${command}`);
       // Same gate as the view/title button for this command, so palette and title bar can never diverge.
       const titleBarMenus: { command: string; when: string }[] = pkg.contributes.menus['view/title'];
-      const titleBarEntry = titleBarMenus.find((e) => e.command === command);
-      expect(titleBarEntry, `expected a view/title entry for ${command}`).toBeTruthy();
-      expect(titleBarEntry!.when).toContain(entry!.when);
+      const titleBarEntry = present(
+        titleBarMenus.find((e) => e.command === command),
+        `a view/title entry for ${command}`,
+      );
+      expect(titleBarEntry.when).toContain(entry.when);
     }
   });
 });
@@ -402,7 +438,8 @@ describe('package.json command titles and categories', () => {
 // for itself.
 describe('package.json record-row context menu — renumber gated to native tracked rows', () => {
   const contextMenus = (): { command: string; when: string }[] => pkg.contributes.menus['view/item/context'];
-  const whenOf = (command: string) => contextMenus().find((e) => e.command === command)!.when;
+  const whenOf = (command: string) =>
+    present(contextMenus().find((e) => e.command === command), `a view/item/context entry for ${command}`).when;
 
   it('offers Change FormID only on viewItem == recordTracked', () => {
     expect(whenOf('modbench.record.renumber')).toBe('view == modbench.pluginListTree && viewItem == recordTracked');
@@ -449,9 +486,11 @@ describe('package.json per-plugin Track', () => {
   const contextMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/item/context'];
 
   it('sits below the other row actions in the same row-action group', () => {
-    const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.track');
-    expect(entry).toBeTruthy();
-    expect(entry!.group).toBe('pluginActions@2');
+    const entry = present(
+      contextMenus().find((e) => e.command === 'modbench.pluginListTree.track'),
+      'the modbench.pluginListTree.track context-menu entry',
+    );
+    expect(entry.group).toBe('pluginActions@2');
   });
 
   // No icon: Track is a one-time, deliberately weighty gesture (ADR-0007: "deliberate friction"),
@@ -470,19 +509,23 @@ describe('package.json "Open Editor to the Side" reachable from Plugins tree rec
   const contextMenus = (): { command: string; when: string; group: string }[] => pkg.contributes.menus['view/item/context'];
 
   it('offers modbench.openEditorBeside on every record and placed-reference row', () => {
-    const entry = contextMenus().find((e) =>
-      e.command === 'modbench.openEditorBeside' && e.when.includes('modbench.pluginListTree'));
-    expect(entry, 'expected a modbench.openEditorBeside entry on the Plugins tree').toBeTruthy();
-    expect(entry!.when).toBe(
+    const entry = present(
+      contextMenus().find((e) =>
+        e.command === 'modbench.openEditorBeside' && e.when.includes('modbench.pluginListTree')),
+      'a modbench.openEditorBeside entry on the Plugins tree',
+    );
+    expect(entry.when).toBe(
       'view == modbench.pluginListTree && (viewItem == recordTracked || viewItem == recordUntracked'
       + ' || viewItem == recordOverride || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)');
   });
 
   it('leaves the Referenced By group row\'s own existing entry untouched', () => {
-    const entry = contextMenus().find((e) =>
-      e.command === 'modbench.openEditorBeside' && e.when.includes('referencedByTree'));
-    expect(entry).toBeTruthy();
-    expect(entry!.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
-    expect(entry!.group).toBe('modbench@2');
+    const entry = present(
+      contextMenus().find((e) =>
+        e.command === 'modbench.openEditorBeside' && e.when.includes('referencedByTree')),
+      'a modbench.openEditorBeside entry on the Referenced By tree',
+    );
+    expect(entry.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
+    expect(entry.group).toBe('modbench@2');
   });
 });

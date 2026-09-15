@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
+import { present } from '../present';
 
 // CONTEXT.md/ADR-0012: Mods, Downloads, Toolbox and the Instance key a plugin by filename and
 // origin, never by FormKey, and never reach the backend. The Plugins view is excluded — it
@@ -12,7 +13,8 @@ const SRC = join(__dirname, '..');
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)]
+    .map((m) => present(m[1], 'the module-path capture group the pattern always matches'));
 }
 
 // No directory is skipped by name here, so the walk provably reaches the Plugins view;

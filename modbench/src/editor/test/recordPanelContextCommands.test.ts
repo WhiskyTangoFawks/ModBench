@@ -24,6 +24,7 @@ vi.mock('../extendedFieldEditor', () => ({
 import { registerRecordPanelContextCommands, type RecordPanelContextCommandDeps } from '../recordPanelContextCommands';
 import type { ArrayElementContext, ArrayParentContext, StringValueContext } from '../../medit/messages';
 import { InMemoryMEditClient } from '../../medit/client';
+import { present } from '../../present';
 
 beforeEach(() => { handlers.clear(); registerCommand.mockClear(); openExtendedFieldEditor.mockClear(); });
 
@@ -85,12 +86,12 @@ describe('right-click array ops write one envelope from the host', () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.array.add')!(parentContext(
+    await present(handlers.get('modbench.array.add'), "the handler registered for 'modbench.array.add'")(parentContext(
       [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }],
     ));
 
     expect(editRecordCalls(meditClient)).toHaveLength(1);
-    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
+    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'add', path: [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }] },
     ]);
@@ -100,11 +101,11 @@ describe('right-click array ops write one envelope from the host', () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.array.remove')!(elementContext(
+    await present(handlers.get('modbench.array.remove'), "the handler registered for 'modbench.array.remove'")(elementContext(
       [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }],
     ));
 
-    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
+    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'remove', path: [{ kind: 'member', name: 'Scripts' }, { kind: 'key', key: 'Guard' }] },
     ]);
@@ -117,11 +118,11 @@ describe('right-click array ops write one envelope from the host', () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get(command)!(elementContext(
+    await present(handlers.get(command), "the handler registered for the command under test")(elementContext(
       [{ kind: 'member', name: 'Container' }, { kind: 'member', name: 'Entries' }, { kind: 'index', index: 2 }],
     ));
 
-    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
+    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       {
         op: 'move',
@@ -137,9 +138,9 @@ describe('right-click array ops write one envelope from the host', () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.array.moveUp')!(elementContext([{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }]));
+    await present(handlers.get('modbench.array.moveUp'), "the handler registered for 'modbench.array.moveUp'")(elementContext([{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }]));
 
-    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
+    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'move', path: [{ kind: 'member', name: 'Values' }, { kind: 'index', index: 0 }], value: -1 },
     ]);
@@ -149,7 +150,7 @@ describe('right-click array ops write one envelope from the host', () => {
     const { deps, onRecordEdited } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.array.add')!(parentContext([{ kind: 'member', name: 'Values' }]));
+    await present(handlers.get('modbench.array.add'), "the handler registered for 'modbench.array.add'")(parentContext([{ kind: 'member', name: 'Values' }]));
 
     expect(onRecordEdited).toHaveBeenCalledWith(IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin);
   });
@@ -159,7 +160,7 @@ describe('right-click array ops write one envelope from the host', () => {
     meditClient.setCommandResult('editRecord', { applied: false, refusal: 'NotTracked', message: 'Track the mod first.' });
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.array.add')!(parentContext([{ kind: 'member', name: 'Values' }]));
+    await present(handlers.get('modbench.array.add'), "the handler registered for 'modbench.array.add'")(parentContext([{ kind: 'member', name: 'Values' }]));
 
     expect(report).toHaveBeenCalledWith('warning', 'Track the mod first.');
     expect(onRecordEdited).not.toHaveBeenCalled();
@@ -169,7 +170,7 @@ describe('right-click array ops write one envelope from the host', () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.array.add')!(undefined);
+    await present(handlers.get('modbench.array.add'), "the handler registered for 'modbench.array.add'")(undefined);
 
     expect(editRecordCalls(meditClient)).toHaveLength(0);
   });
@@ -179,7 +180,7 @@ describe('right-click array ops write one envelope from the host', () => {
 // context it is handed rather than asking the panel for anything.
 describe('the extended editor opens and saves from the host', () => {
   function openedWith(): { params: OpenExtendedFieldEditorParams; deps: ExtendedFieldEditorDeps } {
-    const [params, editorDeps] = openExtendedFieldEditor.mock.calls.at(-1)!;
+    const [params, editorDeps] = present(openExtendedFieldEditor.mock.calls.at(-1), "the last openExtendedFieldEditor call");
     return { params, deps: editorDeps };
   }
 
@@ -187,7 +188,7 @@ describe('the extended editor opens and saves from the host', () => {
     const { deps } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.field.openExtended')!(stringContext({
+    await present(handlers.get('modbench.field.openExtended'), "the handler registered for 'modbench.field.openExtended'")(stringContext({
       recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Id', readOnly: true,
     }));
 
@@ -201,7 +202,7 @@ describe('the extended editor opens and saves from the host', () => {
     const { deps } = makeDeps({ tempRoot: '/tmp/modbench-fields' });
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.field.openExtended')!(stringContext());
+    await present(handlers.get('modbench.field.openExtended'), "the handler registered for 'modbench.field.openExtended'")(stringContext());
 
     expect(openedWith().deps.tempRoot).toBe('/tmp/modbench-fields');
   });
@@ -213,10 +214,10 @@ describe('the extended editor opens and saves from the host', () => {
       { kind: 'member', name: 'Container' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' },
     ] as StringValueContext['path'];
 
-    await handlers.get('modbench.field.openExtended')!(stringContext({ path }));
+    await present(handlers.get('modbench.field.openExtended'), "the handler registered for 'modbench.field.openExtended'")(stringContext({ path }));
     await openedWith().deps.onCommit('edited in the tab');
 
-    expect(editRecordCalls(meditClient)[0]!.args).toEqual([
+    expect(present(editRecordCalls(meditClient)[0], "the sole editRecord call").args).toEqual([
       IDENTITY.formKey, IDENTITY.plugin, IDENTITY.origin,
       { op: 'set', path, value: 'edited in the tab' },
     ]);
@@ -227,7 +228,7 @@ describe('the extended editor opens and saves from the host', () => {
     const { deps, meditClient } = makeDeps();
     registerRecordPanelContextCommands(deps);
 
-    await handlers.get('modbench.field.openExtended')!(stringContext());
+    await present(handlers.get('modbench.field.openExtended'), "the handler registered for 'modbench.field.openExtended'")(stringContext());
     await openedWith().deps.onCommit('first save');
     await openedWith().deps.onCommit('second save');
 
