@@ -11,18 +11,28 @@ export type FormKeyResolution = Schemas['FormKeyResolution'];
 export type ConflictAll = Schemas['ConflictAll'];
 export type ConflictThis = Schemas['ConflictThis'];
 export type EnumMember = Schemas['EnumMember'];
-/** The backend's own `type` string, narrowed to the closed set this side switches on. Each names
- *  the codec's spelling: a translated string is an object, a color "#AARRGGBB", a vector
- *  "x, y, z", flags an array of names. */
+/** The closed set this side switches on. Each names the codec's spelling: a translated string is
+ *  an object, a color "#AARRGGBB", a vector "x, y, z", flags an array of names. */
 export type FieldType =
   | 'string' | 'translatedString' | 'int' | 'float' | 'bool' | 'enum' | 'flags' | 'formKey'
   | 'struct' | 'array' | 'hex' | 'color' | 'vector';
+
+const FIELD_TYPES: readonly FieldType[] = [
+  'string', 'translatedString', 'int', 'float', 'bool', 'enum', 'flags', 'formKey',
+  'struct', 'array', 'hex', 'color', 'vector',
+];
+
+// Narrows FieldMetadata's plain wire string into FieldType, for a switch that needs the union.
+export function isFieldType(value: string): value is FieldType {
+  return (FIELD_TYPES as readonly string[]).includes(value);
+}
 
 /** `readOnly` is the one member the wire does not carry: a per-row stamp regardless of the
  *  column's own mutability — "per column, never a mode". */
 export type FieldMetadata =
   Omit<Schemas['FieldMetadata'], 'type' | 'elementType' | 'fields' | 'variants'> & {
-    type: FieldType;
+    // The wire's own string; a backend type FieldType has not caught up with still arrives here.
+    type: string;
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
     variants?: Record<string, FieldMetadata> | null;

@@ -12,25 +12,28 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { columnKey } from './columnKey';
-import { fieldMeta, panelClient, parseJsonRecord, required, type PanelOpts } from './test/fixtures';
+import {
+  compareOverride, compareResultFixture, diffNode, fieldMeta, panelClient, parseJsonRecord, required,
+  type PanelOpts,
+} from './test/fixtures';
+import type { CompareResult } from './types';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
-const compareResult = {
+const compareResult: CompareResult = compareResultFixture({
   conflictAll: 'Conflict',
   overrides: [
-    {
+    compareOverride({
       formKey: '000001:Fallout4.esm',
       plugin: 'Fallout4.esm',
-      loadOrderIndex: 0,
       isWinner: false,
       editorId: 'TestNPC',
       fields: [
         { metadata: strMeta, value: 'Original Name' },
       ],
       conflictThis: 'Master',
-    },
-    {
+    }),
+    compareOverride({
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       loadOrderIndex: 1,
@@ -40,59 +43,58 @@ const compareResult = {
         { metadata: strMeta, value: 'Override Name' },
       ],
       conflictThis: 'ConflictWins',
-    },
+    }),
   ],
   diffs: [
-    {
+    diffNode({
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
       winnerColumn: 'MyMod.esp',
       cellStates: { 'MyMod.esp': 'ConflictWins' },
       conflictAll: 'Conflict',
-    },
+    }),
   ],
-};
+});
 
 const pluginsResponse = [
   { name: 'Fallout4.esm', isImmutable: true,  loadOrderIndex: 0 },
   { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
 ];
 
-const immutableWinnerCompareResult = {
+const immutableWinnerCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'OnlyOne',
   overrides: [
-    {
-      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true,
+    compareOverride({
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'OnlyOne',
-    },
+    }),
   ],
   diffs: [
-    {
+    diffNode({
       fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name' },
       winnerColumn: 'Fallout4.esm', cellStates: {},
-    },
+    }),
   ],
-};
+});
 
 const intMeta: FieldMetadata = fieldMeta({ name: 'Level', type: 'int' });
 const fkMeta: FieldMetadata = fieldMeta({
   name: 'Race', type: 'formKey', validFormKeyTypes: ['race']});
 
-const fkCompareResult = {
+const fkCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'OnlyOne',
   overrides: [
-    {
+    compareOverride({
       formKey: '000001:Fallout4.esm',
       plugin: 'Fallout4.esm',
-      loadOrderIndex: 0,
       isWinner: true,
       editorId: 'TestNPC',
       fields: [{ metadata: fkMeta, value: '00013918:Fallout4.esm' }],
       conflictThis: 'OnlyOne',
-    },
+    }),
   ],
   diffs: [
-    {
+    diffNode({
       fieldName: 'Race',
       values: { 'Fallout4.esm': '00013918:Fallout4.esm' },
       winnerColumn: 'Fallout4.esm',
@@ -100,77 +102,77 @@ const fkCompareResult = {
       // ADR-0005: the backend carries a resolution signal per FormKey value; an unresolved
       // default would exercise no affordance at all.
       resolutions: { 'Fallout4.esm': { state: 'ResolvedValidType', recordType: 'race', editorId: 'HumanRace' } },
-    },
+    }),
   ],
-};
+});
 
-const overrideCompareResult = {
+const overrideCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
-    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'Master' },
-    { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }], conflictThis: 'Override' },
+    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'Master' }),
+    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }], conflictThis: 'Override' }),
   ],
-  diffs: [{ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
+  diffs: [diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
     winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' },
-    conflictAll: 'Override' }],
-};
+    conflictAll: 'Override' })],
+});
 
-const twoSiblingFieldsResult = {
+const twoSiblingFieldsResult: CompareResult = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
-    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }, { metadata: intMeta, value: 5 }], conflictThis: 'Master' },
-    { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }, { metadata: intMeta, value: 5 }], conflictThis: 'Override' },
+    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }, { metadata: intMeta, value: 5 }], conflictThis: 'Master' }),
+    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Override Name' }, { metadata: intMeta, value: 5 }], conflictThis: 'Override' }),
   ],
   diffs: [
-    { fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
+    diffNode({ fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
       winnerColumn: 'MyMod.esp', cellStates: { 'MyMod.esp': 'Override' },
-      conflictAll: 'Override' },
-    { fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 },
+      conflictAll: 'Override' }),
+    diffNode({ fieldName: 'Level', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 },
       winnerColumn: 'MyMod.esp', cellStates: {},
-      conflictAll: 'NoConflict' },
+      conflictAll: 'NoConflict' }),
   ],
-};
+});
 
-const sameFilenameCompareResult = {
+const sameFilenameCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'Conflict',
   overrides: [
-    { formKey: '000001:Fallout4.esm', plugin: 'Shared.esp', origin: 'ModA', loadOrderIndex: 0, isWinner: false,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'FromA' }], conflictThis: 'Master', recordType: 'npc_' },
-    { formKey: '000001:Fallout4.esm', plugin: 'Shared.esp', origin: 'ModB', loadOrderIndex: 1, isWinner: true,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'FromB' }], conflictThis: 'ConflictWins', recordType: 'npc_' },
+    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Shared.esp', origin: 'ModA', isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'FromA' }], conflictThis: 'Master', recordType: 'npc_' }),
+    compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Shared.esp', origin: 'ModB', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'FromB' }], conflictThis: 'ConflictWins', recordType: 'npc_' }),
   ],
-  diffs: [{
+  diffs: [diffNode({
     fieldName: 'Name',
     values: { [columnKey('Shared.esp', 'ModA')]: 'FromA', [columnKey('Shared.esp', 'ModB')]: 'FromB' },
     winnerColumn: columnKey('Shared.esp', 'ModB'),
     cellStates: { [columnKey('Shared.esp', 'ModB')]: 'ConflictWins' },
-  }],
-};
+  })],
+});
 
 const sameFilenamePluginsResponse = [
   { name: 'Shared.esp', origin: 'ModA', isImmutable: false, loadOrderIndex: 0 },
   { name: 'Shared.esp', origin: 'ModB', isImmutable: false, loadOrderIndex: 1 },
 ];
 
-const notInLoadOrderCompareResult = {
+const notInLoadOrderCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'OnlyOne',
   overrides: [
-    {
+    compareOverride({
       formKey: '000001:Solo.esp', plugin: 'Solo.esp', origin: 'ShadowMod', loadOrderIndex: 5, isWinner: false,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Shadowed value' }], conflictThis: 'OnlyOne', recordType: 'npc_',
-    },
+    }),
   ],
-  diffs: [{
+  diffs: [diffNode({
     fieldName: 'Name',
     values: { [columnKey('Solo.esp', 'ShadowMod')]: 'Shadowed value' },
     winnerColumn: columnKey('Solo.esp', 'ShadowMod'),
     cellStates: { [columnKey('Solo.esp', 'ShadowMod')]: 'OnlyOne' },
-  }],
-};
+  })],
+});
 
 const notInLoadOrderPluginsResponse = [
   { name: 'Solo.esp', origin: 'ShadowMod', isImmutable: true, loadOrderIndex: 5, inLoadOrder: false },
@@ -183,47 +185,47 @@ const partialFormTrackedPluginsResponse = [
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
 ];
 
-const partialFormCompareResult = {
+const partialFormCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'NoConflict',
   overrides: [
-    {
-      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+    compareOverride({
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'Master',
-    },
-    {
+    }),
+    compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'IdenticalToMaster',
       isPartialForm: true, isPartialFormable: true,
-    },
+    }),
   ],
   diffs: [
-    {
+    diffNode({
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': null },
       winnerColumn: 'Fallout4.esm',
       cellStates: {},
-    },
+    }),
   ],
-};
+});
 
 // The document names both A and B, so the resting label reads "A, B".
 const flagsFieldMeta: FieldMetadata = fieldMeta({
   name: 'Flags', type: 'flags',
   enumMembers: [{ value: 'A', bitValue: '1' }, { value: 'B', bitValue: '2' }]});
 
-const flagsCompareResult = {
+const flagsCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'NoConflict',
   overrides: [
-    {
-      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+    compareOverride({
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
       editorId: 'TestNPC',
       fields: [
         { metadata: strMeta, value: 'Original Name' },
         { metadata: flagsFieldMeta, value: ['A', 'B'] },
       ],
       conflictThis: 'Master',
-    },
-    {
+    }),
+    compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
       editorId: 'TestNPC',
       fields: [
@@ -231,23 +233,23 @@ const flagsCompareResult = {
         { metadata: flagsFieldMeta, value: ['A', 'B'] },
       ],
       conflictThis: 'IdenticalToMaster',
-    },
+    }),
   ],
   diffs: [
-    {
+    diffNode({
       fieldName: 'Name',
       values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
       winnerColumn: 'MyMod.esp',
       cellStates: {},
-    },
-    {
+    }),
+    diffNode({
       fieldName: 'Flags',
       values: { 'Fallout4.esm': ['A', 'B'], 'MyMod.esp': ['A', 'B'] },
       winnerColumn: 'MyMod.esp',
       cellStates: {},
-    },
+    }),
   ],
-};
+});
 
 // MyMod.esp must be tracked for editableColumns to include it at all, so the real gate runs
 // rather than a hand-fed set.
@@ -264,19 +266,18 @@ const structFieldMeta: FieldMetadata = fieldMeta({
     fieldMeta({ name: 'Y', type: 'int' }),
   ]});
 
-const structCompareResult = {
+const structCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'Override',
   overrides: [
-    {
+    compareOverride({
       formKey: '000001:Fallout4.esm',
       plugin: 'Fallout4.esm',
-      loadOrderIndex: 0,
       isWinner: false,
       editorId: 'TestNPC',
       fields: [{ metadata: structFieldMeta, value: { X: 10, Y: 20 } }],
       conflictThis: 'Master',
-    },
-    {
+    }),
+    compareOverride({
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       loadOrderIndex: 1,
@@ -284,35 +285,35 @@ const structCompareResult = {
       editorId: 'TestNPC',
       fields: [{ metadata: structFieldMeta, value: { X: 15, Y: 20 } }],
       conflictThis: 'Override',
-    },
+    }),
   ],
   diffs: [
-    {
+    diffNode({
       fieldName: 'Bounds',
       values: { 'Fallout4.esm': { X: 10, Y: 20 }, 'MyMod.esp': { X: 15, Y: 20 } },
       winnerColumn: 'MyMod.esp',
       cellStates: { 'MyMod.esp': 'Override' },
       children: [
-        {
+        diffNode({
           fieldName: 'X',
           values: { 'Fallout4.esm': 10, 'MyMod.esp': 15 },
           winnerColumn: 'MyMod.esp',
           cellStates: { 'MyMod.esp': 'Override' },
-        },
-        {
+        }),
+        diffNode({
           fieldName: 'Y',
           values: { 'Fallout4.esm': 20, 'MyMod.esp': 20 },
           winnerColumn: 'MyMod.esp',
           cellStates: { 'MyMod.esp': 'IdenticalToMaster' },
-        },
+        }),
       ],
-    },
+    }),
   ],
-};
+});
 
 // `pluginsResponse` is this file's own default column set; every other option is the shared
 // fixture's.
-function renderPanel(compare: unknown, opts: PanelOpts = {}) {
+function renderPanel(compare: CompareResult, opts: PanelOpts = {}) {
   const client = panelClient(() => compare, { plugins: pluginsResponse, ...opts });
   return { client, ...render(<RecordPanel client={client} />) };
 }
@@ -411,18 +412,18 @@ describe('RecordPanel — column header native right-click menu', () => {
 
   it('the header cell carries the recordHeader context, naming this column\'s own record identity', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    const compare = {
+    const compare = compareResultFixture({
       conflictAll: 'OnlyOne',
-      overrides: [{
+      overrides: [compareOverride({
         formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-        loadOrderIndex: 0, isWinner: true, editorId: 'TestNPC',
+        isWinner: true, editorId: 'TestNPC',
         fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
-      }],
-      diffs: [{
+      })],
+      diffs: [diffNode({
         fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
         winnerColumn: 'MyMod.esp', cellStates: {},
-      }],
-    };
+      })],
+    });
     const { container } = renderPanel(compare);
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
@@ -919,76 +920,80 @@ const aliasesMeta: FieldMetadata = fieldMeta({
 const masterAlias = { Kind: 'RefAlias', name: 'AnAlias', location: { alias_id: 5 }, external: null };
 const overrideAlias = { Kind: 'LocAlias', name: 'AnAlias', location: null, external: { alias_id: 7 } };
 
-const mixedLeafAliasResult = {
+const mixedLeafAliasResult: CompareResult = compareResultFixture({
   conflictAll: 'Conflict',
   overrides: [
-    {
-      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+    compareOverride({
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
       editorId: 'TestQuest', fields: [{ metadata: aliasesMeta, value: [masterAlias] }], conflictThis: 'Master',
-    },
-    {
+    }),
+    compareOverride({
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
       editorId: 'TestQuest', fields: [{ metadata: aliasesMeta, value: [overrideAlias] }], conflictThis: 'ConflictWins',
-    },
+    }),
   ],
-  diffs: [{
+  diffs: [diffNode({
     fieldName: 'aliases',
     values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [overrideAlias] },
     winnerColumn: 'MyMod.esp', cellStates: {},
-    children: [{
+    children: [diffNode({
       fieldName: '[0]',
       values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': overrideAlias },
       winnerColumn: 'MyMod.esp', cellStates: {},
       children: [
-        {
+        diffNode({
           fieldName: 'name', values: { 'Fallout4.esm': 'AnAlias', 'MyMod.esp': 'AnAlias' },
           winnerColumn: 'MyMod.esp', cellStates: {},
-        },
-        {
+        }),
+        diffNode({
           fieldName: 'location',
           values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': null },
           winnerColumn: 'Fallout4.esm', cellStates: {},
-          children: [{
+          children: [diffNode({
             fieldName: 'alias_id', values: { 'Fallout4.esm': 5, 'MyMod.esp': null },
             winnerColumn: 'Fallout4.esm', cellStates: {},
-          }],
-        },
-        {
+          })],
+        }),
+        diffNode({
           fieldName: 'external',
           values: { 'Fallout4.esm': null, 'MyMod.esp': { alias_id: 7 } },
           winnerColumn: 'MyMod.esp', cellStates: {},
-          children: [{
+          children: [diffNode({
             fieldName: 'alias_id', values: { 'Fallout4.esm': null, 'MyMod.esp': 7 },
             winnerColumn: 'MyMod.esp', cellStates: {},
-          }],
-        },
+          })],
+        }),
       ],
-    }],
-  }],
-};
+    })],
+  })],
+});
 
 // Both plugins carry the same leaf, and the backend drops a member null in every column, so
 // only that leaf's members remain.
 const mixedLeafAliasDiff = required(mixedLeafAliasResult.diffs[0], "the sole diff of mixedLeafAliasResult");
-const mixedLeafAliasDiffChild = required(mixedLeafAliasDiff.children[0], "the sole diff's first child");
+const mixedLeafAliasDiffChildren = required(mixedLeafAliasDiff.children, "the sole diff's children");
+const mixedLeafAliasDiffChild = required(mixedLeafAliasDiffChildren[0], "the sole diff's first child");
+const mixedLeafAliasDiffChildChildren = required(
+  mixedLeafAliasDiffChild.children, "the first child's own children",
+);
 
-const singleLeafAliasResult = {
+const singleLeafAliasResult: CompareResult = compareResultFixture({
   ...mixedLeafAliasResult,
-  overrides: mixedLeafAliasResult.overrides.map(o => ({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
-  diffs: [{
+  overrides: mixedLeafAliasResult.overrides.map(o => compareOverride({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
+  diffs: [diffNode({
     ...mixedLeafAliasDiff,
     values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [masterAlias] },
-    children: [{
+    children: [diffNode({
       ...mixedLeafAliasDiffChild,
       values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': masterAlias },
-      children: mixedLeafAliasDiffChild.children
+      children: mixedLeafAliasDiffChildChildren
         .filter(c => c.fieldName !== 'external')
         .map(c => (c.fieldName === 'location'
-          ? { ...c, values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': { alias_id: 5 } } }
+          ? diffNode({ ...c, values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': { alias_id: 5 } } })
           : c)),
-    }],
-  }],
-};
+    })],
+  })],
+});
 
 describe('RecordPanel — union element rows', () => {
   beforeEach(() => {
@@ -1080,33 +1085,33 @@ const unionFieldMeta: FieldMetadata = fieldMeta({
 
 const unionValue = { level: 5, MutagenObjectType: 'NpcLevel' };
 
-const unionCompareResult = {
+const unionCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'OnlyOne',
   overrides: [
-    {
-      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
+    compareOverride({
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: unionFieldMeta, value: unionValue }],
       conflictThis: 'OnlyOne',
-    },
+    }),
   ],
   diffs: [
-    {
+    diffNode({
       fieldName: 'Level',
       values: { 'MyMod.esp': unionValue },
       winnerColumn: 'MyMod.esp', cellStates: {},
       children: [
-        {
+        diffNode({
           fieldName: 'level', values: { 'MyMod.esp': 5 },
           winnerColumn: 'MyMod.esp', cellStates: {},
-        },
-        {
+        }),
+        diffNode({
           fieldName: 'MutagenObjectType', values: { 'MyMod.esp': 'NpcLevel' },
           winnerColumn: 'MyMod.esp', cellStates: {},
-        },
+        }),
       ],
-    },
+    }),
   ],
-};
+});
 
 const unionTrackedPluginsResponse = [
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
@@ -1184,23 +1189,23 @@ describe('RecordPanel — an absent member reads as its default', () => {
   const full = { Weight: 3, Essential: true, Prefix: 'x', RunOn: 'Target', Count: 7, Owner: '000019:Fallout4.esm' };
   const sparse = {};
 
-  const compare = {
+  const compare: CompareResult = compareResultFixture({
     conflictAll: 'Conflict',
     overrides: [
-      { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
-        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: full }], conflictThis: 'Master' },
-      { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
-        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: sparse }], conflictThis: 'ConflictWins' },
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false,
+        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: full }], conflictThis: 'Master' }),
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+        editorId: 'TestNPC', fields: [{ metadata: statsMeta, value: sparse }], conflictThis: 'ConflictWins' }),
     ],
-    diffs: [{
+    diffs: [diffNode({
       fieldName: 'Stats', values: { 'Fallout4.esm': full, 'MyMod.esp': sparse },
       winnerColumn: 'MyMod.esp', cellStates: {},
-      children: Object.entries(full).map(([name, v]) => ({
+      children: Object.entries(full).map(([name, v]) => diffNode({
         fieldName: name, values: { 'Fallout4.esm': v, 'MyMod.esp': null },
         winnerColumn: 'Fallout4.esm', cellStates: {},
       })),
-    }],
-  };
+    })],
+  });
 
   const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
   const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
@@ -1264,30 +1269,30 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   const valuesMeta: FieldMetadata = fieldMeta({
     name: 'Values', type: 'array', isArray: true,
     elementType: fieldMeta({ name: '', type: 'int' })});
-  const compare = {
+  const compare: CompareResult = compareResultFixture({
     conflictAll: 'Conflict',
     overrides: [
-      { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
-        fields: [{ metadata: boundsMeta, value: { X: 10 } }, { metadata: valuesMeta, value: [1, 2] }], conflictThis: 'Master' },
-      { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: boundsMeta, value: null }, { metadata: valuesMeta, value: [1] }], conflictThis: 'ConflictWins' },
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false, editorId: 'TestNPC',
+        fields: [{ metadata: boundsMeta, value: { X: 10 } }, { metadata: valuesMeta, value: [1, 2] }], conflictThis: 'Master' }),
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: boundsMeta, value: null }, { metadata: valuesMeta, value: [1] }], conflictThis: 'ConflictWins' }),
     ],
     diffs: [
-      {
+      diffNode({
         fieldName: 'Bounds', values: { 'Fallout4.esm': { X: 10 }, 'MyMod.esp': null },
         winnerColumn: 'Fallout4.esm', cellStates: {},
-        children: [{ fieldName: 'X', values: { 'Fallout4.esm': 10, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} }],
-      },
-      {
+        children: [diffNode({ fieldName: 'X', values: { 'Fallout4.esm': 10, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} })],
+      }),
+      diffNode({
         fieldName: 'Values', values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1] },
         winnerColumn: 'MyMod.esp', cellStates: {},
         children: [
-          { fieldName: '[0]', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} },
-          { fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} },
+          diffNode({ fieldName: '[0]', values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', cellStates: {} }),
+          diffNode({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': null }, winnerColumn: 'Fallout4.esm', cellStates: {} }),
         ],
-      },
+      }),
     ],
-  };
+  });
 
   const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
   const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
@@ -1329,20 +1334,20 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   it('a Partial Form column\'s non-nullable struct field reads as nothing, not as its default', async () => {
     const sizeMeta: FieldMetadata = fieldMeta({
       name: 'Size', type: 'struct', fields: [fieldMeta({ name: 'Width', type: 'int' })]});
-    renderPanel({
+    renderPanel(compareResultFixture({
       ...partialFormCompareResult,
       overrides: partialFormCompareResult.overrides.map((o, i) => ({
         ...o, fields: [{ metadata: sizeMeta, value: i === 0 ? { Width: 3 } : null }],
       })),
-      diffs: [{
+      diffs: [diffNode({
         fieldName: 'Size', values: { 'Fallout4.esm': { Width: 3 }, 'MyMod.esp': null },
         winnerColumn: 'Fallout4.esm', cellStates: {},
-        children: [{
+        children: [diffNode({
           fieldName: 'Width', values: { 'Fallout4.esm': 3, 'MyMod.esp': null },
           winnerColumn: 'Fallout4.esm', cellStates: {},
-        }],
-      }],
-    }, { plugins: partialFormTrackedPluginsResponse });
+        })],
+      })],
+    }), { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Size'));
     expect(cellAt('Size', 1).textContent).toBe('{…}');
     expect(cellAt('Size', 2).textContent).toBe('');
@@ -1364,23 +1369,23 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
       fieldMeta({ name: 'Depth', type: 'int', default: 12 }),
     ]});
   const full = { Width: 3, Label: 'x', Depth: 7 };
-  const compare = {
+  const compare: CompareResult = compareResultFixture({
     conflictAll: 'Conflict',
     overrides: [
-      { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false, editorId: 'TestNPC',
-        fields: [{ metadata: sizeMeta, value: full }], conflictThis: 'Master' },
-      { formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: sizeMeta, value: null }], conflictThis: 'ConflictWins' },
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', isWinner: false, editorId: 'TestNPC',
+        fields: [{ metadata: sizeMeta, value: full }], conflictThis: 'Master' }),
+      compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: sizeMeta, value: null }], conflictThis: 'ConflictWins' }),
     ],
-    diffs: [{
+    diffs: [diffNode({
       fieldName: 'Size', values: { 'Fallout4.esm': full, 'MyMod.esp': null },
       winnerColumn: 'Fallout4.esm', cellStates: {},
-      children: Object.entries(full).map(([name, v]) => ({
+      children: Object.entries(full).map(([name, v]) => diffNode({
         fieldName: name, values: { 'Fallout4.esm': v, 'MyMod.esp': null },
         winnerColumn: 'Fallout4.esm', cellStates: {},
       })),
-    }],
-  };
+    })],
+  });
 
   const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
   const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
@@ -1418,12 +1423,12 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
 describe('RecordPanel — a translated string leaf posts its object', () => {
   const nameMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'translatedString' });
   const value = { TargetLanguage: 'English', Value: 'Base name' };
-  const compare = {
+  const compare: CompareResult = compareResultFixture({
     conflictAll: 'OnlyOne',
-    overrides: [{ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 0, isWinner: true,
-      editorId: 'TestNPC', fields: [{ metadata: nameMeta, value }], conflictThis: 'OnlyOne' }],
-    diffs: [{ fieldName: 'Name', values: { 'MyMod.esp': value }, winnerColumn: 'MyMod.esp', cellStates: {} }],
-  };
+    overrides: [compareOverride({ formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: nameMeta, value }], conflictThis: 'OnlyOne' })],
+    diffs: [diffNode({ fieldName: 'Name', values: { 'MyMod.esp': value }, winnerColumn: 'MyMod.esp', cellStates: {} })],
+  });
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1456,31 +1461,31 @@ describe('RecordPanel — a column whose record failed to parse', () => {
     elementType: fieldMeta({ name: '', type: 'string' }),
   });
 
-  const column = (plugin: string, name: string, parseDiagnosis?: string) => ({
+  const column = (plugin: string, name: string, parseDiagnosis?: string) => compareOverride({
     formKey: '000001:Broken.esp', plugin, loadOrderIndex: plugin === 'Broken.esp' ? 0 : 1,
     isWinner: plugin !== 'Broken.esp', editorId: 'TestNPC',
     fields: [{ metadata: strMeta, value: name }, { metadata: keywordsMeta, value: ['KwdA'] }],
     conflictThis: 'Master', parseDiagnosis,
   });
 
-  const compare = {
+  const compare: CompareResult = compareResultFixture({
     conflictAll: 'Conflict',
     overrides: [column('Broken.esp', 'Stored Name', PARSE_DIAGNOSIS), column('Good.esp', 'Readable Name')],
     diffs: [
-      {
+      diffNode({
         fieldName: 'Name', values: { 'Broken.esp': 'Stored Name', 'Good.esp': 'Readable Name' },
         winnerColumn: 'Good.esp', cellStates: {}, conflictAll: 'Conflict',
-      },
-      {
+      }),
+      diffNode({
         fieldName: 'Keywords', values: { 'Broken.esp': ['KwdA'], 'Good.esp': ['KwdA'] },
         winnerColumn: 'Good.esp', cellStates: {}, conflictAll: 'NoConflict',
-        children: [{
+        children: [diffNode({
           fieldName: 'KwdA', values: { 'Broken.esp': 'KwdA', 'Good.esp': 'KwdA' },
           winnerColumn: 'Good.esp', cellStates: {},
-        }],
-      },
+        })],
+      }),
     ],
-  };
+  });
 
   const plugins = [
     { name: 'Broken.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
