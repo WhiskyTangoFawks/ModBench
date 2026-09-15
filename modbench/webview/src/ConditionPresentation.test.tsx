@@ -10,6 +10,12 @@ import type { FieldMetadata } from './types';
 import { vscode } from './vscode';
 import { fieldMeta, leafMeta as leaf, panelClient, postedEnvelopes as sharedPostedEnvelopes } from './test/fixtures';
 
+// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
+function required<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(`expected ${what}`);
+  return value;
+}
+
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the enum members these
 // cases name and never restructured; `siblingsInUse` rows come from Condition.GetParameterTypes.
 
@@ -95,6 +101,11 @@ const conditionsMeta = fieldMeta({
     ],
   }),
 });
+
+// conditionsMeta declares its elementType and that type's fields literally above — every use
+// below is reading back what this file just built.
+const conditionsElementType = required(conditionsMeta.elementType, "conditionsMeta's elementType");
+const conditionsElementTypeFields = required(conditionsElementType.fields, "conditionsMeta's elementType fields");
 
 type Condition = Record<string, unknown>;
 
@@ -413,7 +424,7 @@ describe('a collapsed condition reads as xEdit prose', () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await expandConditions();
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the first expand toggle"));
 
     await waitFor(() => screen.getByText('Data'));
     expect(summaryOf(0)).toBe('');
@@ -428,9 +439,9 @@ describe('the table keys on the leaf type name', () => {
   const notAUnion: FieldMetadata = {
     ...conditionsMeta,
     elementType: {
-      ...conditionsMeta.elementType!,
+      ...conditionsElementType,
       leafTypeName: 'ConditionFloat',
-      fields: conditionsMeta.elementType!.fields!.filter(f => !f.isDiscriminator),
+      fields: conditionsElementTypeFields.filter(f => !f.isDiscriminator),
     },
   };
 
@@ -449,7 +460,7 @@ describe('the table keys on the leaf type name', () => {
   it('a union whose own value names no leaf keys on nothing, not on the name the schema declares', async () => {
     const declared: FieldMetadata = {
       ...conditionsMeta,
-      elementType: { ...conditionsMeta.elementType!, leafTypeName: 'ConditionFloat' },
+      elementType: { ...conditionsElementType, leafTypeName: 'ConditionFloat' },
     };
     const unnamed = condition({ MutagenObjectType: null }, { Function: 'IsSneaking' });
     currentCompare = oneColumn([unnamed], {}, declared);
@@ -528,7 +539,7 @@ describe('a governing member posts its own value and nothing else', () => {
     renderPanel();
     const cell = await openMemberEditor('RunOnType');
 
-    const select = cell.querySelector('select')!;
+    const select = required(cell.querySelector('select'), "the cell's select");
     fireEvent.change(select, { target: { value: 'Subject' } });
     fireEvent.blur(select);
 
@@ -542,7 +553,7 @@ describe('a governing member posts its own value and nothing else', () => {
     renderPanel();
     const cell = await openMemberEditor('Function');
 
-    const select = cell.querySelector('select')!;
+    const select = required(cell.querySelector('select'), "the cell's select");
     fireEvent.change(select, { target: { value: 'HasKeyword' } });
     fireEvent.blur(select);
 
@@ -556,7 +567,7 @@ describe('a governing member posts its own value and nothing else', () => {
     renderPanel();
     const cell = await openMemberEditor('Unknown3');
 
-    const input = cell.querySelector('input')!;
+    const input = required(cell.querySelector('input'), "the cell's input");
     fireEvent.change(input, { target: { value: '7' } });
     fireEvent.blur(input);
 
@@ -571,13 +582,16 @@ describe('switching a condition\'s leaf', () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await expandConditions();
-    const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
-    fireEvent.click(element.closest('tr')!.querySelector('button')!);
+    const element = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
+    const elementRow = required(element.closest('tr'), "the '[0]' element's row");
+    fireEvent.click(required(elementRow.querySelector('button'), "the '[0]' row's expand button"));
     await waitFor(() => expect(labelCell('Kind')).toBeDefined());
 
-    const cell = labelCell('Kind')!.closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(cell!.querySelector('[data-open-trigger]')!);
-    const select = cell!.querySelector('select')!;
+    const kindLabelCell = required(labelCell('Kind'), "the 'Kind' row's label cell");
+    const kindRow = required(kindLabelCell.closest('tr'), "the 'Kind' row");
+    const cell = required(kindRow.querySelectorAll('td')[1], "the 'Kind' row's second cell");
+    fireEvent.doubleClick(required(cell.querySelector('[data-open-trigger]'), "the cell's open trigger"));
+    const select = required(cell.querySelector('select'), "the cell's select");
     fireEvent.change(select, { target: { value: 'ConditionGlobal' } });
     fireEvent.blur(select);
 
@@ -601,13 +615,16 @@ describe('a type-varying member takes its cell from each column\'s own leaf', ()
     }, { '00000ABC:MyMod.esp': 'MyGlobal' });
     renderPanel();
     await expandConditions();
-    const element = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!;
-    fireEvent.click(element.closest('tr')!.querySelector('button')!);
+    const element = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
+    const elementRow = required(element.closest('tr'), "the '[0]' element's row");
+    fireEvent.click(required(elementRow.querySelector('button'), "the '[0]' row's expand button"));
     await waitFor(() => expect(labelCell('ComparisonValue')).toBeDefined());
 
-    const cells = labelCell('ComparisonValue')!.closest('tr')!.querySelectorAll('td');
-    expect(cells[1]!.textContent).toBe('2.5');
-    expect(cells[2]!.textContent).toBe('MyGlobal [00000ABC:MyMod.esp]');
+    const comparisonValueLabelCell = required(labelCell('ComparisonValue'), "the 'ComparisonValue' row's label cell");
+    const comparisonValueRow = required(comparisonValueLabelCell.closest('tr'), "the 'ComparisonValue' row");
+    const cells = comparisonValueRow.querySelectorAll('td');
+    expect(required(cells[1], "the 'ComparisonValue' row's second cell").textContent).toBe('2.5');
+    expect(required(cells[2], "the 'ComparisonValue' row's third cell").textContent).toBe('MyGlobal [00000ABC:MyMod.esp]');
   });
 });
 
@@ -616,17 +633,23 @@ describe('the function picker comes from the schema', () => {
     currentCompare = oneColumn([condition({}, { Function: 'IsSneaking' })]);
     renderPanel();
     await waitFor(() => screen.getByText('Conditions'));
-    fireEvent.click(screen.getAllByText('▶')[0]!);
+    fireEvent.click(required(screen.getAllByText('▶')[0], "the first expand toggle"));
     await waitFor(() => expect(screen.getAllByText('[0]').some(el => el.tagName === 'TD')).toBe(true));
-    const el0 = screen.getAllByText('[0]').find(e => e.tagName === 'TD')!;
-    fireEvent.click(el0.closest('tr')!.querySelector('button')!);
+    const el0 = required(screen.getAllByText('[0]').find(e => e.tagName === 'TD'), "the '[0]' index cell");
+    const el0Row = required(el0.closest('tr'), "the '[0]' element's row");
+    fireEvent.click(required(el0Row.querySelector('button'), "the '[0]' row's expand button"));
     await waitFor(() => expect(labelCell('Data')).toBeDefined());
-    fireEvent.click(labelCell('Data')!.closest('tr')!.querySelector('button')!);
+    const dataLabelCell = required(labelCell('Data'), "the 'Data' row's label cell");
+    const dataRow = required(dataLabelCell.closest('tr'), "the 'Data' row");
+    fireEvent.click(required(dataRow.querySelector('button'), "the 'Data' row's expand button"));
     await waitFor(() => expect(labelCell('Function')).toBeDefined());
 
-    const cell = labelCell('Function')!.closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(cell!.querySelector('[data-open-trigger]')!);
-    const options = Array.from(cell!.querySelector('select')!.options).map(o => o.value);
+    const functionLabelCell = required(labelCell('Function'), "the 'Function' row's label cell");
+    const functionRow = required(functionLabelCell.closest('tr'), "the 'Function' row");
+    const cell = required(functionRow.querySelectorAll('td')[1], "the 'Function' row's second cell");
+    fireEvent.doubleClick(required(cell.querySelector('[data-open-trigger]'), "the cell's open trigger"));
+    const select = required(cell.querySelector('select'), "the cell's select");
+    const options = Array.from(select.options).map(o => o.value);
     expect(options).toEqual(Object.keys(FUNCTION_SLOTS));
   });
 });
@@ -637,10 +660,10 @@ describe('a Run On label that contains spaces', () => {
   const labelled: FieldMetadata = {
     ...conditionsMeta,
     elementType: {
-      ...conditionsMeta.elementType!,
-      fields: conditionsMeta.elementType!.fields!.map(f => (f.name !== 'Data' ? f : {
+      ...conditionsElementType,
+      fields: conditionsElementTypeFields.map(f => (f.name !== 'Data' ? f : {
         ...f,
-        fields: f.fields!.map(m => (m.name !== 'RunOnType' ? m : {
+        fields: required(f.fields, "the Data field's own fields").map(m => (m.name !== 'RunOnType' ? m : {
           ...m,
           enumMembers: m.enumMembers.map(e => ({ ...e, label: e.value.replace('CombatTarget', 'Combat Target') })),
         })),
