@@ -29,7 +29,7 @@ export function modelValue(value: unknown, meta: FieldMetadata, resolution?: For
         return toStr(value);
     }
   }
-  // A backend field type FieldType has not caught up with still stringifies like any other scalar.
+  // The wire's field type is a string, and the backend may send one this union does not yet name.
   return toStr(value);
 }
 

@@ -31,7 +31,7 @@ export function isFieldType(value: string): value is FieldType {
  *  column's own mutability — "per column, never a mode". */
 export type FieldMetadata =
   Omit<Schemas['FieldMetadata'], 'type' | 'elementType' | 'fields' | 'variants'> & {
-    // The wire's own string; a backend type FieldType has not caught up with still arrives here.
+    // The wire's field type is a string, and the backend may send one this union does not yet name.
     type: string;
     elementType?: FieldMetadata | null;   // present when type === 'array'
     fields?: FieldMetadata[] | null;      // present when type === 'struct'
