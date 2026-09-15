@@ -47,31 +47,20 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         Assert.True(File.Exists(Path.Combine(modFolder, "NewMod.esp")));
     }
 
-    // ADR-0015 invariants 1 and 2: the created plugin reaches the Index through the snapshot Mod
-    // Management sends once plugins.txt names it, the door any newly installed plugin arrives by.
+    // ADR-0015 invariants 1 and 2: the create gesture's own Apply already names the created copy,
+    // so it reaches the Index through that same snapshot change — no later PUT is the door.
     [Fact]
-    public async Task CreatePlugin_IsQueryable_OnceTheNextSnapshotNamesIt()
+    public async Task CreatePlugin_IsQueryable_OnceItsOwnSnapshotReachesTheIndex()
     {
         var modFolder = ModFolder("QueryableMod");
+        var beforeSequence = await _client.GetFromJsonAsync<long>("/load-order/sequence");
+
         var created = await _client.PostAsJsonAsync("/plugins/create", new { name = "Queryable.esp", path = modFolder, origin = "QueryableMod" });
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        Assert.DoesNotContain(await Listed(), name => name == "Queryable.esp");
 
-        var reconciled = await _client.PutLoadOrderAndAwaitReady(Snapshot(
-            [.. _fixture.Plugins.Select(p => (p.Name, p.Path, p.Origin, p.Slot)),
-             ("Queryable.esp", Path.Combine(modFolder, "Queryable.esp"), "QueryableMod", (int?)_fixture.Plugins.Count)]));
-
-        Assert.Equal(HttpStatusCode.OK, reconciled.StatusCode);
+        await _client.AwaitTerminalLoadOrderStatus(beforeSequence);
         Assert.Contains(await Listed(), name => name == "Queryable.esp");
     }
-
-    private object Snapshot(IReadOnlyList<(string Name, string Path, string Origin, int? Slot)> plugins) => new
-    {
-        plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, Enabled = true, Winning = true }),
-        gameDirectory = _fixture.DataFolder,
-        instanceRoot = _fixture.InstanceRoot,
-        gameRelease = "Fallout4",
-    };
 
     private async Task<IReadOnlyList<string>> Listed()
     {
