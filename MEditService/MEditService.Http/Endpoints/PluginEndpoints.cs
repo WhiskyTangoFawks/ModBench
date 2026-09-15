@@ -182,8 +182,9 @@ public static class PluginEndpoints
                 req.Name, req.Origin, Path.Combine(req.Path, req.Name), NextSlot(previous),
                 Enabled: true, Winning: true);
             registered = previous.With(copy);
-            // ADR-0007: a participant before the file exists, so the Track inside this gesture and
-            // every later reader see it without waiting for the snapshot that lists it.
+            // ADR-0007: a participant before the file exists, so the Track inside this gesture
+            // and every later reader see it — and the created copy reaches the Index through
+            // this same snapshot change.
             holder.Apply(registered);
         }
         catch (InvalidOperationException ex)

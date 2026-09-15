@@ -4,7 +4,7 @@ import type {
 } from './medit/client';
 import { createLoadOrderSender, type LoadOrderSender } from './medit/client';
 import { implicitMastersFrom, rebuildIndexVia } from './toolboxClientCalls';
-import { makeReconcileProgressHandler, reportIndexHeldElsewhere } from './medit/loadOrderProgress';
+import { makeReconcileProgressHandler, reportIndexRefusal } from './medit/loadOrderProgress';
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
@@ -214,7 +214,7 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
     // The Index's own known refusal rides a tick, never the put's own outcome (ADR-0013) — this
     // is the only place it is seen, so it is checked on every one, not folded into treeProgress.
     const onProgress = (status: LoadOrderProgress): void => {
-      reportIndexHeldElsewhere(status, { error: (m) => reporter.report('error', m) });
+      reportIndexRefusal(status, { setStatusText });
       treeProgress.onProgress(status);
     };
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the

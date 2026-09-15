@@ -24,8 +24,9 @@ public static class LoadOrderEndpoints
                 "override order resolves the name to it. Copies new to the load order are opened " +
                 "and registered (indexed only if never seen), copies absent from the snapshot are " +
                 "unregistered, moved copies are re-registered SQL-only; then one winner sweep. " +
-                "Vanilla masters are prepended by the backend and need not be listed. Blocks until " +
-                "the sweep has run; poll GET /load-order/status alongside for progress.")
+                "Vanilla masters are prepended by the backend and need not be listed. Answers as " +
+                "soon as the snapshot is applied; the sweep runs after, reported on " +
+                "GET /load-order/status and the load-order-status notification.")
             .Produces<LoadOrderResponse>()
             .ProducesProblem(400)
             .ProducesProblem(500);
@@ -142,7 +143,7 @@ public static class LoadOrderEndpoints
                 .ToList();
             var snapshot = ForcedPlugins.Snapshot(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
             var result = handler.Put(snapshot);
-            return result.Applied ? Results.Ok(new LoadOrderResponse(true)) : Results.Problem(result.Message, statusCode: 400);
+            return result.Applied ? Results.Ok(new LoadOrderResponse(true)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex)
         {

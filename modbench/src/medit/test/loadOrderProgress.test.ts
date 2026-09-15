@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeReconcileProgressHandler, reportIndexHeldElsewhere } from '../loadOrderProgress';
+import { makeReconcileProgressHandler, reportIndexRefusal } from '../loadOrderProgress';
 import type { LoadOrderProgress } from '../client';
 
 // Applying a tick re-renders the whole tree, and PluginTreeProvider.getPluginChildren is
@@ -45,31 +45,41 @@ describe('makeReconcileProgressHandler', () => {
   });
 });
 
-// ADR-0009 point 5: the put's own outcome reports applied regardless of what the Index found, so
-// a tick carrying the refusal is the only place "another window has this instance open" is seen.
-describe('reportIndexHeldElsewhere', () => {
+// ADR-0009 point 5; ADR-0019: the put's own outcome answers applied regardless of what the Index
+// found, so a tick carrying either refusal is the only place it ever reaches the extension.
+describe('reportIndexRefusal', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
     ({ totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], ...over });
 
-  it('shows the ready-to-show message verbatim, prefixed exactly as a failed send is', () => {
-    const error = vi.fn();
+  it('shows the ready-to-show message on the status bar, held-elsewhere', () => {
+    const setStatusText = vi.fn();
 
-    reportIndexHeldElsewhere(
-      status({ heldElsewhereMessage: 'This instance\'s index is open in another Modbench window.' }),
-      { error },
+    const refused = reportIndexRefusal(
+      status({ refusalMessage: 'This instance\'s index is open in another Modbench window.' }),
+      { setStatusText },
     );
 
-    expect(error).toHaveBeenCalledWith(
-      'mEdit: Failed to send the load order — This instance\'s index is open in another Modbench window.',
+    expect(setStatusText).toHaveBeenCalledWith(
+      '$(error) mEdit: This instance\'s index is open in another Modbench window.',
     );
+    expect(refused).toBe(true);
   });
 
-  // The rival: showing it on every ordinary tick, not only the one carrying the refusal.
-  it('shows nothing for a tick with no held-elsewhere message', () => {
-    const error = vi.fn();
+  it('shows the ready-to-show message on the status bar, an unknown failure', () => {
+    const setStatusText = vi.fn();
 
-    reportIndexHeldElsewhere(status({ indexedPlugins: ['A.esp'] }), { error });
+    reportIndexRefusal(status({ refusalMessage: 'the reconcile threw something unexpected' }), { setStatusText });
 
-    expect(error).not.toHaveBeenCalled();
+    expect(setStatusText).toHaveBeenCalledWith('$(error) mEdit: the reconcile threw something unexpected');
+  });
+
+  // The rival: showing it on every ordinary tick, not only the one carrying a refusal.
+  it('shows nothing, and answers false, for a tick with no refusal message', () => {
+    const setStatusText = vi.fn();
+
+    const refused = reportIndexRefusal(status({ indexedPlugins: ['A.esp'] }), { setStatusText });
+
+    expect(setStatusText).not.toHaveBeenCalled();
+    expect(refused).toBe(false);
   });
 });

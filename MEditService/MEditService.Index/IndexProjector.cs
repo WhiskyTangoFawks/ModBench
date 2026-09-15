@@ -42,6 +42,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // Set only by OnLoadOrderChanged's own catch, cleared at the top of every Reconcile
     // attempt: a repeated refusal re-sets it a moment later, a successful one leaves it clear.
     private string? _heldElsewhereMessage;
+    // The same lifetime as _heldElsewhereMessage, for the reconcile's other known-unknown outcome.
+    private string? _failureMessage;
 
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside this
     /// project names the store, its factory or how a file is opened (ADR-0009).</summary>
@@ -158,13 +160,26 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             lock (_lock)
             {
-                // DisposeCurrent already ran by the time this is set (EnsureScope tears the
-                // previous scope down before the open that refuses), so nothing here is held.
-                if (_heldElsewhereMessage is { } message)
-                    return LoadOrderStatus.None with { State = LoadOrderState.HeldElsewhere, Message = message };
-                if (_heldPlugins is null) return LoadOrderStatus.None;
-                var state = _conflictsComputed ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                return new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures);
+                // Whatever this attempt still holds — usually nothing, since the two known
+                // refusals throw before EnsureScope holds anything new — with State/Message
+                // overlaid rather than discarded, so a mid-reconcile unknown failure keeps
+                // reporting what had already landed.
+                LoadOrderStatus held;
+                if (_heldPlugins is null)
+                {
+                    held = LoadOrderStatus.None;
+                }
+                else
+                {
+                    var state = _conflictsComputed ? LoadOrderState.Ready : LoadOrderState.Reconciling;
+                    held = new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures);
+                }
+
+                if (_heldElsewhereMessage is { } heldElsewhere)
+                    return held with { State = LoadOrderState.HeldElsewhere, Message = heldElsewhere };
+                if (_failureMessage is { } failure)
+                    return held with { State = LoadOrderState.Failed, Message = failure };
+                return held;
             }
         }
     }
@@ -225,7 +240,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
         // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
         // moment this one is asked for, whichever way this one goes.
-        lock (_lock) _heldElsewhereMessage = null;
+        lock (_lock) { _heldElsewhereMessage = null; _failureMessage = null; }
 
         EnterExclusive();
         try
@@ -260,9 +275,14 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): reconciles,
-    /// turning this Index's two known refusals into status data. Anything else propagates.</summary>
-    public void OnLoadOrderChanged(LoadOrderSnapshot snapshot)
+    /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): subscribes
+    /// itself, off the caller's thread — the exclusive gate below already supersedes an in-flight
+    /// reconcile, so nothing here waits for one to finish before returning.</summary>
+    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += snapshot => Task.Run(() => OnLoadOrderChanged(snapshot));
+
+    /// <summary>Reconciles, turning every outcome Reconcile can throw into status data: the two
+    /// known refusals, and anything else as a Failed state rather than a log line nobody reads.</summary>
+    internal void OnLoadOrderChanged(LoadOrderSnapshot snapshot)
     {
         try
         {
@@ -276,6 +296,13 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         catch (IndexHeldElsewhereException ex)
         {
             lock (_lock) _heldElsewhereMessage = ex.Message;
+            PublishStatus();
+        }
+        catch (Exception ex)
+        {
+            // Reconcile already logged this at error; there is nothing further up to raise it
+            // to, so it becomes status data instead of only a log line.
+            lock (_lock) _failureMessage = ex.Message;
             PublishStatus();
         }
     }
@@ -844,13 +871,13 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             return true;
         }
 
-        IndexNotYetHeld(key);
-        return true;
+        return IndexNotYetHeld(key);
     }
 
     // A copy the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
-    // the single-copy counterpart of ReconcileProgressively's own arriving loop.
-    private void IndexNotYetHeld(PluginKey key)
+    // the single-copy counterpart of ReconcileProgressively's own arriving loop. False for a copy
+    // still failing to open — nothing indexed, so nothing for a reader to re-fetch.
+    private bool IndexNotYetHeld(PluginKey key)
     {
         using var _ = WriteGate.Enter();
 
@@ -858,16 +885,17 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         IRecordIndex index;
         lock (_lock)
         {
-            if (_heldPlugins is not { } h || _index is not { } i) return;
+            if (_heldPlugins is not { } h || _index is not { } i) return false;
             (held, index) = (h, i);
         }
 
-        if (_holder.Current.Copy(key) is not { } copy) return;
+        if (_holder.Current.Copy(key) is not { } copy) return false;
 
         if (held.Open(copy) is not { } metadata)
         {
             lock (_lock) _failedHashes[KeyOf(key)] = (key, PluginBinaryHash.OfFile(copy.Path));
-            return;
+            PublishStatus();
+            return false;
         }
         lock (_lock) _failedHashes.Remove(KeyOf(key));
 
@@ -878,6 +906,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
+        return true;
     }
 
     /// <summary>See <see cref="IQueryIndex.FilterSql"/>.</summary>
@@ -981,5 +1010,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         _failedHashes.Clear();
         _conflictsComputed = false;
         _plannedCount = 0;
+        _heldElsewhereMessage = null;
+        _failureMessage = null;
     }
 }

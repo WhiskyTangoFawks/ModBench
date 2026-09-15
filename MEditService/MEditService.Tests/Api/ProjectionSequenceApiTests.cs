@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -47,7 +48,7 @@ public sealed class ProjectionSequenceApiTests : IDisposable
         using var fx = new PluginFixtureBuilder("api-sequence-write")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .Build();
-        (await _client.PutAsJsonAsync("/load-order", LoadOrderBody(fx))).EnsureSuccessStatusCode();
+        (await _client.PutLoadOrderAndAwaitReady(LoadOrderBody(fx))).EnsureSuccessStatusCode();
 
         var after = await _client.GetFromJsonAsync<long>("/load-order/sequence");
         Assert.True(after > before, $"expected the sequence to advance past {before}, got {after}");

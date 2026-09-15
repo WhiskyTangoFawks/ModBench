@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
@@ -25,7 +26,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 
     private async Task LoadAndTrack(ScatteredFixtureData fx)
     {
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

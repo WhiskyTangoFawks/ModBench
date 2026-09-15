@@ -75,15 +75,48 @@ public sealed class OnLoadOrderChangedTests
 
         var second = Task.Run(() => index.OnLoadOrderChanged(
             ForcedPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins)));
-        var premature = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500)));
-        Assert.NotSame(second, premature); // the second waited for the first to stop, exactly as Reconcile does
+        var secondCompletedBeforeTheFirstStopped = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500))) == second;
+        Assert.False(secondCompletedBeforeTheFirstStopped);
 
         gate.Release();
-        await first; // never throws — OnLoadOrderChanged absorbs the supersede
+        Assert.Null(await Record.ExceptionAsync(() => first));
         await second;
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.DoesNotContain(notifications.Notifications.OfType<LoadOrderStatusNotification>(),
             n => n.Status.State == LoadOrderState.HeldElsewhere);
+    }
+
+    private static async Task<bool> CompletesWithin(Task task, TimeSpan timeout) =>
+        await Task.WhenAny(task, Task.Delay(timeout)) == task;
+
+    // The rival this pins: a SubscribeTo that calls OnLoadOrderChanged directly on the caller's own
+    // thread, which would make holder.Apply itself wait out the gated reconcile below.
+    [Fact]
+    public async Task SubscribeTo_SchedulesTheReconcileOffTheCallersThread()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("subscribe-index-subscriber").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher();
+        var (index, gate) = MakeGatedIndex(holder, notifications, gateBefore: "A.esp");
+        using var _ = index;
+        using var __ = gate;
+        index.SubscribeTo(holder);
+        var snapshot = ForcedPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
+
+        var applied = Task.Run(() => holder.Apply(snapshot));
+        Assert.True(await CompletesWithin(applied, TimeSpan.FromSeconds(5)),
+            "holder.Apply waited on the reconcile instead of returning at once");
+
+        await gate.WaitUntilParkedAsync();
+        gate.Release();
+
+        var reachedReady = await CompletesWithin(
+            Task.Run(async () =>
+            {
+                while (index.Status.State != LoadOrderState.Ready) await Task.Delay(20);
+            }),
+            TimeSpan.FromSeconds(10));
+        Assert.True(reachedReady, "the subscribed reconcile never reached Ready");
     }
 }

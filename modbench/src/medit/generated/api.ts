@@ -45,7 +45,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Blocks until the sweep has run; poll GET /load-order/status alongside for progress. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -782,7 +782,7 @@ export interface components {
             applied: boolean;
         };
         /** @enum {string} */
-        LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere";
+        LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere" | "Failed";
         LoadOrderStatus: {
             state: components["schemas"]["LoadOrderState"];
             /** Format: int32 */

@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from '../InMemoryMEditClient';
 import { createLoadOrderSender, type LoadOrderSnapshot } from '../loadOrderSender';
-import type { LoadOrderOutcome, LoadOrderPluginInput } from '../MEditClient';
+import type { LoadOrderOutcome, LoadOrderPluginInput, LoadOrderProgress } from '../MEditClient';
 import { present } from '../../../present';
 
-const APPLIED: LoadOrderOutcome = { outcome: 'applied' };
+const READY_STATUS: LoadOrderProgress = {
+  totalPlugins: 1, indexedPlugins: [], conflictsComputed: true, failures: [],
+};
+const APPLIED: LoadOrderOutcome = { outcome: 'applied', status: READY_STATUS };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
 
 function snapshot(name: string): LoadOrderSnapshot {

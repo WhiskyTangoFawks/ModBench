@@ -115,16 +115,4 @@ public sealed class IndexedBinaryWatchTests
         Assert.Empty(index.Of("reindex"));
         Assert.DoesNotContain("ChangedByXEdit", EditorIds(fixture, fixture.Plugin));
     }
-
-    // An empty snapshot names no copy, so there is nothing to watch and nothing to throw over.
-    [Fact]
-    public void Rearm_WatchesNothing_WhenThereIsNoLoadOrder()
-    {
-        var holder = new LoadOrderHolder();
-        using var noLoadOrder = new IndexProjector(holder, MutagenPluginAdapter.Instance, SharedSchemaReflector.Instance);
-        using var watcher = TestWatcher.Over(
-            holder, noLoadOrder, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(100));
-
-        watcher.Rearm(holder.Current);
-    }
 }

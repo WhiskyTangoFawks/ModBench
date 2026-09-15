@@ -57,12 +57,12 @@ describe('toLoadOrderStatus', () => {
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
-    expect(status.heldElsewhereMessage).toBeUndefined();
+    expect(status.refusalMessage).toBeUndefined();
   });
 
-  // The one state this transform does carry: nothing else here can say "another window has
-  // this instance open".
-  it('carries heldElsewhereMessage only for the HeldElsewhere state', () => {
+  // The two states this transform does carry: nothing else here can say "another window has
+  // this instance open" or "the reconcile hit something unknown".
+  it('carries refusalMessage for the HeldElsewhere state', () => {
     const status = toLoadOrderStatus({
       state: 'HeldElsewhere',
       totalPlugins: 0,
@@ -72,6 +72,19 @@ describe('toLoadOrderStatus', () => {
       message: 'This instance\'s index is open in another Modbench window.',
     });
 
-    expect(status.heldElsewhereMessage).toBe('This instance\'s index is open in another Modbench window.');
+    expect(status.refusalMessage).toBe('This instance\'s index is open in another Modbench window.');
+  });
+
+  it('carries refusalMessage for the Failed state', () => {
+    const status = toLoadOrderStatus({
+      state: 'Failed',
+      totalPlugins: 0,
+      indexedPlugins: [],
+      conflictsComputed: false,
+      failures: [],
+      message: 'the reconcile threw something unexpected',
+    });
+
+    expect(status.refusalMessage).toBe('the reconcile threw something unexpected');
   });
 });

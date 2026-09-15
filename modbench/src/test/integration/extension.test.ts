@@ -212,6 +212,10 @@ function createMockBackend(): http.Server {
         // the tree mid-load; answered immediately otherwise, as most suites expect.
         const answer = () => {
           loadOrderHeld = true;
+          // The real PUT answers before the sweep, which runs on Load order state's own
+          // subscriber — modeled here as the terminal tick this answer publishes alongside it.
+          loadOrderStatus = { ...loadOrderStatus, state: 'Ready', conflictsComputed: true };
+          pushLoadOrderStatus();
           res.writeHead(200, { 'Content-Type': 'application/json' });
           // The full LoadOrderResponse — `status` and `crashRepairOffers` are non-nullable on the
           // wire, so a body without them is one the backend cannot send.

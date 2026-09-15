@@ -12,7 +12,8 @@ function plugin(over: Partial<{ enabled: boolean; winning: boolean; slot: number
   return { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true, ...over };
 }
 
-const applied = { outcome: 'applied' as const };
+const readyStatus = { totalPlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [] };
+const applied = { outcome: 'applied' as const, status: readyStatus };
 type PluginLoadFailure = components['schemas']['PluginLoadFailure'];
 
 describe('reportLoadOrderResult — applied', () => {
@@ -96,6 +97,33 @@ describe('reportLoadOrderResult — applied', () => {
     expect(deps.setStatusText).toHaveBeenCalledWith('$(check) mEdit: Ready (0 plugin copies)');
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
+  });
+});
+
+// A held-elsewhere or failed terminal status still answers applied at the wire (ADR-0013): the
+// status bar carries the refusal, and nothing here claims Ready over it.
+describe('reportLoadOrderResult — applied with a terminal refusal', () => {
+  const heldElsewhere = {
+    outcome: 'applied' as const,
+    status: { totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], refusalMessage: 'another Modbench window holds this instance' },
+  };
+
+  it('writes the refusal to the status bar, never the ready text', () => {
+    const deps = makeDeps();
+
+    reportLoadOrderResult([plugin()], heldElsewhere, [], deps);
+
+    expect(deps.setStatusText).toHaveBeenCalledWith(expect.stringContaining('another Modbench window holds this instance'));
+    expect(deps.setStatusText).not.toHaveBeenCalledWith(expect.stringContaining('Ready'));
+  });
+
+  it('never refreshes the tree or announces conflicts computed', () => {
+    const deps = makeDeps();
+
+    reportLoadOrderResult([plugin()], heldElsewhere, [], deps);
+
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 });
 
@@ -247,6 +275,21 @@ describe('applyLoadOrderOutcome', () => {
 
     expect(deps.error).not.toHaveBeenCalled();
     expect(deps.setStatusText).not.toHaveBeenCalled();
+    expect(deps.syncFilterState).not.toHaveBeenCalled();
+    expect(deps.applyReconciled).not.toHaveBeenCalled();
+  });
+
+  // The rival this pins: syncing the filter or handing the tree a reconcile that never happened,
+  // because the PUT itself still answered applied over a held-elsewhere or failed terminal tick.
+  it('applies nothing when the terminal status is a refusal, though the PUT answered applied', async () => {
+    const deps = makeApplyDeps();
+    const heldElsewhere = {
+      outcome: 'applied' as const,
+      status: { totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], refusalMessage: 'another window' },
+    };
+
+    await applyLoadOrderOutcome([plugin()], heldElsewhere, [], 1, deps);
+
     expect(deps.syncFilterState).not.toHaveBeenCalled();
     expect(deps.applyReconciled).not.toHaveBeenCalled();
   });

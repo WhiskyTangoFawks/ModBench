@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Api;
 
@@ -56,7 +57,7 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         Assert.DoesNotContain(await Listed(), name => name == "Queryable.esp");
 
-        var reconciled = await _client.PutAsJsonAsync("/load-order", Snapshot(
+        var reconciled = await _client.PutLoadOrderAndAwaitReady(Snapshot(
             [.. _fixture.Plugins.Select(p => (p.Name, p.Path, p.Origin, p.Slot)),
              ("Queryable.esp", Path.Combine(modFolder, "Queryable.esp"), "QueryableMod", (int?)_fixture.Plugins.Count)]));
 

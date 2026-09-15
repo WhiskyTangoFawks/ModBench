@@ -40,9 +40,12 @@ export interface UnansweredExternalChange {
 /** ADR-0013: names the copy that failed — two copies of one name are two registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
-/** A transform of `question-open`'s own `crashRepairReason` string, honest since the enum left
- *  the wire with the load-order response's failures. */
-export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';
+/** The one list `CrashRepairReason` and `isCrashRepairReason` both derive from, since the enum
+ *  left the wire with the load-order response's failures — nothing generates it for us. */
+export const CRASH_REPAIR_REASONS = ['InterruptedCompile', 'MissingOrUnreadableBinary'] as const;
+
+/** A transform of `question-open`'s own `crashRepairReason` string. */
+export type CrashRepairReason = typeof CRASH_REPAIR_REASONS[number];
 
 /** One `question-open` notification's crash-repair verdict, exploded to one offer per plugin it
  *  named — the shape the dialog presents one modal per. */
@@ -103,22 +106,29 @@ export interface LoadOrderStatus {
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
    *  the reconcile finishes (ADR-0019). */
   failures: PluginLoadFailure[];
-  /** Set only when the wire's `state` is `'HeldElsewhere'` (ADR-0009 point 5) — the one state
-   *  worth carrying, since nothing else here derives "another window has this instance open". */
-  heldElsewhereMessage?: string;
+  /** Set for the wire's `HeldElsewhere` or `Failed` state (ADR-0009 point 5; ADR-0019) — the one
+   *  place either reaches the extension, since the put's own outcome reports applied regardless. */
+  refusalMessage?: string;
 }
+
+const REFUSAL_STATES = new Set<Schemas['LoadOrderStatus']['state']>(['HeldElsewhere', 'Failed']);
 
 /** The transform a `load-order-status` payload needs before it is this side's
  *  {@link LoadOrderStatus}: `indexedPlugins` carries each entry's origin too, and the
- *  consumer keys on filename alone; `state` is dropped except for its one held-elsewhere value. */
+ *  consumer keys on filename alone; `state` is dropped except for its two refusal values. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,
     indexedPlugins: wire.indexedPlugins.map((p) => p.name),
     conflictsComputed: wire.conflictsComputed,
     failures: wire.failures,
-    heldElsewhereMessage: wire.state === 'HeldElsewhere' ? (wire.message ?? undefined) : undefined,
+    refusalMessage: REFUSAL_STATES.has(wire.state) ? (wire.message ?? undefined) : undefined,
   };
+}
+
+/** Ready, or either refusal — the three states a settled PUT's own tick never advances past. */
+export function isTerminalLoadOrderStatus(status: LoadOrderStatus): boolean {
+  return status.conflictsComputed || status.refusalMessage !== undefined;
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {

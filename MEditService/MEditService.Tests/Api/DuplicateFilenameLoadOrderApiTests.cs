@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -39,7 +40,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
             ? p with { Slot = winner.Slot, Winning = false }
             : p);
 
-        var put = await _client.PutAsJsonAsync("/load-order", new
+        var put = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
@@ -132,7 +133,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
 
         // ADR-0013: a copy absent from the snapshot is unregistered, while the copy that wins is
         // untouched, because a reconcile is not a reload.
-        var without = await _client.PutAsJsonAsync("/load-order", new
+        var without = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

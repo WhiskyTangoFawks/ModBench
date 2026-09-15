@@ -45,6 +45,24 @@ public sealed class ModFolderWatcher : IDisposable
         _maxWindow = maxWindow ?? TimeSpan.FromSeconds(2);
     }
 
+    /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): subscribes
+    /// itself, off the caller's thread — Rearm does disk work no writer should wait on.</summary>
+    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += snapshot => Task.Run(() => RearmSafely(snapshot));
+
+    // No status of its own to carry an unknown failure as data (unlike the Index) — logged, the
+    // last resort, since nothing else here answers for it.
+    private void RearmSafely(LoadOrderSnapshot snapshot)
+    {
+        try
+        {
+            Rearm(snapshot);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Re-arming the watcher after a load order change failed unexpectedly");
+        }
+    }
+
     /// <summary>The watch set the load order now implies, and the check for everything that changed
     /// while no watcher ran. What it finds is Commands' own notification, never this method's
     /// return.</summary>
@@ -498,9 +516,16 @@ public sealed class ModFolderWatcher : IDisposable
     // comparison, never a hash this watcher remembers.
     private void SettleIndexed(PluginEntry plugin)
     {
-        if (!plugin.IndexedArmed) return;
-        var key = new PluginKey(plugin.Name, plugin.Origin ?? "");
-        var path = plugin.Path!;
+        bool armed;
+        PluginKey key;
+        string path;
+        lock (_gate)
+        {
+            armed = plugin.IndexedArmed;
+            key = new PluginKey(plugin.Name, plugin.Origin ?? "");
+            path = plugin.Path!;
+        }
+        if (!armed) return;
         try
         {
             // ADR-0009's runtime half: key and path only, never a locally remembered hash — the

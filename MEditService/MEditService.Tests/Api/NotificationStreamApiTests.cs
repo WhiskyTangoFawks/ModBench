@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 
@@ -32,7 +33,7 @@ public sealed class NotificationStreamApiTests : IDisposable
 
     private async Task LoadAndTrack(ScatteredFixtureData fx)
     {
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

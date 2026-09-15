@@ -18,11 +18,13 @@ export function makeReconcileProgressHandler(deps: {
   };
 }
 
-/** The Index's own known refusal (ADR-0009 point 5) — the put's own outcome reports applied
- *  regardless (ADR-0013), so a tick carrying this is the only place "another window has this"
- *  is ever seen. */
-export function reportIndexHeldElsewhere(
-  status: LoadOrderProgress, deps: { error: (msg: string) => void },
-): void {
-  if (status.heldElsewhereMessage) deps.error(`mEdit: Failed to send the load order — ${status.heldElsewhereMessage}`);
+/** The Index's own known refusal — the put's outcome answers applied regardless, so a tick
+ *  carrying this is the only place either reaches the extension. True while it holds, so a
+ *  caller skips Ready. */
+export function reportIndexRefusal(
+  status: LoadOrderProgress, deps: { setStatusText: (text: string) => void },
+): boolean {
+  if (status.refusalMessage === undefined) return false;
+  deps.setStatusText(`$(error) mEdit: ${status.refusalMessage}`);
+  return true;
 }

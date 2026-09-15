@@ -5,6 +5,7 @@ using System.Text.Json;
 using DuckDB.NET.Data;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -42,7 +43,7 @@ public sealed class IndexRebuildApiTests : IDisposable
         return fx;
     }
 
-    private Task<HttpResponseMessage> PutLoadOrder(ScatteredFixtureData fx) => _client.PutAsJsonAsync("/load-order", new
+    private Task<HttpResponseMessage> PutLoadOrder(ScatteredFixtureData fx) => _client.PutLoadOrderAndAwaitReady(new
     {
         gameDirectory = fx.GameDirectory,
         instanceRoot = fx.InstanceRoot,

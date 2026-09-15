@@ -2,6 +2,7 @@ import type {
   LoadOrderOutcome, LoadOrderPluginInput, PluginLoadFailure, WriteRefused,
 } from './client';
 import { isRefused } from './client';
+import { reportIndexRefusal } from './loadOrderProgress';
 import { reportSkippedPlugins } from './pluginFailures';
 
 /** Each callback is exactly one ADR-0019 surface — `warn`/`error` toast, `log` writes the
@@ -30,6 +31,8 @@ export function reportLoadOrderResult(
     return;
   }
   if (result.outcome !== 'applied') return; // 'abandoned'
+  // A terminal refusal: the status bar carries it, and nothing here claims Ready over it.
+  if (reportIndexRefusal(result.status, deps)) return;
 
   reportSkippedPlugins(failures, deps);
   // Participation is derived — enabled AND winning AND listed — and the snapshot is every copy,
@@ -68,7 +71,9 @@ export async function applyLoadOrderOutcome(
   deps: LoadOrderApplyDeps,
 ): Promise<void> {
   reportLoadOrderResult(plugins, result, failures, deps);
-  if (result.outcome !== 'applied') return;
+  // A terminal refusal is not ready: neither the filter sync nor the tree's own hand-off is the
+  // completed reconcile's, since there was none.
+  if (result.outcome !== 'applied' || result.status.refusalMessage !== undefined) return;
   await deps.syncFilterState();
   await deps.applyReconciled(failures, totalPlugins);
 }

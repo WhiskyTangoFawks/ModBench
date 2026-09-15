@@ -99,4 +99,46 @@ public sealed class RefreshBinaryTests : IDisposable
 
         Assert.Null(_index.IndexedContentHash(_key));
     }
+
+    // The bool itself, across every branch: true only for the two that actually changed something a
+    // reader could re-fetch, false for "still failing" and "already matches" alike.
+    [Fact]
+    public async Task RefreshBinary_AnswersTrueOnlyWhenSomethingChanged()
+    {
+        File.WriteAllText(_pluginPath, "not a plugin");
+        _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+
+        // Still failing to open, on different bytes: nothing indexed, so nothing changed.
+        File.WriteAllText(_pluginPath, "still not a plugin");
+        Assert.False(await _index.RefreshBinary(_key, _pluginPath));
+
+        WriteValidPlugin(_pluginPath);
+        Assert.True(await _index.RefreshBinary(_key, _pluginPath));
+
+        // Same bytes settling again: already indexed, nothing changed.
+        Assert.False(await _index.RefreshBinary(_key, _pluginPath));
+    }
+
+    // The rival this pins: a not-yet-held failure that only logs, leaving Status at whatever it
+    // already was — ADR-0019 bans a failure a subscriber has no way to learn about.
+    [Fact]
+    public async Task RefreshBinary_PublishesStatus_WhenACopyStillFailsToOpen()
+    {
+        var notifications = new InMemoryNotificationPublisher();
+        var reflector = SharedSchemaReflector.Instance;
+        using var index = new IndexProjector(
+            _holder, MutagenPluginAdapter.Instance,
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), notifications: notifications);
+
+        File.WriteAllText(_pluginPath, "not a plugin");
+        index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        var before = notifications.Notifications.Count;
+
+        File.WriteAllText(_pluginPath, "still not a plugin");
+        Assert.False(await index.RefreshBinary(_key, _pluginPath));
+
+        Assert.True(notifications.Notifications.Count > before);
+        var published = Assert.IsType<LoadOrderStatusNotification>(notifications.Notifications[^1]);
+        Assert.Contains(published.Status.Failures, f => f.Name == PluginName);
+    }
 }

@@ -1,6 +1,6 @@
 import type { RecordEditEnvelope } from '../messages';
 import {
-  createApiClient, errorText, openNotificationStream,
+  createApiClient, errorText, isTerminalLoadOrderStatus, openNotificationStream,
   toLoadOrderStatus, type ApiClient,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
@@ -9,7 +9,7 @@ import { SseNotificationSubscriber } from './notificationStream';
 import {
   type BackendStatus, type CellPage, type CellReferences, type CompileResult,
   type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
-  type LoadOrderPluginInput, type MEditClient, type NotificationEvent, type NotificationKind,
+  type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebaseResult, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
   type RecordCreateResponse, type RecordDeleteResponse, type RecordEditOutcome, type RecordPage,
@@ -160,15 +160,21 @@ export class HttpMEditClient implements MEditClient {
     gameRelease: string,
     options: LoadOrderOptions = {},
   ): Promise<LoadOrderOutcome> {
-    // The PUT stays blocking and the generated openapi-fetch client has no streaming path, so
-    // progress rides the load-order-status notification alongside the still in-flight PUT.
-    const unsubscribe = this.subscribeStatus(
-      'load-order-status', (event) => (event.loadOrderStatus ? toLoadOrderStatus(event.loadOrderStatus) : undefined),
-      options.onProgress,
-    );
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
+
+    // Applied answers as soon as the snapshot lands; the Index catches up on its own
+    // subscription, learned here by a terminal tick, never the PUT's own resolution.
+    let resolveTerminal: (status: LoadOrderProgress) => void;
+    const terminal = new Promise<LoadOrderProgress>((resolve) => { resolveTerminal = resolve; });
+    const unsubscribe = this.notifications.subscribe('load-order-status', (event) => {
+      if (!event.loadOrderStatus) return;
+      const status = toLoadOrderStatus(event.loadOrderStatus);
+      options.onProgress?.(status);
+      if (isTerminalLoadOrderStatus(status)) resolveTerminal(status);
+    });
+
     let result;
     try {
       result = await this.apiClient.PUT('/load-order', {
@@ -177,18 +183,38 @@ export class HttpMEditClient implements MEditClient {
         ...(options.signal ? { signal: options.signal } : {}),
       });
     } catch (e) {
+      unsubscribe();
       if (this.wasDeliberatelyAborted(options.signal)) return { outcome: 'abandoned' };
       throw e;
-    } finally {
-      unsubscribe();
     }
+
     const { error, response } = result;
     if (!response.ok) {
+      unsubscribe();
       const text = errorText(error);
       this.log(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
       return { outcome: 'failed', message: `mEdit: Failed to send the load order — ${text}` };
     }
-    return { outcome: 'applied' };
+
+    const status = await this.awaitTerminalOrAbort(terminal, options.signal);
+    unsubscribe();
+    return status === undefined ? { outcome: 'abandoned' } : { outcome: 'applied', status };
+  }
+
+  // A close mid-reconcile abandons the wait rather than resolving with a tick nobody asked for
+  // any more — the same "abandoned" an unsent snapshot gets.
+  private awaitTerminalOrAbort(
+    terminal: Promise<LoadOrderProgress>, signal: AbortSignal | undefined,
+  ): Promise<LoadOrderProgress | undefined> {
+    if (!signal) return terminal;
+    return new Promise((resolve) => {
+      const onAbort = (): void => resolve(undefined);
+      signal.addEventListener('abort', onAbort, { once: true });
+      void terminal.then((status) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(status);
+      });
+    });
   }
 
   // An abort is the one rejection that is not a failure: the teardown is already underway.

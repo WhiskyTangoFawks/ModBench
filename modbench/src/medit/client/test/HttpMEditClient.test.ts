@@ -28,6 +28,24 @@ function openStreamResponse(): Response {
   return new Response(new ReadableStream({ start: () => {} }), { status: 200 });
 }
 
+// A stream this suite can push frames onto after the fact — for a test whose subject is a tick
+// itself, not merely the connection.
+function pushableStreamResponse(): { response: Response; push: (chunk: Uint8Array) => void } {
+  let push!: (chunk: Uint8Array) => void;
+  const stream = new ReadableStream<Uint8Array>({ start: (c) => { push = (chunk) => c.enqueue(chunk); } });
+  return { response: new Response(stream, { status: 200 }), push };
+}
+
+function loadOrderStatusTick(loadOrderStatus: {
+  totalPlugins: number; indexedPlugins: { name: string; origin: string }[]; conflictsComputed: boolean; failures: unknown[];
+}): Uint8Array {
+  const tick = { kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0, loadOrderStatus };
+  return new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`);
+}
+
+// The tick putLoadOrder's own promise waits for: Ready, since that is what settles it (ADR-0013).
+const readyTick = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [] });
+
 // Dispatches by URL substring — for a test that scripts both the notification stream and one
 // API call through the same injected `fetch`.
 function routedFetch(routes: [match: string, handle: (req: Request) => Promise<Response>][]) {
@@ -223,14 +241,18 @@ describe('HttpMEditClient — putLoadOrder', () => {
 
   it('PUTs the ordered plugin list, game directory and instance root', async () => {
     let putBody: unknown;
+    const { response, push } = pushableStreamResponse();
     const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(openStreamResponse())],
+      ['/notifications/stream', () => Promise.resolve(response)],
       ['/load-order', async (req) => { putBody = await req.clone().json(); return jsonResponse(200, appliedBody); }],
     ]);
     const client = makeClient(fetch);
     await client.start();
 
-    await client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+    const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4');
+    await vi.waitFor(() => expect(putBody).toBeDefined());
+    push(readyTick());
+    await load;
 
     expect(putBody).toEqual({ plugins, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' });
   });
@@ -249,18 +271,19 @@ describe('HttpMEditClient — putLoadOrder', () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(putFetch).not.toHaveBeenCalled();
 
-    resolveStream(openStreamResponse());
+    const { response, push } = pushableStreamResponse();
+    resolveStream(response);
     await vi.waitFor(() => expect(putFetch).toHaveBeenCalledTimes(1));
+    push(readyTick());
     await load;
   });
 
   it('subscribes to load-order-status while the PUT is in flight, and unsubscribes once it settles', async () => {
-    let pushFrame!: (chunk: Uint8Array) => void;
-    const stream = new ReadableStream<Uint8Array>({ start: (c) => { pushFrame = (chunk) => c.enqueue(chunk); } });
+    const { response: streamResponse, push: pushFrame } = pushableStreamResponse();
     let resolvePut!: (r: Response) => void;
     const putPromise = new Promise<Response>((r) => { resolvePut = r; });
     const fetch = routedFetch([
-      ['/notifications/stream', () => Promise.resolve(new Response(stream, { status: 200 }))],
+      ['/notifications/stream', () => Promise.resolve(streamResponse)],
       ['/load-order', () => putPromise],
     ]);
     const client = makeClient(fetch);
@@ -269,19 +292,17 @@ describe('HttpMEditClient — putLoadOrder', () => {
 
     const onProgress = vi.fn();
     const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
-    const tick = {
-      kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0,
-      loadOrderStatus: { totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: false, failures: [] },
-    };
-    pushFrame(new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`));
+    pushFrame(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: false, failures: [] }));
     await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
 
     resolvePut(jsonResponse(200, appliedBody));
+    pushFrame(readyTick());
     await load;
+    expect(onProgress).toHaveBeenCalledTimes(2); // the mid-flight tick, then the terminal one that settled the PUT
 
-    pushFrame(new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`));
+    pushFrame(readyTick());
     await new Promise((r) => setTimeout(r, 10));
-    expect(onProgress).toHaveBeenCalledTimes(1); // still 1 — the settled PUT's subscription is gone
+    expect(onProgress).toHaveBeenCalledTimes(2); // still 2 — the settled PUT's subscription is gone
   });
 
   it('reports a deliberately aborted PUT as abandoned, not a failure', async () => {
