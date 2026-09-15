@@ -12,6 +12,7 @@ import { Instance, type InstanceValue } from './instance';
 import { registerPluginsReconcile } from './pluginsReconcileTrigger';
 import { reconcilePlugins, setPluginEnabled, type PluginsReconcileResult } from './commands/plugins';
 import { setSelectedProfileInText } from './mo2/modOrganizerIni';
+import { present } from '../present';
 
 const PROFILE = 'Default';
 const OTHER_PROFILE = 'Secondary';
@@ -30,7 +31,7 @@ afterEach(async () => {
 const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
-  return found[0]!;
+  return present(found[0], `the sole watcher for "${glob}"`);
 };
 
 // How a test learns a recompute landed: no sleep and no poll.
@@ -112,8 +113,11 @@ async function driveToQuiescence(
   for (let round = 0; round < maxRounds; round++) {
     const landed = await pastSequenceWithin(instance, instance.sequence, 5000);
     if (landed === TIMED_OUT) return { writes, quiescent: true }; // no recompute left to run
-    const result = await reconciles[reconciles.length - 1];
-    if (!(result!.applied && result!.wrote)) return { writes, quiescent: true };
+    const result = present(
+      await reconciles[reconciles.length - 1],
+      'the most recently issued reconcile result',
+    );
+    if (!(result.applied && result.wrote)) return { writes, quiescent: true };
     writes++;
     watcherFor('profiles/*/plugins.txt').fireChange();
   }

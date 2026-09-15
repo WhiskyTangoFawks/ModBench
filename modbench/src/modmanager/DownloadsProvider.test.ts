@@ -19,6 +19,7 @@ import { expectInstanceOf } from '../test/expectInstanceOf';
 import { instanceValueFixture } from './test/instanceValueFixture';
 import type { DownloadRow } from './mo2/downloads';
 import type { InstanceValue } from './instance';
+import { present } from '../present';
 
 // The narrowing is deliberate: a read-failure row here has no `row`, and the throw is the finding.
 const rowNames = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);
@@ -190,7 +191,7 @@ describe('DownloadNode', () => {
 
   it('resourceUri points at the archive under <instanceRoot>/downloads/<name>', () => {
     const node = new DownloadNode(row({ name: 'foo.zip' }), '/instance');
-    expect(node.resourceUri!.fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
+    expect(present(node.resourceUri, "the download node's resourceUri").fsPath).toBe(join('/instance', 'downloads', 'foo.zip'));
   });
 
   it('exposes the source row for command handlers to act on', () => {
@@ -364,7 +365,7 @@ describe('DownloadsProvider — reacts to the Instance, never scans on its own',
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(rows[0]!.label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
+    expect(present(rows[0], 'the sole rendered row').label).toBe('⚠ Failed to load: ENOENT: no such file or directory, open modlist.txt');
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'ENOENT: no such file or directory, open modlist.txt' },
     ]);

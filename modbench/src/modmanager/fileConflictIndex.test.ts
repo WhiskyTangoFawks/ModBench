@@ -10,6 +10,7 @@ import { parseModlist } from './mo2/modlistText';
 import { computeModStatuses } from './statusChecker';
 import { deployToGameData, type DeployLink } from './mo2Files';
 import { makeDeployerFixture } from './test/deployerFixture';
+import { present } from '../present';
 
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
 // chmod-based permission denial is silently bypassed when the runner is root.
@@ -351,7 +352,7 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
       const entry = index.files.get(relativePath);
       expect(entry?.providers.sort()).toEqual([baseName, fixName].sort());
       expect(entry?.winnerMod).toBe(fixName);
-      winnerPaths.set(relativePath, entry!.winner);
+      winnerPaths.set(relativePath, present(entry, `the conflict index entry for "${relativePath}"`).winner);
     }
 
     // 2. Badge — statusChecker.ts's per-mod status, built from the SAME index, against the real
@@ -377,7 +378,7 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
       const links: DeployLink[] = [...winnerPaths].map(([relativePath, source]) => ({ relativePath, source }));
       await deployToGameData(fx.instanceRoot, fx.gameDirectory, links);
       for (const relativePath of contested) {
-        const winner = winnerPaths.get(relativePath)!;
+        const winner = present(winnerPaths.get(relativePath), `the winner source path for "${relativePath}"`);
         const target = join(fx.gameDirectory.dataFolder, relativePath);
         const [srcStat, tgtStat] = await Promise.all([stat(winner), stat(target)]);
         expect(tgtStat.ino).toBe(srcStat.ino); // same inode == a real hardlink to the winner, not a copy

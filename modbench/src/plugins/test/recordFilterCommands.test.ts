@@ -29,6 +29,7 @@ vi.mock('fs', () => ({ existsSync: vi.fn().mockReturnValue(false), readdirSync: 
 import { registerFilterCommands, type FilterCommandDeps } from '../recordFilterCommands';
 import { InMemoryMEditClient } from '../../medit/client';
 import { recordingReporter, type RecordingReporter } from '../../test/surfacingDoubles';
+import { present } from '../../present';
 
 beforeEach(() => {
   handlers.clear();
@@ -53,7 +54,7 @@ describe('setFilterFromDocument', () => {
   function invoke(client: InMemoryMEditClient) {
     const deps = makeDeps(client);
     registerFilterCommands(deps);
-    return { handler: handlers.get('modbench.setFilterFromDocument')!, deps };
+    return { handler: present(handlers.get('modbench.setFilterFromDocument'), 'the registered setFilterFromDocument handler'), deps };
   }
 
   it('sets the filter active, refreshes the tree, and refreshes the matching-plugin set on success', async () => {
@@ -98,7 +99,7 @@ describe('clearFilter', () => {
     const deps = makeDeps(client);
     registerFilterCommands(deps);
 
-    await handlers.get('modbench.clearFilter')!();
+    await present(handlers.get('modbench.clearFilter'), 'the registered clearFilter handler')();
 
     expect(client.calls).toContainEqual({ method: 'clearFilter', args: [] });
     expect(deps.setFilterActive).toHaveBeenCalledWith(false);

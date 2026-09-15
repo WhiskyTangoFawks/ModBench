@@ -3,6 +3,7 @@ import type { Mod, ModlistEntry, Separator } from './model';
 import { parseModlist, moveModInText, moveSeparatorBlockInText, writeModlist } from './mo2/modlistText';
 import type { InstanceValue } from './instance';
 import type { ModStatusResult } from './statusChecker';
+import { present } from '../present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFile, DataTransferItem, DataTransfer, FakeCancellationToken, fakeUri,
@@ -141,13 +142,13 @@ describe('ModListProvider', () => {
     const roots = await provider.getChildren();
 
     expect(roots[0]).toBeInstanceOf(CountNode);
-    expect(roots[0]!.label).toBe('2 active / 4 installed');
+    expect(present(roots[0], 'the first root').label).toBe('2 active / 4 installed');
     expect(roots[1]).toBeInstanceOf(SeparatorNode);
-    expect(roots[1]!.label).toBe('Section 1');
+    expect(present(roots[1], 'the second root').label).toBe('Section 1');
     expect(roots[2]).toBeInstanceOf(ModNode);
-    expect(roots[2]!.label).toBe('Delta');
+    expect(present(roots[2], 'the third root').label).toBe('Delta');
     expect(roots[3]).toBeInstanceOf(ModNode);
-    expect(roots[3]!.label).toBe('Gamma');
+    expect(present(roots[3], 'the fourth root').label).toBe('Gamma');
   });
 
   // Rival: the provider ignores the injected value and falls back to a read of its own — with
@@ -180,19 +181,21 @@ describe('ModListProvider', () => {
       sep('Section'),
     ]);
     const roots = await provider.getChildren();
-    const separator = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
+    const separator = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
     const children = await provider.getChildren(separator);
 
     expect(children).toHaveLength(2);
     // Default losing-at-top view reverses each sibling list, so the later file
     // entry (Disabled Mod) renders first.
-    const [disabled, enabled] = expectInstancesOf(children, ModNode);
-    expect(enabled!.label).toBe('UFO4P');
-    expect(enabled!.description).toBe('v2.1.5');
-    expect(enabled!.checkboxState).toBe(1); // Checked
-    expect(enabled!.tooltip).toBe('UFO4P · v2.1.5 · 4598 · UFO4P.7z');
-    expect(disabled!.checkboxState).toBe(0); // Unchecked
-    expect(disabled!.tooltip).toBe('Disabled Mod'); // no extra fields
+    const modNodes = expectInstancesOf(children, ModNode);
+    const disabled = present(modNodes[0], 'the disabled mod row');
+    const enabled = present(modNodes[1], 'the enabled mod row');
+    expect(enabled.label).toBe('UFO4P');
+    expect(enabled.description).toBe('v2.1.5');
+    expect(enabled.checkboxState).toBe(1); // Checked
+    expect(enabled.tooltip).toBe('UFO4P · v2.1.5 · 4598 · UFO4P.7z');
+    expect(disabled.checkboxState).toBe(0); // Unchecked
+    expect(disabled.tooltip).toBe('Disabled Mod'); // no extra fields
   });
 
   it('setModEnabled calls the setModEnabled command with the instance root, active profile and inputs, and fires a refresh', async () => {
@@ -283,7 +286,7 @@ describe('ModListProvider', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(rows[0]!.label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
+    expect(present(rows[0], 'the sole row').label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EACCES: permission denied, open modlist.txt' },
     ]);
@@ -333,7 +336,7 @@ describe('ModListProvider', () => {
       const provider = makeProvider(entries());
       provider.setFilter('alpha', true);
       const roots = await provider.getChildren();
-      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
       const children = await provider.getChildren(sepNode);
 
       // Group A's members are [Zeta, Alpha Child]; only Alpha Child matches.
@@ -344,7 +347,7 @@ describe('ModListProvider', () => {
       const provider = makeProvider(entries());
       provider.setFilter('group a', true);
       const roots = await provider.getChildren();
-      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
       expect(sepNode.label).toBe('Group A');
       const children = await provider.getChildren(sepNode);
       // Separator name matches, so BOTH members show — including Zeta, which
@@ -435,7 +438,7 @@ describe('ModListProvider', () => {
 
     async function childrenOf(provider: ModListProvider, sepName: string): Promise<ModNode[]> {
       const roots = await provider.getChildren();
-      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === sepName)!;
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === sepName), "the sole SeparatorNode");
       return expectInstancesOf(await provider.getChildren(sepNode), ModNode);
     }
 
@@ -450,7 +453,7 @@ describe('ModListProvider', () => {
     it('handleDrag serialises the dragged mod into dataTransfer', async () => {
       const { provider } = makeDndProvider();
       // Alpha is Group A's member (the entry preceding it), not a root.
-      const alphaNode = (await childrenOf(provider, 'Group A')).find((n) => n.label === 'Alpha')!;
+      const alphaNode = present((await childrenOf(provider, 'Group A')).find((n) => n.label === 'Alpha'), "the 'Alpha' node");
       const dt = new DataTransfer();
       provider.handleDrag([alphaNode], dt, token);
       const got = dt.get('application/vnd.medit.modlist-node');
@@ -460,7 +463,7 @@ describe('ModListProvider', () => {
     it('drop mod onto separator → moveModToSeparator', async () => {
       const { provider } = makeDndProvider();
       const roots = await provider.getChildren();
-      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
       const dt = new DataTransfer();
       dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
       await provider.handleDrop(sepNode, dt, token);
@@ -472,7 +475,7 @@ describe('ModListProvider', () => {
     it('winning-at-top down-drag: drop mod onto a lower mod lands it before that mod', async () => {
       const { provider, order } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
-      const gammaNode = (await childrenOf(provider, 'Group B')).find((n) => n.label === 'Gamma')!;
+      const gammaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Gamma'), "the 'Gamma' node");
       await drop(provider, gammaNode, modItem('Alpha'));
       expect(order()).toEqual(['Group A', 'Beta', 'Alpha', 'Gamma', 'Group B', 'Delta']);
     });
@@ -483,7 +486,7 @@ describe('ModListProvider', () => {
     it('winning-at-top up-drag: drop mod onto a higher mod lands it before that mod', async () => {
       const { provider, order } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
-      const betaNode = (await childrenOf(provider, 'Group B')).find((n) => n.label === 'Beta')!;
+      const betaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Beta'), "the 'Beta' node");
       await drop(provider, betaNode, modItem('Delta'));
       expect(order()).toEqual(['Alpha', 'Group A', 'Delta', 'Beta', 'Gamma', 'Group B']);
     });
@@ -502,7 +505,7 @@ describe('ModListProvider', () => {
       const { provider, order } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       const roots = await provider.getChildren();
-      const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(provider, deltaNode, sepItem('Group A'));
       expect(order()).toEqual(['Beta', 'Gamma', 'Group B', 'Alpha', 'Group A', 'Delta']);
     });
@@ -540,7 +543,7 @@ describe('ModListProvider', () => {
       // View target ['Losing', 'Winning', 'Middle'] => file order ['Middle','Winning','Losing'].
       it('default (losing-at-top): dropping the winning mod onto the middle row lands it just above that row in the view', async () => {
         const { provider, order } = makeSimpleProvider();
-        const middle = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Middle')!;
+        const middle = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Middle'), "the 'Middle' node");
         await drop(provider, middle, modItem('Winning'));
         expect(order()).toEqual(['Middle', 'Winning', 'Losing']);
       });
@@ -548,7 +551,7 @@ describe('ModListProvider', () => {
       // View target ['Middle', 'Losing', 'Winning'] => file order ['Winning','Losing','Middle'].
       it('default (losing-at-top): dragging a top (losing) row down onto a lower row lands it just above that row in the view', async () => {
         const { provider, order } = makeSimpleProvider();
-        const winning = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Winning')!;
+        const winning = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Winning'), "the 'Winning' node");
         await drop(provider, winning, modItem('Losing')); // Losing (view top) dropped onto Winning (view bottom)
         expect(order()).toEqual(['Winning', 'Losing', 'Middle']);
       });
@@ -566,7 +569,7 @@ describe('ModListProvider', () => {
         // just after it in the file.
         const { provider, order } = makeApplyingProvider();
         const roots = await provider.getChildren();
-        const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+        const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
         await drop(provider, deltaNode, sepItem('Group A'));
         expect(order()).toEqual(['Beta', 'Gamma', 'Group B', 'Delta', 'Alpha', 'Group A']);
       });
@@ -608,7 +611,7 @@ describe('ModListProvider', () => {
       reorderModMock.mockRejectedValue(new Error('disk full'));
       const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
-      const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(provider, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
       expect(logs.some((l) => l.includes('reorder failed: disk full'))).toBe(true);
@@ -619,7 +622,7 @@ describe('ModListProvider', () => {
       moveModToSeparatorMock.mockResolvedValue({ applied: false, refusal: 'disk full' });
       const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
-      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A'), "the 'Group A' node");
       await drop(provider, sepNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
       expect(logs.some((l) => l.includes('moveModToSeparator failed: disk full'))).toBe(true);
@@ -629,7 +632,7 @@ describe('ModListProvider', () => {
       reorderSeparatorBlockMock.mockRejectedValue(new Error('disk full'));
       const { provider, reports, logs } = makeFailingProvider();
       const roots = await provider.getChildren();
-      const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(provider, deltaNode, item({ kind: 'separator', name: 'Group A' }));
       expect(reports).toEqual([{ severity: 'error', message: 'Failed to reorder mods.', detail: 'disk full' }]);
       expect(logs.some((l) => l.includes('reorderSeparatorBlock failed: disk full'))).toBe(true);
@@ -641,7 +644,7 @@ describe('ModListProvider', () => {
       let failingFired = false;
       failing.onDidChangeTreeData(() => { failingFired = true; });
       const roots = await failing.getChildren();
-      const deltaNode = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(failing, deltaNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(failingFired).toBe(true); // refresh fired to resync against disk
       expect(failingReports).toHaveLength(1);
@@ -651,7 +654,7 @@ describe('ModListProvider', () => {
       let okFired = false;
       ok.onDidChangeTreeData(() => { okFired = true; });
       const okRoots = await ok.getChildren();
-      const okDeltaNode = okRoots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta')!;
+      const okDeltaNode = present(okRoots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(ok, okDeltaNode, item({ kind: 'mod', name: 'Alpha' }));
       expect(okFired).toBe(true);
       expect(okReporter.reports).toEqual([]);
@@ -710,13 +713,13 @@ describe('ModListProvider', () => {
 
       expect(roots[0]).toBeInstanceOf(CountNode);
       expect(roots[1]).toBeInstanceOf(ModNode);
-      expect(roots[1]!.label).toBe('Solo A');
+      expect(present(roots[1], 'the second root').label).toBe('Solo A');
       expect(roots[2]).toBeInstanceOf(ModNode);
-      expect(roots[2]!.label).toBe('Solo B');
+      expect(present(roots[2], 'the third root').label).toBe('Solo B');
       expect(roots[3]).toBeInstanceOf(SeparatorNode);
-      expect(roots[3]!.label).toBe('Section 1');
+      expect(present(roots[3], 'the fourth root').label).toBe('Section 1');
       expect(roots[4]).toBeInstanceOf(SeparatorNode);
-      expect(roots[4]!.label).toBe('Section 2');
+      expect(present(roots[4], 'the fifth root').label).toBe('Section 2');
     });
 
     it('toggled to winning-at-top: mods within a separator are in file order', async () => {
@@ -729,7 +732,7 @@ describe('ModListProvider', () => {
       ]);
       provider.toggleViewDirection(); // -> winning-at-top (file order)
       const roots = await provider.getChildren();
-      const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode)!;
+      const sepNode = present(roots.find((n): n is SeparatorNode => n instanceof SeparatorNode), "the sole SeparatorNode");
       const children = await provider.getChildren(sepNode);
 
       expect(children.map((n) => n.label)).toEqual(['First', 'Second', 'Third']);
@@ -767,7 +770,7 @@ describe('ModListProvider', () => {
 
       // winning-at-top: ungrouped (Alpha) first, then grouped (Group A).
       expect(roots[0]).toBeInstanceOf(ModNode);
-      expect(roots[0]!.label).toBe('Alpha');
+      expect(present(roots[0], 'the first root').label).toBe('Alpha');
       expect(roots[1]).toBeInstanceOf(SeparatorNode);
       const sepNode = expectInstanceOf(roots[1], SeparatorNode);
       const children = await provider.getChildren(sepNode);
@@ -789,8 +792,8 @@ describe('ModListProvider', () => {
       });
       const roots = await provider.getChildren();
       const modNodes = roots.filter((n): n is ModNode => n instanceof ModNode);
-      const modA = modNodes.find((n) => n.label === 'ModA')!;
-      const modB = modNodes.find((n) => n.label === 'ModB')!;
+      const modA = present(modNodes.find((n) => n.label === 'ModA'), "the 'ModA' node");
+      const modB = present(modNodes.find((n) => n.label === 'ModB'), "the 'ModB' node");
 
       expect(modA.iconPath).toEqual({ id: 'warning' });
       expect(modA.tooltip).toContain('textures/shared/foo.dds');
@@ -803,10 +806,10 @@ describe('ModListProvider', () => {
     it('keeps a conflicted mod\'s badge identical after filtering it in, and after clearing the filter', async () => {
       const instance = new FakeInstance(valueOf([mod('ModA'), mod('ModB')], { modStatuses: conflictStatuses() }));
       const provider = makeProvider([], { instance });
-      const before = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      const before = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
 
       provider.setFilter('moda', true);
-      const filtered = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      const filtered = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(filtered.iconPath).toEqual(before.iconPath);
       expect(filtered.tooltip).toEqual(before.tooltip);
       expect(filtered.description).toEqual(before.description);
@@ -814,7 +817,7 @@ describe('ModListProvider', () => {
       provider.setFilter('', true);
       const cleared = await provider.getChildren();
       expect(cleared.filter((n): n is ModNode => n instanceof ModNode)).toHaveLength(2);
-      const clearedModA = cleared.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      const clearedModA = present(cleared.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(clearedModA.iconPath).toEqual(before.iconPath);
     });
 
@@ -823,16 +826,16 @@ describe('ModListProvider', () => {
     it('flipping view direction (toggleViewDirection) never changes a conflict\'s winner', async () => {
       const instance = new FakeInstance(valueOf([mod('ModA'), mod('ModB')], { modStatuses: conflictStatuses() }));
       const provider = makeProvider([], { instance });
-      const before = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      const before = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(before.tooltip).toContain('winner: ModB');
 
       provider.toggleViewDirection(); // presentation flip only — losing-at-top -> winning-at-top
-      const afterFlip = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      const afterFlip = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(afterFlip.tooltip).toContain('winner: ModB');
       expect(afterFlip.iconPath).toEqual(before.iconPath);
 
       provider.toggleViewDirection(); // flip back
-      const afterFlipBack = (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
+      const afterFlipBack = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
       expect(afterFlipBack.tooltip).toContain('winner: ModB');
     });
 
@@ -843,8 +846,8 @@ describe('ModListProvider', () => {
         })),
       });
       const roots = await provider.getChildren();
-      const modA = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA')!;
-      const modB = roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModB')!;
+      const modA = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModA'), "the 'ModA' node");
+      const modB = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'ModB'), "the 'ModB' node");
       expect(modA.iconPath).toEqual({ id: 'package' });
       expect(modB.iconPath).toEqual({ id: 'package' });
     });
@@ -860,7 +863,7 @@ describe('ModListProvider', () => {
         instance: new FakeInstance(valueOf([mod('ModA')], { modStatuses: statuses })),
       });
       const roots = await provider.getChildren();
-      const modA = roots.find((n): n is ModNode => n instanceof ModNode)!;
+      const modA = present(roots.find((n): n is ModNode => n instanceof ModNode), "the sole ModNode");
 
       expect(modA.iconPath).toEqual({ id: 'warning' });
       expect(modA.description).toContain('7 conflicts');
@@ -875,7 +878,7 @@ describe('ModListProvider', () => {
         instance: new FakeInstance(valueOf([mod('ModA')], { modStatuses: statuses })),
       });
       const roots = await provider.getChildren();
-      const modA = roots.find((n): n is ModNode => n instanceof ModNode)!;
+      const modA = present(roots.find((n): n is ModNode => n instanceof ModNode), "the sole ModNode");
 
       expect(modA.iconPath).toEqual({ id: 'error' });
       expect(modA.tooltip).toContain('Missing mod');
@@ -910,12 +913,12 @@ describe('ModListProvider', () => {
         instance: new FakeInstance(valueOf(entries(), { overwriteFileCount: 2 })),
       });
       const roots = await provider.getChildren();
-      const node = roots.find((n): n is OverwriteNode => n instanceof OverwriteNode)!;
+      const node = present(roots.find((n): n is OverwriteNode => n instanceof OverwriteNode), "the sole OverwriteNode");
 
       expect(node.label).toBe('Overwrite');
       expect(node.checkboxState).toBeUndefined();
       expect(node.contextValue).toBe('overwrite');
-      expect(node.command!.command).toBe('modbench.modList.overwrite.reveal');
+      expect(present(node.command, "the OverwriteNode's reveal command").command).toBe('modbench.modList.overwrite.reveal');
       expect(node.tooltip).toContain('2');
       expect(String(node.tooltip)).toMatch(/reassign|clear/i);
     });
@@ -928,7 +931,7 @@ describe('ModListProvider', () => {
         instanceRoot: '/my/mo2/instance',
       });
       const roots = await provider.getChildren();
-      const node = roots.find((n): n is OverwriteNode => n instanceof OverwriteNode)!;
+      const node = present(roots.find((n): n is OverwriteNode => n instanceof OverwriteNode), "the sole OverwriteNode");
       expect(node.resourceUri).toEqual({ fsPath: '/my/mo2/instance/overwrite', toString: expect.any(Function) });
     });
 

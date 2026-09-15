@@ -99,7 +99,8 @@ describe('PluginHeader', () => {
       </tr></thead></table>,
     );
     const pluginHeaderRoot = container.querySelector<HTMLElement>('th > div');
-    expect(pluginHeaderRoot!.style.opacity).toBe('');
+    if (!pluginHeaderRoot) throw new Error('expected the PluginHeader to render a root div inside the <th>');
+    expect(pluginHeaderRoot.style.opacity).toBe('');
   });
 
   // ADR-0012: origin is never what the user reads by default — only the filename.
@@ -127,7 +128,11 @@ describe('PluginHeader', () => {
   it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
     const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data'));
     const { container } = render(<PluginHeader {...baseProps()} vscodeContext={vscodeContext} />);
-    expect(JSON.parse(container.firstElementChild!.getAttribute('data-vscode-context')!)).toEqual({
+    const root = container.firstElementChild;
+    if (!root) throw new Error('expected PluginHeader to render a root element');
+    const contextAttr = root.getAttribute('data-vscode-context');
+    if (contextAttr === null) throw new Error('expected the root element to carry a data-vscode-context attribute');
+    expect(JSON.parse(contextAttr)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data',
       preventDefaultContextMenuItems: true,
     });

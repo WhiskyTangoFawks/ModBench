@@ -6,6 +6,7 @@ vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: f
 import { publishLoadDiagnoses, groupDiagnosesByPlugin } from '../loadDiagnostics';
 import type { OriginFolder } from '../../modmanager/loadOrderSnapshot';
 import type { PluginDiagnosisReport } from '../client';
+import { present } from '../../present';
 
 const report = (plugin: string, origin: string, text: string): PluginDiagnosisReport => ({
   plugin, origin, anchor: null, defectClass: 'fixed-size-subrecord-short', tail: null, message: 'm', text,
@@ -27,10 +28,12 @@ describe('publishLoadDiagnoses', () => {
       report('TrueStorms.esp', 'TS Mod', 'REGN … — fixed-size-subrecord-short, repairable (lossless): …'),
     ]);
 
-    const [path, list] = entriesOf(collection)[0]!;
+    const [path, list] = present(entriesOf(collection)[0], 'the sole published diagnostic-collection entry');
     expect(path).toBe('/instance/mods/TS Mod/TrueStorms.esp');
-    expect(list[0]!.message).toBe('REGN … — fixed-size-subrecord-short, repairable (lossless): …');
-    expect(list[0]!.severity).toBe(1); // Warning — a Malformed plugin still loads and plays
+    const [diagnostic] = list;
+    if (!diagnostic) throw new Error('the sole diagnostic published for TrueStorms.esp');
+    expect(diagnostic.message).toBe('REGN … — fixed-size-subrecord-short, repairable (lossless): …');
+    expect(diagnostic.severity).toBe(1); // Warning — a Malformed plugin still loads and plays
   });
 
   // Rival: `mods/<origin>`, which put an overwrite copy's Problems entry on a path that
@@ -74,7 +77,8 @@ describe('publishLoadDiagnoses', () => {
       report('A.esp', 'M', 'first'), report('A.esp', 'M', 'second'),
     ]);
 
-    expect(entriesOf(collection)[0]![1].map((d) => d.message)).toEqual(['first', 'second']);
+    const [, groupedDiagnostics] = present(entriesOf(collection)[0], 'the sole grouped diagnostic-collection entry');
+    expect(groupedDiagnostics.map((d) => d.message)).toEqual(['first', 'second']);
   });
 });
 

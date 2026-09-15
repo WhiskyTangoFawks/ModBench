@@ -9,6 +9,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import { fakeUri } from '../test/vscodeMock';
+import { present } from '../present';
 
 describe('HiddenDownloadDecorationProvider', () => {
   const instanceRoot = '/instance';
@@ -16,11 +17,10 @@ describe('HiddenDownloadDecorationProvider', () => {
 
   it('dims a hidden download row with the disabled-foreground colour (colour only, no badge)', () => {
     const provider = new HiddenDownloadDecorationProvider(instanceRoot, () => new Set(['hidden.zip']));
-    const decoration = provider.provideFileDecoration(downloadUri('hidden.zip'));
+    const decoration = present(provider.provideFileDecoration(downloadUri('hidden.zip')), 'the decoration for a hidden download row');
 
-    expect(decoration).toBeDefined();
-    expect(decoration!.color).toEqual(new vscode.ThemeColor('disabledForeground'));
-    expect(decoration!.badge).toBeUndefined();
+    expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
+    expect(decoration.badge).toBeUndefined();
   });
 
   it('returns undefined for a visible download row', () => {
