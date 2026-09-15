@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeReconcileProgressHandler } from '../loadOrderProgress';
+import { makeReconcileProgressHandler, reportIndexHeldElsewhere } from '../loadOrderProgress';
 import type { LoadOrderProgress } from '../client';
 
 // Applying a tick re-renders the whole tree, and PluginTreeProvider.getPluginChildren is
@@ -42,5 +42,34 @@ describe('makeReconcileProgressHandler', () => {
 
     expect(applyLoadOrder).toHaveBeenCalledTimes(2);
     expect(applyLoadOrder).toHaveBeenLastCalledWith(['A.esp'], [{ name: 'B.esp', origin: 'SomeMod', reason: 'RACE parse' }]);
+  });
+});
+
+// ADR-0009 point 5: the put's own outcome reports applied regardless of what the Index found, so
+// a tick carrying the refusal is the only place "another window has this instance open" is seen.
+describe('reportIndexHeldElsewhere', () => {
+  const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
+    ({ totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], ...over });
+
+  it('shows the ready-to-show message verbatim, prefixed exactly as a failed send is', () => {
+    const error = vi.fn();
+
+    reportIndexHeldElsewhere(
+      status({ heldElsewhereMessage: 'This instance\'s index is open in another Modbench window.' }),
+      { error },
+    );
+
+    expect(error).toHaveBeenCalledWith(
+      'mEdit: Failed to send the load order — This instance\'s index is open in another Modbench window.',
+    );
+  });
+
+  // The rival: showing it on every ordinary tick, not only the one carrying the refusal.
+  it('shows nothing for a tick with no held-elsewhere message', () => {
+    const error = vi.fn();
+
+    reportIndexHeldElsewhere(status({ indexedPlugins: ['A.esp'] }), { error });
+
+    expect(error).not.toHaveBeenCalled();
   });
 });

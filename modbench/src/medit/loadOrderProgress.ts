@@ -17,3 +17,12 @@ export function makeReconcileProgressHandler(deps: {
     deps.applyLoadOrder(status.indexedPlugins, status.failures);
   };
 }
+
+/** The Index's own known refusal (ADR-0009 point 5), discovered mid-reconcile — the put's own
+ *  outcome reports applied regardless (ADR-0013), so a tick carrying it is the only place
+ *  "another window has this instance open" is ever seen. */
+export function reportIndexHeldElsewhere(
+  status: LoadOrderProgress, deps: { error: (msg: string) => void },
+): void {
+  if (status.heldElsewhereMessage) deps.error(`mEdit: Failed to send the load order — ${status.heldElsewhereMessage}`);
+}

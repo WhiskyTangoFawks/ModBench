@@ -103,17 +103,22 @@ export interface LoadOrderStatus {
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
    *  the reconcile finishes (ADR-0019). */
   failures: PluginLoadFailure[];
+  /** Set only when the wire's `state` is `'HeldElsewhere'` (ADR-0009 point 5) — the one state
+   *  worth carrying, since nothing else here derives "another window has this instance open". */
+  heldElsewhereMessage?: string;
 }
 
 /** The transform a `load-order-status` notification's nested payload needs before it is this
  *  side's {@link LoadOrderStatus}: the wire's `indexedPlugins` carries each entry's origin too,
- *  and the consumer keys on filename alone. */
+ *  and the consumer keys on filename alone; `state` is dropped except for the one value with no
+ *  other way to read it. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,
     indexedPlugins: wire.indexedPlugins.map((p) => p.name),
     conflictsComputed: wire.conflictsComputed,
     failures: wire.failures,
+    heldElsewhereMessage: wire.state === 'HeldElsewhere' ? (wire.message ?? undefined) : undefined,
   };
 }
 

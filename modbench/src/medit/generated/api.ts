@@ -782,7 +782,7 @@ export interface components {
             applied: boolean;
         };
         /** @enum {string} */
-        LoadOrderState: "None" | "Reconciling" | "Ready";
+        LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere";
         LoadOrderStatus: {
             state: components["schemas"]["LoadOrderState"];
             /** Format: int32 */
@@ -790,6 +790,7 @@ export interface components {
             indexedPlugins: components["schemas"]["IndexedPlugin"][];
             conflictsComputed: boolean;
             failures: components["schemas"]["PluginLoadFailure"][];
+            message?: string | null;
         };
         MasterIssue: {
             masterName: string;

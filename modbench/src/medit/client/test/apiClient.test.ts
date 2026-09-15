@@ -57,5 +57,21 @@ describe('toLoadOrderStatus', () => {
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
+    expect(status.heldElsewhereMessage).toBeUndefined();
+  });
+
+  // The one state this transform does carry: nothing else here can say "another window has
+  // this instance open".
+  it('carries heldElsewhereMessage only for the HeldElsewhere state', () => {
+    const status = toLoadOrderStatus({
+      state: 'HeldElsewhere',
+      totalPlugins: 0,
+      indexedPlugins: [],
+      conflictsComputed: false,
+      failures: [],
+      message: 'This instance\'s index is open in another Modbench window.',
+    });
+
+    expect(status.heldElsewhereMessage).toBe('This instance\'s index is open in another Modbench window.');
   });
 });

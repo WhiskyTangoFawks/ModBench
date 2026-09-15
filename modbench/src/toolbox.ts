@@ -4,7 +4,7 @@ import type {
 } from './medit/client';
 import { createLoadOrderSender, type LoadOrderSender } from './medit/client';
 import { implicitMastersFrom, rebuildIndexVia } from './toolboxClientCalls';
-import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
+import { makeReconcileProgressHandler, reportIndexHeldElsewhere } from './medit/loadOrderProgress';
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
@@ -211,6 +211,12 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
     const { plugins, dataFolder } = snapshot;
     const treeProgress = makeTreeProgressHandler(session);
     outputChannel.info(`[toolbox] handing mEdit the load order snapshot (${plugins.length} plugin copies)`);
+    // The Index's own known refusal rides a tick, never the put's own outcome (ADR-0013) — this
+    // is the only place it is seen, so it is checked on every one, not folded into treeProgress.
+    const onProgress = (status: LoadOrderProgress): void => {
+      reportIndexHeldElsewhere(status, { error: (m) => reporter.report('error', m) });
+      treeProgress.onProgress(status);
+    };
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
     const result = await sender.send({
@@ -218,7 +224,7 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
       gameDirectory: dataFolder,
       instanceRoot,
       gameRelease: gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
-    }, { onProgress: treeProgress.onProgress });
+    }, { onProgress });
     await applyLoadOrderOutcome(plugins, result, treeProgress.lastFailures(), treeProgress.lastTotalPlugins(), {
       log: (m) => outputChannel.info(`[toolbox] ${m}`),
       warn: (m) => reporter.report('warning', m),
