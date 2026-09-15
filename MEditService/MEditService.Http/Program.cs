@@ -102,7 +102,9 @@ try
     var app = builder.Build();
 
     // ADR-0013/ADR-0014 invariant 3: the Index and the watcher each subscribe to Load order state
-    // independently, here, so the endpoint that applies a snapshot never names either.
+    // independently, here, so the endpoint that applies a snapshot never names either. Each
+    // subscriber handles its own known failures as status data; this catch is the last resort for
+    // the unknown only.
     var subscriptionLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("LoadOrderSubscriptions");
     var indexProjector = app.Services.GetRequiredService<IndexProjector>();
     var modFolderWatcher = app.Services.GetRequiredService<ModFolderWatcher>();
@@ -110,11 +112,11 @@ try
     {
         try
         {
-            indexProjector.Reconcile(snapshot);
+            indexProjector.OnLoadOrderChanged(snapshot);
         }
         catch (Exception ex)
         {
-            subscriptionLogger.LogError(ex, "Reconciling the load order failed");
+            subscriptionLogger.LogError(ex, "Reconciling the load order failed unexpectedly");
         }
     };
     app.Services.GetRequiredService<LoadOrderHolder>().Changed += snapshot =>
@@ -125,7 +127,7 @@ try
         }
         catch (Exception ex)
         {
-            subscriptionLogger.LogError(ex, "Re-arming the watcher after a load order change failed");
+            subscriptionLogger.LogError(ex, "Re-arming the watcher after a load order change failed unexpectedly");
         }
     };
 

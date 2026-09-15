@@ -19,6 +19,10 @@ public enum LoadOrderState
 
     /// <summary>Every plugin has been indexed and the winner sweep has run.</summary>
     Ready,
+
+    /// <summary>ADR-0009 point 5: another Modbench window holds this instance's index file.
+    /// <see cref="LoadOrderStatus.Message"/> names it; nothing here is held.</summary>
+    HeldElsewhere,
 }
 
 /// <summary>Carries origin as well as filename because two copies of one filename can be held at
@@ -33,7 +37,10 @@ public sealed record LoadOrderStatus(
     int TotalPlugins,
     IReadOnlyList<IndexedPlugin> IndexedPlugins,
     bool ConflictsComputed,
-    IReadOnlyList<PluginLoadFailure> Failures)
+    IReadOnlyList<PluginLoadFailure> Failures,
+    // Non-null only for LoadOrderState.HeldElsewhere: the ready-to-show reason, carried here
+    // because that refusal never reaches the put's own response.
+    string? Message = null)
 {
     public static readonly LoadOrderStatus None =
         new(LoadOrderState.None, 0, [], ConflictsComputed: false, []);

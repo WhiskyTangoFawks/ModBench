@@ -39,6 +39,9 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     private readonly List<IndexedPlugin> _indexed = [];
     private bool _conflictsComputed;
     private int _plannedCount;
+    // Set only by OnLoadOrderChanged's own catch, cleared at the top of every Reconcile
+    // attempt: a repeated refusal re-sets it a moment later, a successful one leaves it clear.
+    private string? _heldElsewhereMessage;
 
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside this
     /// project names the store, its factory or how a file is opened (ADR-0009).</summary>
@@ -155,6 +158,10 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             lock (_lock)
             {
+                // DisposeCurrent already ran by the time this is set (EnsureScope tears the
+                // previous scope down before the open that refuses), so nothing here is held.
+                if (_heldElsewhereMessage is { } message)
+                    return LoadOrderStatus.None with { State = LoadOrderState.HeldElsewhere, Message = message };
                 if (_heldPlugins is null) return LoadOrderStatus.None;
                 var state = _conflictsComputed ? LoadOrderState.Ready : LoadOrderState.Reconciling;
                 return new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures);
@@ -216,6 +223,10 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
                 snapshot.DataFolderPath, snapshot.InstanceRoot, snapshot.Copies.Count, snapshot.GameRelease);
         }
 
+        // A fresh attempt starting: whatever the previous attempt's own refusal set is stale the
+        // moment this one is asked for, whichever way this one goes.
+        lock (_lock) _heldElsewhereMessage = null;
+
         EnterExclusive();
         try
         {
@@ -226,8 +237,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         catch (OperationCanceledException ex)
         {
             // Superseded: whatever landed stays held and registered, and the reconcile that
-            // cancelled this one owns the rest. Nothing was built that its successor will not want.
-            _logger.LogWarning(ex, "Load order reconcile was superseded before it completed");
+            // cancelled this one owns the rest. Normal, not a failure — Information, not Warning.
+            _logger.LogInformation(ex, "Load order reconcile was superseded before it completed");
             throw;
         }
         catch (IndexHeldElsewhereException ex)
@@ -246,6 +257,27 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             EndReconcile();
             ExitExclusive();
+        }
+    }
+
+    /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): reconciles, and
+    /// turns this Index's two known refusals into status data instead of letting them reach the
+    /// composition root. Anything else propagates — the root's own last resort.</summary>
+    public void OnLoadOrderChanged(LoadOrderSnapshot snapshot)
+    {
+        try
+        {
+            Reconcile(snapshot);
+        }
+        catch (OperationCanceledException)
+        {
+            // Already logged at information by Reconcile itself; a newer snapshot superseding
+            // this one is normal, never raised further.
+        }
+        catch (IndexHeldElsewhereException ex)
+        {
+            lock (_lock) _heldElsewhereMessage = ex.Message;
+            PublishStatus();
         }
     }
 

@@ -130,7 +130,9 @@ public sealed class ArchitectureTests
         var root = SolutionDirectory();
         // ADR-0007's created copy is registered by the create endpoint and reaches the Index
         // through the next snapshot, so create writes the kernel and never reconciles.
-        string[] reconcilers = ["Program.cs"];
+        // Reconcile itself is called only from OnLoadOrderChanged, on the same receiver (no
+        // `.Reconcile(` anywhere), so the scan below finds no call site to allow at all.
+        string[] reconcilers = [];
         string[] writers = ["PluginEndpoints.cs", "PutLoadOrderHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
@@ -141,8 +143,8 @@ public sealed class ArchitectureTests
             .Distinct()
             .ToList();
         Assert.True(offenders.Count == 0,
-            "The load order is reconciled outside Program.cs, or written outside "
-            + "PluginEndpoints.cs and PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
+            "The load order is reconciled outside Load order state's own Changed subscriber, or "
+            + "written outside PluginEndpoints.cs and PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
 
         var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies)).ToList();
         Assert.True(dead.Count == 0,
