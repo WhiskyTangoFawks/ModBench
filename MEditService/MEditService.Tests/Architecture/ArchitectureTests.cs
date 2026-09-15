@@ -128,10 +128,9 @@ public sealed class ArchitectureTests
     public void LoadOrder_ArrivesOnlyThroughTheApiEndpoints()
     {
         var root = SolutionDirectory();
-        // ADR-0007's created copy is registered by the create endpoint and reaches the Index
-        // through the next snapshot, so create writes the kernel and never reconciles.
-        // Reconcile itself is called only from OnLoadOrderChanged, on the same receiver (no
-        // `.Reconcile(` anywhere), so the scan below finds no call site to allow at all.
+        // ADR-0007's created copy reaches the Index through the next snapshot, so create
+        // never reconciles. Reconcile itself is called only from OnLoadOrderChanged — no
+        // `.Reconcile(` exists elsewhere to allow.
         string[] reconcilers = [];
         string[] writers = ["PluginEndpoints.cs", "PutLoadOrderHandler.cs"];
 

@@ -260,9 +260,8 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): reconciles, and
-    /// turns this Index's two known refusals into status data instead of letting them reach the
-    /// composition root. Anything else propagates — the root's own last resort.</summary>
+    /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): reconciles,
+    /// turning this Index's two known refusals into status data. Anything else propagates.</summary>
     public void OnLoadOrderChanged(LoadOrderSnapshot snapshot)
     {
         try

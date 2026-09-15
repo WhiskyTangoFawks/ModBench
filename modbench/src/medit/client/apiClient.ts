@@ -108,10 +108,9 @@ export interface LoadOrderStatus {
   heldElsewhereMessage?: string;
 }
 
-/** The transform a `load-order-status` notification's nested payload needs before it is this
- *  side's {@link LoadOrderStatus}: the wire's `indexedPlugins` carries each entry's origin too,
- *  and the consumer keys on filename alone; `state` is dropped except for the one value with no
- *  other way to read it. */
+/** The transform a `load-order-status` payload needs before it is this side's
+ *  {@link LoadOrderStatus}: `indexedPlugins` carries each entry's origin too, and the
+ *  consumer keys on filename alone; `state` is dropped except for its one held-elsewhere value. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,

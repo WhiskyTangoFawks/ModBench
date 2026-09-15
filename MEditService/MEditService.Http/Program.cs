@@ -101,10 +101,9 @@ try
 
     var app = builder.Build();
 
-    // ADR-0013/ADR-0014 invariant 3: the Index and the watcher each subscribe to Load order state
-    // independently, here, so the endpoint that applies a snapshot never names either. Each
-    // subscriber handles its own known failures as status data; this catch is the last resort for
-    // the unknown only.
+    // ADR-0013/ADR-0014 invariant 3: the Index and the watcher subscribe to Load order state
+    // independently, here — the endpoint names neither. Each handles its own known failures as
+    // status; this catch is the last resort, unknown failures only.
     var subscriptionLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("LoadOrderSubscriptions");
     var indexProjector = app.Services.GetRequiredService<IndexProjector>();
     var modFolderWatcher = app.Services.GetRequiredService<ModFolderWatcher>();
