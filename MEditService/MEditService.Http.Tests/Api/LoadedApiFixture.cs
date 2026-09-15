@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
@@ -17,7 +18,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     public async Task InitializeAsync()
     {
         Client = _app.CreateClient();
-        var resp = await Client.PutAsJsonAsync("/load-order", new
+        var resp = await Client.PutLoadOrderAndAwaitReady(new
         {
             plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameDirectory = Plugin.DataFolder,
