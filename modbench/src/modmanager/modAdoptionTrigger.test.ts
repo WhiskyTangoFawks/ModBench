@@ -10,6 +10,7 @@ import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeW
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { Instance, type InstanceValue } from './instance';
+import { instanceValueFixture } from './test/instanceValueFixture';
 import { registerModAdoption, type ModAdoptionOutcome } from './modAdoptionTrigger';
 import { adoptMods } from './commands/modlist';
 import { installFromFolder } from './commands/install';
@@ -34,7 +35,7 @@ afterEach(async () => {
 const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
-  return found[0];
+  return found[0]!;
 };
 
 // How a test learns a recompute landed: no sleep and no poll.
@@ -146,7 +147,7 @@ describe('registerModAdoption — driven by the Instance value', () => {
 });
 
 // Only `activeProfile` and `unlistedFolders` are read; the rest is unused filler cast through.
-const FAKE_VALUE = { activeProfile: 'Default', unlistedFolders: [] } as unknown as InstanceValue;
+const FAKE_VALUE: InstanceValue = instanceValueFixture({ activeProfile: 'Default', unlistedFolders: [] });
 
 function fakeInstance(): { subscribe: Instance['subscribe']; fire: () => void } {
   let subscriber: ((value: InstanceValue, seq: number) => void) | undefined;
@@ -191,7 +192,7 @@ describe('registerModAdoption — outcome handling', () => {
     }, invalidate, channel);
 
     expect(() => instance.fire()).not.toThrow();
-    await calls[calls.length - 1].catch(() => undefined);
+    await calls[calls.length - 1]!.catch(() => undefined);
 
     expect(channel.error).toHaveBeenCalledWith(expect.stringContaining('disk unplugged'));
     expect(invalidate).not.toHaveBeenCalled();

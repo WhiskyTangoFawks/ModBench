@@ -12,6 +12,6 @@ describe('createDownloadsWatcher', () => {
 
     createDownloadsWatcher('/instance', () => {});
 
-    expect(watchers[0].pattern).toBe('downloads/**');
+    expect(watchers[0]!.pattern).toBe('downloads/**');
   });
 });

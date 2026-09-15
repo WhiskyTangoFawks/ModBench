@@ -22,7 +22,8 @@ reported. A table of documented accepts passes exactly as a table of deletions d
 ## 1. Run the tool
 
 Scope the run to the review's fixed point, or take results the caller supplied. Runner
-mechanics live next to the runners — `stryker/stryker.md` for C# (`MEditService.Core`),
+mechanics live next to the runners — `stryker/stryker.md` for C# (one box at a time,
+`--box <Box>` against `MEditService.<Box>` and its own `MEditService.<Box>.Tests`),
 `stryker/stryker-js.md` for TypeScript (`modbench/src/{modmanager,medit}`). Both wrappers print
 only the parsed findings; exit 1 (survivors await disposition) and exit 3 (nothing in
 scope) are normal outcomes, not failures.

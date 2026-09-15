@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { settingsFile } from './mo2/layout';
 import { readGamePath } from './mo2/modOrganizerIni';
 import { factsOf, get } from './mo2Files';
+import { present } from '../present';
 
 export interface GameDirectory {
   /** Folder containing the game executable and Data/. */
@@ -49,7 +50,8 @@ export async function normalizeGamePath(
   const match = /^([A-Za-z]):(.*)$/s.exec(p);
   if (!match) return p.replaceAll('\\', '/');
 
-  const [, drive, rest] = match;
+  const drive = present(match[1], 'drive letter in a Windows-style path');
+  const rest = present(match[2], 'remainder in a Windows-style path');
   const posixRest = rest.replaceAll('\\', '/');
   if (drive.toUpperCase() === 'Z') return posixRest;
 

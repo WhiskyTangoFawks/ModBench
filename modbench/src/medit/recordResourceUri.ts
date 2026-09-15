@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { present } from '../present';
 
 const SCHEME = 'medit-record';
 
@@ -22,6 +23,8 @@ export function parseRecordResourceUri(uri: vscode.Uri): RecordResourceIdentity 
   if (uri.scheme !== SCHEME) return undefined;
   const parts = uri.path.split('/').map(decodeURIComponent);
   if (parts.length < 4) return undefined;
-  const [, plugin, origin, formKey] = parts;
+  const plugin = present(parts[1], 'plugin segment in a medit-record URI');
+  const origin = present(parts[2], 'origin segment in a medit-record URI');
+  const formKey = present(parts[3], 'formKey segment in a medit-record URI');
   return { plugin, origin, formKey };
 }

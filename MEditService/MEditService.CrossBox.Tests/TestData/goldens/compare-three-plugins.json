@@ -1,0 +1,1150 @@
+{
+  "conflicted-conditions": {
+    "ConflictAll": "Override",
+    "DiffFieldCount": 1,
+    "Diffs": [
+      {
+        "CellStates": {
+          "Top.esp": "Override"
+        },
+        "CheckErrors": {
+          "Base.esm": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: ",
+          "Top.esp": "[0].Data.ParameterOneRecord: Found a NULL reference, expected: "
+        },
+        "Children": [
+          {
+            "CellStates": {
+              "Top.esp": "Override"
+            },
+            "CheckErrors": {
+              "Base.esm": "Data.ParameterOneRecord: Found a NULL reference, expected: ",
+              "Top.esp": "Data.ParameterOneRecord: Found a NULL reference, expected: "
+            },
+            "Children": [
+              {
+                "CellStates": {
+                  "Top.esp": "Override"
+                },
+                "CheckErrors": {
+                  "Base.esm": "ParameterOneRecord: Found a NULL reference, expected: ",
+                  "Top.esp": "ParameterOneRecord: Found a NULL reference, expected: "
+                },
+                "Children": [
+                  {
+                    "CellStates": {
+                      "Top.esp": "Override"
+                    },
+                    "CheckErrors": null,
+                    "Children": null,
+                    "ConflictAll": "Override",
+                    "FieldName": "RunOnType",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": null,
+                      "Top.esp": "Target"
+                    },
+                    "WinnerColumn": "Top.esp"
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "CheckErrors": null,
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "Function",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "GetIsID",
+                      "Top.esp": "GetIsID"
+                    },
+                    "WinnerColumn": "Top.esp"
+                  },
+                  {
+                    "CellStates": {
+                      "Top.esp": "IdenticalToMaster"
+                    },
+                    "CheckErrors": null,
+                    "Children": null,
+                    "ConflictAll": "NoConflict",
+                    "FieldName": "MutagenObjectType",
+                    "Resolutions": null,
+                    "Values": {
+                      "Base.esm": "FunctionConditionData",
+                      "Top.esp": "FunctionConditionData"
+                    },
+                    "WinnerColumn": "Top.esp"
+                  }
+                ],
+                "ConflictAll": "Override",
+                "FieldName": "Data",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": {
+                    "Function": "GetIsID",
+                    "MutagenObjectType": "FunctionConditionData"
+                  },
+                  "Top.esp": {
+                    "Function": "GetIsID",
+                    "MutagenObjectType": "FunctionConditionData",
+                    "RunOnType": "Target"
+                  }
+                },
+                "WinnerColumn": "Top.esp"
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "CheckErrors": null,
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "Flags",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": [
+                    "OR"
+                  ],
+                  "Top.esp": [
+                    "OR"
+                  ]
+                },
+                "WinnerColumn": "Top.esp"
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "CheckErrors": null,
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "Unknown1",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": "0x000000",
+                  "Top.esp": "0x000000"
+                },
+                "WinnerColumn": "Top.esp"
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "CheckErrors": null,
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "ComparisonValue",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": 1.0,
+                  "Top.esp": 1.0
+                },
+                "WinnerColumn": "Top.esp"
+              },
+              {
+                "CellStates": {
+                  "Top.esp": "IdenticalToMaster"
+                },
+                "CheckErrors": null,
+                "Children": null,
+                "ConflictAll": "NoConflict",
+                "FieldName": "MutagenObjectType",
+                "Resolutions": null,
+                "Values": {
+                  "Base.esm": "ConditionFloat",
+                  "Top.esp": "ConditionFloat"
+                },
+                "WinnerColumn": "Top.esp"
+              }
+            ],
+            "ConflictAll": "Override",
+            "FieldName": "[0]",
+            "Resolutions": null,
+            "Values": {
+              "Base.esm": {
+                "ComparisonValue": 1.0,
+                "Data": {
+                  "Function": "GetIsID",
+                  "MutagenObjectType": "FunctionConditionData"
+                },
+                "Flags": [
+                  "OR"
+                ],
+                "MutagenObjectType": "ConditionFloat",
+                "Unknown1": "0x000000"
+              },
+              "Top.esp": {
+                "ComparisonValue": 1.0,
+                "Data": {
+                  "Function": "GetIsID",
+                  "MutagenObjectType": "FunctionConditionData",
+                  "RunOnType": "Target"
+                },
+                "Flags": [
+                  "OR"
+                ],
+                "MutagenObjectType": "ConditionFloat",
+                "Unknown1": "0x000000"
+              }
+            },
+            "WinnerColumn": "Top.esp"
+          }
+        ],
+        "ConflictAll": "Override",
+        "FieldName": "Conditions",
+        "Resolutions": null,
+        "Values": {
+          "Base.esm": [
+            {
+              "ComparisonValue": 1.0,
+              "Data": {
+                "Function": "GetIsID",
+                "MutagenObjectType": "FunctionConditionData"
+              },
+              "Flags": [
+                "OR"
+              ],
+              "MutagenObjectType": "ConditionFloat",
+              "Unknown1": "0x000000"
+            }
+          ],
+          "Top.esp": [
+            {
+              "ComparisonValue": 1.0,
+              "Data": {
+                "Function": "GetIsID",
+                "MutagenObjectType": "FunctionConditionData",
+                "RunOnType": "Target"
+              },
+              "Flags": [
+                "OR"
+              ],
+              "MutagenObjectType": "ConditionFloat",
+              "Unknown1": "0x000000"
+            }
+          ]
+        },
+        "WinnerColumn": "Top.esp"
+      }
+    ],
+    "Overrides": [
+      {
+        "ConflictThis": "Master",
+        "EditorId": "ConflictedRecipe",
+        "Fields": {
+          "Categories": null,
+          "Components": null,
+          "Conditions": [
+            {
+              "ComparisonValue": 1.0,
+              "Data": {
+                "Function": "GetIsID",
+                "MutagenObjectType": "FunctionConditionData"
+              },
+              "Flags": [
+                "OR"
+              ],
+              "MutagenObjectType": "ConditionFloat",
+              "Unknown1": "0x000000"
+            }
+          ],
+          "CreatedObject": null,
+          "CreatedObjectCounts": null,
+          "Description": null,
+          "Fallout4MajorRecordFlags": null,
+          "IsDeleted": null,
+          "MenuArtObject": null,
+          "NAM1": null,
+          "NAM2": null,
+          "NAM3": null,
+          "PickUpSound": null,
+          "PutDownSound": null,
+          "Version2": null,
+          "WorkbenchKeyword": null
+        },
+        "FormKey": "000803:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": false,
+        "LoadOrderIndex": 0,
+        "Origin": "Data",
+        "Plugin": "Base.esm",
+        "RecordType": "cobj"
+      },
+      {
+        "ConflictThis": "Override",
+        "EditorId": "ConflictedRecipe",
+        "Fields": {
+          "Categories": null,
+          "Components": null,
+          "Conditions": [
+            {
+              "ComparisonValue": 1.0,
+              "Data": {
+                "Function": "GetIsID",
+                "MutagenObjectType": "FunctionConditionData",
+                "RunOnType": "Target"
+              },
+              "Flags": [
+                "OR"
+              ],
+              "MutagenObjectType": "ConditionFloat",
+              "Unknown1": "0x000000"
+            }
+          ],
+          "CreatedObject": null,
+          "CreatedObjectCounts": null,
+          "Description": null,
+          "Fallout4MajorRecordFlags": null,
+          "IsDeleted": null,
+          "MenuArtObject": null,
+          "NAM1": null,
+          "NAM2": null,
+          "NAM3": null,
+          "PickUpSound": null,
+          "PutDownSound": null,
+          "Version2": null,
+          "WorkbenchKeyword": null
+        },
+        "FormKey": "000803:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": true,
+        "LoadOrderIndex": 2,
+        "Origin": "Data",
+        "Plugin": "Top.esp",
+        "RecordType": "cobj"
+      }
+    ]
+  },
+  "conflicted-npc": {
+    "ConflictAll": "Conflict",
+    "DiffFieldCount": 4,
+    "Diffs": [
+      {
+        "CellStates": {
+          "Mid.esp": "ConflictLoses",
+          "Top.esp": "ConflictWins"
+        },
+        "CheckErrors": null,
+        "Children": null,
+        "ConflictAll": "Conflict",
+        "FieldName": "Name",
+        "Resolutions": null,
+        "Values": {
+          "Base.esm": {
+            "TargetLanguage": "English",
+            "Value": "Base name"
+          },
+          "Mid.esp": {
+            "TargetLanguage": "English",
+            "Value": "Mid name"
+          },
+          "Top.esp": {
+            "TargetLanguage": "English",
+            "Value": "Top name"
+          }
+        },
+        "WinnerColumn": "Top.esp"
+      },
+      {
+        "CellStates": {
+          "Mid.esp": "IdenticalToMaster",
+          "Top.esp": "ConflictWins"
+        },
+        "CheckErrors": {
+          "Base.esm": "[000900:Base.esm] \u003CError: Could not be resolved\u003E",
+          "Mid.esp": "[000900:Base.esm] \u003CError: Could not be resolved\u003E",
+          "Top.esp": "[000901:Base.esm] \u003CError: Could not be resolved\u003E"
+        },
+        "Children": null,
+        "ConflictAll": "Conflict",
+        "FieldName": "Race",
+        "Resolutions": {
+          "Base.esm": {
+            "EditorId": null,
+            "RecordType": null,
+            "State": "Unresolved"
+          },
+          "Mid.esp": {
+            "EditorId": null,
+            "RecordType": null,
+            "State": "Unresolved"
+          },
+          "Top.esp": {
+            "EditorId": null,
+            "RecordType": null,
+            "State": "Unresolved"
+          }
+        },
+        "Values": {
+          "Base.esm": "000900:Base.esm",
+          "Mid.esp": "000900:Base.esm",
+          "Top.esp": "000901:Base.esm"
+        },
+        "WinnerColumn": "Top.esp"
+      },
+      {
+        "CellStates": {
+          "Mid.esp": "ConflictLoses",
+          "Top.esp": "ConflictWins"
+        },
+        "CheckErrors": null,
+        "Children": null,
+        "ConflictAll": "Conflict",
+        "FieldName": "CalculatedHealth",
+        "Resolutions": null,
+        "Values": {
+          "Base.esm": 100,
+          "Mid.esp": 250,
+          "Top.esp": 999
+        },
+        "WinnerColumn": "Top.esp"
+      }
+    ],
+    "Overrides": [
+      {
+        "ConflictThis": "Master",
+        "EditorId": "ConflictedNPC",
+        "Fields": {
+          "ActivateTextOverride": null,
+          "ActorEffect": null,
+          "Aggression": null,
+          "AggroRadiusAttack": null,
+          "AggroRadiusBehaviorEnabled": null,
+          "AggroRadiusWarn": null,
+          "AggroRadiusWarnOrAttack": null,
+          "AnimationSound": null,
+          "Assistance": null,
+          "AttachParentSlots": null,
+          "AttackRace": null,
+          "Attacks": null,
+          "BleedoutOverride": null,
+          "BodyMorphRegionValues": null,
+          "CalcMaxLevel": null,
+          "CalcMinLevel": null,
+          "CalculatedActionPoints": null,
+          "CalculatedHealth": 100,
+          "Class": null,
+          "CombatOverridePackageList": null,
+          "CombatStyle": null,
+          "Confidence": null,
+          "CrimeFaction": null,
+          "DeathItem": null,
+          "DefaultOutfit": null,
+          "DefaultPackageList": null,
+          "DefaultTemplate": null,
+          "Destructible": null,
+          "DispositionBase": null,
+          "EnergyLevel": null,
+          "FaceMorphs": null,
+          "FaceTintingLayers": null,
+          "FacialHairColor": null,
+          "FacialMorphIntensity": null,
+          "Factions": null,
+          "Fallout4MajorRecordFlags": null,
+          "FarAwayModel": null,
+          "FarAwayModelDistance": null,
+          "Flags": null,
+          "FollowerCommandPackageList": null,
+          "FollowerElevatorPackageList": null,
+          "ForcedLocRefType": null,
+          "GearedUpWeapons": null,
+          "GiftFilter": null,
+          "GuardWarnOverridePackageList": null,
+          "HairColor": null,
+          "HeadParts": null,
+          "HeadTexture": null,
+          "HeightMax": null,
+          "HeightMin": null,
+          "InheritsSoundsFrom": null,
+          "IsDeleted": null,
+          "Items": null,
+          "Keywords": null,
+          "LegendaryChance": null,
+          "LegendaryTemplate": null,
+          "Level": {
+            "MutagenObjectType": "NpcLevel"
+          },
+          "MajorFlags": null,
+          "Mood": null,
+          "Morphs": null,
+          "NAM5": null,
+          "NAM7": null,
+          "Name": {
+            "TargetLanguage": "English",
+            "Value": "Base name"
+          },
+          "NativeTerminal": null,
+          "NoSlowApproach": null,
+          "ObjectBounds": null,
+          "ObjectTemplates": null,
+          "ObserveDeadBodyOverridePackageList": null,
+          "Packages": null,
+          "Perks": null,
+          "PowerArmorStand": null,
+          "PreviewTransform": null,
+          "Properties": null,
+          "Race": "000900:Base.esm",
+          "Responsibility": null,
+          "ShortName": null,
+          "Skin": null,
+          "SleepingOutfit": null,
+          "SoundLevel": null,
+          "Sounds": null,
+          "SoundsFinalize": null,
+          "SpectatorOverridePackageList": null,
+          "TemplateActors": null,
+          "TextureLighting": null,
+          "Unknown": null,
+          "Unused": null,
+          "UseTemplateActors": null,
+          "Version2": null,
+          "VirtualMachineAdapter": null,
+          "Voice": null,
+          "Weight": null,
+          "XpValueOffset": null
+        },
+        "FormKey": "000800:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": false,
+        "LoadOrderIndex": 0,
+        "Origin": "Data",
+        "Plugin": "Base.esm",
+        "RecordType": "npc_"
+      },
+      {
+        "ConflictThis": "ConflictLoses",
+        "EditorId": "ConflictedNPC",
+        "Fields": {
+          "ActivateTextOverride": null,
+          "ActorEffect": null,
+          "Aggression": null,
+          "AggroRadiusAttack": null,
+          "AggroRadiusBehaviorEnabled": null,
+          "AggroRadiusWarn": null,
+          "AggroRadiusWarnOrAttack": null,
+          "AnimationSound": null,
+          "Assistance": null,
+          "AttachParentSlots": null,
+          "AttackRace": null,
+          "Attacks": null,
+          "BleedoutOverride": null,
+          "BodyMorphRegionValues": null,
+          "CalcMaxLevel": null,
+          "CalcMinLevel": null,
+          "CalculatedActionPoints": null,
+          "CalculatedHealth": 250,
+          "Class": null,
+          "CombatOverridePackageList": null,
+          "CombatStyle": null,
+          "Confidence": null,
+          "CrimeFaction": null,
+          "DeathItem": null,
+          "DefaultOutfit": null,
+          "DefaultPackageList": null,
+          "DefaultTemplate": null,
+          "Destructible": null,
+          "DispositionBase": null,
+          "EnergyLevel": null,
+          "FaceMorphs": null,
+          "FaceTintingLayers": null,
+          "FacialHairColor": null,
+          "FacialMorphIntensity": null,
+          "Factions": null,
+          "Fallout4MajorRecordFlags": null,
+          "FarAwayModel": null,
+          "FarAwayModelDistance": null,
+          "Flags": null,
+          "FollowerCommandPackageList": null,
+          "FollowerElevatorPackageList": null,
+          "ForcedLocRefType": null,
+          "GearedUpWeapons": null,
+          "GiftFilter": null,
+          "GuardWarnOverridePackageList": null,
+          "HairColor": null,
+          "HeadParts": null,
+          "HeadTexture": null,
+          "HeightMax": null,
+          "HeightMin": null,
+          "InheritsSoundsFrom": null,
+          "IsDeleted": null,
+          "Items": null,
+          "Keywords": null,
+          "LegendaryChance": null,
+          "LegendaryTemplate": null,
+          "Level": {
+            "MutagenObjectType": "NpcLevel"
+          },
+          "MajorFlags": null,
+          "Mood": null,
+          "Morphs": null,
+          "NAM5": null,
+          "NAM7": null,
+          "Name": {
+            "TargetLanguage": "English",
+            "Value": "Mid name"
+          },
+          "NativeTerminal": null,
+          "NoSlowApproach": null,
+          "ObjectBounds": null,
+          "ObjectTemplates": null,
+          "ObserveDeadBodyOverridePackageList": null,
+          "Packages": null,
+          "Perks": null,
+          "PowerArmorStand": null,
+          "PreviewTransform": null,
+          "Properties": null,
+          "Race": "000900:Base.esm",
+          "Responsibility": null,
+          "ShortName": null,
+          "Skin": null,
+          "SleepingOutfit": null,
+          "SoundLevel": null,
+          "Sounds": null,
+          "SoundsFinalize": null,
+          "SpectatorOverridePackageList": null,
+          "TemplateActors": null,
+          "TextureLighting": null,
+          "Unknown": null,
+          "Unused": null,
+          "UseTemplateActors": null,
+          "Version2": null,
+          "VirtualMachineAdapter": null,
+          "Voice": null,
+          "Weight": null,
+          "XpValueOffset": null
+        },
+        "FormKey": "000800:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": false,
+        "LoadOrderIndex": 1,
+        "Origin": "Data",
+        "Plugin": "Mid.esp",
+        "RecordType": "npc_"
+      },
+      {
+        "ConflictThis": "ConflictWins",
+        "EditorId": "ConflictedNPC",
+        "Fields": {
+          "ActivateTextOverride": null,
+          "ActorEffect": null,
+          "Aggression": null,
+          "AggroRadiusAttack": null,
+          "AggroRadiusBehaviorEnabled": null,
+          "AggroRadiusWarn": null,
+          "AggroRadiusWarnOrAttack": null,
+          "AnimationSound": null,
+          "Assistance": null,
+          "AttachParentSlots": null,
+          "AttackRace": null,
+          "Attacks": null,
+          "BleedoutOverride": null,
+          "BodyMorphRegionValues": null,
+          "CalcMaxLevel": null,
+          "CalcMinLevel": null,
+          "CalculatedActionPoints": null,
+          "CalculatedHealth": 999,
+          "Class": null,
+          "CombatOverridePackageList": null,
+          "CombatStyle": null,
+          "Confidence": null,
+          "CrimeFaction": null,
+          "DeathItem": null,
+          "DefaultOutfit": null,
+          "DefaultPackageList": null,
+          "DefaultTemplate": null,
+          "Destructible": null,
+          "DispositionBase": null,
+          "EnergyLevel": null,
+          "FaceMorphs": null,
+          "FaceTintingLayers": null,
+          "FacialHairColor": null,
+          "FacialMorphIntensity": null,
+          "Factions": null,
+          "Fallout4MajorRecordFlags": null,
+          "FarAwayModel": null,
+          "FarAwayModelDistance": null,
+          "Flags": null,
+          "FollowerCommandPackageList": null,
+          "FollowerElevatorPackageList": null,
+          "ForcedLocRefType": null,
+          "GearedUpWeapons": null,
+          "GiftFilter": null,
+          "GuardWarnOverridePackageList": null,
+          "HairColor": null,
+          "HeadParts": null,
+          "HeadTexture": null,
+          "HeightMax": null,
+          "HeightMin": null,
+          "InheritsSoundsFrom": null,
+          "IsDeleted": null,
+          "Items": null,
+          "Keywords": null,
+          "LegendaryChance": null,
+          "LegendaryTemplate": null,
+          "Level": {
+            "MutagenObjectType": "NpcLevel"
+          },
+          "MajorFlags": null,
+          "Mood": null,
+          "Morphs": null,
+          "NAM5": null,
+          "NAM7": null,
+          "Name": {
+            "TargetLanguage": "English",
+            "Value": "Top name"
+          },
+          "NativeTerminal": null,
+          "NoSlowApproach": null,
+          "ObjectBounds": null,
+          "ObjectTemplates": null,
+          "ObserveDeadBodyOverridePackageList": null,
+          "Packages": null,
+          "Perks": null,
+          "PowerArmorStand": null,
+          "PreviewTransform": null,
+          "Properties": null,
+          "Race": "000901:Base.esm",
+          "Responsibility": null,
+          "ShortName": null,
+          "Skin": null,
+          "SleepingOutfit": null,
+          "SoundLevel": null,
+          "Sounds": null,
+          "SoundsFinalize": null,
+          "SpectatorOverridePackageList": null,
+          "TemplateActors": null,
+          "TextureLighting": null,
+          "Unknown": null,
+          "Unused": null,
+          "UseTemplateActors": null,
+          "Version2": null,
+          "VirtualMachineAdapter": null,
+          "Voice": null,
+          "Weight": null,
+          "XpValueOffset": null
+        },
+        "FormKey": "000800:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": true,
+        "LoadOrderIndex": 2,
+        "Origin": "Data",
+        "Plugin": "Top.esp",
+        "RecordType": "npc_"
+      }
+    ]
+  },
+  "injected-npc": {
+    "ConflictAll": "OnlyOne",
+    "DiffFieldCount": 2,
+    "Diffs": [],
+    "Overrides": [
+      {
+        "ConflictThis": "OnlyOne",
+        "EditorId": "InjectedNPC",
+        "Fields": {
+          "ActivateTextOverride": null,
+          "ActorEffect": null,
+          "Aggression": null,
+          "AggroRadiusAttack": null,
+          "AggroRadiusBehaviorEnabled": null,
+          "AggroRadiusWarn": null,
+          "AggroRadiusWarnOrAttack": null,
+          "AnimationSound": null,
+          "Assistance": null,
+          "AttachParentSlots": null,
+          "AttackRace": null,
+          "Attacks": null,
+          "BleedoutOverride": null,
+          "BodyMorphRegionValues": null,
+          "CalcMaxLevel": null,
+          "CalcMinLevel": null,
+          "CalculatedActionPoints": null,
+          "CalculatedHealth": null,
+          "Class": null,
+          "CombatOverridePackageList": null,
+          "CombatStyle": null,
+          "Confidence": null,
+          "CrimeFaction": null,
+          "DeathItem": null,
+          "DefaultOutfit": null,
+          "DefaultPackageList": null,
+          "DefaultTemplate": null,
+          "Destructible": null,
+          "DispositionBase": null,
+          "EnergyLevel": null,
+          "FaceMorphs": null,
+          "FaceTintingLayers": null,
+          "FacialHairColor": null,
+          "FacialMorphIntensity": null,
+          "Factions": null,
+          "Fallout4MajorRecordFlags": null,
+          "FarAwayModel": null,
+          "FarAwayModelDistance": null,
+          "Flags": null,
+          "FollowerCommandPackageList": null,
+          "FollowerElevatorPackageList": null,
+          "ForcedLocRefType": null,
+          "GearedUpWeapons": null,
+          "GiftFilter": null,
+          "GuardWarnOverridePackageList": null,
+          "HairColor": null,
+          "HeadParts": null,
+          "HeadTexture": null,
+          "HeightMax": null,
+          "HeightMin": null,
+          "InheritsSoundsFrom": null,
+          "IsDeleted": null,
+          "Items": null,
+          "Keywords": null,
+          "LegendaryChance": null,
+          "LegendaryTemplate": null,
+          "Level": {
+            "MutagenObjectType": "NpcLevel"
+          },
+          "MajorFlags": null,
+          "Mood": null,
+          "Morphs": null,
+          "NAM5": null,
+          "NAM7": null,
+          "Name": {
+            "TargetLanguage": "English",
+            "Value": "Injected"
+          },
+          "NativeTerminal": null,
+          "NoSlowApproach": null,
+          "ObjectBounds": null,
+          "ObjectTemplates": null,
+          "ObserveDeadBodyOverridePackageList": null,
+          "Packages": null,
+          "Perks": null,
+          "PowerArmorStand": null,
+          "PreviewTransform": null,
+          "Properties": null,
+          "Race": null,
+          "Responsibility": null,
+          "ShortName": null,
+          "Skin": null,
+          "SleepingOutfit": null,
+          "SoundLevel": null,
+          "Sounds": null,
+          "SoundsFinalize": null,
+          "SpectatorOverridePackageList": null,
+          "TemplateActors": null,
+          "TextureLighting": null,
+          "Unknown": null,
+          "Unused": null,
+          "UseTemplateActors": null,
+          "Version2": null,
+          "VirtualMachineAdapter": null,
+          "Voice": null,
+          "Weight": null,
+          "XpValueOffset": null
+        },
+        "FormKey": "000800:Mid.esp",
+        "IsPartialForm": false,
+        "IsWinner": true,
+        "LoadOrderIndex": 1,
+        "Origin": "Data",
+        "Plugin": "Mid.esp",
+        "RecordType": "npc_"
+      }
+    ]
+  },
+  "sole-npc": {
+    "ConflictAll": "OnlyOne",
+    "DiffFieldCount": 2,
+    "Diffs": [],
+    "Overrides": [
+      {
+        "ConflictThis": "OnlyOne",
+        "EditorId": "SoleNPC",
+        "Fields": {
+          "ActivateTextOverride": null,
+          "ActorEffect": null,
+          "Aggression": null,
+          "AggroRadiusAttack": null,
+          "AggroRadiusBehaviorEnabled": null,
+          "AggroRadiusWarn": null,
+          "AggroRadiusWarnOrAttack": null,
+          "AnimationSound": null,
+          "Assistance": null,
+          "AttachParentSlots": null,
+          "AttackRace": null,
+          "Attacks": null,
+          "BleedoutOverride": null,
+          "BodyMorphRegionValues": null,
+          "CalcMaxLevel": null,
+          "CalcMinLevel": null,
+          "CalculatedActionPoints": null,
+          "CalculatedHealth": 7,
+          "Class": null,
+          "CombatOverridePackageList": null,
+          "CombatStyle": null,
+          "Confidence": null,
+          "CrimeFaction": null,
+          "DeathItem": null,
+          "DefaultOutfit": null,
+          "DefaultPackageList": null,
+          "DefaultTemplate": null,
+          "Destructible": null,
+          "DispositionBase": null,
+          "EnergyLevel": null,
+          "FaceMorphs": null,
+          "FaceTintingLayers": null,
+          "FacialHairColor": null,
+          "FacialMorphIntensity": null,
+          "Factions": null,
+          "Fallout4MajorRecordFlags": null,
+          "FarAwayModel": null,
+          "FarAwayModelDistance": null,
+          "Flags": null,
+          "FollowerCommandPackageList": null,
+          "FollowerElevatorPackageList": null,
+          "ForcedLocRefType": null,
+          "GearedUpWeapons": null,
+          "GiftFilter": null,
+          "GuardWarnOverridePackageList": null,
+          "HairColor": null,
+          "HeadParts": null,
+          "HeadTexture": null,
+          "HeightMax": null,
+          "HeightMin": null,
+          "InheritsSoundsFrom": null,
+          "IsDeleted": null,
+          "Items": null,
+          "Keywords": null,
+          "LegendaryChance": null,
+          "LegendaryTemplate": null,
+          "Level": {
+            "MutagenObjectType": "NpcLevel"
+          },
+          "MajorFlags": null,
+          "Mood": null,
+          "Morphs": null,
+          "NAM5": null,
+          "NAM7": null,
+          "Name": null,
+          "NativeTerminal": null,
+          "NoSlowApproach": null,
+          "ObjectBounds": null,
+          "ObjectTemplates": null,
+          "ObserveDeadBodyOverridePackageList": null,
+          "Packages": null,
+          "Perks": null,
+          "PowerArmorStand": null,
+          "PreviewTransform": null,
+          "Properties": null,
+          "Race": null,
+          "Responsibility": null,
+          "ShortName": null,
+          "Skin": null,
+          "SleepingOutfit": null,
+          "SoundLevel": null,
+          "Sounds": null,
+          "SoundsFinalize": null,
+          "SpectatorOverridePackageList": null,
+          "TemplateActors": null,
+          "TextureLighting": null,
+          "Unknown": null,
+          "Unused": null,
+          "UseTemplateActors": null,
+          "Version2": null,
+          "VirtualMachineAdapter": null,
+          "Voice": null,
+          "Weight": null,
+          "XpValueOffset": null
+        },
+        "FormKey": "000802:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": true,
+        "LoadOrderIndex": 0,
+        "Origin": "Data",
+        "Plugin": "Base.esm",
+        "RecordType": "npc_"
+      }
+    ]
+  },
+  "unchanged-weapon": {
+    "ConflictAll": "NoConflict",
+    "DiffFieldCount": 2,
+    "Diffs": [],
+    "Overrides": [
+      {
+        "ConflictThis": "Master",
+        "EditorId": "UnchangedWeapon",
+        "Fields": {
+          "AccuracyBonus": null,
+          "ActionPointCost": null,
+          "AimModel": null,
+          "AlternateBlockMaterial": null,
+          "Ammo": null,
+          "AnimationAttackSeconds": null,
+          "AnimationSound": null,
+          "AnimationType": null,
+          "AttachParentSlots": null,
+          "Attack2dSound": null,
+          "AttackDelay": null,
+          "AttackFailSound": null,
+          "AttackLoopSound": null,
+          "AttackSound": null,
+          "BaseDamage": null,
+          "BlockBashImpactDataSet": null,
+          "Capacity": null,
+          "CritChargeBonus": null,
+          "CritDamageMult": null,
+          "CritEffect": null,
+          "DamageOutOfRangeMult": null,
+          "DamageTypes": null,
+          "Description": null,
+          "Destructible": null,
+          "EmbeddedWeaponMod": null,
+          "EnchantmentAmount": null,
+          "EquipSound": null,
+          "EquipmentType": null,
+          "ExtraData": null,
+          "Fallout4MajorRecordFlags": null,
+          "FastEquipSound": null,
+          "Filter": null,
+          "FirstPersonModel": null,
+          "Flags": null,
+          "FullPowerSeconds": null,
+          "Icons": null,
+          "IdleSound": null,
+          "ImpactDataSet": null,
+          "InstanceNaming": null,
+          "IsDeleted": null,
+          "Keywords": null,
+          "MO4F": null,
+          "MajorFlags": null,
+          "MaxRange": null,
+          "MeleeSpeed": null,
+          "MinPowerPerShot": null,
+          "MinRange": null,
+          "Model": null,
+          "Name": null,
+          "NpcAddAmmoList": null,
+          "ObjectBounds": null,
+          "ObjectEffect": null,
+          "ObjectTemplates": null,
+          "OnHit": null,
+          "PickUpSound": null,
+          "PreviewTransform": null,
+          "PutDownSound": null,
+          "Reach": null,
+          "ReloadSpeed": null,
+          "Resist": null,
+          "SecondaryDamage": null,
+          "Skill": null,
+          "SoundLevel": null,
+          "Speed": null,
+          "Stagger": null,
+          "Template": null,
+          "UnequipSound": null,
+          "Unknown": null,
+          "Unknown2": null,
+          "Unknown3": null,
+          "Value": 25,
+          "Version2": null,
+          "VirtualMachineAdapter": null,
+          "Weight": 2.5,
+          "Zoom": null
+        },
+        "FormKey": "000801:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": false,
+        "LoadOrderIndex": 0,
+        "Origin": "Data",
+        "Plugin": "Base.esm",
+        "RecordType": "weap"
+      },
+      {
+        "ConflictThis": "IdenticalToMaster",
+        "EditorId": "UnchangedWeapon",
+        "Fields": {
+          "AccuracyBonus": null,
+          "ActionPointCost": null,
+          "AimModel": null,
+          "AlternateBlockMaterial": null,
+          "Ammo": null,
+          "AnimationAttackSeconds": null,
+          "AnimationSound": null,
+          "AnimationType": null,
+          "AttachParentSlots": null,
+          "Attack2dSound": null,
+          "AttackDelay": null,
+          "AttackFailSound": null,
+          "AttackLoopSound": null,
+          "AttackSound": null,
+          "BaseDamage": null,
+          "BlockBashImpactDataSet": null,
+          "Capacity": null,
+          "CritChargeBonus": null,
+          "CritDamageMult": null,
+          "CritEffect": null,
+          "DamageOutOfRangeMult": null,
+          "DamageTypes": null,
+          "Description": null,
+          "Destructible": null,
+          "EmbeddedWeaponMod": null,
+          "EnchantmentAmount": null,
+          "EquipSound": null,
+          "EquipmentType": null,
+          "ExtraData": null,
+          "Fallout4MajorRecordFlags": null,
+          "FastEquipSound": null,
+          "Filter": null,
+          "FirstPersonModel": null,
+          "Flags": null,
+          "FullPowerSeconds": null,
+          "Icons": null,
+          "IdleSound": null,
+          "ImpactDataSet": null,
+          "InstanceNaming": null,
+          "IsDeleted": null,
+          "Keywords": null,
+          "MO4F": null,
+          "MajorFlags": null,
+          "MaxRange": null,
+          "MeleeSpeed": null,
+          "MinPowerPerShot": null,
+          "MinRange": null,
+          "Model": null,
+          "Name": null,
+          "NpcAddAmmoList": null,
+          "ObjectBounds": null,
+          "ObjectEffect": null,
+          "ObjectTemplates": null,
+          "OnHit": null,
+          "PickUpSound": null,
+          "PreviewTransform": null,
+          "PutDownSound": null,
+          "Reach": null,
+          "ReloadSpeed": null,
+          "Resist": null,
+          "SecondaryDamage": null,
+          "Skill": null,
+          "SoundLevel": null,
+          "Speed": null,
+          "Stagger": null,
+          "Template": null,
+          "UnequipSound": null,
+          "Unknown": null,
+          "Unknown2": null,
+          "Unknown3": null,
+          "Value": 25,
+          "Version2": null,
+          "VirtualMachineAdapter": null,
+          "Weight": 2.5,
+          "Zoom": null
+        },
+        "FormKey": "000801:Base.esm",
+        "IsPartialForm": false,
+        "IsWinner": true,
+        "LoadOrderIndex": 1,
+        "Origin": "Data",
+        "Plugin": "Mid.esp",
+        "RecordType": "weap"
+      }
+    ]
+  }
+}

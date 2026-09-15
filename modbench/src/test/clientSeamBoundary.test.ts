@@ -12,7 +12,7 @@ const CLIENT_DIR = join('medit', 'client');
 const GENERATED_DIR = 'generated';
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
 }
 
 function tsFiles(dir: string): string[] {

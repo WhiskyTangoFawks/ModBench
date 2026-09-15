@@ -10,7 +10,7 @@ import type { Reporter } from '../reporter';
 // The row's own reveal-in-Explorer gesture — an MO2-instance-scoped fact (which plugin copy
 // wins, where its file lives), so it reads through the tree rather than a disk lookup of its own.
 export function registerRevealInExplorerCommand(
-  pluginsTree: PluginsTreeProvider, reporter: Reporter,
+  pluginsTree: Pick<PluginsTreeProvider, 'resolvePluginPath'>, reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.revealInExplorer', async (node: PluginListNode | undefined) => {
     if (node?.kind !== 'plugin') return;
@@ -30,7 +30,7 @@ export function registerRevealInExplorerCommand(
 }
 
 async function pickPluginDestination(
-  instance: Instance, instanceRoot: string,
+  instance: Pick<Instance, 'value'>, instanceRoot: string,
 ): Promise<{ path: string; origin: string } | undefined> {
   const picked = await vscode.window.showQuickPick(PLUGIN_DESTINATION_OPTIONS, {
     placeHolder: 'Where should the new plugin live?',
@@ -58,7 +58,7 @@ function promptPluginName(): Thenable<string | undefined> {
 // `appendPlugin` add the load-order line — never the other way around, so the load order can
 // never name a file that does not exist.
 async function appendCreatedPluginToLoadOrder(
-  instanceRoot: string, instance: Instance, pluginsTree: PluginsTreeProvider,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, pluginsTree: Pick<PluginsTreeProvider, 'invalidate'>,
   pluginName: string, reporter: Reporter,
 ): Promise<void> {
   const result = await appendPlugin(instanceRoot, instance.value.activeProfile, pluginName);
@@ -76,7 +76,7 @@ async function appendCreatedPluginToLoadOrder(
 
 export function registerCreatePluginCommand(
   client: Pick<MEditClient, 'createPlugin'>,
-  mo2: { instance: Instance; instanceRoot: string; pluginsTree: PluginsTreeProvider } | undefined,
+  mo2: { instance: Pick<Instance, 'value'>; instanceRoot: string; pluginsTree: Pick<PluginsTreeProvider, 'invalidate'> } | undefined,
   reporter: Reporter,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.newPlugin', async () => {

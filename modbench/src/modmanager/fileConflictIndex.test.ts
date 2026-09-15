@@ -176,7 +176,7 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
       if (String(path).endsWith('restricted.dds')) {
         throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
       }
-      return actualStat(path, ...(rest as []));
+      return actualStat(path, ...rest);
     });
 
     try {

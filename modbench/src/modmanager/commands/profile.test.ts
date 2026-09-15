@@ -52,7 +52,7 @@ describe('switchProfile', () => {
     const outcome = await switchProfile(root, 'Secondary');
 
     expect(outcome).toMatchObject({ applied: false });
-    expect(outcome.applied === false && outcome.refusal).toMatch(/ENOENT/);
+    expect(!outcome.applied && outcome.refusal).toMatch(/ENOENT/);
   });
 
   it('serializes concurrent switches — the last one issued is the selected one', async () => {

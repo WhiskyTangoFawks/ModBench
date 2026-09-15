@@ -32,8 +32,8 @@ describe('every MO2 text-file write command has a corpus test', () => {
 // one of the named `…Result` types every gesture returns (ADR-0015 invariant 2).
 function commandVerbs(source: string): string[] {
   return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
-    .filter((m) => /applied|Result>/.test(m[2]))
-    .map((m) => m[1]);
+    .filter((m) => /applied|Result>/.test(m[2]!))
+    .map((m) => m[1]!);
 }
 
 // docs/specs/containers.md rule 7: showCollapseAll on every hierarchical tree, never a flat
@@ -90,7 +90,7 @@ function treeViewOptions(source: string): { id: string; options: string }[] {
       else if (source[end] === '}') depth--;
       end++;
     }
-    out.push({ id: m[1], options: source.slice(start, end - 1) });
+    out.push({ id: m[1]!, options: source.slice(start, end - 1) });
   }
   return out;
 }

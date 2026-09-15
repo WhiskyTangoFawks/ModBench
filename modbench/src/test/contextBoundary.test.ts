@@ -12,7 +12,7 @@ const SRC = join(__dirname, '..');
 const read = (relativePath: string) => readFileSync(join(SRC, relativePath), 'utf8');
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
 }
 
 // No directory is skipped by name here, so the walk provably reaches the Plugins view;

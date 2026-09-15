@@ -25,16 +25,14 @@ import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, recordIdentity, recordTypeIdentity,
 } from '../recordLifecycleCommands';
 import { InMemoryMEditClient } from '../../medit/client';
+import { pluginMetadataFixture, referenceResultFixture } from '../../medit/client/test/fixtures';
+import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 
 beforeEach(() => {
   handlers.clear();
   vi.clearAllMocks();
 });
-
-function fakeOutputChannel() {
-  return { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() } as any;
-}
 
 function fakeTreeSync() {
   return { refresh: vi.fn(), workingTreeStateOf: vi.fn(), markWorkingTreeState: vi.fn() };
@@ -82,7 +80,7 @@ describe('registerRecordLifecycleCommands', () => {
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordLifecycleCommands(client, fakeOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins);
+    registerRecordLifecycleCommands(client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins);
     return { treeSync, refreshMatchingPlugins, reporter, ask };
   }
 
@@ -147,12 +145,15 @@ describe('registerRecordLifecycleCommands', () => {
 
   it('asks the ESL-flag question through the injected dialog when the create hits the flag', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createRecord', { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
+    let onEslRefusal: ((message: string) => Promise<boolean>) | undefined;
+    client.setCommandHandler('createRecord', (...args) => {
+      onEslRefusal = args[5];
+      return Promise.resolve({ applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
+    });
     const { ask } = invoke(client, undefined);
 
     await handlers.get('modbench.record.create')!(RECORD_TYPE_NODE);
-    const onEslRefusal = client.calls.find(c => c.method === 'createRecord')!.args[5] as (m: string) => Promise<boolean>;
-    const accepted = await onEslRefusal('exhausted the ESL range');
+    const accepted = await onEslRefusal!('exhausted the ESL range');
 
     expect(accepted).toBe(false);
     expect(ask.asked).toEqual([{
@@ -252,7 +253,7 @@ describe('registerRecordLifecycleCommands', () => {
     const client = new InMemoryMEditClient();
     client.setCommandResult('renumberRecord', { applied: true, oldFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
     client.setQueryAnswer('peekNextFreeFormKey', '000900:MyPatch.esp');
-    client.setQueryAnswer('getReferences', [{ formKey: '000701:Other.esp' } as any]);
+    client.setQueryAnswer('getReferences', [referenceResultFixture({ formKey: '000701:Other.esp' })]);
     const { ask } = invoke(client, 'Change FormID');
     showInputBox.mockResolvedValue('000900:MyPatch.esp');
 
@@ -270,7 +271,7 @@ describe('registerRecordLifecycleCommands', () => {
   it('renumbers nothing when the blast-radius confirmation is cancelled', async () => {
     const client = new InMemoryMEditClient();
     client.setQueryAnswer('peekNextFreeFormKey', '000900:MyPatch.esp');
-    client.setQueryAnswer('getReferences', [{ formKey: '000701:Other.esp' } as any]);
+    client.setQueryAnswer('getReferences', [referenceResultFixture({ formKey: '000701:Other.esp' })]);
     invoke(client, undefined);
     showInputBox.mockResolvedValue('000900:MyPatch.esp');
 
@@ -303,12 +304,12 @@ describe('registerRecordCopyCommands', () => {
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     const ask = scriptedDialog(...answers);
-    registerRecordCopyCommands(client, fakeOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins);
+    registerRecordCopyCommands(client, new FakeLogOutputChannel(), reporter, ask, treeSync, refreshMatchingPlugins);
     return { treeSync, refreshMatchingPlugins, reporter, ask };
   }
 
   function scriptDestinationPick(client: InMemoryMEditClient) {
-    client.setQueryAnswer('getPlugins', [{ name: 'MyPatch.esp', origin: 'ModA' } as any]);
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA' })]);
     client.setQueryAnswer('getRecordOverridePlugins', []);
     showQuickPick.mockResolvedValue({ label: 'MyPatch.esp', plugin: { name: 'MyPatch.esp', origin: 'ModA' } });
   }
@@ -372,7 +373,7 @@ describe('registerRecordCopyCommands', () => {
 
   it('reports a failed destination lookup at error, with the gesture as the log detail', async () => {
     const client = new InMemoryMEditClient();
-    client.setQueryAnswer('getPlugins', [{ name: 'MyPatch.esp', origin: 'ModA' } as any]);
+    client.setQueryAnswer('getPlugins', [pluginMetadataFixture({ name: 'MyPatch.esp', origin: 'ModA' })]);
     client.setQueryFailure('getRecordOverridePlugins', new Error('backend down'));
     const { reporter } = invoke(client);
 
@@ -430,13 +431,16 @@ describe('registerRecordCopyCommands', () => {
 
   it('asks the ESL-flag question through the injected dialog when the copy hits the flag', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('copyRecordAsNewRecord', { applied: true, sourceFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
+    let onEslRefusal: ((message: string) => Promise<boolean>) | undefined;
+    client.setCommandHandler('copyRecordAsNewRecord', (...args) => {
+      onEslRefusal = args[6];
+      return Promise.resolve({ applied: true, sourceFormKey: '000801:MyPatch.esp', newFormKey: '000900:MyPatch.esp' });
+    });
     scriptDestinationPick(client);
     const { ask } = invoke(client, undefined);
 
     await handlers.get('modbench.record.copyAsNewRecord')!(RECORD_NODE);
-    const onEslRefusal = client.calls.find(c => c.method === 'copyRecordAsNewRecord')!.args[6] as (m: string) => Promise<boolean>;
-    const accepted = await onEslRefusal('exhausted the ESL range');
+    const accepted = await onEslRefusal!('exhausted the ESL range');
 
     expect(accepted).toBe(false);
     expect(ask.asked).toEqual([{

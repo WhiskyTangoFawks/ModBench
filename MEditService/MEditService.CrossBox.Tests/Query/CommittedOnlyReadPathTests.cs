@@ -1,0 +1,112 @@
+using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
+using MEditService.Index;
+using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
+using MEditService.Queries;
+using MEditService.Tests.Api;
+using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
+
+namespace MEditService.Tests.Query;
+
+/// <summary>The read path answers from the index alone (ADR-0007): no surface reconstructs a second
+/// answer on the way out.</summary>
+[Collection(TestPluginFixtureCollection.Name)]
+public sealed class CommittedOnlyReadPathTests : IDisposable
+{
+    private readonly IndexProjector _manager;
+    private readonly RecordQueryService _svc;
+
+    public CommittedOnlyReadPathTests(TestPluginFixture fixture)
+    {
+        var holder = new LoadOrderHolder();
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        _manager.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
+    }
+
+    public void Dispose() => _manager.Dispose();
+
+    [Fact]
+    public void GetRecords_ForAPlugin_ReturnsExactlyTheRecordsThatPluginDeclares()
+    {
+        var result = _svc.GetRecords("npc_", TestPluginFixture.PluginName, search: null, limit: 100, offset: 0);
+
+        Assert.Equal(TestPluginFixture.RecordCount, result.Total);
+        Assert.Equal(
+            ["TestNPC01", "TestNPC02"],
+            result.Items.Select(r => r.EditorId ?? "").OrderBy(e => e, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public void GetPluginRecordTypes_CountsOnlyIndexedRecords()
+    {
+        var counts = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
+
+        var npcs = Assert.Single(counts, c => c.Type == "npc_");
+        Assert.Equal(TestPluginFixture.RecordCount, npcs.Count);
+    }
+
+    [Fact]
+    public void GetCompare_OverrideCarriesTheCommittedFieldValue()
+    {
+        var formKey = _manager.Reads!.OpenedCopies.Count > 0
+            ? _svc.GetRecords("npc_", TestPluginFixture.PluginName, "TestNPC01", 1, 0).Items[0].FormKey
+            : throw new InvalidOperationException("fixture did not load");
+
+        var compare = _svc.GetCompare(formKey);
+
+        Assert.NotNull(compare);
+        var only = Assert.Single(compare.Overrides);
+        Assert.Equal(TestPluginFixture.PluginName, only.Plugin);
+        Assert.Equal("TestNPC01", only.EditorId);
+        // A scalar field read straight off the index — the slot a staged value could otherwise
+        // stand in for. The document omits a false flag, which reads as its default.
+        var deleted = Assert.Single(only.Fields, f => f.Metadata.Name == "IsDeleted");
+        Assert.Null(deleted.Value);
+    }
+}
+
+/// <summary>Split from the class above because it needs a fixture that declares a reference; the
+/// class above deliberately loads a plugin whose records reference nothing.</summary>
+public sealed class CommittedOnlyReferencesTests : IDisposable
+{
+    private readonly IndexProjector _manager;
+    private readonly RecordQueryService _svc;
+    private readonly ReferencePluginFixture _fixture = new();
+
+    public CommittedOnlyReferencesTests()
+    {
+        var holder = new LoadOrderHolder();
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        _manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
+    }
+
+    public void Dispose()
+    {
+        _manager.Dispose();
+        _fixture.Dispose();
+    }
+
+    [Fact]
+    public void GetReferences_ReturnsWhatThePluginDeclares_AndNothingElse()
+    {
+        // Positive control first, through the identical call path: without it the absence half below would
+        // pass just as happily against a broken query, a wrong connection or an empty index.
+        var referenced = _svc.GetReferences(_fixture.KeywordFormKey.ToString());
+
+        var hit = Assert.Single(referenced);
+        Assert.Equal(_fixture.NpcWithKeywordFormKey.ToString(), hit.FormKey);
+        Assert.Equal(ReferencePluginFixture.PluginName, hit.Plugin);
+
+        // And nothing beyond it: the NPC that declares no keyword is not a referencing source —
+        // the row a staged reference could add here.
+        Assert.DoesNotContain(referenced, r => r.FormKey == _fixture.NpcWithoutKeywordFormKey.ToString());
+    }
+}

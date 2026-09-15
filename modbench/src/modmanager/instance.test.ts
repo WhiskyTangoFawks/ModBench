@@ -116,7 +116,7 @@ function pastSequenceWithin(instance: Instance, sequence: number, ms: number): P
 const watcherFor = (glob: string): FakeWatcher => {
   const found = watchers.filter((w) => w.pattern === glob);
   expect(found).toHaveLength(1);
-  return found[0];
+  return found[0]!;
 };
 
 // MO2, xEdit or the user rewriting the file, with Modbench none the wiser.
@@ -729,8 +729,9 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     const value = await pastSequenceWithin(instance, before, 2000);
 
     expect(value).not.toBe(TIMED_OUT);
+    if (value === TIMED_OUT) throw new Error('expected a landed recompute, not a timeout');
     expect(instance.sequence).toBe(before + 1);
-    expect((value as InstanceValue).gameDirectory).toEqual({ root: explicitDir, dataFolder: join(explicitDir, 'Data') });
+    expect(value.gameDirectory).toEqual({ root: explicitDir, dataFolder: join(explicitDir, 'Data') });
   });
 
   it('does not recompute for a config change affecting an unrelated setting', async () => {

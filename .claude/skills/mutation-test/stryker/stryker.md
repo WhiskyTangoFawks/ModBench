@@ -1,48 +1,64 @@
 # Stryker.NET — running mutation tests here
 
-Tool-specific mechanics for the `mutation-test` review skill. Stryker.NET mutates
-`MEditService.Core`; commands run from `MEditService/`. The review philosophy and triage
-live in `TRIAGE.md` — this file is only *how to run and read the tool*.
+Tool-specific mechanics for the `mutation-test` review skill. Stryker.NET runs scoped to
+**one box at a time** — one production project (`MEditService.<Box>`) mutated against
+exactly that box's own test project (`MEditService.<Box>.Tests`); commands run from
+`MEditService/`. `MEditService.CrossBox.Tests` is never a run's test project — it holds
+no production code of its own to mutate, and every per-box run names only that box's own
+test project, so it is excluded by construction, not by an exclusion list. The review
+philosophy and triage live in `TRIAGE.md` — this file is only *how to run and read the
+tool*.
 
 ## Running the report
 
 ```bash
-cd MEditService && bash ../.claude/skills/mutation-test/stryker/run.sh
+cd MEditService && bash ../.claude/skills/mutation-test/stryker/run.sh --box <Box>
 ```
 
-`run.sh` prints its scope, then the report path, then the parsed survivors. Raw Stryker
-output goes to a log file and never reaches agent context.
+`<Box>` is one of `Codec Commands Http Index LoadOrder PluginAdapter Ports Queries
+SourceRepo Watcher` — the ten production projects. `run.sh` prints its scope, then the
+report path, then the parsed survivors. Raw Stryker output goes to a log file and never
+reaches agent context.
 
 | Exit | Means |
 | ---- | ----- |
 | 0 | every mutant killed |
 | 1 | survivors await disposition — **not** a failure |
-| 2 | tool error (bad ref, concurrent run, no report produced, **nothing audited**) |
-| 3 | nothing in scope: the diff held no mutable C#. A clean skip. |
+| 2 | tool error (bad ref, concurrent run, no report produced, unknown/missing `--box`, **nothing audited**) |
+| 3 | nothing in scope: the diff held no mutable C# in that box. A clean skip. |
 
 Scopes:
 
 ```bash
-# default: Core C# changed vs the merge-base with since.target (main), committed or not
-bash ../.claude/skills/mutation-test/stryker/run.sh
+# default: <Box> C# changed vs the merge-base with since.target (main), committed or not
+bash ../.claude/skills/mutation-test/stryker/run.sh --box Ports
 
 # explicit target — the post-merge batch form, e.g. the commit before a landed epic
-bash ../.claude/skills/mutation-test/stryker/run.sh --since <ref-or-sha>
+bash ../.claude/skills/mutation-test/stryker/run.sh --box Ports --since <ref-or-sha>
 
 # narrow the report to survivors whose lines intersect the git diff
-bash ../.claude/skills/mutation-test/stryker/run.sh --diff-only
+bash ../.claude/skills/mutation-test/stryker/run.sh --box Ports --diff-only
 
-# full MEditService.Core corpus — see the cost model below
-bash ../.claude/skills/mutation-test/stryker/run.sh --all
+# the whole box's corpus — see the cost model below
+bash ../.claude/skills/mutation-test/stryker/run.sh --box Ports --all
 
 # one file, run whether or not that file has a diff
-bash ../.claude/skills/mutation-test/stryker/run.sh --file ConflictClassifier.cs
+bash ../.claude/skills/mutation-test/stryker/run.sh --box Queries --file ConflictClassifier.cs
 ```
 
 **`run.sh` computes the diff itself and hands Stryker an explicit mutate list; Stryker's
 own `since` is never enabled** (see the worktree guardrail below). `since.target` in
-`stryker-config.json` survives only as the *default diff target* both wrappers read;
-`since.enabled` is `false` so a bare `dotnet-stryker` can't reach the broken path either.
+`stryker-config.template.json` survives only as the *default diff target* both wrappers
+read; `since.enabled` is `false` so a bare `dotnet-stryker` can't reach the broken path
+either.
+
+`stryker-config.template.json` is a template, not a runnable config: its `test-projects`
+and `mutate` entries are placeholders `run.sh` overwrites for the named box before every
+run, writing the filled-in config to `.stryker-run.json` (gitignored, removed on exit).
+Nothing reads `stryker-config.template.json` directly except `run.sh` and
+`parse-report.py` (for `since.target`) — there is deliberately no per-box config file
+checked in; ten near-identical files would drift the moment one `ignore-methods` or
+threshold changed and the other nine didn't.
 
 **Scope is file-level, not diff-level.** Touching one line makes *every* testable line in
 that file eligible for mutation — mutate globs name files, not lines. This is intentional
@@ -59,24 +75,29 @@ cd MEditService && python3 ../.claude/skills/mutation-test/stryker/parse-report.
 
 ## Cost model
 
-Measured on this repo. Budget from these, not from folklore:
+Measured on this repo pre-split, across the whole former `MEditService.Core`. Per-box
+figures are smaller in proportion to each box's own size — budget from these ratios, not
+from folklore, and re-measure the first time a box's own number matters:
 
 | Phase | Cost |
 | ----- | ---- |
 | Build + mutate + coverage capture (fixed, every run) | ~8 min cold, ~12s warm build |
 | Each mutant actually tested | ~1.8s |
-| A since-scoped batch across three landed tickets (314 mutants) | **~17 min total** |
+| A since-scoped batch across three landed tickets (314 mutants, whole corpus) | **~17 min total** |
 
-An `--all` run is expensive because of mutant *count* — the whole corpus, at the per-mutant
-rate above. Prefer `--since`.
+A `--all` run is expensive because of mutant *count* — the whole box, at the per-mutant
+rate above. Prefer `--since`. The smallest boxes (`Ports`, `LoadOrder`) pay the same ~8
+min fixed cost but mutate only a handful of files, so `--all` there is cheap; the larger
+boxes (`Http`, `Commands`, `Index`) do not.
 
 **Timeouts are a real but secondary tax.** Mutating the async load-order-lifecycle code deadlocks
 rather than fails: a broken cancellation check or loop-exit produces no answer at all, and from
 outside the process "hung" and "slow" are indistinguishable, so a timeout is the only sound
-detector Stryker has. One full run put 200 mutants in `Timeout` — `IndexProjector.cs` (99),
-`RecordQueryService.cs` (61), `LoadOrder.cs` (39), `LoadOrderStatus.cs` (1) — which at the
-default 6-way concurrency cost roughly half that run's mutation phase, not the hours it looks
-like.
+detector Stryker has. One full pre-split run put 200 mutants in `Timeout` — `IndexProjector.cs`
+(99, now in `MEditService.Index`), `RecordQueryService.cs` (61, now in `MEditService.Queries`),
+`LoadOrder.cs` (39, now in `MEditService.LoadOrder`), `LoadOrderStatus.cs` (1, now in
+`MEditService.Ports`) — which at the default 6-way concurrency cost roughly half that run's
+mutation phase, not the hours it looks like.
 
 **Do not "fix" this by lowering the timeout.** A `Timeout` counts as not-survived, so a
 too-tight timeout marks would-be *Survivors* as killed — it hides exactly the findings the run
@@ -84,13 +105,15 @@ exists to produce. The only sound acceleration would be per-test timeouts
 (`[Fact(Timeout = n)]`), which turn a hang into a genuine failure; that is a wide change to
 production tests for a tool's benefit, and has not been made.
 
-What *was* done: `RecordQueryService.cs` and `LoadOrderStatus.cs` are excluded in
-`stryker-config.json`, because they yielded **zero information** — 61 and 1 tested mutants
-respectively, all of them `Timeout`, nothing killed and nothing survived. `LoadOrder.cs` and
-`IndexProjector.cs` are kept: they time out heavily but still produce real findings (25 killed,
-1 survived, 6 uncovered). `run.sh` preserves these `!` exclusions even when it builds an
-explicit mutate list from the working tree, so having one of those files dirty does not quietly
-put it back in scope — but naming one via `--file` does, since that is an explicit request.
+What *was* done: `RecordQueryService.cs` (box `Queries`) and `LoadOrderStatus.cs` (box
+`Ports`) are excluded via `run.sh`'s own `BOX_EXCLUSIONS_Queries` / `BOX_EXCLUSIONS_Ports`
+table, because they yielded **zero information** — 61 and 1 tested mutants respectively,
+all of them `Timeout`, nothing killed and nothing survived. `LoadOrder.cs` (box
+`LoadOrder`) and `IndexProjector.cs` (box `Index`) are kept: they time out heavily but
+still produce real findings (25 killed, 1 survived, 6 uncovered). `run.sh` applies a
+box's exclusion even when it builds an explicit mutate list from the working tree, so
+having that file dirty does not quietly put it back in scope — but naming it via `--file`
+does, since that is an explicit request.
 
 ## Guardrails
 
@@ -103,7 +126,7 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 > ⚠️ **Run `run.sh` detached and poll it in the foreground.** A since-scoped run outlasts the
 > 10-minute foreground command cap, so a foreground call gets killed two-thirds through and
 > looks exactly like a silent failure. From `MEditService/`:
-> `bash ../.claude/skills/validate/detached.sh start stryker bash ../.claude/skills/mutation-test/stryker/run.sh --since <ref>`,
+> `bash ../.claude/skills/validate/detached.sh start stryker bash ../.claude/skills/mutation-test/stryker/run.sh --box <Box> --since <ref>`,
 > then `bash ../.claude/skills/validate/detached.sh wait stryker` until it prints the verdict.
 > Exit 3 means call it again, and its "still running" line carries the log's last line.
 > `run.sh` spawns no terminal window. Never `pkill dotnet` — that kills VS Code's C# servers;
@@ -133,7 +156,7 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 
 > ⚠️ **One run at a time.** Two concurrent runs contend for the same build output and one
 > dies with no report — which is easy to cause, because a silent run looks hung. `run.sh`
-> refuses to start if another is live.
+> refuses to start if another is live, regardless of which box either names.
 
 > ⚠️ **Never read `mutation-report.json` directly.** Files run 2–7 MB with full source
 > embedded. Always go through `run.sh` / `parse-report.py` — only the summary reaches context.
@@ -152,7 +175,11 @@ put it back in scope — but naming one via `--file` does, since that is an expl
 ## Suppression format
 
 The durable, config-level form of `TRIAGE.md`'s **Accept as invariant** disposition —
-**only after explicit developer approval**, always with a reason.
+**only after explicit developer approval**, always with a reason. Since there is no
+per-box config file checked in, a project-wide suppression goes in
+`stryker-config.template.json`'s `ignore-mutations`/`ignore-methods` (applies to every
+box's run); a box-specific one is a new entry in `run.sh`'s `BOX_EXCLUSIONS_<Box>` table,
+next to the two it already carries.
 
 Config-level (preferred, for anything project-wide):
 
@@ -169,8 +196,8 @@ someCode(); // Stryker disable once StringLiteral: <reason>
 ```
 
 Annotations without reasoning (why the code exists, why the mutation is inert) are rejected
-in review. Only logging goes untested by default — via `stryker-config.json`, never comment
-annotations.
+in review. Only logging goes untested by default — via `stryker-config.template.json`, never
+comment annotations.
 
 ## Request-a-fixture disposition (Mutagen seams)
 
@@ -189,11 +216,19 @@ calls or intermediate DTO shape rather than the queried/saved result.
 
 ## Known issues
 
-- **~1000 `CompileError` mutants per run are expected**, and they trace to only ~18 methods.
-  Stryker's "Safe Mode" discards every mutation in a method once one fails to compile, and
-  two errors account for all of it: `CS0165` (unassigned local — block removal against
-  definite assignment) and `CS0411` (LINQ `Select` overload inference). Concentrated in
-  `RenumberRecordHandler.cs` and `DuckDbRecordIndex.cs`. Counted and ignored
+- **~1000 `CompileError` mutants per run are expected** across the boxes that carry them,
+  and they trace to only ~18 methods total. Stryker's "Safe Mode" discards every mutation
+  in a method once one fails to compile, and two errors account for all of it: `CS0165`
+  (unassigned local — block removal against definite assignment) and `CS0411` (LINQ
+  `Select` overload inference). Concentrated in `RenumberRecordHandler.cs` (box
+  `Commands`) and `DuckDbRecordIndex.cs` (box `Index`). Counted and ignored
   automatically — not a signal.
-- The full-install smoke test (`RealData/RealInstallSmokeTests.cs`) is gated behind
-  `MEDIT_SMOKE=1` so it never runs under mutation.
+- The full-install smoke test (`RealData/RealInstallSmokeTests.cs`, in
+  `MEditService.Http.Tests`) is gated behind `MEDIT_SMOKE=1` so it never runs under
+  mutation.
+- `MEditService.CrossBox.Tests` holds tests whose subject spans two or more boxes — the
+  debt a follow-up rewrites away one fixture at a time, at each box's own interface. It
+  is excluded from every per-box run by construction: no per-box run ever names it as a
+  test project. A mutant in a box whose only real-world exerciser sits in that project
+  will show `NoCoverage` under `--box`. That is a true finding about the box split, not a
+  tool bug — the fix is the follow-up rewrite, not a suppression here.

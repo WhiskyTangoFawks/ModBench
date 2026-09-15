@@ -37,14 +37,15 @@ vi.mock('../workspaceConfig', () => ({
 
 import { registerToolboxCommands, DEPLOY_CONFIRM_BUTTON, DEPLOY_DECLINED, type ToolboxCommandDeps } from '../toolboxCommands';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
-import type { Instance } from '../modmanager/instance';
 import type { AskQuestion } from '../dialog';
+import { instanceValueFixture } from '../modmanager/test/instanceValueFixture';
+import { FakeLogOutputChannel } from './fakeOutputChannel';
 
 // `deployed: true` is the steady state most tests want — a directory that already has a
 // manifest, so the deploy gesture never has to ask.
-const value = {
-  activeProfile: 'Default', files: { winners: new Map() }, gameDirectory: { dataFolder: '/game/Data' }, deployed: true,
-};
+const value = instanceValueFixture({
+  activeProfile: 'Default', gameDirectory: { root: '/game', dataFolder: '/game/Data' }, deployed: true,
+});
 
 function register(over: Partial<ToolboxCommandDeps> = {}) {
   const reporter = recordingReporter();
@@ -52,8 +53,8 @@ function register(over: Partial<ToolboxCommandDeps> = {}) {
   const updateProfileDescription = vi.fn(() => Promise.resolve());
   registerToolboxCommands({
     instanceRoot: '/instance',
-    instance: { value } as unknown as Pick<Instance, 'value'>,
-    outputChannel: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } as never,
+    instance: { value },
+    outputChannel: new FakeLogOutputChannel(),
     updateProfileDescription,
     reporterFor: () => reporter,
     ask,
@@ -162,7 +163,7 @@ describe('Deploy and Purge', () => {
       deployMods.mockResolvedValueOnce({ applied: true, wrote: true });
       const ask = scriptedDialog(DEPLOY_CONFIRM_BUTTON);
 
-      const { reporter, run } = register({ instance: { value: notDeployed } as unknown as Pick<Instance, 'value'>, ask });
+      const { reporter, run } = register({ instance: { value: notDeployed }, ask });
       await run('modbench.toolbox.deploy');
 
       expect(ask.asked).toHaveLength(1);
@@ -175,7 +176,7 @@ describe('Deploy and Purge', () => {
     it('declining refuses without calling the command', async () => {
       const ask = scriptedDialog(undefined); // the native cancel
 
-      const { reporter, run } = register({ instance: { value: notDeployed } as unknown as Pick<Instance, 'value'>, ask });
+      const { reporter, run } = register({ instance: { value: notDeployed }, ask });
       await run('modbench.toolbox.deploy');
 
       expect(deployMods).not.toHaveBeenCalled();

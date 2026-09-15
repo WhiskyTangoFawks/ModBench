@@ -171,7 +171,7 @@ describe('install commands', () => {
     expect(await treeOf(join(root, 'mods', MOD))).toBeNull();
     assertOnlyChanged(before, await snapshotTree(root), new Set());
     expect(outcome).toMatchObject({ applied: false });
-    expect(outcome.applied === false && outcome.refusal).toMatch(/different drives/);
+    expect(!outcome.applied && outcome.refusal).toMatch(/different drives/);
   });
 
   it('leaves no staging directory behind, on success or on refusal', async () => {
@@ -193,7 +193,7 @@ describe('install commands', () => {
     const outcome = await installFromFolder(root, { kind: 'new', name }, sourceFolder);
 
     expect(outcome).toMatchObject({ applied: false });
-    expect(outcome.applied === false && outcome.refusal).toMatch(/already exists/);
+    expect(!outcome.applied && outcome.refusal).toMatch(/already exists/);
     expect(await treeOf(modDir)).toEqual(before);
   });
 
@@ -205,7 +205,7 @@ describe('install commands', () => {
     const outcome = await installFromFolder(root, { kind: 'upgrade', name: 'Vanished Mod' }, sourceFolder);
 
     expect(outcome).toMatchObject({ applied: false });
-    expect(outcome.applied === false && outcome.refusal).toMatch(/no folder by that name/);
+    expect(!outcome.applied && outcome.refusal).toMatch(/no folder by that name/);
     expect(await treeOf(join(root, 'mods', 'Vanished Mod'))).toBeNull();
     assertOnlyChanged(before, await snapshotTree(root), new Set());
   });
@@ -312,6 +312,6 @@ describe('install commands', () => {
     const outcome = await installFromArchive(root, { kind: 'new', name: MOD }, join(root, 'downloads', 'bad.7z'), { run });
 
     expect(outcome).toMatchObject({ applied: false });
-    expect(outcome.applied === false && outcome.refusal).toMatch(/corrupt/);
+    expect(!outcome.applied && outcome.refusal).toMatch(/corrupt/);
   });
 });

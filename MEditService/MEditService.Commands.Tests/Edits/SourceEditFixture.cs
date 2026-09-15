@@ -128,7 +128,7 @@ public sealed class SourceEditFixture : IDisposable
         "next change or load.")
     {
         File.WriteAllBytes(Path.Combine(ModFolder, ActualPluginName), "changed-by-xedit"u8.ToArray());
-        ExternalChangeDeferral.Set(ModFolder, question);
+        SourceRepository.RaiseExternalChangeQuestion(ModFolder, question);
     }
 
     public IReadOnlyList<string> GitStatus() =>

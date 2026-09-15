@@ -91,6 +91,17 @@ const aliasesMeta = fieldMeta({
 
 type Obj = Record<string, unknown>;
 
+// Every field/element/property lookup below walks a plain JS structure this file itself built —
+// `Reflect.get` on the guarded `object` reads a member without narrowing away from `unknown`.
+function propertyOf(value: unknown, name: string): unknown {
+  return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
+}
+
+function stringValueAt(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === 'string' ? value : '';
+}
+
 // The document's own spelling: the discriminator first, then only the members the leaf carries.
 const property = (name: string, concreteType: string, over: Obj = {}): Obj => ({
   MutagenObjectType: concreteType, Name: name, Flags: ['Edited'],
@@ -107,7 +118,7 @@ const PLUGIN = 'MyMod.esp';
 // Joined the way the backend joins them; a key member may be dotted, so each one is a path.
 const keyTextOf = (keyMembers: string[], element: unknown): string =>
   keyMembers
-    .map(m => m.split('.').reduce<unknown>((v, name) => (v as Obj | null)?.[name], element))
+    .map(m => m.split('.').reduce<unknown>((v, name) => propertyOf(v, name), element))
     .map(v => String(v ?? ''))
     .join(' / ');
 
@@ -140,14 +151,14 @@ function buildDiff(
     values,
     winnerColumn: columns[0],
     resolutions: resolved.length === 0 ? undefined : Object.fromEntries(resolved.map(c => [c, {
-      state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[values[c] as string],
+      state: 'ResolvedValidType' as const, recordType: null, editorId: editorIds[stringValueAt(values, c)],
     }])),
     children:
       meta.type === 'array' && meta.elementType
         ? each(keysOf(meta, values).map(k =>
           [k, meta.elementType!, (c: string) => elementAt(meta, values[c], k)]))
         : meta.type === 'struct'
-          ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => (values[c] as Obj | null)?.[f.name]]))
+          ? each((meta.fields ?? []).map(f => [f.name, f, (c: string) => propertyOf(values[c], f.name)]))
           : undefined,
   });
 }
@@ -179,20 +190,20 @@ function renderPanel() {
 }
 
 function fieldCell(field: string): HTMLTableCellElement {
-  const td = screen.getAllByText(field).find(el => el.tagName === 'TD');
+  const td = screen.getAllByText(field).find((el): el is HTMLTableCellElement => el.tagName === 'TD');
   expect(td, `no row named ${field}`).toBeDefined();
-  return td as HTMLTableCellElement;
+  return td!;
 }
 
 const summaryOf = (field: string): string =>
-  fieldCell(field).closest('tr')!.querySelectorAll('td')[1].textContent;
+  fieldCell(field).closest('tr')!.querySelectorAll('td')[1]!.textContent;
 
 const expandRow = (field: string) =>
   fireEvent.click(fieldCell(field).closest('tr')!.querySelector('button')!);
 
 async function expandScripts() {
   await waitFor(() => screen.getByText('Scripts'));
-  fireEvent.click(screen.getAllByText('▶')[0]);
+  fireEvent.click(screen.getAllByText('▶')[0]!);
 }
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
@@ -206,7 +217,7 @@ function reloadWith(compare: unknown) {
 
 beforeEach(() => {
   vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
-  (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  vi.mocked(vscode.postMessage).mockClear();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -392,7 +403,7 @@ describe('a row of a keyed array is identified by its key', () => {
     currentCompare = oneColumn([alias(0, 'First'), alias(1, 'Second')], {}, aliasesMeta);
     renderPanel();
     await waitFor(() => screen.getByText('Aliases'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('1'));
     expandRow('1');
     await waitFor(() => screen.getByText('Scripts'));
@@ -444,8 +455,8 @@ describe('a member the column\'s own leaf does not declare', () => {
     await waitFor(() => screen.getByText('Data'));
 
     const cells = fieldCell('Data').closest('tr')!.querySelectorAll('td');
-    expect(cells[1].textContent).toBe('3');
-    expect(cells[2].textContent).toBe('');
+    expect(cells[1]!.textContent).toBe('3');
+    expect(cells[2]!.textContent).toBe('');
   });
 });
 
@@ -457,7 +468,7 @@ describe('Add Script is the generic array gesture', () => {
     renderPanel();
     await waitFor(() => screen.getByText('Scripts'));
 
-    const cell = screen.getAllByText('[1]')[0].closest('td')!;
+    const cell = screen.getAllByText('[1]')[0]!.closest('td')!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Insert' });
 
@@ -477,16 +488,16 @@ describe('Add Script is the generic array gesture', () => {
     // First of the two script rows, since the empty key sorts before every named one.
     const added = document.querySelectorAll('tbody tr')[1];
     // Its Field column holds nothing but the disclosure control: the key is still empty.
-    expect(added.querySelectorAll('td')[0].textContent).toBe('▶');
-    expect(added.querySelectorAll('td')[1].textContent).toBe('()');
+    expect(added!.querySelectorAll('td')[0]!.textContent).toBe('▶');
+    expect(added!.querySelectorAll('td')[1]!.textContent).toBe('()');
 
     // Nameable: its own `name` cell takes an edit like any other string cell, addressed through
     // the empty key — the only handle the element has until it is named.
-    fireEvent.click(added.querySelector('button')!);
+    fireEvent.click(added!.querySelector('button')!);
     await waitFor(() => screen.getAllByText('Name'));
-    const nameCell = screen.getAllByText('Name')[0].closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(nameCell.querySelector('[data-open-trigger]')!);
-    const input = nameCell.querySelector('input')!;
+    const nameCell = screen.getAllByText('Name')[0]!.closest('tr')!.querySelectorAll('td')[1];
+    fireEvent.doubleClick(nameCell!.querySelector('[data-open-trigger]')!);
+    const input = nameCell!.querySelector('input')!;
     fireEvent.change(input, { target: { value: 'Ambush' } });
     fireEvent.blur(input);
 
@@ -511,8 +522,8 @@ describe('Add Script is the generic array gesture', () => {
     await waitFor(() => screen.getByText('Data'));
 
     const dataCell = fieldCell('Data').closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.doubleClick(dataCell.querySelector('[data-open-trigger]')!);
-    const input = dataCell.querySelector('input')!;
+    fireEvent.doubleClick(dataCell!.querySelector('[data-open-trigger]')!);
+    const input = dataCell!.querySelector('input')!;
     fireEvent.change(input, { target: { value: '25' } });
     fireEvent.blur(input);
 
@@ -538,8 +549,8 @@ describe('Add Script is the generic array gesture', () => {
     await waitFor(() => screen.getByText('Radius'));
 
     const cell = fieldCell('Radius').closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Delete' });
+    fireEvent.click(cell!);
+    fireEvent.keyDown(cell!, { key: 'Delete' });
 
     expect(lastEnvelope()).toEqual({
       op: 'remove',
@@ -559,8 +570,8 @@ describe('Add Script is the generic array gesture', () => {
     await waitFor(() => screen.getByText('Properties'));
 
     const cell = fieldCell('Properties').closest('tr')!.querySelectorAll('td')[1];
-    fireEvent.click(cell);
-    fireEvent.keyDown(cell, { key: 'Insert' });
+    fireEvent.click(cell!);
+    fireEvent.keyDown(cell!, { key: 'Insert' });
 
     expect(lastEnvelope()).toEqual({
       op: 'add',

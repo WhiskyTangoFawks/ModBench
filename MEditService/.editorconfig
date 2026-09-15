@@ -418,6 +418,9 @@ dotnet_diagnostic.RS0030.severity = none
 [MEditService.Commands.Tests/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 
+[MEditService.CrossBox.Tests/**.cs]
+dotnet_diagnostic.RS0030.severity = none
+
 [MEditService.Http.Tests/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 

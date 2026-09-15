@@ -11,6 +11,6 @@ describe('createModsWatcher', () => {
 
     createModsWatcher('/instance', () => {});
 
-    expect(watchers[0].pattern).toBe('mods/**');
+    expect(watchers[0]!.pattern).toBe('mods/**');
   });
 });

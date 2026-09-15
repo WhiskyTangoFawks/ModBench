@@ -7,7 +7,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
+import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from './messages';
 import { at, fieldMeta, keyed, lastPostedEnvelope, member, panelClient } from './test/fixtures';
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
@@ -228,9 +228,9 @@ describe('RecordPanel — array child rows (sorted)', () => {
     const kwdBTd = screen.getAllByText('KwdB').find(el => el.tagName === 'TD');
     expect(kwdBTd).toBeTruthy();
     const cells = kwdBTd!.closest('tr')!.querySelectorAll('td');
-    expect(cells[1].textContent).toBe('KwdB');
-    expect(cells[2].textContent).toBe('');
-    expect(cells[2].querySelector('[data-open-trigger]')).toBeNull();
+    expect(cells[1]!.textContent).toBe('KwdB');
+    expect(cells[2]!.textContent).toBe('');
+    expect(cells[2]!.querySelector('[data-open-trigger]')).toBeNull();
   });
 });
 
@@ -286,14 +286,14 @@ describe('RecordPanel — a struct member that is itself an array of structs', (
 
   async function expandToDepth4() {
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand Container -> Entries
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand Container -> Entries
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand Entries -> [0]
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand Entries -> [0]
     await waitFor(() => {
       const td = screen.getAllByText('[0]').find(el => el.tagName === 'TD');
       if (!td) throw new Error('[0] TD not found yet');
     });
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand [0] -> Id/Weight
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand [0] -> Id/Weight
     await waitFor(() => screen.getByText('Weight'));
   }
 
@@ -346,14 +346,14 @@ describe('RecordPanel — array editing (unsorted)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     currentCompare = intArrayCompareResult;
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it('Insert on the focused array-parent cell posts add at the array, carrying no value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    const cell = screen.getAllByText('[3]')[0].closest('td')!;
+    const cell = screen.getAllByText('[3]')[0]!.closest('td')!;
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
@@ -364,7 +364,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Delete on a focused array-element cell posts remove at its own index', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
     await waitFor(() => screen.getByText('[1]'));
     const cell = screen.getByText('2').closest('td')!;
     fireEvent.click(cell);
@@ -376,7 +376,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowDown on a focused element posts move with the next position as its value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('[0]'));
     const cell = screen.getByText('1').closest('td')!;
     fireEvent.click(cell);
@@ -388,7 +388,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowUp on a focused element posts move with the previous position as its value', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('[2]'));
     const cell = screen.getByText('3').closest('td')!;
     fireEvent.click(cell);
@@ -402,7 +402,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
   it('Ctrl+ArrowUp on the first element still posts the move, to the position before it', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('[0]'));
     const cell = screen.getByText('1').closest('td')!;
     fireEvent.click(cell);
@@ -472,10 +472,10 @@ function renderEditablePanel() {
 function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
   const row = screen.getByText(rowLabel).closest('tr')!;
   const cells = row.querySelectorAll('td');
-  const cell = cells[cells.length - 1];
+  const cell = cells[cells.length - 1]!;
   // xEdit's own gesture (ADR-0018): a double click opens the editor on a resting cell.
-  fireEvent.doubleClick(within(cell as HTMLElement).getByText(shownValue));
-  const input = (cell as HTMLElement).querySelector('input')!;
+  fireEvent.doubleClick(within(cell).getByText(shownValue));
+  const input = cell.querySelector('input')!;
   fireEvent.change(input, { target: { value: typed } });
   fireEvent.keyDown(input, { key: 'Enter' });
 }
@@ -483,7 +483,7 @@ function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) 
 describe('RecordPanel — a value edit posts one set envelope addressing the leaf', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -491,7 +491,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = editableIntArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
     await waitFor(() => screen.getByText('[1]'));
 
     editLastCellOfRow('[1]', '22', '99');
@@ -503,7 +503,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = structCollapseExpandResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('ObjectBounds'));
-    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    fireEvent.click(screen.getAllByText('▶')[0]!); // expand
     await waitFor(() => screen.getByText('X1'));
 
     editLastCellOfRow('X1', '5', '7');
@@ -516,11 +516,11 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Weight'));
 
     editLastCellOfRow('Weight', '1', '7');
@@ -534,14 +534,14 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -552,14 +552,14 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     currentCompare = nestedStructArrayResult;
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getByText('Entries'));
-    fireEvent.click(screen.getAllByText('▶')[0]);
+    fireEvent.click(screen.getAllByText('▶')[0]!);
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
     const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
@@ -584,7 +584,7 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
 
     editLastCellOfRow('Level', '4', '6');
 
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = vi.mocked(vscode.postMessage).mock.calls;
     const posted = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)![0];
     expect(posted).toEqual({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
@@ -659,7 +659,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -670,7 +670,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await waitFor(() => screen.getByText(label));
     // The row's own label cell comes first; once expanded, the key text also appears as the value
     // of the element's own `name` member.
-    fireEvent.click(screen.getAllByText(label)[0].closest('tr')!.querySelector('button')!);
+    fireEvent.click(screen.getAllByText(label)[0]!.closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getAllByText('flags'));
   }
 
@@ -678,9 +678,9 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // it in both, where a position could name only one.
   it('a value edit on a keyed element posts set through the key hop', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('flags')[0].closest('tr')!;
+    const row = screen.getAllByText('flags')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.doubleClick(within(cell).getByText('g'));
     const input = cell.querySelector('input')!;
     fireEvent.change(input, { target: { value: 'EDITED' } });
@@ -693,9 +693,9 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
 
   it('Delete on a keyed element posts remove naming the key', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -734,7 +734,7 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     await waitFor(() => screen.getByText('Fragments'));
     fireEvent.click(screen.getByText('Fragments').closest('tr')!.querySelector('button')!);
     await waitFor(() => screen.getByText('10 / 0'));
-    const cell = screen.getByText('10 / 0').closest('tr')!.querySelectorAll('td')[1] as HTMLElement;
+    const cell = screen.getByText('10 / 0').closest('tr')!.querySelectorAll('td')[1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -745,9 +745,9 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // inert on its rows.
   it('Ctrl+ArrowDown on a keyed element posts nothing', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
@@ -758,9 +758,9 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // a row that offered it would swallow the key and still post nothing, indistinguishable above.
   it('Ctrl+ArrowDown on a keyed element leaves the key unhandled', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0].closest('tr')!;
+    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
 
     expect(fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true })).toBe(true);
@@ -779,7 +779,7 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -792,14 +792,16 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
     // KwdC is element 1 of MyMod.esp's own ['KwdA', 'KwdC'].
     const row = screen.getAllByText('KwdC').find(el => el.tagName === 'TD')!.closest('tr')!;
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1] as HTMLElement;
+    const cell = cells[cells.length - 1]!;
     fireEvent.click(cell);
     fireEvent.doubleClick(within(cell).getByText('KwdC'));
 
     // The native QuickPick answers through the bridge; this is its reply.
-    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
-    const request = [...calls].reverse()
-      .find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER)![0] as { requestId: string };
+    type OpenFormKeyPicker = Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER }>;
+    const isOpenFormKeyPicker = (call: [WebviewToExtension]): call is [OpenFormKeyPicker] =>
+      call[0].type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER;
+    const calls = vi.mocked(vscode.postMessage).mock.calls;
+    const request = [...calls].reverse().find(isOpenFormKeyPicker)![0];
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: request.requestId, formKey: '000123:Fallout4.esm' },

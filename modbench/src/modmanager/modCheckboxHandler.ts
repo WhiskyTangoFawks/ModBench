@@ -7,7 +7,7 @@ import { makeReporter } from '../reporter';
  *  cannot load under a minimal `vi.mock('vscode')`. */
 export async function onModCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<ModlistNode>,
-  modListProvider: ModListProvider,
+  modListProvider: Pick<ModListProvider, 'setModEnabled' | 'invalidate'>,
   outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
   for (const [node, state] of e.items) {

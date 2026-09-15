@@ -1,16 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runRebase, handleUnanswered } from '../externalChangeGestures';
 import { APPLY_BUTTON, BASELINE_BUTTON } from '../externalChangeDialog';
-import type { UnansweredExternalChange } from '../../medit/client';
+import type { MEditClient, UnansweredExternalChange } from '../../medit/client';
 
-function makeRebaseDeps(client: unknown) {
+type RebaseClient = Partial<Pick<MEditClient, 'keepAsMyEdit' | 'absorbUpstreamUpdate' | 'rebaseOntoMain'>>;
+
+// Every method the deps' own `client` field requires, so a test's own partial override still
+// satisfies the full port — the untouched methods are never called for that test.
+function fullClient(client: RebaseClient): Required<RebaseClient> {
+  return { keepAsMyEdit: vi.fn(), absorbUpstreamUpdate: vi.fn(), rebaseOntoMain: vi.fn(), ...client };
+}
+
+function makeRebaseDeps(client: RebaseClient) {
   return {
-    client,
+    client: fullClient(client),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
-  } as any;
+  };
 }
 
 describe('runRebase', () => {
@@ -66,15 +74,15 @@ function unanswered(over: Partial<UnansweredExternalChange> = {}): UnansweredExt
   };
 }
 
-function makeDispatchDeps(client: unknown, showDialogChoice: string | undefined) {
+function makeDispatchDeps(client: RebaseClient, showDialogChoice: string | undefined) {
   return {
-    client,
+    client: fullClient(client),
     showDialog: vi.fn().mockResolvedValue(showDialogChoice),
     openMergeEditor: vi.fn().mockResolvedValue(undefined),
     showError: vi.fn(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
-  } as any;
+  };
 }
 
 describe('handleUnanswered', () => {

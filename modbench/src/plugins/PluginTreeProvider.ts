@@ -7,6 +7,7 @@ import type {
 } from '../medit/client';
 import { recordResourceUri } from '../medit/recordResourceUri';
 import { failurePrefixIcon } from '../failurePrefixIcon';
+import { present } from '../present';
 export { headerFormKeyFor } from '../medit/formKeyIdentity';
 
 // Interior-cell listing is the only surface that pages — record-type children (below) load in
@@ -19,7 +20,7 @@ const PAGE_SIZE = 50;
 const UNLIMITED_RECORDS = 2147483647;
 
 function formId(formKey: string): string {
-  return formKey.split(':')[0];
+  return present(formKey.split(':')[0], 'first segment of a formKey');
 }
 
 // "Could not be read into its document" rather than "Mutagen could not parse it": ingest's one
@@ -276,7 +277,8 @@ function containerChildTypeOf(recordType: string): 'qust' | 'dial' | undefined {
   return recordType === 'qust' || recordType === 'dial' ? recordType : undefined;
 }
 
-type PageCache = Map<string, { items: RecordSummary[]; total: number }>;
+type RecordPage = { items: RecordSummary[]; total: number };
+type PageCache = Map<string, RecordPage>;
 type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
 
 type RecordBrowserClient = Pick<
@@ -356,12 +358,14 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // invalidated, so no repository call follows.
   private findCachedRecordLocation(
     plugin: string, origin: string | undefined, formKey: string,
-  ): { key: string; index: number } | undefined {
+  ): { key: string; page: RecordPage; index: number; item: RecordSummary } | undefined {
     const prefix = `${this.originKey(plugin, origin)}::`;
     for (const [key, page] of this.pageCache) {
       if (!key.startsWith(prefix)) continue;
       const index = page.items.findIndex(r => r.formKey === formKey);
-      if (index !== -1) return { key, index };
+      if (index === -1) continue;
+      const item = present(page.items[index], `cached record at index ${index}`);
+      return { key, page, index, item };
     }
     return undefined;
   }
@@ -369,8 +373,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   /** Undefined when nothing has cached this record yet, which the decoration provider reads the
    *  same as 'None': nothing to badge. */
   workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): RecordSummary['workingTreeState'] | undefined {
-    const loc = this.findCachedRecordLocation(plugin, origin, formKey);
-    return loc && this.pageCache.get(loc.key)!.items[loc.index].workingTreeState;
+    return this.findCachedRecordLocation(plugin, origin, formKey)?.item.workingTreeState;
   }
 
   /** Never downgrades Added to Modified: a create seeds no committed counterpart however many
@@ -381,12 +384,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   ): boolean {
     const loc = this.findCachedRecordLocation(plugin, origin, formKey);
     if (!loc) return false;
-    const page = this.pageCache.get(loc.key)!;
-    const current = page.items[loc.index].workingTreeState;
+    const current = loc.item.workingTreeState;
     if (current === state || current === 'Added') return true;
-    const items = [...page.items];
-    items[loc.index] = { ...items[loc.index], workingTreeState: state };
-    this.pageCache.set(loc.key, { ...page, items });
+    const items = [...loc.page.items];
+    items[loc.index] = { ...loc.item, workingTreeState: state };
+    this.pageCache.set(loc.key, { ...loc.page, items });
     this._onDidChangeTreeData.fire(undefined);
     return true;
   }

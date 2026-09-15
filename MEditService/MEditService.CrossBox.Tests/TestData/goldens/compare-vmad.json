@@ -1,0 +1,806 @@
+{
+  "scripted-npc": {
+    "Adapter": {
+      "CellStates": {
+        "Top.esp": "Override"
+      },
+      "CheckErrors": null,
+      "Children": [
+        {
+          "CellStates": {
+            "Top.esp": "Override"
+          },
+          "CheckErrors": null,
+          "Children": [
+            {
+              "CellStates": {},
+              "CheckErrors": null,
+              "Children": [
+                {
+                  "CellStates": {},
+                  "CheckErrors": null,
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "Name",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": "Ambush",
+                    "Top.esp": null
+                  },
+                  "WinnerColumn": "Base.esm"
+                },
+                {
+                  "CellStates": {},
+                  "CheckErrors": null,
+                  "Children": [
+                    {
+                      "CellStates": {},
+                      "CheckErrors": null,
+                      "Children": [
+                        {
+                          "CellStates": {},
+                          "CheckErrors": null,
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "Name",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "Radius",
+                            "Top.esp": null
+                          },
+                          "WinnerColumn": "Base.esm"
+                        },
+                        {
+                          "CellStates": {},
+                          "CheckErrors": null,
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "Data",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": 10,
+                            "Top.esp": null
+                          },
+                          "WinnerColumn": "Base.esm"
+                        },
+                        {
+                          "CellStates": {},
+                          "CheckErrors": null,
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "MutagenObjectType",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "ScriptIntProperty",
+                            "Top.esp": null
+                          },
+                          "WinnerColumn": "Base.esm"
+                        }
+                      ],
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "Radius",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": {
+                          "Data": 10,
+                          "MutagenObjectType": "ScriptIntProperty",
+                          "Name": "Radius"
+                        },
+                        "Top.esp": null
+                      },
+                      "WinnerColumn": "Base.esm"
+                    }
+                  ],
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "Properties",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": [
+                      {
+                        "Data": 10,
+                        "MutagenObjectType": "ScriptIntProperty",
+                        "Name": "Radius"
+                      }
+                    ],
+                    "Top.esp": null
+                  },
+                  "WinnerColumn": "Base.esm"
+                }
+              ],
+              "ConflictAll": "NoConflict",
+              "FieldName": "Ambush",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": {
+                  "Name": "Ambush",
+                  "Properties": [
+                    {
+                      "Data": 10,
+                      "MutagenObjectType": "ScriptIntProperty",
+                      "Name": "Radius"
+                    }
+                  ]
+                },
+                "Top.esp": null
+              },
+              "WinnerColumn": "Base.esm"
+            },
+            {
+              "CellStates": {
+                "Top.esp": "IdenticalToMaster"
+              },
+              "CheckErrors": null,
+              "Children": [
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "CheckErrors": null,
+                  "Children": null,
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "Name",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": "Guard",
+                    "Top.esp": "Guard"
+                  },
+                  "WinnerColumn": "Top.esp"
+                },
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "CheckErrors": null,
+                  "Children": [
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "CheckErrors": null,
+                      "Children": [
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "CheckErrors": null,
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "Name",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "Radius",
+                            "Top.esp": "Radius"
+                          },
+                          "WinnerColumn": "Top.esp"
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "CheckErrors": null,
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "Data",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": 20,
+                            "Top.esp": 20
+                          },
+                          "WinnerColumn": "Top.esp"
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "CheckErrors": null,
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "MutagenObjectType",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "ScriptIntProperty",
+                            "Top.esp": "ScriptIntProperty"
+                          },
+                          "WinnerColumn": "Top.esp"
+                        }
+                      ],
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "Radius",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": {
+                          "Data": 20,
+                          "MutagenObjectType": "ScriptIntProperty",
+                          "Name": "Radius"
+                        },
+                        "Top.esp": {
+                          "Data": 20,
+                          "MutagenObjectType": "ScriptIntProperty",
+                          "Name": "Radius"
+                        }
+                      },
+                      "WinnerColumn": "Top.esp"
+                    }
+                  ],
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "Properties",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": [
+                      {
+                        "Data": 20,
+                        "MutagenObjectType": "ScriptIntProperty",
+                        "Name": "Radius"
+                      }
+                    ],
+                    "Top.esp": [
+                      {
+                        "Data": 20,
+                        "MutagenObjectType": "ScriptIntProperty",
+                        "Name": "Radius"
+                      }
+                    ]
+                  },
+                  "WinnerColumn": "Top.esp"
+                }
+              ],
+              "ConflictAll": "NoConflict",
+              "FieldName": "Guard",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": {
+                  "Name": "Guard",
+                  "Properties": [
+                    {
+                      "Data": 20,
+                      "MutagenObjectType": "ScriptIntProperty",
+                      "Name": "Radius"
+                    }
+                  ]
+                },
+                "Top.esp": {
+                  "Name": "Guard",
+                  "Properties": [
+                    {
+                      "Data": 20,
+                      "MutagenObjectType": "ScriptIntProperty",
+                      "Name": "Radius"
+                    }
+                  ]
+                }
+              },
+              "WinnerColumn": "Top.esp"
+            }
+          ],
+          "ConflictAll": "Override",
+          "FieldName": "Scripts",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": [
+              {
+                "Name": "Ambush",
+                "Properties": [
+                  {
+                    "Data": 10,
+                    "MutagenObjectType": "ScriptIntProperty",
+                    "Name": "Radius"
+                  }
+                ]
+              },
+              {
+                "Name": "Guard",
+                "Properties": [
+                  {
+                    "Data": 20,
+                    "MutagenObjectType": "ScriptIntProperty",
+                    "Name": "Radius"
+                  }
+                ]
+              }
+            ],
+            "Top.esp": [
+              {
+                "Name": "Guard",
+                "Properties": [
+                  {
+                    "Data": 20,
+                    "MutagenObjectType": "ScriptIntProperty",
+                    "Name": "Radius"
+                  }
+                ]
+              }
+            ]
+          },
+          "WinnerColumn": "Top.esp"
+        }
+      ],
+      "ConflictAll": "Override",
+      "FieldName": "VirtualMachineAdapter",
+      "Resolutions": null,
+      "Values": {
+        "Base.esm": {
+          "Scripts": [
+            {
+              "Name": "Ambush",
+              "Properties": [
+                {
+                  "Data": 10,
+                  "MutagenObjectType": "ScriptIntProperty",
+                  "Name": "Radius"
+                }
+              ]
+            },
+            {
+              "Name": "Guard",
+              "Properties": [
+                {
+                  "Data": 20,
+                  "MutagenObjectType": "ScriptIntProperty",
+                  "Name": "Radius"
+                }
+              ]
+            }
+          ]
+        },
+        "Top.esp": {
+          "Scripts": [
+            {
+              "Name": "Guard",
+              "Properties": [
+                {
+                  "Data": 20,
+                  "MutagenObjectType": "ScriptIntProperty",
+                  "Name": "Radius"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "WinnerColumn": "Top.esp"
+    },
+    "ConflictAll": "Override"
+  },
+  "scripted-quest": {
+    "Adapter": {
+      "CellStates": {
+        "Top.esp": "Override"
+      },
+      "CheckErrors": null,
+      "Children": [
+        {
+          "CellStates": {
+            "Top.esp": "IdenticalToMaster"
+          },
+          "CheckErrors": null,
+          "Children": [
+            {
+              "CellStates": {
+                "Top.esp": "IdenticalToMaster"
+              },
+              "CheckErrors": null,
+              "Children": null,
+              "ConflictAll": "NoConflict",
+              "FieldName": "Name",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": "",
+                "Top.esp": ""
+              },
+              "WinnerColumn": "Top.esp"
+            }
+          ],
+          "ConflictAll": "NoConflict",
+          "FieldName": "Script",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": {
+              "Name": ""
+            },
+            "Top.esp": {
+              "Name": ""
+            }
+          },
+          "WinnerColumn": "Top.esp"
+        },
+        {
+          "CellStates": {
+            "Top.esp": "Override"
+          },
+          "CheckErrors": null,
+          "Children": [
+            {
+              "CellStates": {
+                "Top.esp": "Override"
+              },
+              "CheckErrors": null,
+              "Children": [
+                {
+                  "CellStates": {
+                    "Top.esp": "IdenticalToMaster"
+                  },
+                  "CheckErrors": null,
+                  "Children": [
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "CheckErrors": null,
+                      "Children": null,
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "Name",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": "",
+                        "Top.esp": ""
+                      },
+                      "WinnerColumn": "Top.esp"
+                    },
+                    {
+                      "CellStates": {
+                        "Top.esp": "IdenticalToMaster"
+                      },
+                      "CheckErrors": null,
+                      "Children": null,
+                      "ConflictAll": "NoConflict",
+                      "FieldName": "Alias",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": 0,
+                        "Top.esp": 0
+                      },
+                      "WinnerColumn": "Top.esp"
+                    }
+                  ],
+                  "ConflictAll": "NoConflict",
+                  "FieldName": "Property",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": {
+                      "Alias": 0,
+                      "Name": ""
+                    },
+                    "Top.esp": {
+                      "Alias": 0,
+                      "Name": ""
+                    }
+                  },
+                  "WinnerColumn": "Top.esp"
+                },
+                {
+                  "CellStates": {
+                    "Top.esp": "Override"
+                  },
+                  "CheckErrors": null,
+                  "Children": [
+                    {
+                      "CellStates": {
+                        "Top.esp": "Override"
+                      },
+                      "CheckErrors": null,
+                      "Children": [
+                        {
+                          "CellStates": {
+                            "Top.esp": "IdenticalToMaster"
+                          },
+                          "CheckErrors": null,
+                          "Children": null,
+                          "ConflictAll": "NoConflict",
+                          "FieldName": "Name",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": "AliasScript",
+                            "Top.esp": "AliasScript"
+                          },
+                          "WinnerColumn": "Top.esp"
+                        },
+                        {
+                          "CellStates": {
+                            "Top.esp": "Override"
+                          },
+                          "CheckErrors": null,
+                          "Children": [
+                            {
+                              "CellStates": {
+                                "Top.esp": "Override"
+                              },
+                              "CheckErrors": null,
+                              "Children": [
+                                {
+                                  "CellStates": {
+                                    "Top.esp": "IdenticalToMaster"
+                                  },
+                                  "CheckErrors": null,
+                                  "Children": null,
+                                  "ConflictAll": "NoConflict",
+                                  "FieldName": "Name",
+                                  "Resolutions": null,
+                                  "Values": {
+                                    "Base.esm": "Level",
+                                    "Top.esp": "Level"
+                                  },
+                                  "WinnerColumn": "Top.esp"
+                                },
+                                {
+                                  "CellStates": {
+                                    "Top.esp": "Override"
+                                  },
+                                  "CheckErrors": null,
+                                  "Children": null,
+                                  "ConflictAll": "Override",
+                                  "FieldName": "Data",
+                                  "Resolutions": null,
+                                  "Values": {
+                                    "Base.esm": 1,
+                                    "Top.esp": 2
+                                  },
+                                  "WinnerColumn": "Top.esp"
+                                },
+                                {
+                                  "CellStates": {
+                                    "Top.esp": "IdenticalToMaster"
+                                  },
+                                  "CheckErrors": null,
+                                  "Children": null,
+                                  "ConflictAll": "NoConflict",
+                                  "FieldName": "MutagenObjectType",
+                                  "Resolutions": null,
+                                  "Values": {
+                                    "Base.esm": "ScriptIntProperty",
+                                    "Top.esp": "ScriptIntProperty"
+                                  },
+                                  "WinnerColumn": "Top.esp"
+                                }
+                              ],
+                              "ConflictAll": "Override",
+                              "FieldName": "Level",
+                              "Resolutions": null,
+                              "Values": {
+                                "Base.esm": {
+                                  "Data": 1,
+                                  "MutagenObjectType": "ScriptIntProperty",
+                                  "Name": "Level"
+                                },
+                                "Top.esp": {
+                                  "Data": 2,
+                                  "MutagenObjectType": "ScriptIntProperty",
+                                  "Name": "Level"
+                                }
+                              },
+                              "WinnerColumn": "Top.esp"
+                            }
+                          ],
+                          "ConflictAll": "Override",
+                          "FieldName": "Properties",
+                          "Resolutions": null,
+                          "Values": {
+                            "Base.esm": [
+                              {
+                                "Data": 1,
+                                "MutagenObjectType": "ScriptIntProperty",
+                                "Name": "Level"
+                              }
+                            ],
+                            "Top.esp": [
+                              {
+                                "Data": 2,
+                                "MutagenObjectType": "ScriptIntProperty",
+                                "Name": "Level"
+                              }
+                            ]
+                          },
+                          "WinnerColumn": "Top.esp"
+                        }
+                      ],
+                      "ConflictAll": "Override",
+                      "FieldName": "AliasScript",
+                      "Resolutions": null,
+                      "Values": {
+                        "Base.esm": {
+                          "Name": "AliasScript",
+                          "Properties": [
+                            {
+                              "Data": 1,
+                              "MutagenObjectType": "ScriptIntProperty",
+                              "Name": "Level"
+                            }
+                          ]
+                        },
+                        "Top.esp": {
+                          "Name": "AliasScript",
+                          "Properties": [
+                            {
+                              "Data": 2,
+                              "MutagenObjectType": "ScriptIntProperty",
+                              "Name": "Level"
+                            }
+                          ]
+                        }
+                      },
+                      "WinnerColumn": "Top.esp"
+                    }
+                  ],
+                  "ConflictAll": "Override",
+                  "FieldName": "Scripts",
+                  "Resolutions": null,
+                  "Values": {
+                    "Base.esm": [
+                      {
+                        "Name": "AliasScript",
+                        "Properties": [
+                          {
+                            "Data": 1,
+                            "MutagenObjectType": "ScriptIntProperty",
+                            "Name": "Level"
+                          }
+                        ]
+                      }
+                    ],
+                    "Top.esp": [
+                      {
+                        "Name": "AliasScript",
+                        "Properties": [
+                          {
+                            "Data": 2,
+                            "MutagenObjectType": "ScriptIntProperty",
+                            "Name": "Level"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  "WinnerColumn": "Top.esp"
+                }
+              ],
+              "ConflictAll": "Override",
+              "FieldName": "0",
+              "Resolutions": null,
+              "Values": {
+                "Base.esm": {
+                  "Property": {
+                    "Alias": 0,
+                    "Name": ""
+                  },
+                  "Scripts": [
+                    {
+                      "Name": "AliasScript",
+                      "Properties": [
+                        {
+                          "Data": 1,
+                          "MutagenObjectType": "ScriptIntProperty",
+                          "Name": "Level"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "Top.esp": {
+                  "Property": {
+                    "Alias": 0,
+                    "Name": ""
+                  },
+                  "Scripts": [
+                    {
+                      "Name": "AliasScript",
+                      "Properties": [
+                        {
+                          "Data": 2,
+                          "MutagenObjectType": "ScriptIntProperty",
+                          "Name": "Level"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "WinnerColumn": "Top.esp"
+            }
+          ],
+          "ConflictAll": "Override",
+          "FieldName": "Aliases",
+          "Resolutions": null,
+          "Values": {
+            "Base.esm": [
+              {
+                "Property": {
+                  "Alias": 0,
+                  "Name": ""
+                },
+                "Scripts": [
+                  {
+                    "Name": "AliasScript",
+                    "Properties": [
+                      {
+                        "Data": 1,
+                        "MutagenObjectType": "ScriptIntProperty",
+                        "Name": "Level"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "Top.esp": [
+              {
+                "Property": {
+                  "Alias": 0,
+                  "Name": ""
+                },
+                "Scripts": [
+                  {
+                    "Name": "AliasScript",
+                    "Properties": [
+                      {
+                        "Data": 2,
+                        "MutagenObjectType": "ScriptIntProperty",
+                        "Name": "Level"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "WinnerColumn": "Top.esp"
+        }
+      ],
+      "ConflictAll": "Override",
+      "FieldName": "VirtualMachineAdapter",
+      "Resolutions": null,
+      "Values": {
+        "Base.esm": {
+          "Aliases": [
+            {
+              "Property": {
+                "Alias": 0,
+                "Name": ""
+              },
+              "Scripts": [
+                {
+                  "Name": "AliasScript",
+                  "Properties": [
+                    {
+                      "Data": 1,
+                      "MutagenObjectType": "ScriptIntProperty",
+                      "Name": "Level"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "Script": {
+            "Name": ""
+          }
+        },
+        "Top.esp": {
+          "Aliases": [
+            {
+              "Property": {
+                "Alias": 0,
+                "Name": ""
+              },
+              "Scripts": [
+                {
+                  "Name": "AliasScript",
+                  "Properties": [
+                    {
+                      "Data": 2,
+                      "MutagenObjectType": "ScriptIntProperty",
+                      "Name": "Level"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "Script": {
+            "Name": ""
+          }
+        }
+      },
+      "WinnerColumn": "Top.esp"
+    },
+    "ConflictAll": "Override"
+  }
+}

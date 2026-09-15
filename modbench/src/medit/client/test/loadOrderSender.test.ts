@@ -16,8 +16,18 @@ function snapshot(name: string): LoadOrderSnapshot {
 }
 
 const puts = (client: InMemoryMEditClient) => client.calls.filter((c) => c.method === 'putLoadOrder');
+
+// `putLoadOrder`'s own args[0] — a recorded call carries only `unknown[]`, so a test reading one
+// back narrows through this rather than trusting the method name alone.
+function isPluginInputs(value: unknown): value is LoadOrderPluginInput[] {
+  return Array.isArray(value) && value.every((v) => typeof v === 'object' && v !== null && 'name' in v);
+}
 const sentNames = (client: InMemoryMEditClient) =>
-  puts(client).map((c) => (c.args[0] as LoadOrderPluginInput[])[0].name);
+  puts(client).map((c) => {
+    const plugins = c.args[0];
+    if (!isPluginInputs(plugins)) throw new Error('expected putLoadOrder args[0] to be a plugin array');
+    return plugins[0]!.name;
+  });
 
 function attached(): InMemoryMEditClient {
   const client = new InMemoryMEditClient();
@@ -59,7 +69,7 @@ describe('createLoadOrderSender — connect precedes the first put', () => {
 
     await sender.send(snapshot('A.esp'));
 
-    const [plugins, gameDirectory, instanceRoot, gameRelease] = puts(client)[0].args;
+    const [plugins, gameDirectory, instanceRoot, gameRelease] = puts(client)[0]!.args;
     expect({ plugins, gameDirectory, instanceRoot, gameRelease }).toEqual({
       plugins: snapshot('A.esp').plugins, gameDirectory: '/game/Data',
       instanceRoot: '/instance', gameRelease: 'Fallout4',
@@ -166,7 +176,8 @@ describe('createLoadOrderSender — arm and abandon', () => {
     let started!: () => void;
     const inFlight = new Promise<void>((resolve) => { started = resolve; });
     client.setCommandHandler('putLoadOrder', (...args) => new Promise<LoadOrderOutcome>((resolve) => {
-      const { signal } = args[4] as { signal: AbortSignal };
+      const signal = args[4]?.signal;
+      if (!signal) throw new Error('expected putLoadOrder to receive an abort signal');
       started();
       signal.addEventListener('abort', () => resolve(ABANDONED));
     }));

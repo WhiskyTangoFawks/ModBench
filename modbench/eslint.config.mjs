@@ -20,7 +20,7 @@ export default tseslint.config(
     { ignores: ['src/medit/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
     eslint.configs.recommended,
-    tseslint.configs.recommendedTypeChecked,
+    tseslint.configs.strictTypeChecked,
 
     // Standard convention: _-prefixed params are intentionally unused
     {
@@ -29,15 +29,32 @@ export default tseslint.config(
             // The generated schema reports nullability honestly, so a `??` or `?.` on a wire
             // field the schema calls non-nullable is a bug, not defensive coding.
             '@typescript-eslint/no-unnecessary-condition': 'error',
+            '@typescript-eslint/switch-exhaustiveness-check': ['error', { requireDefaultForNonUnion: true }],
+            // A void-returning callback passed by shorthand arrow (`onClick={() => doThing()}`) is
+            // idiomatic React and VS Code API usage here, not a confusing expression.
+            '@typescript-eslint/no-confusing-void-expression': 'off',
+            // Interpolating a number, enum or nullish value into a log or error message is the
+            // normal case in this codebase, not a stringification bug.
+            '@typescript-eslint/restrict-template-expressions': 'off',
         },
     },
 
-    // A narrowing cast is the fastest way past a type error, and the easiest habit to copy. Off
-    // only in the record-document allowlist below, and for tests in their own block further down.
+    // A narrowing cast is the fastest way past a type error, and the easiest habit to copy —
+    // in a test as much as in production. Off only in the two allowlists below.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
         rules: {
             '@typescript-eslint/no-unsafe-type-assertion': 'error',
+        },
+    },
+
+    // `!` asserts an invariant the checker can't see instead of showing it one — the present()
+    // helper (src/present.ts) or a restructuring does that instead. Tests keep the exemption
+    // further down.
+    {
+        files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
+        rules: {
+            '@typescript-eslint/no-non-null-assertion': 'error',
         },
     },
 
@@ -132,8 +149,8 @@ export default tseslint.config(
         },
     },
 
-    // Test files — relax unsafe-any rules since mocks legitimately use any. Tests keep their
-    // narrowing-cast exemption too, until that block shrinks to nothing.
+    // Test files — relax unsafe-any rules since mocks legitimately use any. The non-null-assertion
+    // exemption stays here too, until that block shrinks to nothing.
     {
         files: [
             'src/test/**/*.ts', 'src/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**/*.ts',
@@ -147,7 +164,7 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-member-access': 'off',
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/no-base-to-string': 'off',
-            '@typescript-eslint/no-unsafe-type-assertion': 'off',
+            '@typescript-eslint/no-non-null-assertion': 'off',
         },
     },
 

@@ -13,6 +13,7 @@ import {
   referencedByCopyText,
 } from '../ReferencedByTreeProvider';
 import { InMemoryMEditClient } from '../../medit/client';
+import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
 import type { ReferenceResult } from '../../medit/client';
 
 function reference(overrides: Partial<ReferenceResult> & { formKey: string }): ReferenceResult {
@@ -68,7 +69,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(EmptyStateNode);
-    expect((children[0]).label).toBe('No references found.');
+    expect((children[0])!.label).toBe('No references found.');
   });
 
   it('groups a single reference with no plugin-count suffix', async () => {
@@ -77,7 +78,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     provider.showFor('000001:Fallout4.esm');
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
-    const group = children[0] as ReferencedByGroupNode;
+    const group = expectInstanceOf(children[0], ReferencedByGroupNode);
     expect(group).toBeInstanceOf(ReferencedByGroupNode);
     expect(group.label).toBe('NPC_ / TestNPC');
     expect(group.description).toBeUndefined();
@@ -92,7 +93,7 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     provider.showFor('000001:Fallout4.esm');
     const children = await provider.getChildren();
     expect(children).toHaveLength(1);
-    const group = children[0] as ReferencedByGroupNode;
+    const group = expectInstanceOf(children[0], ReferencedByGroupNode);
     expect(group.description).toBe('2 plugins');
   });
 
@@ -111,8 +112,8 @@ describe('ReferencedByTreeProvider — root, after showFor', () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm', recordType: 'NPC_', editorId: 'TestNPC' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
-    expect(group.command).toEqual({
+    const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
+    expect(group!.command).toEqual({
       command: 'modbench.openEditor',
       title: 'Open Record',
       arguments: [{ formKey: '000002:Fallout4.esm', label: 'TestNPC' }],
@@ -128,13 +129,13 @@ describe('ReferencedByTreeProvider — group children (field rows)', () => {
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
+    const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
     const fields = await provider.getChildren(group);
     expect(fields).toHaveLength(2);
     expect(fields[0]).toBeInstanceOf(ReferencedByFieldNode);
-    expect(fields[0].label).toBe('Fallout4.esm · DefaultOutfit');
-    expect(fields[0].command).toBeUndefined();
-    expect(fields[1].label).toBe('MyMod.esp · DefaultOutfit');
+    expect(fields[0]!.label).toBe('Fallout4.esm · DefaultOutfit');
+    expect(fields[0]!.command).toBeUndefined();
+    expect(fields[1]!.label).toBe('MyMod.esp · DefaultOutfit');
   });
 });
 
@@ -185,8 +186,8 @@ describe('referencedByCopyText — the clipboard copy command\'s text', () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm', recordType: 'NPC_', editorId: 'TestNPC' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
-    expect(referencedByCopyText([group])).toBe('NPC_ / TestNPC');
+    const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
+    expect(referencedByCopyText([group!])).toBe('NPC_ / TestNPC');
   });
 
   it('joins multiple selected groups one per line, in selection order', async () => {
@@ -196,8 +197,8 @@ describe('referencedByCopyText — the clipboard copy command\'s text', () => {
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [first, second] = await provider.getChildren() as ReferencedByGroupNode[];
-    expect(referencedByCopyText([second, first])).toBe('NPC_ / OtherNPC\nNPC_ / TestNPC');
+    const [first, second] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
+    expect(referencedByCopyText([second!, first!])).toBe('NPC_ / OtherNPC\nNPC_ / TestNPC');
   });
 
   it('excludes a selected field row — the group is the copyable unit, field rows are detail', async () => {
@@ -206,18 +207,18 @@ describe('referencedByCopyText — the clipboard copy command\'s text', () => {
     ]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
-    const [field] = await provider.getChildren(group) as ReferencedByFieldNode[];
-    expect(referencedByCopyText([group, field])).toBe('NPC_ / TestNPC');
+    const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
+    const [field] = expectInstancesOf(await provider.getChildren(group), ReferencedByFieldNode);
+    expect(referencedByCopyText([group!, field!])).toBe('NPC_ / TestNPC');
   });
 
   it('returns empty text when only a field row is selected (no group in the selection)', async () => {
     const client = makeClient([reference({ formKey: '000002:Fallout4.esm', plugin: 'Fallout4.esm', fieldPath: 'DefaultOutfit' })]);
     const provider = new ReferencedByTreeProvider(client);
     provider.showFor('000001:Fallout4.esm');
-    const [group] = await provider.getChildren() as ReferencedByGroupNode[];
-    const [field] = await provider.getChildren(group) as ReferencedByFieldNode[];
-    expect(referencedByCopyText([field])).toBe('');
+    const [group] = expectInstancesOf(await provider.getChildren(), ReferencedByGroupNode);
+    const [field] = expectInstancesOf(await provider.getChildren(group), ReferencedByFieldNode);
+    expect(referencedByCopyText([field!])).toBe('');
   });
 });
 

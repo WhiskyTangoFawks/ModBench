@@ -69,18 +69,18 @@ describe('RecordPanel — Add on an abstract-union array', () => {
 
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Quest548.esp');
-    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+    vi.mocked(vscode.postMessage).mockClear();
   });
   afterEach(() => vi.unstubAllGlobals());
 
   it('posts add at the array, carrying no element of its own', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('aliases'));
-    const cell = screen.getAllByText('[1]')[0].closest('td')!;
+    const cell = screen.getAllByText('[1]')[0]!.closest('td')!;
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
     expect(lastEnvelope()).toEqual({ op: 'add', path: [{ kind: 'member', name: 'aliases' }] });
-    expect(Object.keys(lastEnvelope() as object).sort()).toEqual(['op', 'path']);
+    expect(Object.keys(lastEnvelope()!).sort()).toEqual(['op', 'path']);
   });
 });

@@ -8,6 +8,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { recordResourceUri, parseRecordResourceUri } from '../recordResourceUri';
+import { fakeUri } from '../../test/vscodeMock';
 
 describe('recordResourceUri / parseRecordResourceUri', () => {
   it('round-trips (plugin, origin, formKey) through the medit-record: scheme', () => {
@@ -33,6 +34,6 @@ describe('recordResourceUri / parseRecordResourceUri', () => {
   });
 
   it('returns undefined for a URI outside the medit-record: scheme', () => {
-    expect(parseRecordResourceUri({ scheme: 'file', path: '/tmp/x' } as never)).toBeUndefined();
+    expect(parseRecordResourceUri(fakeUri('/tmp/x'))).toBeUndefined();
   });
 });

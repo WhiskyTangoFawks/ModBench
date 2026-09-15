@@ -16,6 +16,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { RecordDecorationProvider } from '../RecordDecorationProvider';
 import { recordResourceUri } from '../../medit/recordResourceUri';
+import { fakeUri } from '../../test/vscodeMock';
 
 describe('RecordDecorationProvider', () => {
   const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
@@ -56,7 +57,7 @@ describe('RecordDecorationProvider', () => {
   // resourceUri that merely happens to carry a matching lookup key by coincidence.
   it('returns undefined for a URI outside the medit-record: scheme', () => {
     const provider = new RecordDecorationProvider(() => 'Modified');
-    expect(provider.provideFileDecoration({ scheme: 'file', path: '/tmp/x' } as never)).toBeUndefined();
+    expect(provider.provideFileDecoration(fakeUri('/tmp/x'))).toBeUndefined();
   });
 
   it('refresh(uri) fires onDidChangeFileDecorations for exactly that URI', () => {

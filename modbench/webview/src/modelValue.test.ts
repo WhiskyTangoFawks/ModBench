@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { modelValue } from './modelValue';
-import type { FormKeyResolution } from './types';
+import type { FieldMetadata, FormKeyResolution } from './types';
 import { fieldMeta } from './test/fixtures';
 
 // ADR-0018: modelValue is the single definition of the string a cell's editor shows for every
@@ -123,5 +123,19 @@ describe('modelValue — struct/array summary rows (JSON, not a prose summary)',
   it('null struct/array: empty string, not "null"', () => {
     expect(modelValue(null, structMeta)).toBe('');
     expect(modelValue(null, arrayMeta)).toBe('');
+  });
+});
+
+describe('modelValue — a type the wire sends that this union does not name', () => {
+  // FieldMetadata['type'] is a compile-time narrowing of the wire's plain string (types.ts), not
+  // a runtime check — a backend field type this union has not caught up with still reaches here.
+  it('stringifies like every other scalar, rather than reading as unset', () => {
+    // The wire sends a plain string for `type` (types.ts); this round-trip carries a value
+    // outside `FieldType` the same honest way a real unrecognized backend type would arrive.
+    const futureMeta: FieldMetadata = JSON.parse(JSON.stringify({
+      ...fieldMeta({ name: 'Future', type: 'string' }),
+      type: 'quaternion',
+    }));
+    expect(modelValue(42, futureMeta)).toBe('42');
   });
 });

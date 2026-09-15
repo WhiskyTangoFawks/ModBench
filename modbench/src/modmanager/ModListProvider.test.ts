@@ -5,7 +5,7 @@ import type { InstanceValue } from './instance';
 import type { ModStatusResult } from './statusChecker';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
-  uriFile, DataTransferItem, DataTransfer,
+  uriFile, DataTransferItem, DataTransfer, FakeCancellationToken, fakeUri,
 } from '../test/vscodeMock';
 
 vi.mock('vscode', () => ({
@@ -31,9 +31,11 @@ vi.mock('./commands/modlist', () => ({
   reorderSeparatorBlock: (...args: unknown[]) => reorderSeparatorBlockMock(...args),
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode } from './ModListProvider';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from './ModListProvider';
 import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../test/surfacingDoubles';
+import { expectInstanceOf, expectInstancesOf } from '../test/expectInstanceOf';
+import { instanceValueFixture } from './test/instanceValueFixture';
 import type { Reporter } from '../reporter';
 
 const INSTANCE_ROOT = '/instance';
@@ -57,12 +59,12 @@ function valueOf(
   mods: ModlistEntry[],
   extra: Partial<Pick<InstanceValue, 'activeProfile' | 'modStatuses' | 'overwriteFileCount'>> = {},
 ): InstanceValue {
-  return {
+  return instanceValueFixture({
     mods,
     activeProfile: extra.activeProfile ?? ACTIVE_PROFILE,
     modStatuses: extra.modStatuses ?? new Map<string, ModStatusResult>(),
     overwriteFileCount: extra.overwriteFileCount ?? 0,
-  } as unknown as InstanceValue;
+  });
 }
 
 // The double the row provider's own contract needs: `.value` plus `.subscribe`, structurally
@@ -139,13 +141,13 @@ describe('ModListProvider', () => {
     const roots = await provider.getChildren();
 
     expect(roots[0]).toBeInstanceOf(CountNode);
-    expect(roots[0].label).toBe('2 active / 4 installed');
+    expect(roots[0]!.label).toBe('2 active / 4 installed');
     expect(roots[1]).toBeInstanceOf(SeparatorNode);
-    expect(roots[1].label).toBe('Section 1');
+    expect(roots[1]!.label).toBe('Section 1');
     expect(roots[2]).toBeInstanceOf(ModNode);
-    expect(roots[2].label).toBe('Delta');
+    expect(roots[2]!.label).toBe('Delta');
     expect(roots[3]).toBeInstanceOf(ModNode);
-    expect(roots[3].label).toBe('Gamma');
+    expect(roots[3]!.label).toBe('Gamma');
   });
 
   // Rival: the provider ignores the injected value and falls back to a read of its own — with
@@ -184,13 +186,13 @@ describe('ModListProvider', () => {
     expect(children).toHaveLength(2);
     // Default losing-at-top view reverses each sibling list, so the later file
     // entry (Disabled Mod) renders first.
-    const [disabled, enabled] = children as ModNode[];
-    expect(enabled.label).toBe('UFO4P');
-    expect(enabled.description).toBe('v2.1.5');
-    expect(enabled.checkboxState).toBe(1); // Checked
-    expect(enabled.tooltip).toBe('UFO4P · v2.1.5 · 4598 · UFO4P.7z');
-    expect(disabled.checkboxState).toBe(0); // Unchecked
-    expect(disabled.tooltip).toBe('Disabled Mod'); // no extra fields
+    const [disabled, enabled] = expectInstancesOf(children, ModNode);
+    expect(enabled!.label).toBe('UFO4P');
+    expect(enabled!.description).toBe('v2.1.5');
+    expect(enabled!.checkboxState).toBe(1); // Checked
+    expect(enabled!.tooltip).toBe('UFO4P · v2.1.5 · 4598 · UFO4P.7z');
+    expect(disabled!.checkboxState).toBe(0); // Unchecked
+    expect(disabled!.tooltip).toBe('Disabled Mod'); // no extra fields
   });
 
   it('setModEnabled calls the setModEnabled command with the instance root, active profile and inputs, and fires a refresh', async () => {
@@ -281,7 +283,7 @@ describe('ModListProvider', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toBeInstanceOf(ErrorNode);
-    expect(rows[0].label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
+    expect(rows[0]!.label).toBe('⚠ Failed to load: EACCES: permission denied, open modlist.txt');
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Failed to read the MO2 instance.', detail: 'EACCES: permission denied, open modlist.txt' },
     ]);
@@ -396,14 +398,8 @@ describe('ModListProvider', () => {
   });
 
   describe('drag-and-drop', () => {
-    type DragItem = { value: unknown };
-    class FakeDataTransfer {
-      private readonly _items = new Map<string, DragItem>();
-      get(mime: string) { return this._items.get(mime); }
-      set(mime: string, item: DragItem) { this._items.set(mime, item); }
-    }
-    const item = (value: unknown): DragItem => ({ value });
-    const token = { isCancellationRequested: false };
+    const item = (value: unknown): DataTransferItem => new DataTransferItem(value);
+    const token = new FakeCancellationToken();
 
     // A separator wraps the entries that PRECEDE it, so Group A holds Alpha, Group B holds
     // Beta and Gamma, and Delta trails the last separator ungrouped.
@@ -440,23 +436,23 @@ describe('ModListProvider', () => {
     async function childrenOf(provider: ModListProvider, sepName: string): Promise<ModNode[]> {
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === sepName)!;
-      return (await provider.getChildren(sepNode)) as ModNode[];
+      return expectInstancesOf(await provider.getChildren(sepNode), ModNode);
     }
 
-    const modItem = (name: string): DragItem => item({ kind: 'mod', name });
-    const sepItem = (name: string): DragItem => item({ kind: 'separator', name });
-    async function drop(provider: ModListProvider, target: any, payload: DragItem): Promise<void> {
-      const dt = new FakeDataTransfer();
+    const modItem = (name: string): DataTransferItem => item({ kind: 'mod', name });
+    const sepItem = (name: string): DataTransferItem => item({ kind: 'separator', name });
+    async function drop(provider: ModListProvider, target: ModlistNode | undefined, payload: DataTransferItem): Promise<void> {
+      const dt = new DataTransfer();
       dt.set('application/vnd.medit.modlist-node', payload);
-      await provider.handleDrop(target, dt as any, token as any);
+      await provider.handleDrop(target, dt, token);
     }
 
     it('handleDrag serialises the dragged mod into dataTransfer', async () => {
       const { provider } = makeDndProvider();
       // Alpha is Group A's member (the entry preceding it), not a root.
       const alphaNode = (await childrenOf(provider, 'Group A')).find((n) => n.label === 'Alpha')!;
-      const dt = new FakeDataTransfer();
-      provider.handleDrag([alphaNode], dt as any, token as any);
+      const dt = new DataTransfer();
+      provider.handleDrag([alphaNode], dt, token);
       const got = dt.get('application/vnd.medit.modlist-node');
       expect(got?.value).toEqual({ kind: 'mod', name: 'Alpha' });
     });
@@ -465,9 +461,9 @@ describe('ModListProvider', () => {
       const { provider } = makeDndProvider();
       const roots = await provider.getChildren();
       const sepNode = roots.find((n): n is SeparatorNode => n instanceof SeparatorNode && n.label === 'Group A')!;
-      const dt = new FakeDataTransfer();
+      const dt = new DataTransfer();
       dt.set('application/vnd.medit.modlist-node', item({ kind: 'mod', name: 'Alpha' }));
-      await provider.handleDrop(sepNode, dt as any, token as any);
+      await provider.handleDrop(sepNode, dt, token);
       expect(moveModToSeparatorMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, 'Alpha', 'Group A');
     });
 
@@ -516,7 +512,7 @@ describe('ModListProvider', () => {
     it('drop onto the Overwrite node is a no-op', async () => {
       const { provider, order } = makeApplyingProvider();
       const before = order();
-      const overwriteNode = new OverwriteNode({ fsPath: '/x', toString: () => 'file:///x' } as any, 1);
+      const overwriteNode = new OverwriteNode(fakeUri('/x'), 1);
       await drop(provider, overwriteNode, modItem('Alpha'));
       expect(order()).toEqual(before);
     });
@@ -580,14 +576,8 @@ describe('ModListProvider', () => {
   // A failed drop reports on ADR-0019's "explicit action failed" tier, and the tree resyncs
   // against disk rather than showing a phantom move.
   describe('drag-and-drop — failure handling', () => {
-    type DragItem = { value: unknown };
-    class FakeDataTransfer {
-      private readonly _items = new Map<string, DragItem>();
-      get(mime: string) { return this._items.get(mime); }
-      set(mime: string, item: DragItem) { this._items.set(mime, item); }
-    }
-    const item = (value: unknown): DragItem => ({ value });
-    const token = { isCancellationRequested: false };
+    const item = (value: unknown): DataTransferItem => new DataTransferItem(value);
+    const token = new FakeCancellationToken();
 
     // Same shape as the drag-and-drop fixture above: Group A wraps Alpha,
     // Group B wraps Beta/Gamma (a separator's real members precede it),
@@ -608,10 +598,10 @@ describe('ModListProvider', () => {
       return { provider, reports: reporter.reports, logs };
     }
 
-    async function drop(provider: ModListProvider, target: unknown, payload: DragItem): Promise<void> {
-      const dt = new FakeDataTransfer();
+    async function drop(provider: ModListProvider, target: ModlistNode | undefined, payload: DataTransferItem): Promise<void> {
+      const dt = new DataTransfer();
       dt.set('application/vnd.medit.modlist-node', payload);
-      await provider.handleDrop(target as never, dt as never, token as never);
+      await provider.handleDrop(target, dt, token);
     }
 
     it('a throw from the reorder command reports an error and logs the specific operation', async () => {
@@ -720,13 +710,13 @@ describe('ModListProvider', () => {
 
       expect(roots[0]).toBeInstanceOf(CountNode);
       expect(roots[1]).toBeInstanceOf(ModNode);
-      expect(roots[1].label).toBe('Solo A');
+      expect(roots[1]!.label).toBe('Solo A');
       expect(roots[2]).toBeInstanceOf(ModNode);
-      expect(roots[2].label).toBe('Solo B');
+      expect(roots[2]!.label).toBe('Solo B');
       expect(roots[3]).toBeInstanceOf(SeparatorNode);
-      expect(roots[3].label).toBe('Section 1');
+      expect(roots[3]!.label).toBe('Section 1');
       expect(roots[4]).toBeInstanceOf(SeparatorNode);
-      expect(roots[4].label).toBe('Section 2');
+      expect(roots[4]!.label).toBe('Section 2');
     });
 
     it('toggled to winning-at-top: mods within a separator are in file order', async () => {
@@ -777,9 +767,9 @@ describe('ModListProvider', () => {
 
       // winning-at-top: ungrouped (Alpha) first, then grouped (Group A).
       expect(roots[0]).toBeInstanceOf(ModNode);
-      expect(roots[0].label).toBe('Alpha');
+      expect(roots[0]!.label).toBe('Alpha');
       expect(roots[1]).toBeInstanceOf(SeparatorNode);
-      const sepNode = roots[1] as SeparatorNode;
+      const sepNode = expectInstanceOf(roots[1], SeparatorNode);
       const children = await provider.getChildren(sepNode);
       expect(children.map((n) => n.label)).toEqual(['Alpha Child', 'Alpha Other']);
     });
@@ -925,7 +915,7 @@ describe('ModListProvider', () => {
       expect(node.label).toBe('Overwrite');
       expect(node.checkboxState).toBeUndefined();
       expect(node.contextValue).toBe('overwrite');
-      expect((node.command as { command: string }).command).toBe('modbench.modList.overwrite.reveal');
+      expect(node.command!.command).toBe('modbench.modList.overwrite.reveal');
       expect(node.tooltip).toContain('2');
       expect(String(node.tooltip)).toMatch(/reassign|clear/i);
     });

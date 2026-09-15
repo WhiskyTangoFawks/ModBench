@@ -14,7 +14,7 @@ const FS_MODULES = ['fs', 'fs/promises', 'node:fs', 'node:fs/promises'];
 const FS_CALLS = ['readFile', 'writeFile', 'readdir', 'mkdir', 'rm', 'access', 'stat', 'cp', 'rename'];
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
 }
 
 // Comments are prose: a rule's own statement names the calls it forbids.

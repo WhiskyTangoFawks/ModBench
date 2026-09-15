@@ -28,20 +28,20 @@ vi.mock('./commands/modlist', () => ({
 }));
 
 import { registerModContextCommands, registerModInstallCommands, type ModInstallDeps } from './modManagementCommands';
-import type { ModNode } from './ModListProvider';
-import type { Instance } from './instance';
+import { ModNode } from './ModListProvider';
 import { scriptedDialog } from '../test/surfacingDoubles';
+import { instanceValueFixture } from './test/instanceValueFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);
   if (!call) throw new Error(`command not registered: ${commandId}`);
-  return call[1](...args) as Promise<unknown>;
+  return Promise.resolve(call[1](...args));
 }
 
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     instanceRoot: '/instance',
-    instance: { value: { mods: [] } } as unknown as ModInstallDeps['instance'],
+    instance: { value: instanceValueFixture() },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     warnIfFomod: vi.fn(),
@@ -133,8 +133,8 @@ describe('registerModInstallCommands: the install target', () => {
 describe('registerModContextCommands: the uninstall confirmation', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const instance = { value: { activeProfile: 'Default', mods: [] } } as unknown as Pick<Instance, 'value'>;
-  const modNode = { kind: 'mod', mod: { name: 'My Mod', archiveFilename: 'my-mod.7z' } } as unknown as ModNode;
+  const instance = { value: instanceValueFixture({ activeProfile: 'Default' }) };
+  const modNode = new ModNode({ kind: 'mod', name: 'My Mod', enabled: true, archiveFilename: 'my-mod.7z' });
   const runModAction = async (_label: string, _fail: string, action: () => Promise<void>) => action();
 
   it('asks one modal naming the mod, then deletes the folder once it is confirmed', async () => {

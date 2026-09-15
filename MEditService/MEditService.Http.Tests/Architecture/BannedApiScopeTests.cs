@@ -18,6 +18,7 @@ public sealed class BannedApiScopeTests
         "MEditService.PluginAdapter/**.cs",
         "MEditService.Codec.Tests/**.cs",
         "MEditService.Commands.Tests/**.cs",
+        "MEditService.CrossBox.Tests/**.cs",
         "MEditService.Http.Tests/**.cs",
         "MEditService.Index.Tests/**.cs",
         "MEditService.LoadOrder.Tests/**.cs",

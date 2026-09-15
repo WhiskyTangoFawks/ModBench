@@ -224,7 +224,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
   it('sends the edit through the single write path with its compound plugin identity', async () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    expect(editRecordCalls()[0].args).toEqual(['000800:Mod.esp', 'Mod.esp', 'SomeMod', envelope]);
+    expect(editRecordCalls()[0]!.args).toEqual(['000800:Mod.esp', 'Mod.esp', 'SomeMod', envelope]);
   });
 
   // The webview spells the whole write; the host adds nothing and rebuilds nothing, so an op with
@@ -241,8 +241,8 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
     };
     await routeRecordPanelMessage({ ...editMessage, envelope: add }, makeDeps());
 
-    expect(editRecordCalls()[0].args).toEqual(['000800:Mod.esp', 'Mod.esp', 'SomeMod', add]);
-    expect(editRecordCalls()[0].args[3]).not.toHaveProperty('value');
+    expect(editRecordCalls()[0]!.args).toEqual(['000800:Mod.esp', 'Mod.esp', 'SomeMod', add]);
+    expect(editRecordCalls()[0]!.args[3]).not.toHaveProperty('value');
   });
 
   it('tells the panel to re-read once the edit has landed', async () => {
@@ -276,7 +276,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD', () => {
 
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    expect(fakeReporter.report.mock.calls[0][0]).toBe('warning');
+    expect(fakeReporter.report.mock.calls[0]![0]).toBe('warning');
   });
 
   it('a transport failure is an error — nothing answered at all', async () => {

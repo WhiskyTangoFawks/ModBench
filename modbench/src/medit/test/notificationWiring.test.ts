@@ -37,7 +37,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming the panel\'s own FormKey re-reads that one panel', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
-    const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
+    const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
@@ -50,7 +50,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
   it('rows-changed naming a different FormKey re-reads nothing', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
-    const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
+    const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
@@ -63,7 +63,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
   it('plugin-changed never reaches a record panel — only rows-changed does', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
-    const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
+    const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
     subscribeRecordPanelsToNotifications(client, recordPanels, tracker);
@@ -76,7 +76,7 @@ describe('subscribeRecordPanelsToNotifications', () => {
   it('unsubscribing stops further re-reads', () => {
     const client = new InMemoryMEditClient();
     const panel = fakePanel();
-    const recordPanels = new Set([panel]) as unknown as Set<import('vscode').WebviewPanel>;
+    const recordPanels = new Set([panel]);
     const tracker = fakeActiveRecordTracker();
     tracker.setFormKey(panel, '000001:Test.esp');
     const unsubscribe = subscribeRecordPanelsToNotifications(client, recordPanels, tracker);

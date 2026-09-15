@@ -15,6 +15,7 @@ import type { Instance } from './instance';
 import type { Reporter } from '../reporter';
 import type { AskQuestion } from '../dialog';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
+import { present } from '../present';
 
 // The host's trash, the one capability a command cannot hold itself.
 const trashFile = async (path: string): Promise<void> => {
@@ -141,7 +142,7 @@ export async function deleteArchives(
   instanceRoot: string, names: string[], reporter: Reporter, ask: AskQuestion,
 ): Promise<void> {
   if (names.length === 1) {
-    await deleteArchive(instanceRoot, names[0], reporter, ask);
+    await deleteArchive(instanceRoot, present(names[0], 'the sole selected archive name'), reporter, ask);
     return;
   }
   const confirmed = (await ask(
@@ -243,7 +244,7 @@ const SORT_OPTIONS: readonly { label: string; column: DownloadSortColumn; descen
 
 /** A quick pick rather than column headers, which a tree does not have. Escape is a silent
  *  no-op, matching the profile picker. */
-export function registerDownloadsSortCommand(downloadsProvider: DownloadsProvider): vscode.Disposable {
+export function registerDownloadsSortCommand(downloadsProvider: Pick<DownloadsProvider, 'setSort'>): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.downloads.sortBy', async () => {
     const picked = await vscode.window.showQuickPick(SORT_OPTIONS, { placeHolder: 'Sort downloads by' });
     if (!picked) return;
@@ -253,7 +254,9 @@ export function registerDownloadsSortCommand(downloadsProvider: DownloadsProvide
 
 /** Two commands over one context key, as the Mods tree's sort-direction toggle does: state
  *  lives on the provider, the handler owns the key package.json's `when` clauses gate on. */
-export function registerDownloadsHiddenToggleCommands(downloadsProvider: DownloadsProvider): vscode.Disposable[] {
+export function registerDownloadsHiddenToggleCommands(
+  downloadsProvider: Pick<DownloadsProvider, 'setShowHidden'>,
+): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.showHidden', () => {
       downloadsProvider.setShowHidden(true);

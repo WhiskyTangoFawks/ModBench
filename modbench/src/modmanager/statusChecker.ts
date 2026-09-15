@@ -29,8 +29,10 @@ export async function computeModStatuses(
   const mods = entries.filter((e): e is Extract<ModlistEntry, { kind: 'mod' }> => e.kind === 'mod');
   // Each entry's own stat is independent, so run them concurrently — a mod count in the hundreds
   // made the old sequential loop the dominant cost of a recompute.
-  const statuses = await Promise.all(mods.map((entry) => computeEntryStatus(entry, instanceRoot, index)));
-  return new Map(mods.map((entry, i) => [entry.name, statuses[i]]));
+  const named = await Promise.all(
+    mods.map(async (entry): Promise<[string, ModStatusResult]> => [entry.name, await computeEntryStatus(entry, instanceRoot, index)]),
+  );
+  return new Map(named);
 }
 
 async function computeEntryStatus(

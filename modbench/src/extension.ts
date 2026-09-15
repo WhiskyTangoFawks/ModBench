@@ -25,7 +25,7 @@ import {
 } from './plugins/pluginRowCommands';
 import { originFolder, type OriginFolder } from './modmanager/loadOrderSnapshot';
 import { registerLoadMoreCommand, registerFilterCommands } from './plugins/recordFilterCommands';
-import { wireExternalChangePending } from './plugins/externalChangeWiring';
+import { wireQuestionOpen } from './plugins/externalChangeWiring';
 
 
 
@@ -64,6 +64,8 @@ function wireAutoLaunch(
     }),
   );
 }
+
+export type ActivateExports = ReturnType<typeof activate>;
 
 export function activate(context: vscode.ExtensionContext) {
   const session: ExtensionSession = {};
@@ -163,7 +165,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     toolbox,
     {
-      dispose: wireExternalChangePending(
+      dispose: wireQuestionOpen(
         meditClient, outputChannel, treeProvider,
         () => { void refreshMatchingPlugins(session); },
         askQuestion,

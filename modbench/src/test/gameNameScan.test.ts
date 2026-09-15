@@ -132,7 +132,7 @@ describe('no extension file names a game outside the two tables', () => {
   // Rival: the allowlisted file's own tokens — proof the exemption is load-bearing, not
   // decorative.
   it('the allowlisted file would fail the scan without its exemption', () => {
-    const text = readFileSync(join(SRC, ALLOWLIST[0]), 'utf8');
+    const text = readFileSync(join(SRC, ALLOWLIST[0]!), 'utf8');
     expect(gameNameLiteralsIn(text)).toEqual(expect.arrayContaining(['f4se', 'skse']));
   });
 

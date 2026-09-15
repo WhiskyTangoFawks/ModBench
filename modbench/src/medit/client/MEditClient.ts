@@ -28,10 +28,10 @@ export function isRefused(result: unknown): result is WriteRefused {
 /** The wire's five kinds, narrowed from the schema's honest `string` for a typed `subscribe` call
  *  — not a mirror of `NotificationEvent`, which keeps every field as the schema reports it. */
 export type NotificationKind =
-  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'external-change-pending';
+  | 'rows-changed' | 'plugin-changed' | 'load-order-status' | 'track-progress' | 'question-open';
 
 const NOTIFICATION_KINDS = new Set<string>([
-  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'external-change-pending',
+  'rows-changed', 'plugin-changed', 'load-order-status', 'track-progress', 'question-open',
 ]);
 
 /** Whether `kind` is one of the five the wire defines — the one place `NotificationEvent.kind`

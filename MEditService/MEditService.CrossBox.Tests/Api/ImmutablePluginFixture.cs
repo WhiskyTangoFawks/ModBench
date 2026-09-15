@@ -1,0 +1,33 @@
+using MEditService.LoadOrder;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
+
+namespace MEditService.Tests.Api;
+
+/// <summary>Plugins.txt lists only the user plugin, so Fallout4.esm is loaded as an implicit
+/// listing.</summary>
+public sealed class ImmutablePluginFixture : IApiPluginFixture<ImmutablePluginFixture>
+{
+    public string DataFolder => _data.DataFolder;
+    public IReadOnlyList<LoadOrderEntry> Plugins => _data.Plugins;
+    public string InstanceRoot => _data.InstanceRoot;
+    public const string ImmutablePluginName = "Fallout4.esm";
+    public const string UserPluginName = "UserMod.esp";
+    public FormKey UserNpcFormKey { get; }
+
+    private readonly PluginFixtureData _data;
+
+    public ImmutablePluginFixture()
+    {
+        FormKey userNpc = default;
+        _data = new PluginFixtureBuilder("medit-imm")
+            .WithPlugin(ImmutablePluginName, listed: false)
+            .WithPlugin(UserPluginName, mod => userNpc = mod.Npcs.AddNew("ImmTestNPC").FormKey)
+            .Build();
+        UserNpcFormKey = userNpc;
+    }
+
+    public void Dispose() => _data.Dispose();
+
+    public static ImmutablePluginFixture Create() => new();
+}

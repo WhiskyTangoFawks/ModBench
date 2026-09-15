@@ -7,7 +7,7 @@ import { makeReporter } from './reporter';
  *  provider's. */
 export async function onPluginCheckboxChanged(
   e: vscode.TreeCheckboxChangeEvent<PluginsTreeNode>,
-  pluginsTree: PluginsTreeProvider,
+  pluginsTree: Pick<PluginsTreeProvider, 'setPluginEnabled' | 'invalidate'>,
   outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
   for (const [node, state] of e.items) {
