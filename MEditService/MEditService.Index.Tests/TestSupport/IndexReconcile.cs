@@ -15,11 +15,17 @@ internal static class IndexReconcile
         this IndexProjector index, LoadOrderHolder holder, string gameDirectory,
         IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null)
     {
-        var snapshot = new LoadOrderSnapshot(gameDirectory, instanceRoot, gameRelease, Prepend(gameDirectory, gameRelease, plugins));
+        var snapshot = Snapshot(gameDirectory, instanceRoot, gameRelease, plugins);
         holder.Apply(snapshot);
         index.Reconcile(snapshot);
         return holder;
     }
+
+    /// <summary>The snapshot alone, for a caller applying it itself — a subscriber seam test, whose
+    /// own subject is what runs off <see cref="LoadOrderHolder.Apply"/>, not this helper.</summary>
+    internal static LoadOrderSnapshot Snapshot(
+        string gameDirectory, string? instanceRoot, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> plugins) =>
+        new(gameDirectory, instanceRoot, gameRelease, Prepend(gameDirectory, gameRelease, plugins));
 
     private static IReadOnlyList<RegisteredCopy> Prepend(
         string gameDirectory, GameRelease gameRelease, IReadOnlyList<LoadOrderEntry> entries)

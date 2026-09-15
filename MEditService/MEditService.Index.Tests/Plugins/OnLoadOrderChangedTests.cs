@@ -1,5 +1,4 @@
 using MEditService.Codec.Schema;
-using MEditService.Http;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -41,7 +40,7 @@ public sealed class OnLoadOrderChangedTests
         using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
         var notifications = new InMemoryNotificationPublisher();
         using var index = MakeIndex(holder, notifications);
-        var snapshot = ForcedPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
 
         index.OnLoadOrderChanged(snapshot);
 
@@ -70,11 +69,11 @@ public sealed class OnLoadOrderChangedTests
         using var __ = gate;
 
         var first = Task.Run(() => index.OnLoadOrderChanged(
-            ForcedPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins)));
+            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins)));
         await gate.WaitUntilParkedAsync();
 
         var second = Task.Run(() => index.OnLoadOrderChanged(
-            ForcedPlugins.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins)));
+            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins)));
         var secondCompletedBeforeTheFirstStopped = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500))) == second;
         Assert.False(secondCompletedBeforeTheFirstStopped);
 
@@ -102,7 +101,7 @@ public sealed class OnLoadOrderChangedTests
         using var _ = index;
         using var __ = gate;
         index.SubscribeTo(holder);
-        var snapshot = ForcedPlugins.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
+        var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
 
         var applied = Task.Run(() => holder.Apply(snapshot));
         Assert.True(await CompletesWithin(applied, TimeSpan.FromSeconds(5)),

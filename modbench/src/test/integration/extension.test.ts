@@ -734,7 +734,10 @@ describe('Notification stream connects only while the backend is up', () => {
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
+    // Awaited so this suite's own enterEditing/exitEditing race no other, unarmed reconcile a
+    // late-settling watcher write would otherwise still send after the test believes it is done.
+    await writeAndAwaitInstance(() =>
+      fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n'));
   });
 
   after(async () => {
@@ -786,6 +789,9 @@ describe('Launch mEdit populates the editing plugin tree', () => {
 
   after(async () => {
     if (!root) return;
+    // The launch below is never closed inside this suite's own test — leaving the backend
+    // attached would bleed a live session (and its stream) into the next suite's own launch.
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');

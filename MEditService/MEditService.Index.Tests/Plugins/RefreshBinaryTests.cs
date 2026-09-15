@@ -108,15 +108,16 @@ public sealed class RefreshBinaryTests : IDisposable
         File.WriteAllText(_pluginPath, "not a plugin");
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
 
-        // Still failing to open, on different bytes: nothing indexed, so nothing changed.
         File.WriteAllText(_pluginPath, "still not a plugin");
-        Assert.False(await _index.RefreshBinary(_key, _pluginPath));
+        var stillFailingToOpen = await _index.RefreshBinary(_key, _pluginPath);
+        Assert.False(stillFailingToOpen);
 
         WriteValidPlugin(_pluginPath);
-        Assert.True(await _index.RefreshBinary(_key, _pluginPath));
+        var nowIndexedForTheFirstTime = await _index.RefreshBinary(_key, _pluginPath);
+        Assert.True(nowIndexedForTheFirstTime);
 
-        // Same bytes settling again: already indexed, nothing changed.
-        Assert.False(await _index.RefreshBinary(_key, _pluginPath));
+        var identicalBytesResettling = await _index.RefreshBinary(_key, _pluginPath);
+        Assert.False(identicalBytesResettling);
     }
 
     // The rival this pins: a not-yet-held failure that only logs, leaving Status at whatever it

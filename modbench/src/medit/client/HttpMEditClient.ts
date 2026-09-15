@@ -201,19 +201,26 @@ export class HttpMEditClient implements MEditClient {
     return status === undefined ? { outcome: 'abandoned' } : { outcome: 'applied', status };
   }
 
-  // A close mid-reconcile abandons the wait rather than resolving with a tick nobody asked for
-  // any more — the same "abandoned" an unsent snapshot gets.
+  // A close mid-reconcile abandons the wait, as an unsent snapshot is. The backend leaving
+  // 'attached' abandons it too — once the stream is gone, nothing is left to hear its tick.
   private awaitTerminalOrAbort(
     terminal: Promise<LoadOrderProgress>, signal: AbortSignal | undefined,
   ): Promise<LoadOrderProgress | undefined> {
-    if (!signal) return terminal;
     return new Promise((resolve) => {
-      const onAbort = (): void => resolve(undefined);
-      signal.addEventListener('abort', onAbort, { once: true });
-      void terminal.then((status) => {
-        signal.removeEventListener('abort', onAbort);
+      let settled = false;
+      const settle = (status: LoadOrderProgress | undefined): void => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', onAbort);
+        unlisten();
         resolve(status);
+      };
+      const onAbort = (): void => settle(undefined);
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const unlisten = this.lifecycle.onStatusChanged((status) => {
+        if (status !== 'attached') settle(undefined);
       });
+      void terminal.then(settle);
     });
   }
 

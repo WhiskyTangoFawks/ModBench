@@ -6,7 +6,7 @@ namespace MEditService.Tests.TestSupport;
 /// <summary>PUT /load-order answers applied at once; the sweep runs on Load order state's own
 /// Changed subscriber. A test needing the sweep done waits for it by polling, never by trusting
 /// the PUT's own timing.</summary>
-internal static class LoadOrderHttpTestExtensions
+public static class LoadOrderHttpTestExtensions
 {
     // A resend that changes nothing advances neither: held this long with no further movement, it
     // is a genuine no-op rather than a reconcile that has simply not started yet.
