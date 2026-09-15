@@ -47,7 +47,12 @@ public sealed class ModFolderWatcher : IDisposable
 
     /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): subscribes
     /// itself, off the caller's thread — Rearm does disk work no writer should wait on.</summary>
-    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += snapshot => Task.Run(() => RearmSafely(snapshot));
+    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += snapshot => RunLongRunning(() => RearmSafely(snapshot));
+
+    // A dedicated thread, not the shared pool: Rearm's own disk work should not queue behind
+    // whatever else the pool is busy with.
+    private static void RunLongRunning(Action action) =>
+        Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     // No status of its own to carry an unknown failure as data (unlike the Index) — logged, the
     // last resort, since nothing else here answers for it.

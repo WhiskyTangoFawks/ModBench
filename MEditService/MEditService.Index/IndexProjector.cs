@@ -278,7 +278,12 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): subscribes
     /// itself, off the caller's thread — the exclusive gate below already supersedes an in-flight
     /// reconcile, so nothing here waits for one to finish before returning.</summary>
-    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += snapshot => Task.Run(() => OnLoadOrderChanged(snapshot));
+    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += snapshot => RunLongRunning(() => OnLoadOrderChanged(snapshot));
+
+    // A dedicated thread, not the shared pool: a reconcile can run minutes long, and queuing it
+    // behind whatever else the pool is busy with would make an unrelated backlog its own delay.
+    private static void RunLongRunning(Action action) =>
+        Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     /// <summary>Reconciles, turning every outcome Reconcile can throw into status data: the two
     /// known refusals, and anything else as a Failed state rather than a log line nobody reads.</summary>
