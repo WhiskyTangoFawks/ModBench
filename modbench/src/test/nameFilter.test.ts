@@ -54,6 +54,7 @@ vi.mock('vscode', () => ({
 }));
 
 import { registerNameFilter, type NameFilterDeps } from '../nameFilter';
+import { present } from '../present';
 
 const VIEW_ID = 'test.view';
 const OPEN = `${VIEW_ID}.filter`;
@@ -80,9 +81,9 @@ function setup(overrides: Partial<NameFilterDeps> = {}): Harness {
   return { view, applied, filter };
 }
 
-const open = async () => { await h.state.commands.get(OPEN)!(); };
-const clear = async () => { await h.state.commands.get(CLEAR)!(); };
-const currentBox = () => h.state.boxes.at(-1)!;
+const open = async () => { await present(h.state.commands.get(OPEN), "the filter's open command")(); };
+const clear = async () => { await present(h.state.commands.get(CLEAR), "the filter's clear command")(); };
+const currentBox = () => present(h.state.boxes.at(-1), 'the most recently created input box');
 
 beforeEach(() => {
   h.state.commands.clear();

@@ -1,13 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
+import { present } from '../../present';
 
 // ADR-0015 invariant 2: commands write and forget. One that read the Instance would make the read
 // model an input to the write side, and a write's own effect would come back to it twice.
 const READ_MODEL = 'instance';
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) =>
+    present(m[1], 'the matched import-source capture group'),
+  );
 }
 
 const commandModules = (): string[] =>

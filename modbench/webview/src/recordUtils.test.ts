@@ -307,7 +307,8 @@ describe('combineVscodeContexts', () => {
 
   it('passes a single context through, still as a JSON string (an unchanged call site contract)', () => {
     const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }]));
-    expect(JSON.parse(result!)).toEqual({
+    if (!result) throw new Error('expected a combined context for one present context');
+    expect(JSON.parse(result)).toEqual({
       webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       path: [{ kind: 'member', name: 'Items' }],
       preventDefaultContextMenuItems: true,
@@ -316,7 +317,8 @@ describe('combineVscodeContexts', () => {
 
   it('skips an absent context among present ones', () => {
     const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }]), undefined);
-    expect(JSON.parse(result!).webviewSection).toBe('arrayParent');
+    if (!result) throw new Error('expected a combined context skipping the absent ones');
+    expect(JSON.parse(result).webviewSection).toBe('arrayParent');
   });
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
@@ -324,7 +326,8 @@ describe('combineVscodeContexts', () => {
       arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
-    const parsed = JSON.parse(result!);
+    if (!result) throw new Error('expected a combined context for two present contexts');
+    const parsed = JSON.parse(result);
     expect(parsed.webviewSection).toBe('arrayElement stringValue');
   });
 
@@ -333,7 +336,8 @@ describe('combineVscodeContexts', () => {
       arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', TAGS_PATH),
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
-    const parsed = JSON.parse(result!);
+    if (!result) throw new Error('expected a combined context for two present contexts');
+    const parsed = JSON.parse(result);
     expect(parsed.canMoveDown).toBe(true);
     expect(parsed.value).toBe('a');
     expect(parsed.path).toEqual(TAGS_PATH);
@@ -352,7 +356,8 @@ describe('headerCellContext', () => {
 
   it('combines like every other context, for a header cell that one day carries more than one', () => {
     const result = combineVscodeContexts(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA'));
-    expect(JSON.parse(result!)).toEqual({
+    if (!result) throw new Error('expected a combined context for the header cell context');
+    expect(JSON.parse(result)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       preventDefaultContextMenuItems: true,
     });
@@ -401,7 +406,8 @@ describe('stringValueContext', () => {
     const result = combineVscodeContexts(
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat', 'Name', 'Dogmeat', false, NAME_PATH),
     );
-    expect(JSON.parse(result!)).toEqual({
+    if (!result) throw new Error('expected a combined context for the string-value context');
+    expect(JSON.parse(result)).toEqual({
       webviewSection: 'stringValue', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       recordLabel: 'Dogmeat', fieldName: 'Name', value: 'Dogmeat', readOnly: false, path: NAME_PATH,
       preventDefaultContextMenuItems: true,

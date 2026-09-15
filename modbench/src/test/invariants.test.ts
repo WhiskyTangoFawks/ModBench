@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { present } from '../present';
 
 // Rules a compiling change can break silently, checked as source text like contextBoundary.test.ts.
 
@@ -32,8 +33,8 @@ describe('every MO2 text-file write command has a corpus test', () => {
 // one of the named `…Result` types every gesture returns (ADR-0015 invariant 2).
 function commandVerbs(source: string): string[] {
   return [...source.matchAll(/^export (?:async )?function (\w+)([\s\S]*?)\{\n/gm)]
-    .filter((m) => /applied|Result>/.test(m[2]!))
-    .map((m) => m[1]!);
+    .filter((m) => /applied|Result>/.test(present(m[2], "the function body between signature and opening brace")))
+    .map((m) => present(m[1], "the exported function's name"));
 }
 
 // docs/specs/containers.md rule 7: showCollapseAll on every hierarchical tree, never a flat
@@ -90,7 +91,7 @@ function treeViewOptions(source: string): { id: string; options: string }[] {
       else if (source[end] === '}') depth--;
       end++;
     }
-    out.push({ id: m[1]!, options: source.slice(start, end - 1) });
+    out.push({ id: present(m[1], "the createTreeView call's id argument"), options: source.slice(start, end - 1) });
   }
   return out;
 }

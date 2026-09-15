@@ -17,6 +17,7 @@ import {
   assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, readModlistEntries, snapshotTree,
 } from '../test/corpusFixture';
 import type { Mod, Separator } from '../model';
+import { present } from '../../present';
 
 const isMod = (name: string) => (e: { kind: string; name: string }): e is Mod => e.kind === 'mod' && e.name === name;
 
@@ -60,7 +61,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     assertOnlyChanged(before, after, new Set([MODLIST]));
 
     const entries = await readModlistEntries(dir);
-    expect(entries[0]!.name).toBe('ENBoost - 12k');
+    expect(present(entries[0], 'the first entry after reordering to the winning end').name).toBe('ENBoost - 12k');
   });
 
   it('insertSeparator adds a new separator marker, touching only modlist.txt', async () => {
@@ -107,7 +108,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
 
     const entries = await readModlistEntries(dir);
     const sepIdx = entries.findIndex((e) => e.kind === 'separator' && e.name === 'Unassigned (Modlist Development)');
-    expect(entries[sepIdx - 1]!.name).toBe('Cracked and Smudged Pip-Boy Screen');
+    expect(present(entries[sepIdx - 1], "the entry now preceding the separator").name).toBe('Cracked and Smudged Pip-Boy Screen');
   });
 
   it('reorderSeparatorBlock moves a separator and its (preceding) children as a unit, touching only modlist.txt', async () => {

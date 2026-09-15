@@ -4,6 +4,7 @@ import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { createModsWatcher } from './modsWatcher';
+import { present } from '../present';
 
 describe('createModsWatcher', () => {
   it('watches mods/** under the instance root', () => {
@@ -11,6 +12,6 @@ describe('createModsWatcher', () => {
 
     createModsWatcher('/instance', () => {});
 
-    expect(watchers[0]!.pattern).toBe('mods/**');
+    expect(present(watchers[0], "the watcher registered for the instance root").pattern).toBe('mods/**');
   });
 });

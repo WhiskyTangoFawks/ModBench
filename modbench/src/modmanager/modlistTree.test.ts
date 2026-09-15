@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from './model';
 import { groupModlist } from './modlistTree';
+import { present } from '../present';
 
 const mod = (name: string, enabled = true, extra: Partial<Mod> = {}): Mod => ({
   kind: 'mod',
@@ -15,8 +16,8 @@ describe('groupModlist', () => {
     const entries: ModlistEntry[] = [mod('A'), mod('B'), sep('S1'), mod('C')];
     const tree = groupModlist(entries);
     expect(tree.groups).toHaveLength(1);
-    expect(tree.groups[0]!.separator.name).toBe('S1');
-    expect(tree.groups[0]!.mods.map((m) => m.name)).toEqual(['A', 'B']);
+    expect(present(tree.groups[0], 'the sole group').separator.name).toBe('S1');
+    expect(present(tree.groups[0], 'the sole group').mods.map((m) => m.name)).toEqual(['A', 'B']);
     expect(tree.ungrouped.map((m) => m.name)).toEqual(['C']);
   });
 
@@ -37,9 +38,9 @@ describe('groupModlist', () => {
     const tree = groupModlist(entries);
     expect(tree.groups.map((g) => g.separator.name)).toEqual(['S1', 'S2']);
     // Nothing precedes S1 (it's the first entry) → empty group.
-    expect(tree.groups[0]!.mods).toEqual([]);
+    expect(present(tree.groups[0], "S1's group").mods).toEqual([]);
     // A and B precede S2, back to S1 → S2's members.
-    expect(tree.groups[1]!.mods.map((m) => m.name)).toEqual(['A', 'B']);
+    expect(present(tree.groups[1], "S2's group").mods.map((m) => m.name)).toEqual(['A', 'B']);
     // C trails the last separator → ungrouped.
     expect(tree.ungrouped.map((m) => m.name)).toEqual(['C']);
   });
@@ -88,10 +89,10 @@ describe('groupModlist', () => {
     ];
     const tree = groupModlist(entries);
     expect(tree.groups).toHaveLength(2);
-    expect(tree.groups[0]!.separator.name).toBe('Radfall-AIO');
-    expect(tree.groups[0]!.mods).toEqual([radfallMod1, radfallMod2]);
-    expect(tree.groups[1]!.separator.name).toBe('ENB');
-    expect(tree.groups[1]!.mods).toEqual([enBoost16k, enBoost12k, enBoost8k, trueSight, enbSeries]);
+    expect(present(tree.groups[0], 'the first group').separator.name).toBe('Radfall-AIO');
+    expect(present(tree.groups[0], 'the first group').mods).toEqual([radfallMod1, radfallMod2]);
+    expect(present(tree.groups[1], 'the second group').separator.name).toBe('ENB');
+    expect(present(tree.groups[1], 'the second group').mods).toEqual([enBoost16k, enBoost12k, enBoost8k, trueSight, enbSeries]);
     expect(tree.ungrouped).toEqual([]);
   });
 });

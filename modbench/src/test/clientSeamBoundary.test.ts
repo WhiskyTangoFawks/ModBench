@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
+import { present } from '../present';
 
 // ADR-0002/ADR-0014: the generated client, `openapi-fetch`, `undici` and the notification
 // stream's endpoint path live only under medit/client/. The webview also calls the backend
@@ -12,7 +13,7 @@ const CLIENT_DIR = join('medit', 'client');
 const GENERATED_DIR = 'generated';
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => present(m[1], "the import/export statement's module specifier"));
 }
 
 function tsFiles(dir: string): string[] {

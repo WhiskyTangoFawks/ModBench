@@ -40,6 +40,7 @@ import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import type { AskQuestion } from '../dialog';
 import { instanceValueFixture } from '../modmanager/test/instanceValueFixture';
 import { FakeLogOutputChannel } from './fakeOutputChannel';
+import { present } from '../present';
 
 // `deployed: true` is the steady state most tests want — a directory that already has a
 // manifest, so the deploy gesture never has to ask.
@@ -60,7 +61,12 @@ function register(over: Partial<ToolboxCommandDeps> = {}) {
     ask,
     ...over,
   });
-  return { reporter, ask, updateProfileDescription, run: (id: string) => handlers.get(id)!() };
+  return {
+    reporter,
+    ask,
+    updateProfileDescription,
+    run: (id: string) => present(handlers.get(id), `the registered handler for "${id}"`)(),
+  };
 }
 
 beforeEach(() => {

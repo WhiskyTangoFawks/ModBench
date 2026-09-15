@@ -76,11 +76,16 @@ describe('RecordPanel — Add on an abstract-union array', () => {
   it('posts add at the array, carrying no element of its own', async () => {
     renderPanel();
     await waitFor(() => screen.getByText('aliases'));
-    const cell = screen.getAllByText('[1]')[0]!.closest('td')!;
+    const cellText = screen.getAllByText('[1]')[0];
+    if (!cellText) throw new Error('the "[1]" index label RecordPanel renders for the array element');
+    const cell = cellText.closest('td');
+    if (!cell) throw new Error('the table cell containing the "[1]" index label');
     fireEvent.click(cell); // focus
     fireEvent.keyDown(cell, { key: 'Insert' });
 
-    expect(lastEnvelope()).toEqual({ op: 'add', path: [{ kind: 'member', name: 'aliases' }] });
-    expect(Object.keys(lastEnvelope()!).sort()).toEqual(['op', 'path']);
+    const envelope = lastEnvelope();
+    expect(envelope).toEqual({ op: 'add', path: [{ kind: 'member', name: 'aliases' }] });
+    if (!envelope) throw new Error('the envelope RecordPanel posted for the add gesture');
+    expect(Object.keys(envelope).sort()).toEqual(['op', 'path']);
   });
 });

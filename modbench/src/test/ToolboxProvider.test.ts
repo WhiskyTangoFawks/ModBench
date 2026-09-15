@@ -5,6 +5,7 @@ import { TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter } from './v
 vi.mock('vscode', () => ({ TreeItem, TreeItemCollapsibleState, ThemeIcon, EventEmitter }));
 
 import { ToolboxProvider, type ToolboxDeps, type ToolboxState } from '../ToolboxProvider';
+import { present } from '../present';
 
 const VALUE: ToolboxState = { activeProfile: 'Default', deployed: false };
 
@@ -41,9 +42,10 @@ describe('ToolboxProvider', () => {
 
   it('reads the active profile out of the value as a row that activates Switch Profile', () => {
     const [profile] = makeProvider({ state: () => ({ activeProfile: 'Survival', deployed: false }) }).getChildren();
+    const row = present(profile, 'the Profile row');
 
-    expect(profile!.description).toBe('Survival');
-    expect(profile!.command!.command).toBe('modbench.toolbox.switchProfile');
+    expect(row.description).toBe('Survival');
+    expect(present(row.command, 'the Profile row\'s command').command).toBe('modbench.toolbox.switchProfile');
   });
 
   // Rival: a row that reads the profile from anywhere but the value — the pre-first-read value
@@ -51,21 +53,23 @@ describe('ToolboxProvider', () => {
   it('reads out an em-dash while the value names no profile yet', () => {
     const [profile] = makeProvider({ state: () => ({ activeProfile: '', deployed: false }) }).getChildren();
 
-    expect(profile!.description).toBe('—');
+    expect(present(profile, 'the Profile row').description).toBe('—');
   });
 
   it('offers Deploy from the deployment row while the value says nothing is deployed', () => {
     const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: false }) }).getChildren();
 
     expect(rows).toHaveLength(2);
-    expect(rows[1]!.description).toBe('not deployed');
-    expect(rows[1]!.command!.command).toBe('modbench.toolbox.deploy');
+    const deployment = present(rows[1], 'the Deployment row');
+    expect(deployment.description).toBe('not deployed');
+    expect(present(deployment.command, 'the Deployment row\'s command').command).toBe('modbench.toolbox.deploy');
   });
 
   it('reads out a live deployment without offering Purge from the row — destructive actions stay in overflow behind a modal', () => {
     const rows = makeProvider({ state: () => ({ activeProfile: 'Default', deployed: true }) }).getChildren();
 
-    expect(rows[1]!.description).toBe('deployed');
-    expect(rows[1]!.command).toBeUndefined();
+    const deployment = present(rows[1], 'the Deployment row');
+    expect(deployment.description).toBe('deployed');
+    expect(deployment.command).toBeUndefined();
   });
 });

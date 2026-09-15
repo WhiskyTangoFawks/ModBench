@@ -12,7 +12,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { columnKey } from './columnKey';
-import { fieldMeta, panelClient, type PanelOpts } from './test/fixtures';
+import { fieldMeta, panelClient, required, type PanelOpts } from './test/fixtures';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
@@ -428,7 +428,10 @@ describe('RecordPanel — column header native right-click menu', () => {
 
     // The context lives on PluginHeader's own root div, nested inside RecordPanel's <th>.
     const headerRoot = container.querySelector('th > div');
-    expect(JSON.parse(headerRoot!.getAttribute('data-vscode-context')!)).toEqual({
+    if (!headerRoot) throw new Error('expected a PluginHeader root under the recordHeader th');
+    const headerContext = headerRoot.getAttribute('data-vscode-context');
+    if (!headerContext) throw new Error('expected the PluginHeader root to carry a data-vscode-context attribute');
+    expect(JSON.parse(headerContext)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       preventDefaultContextMenuItems: true,
     });
@@ -447,11 +450,13 @@ describe('RecordPanel — a copy the load order does not name (ADR-0013)', () =>
     expect(screen.queryByText('(read-only)')).not.toBeInTheDocument();
 
     const th = screen.getByText('Solo.esp').closest('th');
+    if (!th) throw new Error('expected a th ancestor of the Solo.esp header cell');
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
     // CSS opacity compounds on nesting (two 0.55s render at ~0.30), so the PluginHeader root
     // inside this dimmed <th> must not carry a second opacity.
-    const pluginHeaderRoot = th!.querySelector<HTMLElement>(':scope > div');
-    expect(pluginHeaderRoot!.style.opacity).toBe('');
+    const pluginHeaderRoot = th.querySelector<HTMLElement>(':scope > div');
+    if (!pluginHeaderRoot) throw new Error('expected a PluginHeader root inside the dimmed th');
+    expect(pluginHeaderRoot.style.opacity).toBe('');
   });
 
   it('does not dim a vanilla-master column (immutable, still in the load order)', async () => {
@@ -484,7 +489,9 @@ describe('RecordPanel — a Partial Form column', () => {
     renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
     await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
 
-    const cells = screen.getByText('Name').closest('tr')!.querySelectorAll('td');
+    const nameRow = screen.getByText('Name').closest('tr');
+    if (!nameRow) throw new Error('expected a tr ancestor of the Name row');
+    const cells = nameRow.querySelectorAll('td');
     expect(cells[2]).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
     expect(cells[1]).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
@@ -574,7 +581,9 @@ describe('RecordPanel — flags cell editing through real message plumbing', () 
 
     // uncheck A in the tracked column — the first *enabled* box, since the master column's
     // disabled checkboxes render first in column order.
-    fireEvent.click(screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled)[0]!);
+    const [firstEnabledCheckbox] = screen.getAllByRole('checkbox').filter((b): b is HTMLInputElement => b instanceof HTMLInputElement && !b.disabled);
+    if (!firstEnabledCheckbox) throw new Error('expected an enabled checkbox in the tracked column');
+    fireEvent.click(firstEnabledCheckbox);
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
@@ -594,7 +603,8 @@ describe('RecordPanel — conflict color coding', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(overrideCompareResult);
     await waitFor(() => screen.getByText('Name'));
-    const row = screen.getByText('Name').closest('tr')!;
+    const row = screen.getByText('Name').closest('tr');
+    if (!row) throw new Error('expected a tr ancestor of the Name row');
     expect(row.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
   });
 
@@ -602,7 +612,8 @@ describe('RecordPanel — conflict color coding', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Name'));
-    const row = screen.getByText('Name').closest('tr')!;
+    const row = screen.getByText('Name').closest('tr');
+    if (!row) throw new Error('expected a tr ancestor of the Name row');
     expect(row.style.backgroundColor).toBe('rgba(255, 152, 0, 0.20)');
   });
 
@@ -611,8 +622,10 @@ describe('RecordPanel — conflict color coding', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(twoSiblingFieldsResult);
     await waitFor(() => screen.getByText('Name'));
-    const nameRow = screen.getByText('Name').closest('tr')!;
-    const levelRow = screen.getByText('Level').closest('tr')!;
+    const nameRow = screen.getByText('Name').closest('tr');
+    const levelRow = screen.getByText('Level').closest('tr');
+    if (!nameRow) throw new Error('expected a tr ancestor of the Name row');
+    if (!levelRow) throw new Error('expected a tr ancestor of the Level row');
     expect(nameRow.style.backgroundColor).toBe('rgba(76, 175, 80, 0.20)');
     expect(levelRow.style.backgroundColor).toBe('');
   });
@@ -621,7 +634,8 @@ describe('RecordPanel — conflict color coding', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    const cell = screen.getByText('Override Name').closest('td')!;
+    const cell = screen.getByText('Override Name').closest('td');
+    if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
     expect(cell.style.backgroundColor).toBe('rgba(255, 152, 0, 0.18)');
   });
 
@@ -629,7 +643,8 @@ describe('RecordPanel — conflict color coding', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(overrideCompareResult);
     await waitFor(() => screen.getByText('Override Name'));
-    const cell = screen.getByText('Override Name').closest('td')!;
+    const cell = screen.getByText('Override Name').closest('td');
+    if (!cell) throw new Error('expected a td ancestor of the Override Name cell');
     expect(cell.style.backgroundColor).toBe('rgba(76, 175, 80, 0.18)');
   });
 
@@ -638,7 +653,8 @@ describe('RecordPanel — conflict color coding', () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Override Name'));
     // MyMod.esp header: conflictThis = 'ConflictWins' → orange background in the <th>
-    const header = screen.getByText('MyMod.esp').closest('th')!;
+    const header = screen.getByText('MyMod.esp').closest('th');
+    if (!header) throw new Error('expected a th ancestor of the MyMod.esp header cell');
     expect(header.style.backgroundColor).toBe('rgba(255, 152, 0, 0.35)');
   });
 });
@@ -721,25 +737,31 @@ describe('RecordPanel — struct sub-rows', () => {
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('15'));
-    const cell = screen.getByText('15').closest('td')!;
+    const cell = screen.getByText('15').closest('td');
+    if (!cell) throw new Error('expected a td ancestor of the child row\'s 15 cell');
     expect(cell.style.backgroundColor).toBe('rgba(76, 175, 80, 0.18)');
   });
 });
 
 describe('RecordPanel — incomplete-comparison banner (ADR-0013)', () => {
+  // conflictsComputed: false always returns the banner text (recordPanelIncompleteMessage.ts) —
+  // bounded so every test below can rely on it being present.
+  const incompleteMessage = recordPanelIncompleteMessage(false);
+  if (!incompleteMessage) throw new Error('expected a banner message when conflicts are not yet computed');
+
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
   it('states the comparison is incomplete when opened while the winner sweep is outstanding (AC1)', async () => {
     renderPanel(compareResult, { conflictsComputed: false });
-    await waitFor(() => screen.getByText(recordPanelIncompleteMessage(false)!));
+    await waitFor(() => screen.getByText(incompleteMessage));
   });
 
   it('shows no statement once the sweep has already completed (AC3)', async () => {
     renderPanel(compareResult, { conflictsComputed: true });
     await waitFor(() => screen.getByText(/TestNPC/));
-    expect(screen.queryByText(recordPanelIncompleteMessage(false)!)).not.toBeInTheDocument();
+    expect(screen.queryByText(incompleteMessage)).not.toBeInTheDocument();
   });
 
   // A panel already open when the sweep lands must reflect the settled data, not just clear its
@@ -755,13 +777,13 @@ describe('RecordPanel — incomplete-comparison banner (ADR-0013)', () => {
         immutableSet: new Set(), notInLoadOrderSet: new Set(), conflictsComputed: true,
       });
     renderPanel(compareResult, { load });
-    await waitFor(() => screen.getByText(recordPanelIncompleteMessage(false)!));
+    await waitFor(() => screen.getByText(incompleteMessage));
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } }));
     });
 
-    await waitFor(() => expect(screen.queryByText(recordPanelIncompleteMessage(false)!)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(incompleteMessage)).not.toBeInTheDocument());
     expect(load).toHaveBeenCalledTimes(2);
   });
 
@@ -947,16 +969,19 @@ const mixedLeafAliasResult = {
 
 // Both plugins carry the same leaf, and the backend drops a member null in every column, so
 // only that leaf's members remain.
+const mixedLeafAliasDiff = required(mixedLeafAliasResult.diffs[0], "the sole diff of mixedLeafAliasResult");
+const mixedLeafAliasDiffChild = required(mixedLeafAliasDiff.children[0], "the sole diff's first child");
+
 const singleLeafAliasResult = {
   ...mixedLeafAliasResult,
   overrides: mixedLeafAliasResult.overrides.map(o => ({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
   diffs: [{
-    ...mixedLeafAliasResult.diffs[0],
+    ...mixedLeafAliasDiff,
     values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [masterAlias] },
     children: [{
-      ...mixedLeafAliasResult.diffs[0]!.children[0],
+      ...mixedLeafAliasDiffChild,
       values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': masterAlias },
-      children: mixedLeafAliasResult.diffs[0]!.children[0]!.children
+      children: mixedLeafAliasDiffChild.children
         .filter(c => c.fieldName !== 'external')
         .map(c => (c.fieldName === 'location'
           ? { ...c, values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': { alias_id: 5 } } }
@@ -976,14 +1001,14 @@ describe('RecordPanel — union element rows', () => {
 
   // Scoped to the grid's own body — the column headers carry their own load-order index, so
   // "[0]" is not unique document-wide.
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
 
   function labelCell(label: string): HTMLElement {
-    return rows().getByText(label).closest('td')!;
+    return required(rows().getByText(label).closest('td'), `the '${label}' cell's td ancestor`);
   }
 
   function expandRow(label: string) {
-    fireEvent.click(labelCell(label).querySelector('button')!);
+    fireEvent.click(required(labelCell(label).querySelector('button'), `the '${label}' row's expand button`));
   }
 
   async function renderExpandedElement() {
@@ -1004,13 +1029,15 @@ describe('RecordPanel — union element rows', () => {
 
   it('renders an empty cell for the column whose leaf lacks the member', async () => {
     await renderExpandedElement();
-    const locationCells = labelCell('location').closest('tr')!.querySelectorAll('td');
-    expect(locationCells[1]!.textContent).toBe('{…}');
-    expect(locationCells[2]!.textContent).toBe('');
+    const locationRow = required(labelCell('location').closest('tr'), "the 'location' row");
+    const locationCells = locationRow.querySelectorAll('td');
+    expect(required(locationCells[1], "the 'location' row's second cell").textContent).toBe('{…}');
+    expect(required(locationCells[2], "the 'location' row's third cell").textContent).toBe('');
 
-    const externalCells = labelCell('external').closest('tr')!.querySelectorAll('td');
-    expect(externalCells[1]!.textContent).toBe('');
-    expect(externalCells[2]!.textContent).toBe('{…}');
+    const externalRow = required(labelCell('external').closest('tr'), "the 'external' row");
+    const externalCells = externalRow.querySelectorAll('td');
+    expect(required(externalCells[1], "the 'external' row's second cell").textContent).toBe('');
+    expect(required(externalCells[2], "the 'external' row's third cell").textContent).toBe('{…}');
   });
 
   // An element's rows are the ones its own plugins carry, never one per schema member: the
@@ -1175,8 +1202,9 @@ describe('RecordPanel — an absent member reads as its default', () => {
     }],
   };
 
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
-  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
+  const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
+  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1184,40 +1212,40 @@ describe('RecordPanel — an absent member reads as its default', () => {
   async function renderExpanded() {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Stats'));
-    fireEvent.click(rows().getByText('Stats').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Stats').closest('td'), "the 'Stats' cell's td ancestor").querySelector('button'), "the 'Stats' row's expand button"));
     await waitFor(() => rows().getByText('Weight'));
   }
 
   it('an absent int reads 0, an absent bool false, an absent string empty', async () => {
     await renderExpanded();
-    expect(cellsOf('Weight')[2]!.textContent).toBe('0');
-    expect(cellsOf('Essential')[2]!.textContent).toBe('false');
-    expect(cellsOf('Prefix')[2]!.textContent).toBe('');
+    expect(cellAt('Weight', 2).textContent).toBe('0');
+    expect(cellAt('Essential', 2).textContent).toBe('false');
+    expect(cellAt('Prefix', 2).textContent).toBe('');
     expect(rows().queryAllByText('—')).toHaveLength(1);
   });
 
   it('an absent enum reads the default the metadata names', async () => {
     await renderExpanded();
-    expect(cellsOf('RunOn')[2]!.textContent).toBe('Subject');
+    expect(cellAt('RunOn', 2).textContent).toBe('Subject');
   });
 
   it('an absent scalar with a declared default reads that default', async () => {
     await renderExpanded();
-    expect(cellsOf('Count')[2]!.textContent).toBe('100');
+    expect(cellAt('Count', 2).textContent).toBe('100');
   });
 
   it('an unset nullable link reads as empty', async () => {
     await renderExpanded();
-    expect(cellsOf('Owner')[2]!.textContent).toBe('—');
+    expect(cellAt('Owner', 2).textContent).toBe('—');
   });
 
   // The default is what the editor opens on, so a value equal to it is no edit at all.
   it('editing an absent int from its default posts one set with the typed value', async () => {
     await renderExpanded();
     vi.mocked(vscode.postMessage).mockClear();
-    const cell = cellsOf('Weight')[2]!;
+    const cell = cellAt('Weight', 2);
     fireEvent.doubleClick(within(cell).getByText('0'));
-    const input = cell.querySelector('input')!;
+    const input = required(cell.querySelector('input'), "the cell's input");
     fireEvent.change(input, { target: { value: '5' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -1261,8 +1289,9 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
     ],
   };
 
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
-  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
+  const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
+  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1270,30 +1299,30 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   it('an unset nullable struct reads as empty, and its member as nothing rather than zero', async () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Bounds'));
-    expect(cellsOf('Bounds')[2]!.textContent).toBe('');
-    fireEvent.click(rows().getByText('Bounds').closest('td')!.querySelector('button')!);
+    expect(cellAt('Bounds', 2).textContent).toBe('');
+    fireEvent.click(required(required(rows().getByText('Bounds').closest('td'), "the 'Bounds' cell's td ancestor").querySelector('button'), "the 'Bounds' row's expand button"));
     await waitFor(() => rows().getByText('X'));
 
-    expect(cellsOf('X')[1]!.textContent).toBe('10');
-    expect(cellsOf('X')[2]!.textContent).toBe('');
+    expect(cellAt('X', 1).textContent).toBe('10');
+    expect(cellAt('X', 2).textContent).toBe('');
   });
 
   it('an element past the column\'s own length reads as nothing, not zero', async () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Values'));
-    fireEvent.click(rows().getByText('Values').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Values').closest('td'), "the 'Values' cell's td ancestor").querySelector('button'), "the 'Values' row's expand button"));
     await waitFor(() => rows().getByText('[1]'));
 
-    expect(cellsOf('[1]')[1]!.textContent).toBe('2');
-    expect(cellsOf('[1]')[2]!.textContent).toBe('');
+    expect(cellAt('[1]', 1).textContent).toBe('2');
+    expect(cellAt('[1]', 2).textContent).toBe('');
   });
 
   // The classifier nulls every field of a Partial Form column: none of them is absent-by-default.
   it('a Partial Form column\'s fields read as nothing', async () => {
     renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Name'));
-    expect(cellsOf('Name')[1]!.textContent).toBe('Original Name');
-    expect(cellsOf('Name')[2]!.textContent).toBe('');
+    expect(cellAt('Name', 1).textContent).toBe('Original Name');
+    expect(cellAt('Name', 2).textContent).toBe('');
   });
 
   // A non-nullable struct is the field whose absence would otherwise read as its default.
@@ -1315,12 +1344,12 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
       }],
     }, { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Size'));
-    expect(cellsOf('Size')[1]!.textContent).toBe('{…}');
-    expect(cellsOf('Size')[2]!.textContent).toBe('');
+    expect(cellAt('Size', 1).textContent).toBe('{…}');
+    expect(cellAt('Size', 2).textContent).toBe('');
 
-    fireEvent.click(rows().getByText('Size').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
     await waitFor(() => rows().getByText('Width'));
-    expect(cellsOf('Width')[2]!.textContent).toBe('');
+    expect(cellAt('Width', 2).textContent).toBe('');
   });
 });
 
@@ -1353,8 +1382,9 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
     }],
   };
 
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
-  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
+  const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
+  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1366,20 +1396,20 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
 
   async function renderExpanded() {
     await renderCollapsed();
-    fireEvent.click(rows().getByText('Size').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
     await waitFor(() => rows().getByText('Width'));
   }
 
   it('the struct the column omits reads as a struct, not as nothing', async () => {
     await renderCollapsed();
-    expect(cellsOf('Size')[2]!.textContent).toBe('{…}');
+    expect(cellAt('Size', 2).textContent).toBe('{…}');
   });
 
   it('each member of the omitted struct reads its own default', async () => {
     await renderExpanded();
-    expect(cellsOf('Width')[2]!.textContent).toBe('0');
-    expect(cellsOf('Label')[2]!.textContent).toBe('');
-    expect(cellsOf('Depth')[2]!.textContent).toBe('12');
+    expect(cellAt('Width', 2).textContent).toBe('0');
+    expect(cellAt('Label', 2).textContent).toBe('');
+    expect(cellAt('Depth', 2).textContent).toBe('12');
   });
 });
 

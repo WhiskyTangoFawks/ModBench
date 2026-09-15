@@ -28,6 +28,7 @@ import { InMemoryMEditClient } from '../../medit/client';
 import { pluginMetadataFixture, referenceResultFixture } from '../../medit/client/test/fixtures';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
+import { present } from '../../present';
 
 beforeEach(() => {
   handlers.clear();
@@ -91,7 +92,7 @@ describe('registerRecordLifecycleCommands', () => {
         client.setCommandResult('createRecord', { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
         invoke(client);
 
-        await handlers.get('modbench.record.create')!(arg);
+        await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(arg);
 
         expect(client.calls.filter(c => c.method === 'createRecord').map(c => c.args)).toEqual([
           ['MyPatch.esp', 'ModA', 'npc_', undefined, undefined, expect.any(Function)],
@@ -104,7 +105,7 @@ describe('registerRecordLifecycleCommands', () => {
     client.setCommandResult('createRecord', { applied: true, formKey: '000900:MyPatch.esp', recordType: 'npc_' });
     const { treeSync, refreshMatchingPlugins, reporter } = invoke(client);
 
-    await handlers.get('modbench.record.create')!(RECORD_TYPE_NODE);
+    await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(RECORD_TYPE_NODE);
 
     expect(reporter.landings).toEqual(['Added 000900:MyPatch.esp.']);
     expect(treeSync.refresh).toHaveBeenCalledOnce();
@@ -120,7 +121,7 @@ describe('registerRecordLifecycleCommands', () => {
     });
     const { treeSync, refreshMatchingPlugins, reporter } = invoke(client);
 
-    await handlers.get('modbench.record.create')!(RECORD_TYPE_NODE);
+    await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(RECORD_TYPE_NODE);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Could not create a new npc_ record in "MyPatch.esp" — boom', detail: undefined },
@@ -135,7 +136,7 @@ describe('registerRecordLifecycleCommands', () => {
     client.setQueryAnswer('getPlugins', []);
     const { reporter } = invoke(client);
 
-    await handlers.get('modbench.record.create')!({ plugin: 'MyPatch.esp', recordType: 'npc_' });
+    await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")({ plugin: 'MyPatch.esp', recordType: 'npc_' });
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not resolve which mod "MyPatch.esp" belongs to.', detail: undefined },
@@ -152,8 +153,8 @@ describe('registerRecordLifecycleCommands', () => {
     });
     const { ask } = invoke(client, undefined);
 
-    await handlers.get('modbench.record.create')!(RECORD_TYPE_NODE);
-    const accepted = await onEslRefusal!('exhausted the ESL range');
+    await present(handlers.get('modbench.record.create'), "the handler registered for 'modbench.record.create'")(RECORD_TYPE_NODE);
+    const accepted = await present(onEslRefusal, "the ESL-flag refusal callback captured from the command handler")('exhausted the ESL range');
 
     expect(accepted).toBe(false);
     expect(ask.asked).toEqual([{
@@ -170,7 +171,7 @@ describe('registerRecordLifecycleCommands', () => {
         client.setCommandResult('deleteRecord', { applied: true, formKey: '000801:MyPatch.esp' });
         invoke(client, 'Remove');
 
-        await handlers.get('modbench.record.delete')!(arg);
+        await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(arg);
 
         expect(client.calls.filter(c => c.method === 'deleteRecord').map(c => c.args)).toEqual([
           ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA'],
@@ -183,7 +184,7 @@ describe('registerRecordLifecycleCommands', () => {
     client.setCommandResult('deleteRecord', { applied: true, formKey: '000801:MyPatch.esp' });
     const { ask } = invoke(client, 'Remove');
 
-    await handlers.get('modbench.record.delete')!({ ...RECORD_NODE, record: { ...RECORD_NODE.record, editorId: 'MyNpc' } });
+    await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")({ ...RECORD_NODE, record: { ...RECORD_NODE.record, editorId: 'MyNpc' } });
 
     expect(ask.asked).toEqual([{
       message: 'Are you sure you want to permanently remove MyNpc [000801:MyPatch.esp]?',
@@ -198,7 +199,7 @@ describe('registerRecordLifecycleCommands', () => {
     client.setCommandResult('deleteRecord', { applied: true, formKey: '000801:MyPatch.esp' });
     const { treeSync } = invoke(client, undefined);
 
-    await handlers.get('modbench.record.delete')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(RECORD_NODE);
 
     expect(client.calls.filter(c => c.method === 'deleteRecord')).toEqual([]);
     expect(treeSync.refresh).not.toHaveBeenCalled();
@@ -209,7 +210,7 @@ describe('registerRecordLifecycleCommands', () => {
     client.setCommandResult('deleteRecord', { refused: true, message: 'mEdit: Could not delete 000801:MyPatch.esp — boom' });
     const { treeSync, reporter } = invoke(client, 'Remove');
 
-    await handlers.get('modbench.record.delete')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.delete'), "the handler registered for 'modbench.record.delete'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Could not delete 000801:MyPatch.esp — boom', detail: undefined },
@@ -227,7 +228,7 @@ describe('registerRecordLifecycleCommands', () => {
         invoke(client); // zero references — renumberConfirmMessage returns null, so nothing is asked
         showInputBox.mockResolvedValue('000900:MyPatch.esp');
 
-        await handlers.get('modbench.record.renumber')!(arg);
+        await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(arg);
 
         expect(client.calls.filter(c => c.method === 'renumberRecord').map(c => c.args)).toEqual([
           ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', '000900:MyPatch.esp'],
@@ -243,7 +244,7 @@ describe('registerRecordLifecycleCommands', () => {
     const { treeSync, reporter } = invoke(client);
     showInputBox.mockResolvedValue('000900:MyPatch.esp');
 
-    await handlers.get('modbench.record.renumber')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
 
     expect(reporter.landings).toEqual(['Renumbered to 000900:MyPatch.esp.']);
     expect(treeSync.refresh).toHaveBeenCalledOnce();
@@ -257,7 +258,7 @@ describe('registerRecordLifecycleCommands', () => {
     const { ask } = invoke(client, 'Change FormID');
     showInputBox.mockResolvedValue('000900:MyPatch.esp');
 
-    await handlers.get('modbench.record.renumber')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
 
     expect(ask.asked).toEqual([{
       message: expect.stringContaining('000801:MyPatch.esp'),
@@ -275,7 +276,7 @@ describe('registerRecordLifecycleCommands', () => {
     invoke(client, undefined);
     showInputBox.mockResolvedValue('000900:MyPatch.esp');
 
-    await handlers.get('modbench.record.renumber')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
 
     expect(client.calls.filter(c => c.method === 'renumberRecord')).toEqual([]);
   });
@@ -288,7 +289,7 @@ describe('registerRecordLifecycleCommands', () => {
     const { treeSync, reporter } = invoke(client);
     showInputBox.mockResolvedValue('000900:MyPatch.esp');
 
-    await handlers.get('modbench.record.renumber')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Could not renumber 000801:MyPatch.esp — boom', detail: undefined },
@@ -322,7 +323,7 @@ describe('registerRecordCopyCommands', () => {
         scriptDestinationPick(client);
         invoke(client);
 
-        await handlers.get('modbench.record.copyAsOverride')!(arg);
+        await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(arg);
 
         expect(client.calls.filter(c => c.method === 'copyRecordAsOverride').map(c => c.args)).toEqual([
           ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', 'MyPatch.esp', 'ModA'],
@@ -336,7 +337,7 @@ describe('registerRecordCopyCommands', () => {
     scriptDestinationPick(client);
     const { treeSync, reporter } = invoke(client);
 
-    await handlers.get('modbench.record.copyAsOverride')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
 
     expect(reporter.landings).toEqual(['Copied 000801:MyPatch.esp into MyPatch.esp.']);
     expect(treeSync.refresh).toHaveBeenCalledOnce();
@@ -350,7 +351,7 @@ describe('registerRecordCopyCommands', () => {
     scriptDestinationPick(client);
     const { treeSync, reporter } = invoke(client);
 
-    await handlers.get('modbench.record.copyAsOverride')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
@@ -365,7 +366,7 @@ describe('registerRecordCopyCommands', () => {
     client.setQueryAnswer('getRecordOverridePlugins', []);
     const { reporter } = invoke(client);
 
-    await handlers.get('modbench.record.copyAsOverride')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
 
     expect(reporter.landings).toEqual(['No eligible destination plugin for this copy.']);
     expect(showQuickPick).not.toHaveBeenCalled();
@@ -377,7 +378,7 @@ describe('registerRecordCopyCommands', () => {
     client.setQueryFailure('getRecordOverridePlugins', new Error('backend down'));
     const { reporter } = invoke(client);
 
-    await handlers.get('modbench.record.copyAsOverride')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.copyAsOverride'), "the handler registered for 'modbench.record.copyAsOverride'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'Could not look up destination plugins: backend down', detail: 'copy-as-override' },
@@ -392,7 +393,7 @@ describe('registerRecordCopyCommands', () => {
         scriptDestinationPick(client);
         invoke(client);
 
-        await handlers.get('modbench.record.copyAsNewRecord')!(arg);
+        await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(arg);
 
         expect(client.calls.filter(c => c.method === 'copyRecordAsNewRecord').map(c => c.args)).toEqual([
           ['000801:MyPatch.esp', 'MyPatch.esp', 'ModA', 'MyPatch.esp', 'ModA', undefined, expect.any(Function)],
@@ -406,7 +407,7 @@ describe('registerRecordCopyCommands', () => {
     scriptDestinationPick(client);
     const { treeSync, reporter } = invoke(client);
 
-    await handlers.get('modbench.record.copyAsNewRecord')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
 
     expect(reporter.landings).toEqual(['Copied as 000900:MyPatch.esp into MyPatch.esp.']);
     expect(treeSync.refresh).toHaveBeenCalledOnce();
@@ -420,7 +421,7 @@ describe('registerRecordCopyCommands', () => {
     scriptDestinationPick(client);
     const { treeSync, reporter } = invoke(client);
 
-    await handlers.get('modbench.record.copyAsNewRecord')!(RECORD_NODE);
+    await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
 
     expect(reporter.reports).toEqual([
       { severity: 'error', message: 'mEdit: Could not copy 000801:Fallout4.esm into "MyPatch.esp" — boom', detail: undefined },
@@ -439,8 +440,8 @@ describe('registerRecordCopyCommands', () => {
     scriptDestinationPick(client);
     const { ask } = invoke(client, undefined);
 
-    await handlers.get('modbench.record.copyAsNewRecord')!(RECORD_NODE);
-    const accepted = await onEslRefusal!('exhausted the ESL range');
+    await present(handlers.get('modbench.record.copyAsNewRecord'), "the handler registered for 'modbench.record.copyAsNewRecord'")(RECORD_NODE);
+    const accepted = await present(onEslRefusal, "the ESL-flag refusal callback captured from the command handler")('exhausted the ESL range');
 
     expect(accepted).toBe(false);
     expect(ask.asked).toEqual([{

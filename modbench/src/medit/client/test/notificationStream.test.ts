@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SseNotificationSubscriber } from '../notificationStream';
 import type { NotificationEvent } from '../apiClient';
+import { present } from '../../../present';
 
 function rowsChanged(keys: string[], overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return { kind: 'rows-changed', plugin: 'Test.esp', origin: 'ModA', keys, sequence: 1, ...overrides };
@@ -150,7 +151,7 @@ describe('SseNotificationSubscriber', () => {
     await vi.waitFor(() => expect(openStream).toHaveBeenCalledTimes(1));
     expect(connected).toBe(false);
 
-    answer!(streamResponse([]));
+    present(answer, 'the promise-settling connection callback')(streamResponse([]));
     await vi.waitFor(() => expect(connected).toBe(true));
     subscriber.stop();
   });

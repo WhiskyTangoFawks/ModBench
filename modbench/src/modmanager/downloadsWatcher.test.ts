@@ -4,6 +4,7 @@ import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
 vi.mock('vscode', () => fakeVscodeModule());
 
 import { createDownloadsWatcher } from './downloadsWatcher';
+import { present } from '../present';
 
 // Only the glob is asserted here; coalesce and dispose are covered generically elsewhere.
 describe('createDownloadsWatcher', () => {
@@ -12,6 +13,6 @@ describe('createDownloadsWatcher', () => {
 
     createDownloadsWatcher('/instance', () => {});
 
-    expect(watchers[0]!.pattern).toBe('downloads/**');
+    expect(present(watchers[0], 'the watcher just created').pattern).toBe('downloads/**');
   });
 });

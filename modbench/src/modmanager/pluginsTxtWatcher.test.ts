@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
+import { present } from '../present';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
@@ -13,6 +14,8 @@ describe('createPluginsTxtWatcher', () => {
 
     // Every profile, not the active one: switching profiles changes which file matters, and a
     // path resolved once at registration would stop watching the moment it did.
-    expect(watchers[0]!.pattern).toBe('profiles/*/plugins.txt');
+    expect(present(watchers[0], 'the watcher registered for the instance root').pattern).toBe(
+      'profiles/*/plugins.txt',
+    );
   });
 });
