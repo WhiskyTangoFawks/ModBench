@@ -18,6 +18,12 @@ import { columnKey } from './columnKey';
 import { DIMMED_OPACITY } from './gridStyles';
 import { diffNode, fieldMeta } from './test/fixtures';
 
+// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
+function required<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(`expected ${what}`);
+  return value;
+}
+
 const strMeta = fieldMeta({ name: 'Name', type: 'string' });
 const intMeta = fieldMeta({ name: 'Level', type: 'int' });
 // A row offers its expand toggle when its own diff node carries children.
@@ -103,24 +109,24 @@ describe('DiffRow — top-level scalar row', () => {
   // ADR-0007: with no editable columns wired, no cell opens an editor on any gesture.
   it('a value cell opens no editor on click, second click or double click', () => {
     renderRow({ meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
-    const cell = screen.getAllByText('5')[1]; // MyMod.esp
-    fireEvent.click(cell!);
-    fireEvent.click(cell!);
-    fireEvent.doubleClick(cell!);
+    const cell = required(screen.getAllByText('5')[1], "the second '5' match (MyMod.esp)");
+    fireEvent.click(cell);
+    fireEvent.click(cell);
+    fireEvent.doubleClick(cell);
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByDisplayValue('5')).not.toBeInTheDocument();
   });
 
   it('double click on an immutable disk cell opens nothing', () => {
     renderRow({ focusedCell: null, meta: intMeta, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
-    fireEvent.doubleClick(screen.getAllByText('5')[0]!); // Fallout4.esm — immutable
+    fireEvent.doubleClick(required(screen.getAllByText('5')[0], "the first '5' match (Fallout4.esm)")); // immutable
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('double click on the label column toggles expand/collapse without breaking the existing button', () => {
     const onToggle = vi.fn();
     renderRow({ diff: diff({ children: CHILDREN }), isExpanded: false, onToggle });
-    const labelCell = screen.getByText('▶').closest('td')!;
+    const labelCell = required(screen.getByText('▶').closest('td'), "the '▶' cell's td ancestor");
     fireEvent.doubleClick(labelCell);
     expect(onToggle).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByText('▶'));
@@ -129,7 +135,7 @@ describe('DiffRow — top-level scalar row', () => {
 
   it('double click on the label column does nothing for a leaf row with no children', () => {
     renderRow();
-    const labelCell = screen.getByText('Name').closest('td')!;
+    const labelCell = required(screen.getByText('Name').closest('td'), "the 'Name' cell's td ancestor");
     expect(() => fireEvent.doubleClick(labelCell)).not.toThrow();
   });
 });
@@ -139,13 +145,13 @@ describe('DiffRow — top-level scalar row', () => {
 describe('DiffRow — dimmed columns', () => {
   it('dims a cell whose column the panel named dimmed', () => {
     renderRow({ dimmedColumns: new Set([columnKey('MyMod.esp', null)]) });
-    const cell = screen.getAllByText('disk-value')[1]!.closest('td')!;
+    const cell = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     expect(cell).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
   it('does not dim a column outside that set', () => {
     renderRow();
-    const cell = screen.getAllByText('disk-value')[1]!.closest('td')!;
+    const cell = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     expect(cell).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 });
@@ -156,7 +162,7 @@ describe('DiffRow — drag affordance on leaf cells', () => {
   // default arrow, and drag is simply unadvertised (as in xEdit) rather than shown by the cursor.
   it('shows no grab cursor at rest on a leaf cell', () => {
     renderRow();
-    const cell = screen.getAllByText('disk-value')[0]!.closest('td')!;
+    const cell = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor");
     expect(cell.style.cursor).not.toBe('grab');
   });
 });
@@ -168,43 +174,43 @@ describe('DiffRow — cell focus', () => {
   it('clicking a value cell reports its row and plugin to onFocusCell', () => {
     const onFocusCell = vi.fn();
     renderRow({ onFocusCell });
-    fireEvent.click(screen.getAllByText('disk-value')[1]!);
+    fireEvent.click(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1"));
     expect(onFocusCell).toHaveBeenCalledWith('Name', 'MyMod.esp');
   });
 
   it('a disk cell matching focusedCell is tabbable and carries real DOM focus', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    const cell = screen.getAllByText('disk-value')[1]!.closest('td')!;
+    const cell = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
     expect(cell).toHaveAttribute('tabindex', '0');
     expect(cell).toHaveFocus();
   });
 
   it('a cell not matching focusedCell does not carry DOM focus', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    const cell = screen.getAllByText('disk-value')[0]!.closest('td')!; // Fallout4.esm, not the match
+    const cell = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor"); // Fallout4.esm, not the match
     expect(cell).not.toHaveFocus();
   });
 
   it('the row containing the focused cell is highlighted', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    const row = screen.getAllByText('disk-value')[1]!.closest('tr')!;
+    const row = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('tr'), "its tr ancestor");
     expect(row.style.boxShadow).toContain('var(--vscode-focusBorder');
   });
 
   it('a row with no focused cell in it is not highlighted', () => {
     renderRow({ focusedCell: null });
-    const row = screen.getAllByText('disk-value')[0]!.closest('tr')!;
+    const row = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('tr'), "its tr ancestor");
     expect(row.style.boxShadow).toBe('');
   });
 
   it('the focused cell itself is visibly distinguished from the rest of its row', () => {
     renderRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    const focusedTd = screen.getAllByText('disk-value')[1]!.closest('td')!;
-    const otherTd = screen.getAllByText('disk-value')[0]!.closest('td')!;
+    const focusedTd = required(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1").closest('td'), "its td ancestor");
+    const otherTd = required(required(screen.getAllByText('disk-value')[0], "the 'disk-value' match at index 0").closest('td'), "its td ancestor");
     expect(focusedTd.style.boxShadow).toContain('var(--vscode-focusBorder');
     // Different from the row's own highlight, not merely present — the cell's own ring must
     // stand out from the row ring around it, not be indistinguishable from it.
-    const row = focusedTd.closest('tr')!;
+    const row = required(focusedTd.closest('tr'), "the focused cell's tr ancestor");
     expect(focusedTd.style.boxShadow).not.toBe(row.style.boxShadow);
     expect(otherTd.style.boxShadow).toBe('');
   });
@@ -225,7 +231,8 @@ describe('DiffRow — cell focus', () => {
       focusedCell: { rowKey: 'Name', plugin: columnKey('Shared.esp', 'ModA') },
     });
     const cells = screen.getAllByText('disk-value');
-    const [cellA, cellB] = [cells[0]!.closest('td')!, cells[1]!.closest('td')!];
+    const cellA = required(required(cells[0], "the first 'disk-value' match").closest('td'), "its td ancestor");
+    const cellB = required(required(cells[1], "the second 'disk-value' match").closest('td'), "its td ancestor");
 
     expect(cellA).toHaveFocus();
     expect(cellB).not.toHaveFocus();
@@ -355,9 +362,9 @@ describe('DiffRow — the check error is the diff node\'s own, per column', () =
       columns: [diskColumn(decoyed('Fallout4.esm')), diskColumn(decoyed('MyMod.esp'))],
       context: { path: [], rootField: 'Location', depth: 0 },
     });
-    const cells = screen.getAllByText('{…}').map(s => s.closest('td')!);
-    expect(within(cells[0]!).queryByTitle('Location: its reference is dangling')).not.toBeInTheDocument();
-    expect(within(cells[1]!).getByTitle('Location: its reference is dangling')).toBeInTheDocument();
+    const cells = screen.getAllByText('{…}').map(s => required(s.closest('td'), "its td ancestor"));
+    expect(within(required(cells[0], "the first '{…}' cell")).queryByTitle('Location: its reference is dangling')).not.toBeInTheDocument();
+    expect(within(required(cells[1], "the second '{…}' cell")).getByTitle('Location: its reference is dangling')).toBeInTheDocument();
   });
 
   // A nested row is a diff node like any other, so its error is its own, not its root field's.
@@ -455,7 +462,7 @@ describe('DiffRow — flags cell wiring', () => {
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell,
     });
-    fireEvent.click(screen.getAllByRole('checkbox')[3]!); // MyMod.esp's B
+    fireEvent.click(required(screen.getAllByRole('checkbox')[3], "the fourth checkbox (MyMod.esp's B)"));
     expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), ['A', 'B']);
   });
 });
@@ -475,7 +482,7 @@ describe('DiffRow — formKey cell wiring', () => {
 
   it('a formKey cell in a non-editable column does not open the picker when clicked', () => {
     fkRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
-    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]!);
+    fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
     expect(pickFormKey).not.toHaveBeenCalled();
   });
 
@@ -485,7 +492,7 @@ describe('DiffRow — formKey cell wiring', () => {
       onEditCell: vi.fn(),
       focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
     });
-    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]!);
+    fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
     expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
   });
 
@@ -497,7 +504,7 @@ describe('DiffRow — formKey cell wiring', () => {
       onEditCell,
       focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
     });
-    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]!);
+    fireEvent.click(required(screen.getAllByText('000019:Fallout4.esm')[1], "the '000019:Fallout4.esm' match at index 1"));
     await vi.waitFor(() => expect(onEditCell)
       .toHaveBeenCalledWith(columnKey('MyMod.esp', null), '00001A:Fallout4.esm'));
   });
@@ -507,10 +514,11 @@ describe('DiffRow — formKey cell wiring', () => {
 // the `data-vscode-context` attribute DiskCell carries; no left-click gesture reaches it.
 describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
   function stringContext(text: string, index = 0): Record<string, unknown> {
-    const td = screen.getAllByText(text)[index]!.closest('td');
+    const textEl = required(screen.getAllByText(text)[index], `the '' match at index `);
+    const td = textEl.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();
-    const parsed: Record<string, unknown> = JSON.parse(attr!);
+    const parsed: Record<string, unknown> = JSON.parse(required(attr, "the cell's data-vscode-context attribute"));
     return parsed;
   }
 
@@ -558,7 +566,7 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
 
   it('double click opens the inline editor in place, never a tab, calling no callback', () => {
     renderRow({ editableColumns: new Set([columnKey('MyMod.esp', null)]), onEditCell: vi.fn() });
-    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]!);
+    fireEvent.doubleClick(required(screen.getAllByText('disk-value')[1], "the 'disk-value' match at index 1"));
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 });
@@ -567,10 +575,11 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
 // plus a bare scalar index could never express.
 describe('DiffRow — array parent/element right-click context', () => {
   function vscodeContextFor(text: string, index = 0): Record<string, unknown> {
-    const td = screen.getAllByText(text)[index]!.closest('td');
+    const textEl = required(screen.getAllByText(text)[index], `the '' match at index `);
+    const td = textEl.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();
-    const parsed: Record<string, unknown> = JSON.parse(attr!);
+    const parsed: Record<string, unknown> = JSON.parse(required(attr, "the cell's data-vscode-context attribute"));
     return parsed;
   }
 
@@ -695,8 +704,9 @@ describe('DiffRow — a collapsed container row, per column', () => {
     });
   }
 
-  function cellText(columnIndex: number): string {
-    return screen.getByText('Location').closest('tr')!.querySelectorAll('td')[columnIndex + 1]!.textContent;
+  function cellText(columnIndex: number): string | null {
+    const row = required(screen.getByText('Location').closest('tr'), "the 'Location' cell's tr ancestor");
+    return required(row.querySelectorAll('td')[columnIndex + 1], `the 'Location' row's cell ${columnIndex + 1}`).textContent;
   }
 
   it('shows the placeholder only in the column that has a nullable struct', () => {
@@ -728,9 +738,10 @@ describe('DiffRow — a collapsed container row, per column', () => {
       context: { path: [], rootField: 'Items', depth: 0 },
       isExpanded: false,
     });
-    const cells = screen.getByText('Items').closest('tr')!.querySelectorAll('td');
-    expect(cells[1]!.textContent).toBe('[3]');
-    expect(cells[2]!.textContent).toBe('[0]');
+    const itemsRow = required(screen.getByText('Items').closest('tr'), "the 'Items' cell's tr ancestor");
+    const cells = itemsRow.querySelectorAll('td');
+    expect(required(cells[1], "the 'Items' row's second cell").textContent).toBe('[3]');
+    expect(required(cells[2], "the 'Items' row's third cell").textContent).toBe('[0]');
   });
 
   it('shows nothing for an array whose owner the column does not carry', () => {
@@ -741,9 +752,10 @@ describe('DiffRow — a collapsed container row, per column', () => {
       isExpanded: false,
       ownerPresent: column => column === columnKey('Fallout4.esm', null),
     });
-    const cells = screen.getByText('Items').closest('tr')!.querySelectorAll('td');
-    expect(cells[1]!.textContent).toBe('[3]');
-    expect(cells[2]!.textContent).toBe('');
+    const itemsRow = required(screen.getByText('Items').closest('tr'), "the 'Items' cell's tr ancestor");
+    const cells = itemsRow.querySelectorAll('td');
+    expect(required(cells[1], "the 'Items' row's second cell").textContent).toBe('[3]');
+    expect(required(cells[2], "the 'Items' row's third cell").textContent).toBe('');
   });
 
   // A structural container no plugin carries a value for is present in every column. There is
@@ -786,7 +798,7 @@ describe('DiffRow — an enum whose values are wire tokens', () => {
     renderKindRow();
     copyToClipboard.mockClear();
 
-    fireEvent.keyDown(screen.getAllByText('Reference')[0]!.closest('td')!, { key: 'c', ctrlKey: true });
+    fireEvent.keyDown(required(required(screen.getAllByText('Reference')[0], "the 'Reference' match at index 0").closest('td'), "its td ancestor"), { key: 'c', ctrlKey: true });
 
     expect(copyToClipboard).toHaveBeenCalledWith('Reference');
   });
