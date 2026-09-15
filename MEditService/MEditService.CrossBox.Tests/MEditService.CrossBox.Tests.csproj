@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="TestData/**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\MEditService.TestSupport\TestData\**" LinkBase="TestData" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,6 +34,7 @@
          subject reaches two boxes' internals at once, with no single box's test project able to
          hold it. Meant to shrink to nothing as a follow-up rewrites each fixture at its box's
          interface, one at a time. -->
+    <ProjectReference Include="..\MEditService.TestSupport\MEditService.TestSupport.csproj" />
     <ProjectReference Include="..\MEditService.Http\MEditService.Http.csproj" />
     <ProjectReference Include="..\MEditService.Watcher\MEditService.Watcher.csproj" />
     <ProjectReference Include="..\MEditService.Commands\MEditService.Commands.csproj" />

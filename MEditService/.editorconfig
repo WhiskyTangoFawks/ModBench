@@ -411,7 +411,7 @@ dotnet_diagnostic.RS0030.severity = none
 dotnet_diagnostic.RS0030.severity = none
 
 # Permanent: the fixture builder constructs plugins with live objects by design. One section per
-# test project (ticket #901's split), alphabetical, plus the process-isolated suite.
+# test project, alphabetical, plus the process-isolated suite.
 [MEditService.Codec.Tests/**.cs]
 dotnet_diagnostic.RS0030.severity = none
 

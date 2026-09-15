@@ -34,7 +34,10 @@ public static class GitProbe
         Task.WaitAll(stdoutTask, stderrTask);
         process.WaitForExit();
         if (process.ExitCode != 0)
-            throw new InvalidOperationException($"git {args[0]} failed ({process.ExitCode}): {stderrTask.Result}");
+        {
+            var subcommand = args.Length > 0 ? args[0] : "(no subcommand)";
+            throw new InvalidOperationException($"git {subcommand} failed ({process.ExitCode}): {stderrTask.Result}");
+        }
         return stdoutTask.Result;
     }
 }

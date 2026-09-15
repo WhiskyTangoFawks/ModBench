@@ -39,10 +39,10 @@ ALL=false
 DIFF_ONLY=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --box) shift; BOX="$1"; shift ;;
+        --box) shift; [[ $# -gt 0 ]] || { echo "ERROR: --box needs a value." >&2; exit 2; }; BOX="$1"; shift ;;
         --all) ALL=true; shift ;;
-        --file) shift; FILE_FILTER="$1"; shift ;;
-        --since) shift; SINCE_REF="$1"; shift ;;
+        --file) shift; [[ $# -gt 0 ]] || { echo "ERROR: --file needs a value." >&2; exit 2; }; FILE_FILTER="$1"; shift ;;
+        --since) shift; [[ $# -gt 0 ]] || { echo "ERROR: --since needs a value." >&2; exit 2; }; SINCE_REF="$1"; shift ;;
         --diff-only) DIFF_ONLY=true; shift ;;
         *) echo "Unknown flag: $1" >&2; exit 2 ;;
     esac

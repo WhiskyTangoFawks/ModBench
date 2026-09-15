@@ -37,8 +37,11 @@ internal static class Golden
         Assert.Fail($"Golden '{name}' differs from {path}:\n{FirstDifference(expected, actual)}");
     }
 
+    // MEditService.CrossBox.Tests carries no TestData of its own (MEditService.TestSupport's is the
+    // one committed copy, referenced by every project that needs it), so this walks up one more
+    // level than a same-project Golden.cs would.
     private static string GoldenDirectory(string callerFile) =>
-        Path.Combine(Path.GetDirectoryName(callerFile)!, "..", "TestData", "goldens");
+        Path.Combine(Path.GetDirectoryName(callerFile)!, "..", "..", "MEditService.TestSupport", "TestData", "goldens");
 
     private static string Canonical(object? value)
     {
