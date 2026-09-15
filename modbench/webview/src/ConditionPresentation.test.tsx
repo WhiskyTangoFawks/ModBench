@@ -140,10 +140,13 @@ function compareResult(
   };
 
   const resolutionsFor = (path: string[], index: number) => {
+    // Object.fromEntries falls back to an `any`-returning overload unless the entries array is
+    // a genuine tuple array, hence the explicit map return type.
     const entries = columns
       .map(c => [c, at(c, index, path)] as const)
       .filter(([, v]) => typeof v === 'string' && resolutions[v])
-      .map(([c, v]) => [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[String(v)] }]);
+      .map(([c, v]): [string, { state: 'ResolvedValidType'; recordType: null; editorId: string | undefined }] =>
+        [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[String(v)] }]);
     return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   };
 

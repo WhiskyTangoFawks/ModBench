@@ -93,3 +93,15 @@ export function required<T>(value: T | null | undefined, what: string): T {
   if (value === null || value === undefined) throw new Error(`expected ${what}`);
   return value;
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A `data-vscode-context` blob's one parse point: proves it is a JSON object before a test
+ *  reads a member off it, without claiming a type for that member beyond `unknown`. */
+export function parseJsonRecord(json: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(json);
+  if (!isRecord(parsed)) throw new Error('expected a JSON object');
+  return parsed;
+}

@@ -97,6 +97,11 @@ function propertyOf(value: unknown, name: string): unknown {
   return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
 }
 
+// Array.isArray's own type guard narrows to `any[]`; this narrows to `unknown[]` instead.
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
 function stringValueAt(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === 'string' ? value : '';
@@ -119,11 +124,12 @@ const PLUGIN = 'MyMod.esp';
 const keyTextOf = (keyMembers: string[], element: unknown): string =>
   keyMembers
     .map(m => m.split('.').reduce<unknown>((v, name) => propertyOf(v, name), element))
-    .map(v => String(v ?? ''))
+    // Every key member this file's fixtures use (Name, Property.Alias) is a string or a number.
+    .map(v => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))
     .join(' / ');
 
 function keysOf(meta: FieldMetadata, values: Record<string, unknown>): string[] {
-  const lists = Object.values(values).map(v => (Array.isArray(v) ? v : []));
+  const lists = Object.values(values).map(v => (isUnknownArray(v) ? v : []));
   const { keyMembers } = meta;
   if (keyMembers) return [...new Set(lists.flatMap(l => l.map(e => keyTextOf(keyMembers, e))))].sort();
   return Array.from({ length: Math.max(0, ...lists.map(l => l.length)) }, (_, i) => `[${i}]`);

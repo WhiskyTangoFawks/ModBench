@@ -39,7 +39,7 @@ import {
 import { DownloadNode, type DownloadsProvider } from './DownloadsProvider';
 import type { DownloadRow } from './mo2/downloads';
 import type { Instance, InstanceValue } from './instance';
-import { recordingReporter, scriptedDialog } from '../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog, assertAskedOnce } from '../test/surfacingDoubles';
 import { downloadRowFixture } from './test/downloadRowFixture';
 import { instanceValueFixture } from './test/instanceValueFixture';
 
@@ -96,6 +96,17 @@ async function writeMeta(root: string, name: string, text = '[General]\r\n'): Pr
 function calledFsPath(mockFn: { mock: { calls: FakeUri[][] } }): string {
   const call = present(mockFn.mock.calls[0], 'the mock function\'s sole call');
   return present(call[0], "the call's first argument").fsPath;
+}
+
+function calledFsPaths(mockFn: { mock: { calls: FakeUri[][] } }): string[] {
+  return mockFn.mock.calls.map((call) => present(call[0], "the call's first argument").fsPath);
+}
+
+// vi.fn()'s own generic default types every call's args and return as `any`; this witnesses the
+// one call this file's own test cares about, at the type the test itself expects.
+function calledWith<T>(mockFn: { mock: { calls: T[][] } }, argIndex = 0): T {
+  const call = present(mockFn.mock.calls[0], "the mock function's sole call");
+  return present(call[argIndex], "the call's argument");
 }
 
 function invoke(commandId: string, ...args: unknown[]): void {
@@ -197,11 +208,10 @@ describe('registerDownloadsSingleRowCommands', () => {
     invoke('modbench.downloads.install', node('foo.7z'));
 
     await vi.waitFor(() => expect(report.reports).toHaveLength(1));
-    expect(report.reports).toEqual([{
-      severity: 'warning',
-      message: expect.stringContaining('"foo.7z" was installed, but its Downloads status'),
-      detail: expect.stringContaining('EISDIR'),
-    }]);
+    const reportEntry = present(report.reports[0], 'the one recorded report');
+    expect(reportEntry.severity).toBe('warning');
+    expect(reportEntry.message).toContain('"foo.7z" was installed, but its Downloads status');
+    expect(reportEntry.detail).toContain('EISDIR');
     expect(executeCommand).toHaveBeenCalledWith(
       'modbench.modList.installFromArchive', archive, undefined, undefined, undefined, { kind: 'new' });
   });
@@ -243,7 +253,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     invoke('modbench.downloads.visitNexus', node('foo.7z', { modID: '123' }));
 
     await vi.waitFor(() => expect(openExternal).toHaveBeenCalled());
-    const target: { toString(): string } = present(openExternal.mock.calls[0], "the sole openExternal call")[0];
+    const target = calledWith<{ toString(): string }>(openExternal);
     const url = target.toString();
     expect(url).toBe('https://www.nexusmods.com/fallout4/mods/123');
   });
@@ -320,7 +330,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     invoke('modbench.downloads.install', node('foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    const items: { label: string; description?: string; choice: unknown }[] = present(showQuickPick.mock.calls[0], 'the sole showQuickPick call')[0];
+    const items = calledWith<{ label: string; description?: string; choice: unknown }[]>(showQuickPick);
     expect(items).toEqual([
       { label: 'The Match (v2.0)', description: 'File ID match', choice: { kind: 'upgrade', name: 'The Match' } },
       { label: 'No Match (v1.0)', description: undefined, choice: { kind: 'upgrade', name: 'No Match' } },
@@ -501,9 +511,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     invoke('modbench.downloads.delete', node('foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(1));
-    expect(ask.asked).toEqual([
-      { message: expect.stringContaining('"foo.7z"'), detail: undefined, buttons: ['Delete'] },
-    ]);
+    assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
   });
 
   // The negative case on a destructive operation — the single most valuable assertion in this
@@ -530,7 +538,7 @@ describe('registerDownloadsMultiRowCommands', () => {
     invoke('modbench.downloads.delete', node('foo.7z'));
 
     await vi.waitFor(() => expect(fsDelete).toHaveBeenCalledTimes(2));
-    const trashedPaths: string[] = fsDelete.mock.calls.map((c): string => { const uri: FakeUri = c[0]; return uri.fsPath; });
+    const trashedPaths = calledFsPaths(fsDelete);
     expect(trashedPaths).toEqual(expect.arrayContaining([archive, meta]));
   });
 });
@@ -548,10 +556,8 @@ describe('deleteArchives', () => {
 
     await deleteArchives(root, ['a.7z', 'b.7z'], recordingReporter(), ask);
 
-    expect(ask.asked).toEqual([
-      { message: expect.stringContaining('2 items'), detail: undefined, buttons: ['Delete'] },
-    ]);
-    const trashedPaths: string[] = fsDelete.mock.calls.map((c): string => { const uri: FakeUri = c[0]; return uri.fsPath; });
+    assertAskedOnce(ask, { messageContains: '2 items', buttons: ['Delete'] });
+    const trashedPaths = calledFsPaths(fsDelete);
     expect(trashedPaths).toEqual(expect.arrayContaining([a, b]));
   });
 
@@ -571,9 +577,7 @@ describe('deleteArchives', () => {
 
     await deleteArchives(root, ['foo.7z'], recordingReporter(), ask);
 
-    expect(ask.asked).toEqual([
-      { message: expect.stringContaining('"foo.7z"'), detail: undefined, buttons: ['Delete'] },
-    ]);
+    assertAskedOnce(ask, { messageContains: '"foo.7z"', buttons: ['Delete'] });
   });
 });
 

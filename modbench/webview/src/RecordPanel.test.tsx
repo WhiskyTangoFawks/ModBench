@@ -12,7 +12,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { columnKey } from './columnKey';
-import { fieldMeta, panelClient, required, type PanelOpts } from './test/fixtures';
+import { fieldMeta, panelClient, parseJsonRecord, required, type PanelOpts } from './test/fixtures';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
@@ -1489,7 +1489,7 @@ describe('RecordPanel — a column whose record failed to parse', () => {
 
   const contextsFor = (container: HTMLElement, plugin: string) =>
     Array.from(container.querySelectorAll('[data-vscode-context]'))
-      .map((e): Record<string, unknown> => JSON.parse(e.getAttribute('data-vscode-context') ?? ''))
+      .map((e) => parseJsonRecord(e.getAttribute('data-vscode-context') ?? ''))
       .filter(c => c.plugin === plugin);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Broken.esp'));

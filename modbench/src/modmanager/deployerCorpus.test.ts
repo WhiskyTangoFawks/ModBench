@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseModlist } from './mo2/modlistText';
+import { parseManifest } from './mo2Files';
 import { deployMods, purgeMods } from './commands/deployment';
 import { buildFileConflictIndex } from './fileConflictIndex';
 import type { GameDirectory } from './gameDirectory';
@@ -74,7 +75,7 @@ describe('deploy/purge corpus', () => {
       ['game/Data/NonAsciiRetexture - Addon.esl', 'game/Data/NonAsciiRetexture.esp', 'game/Data/Tracked Patch Mod.esp'].sort(),
     );
 
-    const manifest = JSON.parse(await readFile(join(dir, MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(dir, MANIFEST), 'utf8'));
     expect(manifest.links.sort()).toEqual(
       ['NonAsciiRetexture.esp', 'NonAsciiRetexture - Addon.esl', 'Tracked Patch Mod.esp'].sort(),
     );

@@ -205,7 +205,7 @@ export type PurgeOutcome =
   | { wrote: true; warnings: DeployWarning[] }
   | { wrote: false; refusal?: string };
 
-interface Manifest {
+export interface Manifest {
   /** Data/-relative paths we hardlinked. */
   links: string[];
   /** Data/ files present before the first deploy — the vanilla baseline. */
@@ -236,8 +236,9 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 // The manifest's one parse point: checks the fields a manifest always has and throws rather
-// than handing back a value whose shape was never proven. readManifest, below, catches it.
-function parseManifest(raw: string): Manifest {
+// than handing back an unproven shape. readManifest, below, catches it; exported for reuse
+// by a test reading its own deployed manifest.
+export function parseManifest(raw: string): Manifest {
   const parsed: unknown = JSON.parse(raw);
   if (typeof parsed !== 'object' || parsed === null) {
     throw new Error(`Expected the deploy manifest to be a JSON object, got ${typeof parsed}.`);
