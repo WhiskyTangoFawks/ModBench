@@ -139,6 +139,10 @@ test = os.environ["TEST_PROJECT"]
 cfg = json.load(open(tmpl))
 sc = cfg["stryker-config"]
 sc["test-projects"] = [f"{test}/{test}.csproj"]
+# Disambiguates the mutated project among the test project's own references — without it,
+# Stryker enumerates every csproj the solution can build and baselines each one's tests in
+# turn, which is correct but runs the whole suite once per production project.
+sc["project"] = f"{prod}.csproj"
 
 mutate = json.loads(os.environ["MUTATE_JSON"])
 box_exclusion = os.environ.get("BOX_EXCLUSION") or None

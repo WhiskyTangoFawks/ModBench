@@ -84,11 +84,15 @@ from folklore, and re-measure the first time a box's own number matters:
 | Build + mutate + coverage capture (fixed, every run) | ~8 min cold, ~12s warm build |
 | Each mutant actually tested | ~1.8s |
 | A since-scoped batch across three landed tickets (314 mutants, whole corpus) | **~17 min total** |
+| Verified per-box: `--box Ports --all`, the smallest box | **~24 min total** (5 mutants tested, 20 created) |
 
 A `--all` run is expensive because of mutant *count* — the whole box, at the per-mutant
-rate above. Prefer `--since`. The smallest boxes (`Ports`, `LoadOrder`) pay the same ~8
-min fixed cost but mutate only a handful of files, so `--all` there is cheap; the larger
-boxes (`Http`, `Commands`, `Index`) do not.
+rate above. Prefer `--since`. The smallest boxes (`Ports`, `LoadOrder`) mutate only a
+handful of files, but the fixed cost measured higher per-box than the pre-split figure
+above (`--project` narrows *which* project is mutated, not how long its own coverage
+baseline takes) — budget nearer 25 min cold for a first per-box run in this environment
+until a second box's figure confirms whether that is a box-split tax or this run's own
+variance. The larger boxes (`Http`, `Commands`, `Index`) will cost more still.
 
 **Timeouts are a real but secondary tax.** Mutating the async load-order-lifecycle code deadlocks
 rather than fails: a broken cancellation check or loop-exit produces no answer at all, and from
