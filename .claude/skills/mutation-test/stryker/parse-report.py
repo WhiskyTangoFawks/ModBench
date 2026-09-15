@@ -11,7 +11,7 @@ Usage (from MEditService/ for .NET reports, modbench/ for StrykerJS reports):
 
 --diff-only narrows the report (which the runners scope at the *file* level,
 mutating every testable line in any touched file) down to survivors whose lines
-actually intersect the git diff against --target (default: stryker-config.json's
+actually intersect the git diff against --target (default: stryker-config.template.json's
 since.target). Use it to check "did my diff introduce anything new" without
 re-running Stryker; the unfiltered report remains the full-file entropy audit.
 
@@ -50,7 +50,7 @@ def source_context(lines: list[str], start: int, end: int, ctx: int = 3) -> str:
 
 def default_since_target(repo_root: Path) -> str:
     try:
-        with open(repo_root / "MEditService" / "stryker-config.json") as f:
+        with open(repo_root / "MEditService" / "stryker-config.template.json") as f:
             cfg = json.load(f)
         return cfg["stryker-config"]["since"]["target"]
     except (OSError, KeyError, json.JSONDecodeError):
@@ -171,7 +171,7 @@ def main() -> None:
     parser.add_argument("--diff-only", action="store_true",
                          help="Only show survivors whose lines intersect the git diff vs --target")
     parser.add_argument("--target", default=None,
-                         help="Git ref to diff against for --diff-only (default: stryker-config.json's since.target)")
+                         help="Git ref to diff against for --diff-only (default: stryker-config.template.json's since.target)")
     args = parser.parse_args()
 
     report_path = resolve_report_path(args.report_path)
@@ -203,7 +203,9 @@ def main() -> None:
           "from the file before calling anything equivalent.")
 
     for status, fp, sl, sc, el, ec, mutator, desc, ctx in results:
-        display_path = fp.split("MEditService.Core/")[-1] if "MEditService.Core/" in fp else fp
+        # The report path is already relative to the mutated box's own project, e.g.
+        # "MEditService.Ports/PluginLoadFailure.cs" — nothing left to trim since the split.
+        display_path = fp
         span = f"{sl}:{sc}-{ec}" if sl == el else f"{sl}:{sc}-{el}:{ec}"
         print(f"\n[{status}] {display_path}:{span} [{mutator}] {desc}\n{ctx}")
 

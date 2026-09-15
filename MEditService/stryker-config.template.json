@@ -1,0 +1,31 @@
+{
+  "stryker-config": {
+    "solution": "MEditService.sln",
+    "test-projects": [
+      "__filled in by run.sh: MEditService.<Box>.Tests/MEditService.<Box>.Tests.csproj__"
+    ],
+    "coverage-analysis": "perTest",
+    "mutation-level": "Standard",
+    "reporters": [
+      "json"
+    ],
+    "thresholds": {
+      "high": 80,
+      "low": 60,
+      "break": 0
+    },
+    "mutate": [
+      "__filled in by run.sh: **/MEditService.<Box>/**/*.cs, or the diff-scoped file list__"
+    ],
+    "ignore-methods": [
+      "Log*"
+    ],
+    "ignore-mutations": [
+      "String"
+    ],
+    "since": {
+      "enabled": false,
+      "target": "main"
+    }
+  }
+}
