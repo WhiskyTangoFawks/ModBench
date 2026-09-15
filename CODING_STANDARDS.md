@@ -7,8 +7,7 @@ with this file.
 
 ## Comments and docs
 
-- A comment explains what the code does. → Rename or restructure until the code says it.
-  A comment states a constraint from outside the code.
+- A comment explains what the code does. → Rename or restructure until the code says it. A comment states a constraint from outside the code.
 - A comment contradicts the code beneath it. → Delete it.
 - A comment inside a test. → Move what it says into the test's name or an assertion.
 
@@ -35,7 +34,7 @@ diff.
 - A test asserts shape: a type, method or field exists, or a call returned an object. →
   Assert the outcome a caller observes, or delete it. The compiler holds shape.
 - A test proves an absence: a removed method, a retired field, an old wire form. → Delete
-  it. The compiler holds absence, and a refactor ships no tests.
+  it. The compiler holds absence.
 - A test reaches past the seam: a private member, or a row read around the interface. →
   Move it to the seam and assert the outcome there.
 - A refactor hunk arrives with an edit to the test of the same behaviour. → The test was
