@@ -16,13 +16,7 @@ import type { Column, PathSegment } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { columnKey } from './columnKey';
 import { DIMMED_OPACITY } from './gridStyles';
-import { diffNode, fieldMeta } from './test/fixtures';
-
-// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
-function required<T>(value: T | null | undefined, what: string): T {
-  if (value === null || value === undefined) throw new Error(`expected ${what}`);
-  return value;
-}
+import { diffNode, fieldMeta, required } from './test/fixtures';
 
 const strMeta = fieldMeta({ name: 'Name', type: 'string' });
 const intMeta = fieldMeta({ name: 'Level', type: 'int' });

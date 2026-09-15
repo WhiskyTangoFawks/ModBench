@@ -8,13 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
 import { vscode } from './vscode';
-import { fieldMeta, leafMeta as leaf, panelClient, postedEnvelopes as sharedPostedEnvelopes } from './test/fixtures';
-
-// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
-function required<T>(value: T | null | undefined, what: string): T {
-  if (value === null || value === undefined) throw new Error(`expected ${what}`);
-  return value;
-}
+import { fieldMeta, leafMeta as leaf, panelClient, postedEnvelopes as sharedPostedEnvelopes, required } from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the enum members these
 // cases name and never restructured; `siblingsInUse` rows come from Condition.GetParameterTypes.

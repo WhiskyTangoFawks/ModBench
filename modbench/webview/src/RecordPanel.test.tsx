@@ -12,13 +12,7 @@ import { recordPanelIncompleteMessage } from './recordPanelIncompleteMessage';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { columnKey } from './columnKey';
-import { fieldMeta, panelClient, type PanelOpts } from './test/fixtures';
-
-// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
-function required<T>(value: T | null | undefined, what: string): T {
-  if (value === null || value === undefined) throw new Error(`expected ${what}`);
-  return value;
-}
+import { fieldMeta, panelClient, required, type PanelOpts } from './test/fixtures';
 
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 

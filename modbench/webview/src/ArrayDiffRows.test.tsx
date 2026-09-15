@@ -8,15 +8,9 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW, type WebviewToExtension } from './messages';
-import { at, fieldMeta, keyed, lastPostedEnvelope, member, panelClient } from './test/fixtures';
+import { at, fieldMeta, keyed, lastPostedEnvelope, member, panelClient, required } from './test/fixtures';
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
-
-// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
-function required<T>(value: T | null | undefined, what: string): T {
-  if (value === null || value === undefined) throw new Error(`expected ${what}`);
-  return value;
-}
 
 
 const sortedArrayMeta = fieldMeta({
