@@ -41,6 +41,14 @@ import { parseModlist } from '../mo2/modlistText';
 const fixture = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance');
 const LONG_AGO = new Date('2020-01-01T00:00:00Z');
 
+// expect.stringContaining/expect.any(String) are both typed `any`, so this narrows the refusal
+// branch by hand instead of embedding a matcher in a toEqual object.
+function assertRefusal(result: { applied: boolean; refusal?: string }, expectedSubstring?: string): void {
+  if (result.applied) throw new Error('expected a refusal, got applied:true');
+  expect(typeof result.refusal).toBe('string');
+  if (expectedSubstring !== undefined) expect(result.refusal).toContain(expectedSubstring);
+}
+
 describe('modlist.txt commands — bytes written, or a refusal returned', () => {
   let dir: string;
   const modlistPath = () => join(dir, 'profiles', 'Default', 'modlist.txt');
@@ -90,7 +98,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('setModEnabled refuses an unknown mod, leaving the file untouched', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await setModEnabled(dir, 'Default', 'No Such Mod', true);
-    expect(outcome).toEqual({ applied: false, refusal: expect.stringContaining('No Such Mod') });
+    assertRefusal(outcome, 'No Such Mod');
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     expect(await mtime()).toEqual(LONG_AGO);
   });
@@ -105,7 +113,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('reorderMod refuses an unknown mod', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await reorderMod(dir, 'Default', 'No Such Mod', 0);
-    expect(outcome).toEqual({ applied: false, refusal: expect.any(String) });
+    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
@@ -120,7 +128,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('insertSeparator refuses when the anchor entry is absent', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await insertSeparator(dir, 'Default', 'New Section', 'No Such Entry');
-    expect(outcome).toEqual({ applied: false, refusal: expect.any(String) });
+    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
@@ -135,7 +143,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('renameSeparator refuses an unknown separator', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await renameSeparator(dir, 'Default', 'No Such Separator', 'Renamed');
-    expect(outcome).toEqual({ applied: false, refusal: expect.any(String) });
+    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
@@ -150,7 +158,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('deleteSeparator refuses an unknown separator', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await deleteSeparator(dir, 'Default', 'No Such Separator');
-    expect(outcome).toEqual({ applied: false, refusal: expect.any(String) });
+    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
@@ -171,7 +179,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('moveModToSeparator refuses an unknown mod', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await moveModToSeparator(dir, 'Default', 'No Such Mod', null);
-    expect(outcome).toEqual({ applied: false, refusal: expect.any(String) });
+    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
@@ -188,7 +196,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   it('reorderSeparatorBlock refuses an unknown separator', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await reorderSeparatorBlock(dir, 'Default', 'No Such Separator', 0);
-    expect(outcome).toEqual({ applied: false, refusal: expect.any(String) });
+    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
@@ -203,7 +211,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     const before = await readFile(modlistPath(), 'utf8');
     const beforeDirs = await readdir(join(dir, 'mods'));
     const outcome = await uninstallMod(dir, 'Default', 'No Such Mod');
-    expect(outcome).toEqual({ applied: false, refusal: expect.any(String) });
+    assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
     expect(await readdir(join(dir, 'mods'))).toEqual(beforeDirs);
   });
@@ -232,7 +240,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
       const beforeModlist = await readFile(modlistPath(), 'utf8');
       const before = await readdir(join(dir, 'mods', 'Harder VATS'));
       const outcome = await createEmptyMod(dir, 'Default', 'Harder VATS');
-      expect(outcome).toEqual({ applied: false, refusal: expect.stringContaining('Harder VATS') });
+      assertRefusal(outcome, 'Harder VATS');
       expect(await readdir(join(dir, 'mods', 'Harder VATS'))).toEqual(before);
       expect(await readFile(modlistPath(), 'utf8')).toBe(beforeModlist);
     });
@@ -295,7 +303,7 @@ describe('adoptMods — the unlisted folders it is handed get a modlist.txt line
   it('refuses when modlist.txt cannot be read, rather than throwing', async () => {
     await rm(modlistPath());
 
-    expect(await adopt(['Hand Extracted Mod'])).toEqual({ applied: false, refusal: expect.stringContaining('ENOENT') });
+    assertRefusal(await adopt(['Hand Extracted Mod']), 'ENOENT');
   });
 });
 

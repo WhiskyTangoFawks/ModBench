@@ -19,6 +19,18 @@ import { present } from '../../present';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+// vscode.Command's own type leaves `arguments` as `any[]`, so this narrows the first one by hand
+// instead of an unsafe member access straight off it.
+function firstCommandArgument(command: { arguments?: unknown[] } | undefined): Record<string, unknown> {
+  const first = command?.arguments?.[0];
+  if (!isRecord(first)) throw new Error('expected a command argument object');
+  return first;
+}
+
 function makeRecord(
   i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None', hasContainerChildren = false,
 ): RecordSummary {
@@ -305,7 +317,7 @@ describe('RecordNode', () => {
     const record: RecordSummary = { ...makeRecord(0), editorId: null };
     const node = new RecordNode(record);
 
-    expect(node.command?.arguments?.[0].label).toBe(record.formKey);
+    expect(firstCommandArgument(node.command).label).toBe(record.formKey);
   });
 
   // The renumberable row — a master copy whose plugin is tracked — is the only one that

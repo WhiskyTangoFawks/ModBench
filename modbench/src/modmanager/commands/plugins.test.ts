@@ -9,6 +9,12 @@ const PROFILE = 'Default';
 const INITIAL = '# header\r\n*Base.esp\r\nOther.esp\r\n';
 const LONG_AGO = new Date('2020-01-01T00:00:00Z');
 
+// expect.stringContaining's type is `any`, so this narrows the refusal branch by hand instead.
+function assertRefusal(result: { applied: boolean; refusal?: string }, expectedSubstring: string): void {
+  if (result.applied) throw new Error('expected a refusal, got applied:true');
+  expect(result.refusal).toContain(expectedSubstring);
+}
+
 describe('plugins.txt commands — each verb writes bytes or returns a refusal', () => {
   let dir: string;
   const pluginsPath = () => join(dir, 'profiles', PROFILE, 'plugins.txt');
@@ -37,9 +43,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('setPluginEnabled refuses a name with no line, naming it, and writes nothing', async () => {
-    expect(await setPluginEnabled(dir, PROFILE, 'No Such.esp', false)).toEqual({
-      applied: false, refusal: expect.stringContaining('No Such.esp'),
-    });
+    assertRefusal(await setPluginEnabled(dir, PROFILE, 'No Such.esp', false), 'No Such.esp');
     expect(await mtime()).toEqual(LONG_AGO);
   });
 
@@ -49,9 +53,7 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('reorderPlugins refuses a name with no line, naming it, and writes nothing', async () => {
-    expect(await reorderPlugins(dir, PROFILE, ['No Such.esp'], 0)).toEqual({
-      applied: false, refusal: expect.stringContaining('No Such.esp'),
-    });
+    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], 0), 'No Such.esp');
     expect(await plugins()).toBe(INITIAL);
     expect(await mtime()).toEqual(LONG_AGO);
   });
@@ -62,16 +64,14 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
   });
 
   it('appendPlugin refuses a name that already has a line, and writes nothing', async () => {
-    expect(await appendPlugin(dir, PROFILE, 'Base.esp')).toEqual({
-      applied: false, refusal: expect.stringContaining('Base.esp'),
-    });
+    assertRefusal(await appendPlugin(dir, PROFILE, 'Base.esp'), 'Base.esp');
     expect(await plugins()).toBe(INITIAL);
     expect(await mtime()).toEqual(LONG_AGO);
   });
 
   it('a profile with no plugins.txt refuses rather than creating one', async () => {
     const result = await setPluginEnabled(dir, 'NoSuchProfile', 'Base.esp', false);
-    expect(result).toEqual({ applied: false, refusal: expect.stringContaining('ENOENT') });
+    assertRefusal(result, 'ENOENT');
   });
 
   // Rival this catches: a plain read-then-write per command. Both read the same text, and the
@@ -220,7 +220,7 @@ describe('reconcilePlugins — plugins.txt converges on what disk provides', () 
     await writeFile(pluginsPath(), '*Base.esp\r\n*DLCCoast.esm\r\n');
     await rm(join(dir, 'Game', 'Data'), { recursive: true });
 
-    expect(await run()).toEqual({ applied: false, refusal: expect.stringContaining('ENOENT') });
+    assertRefusal(await run(), 'ENOENT');
     expect(await plugins()).toBe('*Base.esp\r\n*DLCCoast.esm\r\n');
   });
 

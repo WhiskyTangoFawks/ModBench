@@ -26,10 +26,10 @@ describe('extractArchive', () => {
   it('throws (does not try other binaries) when a spawned extraction fails, preserving the cause', async () => {
     const underlying = new Error('7z exited with code 2');
     const run = vi.fn().mockRejectedValue(underlying);
-    await expect(extractArchive('/tmp/bad.7z', '/tmp/stage', run)).rejects.toMatchObject({
-      message: expect.stringMatching(/Failed to extract/),
-      cause: underlying,
-    });
+    const rejection: unknown = await extractArchive('/tmp/bad.7z', '/tmp/stage', run).catch((e: unknown) => e);
+    if (!(rejection instanceof Error)) throw new Error('expected extractArchive to reject with an Error');
+    expect(rejection.message).toMatch(/Failed to extract/);
+    expect(rejection.cause).toBe(underlying);
     expect(run).toHaveBeenCalledTimes(1);
   });
 });

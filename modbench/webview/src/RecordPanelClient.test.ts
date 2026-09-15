@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 
 // The webview's vscode bridge is acquired at module load, so it must be stubbed before import.
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -23,7 +23,7 @@ describe('createRecordPanelClient', () => {
 });
 
 describe('RecordPanelClient.load', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: Mock<(input: Request | string) => Promise<Response>>;
 
   beforeEach(() => {
     fetchMock = vi.fn((input: Request | string) => {

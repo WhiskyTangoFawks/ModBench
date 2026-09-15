@@ -3,6 +3,8 @@ import {
   buttonsInDefaultOrder, messageFor, runExternalChangeDialogs, BASELINE_BUTTON, APPLY_BUTTON,
 } from '../externalChangeDialog';
 import type { UnansweredExternalChange } from '../../medit/client';
+import type { AskQuestion } from '../../dialog';
+import { present } from '../../present';
 
 function unanswered(overrides: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
   return {
@@ -83,16 +85,16 @@ describe('messageFor', () => {
 describe('runExternalChangeDialogs', () => {
   it('shows exactly one modal per notification, named for the mod', async () => {
     const items = [unanswered({ plugins: ['A.esp', 'B.esp'], origin: 'ModA', metaChanged: true })];
-    const show = vi.fn().mockResolvedValue(BASELINE_BUTTON);
+    const show = vi.fn<AskQuestion>().mockResolvedValue(BASELINE_BUTTON);
 
     const outcomes = await runExternalChangeDialogs(items, show);
 
     expect(show).toHaveBeenCalledTimes(1);
-    expect(show).toHaveBeenCalledWith(
-      'ModA',
-      { modal: true, detail: expect.stringContaining('A.esp, B.esp') },
-      BASELINE_BUTTON, APPLY_BUTTON,
-    );
+    const [message, options, ...buttons] = present(show.mock.calls[0], 'the first show() call');
+    expect(message).toBe('ModA');
+    expect(options.modal).toBe(true);
+    expect(options.detail).toContain('A.esp, B.esp');
+    expect(buttons).toEqual([BASELINE_BUTTON, APPLY_BUTTON]);
     expect(outcomes).toEqual([{ change: items[0], answer: 'absorb' }]);
   });
 
@@ -101,7 +103,7 @@ describe('runExternalChangeDialogs', () => {
       unanswered({ plugins: ['A.esp'], origin: 'ModA', metaChanged: true }),
       unanswered({ plugins: ['X.esp'], origin: 'ModB', metaChanged: false }),
     ];
-    const show = vi.fn()
+    const show = vi.fn<AskQuestion>()
       .mockResolvedValueOnce(BASELINE_BUTTON)
       .mockResolvedValueOnce(APPLY_BUTTON);
 
@@ -112,14 +114,17 @@ describe('runExternalChangeDialogs', () => {
       { change: items[0], answer: 'absorb' },
       { change: items[1], answer: 'keep' },
     ]);
-    expect(show).toHaveBeenNthCalledWith(1,
-      'ModA',
-      { modal: true, detail: expect.stringContaining('moved from') },
-      BASELINE_BUTTON, APPLY_BUTTON);
-    expect(show).toHaveBeenNthCalledWith(2,
-      'ModB',
-      { modal: true, detail: expect.any(String) },
-      APPLY_BUTTON, BASELINE_BUTTON);
+    const [firstMessage, firstOptions, ...firstButtons] = present(show.mock.calls[0], 'the first show() call');
+    expect(firstMessage).toBe('ModA');
+    expect(firstOptions.modal).toBe(true);
+    expect(firstOptions.detail).toContain('moved from');
+    expect(firstButtons).toEqual([BASELINE_BUTTON, APPLY_BUTTON]);
+
+    const [secondMessage, secondOptions, ...secondButtons] = present(show.mock.calls[1], 'the second show() call');
+    expect(secondMessage).toBe('ModB');
+    expect(secondOptions.modal).toBe(true);
+    expect(typeof secondOptions.detail).toBe('string');
+    expect(secondButtons).toEqual([APPLY_BUTTON, BASELINE_BUTTON]);
   });
 
   it('answers defer on Esc/dismiss (an undefined choice)', async () => {

@@ -5,8 +5,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // A plain click on an editable cell calls pickFormKey, the native-QuickPick bridge — mocked so
 // these cases assert the call rather than rendered picker DOM.
-const pickFormKey = vi.fn().mockResolvedValue(null);
-vi.mock('./nativeBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
+const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
+vi.mock('./nativeBridge', () => ({ pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes) }));
 
 import { FormKeyCell } from './FormKeyCell';
 import type { FormKeyResolution } from './types';
