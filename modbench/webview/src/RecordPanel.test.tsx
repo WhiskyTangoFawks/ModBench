@@ -14,6 +14,12 @@ import type { FieldMetadata } from './types';
 import { columnKey } from './columnKey';
 import { fieldMeta, panelClient, type PanelOpts } from './test/fixtures';
 
+// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
+function required<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(`expected ${what}`);
+  return value;
+}
+
 const strMeta: FieldMetadata = fieldMeta({ name: 'Name', type: 'string' });
 
 const compareResult = {
@@ -969,16 +975,19 @@ const mixedLeafAliasResult = {
 
 // Both plugins carry the same leaf, and the backend drops a member null in every column, so
 // only that leaf's members remain.
+const mixedLeafAliasDiff = required(mixedLeafAliasResult.diffs[0], "the sole diff of mixedLeafAliasResult");
+const mixedLeafAliasDiffChild = required(mixedLeafAliasDiff.children[0], "the sole diff's first child");
+
 const singleLeafAliasResult = {
   ...mixedLeafAliasResult,
   overrides: mixedLeafAliasResult.overrides.map(o => ({ ...o, fields: [{ metadata: aliasesMeta, value: [masterAlias] }] })),
   diffs: [{
-    ...mixedLeafAliasResult.diffs[0],
+    ...mixedLeafAliasDiff,
     values: { 'Fallout4.esm': [masterAlias], 'MyMod.esp': [masterAlias] },
     children: [{
-      ...mixedLeafAliasResult.diffs[0]!.children[0],
+      ...mixedLeafAliasDiffChild,
       values: { 'Fallout4.esm': masterAlias, 'MyMod.esp': masterAlias },
-      children: mixedLeafAliasResult.diffs[0]!.children[0]!.children
+      children: mixedLeafAliasDiffChild.children
         .filter(c => c.fieldName !== 'external')
         .map(c => (c.fieldName === 'location'
           ? { ...c, values: { 'Fallout4.esm': { alias_id: 5 }, 'MyMod.esp': { alias_id: 5 } } }
@@ -998,14 +1007,14 @@ describe('RecordPanel — union element rows', () => {
 
   // Scoped to the grid's own body — the column headers carry their own load-order index, so
   // "[0]" is not unique document-wide.
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
 
   function labelCell(label: string): HTMLElement {
-    return rows().getByText(label).closest('td')!;
+    return required(rows().getByText(label).closest('td'), `the '${label}' cell's td ancestor`);
   }
 
   function expandRow(label: string) {
-    fireEvent.click(labelCell(label).querySelector('button')!);
+    fireEvent.click(required(labelCell(label).querySelector('button'), `the '${label}' row's expand button`));
   }
 
   async function renderExpandedElement() {
@@ -1026,13 +1035,15 @@ describe('RecordPanel — union element rows', () => {
 
   it('renders an empty cell for the column whose leaf lacks the member', async () => {
     await renderExpandedElement();
-    const locationCells = labelCell('location').closest('tr')!.querySelectorAll('td');
-    expect(locationCells[1]!.textContent).toBe('{…}');
-    expect(locationCells[2]!.textContent).toBe('');
+    const locationRow = required(labelCell('location').closest('tr'), "the 'location' row");
+    const locationCells = locationRow.querySelectorAll('td');
+    expect(required(locationCells[1], "the 'location' row's second cell").textContent).toBe('{…}');
+    expect(required(locationCells[2], "the 'location' row's third cell").textContent).toBe('');
 
-    const externalCells = labelCell('external').closest('tr')!.querySelectorAll('td');
-    expect(externalCells[1]!.textContent).toBe('');
-    expect(externalCells[2]!.textContent).toBe('{…}');
+    const externalRow = required(labelCell('external').closest('tr'), "the 'external' row");
+    const externalCells = externalRow.querySelectorAll('td');
+    expect(required(externalCells[1], "the 'external' row's second cell").textContent).toBe('');
+    expect(required(externalCells[2], "the 'external' row's third cell").textContent).toBe('{…}');
   });
 
   // An element's rows are the ones its own plugins carry, never one per schema member: the
@@ -1197,8 +1208,9 @@ describe('RecordPanel — an absent member reads as its default', () => {
     }],
   };
 
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
-  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
+  const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
+  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1206,40 +1218,40 @@ describe('RecordPanel — an absent member reads as its default', () => {
   async function renderExpanded() {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Stats'));
-    fireEvent.click(rows().getByText('Stats').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Stats').closest('td'), "the 'Stats' cell's td ancestor").querySelector('button'), "the 'Stats' row's expand button"));
     await waitFor(() => rows().getByText('Weight'));
   }
 
   it('an absent int reads 0, an absent bool false, an absent string empty', async () => {
     await renderExpanded();
-    expect(cellsOf('Weight')[2]!.textContent).toBe('0');
-    expect(cellsOf('Essential')[2]!.textContent).toBe('false');
-    expect(cellsOf('Prefix')[2]!.textContent).toBe('');
+    expect(cellAt('Weight', 2).textContent).toBe('0');
+    expect(cellAt('Essential', 2).textContent).toBe('false');
+    expect(cellAt('Prefix', 2).textContent).toBe('');
     expect(rows().queryAllByText('—')).toHaveLength(1);
   });
 
   it('an absent enum reads the default the metadata names', async () => {
     await renderExpanded();
-    expect(cellsOf('RunOn')[2]!.textContent).toBe('Subject');
+    expect(cellAt('RunOn', 2).textContent).toBe('Subject');
   });
 
   it('an absent scalar with a declared default reads that default', async () => {
     await renderExpanded();
-    expect(cellsOf('Count')[2]!.textContent).toBe('100');
+    expect(cellAt('Count', 2).textContent).toBe('100');
   });
 
   it('an unset nullable link reads as empty', async () => {
     await renderExpanded();
-    expect(cellsOf('Owner')[2]!.textContent).toBe('—');
+    expect(cellAt('Owner', 2).textContent).toBe('—');
   });
 
   // The default is what the editor opens on, so a value equal to it is no edit at all.
   it('editing an absent int from its default posts one set with the typed value', async () => {
     await renderExpanded();
     vi.mocked(vscode.postMessage).mockClear();
-    const cell = cellsOf('Weight')[2]!;
+    const cell = cellAt('Weight', 2);
     fireEvent.doubleClick(within(cell).getByText('0'));
-    const input = cell.querySelector('input')!;
+    const input = required(cell.querySelector('input'), "the cell's input");
     fireEvent.change(input, { target: { value: '5' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -1283,8 +1295,9 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
     ],
   };
 
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
-  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
+  const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
+  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1292,30 +1305,30 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
   it('an unset nullable struct reads as empty, and its member as nothing rather than zero', async () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Bounds'));
-    expect(cellsOf('Bounds')[2]!.textContent).toBe('');
-    fireEvent.click(rows().getByText('Bounds').closest('td')!.querySelector('button')!);
+    expect(cellAt('Bounds', 2).textContent).toBe('');
+    fireEvent.click(required(required(rows().getByText('Bounds').closest('td'), "the 'Bounds' cell's td ancestor").querySelector('button'), "the 'Bounds' row's expand button"));
     await waitFor(() => rows().getByText('X'));
 
-    expect(cellsOf('X')[1]!.textContent).toBe('10');
-    expect(cellsOf('X')[2]!.textContent).toBe('');
+    expect(cellAt('X', 1).textContent).toBe('10');
+    expect(cellAt('X', 2).textContent).toBe('');
   });
 
   it('an element past the column\'s own length reads as nothing, not zero', async () => {
     renderPanel(compare, { plugins: flagsTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Values'));
-    fireEvent.click(rows().getByText('Values').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Values').closest('td'), "the 'Values' cell's td ancestor").querySelector('button'), "the 'Values' row's expand button"));
     await waitFor(() => rows().getByText('[1]'));
 
-    expect(cellsOf('[1]')[1]!.textContent).toBe('2');
-    expect(cellsOf('[1]')[2]!.textContent).toBe('');
+    expect(cellAt('[1]', 1).textContent).toBe('2');
+    expect(cellAt('[1]', 2).textContent).toBe('');
   });
 
   // The classifier nulls every field of a Partial Form column: none of them is absent-by-default.
   it('a Partial Form column\'s fields read as nothing', async () => {
     renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Name'));
-    expect(cellsOf('Name')[1]!.textContent).toBe('Original Name');
-    expect(cellsOf('Name')[2]!.textContent).toBe('');
+    expect(cellAt('Name', 1).textContent).toBe('Original Name');
+    expect(cellAt('Name', 2).textContent).toBe('');
   });
 
   // A non-nullable struct is the field whose absence would otherwise read as its default.
@@ -1337,12 +1350,12 @@ describe('RecordPanel — a member of an absent owner reads as nothing', () => {
       }],
     }, { plugins: partialFormTrackedPluginsResponse });
     await waitFor(() => rows().getByText('Size'));
-    expect(cellsOf('Size')[1]!.textContent).toBe('{…}');
-    expect(cellsOf('Size')[2]!.textContent).toBe('');
+    expect(cellAt('Size', 1).textContent).toBe('{…}');
+    expect(cellAt('Size', 2).textContent).toBe('');
 
-    fireEvent.click(rows().getByText('Size').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
     await waitFor(() => rows().getByText('Width'));
-    expect(cellsOf('Width')[2]!.textContent).toBe('');
+    expect(cellAt('Width', 2).textContent).toBe('');
   });
 });
 
@@ -1375,8 +1388,9 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
     }],
   };
 
-  const rows = () => within(screen.getByRole('table').querySelector('tbody')!);
-  const cellsOf = (label: string) => rows().getByText(label).closest('tr')!.querySelectorAll('td');
+  const rows = () => within(required(screen.getByRole('table').querySelector('tbody'), "the table's tbody"));
+  const cellsOf = (label: string) => required(rows().getByText(label).closest('tr'), `the '${label}' row`).querySelectorAll('td');
+  const cellAt = (label: string, index: number) => required(cellsOf(label)[index], `the '${label}' row's cell ${index}`);
 
   beforeEach(() => vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm'));
   afterEach(() => vi.unstubAllGlobals());
@@ -1388,20 +1402,20 @@ describe('RecordPanel — an absent non-nullable struct reads as its default mem
 
   async function renderExpanded() {
     await renderCollapsed();
-    fireEvent.click(rows().getByText('Size').closest('td')!.querySelector('button')!);
+    fireEvent.click(required(required(rows().getByText('Size').closest('td'), "the 'Size' cell's td ancestor").querySelector('button'), "the 'Size' row's expand button"));
     await waitFor(() => rows().getByText('Width'));
   }
 
   it('the struct the column omits reads as a struct, not as nothing', async () => {
     await renderCollapsed();
-    expect(cellsOf('Size')[2]!.textContent).toBe('{…}');
+    expect(cellAt('Size', 2).textContent).toBe('{…}');
   });
 
   it('each member of the omitted struct reads its own default', async () => {
     await renderExpanded();
-    expect(cellsOf('Width')[2]!.textContent).toBe('0');
-    expect(cellsOf('Label')[2]!.textContent).toBe('');
-    expect(cellsOf('Depth')[2]!.textContent).toBe('12');
+    expect(cellAt('Width', 2).textContent).toBe('0');
+    expect(cellAt('Label', 2).textContent).toBe('');
+    expect(cellAt('Depth', 2).textContent).toBe('12');
   });
 });
 

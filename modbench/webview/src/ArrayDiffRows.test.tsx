@@ -375,7 +375,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle")); // expand
     await waitFor(() => screen.getByText('[1]'));
-    const cell = screen.getByText('2').closest('td')!;
+    const cell = required(screen.getByText('2').closest('td'), "the '2' cell's td ancestor");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -387,7 +387,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('[0]'));
-    const cell = screen.getByText('1').closest('td')!;
+    const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
@@ -399,7 +399,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('[2]'));
-    const cell = screen.getByText('3').closest('td')!;
+    const cell = required(screen.getByText('3').closest('td'), "the '3' cell's td ancestor");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true });
 
@@ -413,7 +413,7 @@ describe('RecordPanel — array editing (unsorted)', () => {
     await waitFor(() => screen.getByText('Values'));
     fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getByText('[0]'));
-    const cell = screen.getByText('1').closest('td')!;
+    const cell = required(screen.getByText('1').closest('td'), "the '1' cell's td ancestor");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true });
 
@@ -548,9 +548,10 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
-    const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const indexCell = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
+    const row = required(indexCell.closest('tr'), "the row containing the '[0]' index cell");
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1]!;
+    const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -566,9 +567,10 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     fireEvent.click(required(screen.getAllByText('▶')[0], "the expand toggle"));
     await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
 
-    const row = screen.getAllByText('[0]').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const indexCell = required(screen.getAllByText('[0]').find(el => el.tagName === 'TD'), "the '[0]' index cell");
+    const row = required(indexCell.closest('tr'), "the row containing the '[0]' index cell");
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1]!;
+    const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
@@ -594,7 +596,8 @@ describe('RecordPanel — a value edit posts one set envelope addressing the lea
     editLastCellOfRow('Level', '4', '6');
 
     const calls = vi.mocked(vscode.postMessage).mock.calls;
-    const posted = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)![0];
+    const postedCall = required([...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD), "a posted EDIT_FIELD message");
+    const posted = postedCall[0];
     expect(posted).toEqual({
       type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
       envelope: { op: 'set', path: [member('Level')], value: 6 },
@@ -675,11 +678,14 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   async function expandTo(label: string) {
     renderKeyedPanel();
     await waitFor(() => screen.getByText('Scripts'));
-    fireEvent.click(screen.getByText('Scripts').closest('tr')!.querySelector('button')!);
+    const scriptsRow = required(screen.getByText('Scripts').closest('tr'), "the Scripts row");
+    fireEvent.click(required(scriptsRow.querySelector('button'), "the Scripts row's expand button"));
     await waitFor(() => screen.getByText(label));
     // The row's own label cell comes first; once expanded, the key text also appears as the value
     // of the element's own `name` member.
-    fireEvent.click(screen.getAllByText(label)[0]!.closest('tr')!.querySelector('button')!);
+    const labelCell = required(screen.getAllByText(label)[0], `the first '${label}' match`);
+    const labelRow = required(labelCell.closest('tr'), `the row for '${label}'`);
+    fireEvent.click(required(labelRow.querySelector('button'), `the '${label}' row's expand button`));
     await waitFor(() => screen.getAllByText('flags'));
   }
 
@@ -687,11 +693,12 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // it in both, where a position could name only one.
   it('a value edit on a keyed element posts set through the key hop', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('flags')[0]!.closest('tr')!;
+    const flagsCell = required(screen.getAllByText('flags')[0], "the first 'flags' match");
+    const row = required(flagsCell.closest('tr'), "the row for 'flags'");
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1]!;
+    const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.doubleClick(within(cell).getByText('g'));
-    const input = cell.querySelector('input')!;
+    const input = required(cell.querySelector('input'), "the cell's input");
     fireEvent.change(input, { target: { value: 'EDITED' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
@@ -702,9 +709,10 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
 
   it('Delete on a keyed element posts remove naming the key', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
+    const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
+    const row = required(guardCell.closest('tr'), "the row for 'Guard'");
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1]!;
+    const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -741,9 +749,11 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
     }), { plugins: [{ name: 'MyMod.esp', isTracked: true }] });
     render(<RecordPanel client={client} />);
     await waitFor(() => screen.getByText('Fragments'));
-    fireEvent.click(screen.getByText('Fragments').closest('tr')!.querySelector('button')!);
+    const fragmentsRow = required(screen.getByText('Fragments').closest('tr'), "the Fragments row");
+    fireEvent.click(required(fragmentsRow.querySelector('button'), "the Fragments row's expand button"));
     await waitFor(() => screen.getByText('10 / 0'));
-    const cell = screen.getByText('10 / 0').closest('tr')!.querySelectorAll('td')[1]!;
+    const stageRow = required(screen.getByText('10 / 0').closest('tr'), "the '10 / 0' row");
+    const cell = required(stageRow.querySelectorAll('td')[1], "the '10 / 0' row's second cell");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'Delete' });
 
@@ -754,9 +764,10 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // inert on its rows.
   it('Ctrl+ArrowDown on a keyed element posts nothing', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
+    const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
+    const row = required(guardCell.closest('tr'), "the row for 'Guard'");
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1]!;
+    const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
     fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
 
@@ -767,9 +778,10 @@ describe('RecordPanel — a keyed array\'s element is addressed by key', () => {
   // a row that offered it would swallow the key and still post nothing, indistinguishable above.
   it('Ctrl+ArrowDown on a keyed element leaves the key unhandled', async () => {
     await expandTo('Guard');
-    const row = screen.getAllByText('Guard')[0]!.closest('tr')!;
+    const guardCell = required(screen.getAllByText('Guard')[0], "the first 'Guard' match");
+    const row = required(guardCell.closest('tr'), "the row for 'Guard'");
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1]!;
+    const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
 
     expect(fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true })).toBe(true);
@@ -799,9 +811,10 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
     await waitFor(() => screen.getAllByText('KwdC').length > 0);
 
     // KwdC is element 1 of MyMod.esp's own ['KwdA', 'KwdC'].
-    const row = screen.getAllByText('KwdC').find(el => el.tagName === 'TD')!.closest('tr')!;
+    const kwdCCell = required(screen.getAllByText('KwdC').find(el => el.tagName === 'TD'), "the 'KwdC' td cell");
+    const row = required(kwdCCell.closest('tr'), "the row for 'KwdC'");
     const cells = row.querySelectorAll('td');
-    const cell = cells[cells.length - 1]!;
+    const cell = required(cells[cells.length - 1], "the last cell in the row");
     fireEvent.click(cell);
     fireEvent.doubleClick(within(cell).getByText('KwdC'));
 
@@ -810,7 +823,8 @@ describe('RecordPanel — an element of a sorted array is addressed at its posit
     const isOpenFormKeyPicker = (call: [WebviewToExtension]): call is [OpenFormKeyPicker] =>
       call[0].type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER;
     const calls = vi.mocked(vscode.postMessage).mock.calls;
-    const request = [...calls].reverse().find(isOpenFormKeyPicker)![0];
+    const requestCall = required([...calls].reverse().find(isOpenFormKeyPicker), "a posted OPEN_FORM_KEY_PICKER message");
+    const request = requestCall[0];
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
         data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: request.requestId, formKey: '000123:Fallout4.esm' },

@@ -918,7 +918,7 @@ describe('ModListProvider', () => {
       expect(node.label).toBe('Overwrite');
       expect(node.checkboxState).toBeUndefined();
       expect(node.contextValue).toBe('overwrite');
-      expect(node.command!.command).toBe('modbench.modList.overwrite.reveal');
+      expect(present(node.command, "the OverwriteNode's reveal command").command).toBe('modbench.modList.overwrite.reveal');
       expect(node.tooltip).toContain('2');
       expect(String(node.tooltip)).toMatch(/reassign|clear/i);
     });
