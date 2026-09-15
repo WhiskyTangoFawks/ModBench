@@ -19,7 +19,7 @@ import {
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride, FieldMetadata } from './types';
-import { fieldMeta } from './test/fixtures';
+import { fieldMeta, parseJsonRecord } from './test/fixtures';
 
 function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -318,7 +318,7 @@ describe('combineVscodeContexts', () => {
   it('skips an absent context among present ones', () => {
     const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', [{ kind: 'member', name: 'Items' }]), undefined);
     if (!result) throw new Error('expected a combined context skipping the absent ones');
-    expect(JSON.parse(result).webviewSection).toBe('arrayParent');
+    expect(parseJsonRecord(result).webviewSection).toBe('arrayParent');
   });
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
@@ -327,8 +327,7 @@ describe('combineVscodeContexts', () => {
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     if (!result) throw new Error('expected a combined context for two present contexts');
-    const parsed = JSON.parse(result);
-    expect(parsed.webviewSection).toBe('arrayElement stringValue');
+    expect(parseJsonRecord(result).webviewSection).toBe('arrayElement stringValue');
   });
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
@@ -337,7 +336,7 @@ describe('combineVscodeContexts', () => {
       stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Dogmeat [000001:Fallout4.esm]', 'tags', 'a', false, TAGS_PATH),
     );
     if (!result) throw new Error('expected a combined context for two present contexts');
-    const parsed = JSON.parse(result);
+    const parsed = parseJsonRecord(result);
     expect(parsed.canMoveDown).toBe(true);
     expect(parsed.value).toBe('a');
     expect(parsed.path).toEqual(TAGS_PATH);

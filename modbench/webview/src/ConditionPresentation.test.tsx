@@ -6,9 +6,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
-import type { FieldMetadata } from './types';
+import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
-import { fieldMeta, leafMeta as leaf, panelClient, postedEnvelopes as sharedPostedEnvelopes, required } from './test/fixtures';
+import {
+  compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as leaf, panelClient,
+  postedEnvelopes as sharedPostedEnvelopes, required,
+} from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the enum members these
 // cases name and never restructured; `siblingsInUse` rows come from Condition.GetParameterTypes.
@@ -131,7 +134,7 @@ const PLUGIN = 'MyMod.esp';
 function compareResult(
   byColumn: Record<string, Condition[]>, resolutions: Record<string, string> = {},
   meta: FieldMetadata = conditionsMeta,
-) {
+): CompareResult {
   const columns = Object.keys(byColumn);
   const at = (column: string, index: number, path: string[]): unknown => {
     const rows = byColumn[column];
@@ -140,10 +143,13 @@ function compareResult(
   };
 
   const resolutionsFor = (path: string[], index: number) => {
+    // Object.fromEntries falls back to an `any`-returning overload unless the entries array is
+    // a genuine tuple array, hence the explicit map return type.
     const entries = columns
       .map(c => [c, at(c, index, path)] as const)
       .filter(([, v]) => typeof v === 'string' && resolutions[v])
-      .map(([c, v]) => [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[String(v)] }]);
+      .map(([c, v]): [string, { state: 'ResolvedValidType'; recordType: null; editorId: string | undefined }] =>
+        [c, { state: 'ResolvedValidType', recordType: null, editorId: resolutions[String(v)] }]);
     return entries.length > 0 ? Object.fromEntries(entries) : undefined;
   };
 
@@ -152,12 +158,12 @@ function compareResult(
 
   // A row exists for any member some column carries, as the backend's classifier aligns them; a
   // document omits a member at its default, so the keys are the union across columns.
-  const memberDiffs = (path: string[], index: number): unknown[] => {
+  const memberDiffs = (path: string[], index: number): FieldDiff[] => {
     const keys = [...new Set(columns.flatMap(c => {
       const value = at(c, index, path);
       return Object.keys(typeof value === 'object' && value !== null ? value : {});
     }))];
-    return keys.map(name => ({
+    return keys.map(name => diffNode({
       fieldName: name,
       values: valuesFor([...path, name], index),
       winnerColumn: columns[0], cellStates: {},
@@ -171,32 +177,32 @@ function compareResult(
   const firstColumnRows = byColumn[firstColumn];
   if (!firstColumnRows) throw new Error(`compareResult: no rows recorded for column "${firstColumn}"`);
 
-  return {
+  return compareResultFixture({
     conflictAll: 'NoConflict',
-    overrides: columns.map((plugin, i) => ({
-      formKey: '000001:MyMod.esp', plugin, origin: 'Data',
+    overrides: columns.map((plugin, i) => compareOverride({
+      formKey: '000001:MyMod.esp', plugin,
       loadOrderIndex: i + 1, isWinner: i === 0, editorId: 'TestCobj',
       fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
     })),
-    diffs: [{
+    diffs: [diffNode({
       fieldName: 'Conditions',
       values: Object.fromEntries(columns.map(c => [c, byColumn[c]])),
       winnerColumn: columns[0], cellStates: {},
-      children: firstColumnRows.map((_, i) => ({
+      children: firstColumnRows.map((_, i) => diffNode({
         fieldName: `[${i}]`,
         values: valuesFor([], i),
         winnerColumn: columns[0], cellStates: {},
         children: memberDiffs([], i),
       })),
-    }],
-  };
+    })],
+  });
 }
 
 const oneColumn = (
   elements: Condition[], resolutions: Record<string, string> = {}, meta: FieldMetadata = conditionsMeta,
 ) => compareResult({ [PLUGIN]: elements }, resolutions, meta);
 
-let currentCompare: unknown = null;
+let currentCompare: CompareResult = compareResultFixture();
 
 function renderPanel() {
   return render(<RecordPanel client={panelClient(() => currentCompare, {
@@ -668,9 +674,10 @@ describe('a Run On label that contains spaces', () => {
   it('strips them, so the prefix reads as one word', async () => {
     const element = condition({}, { RunOnType: 'CombatTarget', Function: 'IsSneaking' });
     const base = oneColumn([element]);
+    const baseOverride = required(base.overrides[0], "oneColumn's sole override");
     currentCompare = {
       ...base,
-      overrides: [{ ...base.overrides[0], fields: [{ metadata: labelled, value: [element] }] }],
+      overrides: [{ ...baseOverride, fields: [{ metadata: labelled, value: [element] }] }],
     };
     renderPanel();
     await expandConditions();

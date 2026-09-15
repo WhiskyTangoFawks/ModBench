@@ -6,10 +6,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
-import type { FieldDiff, FieldMetadata } from './types';
+import type { CompareResult, FieldDiff, FieldMetadata } from './types';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW } from './messages';
-import { diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient } from './test/fixtures';
+import {
+  compareOverride, compareResultFixture, diffNode, fieldMeta, leafMeta as field, lastPostedEnvelope, panelClient,
+} from './test/fixtures';
 
 // The metadata below is the Fallout 4 schema's own shape, trimmed to the leaves these cases
 // name; the keyed arrays and their key members are Fallout4VmadAnnotations.KeyedArrays.
@@ -97,6 +99,11 @@ function propertyOf(value: unknown, name: string): unknown {
   return typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined;
 }
 
+// Array.isArray's own type guard narrows to `any[]`; this narrows to `unknown[]` instead.
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
 function stringValueAt(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === 'string' ? value : '';
@@ -119,11 +126,12 @@ const PLUGIN = 'MyMod.esp';
 const keyTextOf = (keyMembers: string[], element: unknown): string =>
   keyMembers
     .map(m => m.split('.').reduce<unknown>((v, name) => propertyOf(v, name), element))
-    .map(v => String(v ?? ''))
+    // Every key member this file's fixtures use (Name, Property.Alias) is a string or a number.
+    .map(v => (typeof v === 'string' || typeof v === 'number' ? String(v) : ''))
     .join(' / ');
 
 function keysOf(meta: FieldMetadata, values: Record<string, unknown>): string[] {
-  const lists = Object.values(values).map(v => (Array.isArray(v) ? v : []));
+  const lists = Object.values(values).map(v => (isUnknownArray(v) ? v : []));
   const { keyMembers } = meta;
   if (keyMembers) return [...new Set(lists.flatMap(l => l.map(e => keyTextOf(keyMembers, e))))].sort();
   return Array.from({ length: Math.max(0, ...lists.map(l => l.length)) }, (_, i) => `[${i}]`);
@@ -166,23 +174,23 @@ function buildDiff(
 
 function compareResult(
   byColumn: Record<string, Obj[]>, editorIds: Record<string, string> = {}, meta: FieldMetadata = scriptsMeta,
-) {
+): CompareResult {
   const columns = Object.keys(byColumn);
-  return {
+  return compareResultFixture({
     conflictAll: 'NoConflict',
-    overrides: columns.map((plugin, i) => ({
-      formKey: '000001:MyMod.esp', plugin, origin: 'Data',
+    overrides: columns.map((plugin, i) => compareOverride({
+      formKey: '000001:MyMod.esp', plugin,
       loadOrderIndex: i + 1, isWinner: i === 0, editorId: 'TestNpc',
       fields: [{ metadata: meta, value: byColumn[plugin] }], conflictThis: 'Master',
     })),
     diffs: [buildDiff(meta.name, meta, byColumn, editorIds)],
-  };
+  });
 }
 
 const oneColumn = (scripts: Obj[], editorIds: Record<string, string> = {}, meta: FieldMetadata = scriptsMeta) =>
   compareResult({ [PLUGIN]: scripts }, editorIds, meta);
 
-let currentCompare: unknown = null;
+let currentCompare: CompareResult = compareResultFixture();
 
 function renderPanel() {
   return render(<RecordPanel client={panelClient(() => currentCompare, {
@@ -229,7 +237,7 @@ async function expandScripts() {
 
 const lastEnvelope = () => lastPostedEnvelope(vscode.postMessage);
 
-function reloadWith(compare: unknown) {
+function reloadWith(compare: CompareResult) {
   currentCompare = compare;
   window.dispatchEvent(new MessageEvent('message', {
     data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000001:MyMod.esp' },

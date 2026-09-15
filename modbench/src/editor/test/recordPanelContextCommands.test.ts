@@ -54,7 +54,7 @@ function editRecordCalls(client: InMemoryMEditClient) {
 // too (messages.ts), so a test reading one back narrows through this either way.
 function envelopeValue(args: unknown[]): string {
   const envelope = args[3];
-  const value = typeof envelope === 'object' && envelope !== null ? Reflect.get(envelope, 'value') : undefined;
+  const value: unknown = typeof envelope === 'object' && envelope !== null ? Reflect.get(envelope, 'value') : undefined;
   if (typeof value !== 'string') throw new Error('expected an editRecord envelope carrying a string value');
   return value;
 }
