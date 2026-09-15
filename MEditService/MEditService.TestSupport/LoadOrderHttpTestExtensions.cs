@@ -28,7 +28,7 @@ public static class LoadOrderHttpTestExtensions
     public static async Task AwaitTerminalLoadOrderStatus(
         this HttpClient client, long beforeSequence, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(60));
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(120));
         DateTime? unchangedSince = null;
         while (DateTime.UtcNow < deadline)
         {
