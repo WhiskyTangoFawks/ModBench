@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { InMemoryMEditClient } from '../InMemoryMEditClient';
 import { createLoadOrderSender, type LoadOrderSnapshot } from '../loadOrderSender';
 import type { LoadOrderOutcome, LoadOrderPluginInput } from '../MEditClient';
+import { present } from '../../../present';
 
 const APPLIED: LoadOrderOutcome = { outcome: 'applied' };
 const ABANDONED: LoadOrderOutcome = { outcome: 'abandoned' };
@@ -26,7 +27,7 @@ const sentNames = (client: InMemoryMEditClient) =>
   puts(client).map((c) => {
     const plugins = c.args[0];
     if (!isPluginInputs(plugins)) throw new Error('expected putLoadOrder args[0] to be a plugin array');
-    return plugins[0]!.name;
+    return present(plugins[0], "the snapshot's sole plugin").name;
   });
 
 function attached(): InMemoryMEditClient {
@@ -69,7 +70,7 @@ describe('createLoadOrderSender — connect precedes the first put', () => {
 
     await sender.send(snapshot('A.esp'));
 
-    const [plugins, gameDirectory, instanceRoot, gameRelease] = puts(client)[0]!.args;
+    const [plugins, gameDirectory, instanceRoot, gameRelease] = present(puts(client)[0], "the sole putLoadOrder call").args;
     expect({ plugins, gameDirectory, instanceRoot, gameRelease }).toEqual({
       plugins: snapshot('A.esp').plugins, gameDirectory: '/game/Data',
       instanceRoot: '/instance', gameRelease: 'Fallout4',

@@ -44,6 +44,7 @@ import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { pluginMetadataFixture, compileResultFixture } from '../../medit/client/test/fixtures';
 import type { ExtensionSession } from '../../session';
+import { present } from '../../present';
 
 beforeEach(() => {
   handlers.clear();
@@ -69,7 +70,10 @@ describe('registerTrackCommand', () => {
     const treeProvider = new PluginTreeProvider(client);
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
     registerTrackCommand(session, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked);
-    return { handler: handlers.get('modbench.pluginListTree.track')!, onTracked, reporter, refresh };
+    return {
+      handler: present(handlers.get('modbench.pluginListTree.track'), 'the track command registerTrackCommand registers'),
+      onTracked, reporter, refresh,
+    };
   }
 
   it('refreshes the tree and lands the tracked toast on a landed track', async () => {
@@ -127,7 +131,10 @@ describe('registerRebaseCommand', () => {
     const refreshMatchingPlugins = vi.fn();
     const reporter = recordingReporter();
     registerRebaseCommand(client, new FakeLogOutputChannel(), reporter, treeProvider, refreshMatchingPlugins);
-    return { handler: handlers.get('modbench.pluginListTree.rebase')!, refresh, refreshMatchingPlugins, reporter };
+    return {
+      handler: present(handlers.get('modbench.pluginListTree.rebase'), 'the rebase command registerRebaseCommand registers'),
+      refresh, refreshMatchingPlugins, reporter,
+    };
   }
 
   it('lands the clean-rebase toast and refreshes on a landed rebase', async () => {
@@ -341,7 +348,10 @@ describe('registerSaveAndCompileCommand', () => {
     registerSaveAndCompileCommand(
       client, { current: () => undefined }, new FakeLogOutputChannel(), reporter, scriptedDialog(),
       new FakeDiagnosticCollection(), () => undefined);
-    return { handler: handlers.get('modbench.saveAndCompile')!, reporter };
+    return {
+      handler: present(handlers.get('modbench.saveAndCompile'), 'the save-and-compile command registerSaveAndCompileCommand registers'),
+      reporter,
+    };
   }
 
   it('drives a tree-row compile through the registered command, recording the compile call and surfacing the refusal', async () => {
@@ -392,7 +402,13 @@ describe('registerCompileAtRefCommand', () => {
     const reporter = recordingReporter();
     const ask = scriptedDialog(answer);
     registerCompileAtRefCommand(client, new FakeLogOutputChannel(), reporter, ask, new FakeDiagnosticCollection(), () => undefined);
-    return { handler: handlers.get('modbench.pluginListTree.compileAtMain')!, reporter, ask };
+    return {
+      handler: present(
+        handlers.get('modbench.pluginListTree.compileAtMain'),
+        'the compile-at-main command registerCompileAtRefCommand registers',
+      ),
+      reporter, ask,
+    };
   }
 
   it('drives a compile-at-main through the registered command once the dialog confirms, recording the compile call at "main" and surfacing the refusal', async () => {

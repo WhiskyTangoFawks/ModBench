@@ -8,6 +8,7 @@ vi.mock('vscode', () => ({
 
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import { fakeUri } from '../test/vscodeMock';
+import { present } from '../present';
 
 describe('OverwriteDecorationProvider', () => {
   const instanceRoot = '/instance';
@@ -15,12 +16,14 @@ describe('OverwriteDecorationProvider', () => {
 
   it('tints the overwrite folder URI reddish (gitDecoration.deletedResourceForeground)', () => {
     const provider = new OverwriteDecorationProvider(instanceRoot);
-    const decoration = provider.provideFileDecoration(fakeUri(overwriteDir));
+    const decoration = present(
+      provider.provideFileDecoration(fakeUri(overwriteDir)),
+      'the overwrite folder\'s decoration',
+    );
 
-    expect(decoration).toBeDefined();
-    expect(decoration!.color).toEqual({ id: 'gitDecoration.deletedResourceForeground' });
+    expect(decoration.color).toEqual({ id: 'gitDecoration.deletedResourceForeground' });
     // No badge and no prefix — the spec scopes this row to a label tint only.
-    expect(decoration!.badge).toBeUndefined();
+    expect(decoration.badge).toBeUndefined();
   });
 
   it('returns undefined for any other URI so mod rows are unaffected', () => {

@@ -8,6 +8,7 @@ import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
 import type { PluginMetadata } from '../../medit/client';
 import type { ActivateExports } from '../../extension';
 import { DownloadNode, type DownloadsTreeNode } from '../../modmanager/DownloadsProvider';
+import { present } from '../../present';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -113,6 +114,12 @@ let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 // blocks for the whole indexing run, and the progressive-load assertions are about that window.
 let releasePutLoadOrder: (() => void) | null = null;
 let holdPutLoadOrder = false;
+// A test that holds PUT /load-order (holdPutLoadOrder = true) must release it — this fires the
+// release, naming the precondition when the test forgot to hold it in the first place.
+function releasePut(): void {
+  if (!releasePutLoadOrder) throw new Error('expected PUT /load-order to be held (holdPutLoadOrder must be set) before releasing it');
+  releasePutLoadOrder();
+}
 // The client's `start()` gates on GET /health, so holding it parks a launch in its first
 // phase — the window a mid-load close also has to survive. One-shot: releasing clears the hold.
 let releaseHealth: (() => void) | null = null;
@@ -593,7 +600,7 @@ const archiveNameOf = (row: DownloadsTreeNode): string | undefined =>
 describe('modbench.downloads tree', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const downloadsDir = root ? path.join(root, 'downloads') : '';
-  const provider = () => ext?.exports.downloadsProvider;
+  const provider = () => present(ext?.exports.downloadsProvider, "the activated extension's downloadsProvider export");
 
   // The committed test workspace fixture has no downloads/ folder — created and torn down
   // here (mirrors the Overwrite suite's overwriteDir cleanup).
@@ -615,7 +622,7 @@ describe('modbench.downloads tree', () => {
       fs.writeFileSync(path.join(downloadsDir, 'foo.zip.meta'), '[General]\r\n');
     });
 
-    const rows = await provider()!.getChildren();
+    const rows = await provider().getChildren();
     assert.deepStrictEqual(rows.map((r) => archiveNameOf(r)), ['foo.zip']);
   });
 
@@ -627,7 +634,7 @@ describe('modbench.downloads tree', () => {
     const rows = await new Promise<DownloadsTreeNode[]>((resolve, reject) => {
       const deadline = Date.now() + 10000;
       const check = () => {
-        provider()!
+        provider()
           .getChildren()
           .then((found) => {
             if (found.some((r) => archiveNameOf(r) === 'bar.zip')) return resolve(found);
@@ -647,7 +654,7 @@ describe('modbench.downloads tree', () => {
 describe('Overwrite row', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const overwriteDir = root ? path.join(root, 'overwrite') : '';
-  const provider = () => ext?.exports.modListProvider;
+  const provider = () => present(ext?.exports.modListProvider, "the activated extension's modListProvider export");
 
   // The pinned Overwrite row is appended only once the modlist loads (it sits
   // after the mod roots). The committed test workspace fixture is
@@ -670,14 +677,14 @@ describe('Overwrite row', () => {
       fs.writeFileSync(path.join(overwriteDir, 'f4se.log'), 'x');
     });
 
-    const roots = await provider()!.getChildren();
-    const last = roots[roots.length - 1];
-    assert.strictEqual(last!.kind, 'overwrite', 'Overwrite row should be the very last root');
-    assert.strictEqual(last!.label, 'Overwrite');
+    const roots = await provider().getChildren();
+    const last = present(roots[roots.length - 1], 'the last root');
+    assert.strictEqual(last.kind, 'overwrite', 'Overwrite row should be the very last root');
+    assert.strictEqual(last.label, 'Overwrite');
   });
 
   it('reveal action resolves against the overwrite folder without throwing', async () => {
-    const p = provider()!;
+    const p = provider();
     const roots = await p.getChildren();
     const node = roots.find((n) => n.kind === 'overwrite');
     assert.ok(node, 'expected an Overwrite node to reveal');
@@ -688,7 +695,7 @@ describe('Overwrite row', () => {
     await writeAndAwaitInstance(() => {
       fs.rmSync(overwriteDir, { recursive: true, force: true });
     });
-    const roots = await provider()!.getChildren();
+    const roots = await provider().getChildren();
     assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
   });
 });
@@ -807,7 +814,7 @@ describe('Launch mEdit populates the editing plugin tree', () => {
 describe('The Toolbox stack stays visible through an editing backend', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginListProvider = () => ext?.exports.pluginsTree;
+  const pluginListProvider = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
 
   before(async () => {
@@ -836,7 +843,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
   });
 
   it('keeps the Plugin load order filter applied across a Launch mEdit / Close mEdit round trip (AC5)', async () => {
-    const provider = pluginListProvider()!;
+    const provider = pluginListProvider();
     provider.setFilter('TestMod');
     const before = await provider.getChildren();
     assert.deepStrictEqual(
@@ -855,7 +862,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
   });
 
   it('still writes plugins.txt through the Plugin load order while the backend is running (AC4)', async () => {
-    const provider = pluginListProvider()!;
+    const provider = pluginListProvider();
     provider.setFilter(''); // undo the previous test's filter so both rows are addressable
     await enterEditing();
 
@@ -869,7 +876,7 @@ describe('The Toolbox stack stays visible through an editing backend', () => {
   });
 
   it('still writes plugins.txt through the Plugin load order drag-reorder while the backend is running (AC4)', async () => {
-    const provider = pluginListProvider()!;
+    const provider = pluginListProvider();
     provider.setFilter('');
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*Other.esp\n');
     provider.invalidate();
@@ -918,7 +925,7 @@ function findRow<T>(rows: readonly T[], name: string): T {
 describe('Plugin load-order rows expand into records', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => ext?.exports.pluginsTree;
+  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
 
   before(async () => {
@@ -930,7 +937,7 @@ describe('Plugin load-order rows expand into records', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\nOther.esp\n'));
-    pluginsTree()?.invalidate();
+    pluginsTree().invalidate();
       // Setting the game directory just now fired the production config-change relaunch
     // (backend down + a directory appeared). Settle it and tear editing down so the
     // tests below still start from the pre-editing state they assert.
@@ -954,30 +961,30 @@ describe('Plugin load-order rows expand into records', () => {
   // The extension parses no plugin binary (ADR-0016), so the forced-on rows can only be the
   // backend's answer — nothing here discovers them from the Data folder.
   it('renders the implicit masters the backend names, ahead of the plugins.txt rows', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     mockImplicitMasters = ['Fallout4.esm'];
     try {
-      pluginsTree()!.invalidate();
+      pluginsTree().invalidate();
       const rows = await tree.getChildren();
 
       assert.strictEqual(rowName(rows[0]), 'Fallout4.esm', 'the backend-named implicit master leads the rows');
-      assert.strictEqual(tree.getTreeItem(rows[0]!).contextValue, 'pluginImplicit');
+      assert.strictEqual(tree.getTreeItem(present(rows[0], 'the first row')).contextValue, 'pluginImplicit');
     } finally {
       mockImplicitMasters = [];
-      pluginsTree()!.invalidate();
+      pluginsTree().invalidate();
     }
   });
 
   it('renders no implicit row when the backend names none', async () => {
-    const tree = pluginsTree()!;
-    pluginsTree()!.invalidate();
+    const tree = pluginsTree();
+    pluginsTree().invalidate();
     const rows = await tree.getChildren();
 
     assert.ok(!rows.some((r) => tree.getTreeItem(r).contextValue === 'pluginImplicit'));
   });
 
   it('renders every row collapsible, whether or not mEdit has launched', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const rows = await tree.getChildren();
 
     assert.deepStrictEqual(
@@ -997,7 +1004,7 @@ describe('Plugin load-order rows expand into records', () => {
   });
 
   it('launching mEdit gives a row real children, without reordering the load order', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const before = await tree.getChildren();
 
     await enterEditing();
@@ -1015,7 +1022,7 @@ describe('Plugin load-order rows expand into records', () => {
   });
 
   it('expands a plugin row into its record types', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const testMod = findRow(await tree.getChildren(), 'TestMod.esp');
 
     const children = await tree.getChildren(testMod);
@@ -1027,7 +1034,7 @@ describe('Plugin load-order rows expand into records', () => {
   });
 
   it('a disabled plugin browses like any other', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const other = findRow(await tree.getChildren(), 'Other.esp'); // the prefix-less plugins.txt line
 
     assert.strictEqual(
@@ -1040,7 +1047,7 @@ describe('Plugin load-order rows expand into records', () => {
   // ADR-0002: the view has no shape to revert to, so a backend that goes takes nothing with it —
   // the row's own content is what reports the absence, on the expand that asks for it.
   it('keeps every row and its chevron when mEdit closes', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
 
     exitEditing();
 
@@ -1064,7 +1071,7 @@ describe('Plugin load-order rows expand into records', () => {
 describe('A read-only plugin\'s tooltip says so once the backend is running', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => ext?.exports.pluginsTree;
+  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
 
   before(async () => {
@@ -1076,7 +1083,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*Immutable.esm\n'));
-    pluginsTree()?.invalidate();
+    pluginsTree().invalidate();
       // Setting the game directory just now fired the production config-change relaunch
     // (backend down + a directory appeared). Settle it and tear editing down so the
     // tests below still start from the pre-editing state they assert.
@@ -1095,7 +1102,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
 
   it('gains a read-only tooltip once the load order reports it immutable', async () => {
     await enterEditing();
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const row = findRow(await tree.getChildren(), 'Immutable.esm');
 
     const tooltip = tree.getTreeItem(row).tooltip;
@@ -1110,7 +1117,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
 describe('A plugin with a missing master is flagged, never deactivated', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => ext?.exports.pluginsTree;
+  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
 
   before(async () => {
@@ -1127,7 +1134,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     await writeAndAwaitInstance(() => fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n'));
-    pluginsTree()?.invalidate();
+    pluginsTree().invalidate();
     await enterEditing();
   });
 
@@ -1141,7 +1148,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
   });
 
   it('flags the row with an error decoration naming the missing master, and stays checked', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const row = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const item = tree.getTreeItem(row);
 
@@ -1159,7 +1166,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
   // The negative case: `masterIssues` is non-nullable on the wire, so a plugin whose masters all
   // resolved carries an empty array, and gets no decoration.
   it('leaves a plugin whose masters all resolve undecorated', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const row = findRow(await tree.getChildren(), 'TestMod.esp');
 
     const item = tree.getTreeItem(row);
@@ -1174,7 +1181,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
 describe('An instance change sends a fresh load order snapshot (ADR-0013)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => ext?.exports.pluginsTree;
+  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
   let pluginsTxtTrailer = '';
   const putCount = () => requestLog.filter((l) => l === 'PUT /load-order').length;
@@ -1205,7 +1212,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n*MissingMaster.esp\n');
-    pluginsTree()?.invalidate();
+    pluginsTree().invalidate();
     await enterEditing();
   });
 
@@ -1230,7 +1237,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   // to layer back on, so the same row object must lose a decoration once the backend stops
   // reporting its condition rather than gain a second copy.
   it('clears a resolved master-issue decoration on the same row after the next reconcile, not just applies it', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const beforeTooltip = tree.getTreeItem(before).tooltip;
     assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing master: Ghost.esm'),
@@ -1249,7 +1256,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   // stay suppressed through a reconcile with no filter at all. Under plugins.md such a plugin has
   // no row, so absence is what is asserted.
   it('hides a plugin a filter suppresses, and restores it once a reconcile comes up with no filter', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'sanity: the row is expandable before either reconcile below');
@@ -1270,7 +1277,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
   // ADR-0013: a failed PUT tears nothing down — the backend still holds what it held — so the
   // tree keeps its chevrons rather than tearing editing down.
   it('keeps the rows expandable, without throwing, when the reconcile itself fails', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'sanity: the row is expandable before the failing reconcile');
@@ -1300,7 +1307,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
 describe('a client that reports stopped outside exitEditing leaves the Plugins tree\'s shape alone', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => ext?.exports.pluginsTree;
+  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   const clientOf = () => ext?.exports.client;
   let gameDir = '';
 
@@ -1324,7 +1331,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
     await enterEditing();
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     await waitFor('the activation reconcile to filter TestMod.esp out',
       async () => ((await tree.getChildren()).some((r) => rowName(r) === 'TestMod.esp') ? undefined : true));
   });
@@ -1339,7 +1346,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   });
 
   it('the row a record filter hid stays hidden', async () => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
 
     await clientOf()?.stop();
     await new Promise((r) => setTimeout(r, 200)); // let the status listener's refresh land
@@ -1352,7 +1359,7 @@ describe('a client that reports stopped outside exitEditing leaves the Plugins t
   // connected" for every row, whatever the row's own content would have been.
   it('a row still in the tree keeps the load order behind its chevron', async () => {
     mockPluginsOverride = null; // this one is about the rows the filter left alone
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     await enterEditing();
     const row = findRow(await tree.getChildren(), 'TestMod.esp');
 
@@ -1413,16 +1420,16 @@ async function waitFor<T>(label: string, read: () => Promise<T | false | undefin
 describe('Progressive load', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
-  const pluginsTree = () => ext?.exports.pluginsTree;
+  const pluginsTree = () => present(ext?.exports.pluginsTree, "the activated extension's pluginsTree export");
   let gameDir = '';
 
   const childrenFor = async (name: string) => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     return tree.getChildren(findRow(await tree.getChildren(), name));
   };
 
   const itemFor = async (name: string) => {
-    const tree = pluginsTree()!;
+    const tree = pluginsTree();
     return tree.getTreeItem(findRow(await tree.getChildren(), name));
   };
 
@@ -1460,7 +1467,7 @@ describe('Progressive load', () => {
   beforeEach(() => {
     resetMockBackend();
     holdPutLoadOrder = true;
-    pluginsTree()?.invalidate();
+    pluginsTree().invalidate();
   });
 
   afterEach(() => {
@@ -1501,7 +1508,7 @@ describe('Progressive load', () => {
     setIndexed(['TestMod.esp', 'Other.esp']);
     await waitForIndexed('Other.esp');
 
-    releasePutLoadOrder!();
+    releasePut();
     await launch;
   });
 
@@ -1518,7 +1525,7 @@ describe('Progressive load', () => {
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),
       `expected the failure reason in the tooltip, got: ${String(item.tooltip)}`);
 
-    releasePutLoadOrder!();
+    releasePut();
     await launch;
   });
 
@@ -1597,7 +1604,7 @@ describe('Progressive load', () => {
       `master issues must not be decorated mid-load, got: ${String(midLoad.tooltip)}`,
     );
 
-    releasePutLoadOrder!();
+    releasePut();
     await launch;
 
     const loaded = await itemFor('MissingMaster.esp');
@@ -1651,8 +1658,10 @@ describe('Copy destination picking degrades to a reported error, never an uncaug
         assert.ok(requestLog.some((l) => l === 'GET /plugins'),
           'the command must have actually reached pickCopyDestination\'s getPlugins() call');
         assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
-        assert.ok(errors[0]!.startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errors[0]}`);
-        assert.ok(!errors[0]!.includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errors[0]}`);
+        const [errorToast] = errors;
+        if (errorToast === undefined) throw new Error('expected the one error toast just asserted above');
+        assert.ok(errorToast.startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errorToast}`);
+        assert.ok(!errorToast.includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errorToast}`);
       } finally {
         Object.defineProperty(vscode.window, 'showErrorMessage', { configurable: true, value: realShowError });
       }

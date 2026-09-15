@@ -8,6 +8,7 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 import { fakeUri } from '../test/vscodeMock';
+import { present } from '../present';
 
 // MO2 grays a `forceLoaded` row's name (`pluginlist.cpp`) — the one piece of its
 // forced-master presentation the platform lets this surface adopt verbatim.
@@ -17,12 +18,11 @@ describe('ImplicitMasterDecorationProvider', () => {
 
   it('grays an implicit master row', async () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
-    const decoration = await provider.provideFileDecoration(dataUri('Fallout4.esm'));
-    expect(decoration).toBeDefined();
+    const decoration = present(await provider.provideFileDecoration(dataUri('Fallout4.esm')), 'the decoration for an implicit master row');
     // MO2's foregroundData() grays via this exact theme color — check the
     // id itself, not just that some color object was constructed.
-    expect(decoration!.color).toEqual(new vscode.ThemeColor('disabledForeground'));
-    expect(decoration!.badge).toBeUndefined();
+    expect(decoration.color).toEqual(new vscode.ThemeColor('disabledForeground'));
+    expect(decoration.badge).toBeUndefined();
   });
 
   it('returns undefined for a plugin that is not an implicit master', async () => {

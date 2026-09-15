@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
+import { present } from '../present';
 
 describe('resolvePluginDestination', () => {
   it('overwrite resolves to the instance\'s overwrite/ folder with the reserved origin', () => {
@@ -24,6 +25,6 @@ describe('PLUGIN_DESTINATION_OPTIONS (New Plugin\'s destination QuickPick)', () 
   });
 
   it('lists overwrite/ first, so it is the pre-highlighted default', () => {
-    expect(PLUGIN_DESTINATION_OPTIONS[0]!.choice).toBe('overwrite');
+    expect(present(PLUGIN_DESTINATION_OPTIONS[0], 'the first destination option').choice).toBe('overwrite');
   });
 });

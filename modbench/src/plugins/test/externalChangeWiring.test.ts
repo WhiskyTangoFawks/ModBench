@@ -25,13 +25,17 @@ import { PluginTreeProvider } from '../PluginTreeProvider';
 import { InMemoryMEditClient } from '../../medit/client';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { scriptedDialog } from '../../test/surfacingDoubles';
+import { present } from '../../present';
 
 function wire(askQuestion = scriptedDialog(), presentCrashRepair = vi.fn().mockResolvedValue(undefined)) {
   const outputChannel = new FakeLogOutputChannel();
   const client = new InMemoryMEditClient();
   const treeProvider = new PluginTreeProvider(client);
   wireQuestionOpen(client, outputChannel, treeProvider, vi.fn(), askQuestion, presentCrashRepair);
-  return { outputChannel, deps: subscribeQuestionOpen.mock.calls[0]![0] };
+  return {
+    outputChannel,
+    deps: present(subscribeQuestionOpen.mock.calls[0], "wireQuestionOpen's call to the coordinator")[0],
+  };
 }
 
 describe('wireQuestionOpen', () => {

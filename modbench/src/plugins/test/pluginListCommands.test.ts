@@ -30,6 +30,7 @@ import { appendPlugin } from '../../modmanager/commands/plugins';
 import { InMemoryMEditClient } from '../../medit/client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
+import { present } from '../../present';
 
 beforeEach(() => {
   handlers.clear();
@@ -48,7 +49,7 @@ describe('registerCreatePluginCommand', () => {
   function invoke(client: InMemoryMEditClient, mo2: ReturnType<typeof makeMo2> | undefined) {
     const reporter = recordingReporter();
     registerCreatePluginCommand(client, mo2, reporter);
-    return { run: handlers.get('modbench.newPlugin')!, reporter };
+    return { run: present(handlers.get('modbench.newPlugin'), "the newPlugin command's registered handler"), reporter };
   }
 
   it('appends the created plugin to the load order and lands the created toast', async () => {
@@ -124,7 +125,7 @@ describe('registerRevealInExplorerCommand', () => {
   function invoke(resolvePluginPath: () => Promise<string | undefined>) {
     const reporter = recordingReporter();
     registerRevealInExplorerCommand({ resolvePluginPath }, reporter);
-    return { run: handlers.get('modbench.pluginListTree.revealInExplorer')!, reporter };
+    return { run: present(handlers.get('modbench.pluginListTree.revealInExplorer'), "the revealInExplorer command's registered handler"), reporter };
   }
 
   it('reveals the resolved file in the OS explorer and says nothing', async () => {

@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, extname, basename, sep } from 'node:path';
 import ts from 'typescript';
+import { present } from '../present';
 
 // The `node:fs` entry points that hand back bytes rather than a directory listing or a decoded
 // string. `readFile` is not among them — it is covered by the encoding rule below.
@@ -59,8 +60,8 @@ function fsModuleAcquired(node: ts.Node): string | undefined {
   const dynamic = node.expression.kind === ts.SyntaxKind.ImportKeyword
     || (ts.isIdentifier(node.expression) && node.expression.text === 'require');
   if (!dynamic || node.arguments.length === 0) return undefined;
-  const specifier = node.arguments[0];
-  return ts.isStringLiteralLike(specifier!) && FS_MODULES.has(specifier.text) ? specifier.text : undefined;
+  const specifier = present(node.arguments[0], 'the call expression\'s first argument');
+  return ts.isStringLiteralLike(specifier) && FS_MODULES.has(specifier.text) ? specifier.text : undefined;
 }
 
 const isFsModule = (node: ts.Expression, aliases: ReadonlySet<string>): boolean => {

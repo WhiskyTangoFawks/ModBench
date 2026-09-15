@@ -49,8 +49,7 @@ export default tseslint.config(
     },
 
     // `!` asserts an invariant the checker can't see instead of showing it one — the present()
-    // helper (src/present.ts) or a restructuring does that instead. Tests keep the exemption
-    // further down.
+    // helper (src/present.ts) or a restructuring does that instead.
     {
         files: ['src/**/*.ts', 'webview/src/**/*.{ts,tsx}'],
         rules: {
@@ -149,8 +148,7 @@ export default tseslint.config(
         },
     },
 
-    // Test files — relax unsafe-any rules since mocks legitimately use any. The non-null-assertion
-    // exemption stays here too, until that block shrinks to nothing.
+    // Test files — relax unsafe-any rules since mocks legitimately use any.
     {
         files: [
             'src/test/**/*.ts', 'src/**/*.test.ts', 'webview/src/**/*.test.{ts,tsx}', 'webview/src/test/**/*.ts',
@@ -164,7 +162,6 @@ export default tseslint.config(
             '@typescript-eslint/no-unsafe-member-access': 'off',
             '@typescript-eslint/unbound-method': 'off',
             '@typescript-eslint/no-base-to-string': 'off',
-            '@typescript-eslint/no-non-null-assertion': 'off',
         },
     },
 

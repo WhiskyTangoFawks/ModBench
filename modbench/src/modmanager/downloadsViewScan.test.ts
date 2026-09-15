@@ -4,6 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { present } from '../present';
 
 const VIEW_FILES = ['DownloadsPanel.ts', 'DownloadsProvider.ts', 'HiddenDownloadDecorationProvider.ts'];
 
@@ -14,7 +15,8 @@ const FS_MODULES = ['fs', 'fs/promises', 'node:fs', 'node:fs/promises'];
 const FS_CALLS = ['readFile', 'writeFile', 'readdir', 'mkdir', 'rm', 'access', 'stat', 'cp', 'rename'];
 
 function importsOf(source: string): string[] {
-  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)].map((m) => m[1]!);
+  return [...source.matchAll(/(?:import|export)[\s\S]*?from\s+'([^']+)'/g)]
+    .map((m) => present(m[1], 'the module-path capture group the pattern always matches'));
 }
 
 // Comments are prose: a rule's own statement names the calls it forbids.

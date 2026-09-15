@@ -87,3 +87,9 @@ export const leafMeta = (
 export const member = (name: string): PathHop => ({ kind: 'member', name });
 export const at = (index: number): PathHop => ({ kind: 'index', index });
 export const keyed = (key: string): PathHop => ({ kind: 'key', key });
+
+// A miss here is a fixture bug, named at the point it would otherwise become a bare TypeError.
+export function required<T>(value: T | null | undefined, what: string): T {
+  if (value === null || value === undefined) throw new Error(`expected ${what}`);
+  return value;
+}

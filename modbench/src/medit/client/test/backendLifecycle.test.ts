@@ -6,6 +6,7 @@ import type { AddressInfo } from 'node:net';
 
 import { BackendLifecycle } from '../backendLifecycle';
 import type { BackendStatus } from '../MEditClient';
+import { present } from '../../../present';
 
 // `Server.address()` types as `string | AddressInfo | null` for the pipe/unbound cases neither
 // test below hits, since both bind to 127.0.0.1 on an OS-assigned port.
@@ -227,7 +228,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     const restarted = nextAttach(lifecycle);
     state.healthy = false;          // backend died
-    children[0]!.emit('exit', 1);    // unexpected exit
+    present(children[0], 'the first spawned child').emit('exit', 1);    // unexpected exit
     await restarted;
 
     expect(spawn).toHaveBeenCalledTimes(2);
@@ -249,7 +250,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     const restarted = nextAttach(lifecycle);
     state.healthy = false;
-    children[0]!.emit('exit', 1);
+    present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
 
     expect(statuses).toEqual(['disconnected', 'starting', 'attached']);
@@ -281,7 +282,7 @@ describe('BackendLifecycle crash-restart / stop', () => {
     const startP = lifecycle.start();
     await new Promise((r) => setTimeout(r, 15)); // let it spawn + begin polling
     const stopP = lifecycle.stop();
-    children[0]!.emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
+    present(children[0], 'the first spawned child').emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
     state.healthy = true;                        // backend "comes up" after the user closed
     await Promise.all([startP, stopP]);
     await new Promise((r) => setTimeout(r, 20)); // let any stray poll fire
@@ -323,10 +324,10 @@ describe('BackendLifecycle crash-restart / stop', () => {
 
     const restarted = nextAttach(lifecycle);
     state.healthy = false;
-    children[0]!.emit('exit', 1);
+    present(children[0], 'the first spawned child').emit('exit', 1);
     await restarted;
 
-    children[1]!.stdout.write('[08:30:50 INF] back up\n');
+    present(children[1], 'the second (restarted) child').stdout.write('[08:30:50 INF] back up\n');
     await waitForLines(lines, 1);
 
     expect(lines).toEqual(['[08:30:50 INF] back up']);
@@ -392,14 +393,16 @@ describe('BackendLifecycle (no checkHealth injected — the real GET /health ada
   let server: Server | undefined;
 
   afterEach(async () => {
-    if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
+    const s = server;
+    if (s) await new Promise<void>((resolve) => s.close(() => resolve()));
     server = undefined;
   });
 
   it('attaches when a real GET /health answers 200', async () => {
-    server = createServer((_req, res) => { res.writeHead(200); res.end(); });
+    const s = createServer((_req, res) => { res.writeHead(200); res.end(); });
+    server = s;
     const port = await new Promise<number>((resolve) => {
-      server!.listen(0, '127.0.0.1', () => resolve(addressInfo(server!.address()).port));
+      s.listen(0, '127.0.0.1', () => resolve(addressInfo(s.address()).port));
     });
 
     const lifecycle = new BackendLifecycle({ port });
