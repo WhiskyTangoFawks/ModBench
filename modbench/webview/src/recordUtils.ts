@@ -1,4 +1,4 @@
-import type { ColumnKey, CompareOverride, FieldMetadata, FieldValue, PathHop, PathSegment } from './types';
+import { isFieldType, type ColumnKey, type CompareOverride, type FieldMetadata, type FieldValue, type PathHop, type PathSegment } from './types';
 import { columnKey } from './columnKey';
 
 export function toStr(v: unknown): string {
@@ -187,6 +187,7 @@ export function wirePath(rootField: string, path: readonly PathSegment[], docume
 // grid's "no value" rendering.
 export function defaultOf(meta: FieldMetadata): unknown {
   if (meta.default != null) return meta.default;
+  if (!isFieldType(meta.type)) return undefined;
   switch (meta.type) {
     case 'int': case 'float': return 0;
     case 'bool': return false;

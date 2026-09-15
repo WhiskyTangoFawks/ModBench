@@ -302,7 +302,8 @@ before(async function () {
   // The extension must auto-activate via onStartupFinished (no manual
   // activate() call here) — that's the behavior under test. Poll rather than
   // assume, since activation timing after workbench restore isn't instant.
-  ext = vscode.extensions.all.find(e => e.packageJSON?.name === 'modbench');
+  // packageJSON's type is `any`; isRecord narrows it.
+  ext = vscode.extensions.all.find(e => isRecord(e.packageJSON) && e.packageJSON.name === 'modbench');
   const deadline = Date.now() + 5000;
   while (ext && !ext.isActive && Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 100));
@@ -393,13 +394,25 @@ describe('Modbench output channel', () => {
 
 // ── Command registration ───────────────────────────────────────────────────────
 
+// This file's one parse point for package.json's contributed commands: proves the shape this
+// suite reads rather than handing back an unproven one.
+function commandsManifest(raw: unknown): { contributes: { commands: { command: string }[] } } {
+  if (
+    !isRecord(raw) || !isRecord(raw.contributes) || !Array.isArray(raw.contributes.commands)
+    || !raw.contributes.commands.every((c: unknown): c is { command: string } => isRecord(c) && typeof c.command === 'string')
+  ) {
+    throw new Error("expected package.json to have a contributes.commands array of { command }");
+  }
+  return { contributes: { commands: raw.contributes.commands } };
+}
+
 describe('modbench command registration', () => {
   // Derived from package.json rather than hand-copied, so a contributed command that was never
   // registered fails here instead of matching a hand-written list that forgot it too. __dirname is
   // three levels under the package root once compiled.
-  const pkg: { contributes: { commands: { command: string }[] } } = JSON.parse(
+  const pkg = commandsManifest(JSON.parse(
     fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'),
-  );
+  ));
   const EXPECTED_COMMANDS = pkg.contributes.commands.map((c) => c.command);
 
   it('registers all expected commands on activation', async () => {
@@ -926,6 +939,16 @@ function findRow<T>(rows: readonly T[], name: string): T {
   return row;
 }
 
+// A TreeItem's tooltip is typed string | MarkdownString | undefined; a failure message reads
+// the string case directly rather than through MarkdownString's own default Object stringification.
+function describeTooltip(tooltip: vscode.TreeItem['tooltip']): string {
+  return typeof tooltip === 'string' ? tooltip : JSON.stringify(tooltip);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 describe('Plugin load-order rows expand into records', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
@@ -1111,7 +1134,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running', ()
 
     const tooltip = tree.getTreeItem(row).tooltip;
 
-    assert.ok(typeof tooltip === 'string' && tooltip.includes('read-only'), `expected a read-only tooltip, got: ${String(tooltip)}`);
+    assert.ok(typeof tooltip === 'string' && tooltip.includes('read-only'), `expected a read-only tooltip, got: ${describeTooltip(tooltip)}`);
   });
 });
 
@@ -1157,7 +1180,7 @@ describe('A plugin with a missing master is flagged, never deactivated', () => {
     const item = tree.getTreeItem(row);
 
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing master: Ghost.esm'),
-      `expected a missing-master tooltip, got: ${String(item.tooltip)}`);
+      `expected a missing-master tooltip, got: ${describeTooltip(item.tooltip)}`);
     // Never deactivated, excluded or hidden — still expandable (in the load order) and checked.
     assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
     assert.strictEqual(rowFields(row).plugin?.enabled, true);
@@ -1245,7 +1268,7 @@ describe('An instance change sends a fresh load order snapshot (ADR-0013)', () =
     const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
     const beforeTooltip = tree.getTreeItem(before).tooltip;
     assert.ok(typeof beforeTooltip === 'string' && beforeTooltip.includes('Missing master: Ghost.esm'),
-      `expected the row to carry the master-issue tooltip before the reconcile, got: ${String(beforeTooltip)}`);
+      `expected the row to carry the master-issue tooltip before the reconcile, got: ${describeTooltip(beforeTooltip)}`);
 
     // The next reconcile reports the same plugin with its master issue resolved.
     mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'MissingMaster.esp' ? { ...p, masterIssues: [] } : p);
@@ -1527,7 +1550,7 @@ describe('Progressive load', () => {
     });
 
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('RACE parse'),
-      `expected the failure reason in the tooltip, got: ${String(item.tooltip)}`);
+      `expected the failure reason in the tooltip, got: ${describeTooltip(item.tooltip)}`);
 
     releasePut();
     await launch;
@@ -1605,7 +1628,7 @@ describe('Progressive load', () => {
     const midLoad = await itemFor('MissingMaster.esp');
     assert.ok(
       !(typeof midLoad.tooltip === 'string' && midLoad.tooltip.includes('Missing master: Ghost.esm')),
-      `master issues must not be decorated mid-load, got: ${String(midLoad.tooltip)}`,
+      `master issues must not be decorated mid-load, got: ${describeTooltip(midLoad.tooltip)}`,
     );
 
     releasePut();
@@ -1613,13 +1636,13 @@ describe('Progressive load', () => {
 
     const loaded = await itemFor('MissingMaster.esp');
     assert.ok(typeof loaded.tooltip === 'string' && loaded.tooltip.includes('Missing master: Ghost.esm'),
-      `expected the missing-master tooltip once the load completed, got: ${String(loaded.tooltip)}`);
+      `expected the missing-master tooltip once the load completed, got: ${describeTooltip(loaded.tooltip)}`);
     // A progressive tick carries empty readOnly/masterIssues, so if a tick were ever the last
     // setLoadOrder call both decorations would vanish from a fully loaded tree. Asserting one of each
     // proves the completion hand-off runs after the last tick.
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
-      `expected the read-only note once the load completed, got: ${String(immutable.tooltip)}`);
+      `expected the read-only note once the load completed, got: ${describeTooltip(immutable.tooltip)}`);
     // Immutable.esm never appears in a progress tick's indexedPlugins, so its browsability can
     // only come from the completion hand-off's file set, which a hand-off applying only readOnly
     // would drop.

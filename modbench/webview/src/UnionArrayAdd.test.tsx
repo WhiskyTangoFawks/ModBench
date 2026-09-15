@@ -7,7 +7,8 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
-import { fieldMeta, lastPostedEnvelope, panelClient } from './test/fixtures';
+import { compareOverride, compareResultFixture, diffNode, fieldMeta, lastPostedEnvelope, panelClient } from './test/fixtures';
+import type { CompareResult } from './types';
 
 // Add on an abstract-union array: the webview contributes no element and no default. A
 // reflected array's default element belongs to the backend's DocumentEdit, the only place that can
@@ -31,31 +32,31 @@ const aliasesMeta = fieldMeta({
   }),
 });
 
-const aliasesCompareResult = {
+const aliasesCompareResult: CompareResult = compareResultFixture({
   conflictAll: 'NoConflict',
   overrides: [
-    {
+    compareOverride({
       formKey: '000001:Quest548.esp', plugin: 'MyMod.esp', origin: 'Data',
       loadOrderIndex: 1, isWinner: true, editorId: 'Quest548',
       fields: [{ metadata: aliasesMeta, value: [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }] }],
       conflictThis: 'Master',
-    },
+    }),
   ],
-  diffs: [{
+  diffs: [diffNode({
     fieldName: 'aliases',
     values: { 'MyMod.esp': [{ MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' }] },
     winnerColumn: 'MyMod.esp',
     cellStates: {},
     children: [
-      {
+      diffNode({
         fieldName: '[0]',
         values: { 'MyMod.esp': { MutagenObjectType: 'QuestLocationAlias', name: 'OriginalLoc' } },
         winnerColumn: 'MyMod.esp',
         cellStates: {},
-      },
+      }),
     ],
-  }],
-};
+  })],
+});
 
 describe('RecordPanel — Add on an abstract-union array', () => {
   function renderPanel() {

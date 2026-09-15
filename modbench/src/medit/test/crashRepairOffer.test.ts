@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { CrashRepairOffer } from '../client';
+import type { AskQuestion } from '../../dialog';
+import { present } from '../../present';
 import {
   messageFor, presentCrashRepairOffers,
   REPAIR_WORKING_TREE_BUTTON, REPAIR_AT_MAIN_BUTTON,
@@ -28,16 +30,17 @@ describe('crashRepairOffer.messageFor', () => {
 
 describe('crashRepairOffer.presentCrashRepairOffers', () => {
   it('shows one modal per offer, naming both buttons', async () => {
-    const show = vi.fn().mockResolvedValue(undefined);
+    const show = vi.fn<AskQuestion>().mockResolvedValue(undefined);
     const onAccept = vi.fn();
 
     await presentCrashRepairOffers([offer({ plugin: 'A.esp' }), offer({ plugin: 'B.esp' })], show, onAccept);
 
     expect(show).toHaveBeenCalledTimes(2);
-    expect(show).toHaveBeenCalledWith(
-      expect.stringContaining('A.esp'), { modal: true, detail: expect.any(String) },
-      REPAIR_WORKING_TREE_BUTTON, REPAIR_AT_MAIN_BUTTON,
-    );
+    const [message, options, ...buttons] = present(show.mock.calls[0], 'the first show() call');
+    expect(message).toContain('A.esp');
+    expect(options.modal).toBe(true);
+    expect(typeof options.detail).toBe('string');
+    expect(buttons).toEqual([REPAIR_WORKING_TREE_BUTTON, REPAIR_AT_MAIN_BUTTON]);
   });
 
   // Sequential, never Promise.all'd — the second offer's modal must not be requested until the

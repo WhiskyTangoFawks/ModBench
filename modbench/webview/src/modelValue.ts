@@ -1,36 +1,36 @@
 import { toStr } from './recordUtils';
 import { formKeyLabel } from './FormKeyLink';
-import type { FieldMetadata, FormKeyResolution } from './types';
+import { isFieldType, type FieldMetadata, type FormKeyResolution } from './types';
 
 // ADR-0018: one definition of a cell's edit value, so the readout and what Ctrl+C copies cannot
 // drift from the editor. Struct/array is JSON, not xEdit's prose summary, because an edit value
 // must round-trip.
 export function modelValue(value: unknown, meta: FieldMetadata, resolution?: FormKeyResolution): string {
   if (value == null) return '';
-  switch (meta.type) {
-    case 'formKey':
-      return typeof value === 'string' && value ? formKeyLabel(value, resolution) : '';
-    case 'flags':
-      return flagNames(value).join(', ');
-    case 'translatedString':
-      return toStr(translatedText(value));
-    case 'struct':
-    case 'array':
-      return JSON.stringify(value);
-    case 'string':
-    case 'int':
-    case 'float':
-    case 'bool':
-    case 'enum':
-    case 'hex':
-    case 'color':
-    case 'vector':
-      return toStr(value);
-    // meta.type narrows the wire's plain string at compile time only (types.ts); a type this
-    // union has not caught up with still reaches here and stringifies like any other scalar.
-    default:
-      return toStr(value);
+  if (isFieldType(meta.type)) {
+    switch (meta.type) {
+      case 'formKey':
+        return typeof value === 'string' && value ? formKeyLabel(value, resolution) : '';
+      case 'flags':
+        return flagNames(value).join(', ');
+      case 'translatedString':
+        return toStr(translatedText(value));
+      case 'struct':
+      case 'array':
+        return JSON.stringify(value);
+      case 'string':
+      case 'int':
+      case 'float':
+      case 'bool':
+      case 'enum':
+      case 'hex':
+      case 'color':
+      case 'vector':
+        return toStr(value);
+    }
   }
+  // The wire's field type is a string, and the backend may send one this union does not yet name.
+  return toStr(value);
 }
 
 // Differs from the edit value only for an enum whose values are wire tokens rather than words (an

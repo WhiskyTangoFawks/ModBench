@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const executeCommand = vi.fn();
-const writeText = vi.fn();
-const createQuickPick = vi.fn();
-const showQuickPick = vi.fn();
+const executeCommand = vi.fn<(...args: unknown[]) => unknown>();
+const writeText = vi.fn<(...args: unknown[]) => unknown>();
+const createQuickPick = vi.fn<(...args: unknown[]) => unknown>();
+const showQuickPick = vi.fn<(...args: unknown[]) => unknown>();
 
 vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => executeCommand(...args) },
@@ -86,9 +86,11 @@ function makeFakeQuickPick() {
   };
   return {
     qp,
-    typeValue(v: string) { qp.value = v; changeValueListeners.forEach(cb => cb(v)); },
-    accept() { acceptListeners.forEach(cb => cb()); },
-    hideWithoutAccept() { hideListeners.forEach(cb => cb()); },
+    // Arrow properties, not methods: none needs its own `this`, and destructuring one out
+    // (`const { typeValue } = makeFakeQuickPick()`) must not trip unbound-method.
+    typeValue: (v: string) => { qp.value = v; changeValueListeners.forEach(cb => cb(v)); },
+    accept: () => { acceptListeners.forEach(cb => cb()); },
+    hideWithoutAccept: () => { hideListeners.forEach(cb => cb()); },
   };
 }
 

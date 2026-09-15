@@ -1,5 +1,7 @@
+import { expect } from 'vitest';
 import type { AskQuestion } from '../dialog';
 import type { Reporter, Severity } from '../reporter';
+import { present } from '../present';
 
 export interface RecordedReport { severity: Severity; message: string; detail?: string }
 
@@ -35,4 +37,16 @@ export function scriptedDialog(...answers: readonly (string | undefined)[]): Scr
     return Promise.resolve(answers[next++]);
   };
   return Object.assign(ask, { asked });
+}
+
+// expect.stringContaining's type is `any`, so this checks the one asked question by hand instead
+// of embedding the matcher in a toEqual array.
+export function assertAskedOnce(
+  ask: ScriptedDialog, expected: { messageContains: string; buttons: string[] },
+): void {
+  expect(ask.asked).toHaveLength(1);
+  const call = present(ask.asked[0], 'the one recorded question');
+  expect(call.message).toContain(expected.messageContains);
+  expect(call.detail).toBeUndefined();
+  expect(call.buttons).toEqual(expected.buttons);
 }

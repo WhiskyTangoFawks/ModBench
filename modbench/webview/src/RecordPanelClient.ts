@@ -28,7 +28,10 @@ export type LoadResult =
 // strings are hand-built. ADR-0007: reads only — a refusal has to become a native notification,
 // and only the extension host can show one.
 export interface RecordPanelClient {
-  load(formKey: string): Promise<LoadResult>;
+  // An arrow-typed property, not a method: `load` never needs its own `this`, and this shape
+  // lets a test hold a bare reference to it (`vi.mocked(client.load)`) without an
+  // unbound-method warning.
+  load: (formKey: string) => Promise<LoadResult>;
 }
 
 export function createRecordPanelClient(port: number): RecordPanelClient {

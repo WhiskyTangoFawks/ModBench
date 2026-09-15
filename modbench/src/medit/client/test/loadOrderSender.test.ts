@@ -126,7 +126,8 @@ describe('createLoadOrderSender — the last snapshot lands and the superseded o
     const sender = createLoadOrderSender(client);
 
     const failed = await sender.send(snapshot('A.esp'));
-    expect(failed).toEqual({ outcome: 'failed', message: expect.stringContaining('boom') });
+    if (failed.outcome !== 'failed') throw new Error('expected outcome: failed');
+    expect(failed.message).toContain('boom');
 
     client.setCommandHandler('putLoadOrder', () => Promise.resolve(APPLIED));
     await expect(sender.send(snapshot('B.esp'))).resolves.toEqual(APPLIED);

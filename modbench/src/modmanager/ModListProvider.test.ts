@@ -8,6 +8,9 @@ import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFile, DataTransferItem, DataTransfer, FakeCancellationToken, fakeUri,
 } from '../test/vscodeMock';
+import type {
+  setModEnabled, reorderMod, moveModToSeparator, reorderSeparatorBlock,
+} from './commands/modlist';
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
@@ -20,16 +23,16 @@ vi.mock('vscode', () => ({
 const {
   setModEnabledMock, reorderModMock, moveModToSeparatorMock, reorderSeparatorBlockMock,
 } = vi.hoisted(() => ({
-  setModEnabledMock: vi.fn(),
-  reorderModMock: vi.fn(),
-  moveModToSeparatorMock: vi.fn(),
-  reorderSeparatorBlockMock: vi.fn(),
+  setModEnabledMock: vi.fn<typeof setModEnabled>(),
+  reorderModMock: vi.fn<typeof reorderMod>(),
+  moveModToSeparatorMock: vi.fn<typeof moveModToSeparator>(),
+  reorderSeparatorBlockMock: vi.fn<typeof reorderSeparatorBlock>(),
 }));
 vi.mock('./commands/modlist', () => ({
-  setModEnabled: (...args: unknown[]) => setModEnabledMock(...args),
-  reorderMod: (...args: unknown[]) => reorderModMock(...args),
-  moveModToSeparator: (...args: unknown[]) => moveModToSeparatorMock(...args),
-  reorderSeparatorBlock: (...args: unknown[]) => reorderSeparatorBlockMock(...args),
+  setModEnabled: (...args: Parameters<typeof setModEnabledMock>) => setModEnabledMock(...args),
+  reorderMod: (...args: Parameters<typeof reorderModMock>) => reorderModMock(...args),
+  moveModToSeparator: (...args: Parameters<typeof moveModToSeparatorMock>) => moveModToSeparatorMock(...args),
+  reorderSeparatorBlock: (...args: Parameters<typeof reorderSeparatorBlockMock>) => reorderSeparatorBlockMock(...args),
 }));
 
 import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from './ModListProvider';
@@ -426,11 +429,11 @@ describe('ModListProvider', () => {
       let text = writeModlist(dndEntries);
       reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
         text = moveModInText(text, name, idx);
-        return { applied: true, wrote: true };
+        return Promise.resolve({ applied: true, wrote: true });
       });
       reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, sepName: string, idx: number) => {
         text = moveSeparatorBlockInText(text, sepName, idx);
-        return { applied: true, wrote: true };
+        return Promise.resolve({ applied: true, wrote: true });
       });
       const provider = makeProvider(dndEntries);
       return { provider, order: () => parseModlist(text).map((e) => e.name) };
@@ -527,7 +530,7 @@ describe('ModListProvider', () => {
         let text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
         reorderModMock.mockImplementation((_root: string, _profile: string, name: string, idx: number) => {
           text = moveModInText(text, name, idx);
-          return { applied: true, wrote: true };
+          return Promise.resolve({ applied: true, wrote: true });
         });
         const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];
         const provider = makeProvider(simpleEntries);
@@ -919,8 +922,10 @@ describe('ModListProvider', () => {
       expect(node.checkboxState).toBeUndefined();
       expect(node.contextValue).toBe('overwrite');
       expect(present(node.command, "the OverwriteNode's reveal command").command).toBe('modbench.modList.overwrite.reveal');
-      expect(node.tooltip).toContain('2');
-      expect(String(node.tooltip)).toMatch(/reassign|clear/i);
+      const tooltip = node.tooltip;
+      if (typeof tooltip !== 'string') throw new Error('expected OverwriteNode.tooltip to be a string');
+      expect(tooltip).toContain('2');
+      expect(tooltip).toMatch(/reassign|clear/i);
     });
 
     // instanceRoot's only remaining use: the pinned row's resourceUri (Explorer reveal / the
@@ -932,7 +937,8 @@ describe('ModListProvider', () => {
       });
       const roots = await provider.getChildren();
       const node = present(roots.find((n): n is OverwriteNode => n instanceof OverwriteNode), "the sole OverwriteNode");
-      expect(node.resourceUri).toEqual({ fsPath: '/my/mo2/instance/overwrite', toString: expect.any(Function) });
+      expect(node.resourceUri.fsPath).toBe('/my/mo2/instance/overwrite');
+      expect(typeof node.resourceUri.toString).toBe('function');
     });
 
     it('stays last even under descending sort (outside all grouping)', async () => {

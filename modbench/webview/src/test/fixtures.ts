@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { WEBVIEW_TO_EXTENSION, type WebviewToExtension } from '../messages';
 import type { RecordPanelClient } from '../RecordPanelClient';
-import type { CompareResult, FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from '../types';
+import type { CompareOverride, CompareResult, FieldDiff, FieldMetadata, PathHop, RecordEditEnvelope } from '../types';
 import { columnKey } from '../columnKey';
 
 // Nothing here imports a component: `vscode.ts` calls acquireVsCodeApi() at module load, so a
@@ -24,6 +24,21 @@ export const diffNode = (
   values: {}, winnerColumn: '', cellStates: {}, conflictAll: 'NoConflict', ...d,
 });
 
+/** A compare override with every required wire member at its neutral value: `OnlyOne` is the
+ *  unconflicted ConflictThis, and `Data` is columnKey()'s own elided origin. */
+export const compareOverride = (
+  o: Partial<CompareOverride> & Pick<CompareOverride, 'formKey' | 'plugin' | 'fields'>,
+): CompareOverride => ({
+  loadOrderIndex: 0, isWinner: false, origin: 'Data', recordType: '',
+  isPartialForm: false, isPartialFormable: false, conflictThis: 'OnlyOne', ...o,
+});
+
+/** A compare result with every required wire member at its neutral value, so a fixture answers
+ *  no wire question by omission — the same posture as fieldMeta/diffNode/compareOverride. */
+export const compareResultFixture = (over: Partial<CompareResult> = {}): CompareResult => ({
+  overrides: [], diffs: [], conflictAll: 'NoConflict', ...over,
+});
+
 /** What `GET /plugins` says about one column, as far as the panel reads it. */
 export interface FixturePlugin {
   name: string;
@@ -40,14 +55,9 @@ export interface PanelOpts {
   load?: RecordPanelClient['load'];
 }
 
-// A fixture builds its compare result freehand (plain object literals, not always every wire
-// field), so it crosses to `CompareResult` the way a real one crosses the wire: as JSON.
-function asCompareResult(value: unknown): CompareResult {
-  return JSON.parse(JSON.stringify(value));
-}
-
-// `compare` is a thunk so a test that edits and reloads gets the new document on the second load.
-export function panelClient(compare: () => unknown, opts: PanelOpts = {}): RecordPanelClient {
+// `compare` is a thunk so a test that edits and reloads gets the new document on the second load;
+// its result is a real CompareResult, not a freehand value cast at the boundary.
+export function panelClient(compare: () => CompareResult, opts: PanelOpts = {}): RecordPanelClient {
   const plugins = opts.plugins ?? [];
   // ADR-0012: compound keying, so a fake keyed by bare filename cannot pass a same-filename case.
   const columnsWhere = (p: (plugin: FixturePlugin) => boolean) =>
@@ -55,7 +65,9 @@ export function panelClient(compare: () => unknown, opts: PanelOpts = {}): Recor
   return {
     load: opts.load ?? vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,
-      result: asCompareResult(compare()),
+      // A fresh clone per load(): a fixture is one shared module-level object, and a test that
+      // edits and reloads must not hand the panel the same reference twice.
+      result: structuredClone(compare()),
       immutableSet: columnsWhere(p => p.isImmutable === true),
       // ADR-0013/ADR-0007: an unstated plugin is in the load order, and untracked.
       notInLoadOrderSet: columnsWhere(p => p.inLoadOrder === false),
@@ -92,4 +104,16 @@ export const keyed = (key: string): PathHop => ({ kind: 'key', key });
 export function required<T>(value: T | null | undefined, what: string): T {
   if (value === null || value === undefined) throw new Error(`expected ${what}`);
   return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A `data-vscode-context` blob's one parse point: proves it is a JSON object before a test
+ *  reads a member off it, without claiming a type for that member beyond `unknown`. */
+export function parseJsonRecord(json: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(json);
+  if (!isRecord(parsed)) throw new Error('expected a JSON object');
+  return parsed;
 }

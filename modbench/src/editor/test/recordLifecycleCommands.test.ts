@@ -27,7 +27,7 @@ import {
 import { InMemoryMEditClient } from '../../medit/client';
 import { pluginMetadataFixture, referenceResultFixture } from '../../medit/client/test/fixtures';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
-import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../present';
 
 beforeEach(() => {
@@ -157,11 +157,10 @@ describe('registerRecordLifecycleCommands', () => {
     const accepted = await present(onEslRefusal, "the ESL-flag refusal callback captured from the command handler")('exhausted the ESL range');
 
     expect(accepted).toBe(false);
-    expect(ask.asked).toEqual([{
-      message: expect.stringContaining('Remove the ESL flag and create the record?'),
-      detail: undefined,
+    assertAskedOnce(ask, {
+      messageContains: 'Remove the ESL flag and create the record?',
       buttons: ['Remove ESL Flag and Create the Record'],
-    }]);
+    });
   });
 
   describe('modbench.record.delete — a tree node and a plain identity record the same call', () => {
@@ -260,11 +259,7 @@ describe('registerRecordLifecycleCommands', () => {
 
     await present(handlers.get('modbench.record.renumber'), "the handler registered for 'modbench.record.renumber'")(RECORD_NODE);
 
-    expect(ask.asked).toEqual([{
-      message: expect.stringContaining('000801:MyPatch.esp'),
-      detail: undefined,
-      buttons: ['Change FormID'],
-    }]);
+    assertAskedOnce(ask, { messageContains: '000801:MyPatch.esp', buttons: ['Change FormID'] });
   });
 
   // The rival: renumbering whatever the dialog answered would cascade the change over every
@@ -444,10 +439,9 @@ describe('registerRecordCopyCommands', () => {
     const accepted = await present(onEslRefusal, "the ESL-flag refusal callback captured from the command handler")('exhausted the ESL range');
 
     expect(accepted).toBe(false);
-    expect(ask.asked).toEqual([{
-      message: expect.stringContaining('Remove the ESL flag and copy the record?'),
-      detail: undefined,
+    assertAskedOnce(ask, {
+      messageContains: 'Remove the ESL flag and copy the record?',
       buttons: ['Remove ESL Flag and Copy the Record'],
-    }]);
+    });
   });
 });

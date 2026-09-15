@@ -11,6 +11,12 @@ import {
 } from './downloads';
 import { parseDownloadMeta } from '../mo2/downloads';
 
+// expect.stringContaining's type is `any`, so this narrows the refusal branch by hand instead.
+function assertRefusal(result: { applied: boolean; refusal?: string }, expectedSubstring: string): void {
+  if (result.applied) throw new Error('expected a refusal, got applied:true');
+  expect(result.refusal).toContain(expectedSubstring);
+}
+
 // tmpdirs made this test, removed in afterEach even when an assertion above the cleanup failed.
 let roots: string[] = [];
 
@@ -126,10 +132,7 @@ describe('markDownloadInstalled', () => {
     await writeArchive(root, 'foo.7z');
     await mkdir(sidecarPath(root, 'foo.7z'));
 
-    expect(await markDownloadInstalled(root, 'foo.7z')).toEqual({
-      applied: false,
-      refusal: expect.stringContaining('EISDIR'),
-    });
+    assertRefusal(await markDownloadInstalled(root, 'foo.7z'), 'EISDIR');
   });
 
   // Two verbs read-modify-write the same sidecar; interleaved, the second would splice the text
@@ -162,10 +165,7 @@ describe('markDownloadUninstalled', () => {
   it('refuses when no archive by that name is in downloads/, writing no orphan sidecar', async () => {
     const root = await makeInstanceRoot();
 
-    expect(await markDownloadUninstalled(root, 'gone.7z')).toEqual({
-      applied: false,
-      refusal: expect.stringContaining('gone.7z'),
-    });
+    assertRefusal(await markDownloadUninstalled(root, 'gone.7z'), 'gone.7z');
     await expect(readFile(sidecarPath(root, 'gone.7z'), 'utf8')).rejects.toThrow();
   });
 });

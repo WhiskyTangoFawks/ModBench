@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+type FakeTextDocument = { uri: { fsPath: string }; getText?: () => string };
+type DocEventListener = (doc: { uri: { fsPath: string }; getText: () => string }) => unknown;
+type DocEventRegister = (listener: DocEventListener) => { dispose: () => void };
+
 // Real fs against a throwaway tmpdir, not a mocked fs: the chmod bits and content must land.
-const openTextDocument = vi.fn();
-const showTextDocument = vi.fn();
-const onDidSaveTextDocument = vi.fn();
-const onDidCloseTextDocument = vi.fn();
+const openTextDocument = vi.fn<(uri: { fsPath: string }) => Promise<FakeTextDocument>>();
+const showTextDocument = vi.fn<(doc: unknown, opts?: unknown) => Promise<unknown>>();
+const onDidSaveTextDocument = vi.fn<DocEventRegister>();
+const onDidCloseTextDocument = vi.fn<DocEventRegister>();
 
 vi.mock('vscode', () => ({
   workspace: {
-    openTextDocument: (...args: unknown[]) => openTextDocument(...args),
-    onDidSaveTextDocument: (...args: unknown[]) => onDidSaveTextDocument(...args),
-    onDidCloseTextDocument: (...args: unknown[]) => onDidCloseTextDocument(...args),
+    openTextDocument: (uri: { fsPath: string }) => openTextDocument(uri),
+    onDidSaveTextDocument: (listener: DocEventListener) => onDidSaveTextDocument(listener),
+    onDidCloseTextDocument: (listener: DocEventListener) => onDidCloseTextDocument(listener),
   },
-  window: { showTextDocument: (...args: unknown[]) => showTextDocument(...args) },
+  window: { showTextDocument: (doc: unknown, opts?: unknown) => showTextDocument(doc, opts) },
   Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
   ViewColumn: { One: 1, Beside: -2 },
 }));

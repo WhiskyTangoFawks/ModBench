@@ -127,15 +127,10 @@ describe('modelValue — struct/array summary rows (JSON, not a prose summary)',
 });
 
 describe('modelValue — a type the wire sends that this union does not name', () => {
-  // FieldMetadata['type'] is a compile-time narrowing of the wire's plain string (types.ts), not
-  // a runtime check — a backend field type this union has not caught up with still reaches here.
+  // FieldMetadata.type is the wire's own plain string (types.ts) — a backend field type
+  // FieldType has not caught up with still reaches here.
   it('stringifies like every other scalar, rather than reading as unset', () => {
-    // The wire sends a plain string for `type` (types.ts); this round-trip carries a value
-    // outside `FieldType` the same honest way a real unrecognized backend type would arrive.
-    const futureMeta: FieldMetadata = JSON.parse(JSON.stringify({
-      ...fieldMeta({ name: 'Future', type: 'string' }),
-      type: 'quaternion',
-    }));
+    const futureMeta: FieldMetadata = { ...fieldMeta({ name: 'Future', type: 'string' }), type: 'quaternion' };
     expect(modelValue(42, futureMeta)).toBe('42');
   });
 });

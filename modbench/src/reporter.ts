@@ -4,10 +4,13 @@ import * as vscode from 'vscode';
  *  to the one function that builds it, rather than in any one consumer's own module. */
 export type Severity = 'error' | 'warning';
 export interface Reporter {
-  report(severity: Severity, message: string, detail?: string): void;
+  // Arrow-typed properties, not methods: neither ever needs its own `this`, and this shape lets
+  // a test hold a bare reference to one (`vi.mocked(reporter.report)`) without an
+  // unbound-method warning.
+  report: (severity: Severity, message: string, detail?: string) => void;
   /** A gesture the user invoked landed: ADR-0019's success tier, an information toast and no log
    *  line. Nothing went wrong, so there is no detail to go back and read. */
-  landed(message: string): void;
+  landed: (message: string) => void;
 }
 
 /** ADR-0019 surfacing: log at the level matching severity, toast for warning and error; a landing

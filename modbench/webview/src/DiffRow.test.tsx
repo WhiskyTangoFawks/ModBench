@@ -4,11 +4,11 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // FormKeyCell's pickFormKey import touches vscode.ts's acquireVsCodeApi() at module load.
-const copyToClipboard = vi.fn();
-const pickFormKey = vi.fn().mockResolvedValue(null);
+const copyToClipboard = vi.fn<(value: string) => void>();
+const pickFormKey = vi.fn<(seed: string, validTypes: string[]) => Promise<string | null>>().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
-  copyToClipboard: (...args: unknown[]) => copyToClipboard(...args),
-  pickFormKey: (...args: unknown[]) => pickFormKey(...args),
+  copyToClipboard: (value: string) => copyToClipboard(value),
+  pickFormKey: (seed: string, validTypes: string[]) => pickFormKey(seed, validTypes),
 }));
 
 import { DiffRow } from './DiffRow';
@@ -16,7 +16,7 @@ import type { Column, PathSegment } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { columnKey } from './columnKey';
 import { DIMMED_OPACITY } from './gridStyles';
-import { diffNode, fieldMeta, required } from './test/fixtures';
+import { diffNode, fieldMeta, parseJsonRecord, required } from './test/fixtures';
 
 const strMeta = fieldMeta({ name: 'Name', type: 'string' });
 const intMeta = fieldMeta({ name: 'Level', type: 'int' });
@@ -512,8 +512,7 @@ describe('DiffRow — string cell right-click menu (ADR-0018)', () => {
     const td = textEl.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();
-    const parsed: Record<string, unknown> = JSON.parse(required(attr, "the cell's data-vscode-context attribute"));
-    return parsed;
+    return parseJsonRecord(required(attr, "the cell's data-vscode-context attribute"));
   }
 
   it('a mutable string cell carries a stringValue context with readOnly: false and its current value', () => {
@@ -573,8 +572,7 @@ describe('DiffRow — array parent/element right-click context', () => {
     const td = textEl.closest('td');
     const attr = td?.getAttribute('data-vscode-context');
     expect(attr).toBeTruthy();
-    const parsed: Record<string, unknown> = JSON.parse(required(attr, "the cell's data-vscode-context attribute"));
-    return parsed;
+    return parseJsonRecord(required(attr, "the cell's data-vscode-context attribute"));
   }
 
   const intArrayMeta = fieldMeta({

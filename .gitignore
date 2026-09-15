@@ -20,6 +20,7 @@ __pycache__/
 
 # Stryker mutation test reports
 MEditService/StrykerOutput/
+MEditService/.stryker-run.json
 modbench/reports/mutation/
 modbench/.stryker-tmp/
 

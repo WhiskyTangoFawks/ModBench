@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { link, lstat, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
-  deployToGameData, purgeFromGameData, listRelativeFiles, manifestFile, exists,
+  deployToGameData, purgeFromGameData, listRelativeFiles, manifestFile, exists, parseManifest,
   type DeployLink, type DeployOutcome, type DeployWarning, type PurgeOutcome,
 } from './mo2Files';
 import { makeDeployerFixture, type DeployerFixture } from './test/deployerFixture';
@@ -49,7 +49,7 @@ describe('deployToGameData', () => {
     const [srcStat, tgtStat] = await Promise.all([stat(source), stat(target)]);
     expect(tgtStat.ino).toBe(srcStat.ino);
 
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['textures/foo.dds']);
     expect(manifest.preExisting).toEqual([]);
   });
@@ -93,7 +93,7 @@ describe('deployToGameData', () => {
 
     const deployedFiles = await listRelativeFiles(fx.gameDirectory.dataFolder);
     expect(deployedFiles).toEqual(['MyMod.esp']);
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['MyMod.esp']);
   });
 
@@ -138,7 +138,7 @@ describe('deployToGameData', () => {
     // would equally satisfy if the outcome landed in the wrong bucket.
     expect(warnings.some((w) => w.message.includes('different drive') && w.detail?.includes('mod.esp'))).toBe(true);
     expect(warnings.some((w) => w.message.includes('already exists in Data/'))).toBe(false);
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual([]); // not recorded as linked — retried on the next deploy
   });
 
@@ -167,7 +167,7 @@ describe('deployToGameData', () => {
     await deployToGameData(fx.instanceRoot, fx.gameDirectory, toLinks({}), [{ source, target }, { source: source2, target: target2 }]);
 
     expect(await readFile(target, 'utf8')).toBe('# managed\r\n*ModA.esp\r\n');
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.loadOrder).toEqual([target, target2]);
 
     // target2 is already gone (e.g., manually removed) before purge runs — its rm(force:true)
@@ -205,7 +205,7 @@ describe('deployToGameData', () => {
 
     // The vanilla file is untouched (not overwritten by the mod link).
     expect(await readFile(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'), 'utf8')).toBe('VANILLA');
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual([]);
     // ADR-0019 integrity tier: this is mandatory, so a warning firing at all is what matters.
     expect(assertWrote(outcome).some((w) => w.detail?.includes('textures/foo.dds'))).toBe(true);
@@ -255,7 +255,7 @@ describe('deployToGameData', () => {
 
     await expect(stat(join(fx.gameDirectory.dataFolder, 'b.esp'))).rejects.toThrow();
     await expect(stat(join(fx.gameDirectory.dataFolder, 'c.esp'))).rejects.toThrow();
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['a.esp']);
 
     // Purge must not misfile the (already removed) b.esp/c.esp into overwrite/.
@@ -275,7 +275,7 @@ describe('deployToGameData', () => {
     await expect(stat(join(fx.gameDirectory.dataFolder, 'Textures/Foo.dds'))).resolves.toBeTruthy();
     // The losing provider's own casing was never separately linked.
     await expect(stat(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'))).rejects.toThrow();
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['Textures/Foo.dds']);
   });
 
@@ -295,7 +295,7 @@ describe('deployToGameData', () => {
     // New-cased target is present with the new winner's content.
     expect(await readFile(join(fx.gameDirectory.dataFolder, 'textures/foo.dds'), 'utf8')).toBe('B');
 
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['textures/foo.dds']); // never both casings
   });
 
@@ -391,7 +391,7 @@ describe('deployToGameData', () => {
     const outcome = await deployToGameData(fx.instanceRoot, fx.gameDirectory, toLinks({ 'mod.esp': source }), loadOrder);
 
     // The link and manifest exist despite the load-order copy failing.
-    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    const manifest = parseManifest(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['mod.esp']);
     expect(manifest.loadOrder).toEqual([]);
     expect(assertWrote(outcome).length).toBeGreaterThan(0);
@@ -529,7 +529,7 @@ describe('purgeFromGameData', () => {
     const source = await fx.writeModFile('ModA', 'mod.esp', 'MOD');
     await deployToGameData(fx.instanceRoot, fx.gameDirectory, toLinks({ 'mod.esp': source }));
     const manifestPath = join(fx.instanceRoot, ...MANIFEST);
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    const manifest = parseManifest(await readFile(manifestPath, 'utf8'));
     delete manifest.loadOrder;
     await writeFile(manifestPath, JSON.stringify(manifest));
 
