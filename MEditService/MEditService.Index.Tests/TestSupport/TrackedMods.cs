@@ -47,6 +47,35 @@ internal static class TrackedMods
 
     internal static PluginCopyKey KeyOf(this LoadOrderEntry entry) => new(entry.Name, entry.Origin);
 
+    internal static string ModFolderOf(this LoadOrderEntry entry) =>
+        Path.GetDirectoryName(entry.Path) ?? throw new ArgumentException("A tracked entry sits in a mod folder.", nameof(entry));
+
+    /// <summary>The file the tracked tree keeps <paramref name="identity"/>'s document in, asked of
+    /// the repository: an embedded child names its container's file.</summary>
+    internal static string SourceFileOf(this LoadOrderEntry entry, RecordIdentity identity, GameRelease release = GameRelease.Fallout4)
+    {
+        var modFolder = entry.ModFolderOf();
+        var unit = RepositoryOf(entry, release).UnitHolding(entry.KeyOf(), identity)
+            ?? throw new InvalidOperationException($"No document in {entry.Name}'s tree under '{modFolder}' holds {identity.FormKey}.");
+        return Path.Combine(modFolder, unit.RelativePath);
+    }
+
+    internal static string SourceFileOf(this LoadOrderEntry entry, RecordDocument document) =>
+        entry.SourceFileOf(new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
+
+    /// <summary>Git run against the tracked mod folder: the "other tool" actor, never an
+    /// assertion channel.</summary>
+    internal static string Git(this LoadOrderEntry entry, params string[] args) =>
+        GitProbe.Run(Path.Combine(entry.ModFolderOf(), ".git"), entry.ModFolderOf(), args);
+
+    /// <summary>A hand edit no repository write made: the bytes of a document's own file replaced
+    /// behind the Index's back (ADR-0003).</summary>
+    internal static void HandEdit(this LoadOrderEntry entry, RecordDocument document, string from, string to)
+    {
+        var path = entry.SourceFileOf(document);
+        File.WriteAllText(path, File.ReadAllText(path).Replace(from, to, StringComparison.Ordinal));
+    }
+
     /// <summary>The working tree's copy of <paramref name="document"/> replaced by
     /// <paramref name="body"/>, then the narrow signal a Source watcher would send.</summary>
     internal static void Edit(this IndexProjector index, LoadOrderEntry entry, RecordDocument document, string body)
@@ -60,6 +89,25 @@ internal static class TrackedMods
     {
         RepositoryOf(entry).Put(entry.KeyOf(), new SourceDocument(formKey, recordType, editorId, body));
         index.RefreshKeys(entry.KeyOf(), [formKey]);
+    }
+
+    /// <summary>Several working-tree changes made the Source repository's own way, then the one
+    /// narrow signal a settled Source batch sends for them (ADR-0015 invariant 2). A null body is
+    /// the document taken out.</summary>
+    internal static void Project(
+        this IndexProjector index, LoadOrderEntry entry, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    {
+        var repository = RepositoryOf(entry);
+        var reads = index.RequireReads();
+        foreach (var (formKey, body) in deltas)
+        {
+            var current = reads.DocumentOf(formKey, entry.KeyOf());
+            if (body is null)
+                repository.Remove(entry.KeyOf(), new RecordIdentity(formKey, current.RecordType, current.EditorId));
+            else
+                repository.Put(entry.KeyOf(), new SourceDocument(formKey, current.RecordType, current.EditorId, body));
+        }
+        index.RefreshKeys(entry.KeyOf(), [.. deltas.Select(d => d.FormKey)]);
     }
 
     /// <summary>The working tree's copy of <paramref name="document"/> taken out, then the narrow
