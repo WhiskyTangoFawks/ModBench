@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -75,8 +76,8 @@ public sealed class RenumberRollbackTests
     public void TheGroupFolder_ReturnsToItsPreActionEntries()
     {
         using var fixture = new CascadeRollbackFixture();
-        var racesFolder = Path.GetDirectoryName(
-            fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId))!;
+        var racesFolder = PathShape.DirectoryOf(
+            fixture.SourceFileOf(fixture.TargetPlugin, fixture.Race, "race", CascadeRollbackFixture.RaceEditorId));
         Block(fixture.CascadeWritePaths(NewRaceFormKey)[0]);
 
         var entriesBefore = Directory.GetFileSystemEntries(racesFolder)
@@ -124,9 +125,9 @@ public sealed class RenumberRollbackTests
         var repository = SourceRepository.Over(fixture.ModFolder, GameRelease.Fallout4);
         var identity = new RecordIdentity(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         repository.Put(fixture.Plugin, new SourceDocument(newFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
-        var directory = Path.GetDirectoryName(SourceDocumentPath.Of(
+        var directory = PathShape.DirectoryOf(SourceDocumentPath.Of(
             fixture.ModFolder, fixture.Plugin.Name, "wrld", newFormKey, SourceContainerFixture.WorldspaceEditorId,
-            GameRelease.Fallout4))!;
+            GameRelease.Fallout4));
         repository.Remove(fixture.Plugin, identity);
         return directory;
     }

@@ -54,7 +54,8 @@ public sealed class ReconcileDiffTests
     // would say only that the test applied what it applied.
     private static Registration RegistrationOf(IndexProjector index, string plugin, string origin)
     {
-        var connection = DelegatingRecordIndex.DuckDbUnder(index.Store!).Connection;
+        var store = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
+        var connection = DelegatingRecordIndex.DuckDbUnder(store).Connection;
         using var cmd = connection.CreateCommand();
         cmd.CommandText =
             "SELECT load_order_idx, enabled, winning FROM registrations WHERE plugin = ? AND origin = ?";
@@ -78,13 +79,20 @@ public sealed class ReconcileDiffTests
             })
             .BuildScattered();
 
+    private static IRecordReads ReadsOf(IndexProjector index) =>
+        index.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+
+    private static RecordOverrides OverrideStackOf(IndexProjector index, string formKey) =>
+        ReadsOf(index).GetOverrideStack(formKey)
+            ?? throw new InvalidOperationException($"Expected an override stack for '{formKey}'.");
+
     private static string SharedNpc(IndexProjector index) =>
-        index.Reads!
+        ReadsOf(index)
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
     private static string? WinnerOf(IndexProjector index, string formKey) =>
-        index.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
+        OverrideStackOf(index, formKey).Entries.Single(e => e.IsWinner).Plugin.Name;
 
     private static IReadOnlyList<LoadOrderEntry> With(IReadOnlyList<LoadOrderEntry> plugins, string name, Func<LoadOrderEntry, LoadOrderEntry> change) =>
         plugins.Select(p => p.Name == name ? change(p) : p).ToList();
@@ -183,18 +191,19 @@ public sealed class ReconcileDiffTests
         Assert.False(modB.InLoadOrder);
         Assert.Equal(modA.LoadOrderIndex, modB.LoadOrderIndex);
 
-        var stack = index.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
+        var stack = OverrideStackOf(index, "000800:Shared.esp").Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Origin == "ModA").IsWinner);
         Assert.False(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
 
         // Both copies are registered — the losing one is browsable, not absent.
-        Assert.Contains(index.Store!.RegisteredPlugins(), k => k.Origin == "ModB");
+        var store = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
+        Assert.Contains(store.RegisteredPlugins(), k => k.Origin == "ModB");
 
         // Reprioritising the mods flips which copy wins — SQL-only, like every other move.
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
         index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
-        stack = index.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
+        stack = OverrideStackOf(index, "000800:Shared.esp").Entries;
         Assert.True(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
         Assert.False(RegistrationOf(index, "Shared.esp", "ModA").InLoadOrder);
     }
@@ -214,16 +223,18 @@ public sealed class ReconcileDiffTests
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
-        Assert.DoesNotContain(index.Reads!.OpenedCopies.Keys, k => k.Name == "B.esp");
-        Assert.DoesNotContain(index.Store!.RegisteredPlugins(), k => k.Name == "B.esp");
+        var readsAfterLeaving = ReadsOf(index);
+        var storeAfterLeaving = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
+        Assert.DoesNotContain(readsAfterLeaving.OpenedCopies.Keys, k => k.Name == "B.esp");
+        Assert.DoesNotContain(storeAfterLeaving.RegisteredPlugins(), k => k.Name == "B.esp");
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
-        Assert.NotNull(index.Store!.IndexedContentHash(bKey));
+        Assert.NotNull(storeAfterLeaving.IndexedContentHash(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(indexed, counts.Indexed);
-        Assert.Contains(index.Reads!.OpenedCopies.Keys, k => k.Name == "B.esp");
+        Assert.Contains(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "B.esp");
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
@@ -256,7 +267,8 @@ public sealed class ReconcileDiffTests
             third.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
             Assert.Equal(0, thirdCounts.Indexed);
-            Assert.DoesNotContain(third.Store!.RegisteredPlugins(), k => k.Name == "B.esp");
+            var thirdStore = third.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
+            Assert.DoesNotContain(thirdStore.RegisteredPlugins(), k => k.Name == "B.esp");
             Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third)));
         }
     }
@@ -276,7 +288,7 @@ public sealed class ReconcileDiffTests
 
         Assert.Contains(index.Status.Failures, f => f.Name == "Bad.esp");
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.DoesNotContain(index.Reads!.OpenedCopies.Keys, k => k.Name == "Bad.esp");
+        Assert.DoesNotContain(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "Bad.esp");
 
         // The same snapshot again is a no-op — the failed parse is not paid twice.
         var sweeps = counts.Sweeps;
@@ -287,7 +299,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
         Assert.Empty(index.Status.Failures);
-        Assert.Contains(index.Reads!.OpenedCopies.Keys, k => k.Name == "Bad.esp");
+        Assert.Contains(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "Bad.esp");
     }
 
     [Fact]

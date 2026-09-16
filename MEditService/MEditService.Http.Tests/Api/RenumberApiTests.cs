@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
@@ -53,7 +54,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             formKey = (string?)null,
         });
         created.EnsureSuccessStatusCode();
-        var oldFormKey = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey").GetString()!;
+        var oldFormKey = DocumentNodes.StringValueOf((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("formKey"));
 
         // ADR-0014: the create wrote the source tree and returned; the renumber below resolves its
         // target through the Index, so it waits for the Source watcher's projection of that write.
@@ -64,7 +65,7 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             $"/records/{Uri.EscapeDataString(oldFormKey)}/renumber",
             new { plugin = Plugin, origin = Origin, newFormKey = (string?)null });
         renumbered.EnsureSuccessStatusCode();
-        var newFormKey = (await renumbered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey").GetString()!;
+        var newFormKey = DocumentNodes.StringValueOf((await renumbered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey"));
 
         // ADR-0014: the renumber's create, delete and cascade settle as one batch and that batch is
         // one advance, so one await is the whole wait — no poll for an end state.
@@ -93,6 +94,6 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     private async Task<List<string>> NpcFormKeys()
     {
         var listing = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-        return [.. listing.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("formKey").GetString()!)];
+        return [.. listing.GetProperty("items").EnumerateArray().Select(i => DocumentNodes.StringValueOf(i.GetProperty("formKey")))];
     }
 }

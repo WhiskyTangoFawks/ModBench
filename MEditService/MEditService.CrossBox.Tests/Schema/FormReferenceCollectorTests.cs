@@ -302,9 +302,10 @@ public class FormReferenceCollectorTests
         using var document = JsonDocument.Parse(HeaderDocument.Write(mod));
 
         var masters = DocumentNodes.At(document.RootElement, $"ModHeader.{PluginHeader.MastersFieldName}");
+        Assert.NotNull(masters);
         Assert.Equal(
             ["Fallout4.esm"],
-            masters!.Value.EnumerateArray().Select(m => m.GetProperty("Master").GetString()));
+            masters.Value.EnumerateArray().Select(m => m.GetProperty("Master").GetString()));
         // The schema types a master as the plugin name it is, so the collector reaches no leaf: the
         // references table has never held a row sourced at a header.
         Assert.Empty(FormReferences.Collect(document.RootElement, header));

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -19,12 +20,16 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
+    private static string RequireNewFormKey(RecordEditResult result) =>
+        result.NewFormKey ?? throw new InvalidOperationException("Expected a successful edit to set NewFormKey.");
+
     [Fact]
     public void AnEditorIdEdit_ProjectsTheNewNameOntoTheRecordsRow()
     {
         Assert.True(Service().Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
 
-        Assert.Equal("RenamedNpc", _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
+        var document = _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        Assert.Equal("RenamedNpc", document.EditorId);
     }
 
     [Fact]
@@ -32,8 +37,8 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Assert.True(Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75")).Applied);
 
-        var field = _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
-            .Fields.Single(f => f.Metadata.Name == "HeightMax");
+        var document = _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        var field = document.Fields.Single(f => f.Metadata.Name == "HeightMax");
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(field.Value).GetSingle());
     }
 
@@ -44,13 +49,12 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The file write and the projection are two events (ADR-0014), and both have to have landed:
         // dirt on disk with the editor showing the old value is half a write path.
-        var index = _mod.Index.Store!;
-        Assert.Contains(
-            "0.75", index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
-            StringComparison.Ordinal);
+        var index = _mod.Index.Store.Require();
+        var effective = index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        Assert.Contains("0.75", effective.Body.Require(), StringComparison.Ordinal);
 
-        var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!;
-        Assert.DoesNotContain("0.75", head.Body!, StringComparison.Ordinal);
+        var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        Assert.DoesNotContain("0.75", head.Body.Require(), StringComparison.Ordinal);
         Assert.Equal(
             _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)), head.Body);
     }
@@ -64,13 +68,13 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The second edit must not re-baseline against the first: Head is what the last commit
         // holds, not "the value before the most recent keystroke".
-        var index = _mod.Index.Store!;
-        Assert.Contains(
-            "0.5", index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
-            StringComparison.Ordinal);
+        var index = _mod.Index.Store.Require();
+        var effective = index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        Assert.Contains("0.5", effective.Body.Require(), StringComparison.Ordinal);
+        var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         Assert.Equal(
             _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)),
-            index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body);
+            head.Body);
     }
 
     // _filter is a one-shot snapshot of whatever matched when SetFilter ran, so an edit that changes
@@ -95,8 +99,10 @@ public sealed class IndexAfterAWriteTests : IDisposable
         var result = Service().CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal("BrandNewNpc", _mod.Index.Projected().GetDocument(result.NewFormKey!, _mod.Plugin)!.EditorId);
-        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(result.NewFormKey!, _mod.Plugin));
+        var newFormKey = RequireNewFormKey(result);
+        var document = _mod.Index.Projected().GetDocument(newFormKey, _mod.Plugin).Require();
+        Assert.Equal("BrandNewNpc", document.EditorId);
+        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(newFormKey, _mod.Plugin));
     }
 
     // _filter never evaluated a brand-new row against its SQL, so it stays hidden until the create
@@ -121,10 +127,11 @@ public sealed class IndexAfterAWriteTests : IDisposable
         var service = Service();
         var created = service.CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
         Assert.True(created.Applied, created.Message);
+        var createdFormKey = RequireNewFormKey(created);
 
-        Assert.True(service.Set(_mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\"")).Applied);
+        Assert.True(service.Set(_mod.Plugin, createdFormKey, "EditorID", Json("\"RenamedNpc\"")).Applied);
 
-        var document = _mod.Index.Projected().GetDocument(created.NewFormKey!, _mod.Plugin)!;
+        var document = _mod.Index.Projected().GetDocument(createdFormKey, _mod.Plugin).Require();
         Assert.Equal("RenamedNpc", document.EditorId);
         Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
     }
@@ -154,11 +161,12 @@ public sealed class IndexAfterAWriteTests : IDisposable
         var service = Service();
         var created = service.CreateRecord(_mod.Plugin, "npc_", "BrandNew");
         Assert.True(created.Applied, created.Message);
+        var createdFormKey = RequireNewFormKey(created);
 
-        Assert.True(service.DeleteRecord(_mod.Plugin, created.NewFormKey!).Applied);
+        Assert.True(service.DeleteRecord(_mod.Plugin, createdFormKey).Applied);
 
-        Assert.Null(_mod.Index.Projected().GetDocument(created.NewFormKey!, _mod.Plugin));
-        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(created.NewFormKey!, _mod.Plugin));
+        Assert.Null(_mod.Index.Projected().GetDocument(createdFormKey, _mod.Plugin));
+        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(createdFormKey, _mod.Plugin));
     }
 
     [Fact]

@@ -128,7 +128,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     public void Compile_ForAnOverrideOfAnotherPluginsRecord_NamesThatPluginAsAMaster()
     {
         SourceEdits.Write(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new Keyword(_deltaKeyword, Fallout4Release.Fallout4) { EditorID = "DeltaKeyword" },
             "kywd", GameRelease.Fallout4);
 
@@ -144,9 +144,9 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     public void Compile_ForALinkIntoAnotherPluginNamingTheWrongRecordType_ReportsIt()
     {
         SourceEdits.Rewrite<Npc>(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
-            npc => npc.Keywords!.Add(new FormLink<IKeywordGetter>(_bravoRace)));
+            npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_bravoRace)));
 
         var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
 
@@ -178,9 +178,9 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     public void Compile_AfterAnEditIntroducesAReferenceToAnUnreferencedPlugin_AddsItAsAMaster()
     {
         SourceEdits.Rewrite<Npc>(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_npc.ToString(), "npc_", "HostNpc"), GameRelease.Fallout4,
-            npc => npc.Keywords!.Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
+            npc => npc.Keywords.Require().Add(new FormLink<IKeywordGetter>(_deltaKeyword)));
 
         var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);

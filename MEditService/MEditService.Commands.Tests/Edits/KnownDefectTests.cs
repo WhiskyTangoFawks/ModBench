@@ -19,7 +19,7 @@ public sealed class KnownDefectTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["scen"];
 
     private static SubFieldSpec SceneActionType() =>
-        Scenes.RecordColumns.Single(c => c.Name == "Actions").Field.ElementSpec!.SubFields!
+        Scenes.RecordColumns.Single(c => c.Name == "Actions").Field.ElementSpec.Require().SubFields.Require()
             .Single(f => f.Name == "Type");
 
     private static string OneSceneWithAnAction()
@@ -38,7 +38,7 @@ public sealed class KnownDefectTests
         var type = SceneActionType();
 
         Assert.Equal("ASceneActionType", type.LeafTypeName);
-        Assert.Empty(type.SubFields!);
+        Assert.Empty(type.SubFields.Require());
         Assert.Contains("unimplemented throw upstream", type.ReadOnlyReason, StringComparison.Ordinal);
     }
 
@@ -51,7 +51,7 @@ public sealed class KnownDefectTests
             before, Scenes, SetAt(Json("{}"), Member("Actions"), At(0), Member("Type")), out var written);
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, refused?.Refusal);
-        Assert.Contains("'Type' is read-only", refused!.Message, StringComparison.Ordinal);
+        Assert.Contains("'Type' is read-only", refused.Require().Message, StringComparison.Ordinal);
         Assert.Equal(before, written);
     }
 
@@ -63,6 +63,6 @@ public sealed class KnownDefectTests
             SetAt(Json("""{"Name": "Second", "Type": {}}"""), Member("Actions"), At(0)), out _);
 
         Assert.Equal(RecordEditRefusal.FieldReadOnly, refused?.Refusal);
-        Assert.Contains("'Type' is read-only", refused!.Message, StringComparison.Ordinal);
+        Assert.Contains("'Type' is read-only", refused.Require().Message, StringComparison.Ordinal);
     }
 }

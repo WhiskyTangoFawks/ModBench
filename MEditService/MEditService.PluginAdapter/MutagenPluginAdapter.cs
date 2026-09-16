@@ -120,7 +120,7 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
     {
         // Never-assume-exclusive-ownership: the destination may be a mod folder nothing has written
         // into yet — a brand-new mod, or overwrite/ before its first file.
-        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(destinationPath));
         if (File.Exists(destinationPath))
             throw new IOException($"Plugin file already exists: {Path.GetFileName(destinationPath)}");
 

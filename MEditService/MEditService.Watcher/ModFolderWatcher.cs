@@ -528,7 +528,8 @@ public sealed class ModFolderWatcher : IDisposable
         {
             armed = plugin.IndexedArmed;
             key = new PluginCopyKey(plugin.Name, plugin.Origin ?? "");
-            path = plugin.Path!;
+            path = plugin.Path
+                ?? throw new InvalidOperationException($"Expected '{plugin.Name}' to carry its path once watched.");
         }
         if (!armed) return;
         try

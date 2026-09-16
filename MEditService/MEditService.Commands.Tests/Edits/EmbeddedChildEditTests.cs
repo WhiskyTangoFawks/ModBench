@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using static MEditService.Tests.TestSupport.Envelopes;
@@ -20,11 +21,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString())!.Body;
+    private string WorkingTreeCell() => _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body;
 
     private string CommittedCell() =>
         _fixture.CommittedDocument(
-            _fixture.EmbedCell.ToString(), "cell", ContainerModFixture.EmbedCellEditorId)!.Body;
+            _fixture.EmbedCell.ToString(), "cell", ContainerModFixture.EmbedCellEditorId).Require().Body;
 
     // ---- the parent's untouched bytes are untouched ----
 
@@ -71,7 +72,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // Cut back out of its owner's document by the repository, which is the only place it exists.
         var child = _fixture.Document(_fixture.TemporaryRef.ToString());
         Assert.NotNull(child);
-        Assert.Contains("\"Scale\": 3.5", child!.Body, StringComparison.Ordinal);
+        Assert.Contains("\"Scale\": 3.5", child.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -97,7 +98,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // The reflector's general P3Int16/P3Float mapping makes `position` an ordinary writable column on
         // every IPlacedGetter, so RefuseIfContainmentField refuses it by name: Position is mirrored into
         // `placement` and nothing on this write path re-derives that row.
-        var before = _fixture.Document(_fixture.TemporaryRef.ToString())!.Body;
+        var before = _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body;
 
         var result = EditService().Set(
             _fixture.Plugin, _fixture.TemporaryRef.ToString(), "Position", Json("""{"X": 99.0, "Y": 88.0, "Z": 77.0}"""));
@@ -105,7 +106,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("placement", result.Message, StringComparison.Ordinal);
-        Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString())!.Body);
+        Assert.Equal(before, _fixture.Document(_fixture.TemporaryRef.ToString()).Require().Body);
         // No working-tree dirt at all from a refused edit.
         Assert.Empty(_fixture.GitStatus());
     }
@@ -206,7 +207,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
             before.Replace("\"Scale\": 6.0", "\"Scale\": 9.5", StringComparison.Ordinal),
             File.ReadAllText(file));
         Assert.Contains(
-            "\"Scale\": 9.5", _fixture.Document(_fixture.TopCellRef.ToString())!.Body, StringComparison.Ordinal);
+            "\"Scale\": 9.5", _fixture.Document(_fixture.TopCellRef.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
     // ---- a record the tree does not hold, both branches ----
@@ -217,7 +218,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // Branch one: no document of its own, and no other record's document carries it. An interior
         // cell removed from disk by something outside Modbench is exactly that, and the tree is the
         // only thing asked (ADR-0015 invariant 5).
-        Directory.Delete(Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!, recursive: true);
+        Directory.Delete(PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId)), recursive: true);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.EmbedCell.ToString(), "WaterHeight", Json("77.0"));
 
@@ -288,7 +289,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void EditingAWorldspacesEditorId_MovesItsSourceDirectory()
     {
-        var oldDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId))!;
+        var oldDirectory = PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModFixture.WorldspaceEditorId));
 
         Assert.True(EditService().Set(_fixture.Plugin, _fixture.Worldspace.ToString(), "EditorID", Json("\"RenamedWorld\"")).Applied);
 

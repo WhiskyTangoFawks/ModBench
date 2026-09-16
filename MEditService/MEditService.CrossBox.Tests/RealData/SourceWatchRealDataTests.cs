@@ -134,7 +134,7 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         Assert.True(await fixture.Index.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(60)));
         await WaitForEveryRow(renamed);
         foreach (var (formKey, editorId) in renamed)
-            Assert.Equal(editorId, fixture.Index.Store!.At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
+            Assert.Equal(editorId, fixture.Index.Store.Require().At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
     }
 
     // 60s to match the sequence await above: the same load that delays the projection delays this
@@ -144,7 +144,7 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         while (DateTime.UtcNow < deadline)
         {
-            if (renamed.All(r => fixture.Index.Store!.At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
+            if (renamed.All(r => fixture.Index.Store.Require().At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
                 return;
             await Task.Delay(50);
         }
@@ -164,6 +164,6 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
     private static string Property(string document, string name)
     {
         using var parsed = JsonDocument.Parse(File.ReadAllText(document));
-        return parsed.RootElement.GetProperty(name).GetString()!;
+        return DocumentNodes.StringValueOf(parsed.RootElement.GetProperty(name));
     }
 }

@@ -57,7 +57,9 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
             _mod.Holder, TestEditService.AbsorbHandler(), watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
-        Assert.True(ok.Value!.Succeeded);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.True(response.Succeeded);
         Assert.Null(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
@@ -90,8 +92,10 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
             _mod.Holder, TestEditService.AbsorbHandler(), watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
-        Assert.False(ok.Value!.Succeeded);
-        Assert.Contains(IndexedModFixture.PluginName, ok.Value.RefusalReason, StringComparison.Ordinal);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.False(response.Succeeded);
+        Assert.Contains(IndexedModFixture.PluginName, response.RefusalReason, StringComparison.Ordinal);
         Assert.NotNull(SourceRepository.UnansweredExternalChange(_mod.ModFolder));
     }
 
@@ -109,8 +113,10 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
             _mod.Holder, TestEditService.KeepHandler(), TestWatcher.Inert(), loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
-        Assert.False(ok.Value!.Succeeded);
-        Assert.Contains(_mod.Npc.ToString(), ok.Value.RefusalReason, StringComparison.Ordinal);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.False(response.Succeeded);
+        Assert.Contains(_mod.Npc.ToString(), response.RefusalReason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -150,6 +156,8 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
             loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<RebaseResponse>>(result);
-        Assert.Equal(RebaseOutcome.Clean, ok.Value!.Outcome);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.Equal(RebaseOutcome.Clean, response.Outcome);
     }
 }

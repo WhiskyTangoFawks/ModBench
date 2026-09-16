@@ -76,7 +76,9 @@ public sealed class IndexProjectorTests
 
     private static IReadOnlyList<RegisteredCopy> RegistrationRows(IndexProjector projector)
     {
-        var connection = ((DuckDbRecordIndex)projector.Store!).Connection;
+        var store = projector.Store
+            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+        var connection = ((DuckDbRecordIndex)store).Connection;
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT plugin, origin, load_order_idx, enabled, winning FROM registrations";
         using var reader = cmd.ExecuteReader();
@@ -91,12 +93,16 @@ public sealed class IndexProjectorTests
     }
 
     private static string SharedNpc(IndexProjector projector) =>
-        projector.Reads!
+        projector.RequireReads()
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
-    private static string? WinnerOf(IndexProjector projector, string formKey) =>
-        projector.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
+    private static string? WinnerOf(IndexProjector projector, string formKey)
+    {
+        var stack = projector.RequireReads().GetOverrideStack(formKey)
+            ?? throw new InvalidOperationException($"Expected {formKey} to resolve to an override stack.");
+        return stack.Entries.Single(e => e.IsWinner).Plugin.Name;
+    }
 
     // ADR-0013 invariant 4: the sweep is handed the kernel's load order. The holder alone takes the
     // next snapshot here, so the copies the Index has open still carry the old winner: a projector
@@ -374,7 +380,7 @@ public sealed class IndexProjectorTests
         Reconcile(projector, holder, Snapshot(fx));
 
         var arrived = fx.Plugins[1];
-        var rows = projector.Reads!.Search(new RecordQuery(
+        var rows = projector.RequireReads().Search(new RecordQuery(
             Plugin: arrived.Name, Origin: arrived.Origin, Limit: 10, Offset: 0));
         Assert.NotEmpty(rows.Items);
     }
@@ -418,7 +424,7 @@ public sealed class IndexProjectorTests
 
         Reconcile(projector, holder, Snapshot(fx));
 
-        var matched = projector.Reads!
+        var matched = projector.RequireReads()
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
         Assert.Equal(["CharlieNpc"], matched.Items.Select(i => i.EditorId));
     }

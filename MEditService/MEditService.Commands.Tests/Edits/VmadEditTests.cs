@@ -36,17 +36,17 @@ public sealed class VmadEditTests : IDisposable
     // Every gesture here sits under the adapter column.
     private static PathHop[] Under(params PathHop[] hops) => [Member(Field), .. hops];
 
-    private static JsonArray Scripts(JsonNode adapter) => adapter["Scripts"]!.AsArray();
+    private static JsonArray Scripts(JsonNode adapter) => adapter["Scripts"].Require().AsArray();
 
     private static JsonNode ScriptNamed(JsonNode adapter, string name) =>
-        Scripts(adapter).First(s => s!["Name"]!.GetValue<string>() == name)!;
+        Scripts(adapter).First(s => s.Require()["Name"].Require().GetValue<string>() == name).Require();
 
     private static JsonNode PropertyNamed(JsonNode script, string name) =>
-        script["Properties"]!.AsArray().First(p => p!["Name"]!.GetValue<string>() == name)!;
+        script["Properties"].Require().AsArray().First(p => p.Require()["Name"].Require().GetValue<string>() == name).Require();
 
     private static List<string> WrittenScriptNames(string body) =>
-        [.. JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
-            .Select(s => s!["Name"]!.GetValue<string>())];
+        [.. JsonNode.Parse(body).Require()["VirtualMachineAdapter"].Require()["Scripts"].Require().AsArray()
+            .Select(s => s.Require()["Name"].Require().GetValue<string>())];
 
     // ── scripts ──────────────────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ public sealed class VmadEditTests : IDisposable
     {
         _fixture.Normalize(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
-        ScriptNamed(adapter, "Alpha")["Properties"]!.AsArray().Add(new JsonObject
+        ScriptNamed(adapter, "Alpha")["Properties"].Require().AsArray().Add(new JsonObject
         {
             ["MutagenObjectType"] = "ScriptFloatProperty",
             ["Name"] = "Amount",
@@ -197,7 +197,7 @@ public sealed class VmadEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var tags = WrittenProperty(_fixture.Body(_fixture.Npc), "Alpha", "Tags");
-        Assert.Equal(expected, tags["Data"]!.AsArray().Select(e => e!.GetValue<string>()));
+        Assert.Equal(expected, tags["Data"].Require().AsArray().Select(e => e.Require().GetValue<string>()));
         Assert.All(
             ConditionEditTests.DocumentDiff(before, _fixture.Body(_fixture.Npc)),
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts[0].Properties[3].Data[", d, StringComparison.Ordinal));
@@ -212,7 +212,7 @@ public sealed class VmadEditTests : IDisposable
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         var config = PropertyNamed(ScriptNamed(adapter, "Alpha"), "Config");
-        config["Members"]![0]!["Properties"]![0]!["Data"] = 9;
+        config["Members"].Require()[0].Require()["Properties"].Require()[0].Require()["Data"] = 9;
 
         var result = Edit(_fixture.Npc, adapter);
 
@@ -229,7 +229,7 @@ public sealed class VmadEditTests : IDisposable
         var before = _fixture.Body(_fixture.Npc);
         var adapter = _fixture.Adapter(_fixture.Npc);
         var parts = PropertyNamed(ScriptNamed(adapter, "Alpha"), "Parts");
-        parts["Structs"]!.AsArray().Add(new JsonObject
+        parts["Structs"].Require().AsArray().Add(new JsonObject
         {
             ["Members"] = new JsonArray(new JsonObject
             {
@@ -259,7 +259,7 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Quest);
         var before = _fixture.Body(_fixture.Quest);
         var adapter = _fixture.Adapter(_fixture.Quest);
-        PropertyNamed(adapter["Aliases"]![0]!["Scripts"]!.AsArray()[0]!, "Level")["Data"] = 7;
+        PropertyNamed(adapter["Aliases"].Require()[0].Require()["Scripts"].Require().AsArray()[0].Require(), "Level")["Data"] = 7;
 
         var result = Edit(_fixture.Quest, adapter);
 
@@ -274,19 +274,19 @@ public sealed class VmadEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Quest);
         var adapter = _fixture.Adapter(_fixture.Quest);
-        adapter["Fragments"]!.AsArray().First(f => f!["Stage"]!.GetValue<int>() == 10)!["ScriptName"] = "Renamed";
+        adapter["Fragments"].Require().AsArray().First(f => f.Require()["Stage"].Require().GetValue<int>() == 10).Require()["ScriptName"] = "Renamed";
 
         var result = Edit(_fixture.Quest, adapter);
 
         Assert.True(result.Applied, result.Message);
-        var written = JsonNode.Parse(_fixture.Body(_fixture.Quest))!["VirtualMachineAdapter"]!["Fragments"]!.AsArray();
+        var written = JsonNode.Parse(_fixture.Body(_fixture.Quest)).Require()["VirtualMachineAdapter"].Require()["Fragments"].Require().AsArray();
         // The fixture wrote stage 10 before stage 5; the key is (Stage, StageIndex), so the write
         // stores them the other way round.
-        Assert.Equal([5, 10], written.Select(f => f!["Stage"]!.GetValue<int>()));
+        Assert.Equal([5, 10], written.Select(f => f.Require()["Stage"].Require().GetValue<int>()));
         // The edited fragment differs by exactly its ScriptName; the other is byte-identical.
         var after = ByName(written, "Stage");
         var beforeByStage = ByName(
-            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["Fragments"]!.AsArray(), "Stage");
+            JsonNode.Parse(before).Require()["VirtualMachineAdapter"].Require()["Fragments"].Require().AsArray(), "Stage");
         Assert.Equal(beforeByStage["5"], after["5"]);
         Assert.Equal(beforeByStage["10"].Replace("\"Ten\"", "\"Renamed\"", StringComparison.Ordinal), after["10"]);
     }
@@ -296,19 +296,19 @@ public sealed class VmadEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Perk);
         var adapter = _fixture.Adapter(_fixture.Perk);
-        adapter["ScriptFragments"]!["Fragments"]!.AsArray()
-            .First(f => f!["Index"]!.GetValue<int>() == 2)!["ScriptName"] = "Renamed";
+        adapter["ScriptFragments"].Require()["Fragments"].Require().AsArray()
+            .First(f => f.Require()["Index"].Require().GetValue<int>() == 2).Require()["ScriptName"] = "Renamed";
 
         var result = Edit(_fixture.Perk, adapter);
 
         Assert.True(result.Applied, result.Message);
-        var written = JsonNode.Parse(_fixture.Body(_fixture.Perk))!["VirtualMachineAdapter"]!
-            ["ScriptFragments"]!["Fragments"]!.AsArray();
+        var written = JsonNode.Parse(_fixture.Body(_fixture.Perk)).Require()["VirtualMachineAdapter"].Require()
+            ["ScriptFragments"].Require()["Fragments"].Require().AsArray();
         // The fixture wrote index 2 before index 1; a single-member key sorts them by value.
-        Assert.Equal([1, 2], written.Select(f => f!["Index"]!.GetValue<int>()));
+        Assert.Equal([1, 2], written.Select(f => f.Require()["Index"].Require().GetValue<int>()));
         var after = ByName(written, "Index");
         var beforeByIndex = ByName(
-            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["ScriptFragments"]!["Fragments"]!.AsArray(), "Index");
+            JsonNode.Parse(before).Require()["VirtualMachineAdapter"].Require()["ScriptFragments"].Require()["Fragments"].Require().AsArray(), "Index");
         Assert.Equal(beforeByIndex["1"], after["1"]);
         Assert.Equal(beforeByIndex["2"].Replace("\"Two\"", "\"Renamed\"", StringComparison.Ordinal), after["2"]);
     }
@@ -318,20 +318,20 @@ public sealed class VmadEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Scene);
         var adapter = _fixture.Adapter(_fixture.Scene);
-        adapter["ScriptFragments"]!["PhaseFragments"]!.AsArray()
-            .First(f => f!["ScriptName"]!.GetValue<string>() == "OneStart")!["FragmentName"] = "Renamed";
+        adapter["ScriptFragments"].Require()["PhaseFragments"].Require().AsArray()
+            .First(f => f.Require()["ScriptName"].Require().GetValue<string>() == "OneStart").Require()["FragmentName"] = "Renamed";
 
         var result = Edit(_fixture.Scene, adapter);
 
         Assert.True(result.Applied, result.Message);
-        var written = JsonNode.Parse(_fixture.Body(_fixture.Scene))!["VirtualMachineAdapter"]!
-            ["ScriptFragments"]!["PhaseFragments"]!.AsArray();
+        var written = JsonNode.Parse(_fixture.Body(_fixture.Scene)).Require()["VirtualMachineAdapter"].Require()
+            ["ScriptFragments"].Require()["PhaseFragments"].Require().AsArray();
         // Two fragments share index 1 and the flag separates them, so all three survive and the pair sorts
         // by flag value. A key of the index alone would refuse this record's own data as a duplicate.
-        Assert.Equal(["ZeroEnd", "OneStart", "OneEnd"], written.Select(f => f!["ScriptName"]!.GetValue<string>()));
+        Assert.Equal(["ZeroEnd", "OneStart", "OneEnd"], written.Select(f => f.Require()["ScriptName"].Require().GetValue<string>()));
         var after = ByName(written, "ScriptName");
         var beforeByName = ByName(
-            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["ScriptFragments"]!["PhaseFragments"]!.AsArray(),
+            JsonNode.Parse(before).Require()["VirtualMachineAdapter"].Require()["ScriptFragments"].Require()["PhaseFragments"].Require().AsArray(),
             "ScriptName");
         Assert.Equal(beforeByName["\"ZeroEnd\""], after["\"ZeroEnd\""]);
         Assert.Equal(beforeByName["\"OneEnd\""], after["\"OneEnd\""]);
@@ -349,11 +349,11 @@ public sealed class VmadEditTests : IDisposable
         // the one to compare against: from there a resend is the identity, null member included.
         _fixture.Normalize(_fixture.Scene);
         var before = _fixture.Body(_fixture.Scene);
-        Assert.Null(_fixture.Adapter(_fixture.Scene)["ScriptFragments"]!["OnBegin"]);
+        Assert.Null(_fixture.Adapter(_fixture.Scene)["ScriptFragments"].Require()["OnBegin"]);
 
         _fixture.Normalize(_fixture.Scene);
 
-        Assert.Null(_fixture.Adapter(_fixture.Scene)["ScriptFragments"]!["OnBegin"]);
+        Assert.Null(_fixture.Adapter(_fixture.Scene)["ScriptFragments"].Require()["OnBegin"]);
         Assert.Equal(before, _fixture.Body(_fixture.Scene));
     }
 
@@ -396,7 +396,7 @@ public sealed class VmadEditTests : IDisposable
     public void TwoQuestFragmentsOnOneStage_AreRefusedNamingTheCompositeKey()
     {
         var adapter = _fixture.Adapter(_fixture.Quest);
-        adapter["Fragments"]!.AsArray().Add(new JsonObject
+        adapter["Fragments"].Require().AsArray().Add(new JsonObject
         {
             ["Stage"] = 10,
             ["StageIndex"] = 0,
@@ -423,18 +423,18 @@ public sealed class VmadEditTests : IDisposable
         _fixture.Normalize(_fixture.Quest);
         var before = _fixture.Body(_fixture.Quest);
         var beforeByStage = ByName(
-            JsonNode.Parse(before)!["VirtualMachineAdapter"]!["Fragments"]!.AsArray(), "Stage");
+            JsonNode.Parse(before).Require()["VirtualMachineAdapter"].Require()["Fragments"].Require().AsArray(), "Stage");
         // In key order stage 5 is element 0 and stage 10 is element 1, so removing the wrong one is
         // observable rather than a coin flip.
-        Assert.Equal([5, 10], JsonNode.Parse(before)!["VirtualMachineAdapter"]!["Fragments"]!
-            .AsArray().Select(f => f!["Stage"]!.GetValue<int>()));
+        Assert.Equal([5, 10], JsonNode.Parse(before).Require()["VirtualMachineAdapter"].Require()["Fragments"].Require()
+            .AsArray().Select(f => f.Require()["Stage"].Require().GetValue<int>()));
 
         var result = Edit(_fixture.Quest, RemoveAt(Under(Member("Fragments"), Key("10 / 0"))));
 
         Assert.True(result.Applied, result.Message);
-        var written = JsonNode.Parse(_fixture.Body(_fixture.Quest))!["VirtualMachineAdapter"]!["Fragments"]!.AsArray();
-        Assert.Equal([5], written.Select(f => f!["Stage"]!.GetValue<int>()));
-        Assert.Equal(beforeByStage["5"], written[0]!.ToJsonString());
+        var written = JsonNode.Parse(_fixture.Body(_fixture.Quest)).Require()["VirtualMachineAdapter"].Require()["Fragments"].Require().AsArray();
+        Assert.Equal([5], written.Select(f => f.Require()["Stage"].Require().GetValue<int>()));
+        Assert.Equal(beforeByStage["5"], written[0].Require().ToJsonString());
     }
 
     [Fact]
@@ -450,7 +450,7 @@ public sealed class VmadEditTests : IDisposable
         var after = _fixture.Body(_fixture.Npc);
         Assert.Equal(
             ["b", "a"],
-            WrittenProperty(after, "Alpha", "Tags")["Data"]!.AsArray().Select(e => e!.GetValue<string>()));
+            WrittenProperty(after, "Alpha", "Tags")["Data"].Require().AsArray().Select(e => e.Require().GetValue<string>()));
         Assert.All(
             ConditionEditTests.DocumentDiff(before, after),
             d => Assert.StartsWith("VirtualMachineAdapter.Scripts[0].Properties[3].Data[", d, StringComparison.Ordinal));
@@ -471,7 +471,7 @@ public sealed class VmadEditTests : IDisposable
         // Properties list is simply absent from the source document.
         Assert.Equal(
             """[{"Property":{"Name":"","Alias":0},"Scripts":[{"Name":"AliasScript"}]}]""",
-            JsonNode.Parse(after)!["VirtualMachineAdapter"]!["Aliases"]!.ToJsonString());
+            JsonNode.Parse(after).Require()["VirtualMachineAdapter"].Require()["Aliases"].Require().ToJsonString());
         Assert.All(
             ConditionEditTests.DocumentDiff(before, after),
             d => Assert.StartsWith("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties", d, StringComparison.Ordinal));
@@ -536,21 +536,21 @@ public sealed class VmadEditTests : IDisposable
     }
 
     private static Dictionary<string, string> WrittenScripts(string body) =>
-        JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
-            .ToDictionary(s => s!["Name"]!.GetValue<string>(), s => s!.ToJsonString(), StringComparer.Ordinal);
+        JsonNode.Parse(body).Require()["VirtualMachineAdapter"].Require()["Scripts"].Require().AsArray()
+            .ToDictionary(s => s.Require()["Name"].Require().GetValue<string>(), s => s.Require().ToJsonString(), StringComparer.Ordinal);
 
     private static Dictionary<string, string> ByName(JsonArray written, string member) =>
-        written.ToDictionary(e => e![member]!.ToJsonString(), e => e!.ToJsonString(), StringComparer.Ordinal);
+        written.ToDictionary(e => e.Require()[member].Require().ToJsonString(), e => e.Require().ToJsonString(), StringComparer.Ordinal);
 
     private static JsonNode WrittenProperty(string body, string script, string property) =>
-        JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
-            .First(s => s!["Name"]!.GetValue<string>() == script)!["Properties"]!.AsArray()
-            .First(p => p!["Name"]!.GetValue<string>() == property)!;
+        JsonNode.Parse(body).Require()["VirtualMachineAdapter"].Require()["Scripts"].Require().AsArray()
+            .First(s => s.Require()["Name"].Require().GetValue<string>() == script).Require()["Properties"].Require().AsArray()
+            .First(p => p.Require()["Name"].Require().GetValue<string>() == property).Require();
 
     private static List<string> WrittenPropertyNames(string body, string script) =>
-        [.. JsonNode.Parse(body)!["VirtualMachineAdapter"]!["Scripts"]!.AsArray()
-            .First(s => s!["Name"]!.GetValue<string>() == script)!["Properties"]!.AsArray()
-            .Select(p => p!["Name"]!.GetValue<string>())];
+        [.. JsonNode.Parse(body).Require()["VirtualMachineAdapter"].Require()["Scripts"].Require().AsArray()
+            .First(s => s.Require()["Name"].Require().GetValue<string>() == script).Require()["Properties"].Require().AsArray()
+            .Select(p => p.Require()["Name"].Require().GetValue<string>())];
 
     private sealed class VmadFixture : IDisposable
     {
@@ -668,10 +668,10 @@ public sealed class VmadEditTests : IDisposable
         public EditRecordHandler Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
-            TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;
+            TrackedTree.Body(_modFolder, Plugin, formKey.ToString());
 
         public JsonObject Adapter(FormKey formKey) =>
-            JsonNode.Parse(Body(formKey))!.AsObject()[Field]!.AsObject();
+            JsonNode.Parse(Body(formKey)).Require().AsObject()[Field].Require().AsObject();
 
         public void Normalize(FormKey formKey)
         {

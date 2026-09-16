@@ -40,9 +40,11 @@ public sealed class ValidateAtLoadTests
         restarted.Reconcile(holder,
             mod.GameDirectory, [mod.Entry], GameRelease.Fallout4, mod.InstanceRoot);
 
-        Assert.Equal(
-            "EditedWhileStopped",
-            restarted.Store!.At(RecordRef.Effective).GetDocument(formKey, mod.Plugin)!.EditorId);
+        var store = restarted.Store
+            ?? throw new InvalidOperationException("Expected the restarted index to already hold a built store.");
+        var document = store.At(RecordRef.Effective).GetDocument(formKey, mod.Plugin);
+        Assert.NotNull(document);
+        Assert.Equal("EditedWhileStopped", document.EditorId);
         Assert.DoesNotContain(
             entries, e => e.Message.StartsWith($"Indexing {IndexedModFixture.PluginName} ", StringComparison.Ordinal));
     }

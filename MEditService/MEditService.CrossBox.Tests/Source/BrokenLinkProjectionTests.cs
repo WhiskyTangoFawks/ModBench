@@ -26,7 +26,8 @@ public sealed class BrokenLinkProjectionTests
 
     private static string? CheckErrorOnKeywords(IndexProjector index, IndexedModFixture mod)
     {
-        var record = index.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var store = index.Store ?? throw new InvalidOperationException("Expected Reconcile to have populated the index store.");
+        var record = store.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(record);
         return record.Fields.Single(field => field.Metadata.Name == "Keywords").CheckError;
     }

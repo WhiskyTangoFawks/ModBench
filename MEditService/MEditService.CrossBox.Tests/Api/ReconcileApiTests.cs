@@ -51,12 +51,15 @@ public sealed class ReconcileApiTests : IDisposable
     private async Task<string> FirstNpcFormKey()
     {
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-        return records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
+        return records.GetProperty("items")[0].GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException("Expected the first npc_ record to carry a formKey.");
     }
 
     private void CorruptTheStoredBody(string formKey)
     {
-        var index = (DuckDbRecordIndex)_app.Services.GetRequiredService<IndexProjector>().Store!;
+        var store = _app.Services.GetRequiredService<IndexProjector>().Store
+            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+        var index = (DuckDbRecordIndex)store;
         DuckDbSql.ExecuteFor(index.Connection,
             "UPDATE mirror.records SET body = '{\"EditorID\": \"CorruptedInTheStore\"}' WHERE form_key = $1", formKey);
     }
@@ -140,7 +143,9 @@ public sealed class ReconcileApiTests : IDisposable
             if (line.StartsWith("event: ", StringComparison.Ordinal))
                 kind = line["event: ".Length..];
             else if (line.StartsWith("data: ", StringComparison.Ordinal))
-                return (kind!, JsonDocument.Parse(line["data: ".Length..]).RootElement);
+                return (
+                    kind ?? throw new InvalidOperationException("Expected an SSE event: line before this data: line."),
+                    JsonDocument.Parse(line["data: ".Length..]).RootElement);
         }
     }
 }

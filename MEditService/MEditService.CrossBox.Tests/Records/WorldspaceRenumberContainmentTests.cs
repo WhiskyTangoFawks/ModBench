@@ -83,19 +83,24 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     private ProjectingEditService EditService() =>
         ProjectingEditService.Over(_index, Holder);
 
+    private static string RequireNewFormKey(RecordEditResult result) =>
+        result.NewFormKey ?? throw new InvalidOperationException("Expected a successful renumber to set NewFormKey.");
+
     // ---- the confirmed gap ----
 
     [Fact]
     public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameLoadOrder()
     {
-        var index = _index.Store!;
-        Assert.Equal(_worldspaceFormKey, index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
+        var index = _index.Store.Require();
+        var before = Assert.NotNull(index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey));
+        Assert.Equal(_worldspaceFormKey, before.ParentWorldspace);
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
-        var newFormKey = result.NewFormKey!;
+        var newFormKey = RequireNewFormKey(result);
 
-        Assert.Equal(newFormKey, index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
+        var after = Assert.NotNull(index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey));
+        Assert.Equal(newFormKey, after.ParentWorldspace);
         Assert.Contains(
             index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey),
             c => c.FormKey == _extCellFormKey);
@@ -111,15 +116,16 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void RenumberingAWorldspace_LeavesExactlyOneCellLocationRowForItsTopCell_NoDuplicate()
     {
-        var index = _index.Store!;
+        var index = _index.Store.Require();
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
-        var newFormKey = result.NewFormKey!;
+        var newFormKey = RequireNewFormKey(result);
 
         var cells = index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey);
         Assert.Single(cells, c => c.FormKey == _topCellFormKey);
-        Assert.Equal(newFormKey, index.At(RecordRef.Effective).GetCellLocation(_plugin, _topCellFormKey)!.Value.ParentWorldspace);
+        var topCellLocation = Assert.NotNull(index.At(RecordRef.Effective).GetCellLocation(_plugin, _topCellFormKey));
+        Assert.Equal(newFormKey, topCellLocation.ParentWorldspace);
     }
 
     // ---- parity against a fresh reconcile ingest ----
@@ -130,7 +136,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         var Holder = new LoadOrderHolder();
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
-        var newFormKey = result.NewFormKey!;
+        var newFormKey = RequireNewFormKey(result);
 
         var live = _index.Projected().GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
@@ -145,7 +151,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             GameRelease.Fallout4);
         Assert.Empty(reloaded.Status.Failures);
 
-        var freshlyIngested = reloaded.Store!.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
+        var freshlyIngested = reloaded.Store.Require().At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
         Assert.Equal(freshlyIngested, live);

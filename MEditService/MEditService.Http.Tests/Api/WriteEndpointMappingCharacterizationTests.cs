@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Http.Endpoints;
+using MEditService.LoadOrder;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -54,11 +56,11 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     private async Task<string> FirstNpcFormKey(string plugin)
     {
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={plugin}&type=npc_");
-        return records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
+        return DocumentNodes.StringValueOf(records.GetProperty("items")[0].GetProperty("formKey"));
     }
 
     private static string ModFolderOf(ScatteredFixtureData fx, string origin) =>
-        Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == origin).Path)!;
+        PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == origin).Path);
 
     // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416) even on a
     // Linux-only runtime. Recursive: handlers write into subdirectories Track left writable, so a
@@ -67,7 +69,8 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
             "chmod", ["-R", mode, path])
-        { RedirectStandardError = true })!;
+        { RedirectStandardError = true })
+            ?? throw new InvalidOperationException($"Expected 'chmod {mode} {path}' to start a process.");
         process.WaitForExit();
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
@@ -455,7 +458,8 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
             "chmod", ["-R", mode, path])
-        { RedirectStandardError = true })!;
+        { RedirectStandardError = true })
+            ?? throw new InvalidOperationException($"Expected 'chmod {mode} {path}' to start a process.");
         process.WaitForExit();
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");

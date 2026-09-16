@@ -43,8 +43,10 @@ public sealed class LoadOrderLocalizedTests
             // silently-skipped plugin is the precise shape the defect takes here.
             Assert.Empty(manager.Status.Failures);
 
-            var detail = manager.Reads!.GetDocument(doorFormKey.ToString(), new PluginCopyKey("Fixture.esp", "Data"))!;
-            Assert.Contains(detail.Fields, f => f.Value != null && f.Value.ToString()!.Contains("The Big Door"));
+            var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+            var detail = reads.GetDocument(doorFormKey.ToString(), new PluginCopyKey("Fixture.esp", "Data"));
+            Assert.NotNull(detail);
+            Assert.Contains(detail.Fields, f => f.Value?.ToString()?.Contains("The Big Door") == true);
         }
     }
 }

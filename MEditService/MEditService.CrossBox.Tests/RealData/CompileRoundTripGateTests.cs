@@ -56,6 +56,14 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     // against the tracked one on equal terms rather than differing by line endings on Windows.
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 
+    private static JsonNode RequireNode(JsonNode? node, string what) =>
+        node ?? throw new InvalidOperationException($"Expected {what} to be present.");
+
+    private static string FormKeyOf(JsonNode? recordNode) =>
+        RequireNode(recordNode, "a record node")[nameof(IMajorRecordGetter.FormKey)] is { } formKeyNode
+            ? formKeyNode.GetValue<string>()
+            : throw new InvalidOperationException("Expected a FormKey member.");
+
     // This class's fixture is the only one with real populated cells and worldspaces; the flat two-NPC
     // fixture structurally cannot exercise this. Key paths by pattern rather than a hardcoded block
     // number this test cannot verify independently.
@@ -102,7 +110,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
 
         foreach (var quest in quests)
         {
-            var root = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, quest.FormKey.ToString())))!.AsObject();
+            var parsed = JsonNode.Parse(File.ReadAllText(SourceDocumentOf(documents, quest.FormKey.ToString())))
+                ?? throw new InvalidOperationException($"Expected {quest.FormKey}'s document to parse as JSON.");
+            var root = parsed.AsObject();
 
             foreach (var (slot, children) in new (string, IEnumerable<IMajorRecordGetter>)[]
                      {
@@ -121,18 +131,19 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
                 }
                 Assert.Equal(
                     expected,
-                    root[slot]!.AsArray().Select(c => c![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>()));
+                    RequireNode(root[slot], slot).AsArray().Select(FormKeyOf));
             }
 
             foreach (var topic in quest.DialogTopics)
             {
                 foreach (var response in topic.Responses)
                     Assert.DoesNotContain(documents, f => SourceRepository.NameCarriesFormKey(Path.GetFileName(f), response.FormKey.ToString()));
-                var inline = root[nameof(Quest.DialogTopics)]!.AsArray()
-                    .Single(t => t![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>() == topic.FormKey.ToString())!;
+                var inline = RequireNode(root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
+                    .Single(t => FormKeyOf(t) == topic.FormKey.ToString())
+                    ?? throw new InvalidOperationException($"Expected {topic.FormKey} to be present among inlined dialog topics.");
                 Assert.Equal(
                     topic.Responses.Select(r => r.FormKey.ToString()),
-                    inline[nameof(DialogTopic.Responses)]?.AsArray().Select(r => r![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>()) ?? []);
+                    inline[nameof(DialogTopic.Responses)]?.AsArray().Select(FormKeyOf) ?? []);
             }
         }
     }
@@ -176,7 +187,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         documents.Single(f =>
             SourceRepository.NameCarriesFormKey(Path.GetFileName(f), formKey)
             || (Path.GetFileName(f) == SourceRepository.RecordDataFileName
-                && SourceRepository.NameCarriesFormKey(Path.GetFileName(Path.GetDirectoryName(f)!), formKey)));
+                && SourceRepository.NameCarriesFormKey(Path.GetFileName(PathShape.DirectoryOf(f)), formKey)));
 
     // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
     // would pass whether or not the field was suppressed.
@@ -252,7 +263,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         using var scope = new MutationScope(fixture);
 
-        var npc = scope.Index.Store!
+        var scopeStore = scope.Index.Store
+            ?? throw new InvalidOperationException("Expected the index to hold a store.");
+        var npc = scopeStore
             .At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin.Name, Origin: scope.Plugin.Origin, Limit: 1))
             .Items[0];
         // Asked of the repository rather than computed: the path needs an order index this test

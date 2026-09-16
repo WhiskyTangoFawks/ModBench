@@ -111,9 +111,10 @@ public sealed class PluginDocumentReadTests
             new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
         var cell = documents.Records.Single(d => d.RecordType == "cell" && d.FormKey == extCellFormKey);
 
+        Assert.NotNull(cell.Contents);
         Assert.Equal(
             [("000802:Documents.esp", "persistent"), ("000803:Documents.esp", "temporary")],
-            cell.Contents!.Select(c => (c.FormKey, c.PlacementGroup)).ToList());
+            cell.Contents.Select(c => (c.FormKey, c.PlacementGroup)).ToList());
     }
 
     private static PluginFixtureData CellFixture(string prefix, out string extCellFormKey)

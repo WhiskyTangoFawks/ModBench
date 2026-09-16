@@ -74,7 +74,9 @@ internal sealed class SourceModFixture : IDisposable
 
     /// <summary>What the tree holds for a FormKey, read back through the same repository the write
     /// side wrote through — the whole read model this fixture has.</summary>
-    internal string Body(FormKey formKey) => TrackedTree.Document(ModFolder, Plugin, formKey.ToString())!.Body;
+    internal string Body(FormKey formKey) =>
+        (TrackedTree.Document(ModFolder, Plugin, formKey.ToString())
+            ?? throw new InvalidOperationException($"Expected '{formKey}' to have a tracked source document.")).Body;
 
     public void Dispose()
     {

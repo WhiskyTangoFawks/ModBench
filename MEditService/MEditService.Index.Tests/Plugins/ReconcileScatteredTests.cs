@@ -33,10 +33,11 @@ public sealed class ReconcileScatteredTests
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.NotNull(manager.Reads);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data"))
+        var reads = manager.Reads;
+        Assert.NotNull(reads);
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("B.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("B.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -57,7 +58,8 @@ public sealed class ReconcileScatteredTests
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var winner = manager.Reads!.GetDocument(shared.ToString());
+        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var winner = reads.GetDocument(shared.ToString());
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
         Assert.Equal("Override.esp", winner.Plugin.Name);
@@ -73,12 +75,13 @@ public sealed class ReconcileScatteredTests
 
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var firstRepo = manager.Reads;
+        var firstRepo = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
 
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Same(firstRepo, manager.Reads);
-        Assert.NotEmpty(firstRepo!.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data")));
+        Assert.NotEmpty(firstRepo.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data")));
     }
 
     // A single plugin whose binary data Mutagen can't parse (e.g.
@@ -99,10 +102,11 @@ public sealed class ReconcileScatteredTests
 
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
+        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
         Assert.Contains(manager.Status.Failures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("Good.esp", "Data"))
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("Bad.esp", "Data"))
+        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginCopyKey("Bad.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // The failed plugin's own indexing throw must hit the `continue` in IndexProgressively's
         // catch, not fall through into the "recorded once Index() has returned" block below it —

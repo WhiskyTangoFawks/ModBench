@@ -95,7 +95,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var status = await _client.GetFromJsonAsync<LoadOrderStatusDto>("/load-order/status");
-        var failure = Assert.Single(status!.Failures);
+        Assert.NotNull(status);
+        var failure = Assert.Single(status.Failures);
         Assert.Equal("Bad.esp", failure.Name);
     }
 
@@ -122,7 +123,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var status = await _client.GetFromJsonAsync<LoadOrderStatusDto>("/load-order/status");
-        var failure = Assert.Single(status!.Failures);
+        Assert.NotNull(status);
+        var failure = Assert.Single(status.Failures);
         Assert.Equal("Shared.esp", failure.Name);
         Assert.Equal("ModB", failure.Origin);
     }

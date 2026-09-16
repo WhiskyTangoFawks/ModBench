@@ -19,25 +19,40 @@ public sealed class ConcreteBaseUnionSchemaTests
         reflector.GetSchemas(GameRelease.Fallout4)["npc_"].RecordColumns
             .Single(c => c.Name == "VirtualMachineAdapter");
 
+    private static IReadOnlyList<SubFieldSpec> RequireSubFields(SubFieldSpec field) =>
+        field.SubFields ?? throw new InvalidOperationException($"Expected '{field.Name}' to have sub-fields.");
+
+    private static SubFieldSpec RequireElementSpec(SubFieldSpec field) =>
+        field.ElementSpec ?? throw new InvalidOperationException($"Expected '{field.Name}' to have an element spec.");
+
+    private static IReadOnlyList<FieldMetadata> RequireFields(FieldMetadata meta) =>
+        meta.Fields ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have fields.");
+
+    private static FieldMetadata RequireElementType(FieldMetadata meta) =>
+        meta.ElementType ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have an element type.");
+
     [Fact]
     public void VirtualMachineAdapterColumn_IsAStructColumn_WithAScriptsSubfield()
     {
         var column = NpcAdapterColumn(SharedSchemaReflector.Instance);
 
         Assert.Equal("struct", column.ApiType);
-        Assert.Contains(column.Field.SubFields!, f => f.Name == "Scripts");
+        Assert.Contains(RequireSubFields(column.Field), f => f.Name == "Scripts");
     }
 
-    private static FieldMetadata ScriptPropertyElement(ColumnSpec adapter) =>
-        adapter.Field.SubFields!.Single(f => f.Name == "Scripts").ElementSpec!
-            .SubFields!.Single(f => f.Name == "Properties").ElementSpec!.ToFieldMetadata();
+    private static FieldMetadata ScriptPropertyElement(ColumnSpec adapter)
+    {
+        var scripts = RequireSubFields(adapter.Field).Single(f => f.Name == "Scripts");
+        var properties = RequireSubFields(RequireElementSpec(scripts)).Single(f => f.Name == "Properties");
+        return RequireElementSpec(properties).ToFieldMetadata();
+    }
 
     [Fact]
     public void ScriptProperty_ConcreteType_ListsFourteenLeavesAndTheBaseItself()
     {
         var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
 
-        var discriminator = element.Fields!.Single(f => f.Name == "MutagenObjectType");
+        var discriminator = RequireFields(element).Single(f => f.Name == "MutagenObjectType");
         Assert.Equal("enum", discriminator.Type);
         Assert.Equal(
             [
@@ -64,12 +79,12 @@ public sealed class ConcreteBaseUnionSchemaTests
     public void ScriptProperty_ObjectLeafAndStructLeaf_ExposeTheirOwnMembers()
     {
         var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
-        var byName = element.Fields!.ToDictionary(f => f.Name);
+        var byName = RequireFields(element).ToDictionary(f => f.Name);
 
         Assert.Equal("formKey", byName["Object"].Type);
         Assert.Equal("int", byName["Alias"].Type);
         Assert.True(byName["Members"].IsArray);
-        var member = byName["Members"].ElementType!.Fields!.ToDictionary(f => f.Name);
+        var member = RequireFields(RequireElementType(byName["Members"])).ToDictionary(f => f.Name);
         Assert.Equal("string", member["Name"].Type);
         Assert.True(member["Properties"].IsArray);
     }
@@ -80,15 +95,15 @@ public sealed class ConcreteBaseUnionSchemaTests
     public void InsideAStructLeaf_NeitherStructLeafIsOfferedAgain(string structLeafList)
     {
         var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));
-        var nestedElement = element.Fields!.Single(f => f.Name == structLeafList).ElementType!;
-        var nestedProperty = nestedElement.Fields!.Single(f => f.Name == (structLeafList == "Members" ? "Properties" : "Members")).ElementType!;
+        var nestedElement = RequireElementType(RequireFields(element).Single(f => f.Name == structLeafList));
+        var nestedProperty = RequireElementType(RequireFields(nestedElement).Single(f => f.Name == (structLeafList == "Members" ? "Properties" : "Members")));
 
-        var kinds = nestedProperty.Fields!.Single(f => f.Name == "MutagenObjectType")
+        var kinds = RequireFields(nestedProperty).Single(f => f.Name == "MutagenObjectType")
             .EnumMembers.Select(m => m.Value).ToList();
         Assert.Equal(13, kinds.Count);
         Assert.DoesNotContain("ScriptStructProperty", kinds);
         Assert.DoesNotContain("ScriptStructListProperty", kinds);
-        Assert.DoesNotContain(nestedProperty.Fields!, f => f.Name is "Members" or "Structs");
+        Assert.DoesNotContain(RequireFields(nestedProperty), f => f.Name is "Members" or "Structs");
     }
 
     [Fact]
@@ -119,7 +134,9 @@ public sealed class ConcreteBaseUnionSchemaTests
     public void ConcreteBasesWithSubclasses_InThePinnedFallout4Assembly_AreExactlyTheRuledOnSix()
     {
         var assembly = typeof(Fallout4Mod).Assembly;
-        Assert.Equal("0.53.1.0", assembly.GetName().Version!.ToString());
+        var version = assembly.GetName().Version
+            ?? throw new InvalidOperationException("Expected the pinned Fallout4 assembly to report a version.");
+        Assert.Equal("0.53.1.0", version.ToString());
 
         static bool IsLoquiClass(Type t) =>
             t.IsClass && !t.IsAbstract && !t.ContainsGenericParameters && !t.Name.EndsWith("BinaryOverlay", StringComparison.Ordinal)

@@ -46,7 +46,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
 
         var npc = CompileAndReparse().Npcs.Single(n => n.FormKey == _fixture.Npc);
         Assert.IsType<NpcLevel>(npc.Level);
-        Assert.Equal((byte)20, ((INpcLevelGetter)npc.Level!).Level);
+        Assert.Equal((byte)20, ((INpcLevelGetter)npc.Level.Require()).Level);
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         var quest = CompileAndReparse().Quests.Single(q => q.FormKey == _fixture.Quest);
-        var alias = Assert.Single(quest.Aliases!);
+        var alias = Assert.Single(quest.Aliases.Require());
         // Quest alias elements stay lazy `...BinaryOverlay` instances until touched (confirmed by
         // AbstractUnionRealDataTests' own doc comment) — asserted through the getter interface, not
         // the concrete eager class, the same reason that file's own real-fixture read test does.
@@ -295,8 +295,9 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         var faction = CompileAndReparse().Factions.Single(f => f.FormKey == _fixture.Faction);
-        Assert.Equal(99u, faction.VendorLocation!.Radius);
-        var target = Assert.IsAssignableFrom<ILocationFallbackGetter>(faction.VendorLocation.Target);
+        var vendorLocation = faction.VendorLocation.Require();
+        Assert.Equal(99u, vendorLocation.Radius);
+        var target = Assert.IsAssignableFrom<ILocationFallbackGetter>(vendorLocation.Target);
         Assert.Equal(LocationTargetRadius.LocationType.NearSelf, target.Type);
         Assert.Equal(3, target.Data);
     }
@@ -310,6 +311,6 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         var stat = CompileAndReparse().Statics.Single(s => s.FormKey == _fixture.Static);
-        Assert.IsAssignableFrom<ICellNavmeshParentGetter>(stat.NavmeshGeometry!.Parent);
+        Assert.IsAssignableFrom<ICellNavmeshParentGetter>(stat.NavmeshGeometry.Require().Parent);
     }
 }

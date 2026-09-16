@@ -54,7 +54,8 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
     [Fact]
     public void EveryCompareValue_IsTheStoredDocumentsOwnNode()
     {
-        var reads = fixture.Index.Store!.At(RecordRef.Effective);
+        var store = fixture.Index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
+        var reads = store.At(RecordRef.Effective);
         var formKeys = GoldenFormKeys();
 
         Assert.NotEmpty(formKeys);
@@ -64,13 +65,13 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
         {
             var document = reads.GetDocument(formKey, fixture.Plugin);
             Assert.NotNull(document);
-            var stored = JsonNode.Parse(Assert.IsType<string>(document!.Body));
+            var stored = JsonNode.Parse(Assert.IsType<string>(document.Body));
             var compare = fixture.Compare.GetCompare(formKey);
             Assert.NotNull(compare);
 
             // The metadata says how an array's children are labelled: by key for a keyed array, by
             // value for a sorted one, by position otherwise.
-            var metadata = compare!.Overrides[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
+            var metadata = compare.Overrides[0].Fields.ToDictionary(f => f.Metadata.Name, f => f.Metadata);
             // A synthetic member is one bit of a member the document spells, never a node of its own
             // (SchemaAnnotations.SyntheticFlagMembers); its value is that bit, read off the document.
             var synthetic = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)[document.RecordType]
@@ -146,7 +147,7 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
         using var document = JsonDocument.Parse(File.ReadAllText(golden));
         return [.. document.RootElement.EnumerateObject()
             .SelectMany(recordType => recordType.Value.EnumerateArray())
-            .Select(record => record.GetProperty("FormKey").GetString()!)
+            .Select(record => DocumentNodes.StringValueOf(record.GetProperty("FormKey")))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)];
     }

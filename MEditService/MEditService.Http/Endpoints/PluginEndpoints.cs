@@ -112,7 +112,7 @@ public static class PluginEndpoints
             string plugin, string origin, PeekNextFreeFormKeyHandler edits) =>
         {
             var result = edits.PeekNextFreeFormKey(WriteEndpointMapping.PluginCopyKeyOf(plugin, origin));
-            return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : WriteEndpointMapping.Refusal(result);
+            return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(WriteEndpointMapping.RequireNewFormKey(result))) : WriteEndpointMapping.Refusal(result);
         })
             .WithName("PeekNextFreeFormKey")
             .WithTags(Tag)
@@ -341,7 +341,7 @@ public static class PluginEndpoints
                 return null;
             },
             execute: () => edits.CreateRecord(WriteEndpointMapping.PluginCopyKeyOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
-            onApplied: result => Results.Ok(new RecordCreateResponse(true, result.NewFormKey!, req.RecordType)),
+            onApplied: result => Results.Ok(new RecordCreateResponse(true, WriteEndpointMapping.RequireNewFormKey(result), req.RecordType)),
             onWriteFailure: ex =>
             {
                 logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);

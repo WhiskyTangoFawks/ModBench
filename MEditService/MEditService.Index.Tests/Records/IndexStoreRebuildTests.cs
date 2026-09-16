@@ -9,7 +9,8 @@ public sealed class IndexStoreRebuildTests
     {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'marker'";
-        return (long)cmd.ExecuteScalar()!;
+        return (long)(cmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
     }
 
     [Fact]

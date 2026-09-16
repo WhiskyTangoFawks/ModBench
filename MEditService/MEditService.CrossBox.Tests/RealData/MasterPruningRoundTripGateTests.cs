@@ -135,7 +135,7 @@ public sealed class MasterPruningRoundTripGateTests
         return ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath),
             GameRelease.Fallout4,
-            LocalizedStrings.ForRead(PluginStrings.In(Path.GetDirectoryName(fixturePath)!)));
+            LocalizedStrings.ForRead(PluginStrings.In(PathShape.DirectoryOf(fixturePath))));
     }
 
     private static async Task<IFallout4Mod> DeserializeLegendariesThroughSource(string scratchDir)
@@ -143,7 +143,7 @@ public sealed class MasterPruningRoundTripGateTests
         foreach (var file in await PluginTrees.SerializeTree(DeepParseLegendaries()))
         {
             var fullPath = Path.Combine(scratchDir, file.RelativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
             await File.WriteAllBytesAsync(fullPath, file.Content);
         }
 

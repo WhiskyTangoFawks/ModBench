@@ -21,11 +21,13 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private IRecordIndex Index => _fixture.Index.Store!;
+    private IRecordIndex Index =>
+        _fixture.Index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
     private IRecordReads Effective => Index.At(RecordRef.Effective);
     private IRecordReads Head => Index.At(RecordRef.Head);
 
-    private string CellBody() => Effective.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body!;
+    private string CellBody() =>
+        Effective.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin).Require().Body.Require();
 
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
@@ -48,9 +50,11 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
         Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
 
-        Assert.Equal("AppendedRef", Effective.GetDocument(newRef.ToString(), _fixture.Plugin)!.EditorId);
+        var newDocument = Effective.GetDocument(newRef.ToString(), _fixture.Plugin).Require();
+        Assert.Equal("AppendedRef", newDocument.EditorId);
         Assert.Null(Head.GetDocument(newRef.ToString(), _fixture.Plugin));
-        Assert.Equal(_fixture.EmbedCell.ToString(), Effective.GetPlacement(newRef.ToString(), _fixture.Plugin)!.Value.ParentCell);
+        var placement = Assert.NotNull(Effective.GetPlacement(newRef.ToString(), _fixture.Plugin));
+        Assert.Equal(_fixture.EmbedCell.ToString(), placement.ParentCell);
     }
 
     [Fact]
@@ -66,7 +70,8 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         Assert.Null(Effective.GetPlacement(removed, _fixture.Plugin));
         // The sibling in the other slot is exactly as it was.
         Assert.NotNull(Effective.GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
-        Assert.Equal(_fixture.EmbedCell.ToString(), Effective.GetPlacement(_fixture.PersistentRef.ToString(), _fixture.Plugin)!.Value.ParentCell);
+        var persistentPlacement = Assert.NotNull(Effective.GetPlacement(_fixture.PersistentRef.ToString(), _fixture.Plugin));
+        Assert.Equal(_fixture.EmbedCell.ToString(), persistentPlacement.ParentCell);
     }
 
     [Fact]
@@ -94,7 +99,9 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), edited)]);
 
         var child = _fixture.TemporaryRef.ToString();
-        Assert.Contains("\"Scale\": 2.5", Effective.GetDocument(child, _fixture.Plugin)!.Body!, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Scale\": 2.5", Head.GetDocument(child, _fixture.Plugin)!.Body!, StringComparison.Ordinal);
+        var effectiveChild = Effective.GetDocument(child, _fixture.Plugin).Require();
+        var headChild = Head.GetDocument(child, _fixture.Plugin).Require();
+        Assert.Contains("\"Scale\": 2.5", effectiveChild.Body.Require(), StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Scale\": 2.5", headChild.Body.Require(), StringComparison.Ordinal);
     }
 }

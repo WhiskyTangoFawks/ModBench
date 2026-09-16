@@ -19,6 +19,12 @@ internal static class TrackedTree
         return identity is { } held ? repository.Get(plugin, held) : null;
     }
 
+    /// <summary>The document body for a record a fixture just wrote: absent here is a broken
+    /// fixture, not a case under test.</summary>
+    internal static string Body(string modFolder, PluginCopyKey plugin, string formKey) =>
+        Document(modFolder, plugin, formKey)?.Body
+            ?? throw new InvalidOperationException($"Expected '{formKey}' to have a tracked document in '{modFolder}'.");
+
     /// <summary>The same question at a named ref: what the last commit holds, which a working-tree
     /// change does not alter.</summary>
     internal static SourceDocument? CommittedDocument(

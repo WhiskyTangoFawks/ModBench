@@ -31,7 +31,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
             // layout, a plugin folder inside it with no plugin file left.
             var orphanTree = Path.Combine(originFolder, "source", "Removed.esp");
             var orphanFile = Path.Combine(orphanTree, "records", "Removed.esp", "000800.json");
-            Directory.CreateDirectory(Path.GetDirectoryName(orphanFile)!);
+            Directory.CreateDirectory(PathShape.DirectoryOf(orphanFile));
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");
 
             var reflector = SharedSchemaReflector.Instance;
@@ -45,7 +45,8 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
                 GameRelease.Fallout4);
 
             // Positive control: the load really happened and really indexed the present plugin.
-            Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("StillHere.esp", "ModA"))
+            var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+            Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("StillHere.esp", "ModA"))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
             Assert.True(Directory.Exists(orphanTree), "the orphaned source tree must survive the load");

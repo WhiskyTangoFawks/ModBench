@@ -35,7 +35,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
 
         // The tree is the answer: OtherNpc's own document now carries the new race.
         Assert.Contains(
-            _mod.Race.ToString(), _mod.Document(_mod.OtherNpc.ToString())!.Body, StringComparison.Ordinal);
+            _mod.Race.ToString(), _mod.Document(_mod.OtherNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
     // Where the target is, and whether it is a RACE, is not a fact this document carries: the value
@@ -48,7 +48,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_mod.GitStatus());
         Assert.Contains(
-            "ABCDEF:NoSuchPlugin.esp", _mod.Document(_mod.OtherNpc.ToString())!.Body, StringComparison.Ordinal);
+            "ABCDEF:NoSuchPlugin.esp", _mod.Document(_mod.OtherNpc.ToString()).Require().Body, StringComparison.Ordinal);
     }
 
     // RefuseIfBlocked runs before any

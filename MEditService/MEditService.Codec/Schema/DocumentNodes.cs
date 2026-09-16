@@ -77,4 +77,8 @@ public static class DocumentNodes
     /// answers to that name.</summary>
     public static FieldMetadata Variant(FieldMetadata member, string? leaf) =>
         leaf != null && member.Variants is { } variants && variants.TryGetValue(leaf, out var variant) ? variant : member;
+
+    /// <summary>The string value of a node the caller has already checked is a JSON string.</summary>
+    public static string StringValueOf(JsonElement element) =>
+        element.GetString() ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
 }

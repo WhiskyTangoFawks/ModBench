@@ -48,14 +48,14 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             b => b.BlockNumberX == ContainerCopyFixture.ExteriorBlockX && b.BlockNumberY == ContainerCopyFixture.ExteriorBlockY);
         Assert.NotNull(block);
 
-        var subBlock = block!.Items.SingleOrDefault(
+        var subBlock = block.Require().Items.SingleOrDefault(
             sb => sb.BlockNumberX == ContainerCopyFixture.ExteriorSubX && sb.BlockNumberY == ContainerCopyFixture.ExteriorSubY);
         Assert.NotNull(subBlock);
 
-        var compiledCell = subBlock!.Items.SingleOrDefault(c => c.FormKey == _fixture.ExteriorCell);
+        var compiledCell = subBlock.Require().Items.SingleOrDefault(c => c.FormKey == _fixture.ExteriorCell);
         Assert.NotNull(compiledCell);
 
-        Assert.Contains(compiledCell!.Persistent, r => r.FormKey == _fixture.ExteriorPersistentRef);
+        Assert.Contains(compiledCell.Require().Persistent, r => r.FormKey == _fixture.ExteriorPersistentRef);
         Assert.DoesNotContain(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
     }
 

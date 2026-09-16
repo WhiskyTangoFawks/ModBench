@@ -58,7 +58,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var stringsDir = Path.Combine(_modFolder, "Strings");
         var originalStringsFiles = Directory.GetFiles(stringsDir)
-            .ToDictionary(f => Path.GetFileName(f)!, File.ReadAllBytes);
+            .ToDictionary(f => Path.GetFileName(f) ?? throw new InvalidOperationException("Expected a file path to have a file name."), File.ReadAllBytes);
         // Sanity: Track's own fixture setup actually produced strings files to compare against —
         // otherwise every assertion below would vacuously pass over an empty set.
         Assert.NotEmpty(originalStringsFiles);

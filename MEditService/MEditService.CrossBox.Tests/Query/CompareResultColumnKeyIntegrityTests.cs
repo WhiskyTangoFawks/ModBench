@@ -128,6 +128,9 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public IRecordReads RequireReads() => reads;
     }
 
+    private static IReadOnlyList<FieldDiff> Children(FieldDiff diff) =>
+        diff.Children ?? throw new InvalidOperationException($"Expected \"{diff.FieldName}\" to have children.");
+
     [Fact]
     public void GetCompare_SameFilenameTwoOrigins_EveryDictionaryKeyIsARealColumnKey()
     {
@@ -198,21 +201,27 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
         // The walk below is only meaningful if it reaches non-empty struct/structList Raw and condition
         // subtrees, so a fixture regression fails loudly here rather than passing over empty objects.
-        var properties = Assert.Single(compare.Diffs, d => d.FieldName == "VirtualMachineAdapter")
-            .Children!.Single(c => c.FieldName == "Scripts")
-            .Children!.Single()
-            .Children!.Single(c => c.FieldName == "Properties")
-            .Children!;
-        Assert.NotEmpty(properties.Single(p => p.FieldName == "Config").Children!.Single(c => c.FieldName == "Members").Children!);
-        Assert.NotEmpty(properties.Single(p => p.FieldName == "Items").Children!.Single(c => c.FieldName == "Structs").Children!);
+        var virtualMachineAdapter = Assert.Single(compare.Diffs, d => d.FieldName == "VirtualMachineAdapter");
+        var scripts = Children(virtualMachineAdapter).Single(c => c.FieldName == "Scripts");
+        var scriptDiff = Children(scripts).Single();
+        var propertiesNode = Children(scriptDiff).Single(c => c.FieldName == "Properties");
+        var properties = Children(propertiesNode);
+
+        var config = properties.Single(p => p.FieldName == "Config");
+        var configMembers = Children(config).Single(c => c.FieldName == "Members");
+        Assert.NotEmpty(Children(configMembers));
+
+        var items = properties.Single(p => p.FieldName == "Items");
+        var itemsStructs = Children(items).Single(c => c.FieldName == "Structs");
+        Assert.NotEmpty(Children(itemsStructs));
 
         // Conditions reach the grid as an ordinary reflected array column, so the walk's condition coverage
         // is a nested FieldDiff subtree with per-column Values/CellStates.
         var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
-        var conditionRow = Assert.Single(conditions.Children!);
+        var conditionRow = Assert.Single(Children(conditions));
         Assert.NotEmpty(conditionRow.CellStates);
-        var conditionData = Assert.Single(conditionRow.Children!, c => c.FieldName == "Data");
-        var runOnReference = Assert.Single(conditionData.Children!, c => c.FieldName == "Reference");
+        var conditionData = Assert.Single(Children(conditionRow), c => c.FieldName == "Data");
+        var runOnReference = Assert.Single(Children(conditionData), c => c.FieldName == "Reference");
         Assert.NotEmpty(runOnReference.Resolutions ?? new Dictionary<string, FormKeyResolution>());
 
         var json = JsonSerializer.SerializeToElement(compare, WireOptions);

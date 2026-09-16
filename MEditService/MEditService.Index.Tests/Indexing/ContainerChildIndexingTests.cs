@@ -119,7 +119,8 @@ public sealed class ContainerChildIndexingTests
 
         using var cmd = built.Repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM container_child WHERE slot_name IN ('Persistent', 'Temporary', 'TopCell', 'SubCells')";
-        var count = (long)cmd.ExecuteScalar()!;
+        var count = (long)(cmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
 
         Assert.Equal(0, count);
     }
@@ -132,7 +133,8 @@ public sealed class ContainerChildIndexingTests
 
         using var cmd = built.Repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM container_child";
-        var count = (long)cmd.ExecuteScalar()!;
+        var count = (long)(cmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
 
         Assert.Equal(0, count);
     }

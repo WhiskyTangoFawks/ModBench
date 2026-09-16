@@ -62,7 +62,9 @@ public class PluginParticipationTests
         repo.IndexMod(modB, Registration.Disabled(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
+        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())
+            ?? throw new InvalidOperationException($"Expected an override stack for indexed record '{npcKey}'.");
+        var overrides = overrideStack.Entries;
 
         Assert.Equal(2, overrides.Count);
         var pluginA = overrides.Single(o => o.Plugin.Name == "PluginA.esm");

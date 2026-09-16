@@ -125,9 +125,15 @@ public sealed class ProjectionSequenceTests : IDisposable
 
         var formKey1 = _npc1.ToString();
         var formKey2 = _npc2.ToString();
-        var body1 = index.At(RecordRef.Effective).GetDocument(formKey1, BaseKey)!.Body!
+        var document1 = index.At(RecordRef.Effective).GetDocument(formKey1, BaseKey)
+            ?? throw new InvalidOperationException($"Expected a document for '{formKey1}'.");
+        var document2 = index.At(RecordRef.Effective).GetDocument(formKey2, BaseKey)
+            ?? throw new InvalidOperationException($"Expected a document for '{formKey2}'.");
+        var body1 = (document1.Body
+            ?? throw new InvalidOperationException($"Expected document '{formKey1}' to carry a body."))
             .Replace("First", "FirstEdited", StringComparison.Ordinal);
-        var body2 = index.At(RecordRef.Effective).GetDocument(formKey2, BaseKey)!.Body!
+        var body2 = (document2.Body
+            ?? throw new InvalidOperationException($"Expected document '{formKey2}' to carry a body."))
             .Replace("Second", "SecondEdited", StringComparison.Ordinal);
 
         var before = index.Sequence;

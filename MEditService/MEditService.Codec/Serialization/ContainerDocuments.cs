@@ -78,7 +78,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         if (!node.TryGetProperty(FormKeyMember, out var formKey) || formKey.ValueKind != JsonValueKind.String) return null;
 
         return new ChildDocument(
-            slotName, index, formKey.GetString()!, RecordTypeOf(owner, slotName, node), node.Clone());
+            slotName, index, DocumentNodes.StringValueOf(formKey), RecordTypeOf(owner, slotName, node), node.Clone());
     }
 
     // The child's own spelling where the document carries it, else the slot's declared element type:
@@ -88,7 +88,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
 
     private Type? DeclaredType(JsonElement node) =>
         node.TryGetProperty(LoquiUnions.UnionTypeDiscriminator, out var named) && named.ValueKind == JsonValueKind.String
-            ? _dispatch.ConcreteFor(named.GetString()!)
+            ? _dispatch.ConcreteFor(DocumentNodes.StringValueOf(named))
             : null;
 
     private Type? SlotElementType(Type owner, string slotName) =>
@@ -136,7 +136,7 @@ public sealed class ContainerDocuments(GameRelease release, IReadOnlyDictionary<
         foreach (var child in ChildrenOf(ownerRecordType, ownerRoot))
         {
             if (string.Equals(child.FormKey, formKey, StringComparison.Ordinal))
-                return new DocumentContainment(ownKey.GetString()!, ownerRecordType, child.SlotName);
+                return new DocumentContainment(DocumentNodes.StringValueOf(ownKey), ownerRecordType, child.SlotName);
 
             if (!_slots.IsEmbeddedSlot(ownerType, child.SlotName)) continue;
             if (ContainmentOf(child.RecordType, child.Node, formKey) is { } deeper) return deeper;

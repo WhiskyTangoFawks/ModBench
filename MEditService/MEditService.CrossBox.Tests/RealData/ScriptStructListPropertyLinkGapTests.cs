@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
@@ -19,12 +20,14 @@ public sealed class ScriptStructListPropertyLinkGapTests
     {
         var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
         var modPath = new ModPath(modKey, FixturePath);
-        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, LocalizedStrings.ForRead(PluginStrings.In(Path.GetDirectoryName(FixturePath)!)));
+        var mod = ModFactory.ImportSetter(modPath, GameRelease.Fallout4, LocalizedStrings.ForRead(PluginStrings.In(PathShape.DirectoryOf(FixturePath))));
 
         var quest = mod.EnumerateMajorRecords().OfType<IQuestGetter>()
             .Single(q => q.EditorID == "DiaQ_LLInjector_SpadeyAMR");
 
-        var script = quest.VirtualMachineAdapter!.Scripts.Single(s => s.Name == "DLC04:DLCLegendaryLLManagerScript");
+        var adapter = quest.VirtualMachineAdapter
+            ?? throw new InvalidOperationException("Expected DiaQ_LLInjector_SpadeyAMR to carry a VirtualMachineAdapter.");
+        var script = adapter.Scripts.Single(s => s.Name == "DLC04:DLCLegendaryLLManagerScript");
         var property = script.Properties.Single(p => p.Name == "LeveledListData");
         return Assert.IsAssignableFrom<IScriptStructListPropertyGetter>(property);
     }

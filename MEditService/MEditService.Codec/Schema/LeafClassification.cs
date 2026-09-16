@@ -80,7 +80,9 @@ internal static class LeafClassification
             var nonZero = NonZero(declared);
             var zero = core == typeof(bool) ? "false" : "0";
             var literal = nonZero == null ? zero
-                : Convert.ToString(nonZero, CultureInfo.InvariantCulture)!.ToLowerInvariant();
+                : (Convert.ToString(nonZero, CultureInfo.InvariantCulture)
+                    ?? throw new InvalidOperationException($"Expected '{nonZero}' to have a string representation."))
+                        .ToLowerInvariant();
             return new(apiType, duckDb, LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers,
                 ViewDefaultLiteral: literal, Default: nonZero);
         }
@@ -133,7 +135,10 @@ internal static class LeafClassification
         if (core.GetCustomAttribute<FlagsAttribute>() != null)
         {
             // A flags enum renders as a joined name list in a view, so its default is the empty string.
-            var set = NonZero(declared) is { } bits ? bits.ToString()!.Split(", ") : null;
+            var set = NonZero(declared) is { } bits
+                ? (bits.ToString() ?? throw new InvalidOperationException($"Expected '{bits}' to have a string representation."))
+                    .Split(", ")
+                : null;
             return new("flags", "VARCHAR", LeafSpec.NoFormKeyTypes, members, ViewDefaultLiteral: "''", Default: set);
         }
 

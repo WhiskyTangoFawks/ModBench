@@ -35,7 +35,8 @@ public sealed class DocumentEditRealDataTests(CutDownPluginFixture fixture, ITes
         foreach (var document in documents)
         {
             var schema = Schemas[document.RecordType];
-            var before = document.Body!;
+            var before = document.Body
+                ?? throw new InvalidOperationException($"{document.RecordType} {document.FormKey}: expected a parsed body.");
             if (!schema.IsHeader)
             {
                 var identity = DocumentEdits.Apply(

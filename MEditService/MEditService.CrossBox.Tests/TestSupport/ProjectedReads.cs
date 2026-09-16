@@ -12,7 +12,8 @@ internal static class ProjectedReads
     internal static IRecordReads Projected(this IndexProjector index, RecordRef recordRef = RecordRef.Effective)
     {
         index.Settle();
-        return index.Store!.At(recordRef);
+        var store = index.Store ?? throw new InvalidOperationException("Expected Settle to have populated the index store.");
+        return store.At(recordRef);
     }
 
     /// <summary>The Index's own reads — filter-aware and load-order-wide — behind the same
@@ -20,7 +21,7 @@ internal static class ProjectedReads
     internal static IRecordReads SettledReads(this IndexProjector index)
     {
         index.Settle();
-        return index.Reads!;
+        return index.Reads ?? throw new InvalidOperationException("Expected Settle to have populated the index reads.");
     }
 
     internal static void Settle(this IndexProjector index) => index.ValidateIndex(null);

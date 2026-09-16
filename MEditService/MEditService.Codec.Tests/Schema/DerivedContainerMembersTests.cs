@@ -81,7 +81,8 @@ public sealed class DerivedContainerMembersTests
 
     private static Type ElementOf(string parent, string slot)
     {
-        var property = RecordTypes().First(t => t.Name == parent).GetProperty(slot)!;
+        var property = RecordTypes().First(t => t.Name == parent).GetProperty(slot)
+            ?? throw new InvalidOperationException($"Expected '{parent}' to declare property '{slot}'.");
         return property.PropertyType.IsGenericType
             ? property.PropertyType.GetGenericArguments()[0]
             : property.PropertyType;

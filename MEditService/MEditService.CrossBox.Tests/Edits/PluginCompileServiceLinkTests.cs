@@ -82,7 +82,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     }
 
     private static SourceRepository Repository(string modFolder) =>
-        SourceRepository.Open(modFolder, GameRelease.Fallout4)!;
+        SourceRepository.Open(modFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException($"Expected {modFolder} to already be a tracked repository.");
 
     private void PointTheNpcAt(FormKey keyword) =>
         SourceEdits.Rewrite<Npc>(
@@ -97,7 +98,9 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     {
         using var loaded = MEditService.PluginAdapter.MutagenPluginAdapter.OpenForRead(
             new ModPath(ModKey.FromFileName(HostName), Path.Combine(_hostFolder, HostName)), GameRelease.Fallout4);
-        return [.. ((IFallout4ModGetter)loaded.Getter).Npcs.Single().Keywords!.Select(k => k.FormKey)];
+        var keywords = ((IFallout4ModGetter)loaded.Getter).Npcs.Single().Keywords
+            ?? throw new InvalidOperationException("Expected the compiled NPC to carry a Keywords collection.");
+        return [.. keywords.Select(k => k.FormKey)];
     }
 
     [Fact]

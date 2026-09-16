@@ -170,9 +170,9 @@ public sealed class RecordTypeDispatch
         var modType = ModFactory.Activator(ModKey.Null, release).GetType();
 
         var groupProperties = modType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Select(p => (Property: p, ElementType: GroupElementType(p.PropertyType)))
-            .Where(t => t.ElementType != null)
-            .Select(t => (t.Property, ElementType: t.ElementType!))
+            .SelectMany(p => GroupElementType(p.PropertyType) is not { } elementType
+                ? []
+                : new[] { (Property: p, ElementType: elementType) })
             .ToList();
 
         var abstractElements = groupProperties
@@ -197,7 +197,9 @@ public sealed class RecordTypeDispatch
 
             byName[type.Name] = type;
 
-            var signature = ((RecordType)grup.GetValue(null)!).Type;
+            var grupRecordType = grup.GetValue(null)
+                ?? throw new InvalidOperationException($"Expected '{type.Name}.GrupRecordType' to hold a value.");
+            var signature = ((RecordType)grupRecordType).Type;
             // A shared signature resolves to whichever type was discovered first, safe only while they
             // are all ambiguous together; if they disagree, null it so the document names itself.
             if (byName.TryGetValue(signature, out var existing) && existing != type)

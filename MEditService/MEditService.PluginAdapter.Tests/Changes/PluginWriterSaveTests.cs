@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -151,7 +152,7 @@ public sealed class PluginWriterSaveTests
             .Build();
 
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
-        var dir = Path.GetDirectoryName(pluginPath)!;
+        var dir = PathShape.DirectoryOf(pluginPath);
         var name = Path.GetFileNameWithoutExtension(pluginPath);
 
         // Pre-create maxBackups + 1 backups; SaveAsync adds one more before pruning.

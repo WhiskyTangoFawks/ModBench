@@ -10,6 +10,9 @@ namespace MEditService.Tests.Serialization;
 /// container level in order to serialize one.</summary>
 public sealed class RecordTextCodecBlankDocumentTests
 {
+    private static JsonObject ParseObject(string document) =>
+        (JsonNode.Parse(document) ?? throw new InvalidOperationException("Expected the document to parse as a JSON node.")).AsObject();
+
     [Fact]
     public void BlankDocument_ForAContainerLevel_CarriesTheIdentityGiven()
     {
@@ -40,7 +43,7 @@ public sealed class RecordTextCodecBlankDocumentTests
             new JsonObject { ["BlockNumberX"] = 3, ["BlockNumberY"] = -2 });
 
         var readBackAndWritten = RecordTextCodec.BlankDocument(
-            typeof(WorldspaceBlock), GameRelease.Fallout4, JsonNode.Parse(document)!.AsObject());
+            typeof(WorldspaceBlock), GameRelease.Fallout4, ParseObject(document));
 
         Assert.Equal(document, readBackAndWritten);
     }
@@ -67,6 +70,6 @@ public sealed class RecordTextCodecBlankDocumentTests
         Assert.Equal(
             document,
             RecordTextCodec.BlankDocument(
-                typeof(Cell), GameRelease.Fallout4, JsonNode.Parse(document)!.AsObject()));
+                typeof(Cell), GameRelease.Fallout4, ParseObject(document)));
     }
 }

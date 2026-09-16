@@ -271,8 +271,8 @@ public sealed class AbstractUnionEditTests : IDisposable
 
         public EditRecordHandler Service() => EditHandler;
 
-        public string NpcBody() => TrackedTree.Document(_modFolder, Plugin, Npc.ToString())!.Body;
-        public string QuestBody() => TrackedTree.Document(_modFolder, Plugin, Quest.ToString())!.Body;
+        public string NpcBody() => TrackedTree.Body(_modFolder, Plugin, Npc.ToString());
+        public string QuestBody() => TrackedTree.Body(_modFolder, Plugin, Quest.ToString());
 
         public void Dispose()
         {

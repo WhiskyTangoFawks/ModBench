@@ -43,6 +43,6 @@ public sealed class ComparisonDoorBoundaryTests
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, projectName)))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        return Path.Combine(dir!.FullName, projectName);
+        return Path.Combine(dir.FullName, projectName);
     }
 }

@@ -31,7 +31,7 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Cobj);
         var value = _fixture.Field(_fixture.Cobj, "Conditions");
-        value[0]!["CompareOperator"] = "LessThan";
+        value[0].Require()["CompareOperator"] = "LessThan";
 
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Cobj.ToString(), "Conditions", Json(value.ToJsonString()));
@@ -47,7 +47,7 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Cobj);
         var value = _fixture.Field(_fixture.Cobj, "Conditions");
-        value[0]!["Data"]!["Unknown3"] = 7;
+        value[0].Require()["Data"].Require()["Unknown3"] = 7;
 
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Cobj.ToString(), "Conditions", Json(value.ToJsonString()));
@@ -63,7 +63,7 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Cobj);
         var value = _fixture.Field(_fixture.Cobj, "Conditions");
-        value[0]!["Flags"] = new JsonArray("OR", "ParametersUseAliases");
+        value[0].Require()["Flags"] = new JsonArray("OR", "ParametersUseAliases");
 
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Cobj.ToString(), "Conditions", Json(value.ToJsonString()));
@@ -81,8 +81,8 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Cobj);
         var value = _fixture.Field(_fixture.Cobj, "Conditions");
-        value[0]!["MutagenObjectType"] = "ConditionGlobal";
-        value[0]!["ComparisonValue"] = _fixture.Global.ToString();
+        value[0].Require()["MutagenObjectType"] = "ConditionGlobal";
+        value[0].Require()["ComparisonValue"] = _fixture.Global.ToString();
 
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Cobj.ToString(), "Conditions", Json(value.ToJsonString()));
@@ -107,7 +107,7 @@ public sealed class ConditionEditTests : IDisposable
         Assert.True(seeded.Applied, seeded.Message);
         Assert.Equal(
             "bAllowRotation",
-            JsonNode.Parse(_fixture.Body(_fixture.Cobj))!["Conditions"]![0]!["Data"]!["ParameterOneString"]!.GetValue<string>());
+            JsonNode.Parse(_fixture.Body(_fixture.Cobj)).Require()["Conditions"].Require()[0].Require()["Data"].Require()["ParameterOneString"].Require().GetValue<string>());
         var before = _fixture.Body(_fixture.Cobj);
 
         // HasKeyword uses ParameterOneRecord alone, so the string slot is idled by the one-leaf change.
@@ -116,9 +116,9 @@ public sealed class ConditionEditTests : IDisposable
             SetAt(Json($"\"{nameof(Condition.Function.HasKeyword)}\""), Member("Conditions"), At(0), Member("Data"), Member("Function")));
 
         Assert.True(result.Applied, result.Message);
-        var after = JsonNode.Parse(_fixture.Body(_fixture.Cobj))!["Conditions"]![0]!["Data"]!;
+        var after = JsonNode.Parse(_fixture.Body(_fixture.Cobj)).Require()["Conditions"].Require()[0].Require()["Data"].Require();
         Assert.Null(after["ParameterOneString"]);
-        Assert.Equal(nameof(Condition.Function.HasKeyword), after["Function"]!.GetValue<string>());
+        Assert.Equal(nameof(Condition.Function.HasKeyword), after["Function"].Require().GetValue<string>());
         // Mutagen spells one parameter slot through every typed view, so the Number view of the
         // quest link is idled alongside the stale string; the Record view HasKeyword reads stays.
         Assert.Equal(
@@ -144,37 +144,37 @@ public sealed class ConditionEditTests : IDisposable
         var after = _fixture.Body(_fixture.Cobj);
         // Nothing outside the appended element moved.
         Assert.All(DocumentDiff(before, after), d => Assert.StartsWith("Conditions[2]", d, StringComparison.Ordinal));
-        var appended = JsonNode.Parse(after)!["Conditions"]!.AsArray()[2]!;
-        Assert.Equal(leaf, appended["MutagenObjectType"]!.GetValue<string>());
+        var appended = JsonNode.Parse(after).Require()["Conditions"].Require().AsArray()[2].Require();
+        Assert.Equal(leaf, appended["MutagenObjectType"].Require().GetValue<string>());
         Assert.Equal(
             SharedSchemaReflector.FirstArrayElementLeafSubField("cobj", "Conditions", "Data", "MutagenObjectType"),
-            appended["Data"]!["MutagenObjectType"]!.GetValue<string>());
+            appended["Data"].Require()["MutagenObjectType"].Require().GetValue<string>());
     }
 
     [Fact]
     public void ArrayRemove_DropsTheNamedConditionAndKeepsTheOther()
     {
         var before = _fixture.Body(_fixture.Cobj);
-        var second = JsonNode.Parse(before)!["Conditions"]![1]!.ToJsonString();
+        var second = JsonNode.Parse(before).Require()["Conditions"].Require()[1].Require().ToJsonString();
 
         var result = _fixture.Service().Edit(_fixture.Plugin, _fixture.Cobj.ToString(), RemoveAt(Member("Conditions"), At(0)));
 
         Assert.True(result.Applied, result.Message);
         var after = _fixture.Body(_fixture.Cobj);
-        Assert.Equal(second, JsonNode.Parse(after)!["Conditions"]!.AsArray().Single()!.ToJsonString());
+        Assert.Equal(second, JsonNode.Parse(after).Require()["Conditions"].Require().AsArray().Single().Require().ToJsonString());
     }
 
     [Fact]
     public void ArrayMoveDown_SwapsTheTwoConditionsAndChangesNothingInsideThem()
     {
         var before = _fixture.Body(_fixture.Cobj);
-        var elements = JsonNode.Parse(before)!["Conditions"]!.AsArray().Select(e => e!.ToJsonString()).ToList();
+        var elements = JsonNode.Parse(before).Require()["Conditions"].Require().AsArray().Select(e => e.Require().ToJsonString()).ToList();
 
         var result = _fixture.Service().Edit(_fixture.Plugin, _fixture.Cobj.ToString(), MoveTo(1, Member("Conditions"), At(0)));
 
         Assert.True(result.Applied, result.Message);
-        var after = JsonNode.Parse(_fixture.Body(_fixture.Cobj))!["Conditions"]!.AsArray()
-            .Select(e => e!.ToJsonString()).ToList();
+        var after = JsonNode.Parse(_fixture.Body(_fixture.Cobj)).Require()["Conditions"].Require().AsArray()
+            .Select(e => e.Require().ToJsonString()).ToList();
         Assert.Equal([elements[1], elements[0]], after);
     }
 
@@ -185,7 +185,7 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Perk);
         var value = _fixture.Field(_fixture.Perk, "Effects");
-        value[0]!["Conditions"]![0]!["Conditions"]![0]!["Data"]!["Function"] = "GetIsSex";
+        value[0].Require()["Conditions"].Require()[0].Require()["Conditions"].Require()[0].Require()["Data"].Require()["Function"] = "GetIsSex";
 
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Perk.ToString(), "Effects", Json(value.ToJsonString()));
@@ -201,7 +201,7 @@ public sealed class ConditionEditTests : IDisposable
     {
         var before = _fixture.Body(_fixture.Message);
         var value = _fixture.Field(_fixture.Message, "MenuButtons");
-        value[0]!["Conditions"]![0]!["Data"]!["RunOnType"] = "Target";
+        value[0].Require()["Conditions"].Require()[0].Require()["Data"].Require()["RunOnType"] = "Target";
 
         var result = _fixture.Service().Set(
             _fixture.Plugin, _fixture.Message.ToString(), "MenuButtons", Json(value.ToJsonString()));
@@ -335,10 +335,10 @@ public sealed class ConditionEditTests : IDisposable
         public EditRecordHandler Service() => EditHandler;
 
         public string Body(FormKey formKey) =>
-            TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;
+            TrackedTree.Body(_modFolder, Plugin, formKey.ToString());
 
         public JsonArray Field(FormKey formKey, string name) =>
-            JsonNode.Parse(Body(formKey))!.AsObject()[name]!.AsArray();
+            JsonNode.Parse(Body(formKey)).Require().AsObject()[name].Require().AsArray();
 
         public void Dispose()
         {

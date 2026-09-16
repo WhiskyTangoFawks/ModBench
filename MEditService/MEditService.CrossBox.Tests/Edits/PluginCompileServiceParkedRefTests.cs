@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -123,7 +124,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         // structurally cannot emit, so nothing about the plugin's parked state should move.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
-        Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(collidingPath));
         File.WriteAllText(collidingPath, npcSourceText);
 
         var baselineParked = RunGit("rev-parse", ParkedRef).Trim();

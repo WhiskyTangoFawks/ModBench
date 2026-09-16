@@ -41,7 +41,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var record = Reads().GetRecord(_fixture.Cell.ToString());
 
         Assert.NotNull(record);
-        Assert.Equal(ContainerModFixture.CellEditorId, record!.EditorId);
+        Assert.Equal(ContainerModFixture.CellEditorId, record.EditorId);
     }
 
     [Fact]
@@ -71,8 +71,10 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             before.Replace("\"WaterHeight\": 100.0", "\"WaterHeight\": 250.0", StringComparison.Ordinal),
             File.ReadAllText(file));
         // The source unit's own indexed document moved with the file.
-        Assert.Contains(
-            "250.0", _fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
+        var document = _fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin);
+        Assert.NotNull(document);
+        Assert.NotNull(document.Body);
+        Assert.Contains("250.0", document.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -93,7 +95,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void EditingACellsEditorId_MovesItsSourceDirectory_AndStagesAsARename()
     {
-        var oldDirectory = Path.GetDirectoryName(CellSourceFile)!;
+        var oldDirectory = PathShape.DirectoryOf(CellSourceFile);
         Assert.EndsWith(ContainerModFixture.CellEditorId + " - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
 
         var result = EditService().Set(_fixture.Plugin, _fixture.Cell.ToString(), "EditorID", Json("\"RenamedCell\""));
@@ -103,7 +105,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         // The new directory is named by identity alone: a rename carries no position, because the cell's
         // slot lives in its sub-block's ordered child list keyed by FormKey, which a rename does not touch.
         var newDirectory = Path.Combine(
-            Path.GetDirectoryName(oldDirectory)!, "RenamedCell - " + FilesafeCellKey);
+            PathShape.DirectoryOf(oldDirectory), "RenamedCell - " + FilesafeCellKey);
         Assert.True(Directory.Exists(newDirectory));
         Assert.Contains(
             "\"EditorID\": \"RenamedCell\"",
@@ -163,7 +165,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.Null(_fixture.Index.Projected().GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
-        Assert.NotNull(_fixture.Index.Projected().GetDocument(result.NewFormKey!, _fixture.Plugin));
+        var newFormKey = result.NewFormKey ?? throw new InvalidOperationException("Expected RenumberRecord to set NewFormKey on success.");
+        Assert.NotNull(_fixture.Index.Projected().GetDocument(newFormKey, _fixture.Plugin));
     }
 
     [Fact]

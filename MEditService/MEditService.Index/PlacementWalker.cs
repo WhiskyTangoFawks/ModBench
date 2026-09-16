@@ -61,7 +61,7 @@ internal static class PlacementWalker
     // The codec writes a vector as its components in English, comma-separated (ReflectedTypes.VectorText).
     private static string[]? Components(JsonElement document, string path) =>
         DocumentNodes.At(document, path) is { ValueKind: JsonValueKind.String } vector
-            ? vector.GetString()!.Split(',')
+            ? DocumentNodes.StringValueOf(vector).Split(',')
             : null;
 
     private static int? Int(string component) =>

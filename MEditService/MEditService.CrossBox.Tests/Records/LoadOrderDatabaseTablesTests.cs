@@ -34,7 +34,8 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     }
 
     private DuckDbRecordIndex Index() =>
-        (DuckDbRecordIndex)loaded.Services.GetRequiredService<IndexProjector>().Store!;
+        (DuckDbRecordIndex)(loaded.Services.GetRequiredService<IndexProjector>().Store
+            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store."));
 
     private DuckDBConnection Connection() => Index().Connection;
 

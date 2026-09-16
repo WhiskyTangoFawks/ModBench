@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using MEditService.LoadOrder;
 
 namespace MEditService.Tests.TestSupport;
 
@@ -41,7 +42,7 @@ internal static class Golden
     // one committed copy, referenced by every project that needs it), so this walks up one more
     // level than a same-project Golden.cs would.
     private static string GoldenDirectory(string callerFile) =>
-        Path.Combine(Path.GetDirectoryName(callerFile)!, "..", "..", "MEditService.TestSupport", "TestData", "goldens");
+        Path.Combine(PathShape.DirectoryOf(callerFile), "..", "..", "MEditService.TestSupport", "TestData", "goldens");
 
     private static string Canonical(object? value)
     {

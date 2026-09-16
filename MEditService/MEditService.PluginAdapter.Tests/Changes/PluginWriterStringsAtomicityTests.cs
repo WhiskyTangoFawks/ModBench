@@ -43,7 +43,7 @@ public sealed class PluginWriterStringsAtomicityTests : IDisposable
     }
 
     private Dictionary<string, byte[]> ReadStringsFiles() =>
-        Directory.GetFiles(_stringsDir).ToDictionary(f => Path.GetFileName(f)!, File.ReadAllBytes);
+        Directory.GetFiles(_stringsDir).ToDictionary(f => Path.GetFileName(f), File.ReadAllBytes);
 
     [Fact]
     public async Task PrepareFromModAsync_LocalizedMod_LeavesFinalStringsFilesUntouchedBeforeCommit()

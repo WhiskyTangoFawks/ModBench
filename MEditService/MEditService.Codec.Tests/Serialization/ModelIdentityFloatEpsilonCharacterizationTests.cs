@@ -27,6 +27,6 @@ public sealed class ModelIdentityFloatEpsilonCharacterizationTests
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal(npc.FormKey, divergence!.FormKey);
+        Assert.Equal(npc.FormKey, divergence.FormKey);
     }
 }

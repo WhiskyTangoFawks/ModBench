@@ -87,11 +87,18 @@ public sealed class VmadCompareTests : IDisposable
         return adapter;
     }
 
-    private static FieldDiff Child(FieldDiff diff, string name) =>
-        diff.Children!.Single(c => c.FieldName == name);
+    private static IReadOnlyList<FieldDiff> Children(FieldDiff diff) =>
+        diff.Children ?? throw new InvalidOperationException($"Expected \"{diff.FieldName}\" to have children.");
 
-    private FieldDiff Adapter(FormKey record) =>
-        _service.GetCompare(record.ToString())!.Diffs.Single(d => d.FieldName == Field);
+    private static FieldDiff Child(FieldDiff diff, string name) =>
+        Children(diff).Single(c => c.FieldName == name);
+
+    private FieldDiff Adapter(FormKey record)
+    {
+        var compare = _service.GetCompare(record.ToString())
+            ?? throw new InvalidOperationException($"Expected {record} to resolve to a compare result.");
+        return compare.Diffs.Single(d => d.FieldName == Field);
+    }
 
     [Fact]
     public void ScriptsPresentInOneOverrideOnly_AlignByName()
@@ -100,12 +107,16 @@ public sealed class VmadCompareTests : IDisposable
 
         // Both keys are rows, in key order, and the master's own holds nothing on the override's side. A
         // positional reading would line the master's Ambush up against the override's Guard.
-        Assert.Equal(["Ambush", "Guard"], scripts.Children!.Select(c => c.FieldName));
+        Assert.Equal(["Ambush", "Guard"], Children(scripts).Select(c => c.FieldName));
         var ambush = Child(scripts, "Ambush");
         Assert.NotNull(ambush.Values["Base.esm"]);
         Assert.Null(ambush.Values["Top.esp"]);
         var guard = Child(scripts, "Guard");
-        Assert.Equal(guard.Values["Base.esm"]!.ToString(), guard.Values["Top.esp"]!.ToString());
+        var guardBase = guard.Values["Base.esm"];
+        var guardTop = guard.Values["Top.esp"];
+        Assert.NotNull(guardBase);
+        Assert.NotNull(guardTop);
+        Assert.Equal(guardBase.ToString(), guardTop.ToString());
     }
 
     [Fact]
@@ -124,16 +135,21 @@ public sealed class VmadCompareTests : IDisposable
         // identical in both, and the empty script and fragment lists, which both documents omit,
         // are not rows at all.
         Assert.Equal(ConflictThis.IdenticalToMaster, Child(adapter, "Script").CellStates["Top.esp"]);
-        Assert.DoesNotContain(adapter.Children!, c => c.FieldName is "Scripts" or "Fragments");
+        Assert.DoesNotContain(Children(adapter), c => c.FieldName is "Scripts" or "Fragments");
     }
 
     [Fact]
     public void Vmad_Compare_MatchesGolden()
     {
+        var npcCompare = _service.GetCompare(ScriptedNpc.ToString());
+        var questCompare = _service.GetCompare(ScriptedQuest.ToString());
+        Assert.NotNull(npcCompare);
+        Assert.NotNull(questCompare);
+
         var captured = new Dictionary<string, object?>
         {
-            ["scripted-npc"] = Project(_service.GetCompare(ScriptedNpc.ToString())!),
-            ["scripted-quest"] = Project(_service.GetCompare(ScriptedQuest.ToString())!),
+            ["scripted-npc"] = Project(npcCompare),
+            ["scripted-quest"] = Project(questCompare),
         };
 
         Golden.Verify("compare-vmad", captured);

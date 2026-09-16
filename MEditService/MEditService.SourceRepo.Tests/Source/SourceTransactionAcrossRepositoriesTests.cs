@@ -46,7 +46,8 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
                 .. alsoWrite,
             ],
             new TrackProvenance(null, null, new Dictionary<string, string>()));
-        return SourceRepository.Open(modFolder, Release)!;
+        return SourceRepository.Open(modFolder, Release)
+            ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
     }
 
     // A worldspace with an exterior cell beneath it: the one shape whose removal takes a whole

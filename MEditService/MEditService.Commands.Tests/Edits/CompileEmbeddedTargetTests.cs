@@ -135,7 +135,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     {
         var targets = MutagenPluginAdapter.Instance.LinkTargets(
             _loadOrder,
-            _loadOrder.Copy(_referrer)!,
+            _loadOrder.Copy(_referrer).Require(),
             SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4),
             [_embeddedTarget.ToString()]);
 

@@ -126,7 +126,8 @@ public sealed class CascadeRollbackFixture : IDisposable
         _watcher.Rearm(holder.Current);
     }
 
-    public string ModFolderOf(PluginCopyKey plugin) => LoadOrder.ModFolderOf(plugin)!;
+    public string ModFolderOf(PluginCopyKey plugin) =>
+        LoadOrder.ModFolderOf(plugin) ?? throw new InvalidOperationException($"Expected the load order to hold a mod folder for {plugin}.");
 
     public string SourceFileOf(PluginCopyKey plugin, FormKey formKey, string recordType, string editorId) =>
         SourceDocumentPath.Of(
@@ -152,13 +153,16 @@ public sealed class CascadeRollbackFixture : IDisposable
     /// projection sequence: a renumber's file moves can settle as more than one batch.</summary>
     public async Task<bool> ProjectionReaches(Func<IRecordReads, bool> condition)
     {
+        var index = Index ?? throw new InvalidOperationException("ProjectionReaches requires the Watched() fixture.");
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
         while (DateTime.UtcNow < deadline)
         {
-            if (condition(Index!.Store!.At(RecordRef.Effective))) return true;
-            await Index.AwaitSequenceAsync(Index.Sequence + 1, TimeSpan.FromSeconds(2));
+            var store = index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
+            if (condition(store.At(RecordRef.Effective))) return true;
+            await index.AwaitSequenceAsync(index.Sequence + 1, TimeSpan.FromSeconds(2));
         }
-        return condition(Index!.Store!.At(RecordRef.Effective));
+        var finalStore = index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
+        return condition(finalStore.At(RecordRef.Effective));
     }
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Snapshots() =>

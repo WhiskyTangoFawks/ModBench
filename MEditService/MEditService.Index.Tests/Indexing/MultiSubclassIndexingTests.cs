@@ -47,7 +47,9 @@ public class MultiSubclassIndexingTests
             Assert.NotNull(detail);
             var value = detail.Fields.FirstOrDefault(f => f.Metadata.Name == field);
             Assert.NotNull(value);
-            result[summary.EditorId!] = value.Value;
+            var editorId = summary.EditorId
+                ?? throw new InvalidOperationException($"Expected '{summary.FormKey}' to have an EditorID.");
+            result[editorId] = value.Value;
         }
         return result;
     }
@@ -69,7 +71,10 @@ public class MultiSubclassIndexingTests
         repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var byEdid = FieldByEditorId(repo, "gmst", "Data").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
+        var byEdid = FieldByEditorId(repo, "gmst", "Data").ToDictionary(
+            kv => kv.Key,
+            kv => (JsonElement)(kv.Value
+                ?? throw new InvalidOperationException($"Expected a value for '{kv.Key}'.")));
         Assert.Equal(4, byEdid.Count);
         Assert.Equal(42, byEdid["iTest"].GetInt32());
         Assert.Equal(3.5f, byEdid["fTest"].GetSingle());
@@ -95,7 +100,10 @@ public class MultiSubclassIndexingTests
         repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var byEdid = FieldByEditorId(repo, "glob", "Data").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
+        var byEdid = FieldByEditorId(repo, "glob", "Data").ToDictionary(
+            kv => kv.Key,
+            kv => (JsonElement)(kv.Value
+                ?? throw new InvalidOperationException($"Expected a value for '{kv.Key}'.")));
         Assert.Equal(4, byEdid.Count);
         Assert.Equal(7, byEdid["TestGlobInt"].GetInt32());
         Assert.Equal(1.25f, byEdid["TestGlobFloat"].GetSingle());
@@ -165,8 +173,14 @@ public class MultiSubclassIndexingTests
         repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var values = FieldByEditorId(repo, "dmgt", "DamageTypes").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
-        var classes = FieldByEditorId(repo, "dmgt", "MutagenObjectType").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
+        var values = FieldByEditorId(repo, "dmgt", "DamageTypes").ToDictionary(
+            kv => kv.Key,
+            kv => (JsonElement)(kv.Value
+                ?? throw new InvalidOperationException($"Expected a value for '{kv.Key}'.")));
+        var classes = FieldByEditorId(repo, "dmgt", "MutagenObjectType").ToDictionary(
+            kv => kv.Key,
+            kv => (JsonElement)(kv.Value
+                ?? throw new InvalidOperationException($"Expected a value for '{kv.Key}'.")));
         Assert.Equal(2, values.Count);
 
         Assert.Equal(nameof(DamageType), classes["PlainDmgt339"].GetString());

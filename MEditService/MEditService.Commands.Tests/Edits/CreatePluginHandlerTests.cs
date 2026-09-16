@@ -125,7 +125,7 @@ public sealed class CreatePluginHandlerTests : IDisposable
 
         Assert.True(result.Applied);
         Assert.True(SourceRepository.IsTracked(modFolder));
-        Assert.True(result.Track!.Applied);
+        Assert.True(result.Track.Require().Applied);
     }
 
     // The rival is Track's own refusal to re-track: a create that always tracks would refuse the

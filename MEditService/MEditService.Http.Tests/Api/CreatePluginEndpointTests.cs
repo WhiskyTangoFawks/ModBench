@@ -51,8 +51,11 @@ public sealed class CreatePluginEndpointTests : IDisposable
         var result = await Create("Slotted.esp", IndexedModFixture.ModFolderOrigin);
 
         var ok = Assert.IsAssignableFrom<Ok<PluginCreatedResponse>>(result);
-        Assert.Equal(highest + 1, ok.Value!.Slot);
-        Assert.Equal(highest + 1, Registered("Slotted.esp", IndexedModFixture.ModFolderOrigin)!.Slot);
+        Assert.NotNull(ok.Value);
+        Assert.Equal(highest + 1, ok.Value.Slot);
+        var registered = Registered("Slotted.esp", IndexedModFixture.ModFolderOrigin);
+        Assert.NotNull(registered);
+        Assert.Equal(highest + 1, registered.Slot);
     }
 
     [Fact]
@@ -74,7 +77,8 @@ public sealed class CreatePluginEndpointTests : IDisposable
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
-        Assert.Contains("extension", problem.ProblemDetails.Detail!, StringComparison.Ordinal);
+        Assert.NotNull(problem.ProblemDetails.Detail);
+        Assert.Contains("extension", problem.ProblemDetails.Detail, StringComparison.Ordinal);
         Assert.Null(Registered("Mod.txt", IndexedModFixture.ModFolderOrigin));
     }
 
@@ -159,7 +163,7 @@ public sealed class CreatePluginEndpointTests : IDisposable
             new PluginCopyKey("Editable.esp", IndexedModFixture.ModFolderOrigin), "npc_", "MintedNpc");
 
         Assert.True(edit.Applied);
-        Assert.EndsWith("Editable.esp", edit.NewFormKey!, StringComparison.OrdinalIgnoreCase);
+        Assert.EndsWith("Editable.esp", WriteEndpointMapping.RequireNewFormKey(edit), StringComparison.OrdinalIgnoreCase);
     }
 
     private LoadOrderSnapshot Order(params RegisteredCopy[] copies) =>

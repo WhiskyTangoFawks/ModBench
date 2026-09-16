@@ -74,7 +74,9 @@ public sealed class EditRecordHandler
             var found = parentType == null
                 ? null
                 : EmbeddedChildPath.Find(
-                    (JsonObject)JsonNode.Parse(text)!, ContainerChildFields.NormalizedTypeName(parentType), formKey, release);
+                    JsonNode.Parse(text) as JsonObject
+                        ?? throw new InvalidOperationException($"Expected '{unit.RelativePath}' to hold a JSON object."),
+                    ContainerChildFields.NormalizedTypeName(parentType), formKey, release);
             if (found == null)
             {
                 return RecordEditResult.Refused(

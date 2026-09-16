@@ -54,9 +54,9 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private IReadOnlyList<string> SlotOf(FormKey owner, string slotName)
     {
-        using var document = JsonDocument.Parse(_fixture.Document(owner.ToString())!.Body);
+        using var document = JsonDocument.Parse(_fixture.Document(owner.ToString()).Require().Body);
         return [.. document.RootElement.GetProperty(slotName).EnumerateArray()
-            .Select(child => child.GetProperty("FormKey").GetString()!)];
+            .Select(child => child.GetProperty("FormKey").GetString().Require())];
     }
 
     // ---- set ----
@@ -65,9 +65,9 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private (FormKey Child, string EditorId, Func<IQuestGetter, IEnumerable<string>> Siblings) Kind(string kind) => kind switch
     {
-        "topic" => (_fixture.DialogTopic2, ContainerModFixture.DialogTopic2EditorId, q => q.DialogTopics.Select(t => t.EditorID!)),
-        "branch" => (_fixture.DialogBranch, ContainerModFixture.DialogBranchEditorId, q => q.DialogBranches.Select(b => b.EditorID!)),
-        "scene" => (_fixture.Scene, ContainerModFixture.SceneEditorId, q => q.Scenes.Select(s => s.EditorID!)),
+        "topic" => (_fixture.DialogTopic2, ContainerModFixture.DialogTopic2EditorId, q => q.DialogTopics.Select(t => t.EditorID.Require())),
+        "branch" => (_fixture.DialogBranch, ContainerModFixture.DialogBranchEditorId, q => q.DialogBranches.Select(b => b.EditorID.Require())),
+        "scene" => (_fixture.Scene, ContainerModFixture.SceneEditorId, q => q.Scenes.Select(s => s.EditorID.Require())),
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "No such quest child kind."),
     };
 
@@ -87,7 +87,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
             File.ReadAllText(QuestFile));
         AssertOnlyTheQuestFileChanged();
 
-        Assert.Equal($"Renamed{kind}", _fixture.Document(child.ToString())!.EditorId);
+        Assert.Equal($"Renamed{kind}", _fixture.Document(child.ToString()).Require().EditorId);
         var compiled = siblings(CompiledQuest()).ToList();
         Assert.Contains($"Renamed{kind}", compiled);
         if (kind == "topic")
@@ -111,11 +111,11 @@ public sealed class QuestChildWriteApiTests : IDisposable
             File.ReadAllText(QuestFile));
         AssertOnlyTheQuestFileChanged();
 
-        Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString())!.EditorId);
+        Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString()).Require().EditorId);
         Assert.Contains(_fixture.Response.ToString(), SlotOf(_fixture.DialogTopic, nameof(DialogTopic.Responses)));
         Assert.Equal(
             ["RenamedResponse", ContainerModFixture.Response2EditorId],
-            CompiledQuest().DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic).Responses.Select(r => r.EditorID!));
+            CompiledQuest().DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic).Responses.Select(r => r.EditorID.Require()));
     }
 
     // ---- the generic array ops, on an embedded child's own array field ----
@@ -150,11 +150,11 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
     private int[] LineNumbersInDocument()
     {
-        var root = JsonNode.Parse(File.ReadAllText(QuestFile))!.AsObject();
-        var response = root[nameof(Quest.DialogTopics)]!.AsArray()
-            .SelectMany(t => t![nameof(DialogTopic.Responses)] as JsonArray ?? [])
-            .Single(r => r![nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>() == _fixture.Response.ToString())!;
-        return [.. response[nameof(DialogResponses.Responses)]!.AsArray().Select(l => l![nameof(DialogResponse.ResponseNumber)]!.GetValue<int>())];
+        var root = JsonNode.Parse(File.ReadAllText(QuestFile)).Require().AsObject();
+        var response = root[nameof(Quest.DialogTopics)].Require().AsArray()
+            .SelectMany(t => t.Require()[nameof(DialogTopic.Responses)] as JsonArray ?? [])
+            .Single(r => r.Require()[nameof(IMajorRecordGetter.FormKey)].Require().GetValue<string>() == _fixture.Response.ToString()).Require();
+        return [.. response[nameof(DialogResponses.Responses)].Require().AsArray().Select(l => l.Require()[nameof(DialogResponse.ResponseNumber)].Require().GetValue<int>())];
     }
 
     // ---- delete ----
@@ -185,8 +185,8 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.Equal([_fixture.DialogTopic2.ToString(), _fixture.DialogTopic3.ToString()], QuestSlot(nameof(Quest.DialogTopics)));
 
         var compiled = CompiledQuest();
-        Assert.Equal([ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId], compiled.DialogTopics.Select(t => t.EditorID!));
-        Assert.Equal([ContainerModFixture.SceneEditorId], compiled.Scenes.Select(s => s.EditorID!));
+        Assert.Equal([ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId], compiled.DialogTopics.Select(t => t.EditorID.Require()));
+        Assert.Equal([ContainerModFixture.SceneEditorId], compiled.Scenes.Select(s => s.EditorID.Require()));
     }
 
     // ---- renumber ----
@@ -198,17 +198,17 @@ public sealed class QuestChildWriteApiTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(QuestFile);
-        Assert.Contains(result.NewFormKey!, after, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey.Require(), after, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.DialogTopic2.ToString(), after, StringComparison.Ordinal);
         AssertOnlyTheQuestFileChanged();
 
         Assert.Equal(
-            [_fixture.DialogTopic.ToString(), result.NewFormKey!, _fixture.DialogTopic3.ToString()],
+            [_fixture.DialogTopic.ToString(), result.NewFormKey.Require(), _fixture.DialogTopic3.ToString()],
             QuestSlot(nameof(Quest.DialogTopics)));
 
         Assert.Equal(
             [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic2EditorId, ContainerModFixture.DialogTopic3EditorId],
-            CompiledQuest().DialogTopics.Select(t => t.EditorID!));
+            CompiledQuest().DialogTopics.Select(t => t.EditorID.Require()));
     }
 
     // ---- refusal ----
@@ -217,14 +217,14 @@ public sealed class QuestChildWriteApiTests : IDisposable
     public void ARefusedQuestChildEdit_LeavesTheQuestDocumentAndTheSceneItselfUntouched()
     {
         var before = File.ReadAllText(QuestFile);
-        var sceneBefore = _fixture.Document(_fixture.Scene.ToString())!.Body;
+        var sceneBefore = _fixture.Document(_fixture.Scene.ToString()).Require().Body;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.Scene.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(before, File.ReadAllText(QuestFile));
         Assert.Empty(_fixture.GitStatus());
-        Assert.Equal(sceneBefore, _fixture.Document(_fixture.Scene.ToString())!.Body);
+        Assert.Equal(sceneBefore, _fixture.Document(_fixture.Scene.ToString()).Require().Body);
     }
 
     // ---- copy as override: the container rule's mint, one and two levels up ----
@@ -240,7 +240,7 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.True(quest!.IsPartialForm());
+        Assert.True(quest.Require().IsPartialForm());
         Assert.Equal(
             fixture.Scene.ToString(),
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("Scenes").EnumerateArray())
@@ -266,10 +266,10 @@ public sealed class QuestChildWriteApiTests : IDisposable
             fixture.SourcePlugin, fixture.DialogTopic.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString())!.IsPartialForm());
+        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
-        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic!.EditorId);
+        Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, topic.Require().EditorId);
         Assert.Null(fixture.Document(fixture.DestinationPlugin, fixture.Response1.ToString()));
         Assert.False(JsonDocument.Parse(topic.Body).RootElement.TryGetProperty("Responses", out _));
 
@@ -290,10 +290,10 @@ public sealed class QuestChildWriteApiTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var quest = fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.True(quest!.IsPartialForm());
+        Assert.True(quest.Require().IsPartialForm());
         var topic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(topic);
-        Assert.True(topic!.IsPartialForm());
+        Assert.True(topic.Require().IsPartialForm());
         Assert.Equal(
             fixture.DialogTopic.ToString(),
             Assert.Single(JsonDocument.Parse(quest.Body).RootElement.GetProperty("DialogTopics").EnumerateArray())

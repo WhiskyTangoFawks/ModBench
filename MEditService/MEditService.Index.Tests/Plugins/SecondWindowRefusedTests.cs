@@ -29,7 +29,7 @@ public sealed class SecondWindowRefusedTests
         // The file exists with real rows before the other window takes it, so the final load is warm.
         using (var earlier = MakeIndex(holder)) earlier.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         var indexPath = IndexFile.For(data.InstanceRoot);
-        var indexDir = Path.GetDirectoryName(indexPath)!;
+        var indexDir = PathShape.DirectoryOf(indexPath);
 
         using var otherWindow = ForeignIndexHolder.Hold(indexPath);
         var filesWhileHeld = Directory.GetFiles(indexDir).Select(Path.GetFileName).Order().ToList();
@@ -50,6 +50,7 @@ public sealed class SecondWindowRefusedTests
         otherWindow.Dispose();
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.NotEmpty(index.Store!.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
+        var store = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
+        Assert.NotEmpty(store.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
     }
 }

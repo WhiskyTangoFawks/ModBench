@@ -40,7 +40,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx, "TrackedMod");
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "TrackedMod").Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == "TrackedMod").Path);
 
         var response = await _client.PostAsJsonAsync("/plugins/track", new { origin = "TrackedMod", preset = "Edits" });
 
@@ -96,7 +96,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             .WithPlugin("Watched.esp", mod => npc = mod.Npcs.AddNew("WatchedNpc").FormKey, origin: "WatchedMod")
             .BuildScattered();
         await LoadOnly(fx, "WatchedMod");
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "WatchedMod").Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == "WatchedMod").Path);
         var key = new PluginCopyKey("Watched.esp", "WatchedMod");
 
         var response = await _client.PostAsJsonAsync("/plugins/track", new { origin = "WatchedMod", preset = "Edits" });
@@ -116,7 +116,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             .WithPlugin("Held.esp", mod => npc = mod.Npcs.AddNew("HeldNpc").FormKey, origin: "CreatedIntoMod")
             .BuildScattered();
         await LoadOnly(fx, "CreatedIntoMod");
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "CreatedIntoMod").Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == "CreatedIntoMod").Path);
         var key = new PluginCopyKey("Held.esp", "CreatedIntoMod");
 
         var response = await _client.PostAsJsonAsync(
@@ -136,9 +136,12 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             File.ReadAllText(document).Replace($"\"{editorId}\"", $"\"{renamed}\"", StringComparison.Ordinal));
     }
 
-    private string? EditorIdOf(FormKey formKey, PluginCopyKey plugin) =>
-        loaded.Services.GetRequiredService<IndexProjector>().Store!
-            .At(RecordRef.Effective).GetDocument(formKey.ToString(), plugin)?.EditorId;
+    private string? EditorIdOf(FormKey formKey, PluginCopyKey plugin)
+    {
+        var store = loaded.Services.GetRequiredService<IndexProjector>().Store
+            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+        return store.At(RecordRef.Effective).GetDocument(formKey.ToString(), plugin)?.EditorId;
+    }
 
     // Long enough for the settle window the edit opens, and the refresh behind it.
     private async Task<string?> EditorIdReaches(FormKey formKey, PluginCopyKey plugin, string editorId)

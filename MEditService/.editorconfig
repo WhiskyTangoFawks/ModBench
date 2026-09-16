@@ -399,6 +399,10 @@ dotnet_naming_style.s_camelcase.capitalization = camel_case
 [*.cs]
 dotnet_diagnostic.RS0030.severity = error
 
+# No built-in analyzer reads the null-forgiving operator; NX0001 does. No per-project or
+# per-folder exemption, held at error for production and test code alike.
+dotnet_diagnostic.NX0001.severity = error
+
 # The codec — the one box a record is a CLR object in.
 [MEditService.Codec/Serialization/**.cs]
 dotnet_diagnostic.RS0030.severity = none

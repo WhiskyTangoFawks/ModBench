@@ -86,20 +86,24 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void DeletingTheWinningOverride_PromotesTheNextPluginDown_AtEffectiveOnly()
     {
         using var index = LoadedIndex();
-        Assert.Equal("Winner.esp", index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
+        var initialWinner = index.At(RecordRef.Effective).GetDocument(_npc);
+        Assert.NotNull(initialWinner);
+        Assert.Equal("Winner.esp", initialWinner.Plugin.Name);
 
         // Winner.esp's copy is deleted in its working tree and Base.esm's must become the winner: a
         // winner is a fact about the stack that survives at this ref, not a stored flag that goes stale.
         index.ProjectDocuments(WinnerKey, [(_npc, null)]);
 
         var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc);
-        Assert.Equal("Base.esm", effectiveWinner!.Plugin.Name);
+        Assert.NotNull(effectiveWinner);
+        Assert.Equal("Base.esm", effectiveWinner.Plugin.Name);
         Assert.True(effectiveWinner.IsWinner);
 
         // At Head nothing was deleted, so Winner.esp still wins — and Base.esm's row, which is the
         // *same physical row* the Effective sweep just promoted, must not have leaked that promotion
         // into the committed answer.
-        var headStack = index.At(RecordRef.Head).GetOverrideStack(_npc)!;
+        var headStack = index.At(RecordRef.Head).GetOverrideStack(_npc);
+        Assert.NotNull(headStack);
         Assert.Equal(
             [("Base.esm", false), ("Winner.esp", true)],
             headStack.Entries.Select(e => (e.Plugin.Name, e.IsWinner)));
@@ -109,11 +113,16 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     public void RestoringADeletedOverride_MakesItTheEffectiveWinnerAgain_WithoutMovingHead()
     {
         using var index = LoadedIndex();
-        var winnersCopy = index.At(RecordRef.Effective).GetDocument(_npc, WinnerKey)!.Body!;
+        var winnersDocument = index.At(RecordRef.Effective).GetDocument(_npc, WinnerKey);
+        Assert.NotNull(winnersDocument);
+        var winnersCopy = winnersDocument.Body;
+        Assert.NotNull(winnersCopy);
 
         // Winner.esp's copy is deleted in its working tree, so Base.esm holds the field...
         index.ProjectDocuments(WinnerKey, [(_npc, null)]);
-        Assert.Equal("Base.esm", index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
+        var afterDeletion = index.At(RecordRef.Effective).GetDocument(_npc);
+        Assert.NotNull(afterDeletion);
+        Assert.Equal("Base.esm", afterDeletion.Plugin.Name);
 
         // ...and then the file comes back carrying a different value, the direction a create takes
         // too, so its appearance has to move winner status.
@@ -121,13 +130,15 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.NotEqual(winnersCopy, edited);
         index.ProjectDocuments(WinnerKey, [(_npc, edited)]);
 
-        var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc)!;
+        var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc);
+        Assert.NotNull(effectiveWinner);
         Assert.Equal("Winner.esp", effectiveWinner.Plugin.Name);
         Assert.True(effectiveWinner.IsWinner);
         Assert.Equal("RestoredByWorkingTree", effectiveWinner.EditorId);
 
         // Head never lost it, and must not have gained a second winner on the way through either.
-        var headStack = index.At(RecordRef.Head).GetOverrideStack(_npc)!;
+        var headStack = index.At(RecordRef.Head).GetOverrideStack(_npc);
+        Assert.NotNull(headStack);
         Assert.Equal(
             [("Base.esm", false), ("Winner.esp", true)],
             headStack.Entries.Select(e => (e.Plugin.Name, e.IsWinner)));
@@ -155,7 +166,10 @@ public sealed class WorkingTreeDeletionTests : IDisposable
         Assert.Contains(index.At(RecordRef.Effective).GetReferencedBy(_raceA), r => r.FormKey == _npc);
         Assert.DoesNotContain(index.At(RecordRef.Effective).GetReferencedBy(_raceB), r => r.FormKey == _npc);
 
-        var body = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey)!.Body!;
+        var npcDocument = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey);
+        Assert.NotNull(npcDocument);
+        var body = npcDocument.Body;
+        Assert.NotNull(body);
         Assert.Contains(_raceA, body, StringComparison.Ordinal); // the fixture really does carry the link being repointed
         index.ProjectDocuments(BaseKey, [(_npc, body.Replace(_raceA, _raceB, StringComparison.Ordinal))]);
 

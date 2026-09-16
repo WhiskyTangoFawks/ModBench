@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -38,7 +39,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
             .WithPlugin("Shared.esp", mod => questFk = ConfigureCopy(mod, "ModA"), origin: "ModA")
             .WithPlugin("Shared.esp", mod => ConfigureCopy(mod, "ModB"), origin: "ModB")
             .BuildScattered();
-        return (fx, questFk!);
+        return (fx, questFk ?? throw new InvalidOperationException("Expected ConfigureCopy to have captured the quest's FormKey."));
     }
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
@@ -69,11 +70,11 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
         var encodedFk = Uri.EscapeDataString(questFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/records/{encodedFk}/children?origin=ModB");
-        var namesB = modB.EnumerateArray().Select(c => c.GetProperty("editorId").GetString()!).ToArray();
+        var namesB = modB.EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray();
         Assert.Equal(["TopicModB", "BranchModB"], namesB);
 
         var omitted = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/records/{encodedFk}/children");
-        var namesOmitted = omitted.EnumerateArray().Select(c => c.GetProperty("editorId").GetString()!).ToArray();
+        var namesOmitted = omitted.EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray();
         Assert.Equal(["TopicModA", "BranchModA"], namesOmitted);
     }
 }

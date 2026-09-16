@@ -107,7 +107,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         List<FieldDiff>? children = null;
         if (shape.Fields is { } members) children = StructChildren(members, values, ctx);
-        else if (shape.ElementType != null) children = ArrayChildren(shape, label, values, ctx);
+        else if (shape.ElementType is { } shapeElement) children = ArrayChildren(shape, shapeElement, label, values, ctx);
 
         // Escalate is associative and commutative over {NoConflict, Override, Conflict} (Reduce
         // never produces the terminal states), so folding children equals reducing the whole
@@ -159,13 +159,12 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     // an element one plugin lacks is an absence at its key, not a shift. Keyed rows come out in key
     // order.
     private static List<FieldDiff>? ArrayChildren(
-        FieldMetadata array, string label, Dictionary<string, object?> values, DiffContext ctx)
+        FieldMetadata array, FieldMetadata element, string label, Dictionary<string, object?> values, DiffContext ctx)
     {
-        var element = array.ElementType!;
         Func<JsonElement, int, ElementKey?> keyOf;
         if (array.KeyMembers is { } keyMembers) keyOf = (e, _) => ElementKey.Of(e, keyMembers, element);
         // A non-string element (the JSON null of a never-set slot) is not a row.
-        else if (ComparesUnordered(array)) keyOf = (e, _) => e.ValueKind == JsonValueKind.String ? ElementKey.OfValue(e.GetString()!) : null;
+        else if (ComparesUnordered(array)) keyOf = (e, _) => e.ValueKind == JsonValueKind.String ? ElementKey.OfValue(DocumentNodes.StringValueOf(e)) : null;
         else keyOf = (_, index) => ElementKey.OfValue($"[{index}]");
 
         var byColumn = new Dictionary<string, Dictionary<string, object?>>(StringComparer.Ordinal);

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using MEditService.LoadOrder;
 
 namespace MEditService.Tests.TestSupport;
 
@@ -26,8 +27,9 @@ public sealed class ForeignIndexHolder : IDisposable
 
     public static ForeignIndexHolder Hold(string indexPath)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(indexPath)!);
-        var psi = new ProcessStartInfo(Python()!)
+        Directory.CreateDirectory(PathShape.DirectoryOf(indexPath));
+        var python = Python() ?? throw new InvalidOperationException("Expected python3 to be on PATH: check ForeignIndexHolder.Available first.");
+        var psi = new ProcessStartInfo(python)
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -38,7 +40,8 @@ public sealed class ForeignIndexHolder : IDisposable
         psi.ArgumentList.Add(Script);
         psi.ArgumentList.Add(NativeLibrary());
         psi.ArgumentList.Add(indexPath);
-        var process = Process.Start(psi)!;
+        var process = Process.Start(psi)
+            ?? throw new InvalidOperationException($"Expected 'python3' to start a process for {indexPath}.");
         // Bounded: a python that neither answers nor exits (a wedged native load) must fail the test
         // with a diagnosis, not hang the suite.
         var answer = Task.Run(process.StandardOutput.ReadLine);

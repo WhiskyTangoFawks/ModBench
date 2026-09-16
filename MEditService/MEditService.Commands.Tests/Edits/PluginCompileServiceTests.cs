@@ -1,5 +1,6 @@
 using MEditService.Commands.Edits;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -39,7 +40,7 @@ public sealed class PluginCompileServiceTests : IDisposable
     private List<string> NpcFiles() =>
         [.. Directory.GetFiles(Path.Combine(_mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName), "Npcs"))
             .Select(Path.GetFileName)
-            .Select(n => n!)
+            .Select(n => n.Require())
             .Order(StringComparer.Ordinal)];
 
     [Fact]

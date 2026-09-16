@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -115,7 +116,7 @@ internal static class PluginTrees
         foreach (var file in files)
         {
             var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
             await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
         }
         return Path.Combine(baseDirectory, SharedDirectoryOf(files));

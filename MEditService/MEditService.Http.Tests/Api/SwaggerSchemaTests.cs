@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
@@ -190,7 +191,7 @@ public sealed class SwaggerSchemaTests
         Assert.True(schema.TryGetProperty("required", out var required), $"{schemaName} declares no `required` at all.");
         Assert.Equal(
             expectedRequired.ToHashSet(),
-            required.EnumerateArray().Select(e => e.GetString()!).ToHashSet());
+            required.EnumerateArray().Select(DocumentNodes.StringValueOf).ToHashSet());
     }
 
     // A property can be required and nullable, which openapi-typescript renders `string | null`,

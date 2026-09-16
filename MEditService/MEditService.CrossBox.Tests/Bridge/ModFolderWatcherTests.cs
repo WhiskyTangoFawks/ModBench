@@ -298,7 +298,9 @@ public sealed class ModFolderWatcherTests
         File.WriteAllText(Path.Combine(sourceRoot, "record.json"), Guid.NewGuid().ToString());
 
     private static IReadOnlyList<string> ValidatedIn(RecordingRefreshIndex index, int scope) =>
-        [.. index.Of("validate").Where(p => p.Scope == scope).Select(p => p.Plugin!.Value.Name).Order(StringComparer.Ordinal)];
+        [.. index.Of("validate").Where(p => p.Scope == scope)
+            .Select(p => (p.Plugin ?? throw new InvalidOperationException("Expected a validate record to carry its Plugin.")).Name)
+            .Order(StringComparer.Ordinal)];
 
     private static int Scopes(RecordingRefreshIndex index) => index.Of("projection").Count;
 
@@ -422,7 +424,9 @@ public sealed class ModFolderWatcherTests
             WaitUntil(() => index.Of("refresh").Count > 0, TimeSpan.FromSeconds(3));
 
             var refreshed = Assert.Single(index.Of("refresh"));
-            Assert.Equal("A.esp", refreshed.Plugin!.Value.Name);
+            var refreshedPlugin = refreshed.Plugin
+                ?? throw new InvalidOperationException("Expected the refresh record to carry its Plugin.");
+            Assert.Equal("A.esp", refreshedPlugin.Name);
             Assert.Equal(["000800:A.esp"], refreshed.Keys);
             Assert.Empty(index.Of("validate"));
         }

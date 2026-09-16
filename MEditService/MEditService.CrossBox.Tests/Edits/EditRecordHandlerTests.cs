@@ -37,7 +37,9 @@ public sealed class EditRecordHandlerTests : IDisposable
         Assert.True(File.Exists(moved));
         Assert.DoesNotContain("[", Path.GetFileName(newRelative), StringComparison.Ordinal);
         Assert.Contains("\"EditorID\": \"RenamedNpc\"", File.ReadAllText(moved), StringComparison.Ordinal);
-        Assert.Equal("RenamedNpc", _mod.Document(_mod.Npc.ToString())!.EditorId);
+        var document = _mod.Document(_mod.Npc.ToString());
+        Assert.NotNull(document);
+        Assert.Equal("RenamedNpc", document.EditorId);
     }
 
     [Fact]

@@ -415,7 +415,7 @@ public sealed partial class SourceRepository
             var byChild = new Dictionary<string, OwnerDocument>(StringComparer.Ordinal);
             if (!Directory.Exists(sourceRoot)) return byChild;
 
-            var modFolder = Path.GetDirectoryName(Path.GetDirectoryName(sourceRoot))!;
+            var modFolder = PathShape.DirectoryOf(PathShape.DirectoryOf(sourceRoot));
             foreach (var documentPath in Directory.EnumerateFiles(sourceRoot, "*.json", SearchOption.AllDirectories))
             {
                 if (CarriesNoRecord(documentPath)) continue;
@@ -479,7 +479,9 @@ public sealed partial class SourceRepository
                         OpenedAt(openedBy, reader.CurrentDepth, pendingMember);
                         break;
                     case JsonTokenType.String when atFormKey:
-                        found.Add((reader.GetString()!, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth)));
+                        var formKey = reader.GetString()
+                            ?? throw new InvalidOperationException("Expected a JSON string value to read a non-null string.");
+                        found.Add((formKey, keyDepth == 1, UnderAnEmbedSlot(openedBy, keyDepth)));
                         break;
                 }
                 atFormKey = false;

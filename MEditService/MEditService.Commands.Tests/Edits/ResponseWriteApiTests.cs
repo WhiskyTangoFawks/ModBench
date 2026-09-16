@@ -27,9 +27,9 @@ public sealed class ResponseWriteApiTests : IDisposable
     // The topic document's own Responses array, in document order — the only order a response has.
     private IReadOnlyList<string> ResponseFormKeys()
     {
-        using var topic = JsonDocument.Parse(_fixture.Document(_fixture.DialogTopic.ToString())!.Body);
+        using var topic = JsonDocument.Parse(_fixture.Document(_fixture.DialogTopic.ToString()).Require().Body);
         return [.. topic.RootElement.GetProperty("Responses").EnumerateArray()
-            .Select(response => response.GetProperty("FormKey").GetString()!)];
+            .Select(response => response.GetProperty("FormKey").GetString().Require())];
     }
 
     private IReadOnlyList<string> CompiledResponseEditorIds()
@@ -43,7 +43,7 @@ public sealed class ResponseWriteApiTests : IDisposable
             GameRelease.Fallout4);
         return [.. ((IFallout4ModGetter)overlay).Quests.Single(q => q.FormKey == _fixture.Quest)
             .DialogTopics.Single(t => t.FormKey == _fixture.DialogTopic)
-            .Responses.Select(r => r.EditorID!)];
+            .Responses.Select(r => r.EditorID.Require())];
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public sealed class ResponseWriteApiTests : IDisposable
         var changed = Assert.Single(_fixture.GitStatus());
         Assert.EndsWith(Path.GetFileName(TopicFile), changed, StringComparison.Ordinal);
 
-        Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString())!.EditorId);
+        Assert.Equal("RenamedResponse", _fixture.Document(_fixture.Response.ToString()).Require().EditorId);
         Assert.Equal(["RenamedResponse", ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
     }
 
@@ -91,11 +91,11 @@ public sealed class ResponseWriteApiTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var after = File.ReadAllText(TopicFile);
-        Assert.Contains(result.NewFormKey!, after, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey.Require(), after, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.Response.ToString(), after, StringComparison.Ordinal);
         Assert.Equal([Path.GetFileName(TopicFile)], _fixture.GitStatus().Select(Path.GetFileName));
 
-        Assert.Equal([result.NewFormKey!, _fixture.Response2.ToString()], ResponseFormKeys());
+        Assert.Equal([result.NewFormKey.Require(), _fixture.Response2.ToString()], ResponseFormKeys());
 
         Assert.Equal([ContainerModFixture.ResponseEditorId, ContainerModFixture.Response2EditorId], CompiledResponseEditorIds());
     }
@@ -104,14 +104,14 @@ public sealed class ResponseWriteApiTests : IDisposable
     public void ARefusedResponseEdit_LeavesTheTopicDocumentAndTheResponseItselfUntouched()
     {
         var before = File.ReadAllText(TopicFile);
-        var responseBefore = _fixture.Document(_fixture.Response.ToString())!.Body;
+        var responseBefore = _fixture.Document(_fixture.Response.ToString()).Require().Body;
 
         var result = EditService().Set(_fixture.Plugin, _fixture.Response.ToString(), "NoSuchField", Json("1"));
 
         Assert.False(result.Applied);
         Assert.Equal(before, File.ReadAllText(TopicFile));
         Assert.Empty(_fixture.GitStatus());
-        Assert.Equal(responseBefore, _fixture.Document(_fixture.Response.ToString())!.Body);
+        Assert.Equal(responseBefore, _fixture.Document(_fixture.Response.ToString()).Require().Body);
     }
 
     // The container rule's mint: the destination lacks the topic and the quest, so both land bare
@@ -125,10 +125,10 @@ public sealed class ResponseWriteApiTests : IDisposable
             fixture.SourcePlugin, fixture.Response1.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString())!.IsPartialForm());
+        Assert.True(fixture.Document(fixture.DestinationPlugin, fixture.Quest.ToString()).Require().IsPartialForm());
         var mintedTopic = fixture.Document(fixture.DestinationPlugin, fixture.DialogTopic.ToString());
         Assert.NotNull(mintedTopic);
-        Assert.True(mintedTopic!.IsPartialForm());
+        Assert.True(mintedTopic.IsPartialForm());
         Assert.Equal(
             fixture.Response1.ToString(),
             Assert.Single(JsonDocument.Parse(mintedTopic.Body).RootElement.GetProperty("Responses").EnumerateArray())

@@ -116,7 +116,9 @@ public sealed class SpatialParseFailurePrefixTests
 
         internal void MarkUnreadable(string formKey)
         {
-            using var cmd = ((DuckDbRecordIndex)_index.Store!).Connection.CreateCommand();
+            var store = _index.Store
+                ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+            using var cmd = ((DuckDbRecordIndex)store).Connection.CreateCommand();
             cmd.CommandText = "UPDATE mirror.records SET parse_diagnosis = 'could not be read' WHERE form_key = $1";
             cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
             cmd.ExecuteNonQuery();

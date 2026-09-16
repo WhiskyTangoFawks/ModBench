@@ -6,6 +6,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
@@ -57,15 +58,15 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
     // ref, so LIMIT/OFFSET pages silently skip and repeat rows.
     private List<string> AllFormKeys(IndexProjector index) =>
-        [.. index.Store!.At(RecordRef.Effective)
+        [.. index.Store.Require().At(RecordRef.Effective)
             .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
             .Items.Select(i => i.FormKey)];
 
     private int CountOf(IndexProjector index, string recordType) =>
-        index.Store!.At(RecordRef.Effective).GetRecordTypeCounts(fixture.Plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
+        index.Store.Require().At(RecordRef.Effective).GetRecordTypeCounts(fixture.Plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
 
     private Dictionary<string, RecordDocument> DocumentsByFormKey(IndexProjector index) =>
-        index.Store!.At(RecordRef.Effective).GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
+        index.Store.Require().At(RecordRef.Effective).GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
 
     [Fact]
     public void EveryRecordsDocument_IsByteIdentical_ExceptOnePinnedOverlayVsDeepParseCellDivergence()
@@ -91,8 +92,10 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
         // ...and pinned to the *field*, so another Cell field starting to diverge cannot hide behind
         // the same count.
-        var binaryBody = binaryDocuments[mismatched[0]].Body!;
-        var sourceBody = sourceDocuments[mismatched[0]].Body!;
+        var binaryBody = binaryDocuments[mismatched[0]].Body
+            ?? throw new InvalidOperationException("Expected the binary-path document to carry a body.");
+        var sourceBody = sourceDocuments[mismatched[0]].Body
+            ?? throw new InvalidOperationException("Expected the source-path document to carry a body.");
         Assert.Contains("\"Break2\"", binaryBody, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Break2\"", sourceBody, StringComparison.Ordinal);
         Assert.Equal(
@@ -105,8 +108,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(CutDownPluginFixture.PluginFileName));
 
-        var binary = fixture.FromBinary.Store!.At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
-        var source = fixture.FromSource.Store!.At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
+        var binary = fixture.FromBinary.Store.Require().At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
+        var source = fixture.FromSource.Store.Require().At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
 
         Assert.NotNull(binary);
         Assert.NotNull(source);
@@ -126,12 +129,14 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         // is VARCHAR, so this is the only comparison here that is genuinely about bytes.
         var headerFile = Path.Combine(fixture.ModFolder, "source", CutDownPluginFixture.PluginFileName, "RecordData.json");
         Assert.True(File.Exists(headerFile), $"expected the tracked tree to hold {headerFile}");
-        Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(source.Body!));
+        var sourceBody = source.Body
+            ?? throw new InvalidOperationException("Expected the source header document to carry a body.");
+        Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(sourceBody));
     }
 
     private static string ContentHashOf(IndexProjector index, string formKey)
     {
-        using var cmd = ((DuckDbRecordIndex)index.Store!).Connection.CreateCommand();
+        using var cmd = ((DuckDbRecordIndex)index.Store.Require()).Connection.CreateCommand();
         cmd.CommandText = "SELECT content_hash FROM records WHERE form_key = $1";
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         return Assert.IsType<string>(cmd.ExecuteScalar());
@@ -184,7 +189,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
     private List<string> Rows(IndexProjector index, string table, string pluginColumn, string originColumn)
     {
-        using var cmd = ((DuckDbRecordIndex)index.Store!).Connection.CreateCommand();
+        using var cmd = ((DuckDbRecordIndex)index.Store.Require()).Connection.CreateCommand();
         cmd.CommandText = $"SELECT * FROM {table} WHERE {pluginColumn} = $1 AND {originColumn} = $2 ORDER BY ALL";
         cmd.Parameters.Add(new DuckDBParameter { Value = fixture.Plugin.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = fixture.Plugin.Origin });

@@ -1,5 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -29,6 +30,9 @@ public sealed class IndexAfterARenumberTests
         return index;
     }
 
+    private static string RequireNewFormKey(RecordEditResult result) =>
+        result.NewFormKey ?? throw new InvalidOperationException("Expected a successful renumber to set NewFormKey.");
+
     [Fact]
     public void ARenumberedRecord_IsGoneAtEffective_StillAtHead_AndItsNewKeyIsAbsentAtHead()
     {
@@ -40,10 +44,11 @@ public sealed class IndexAfterARenumberTests
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, oldFormKey);
         Assert.True(result.Applied, result.Message);
 
+        var newFormKey = RequireNewFormKey(result);
         Assert.Null(index.Projected().GetDocument(oldFormKey, two.TargetPlugin));
         Assert.NotNull(index.Projected(RecordRef.Head).GetDocument(oldFormKey, two.TargetPlugin));
-        Assert.NotNull(index.Projected().GetDocument(result.NewFormKey!, two.TargetPlugin));
-        Assert.Null(index.Projected(RecordRef.Head).GetDocument(result.NewFormKey!, two.TargetPlugin));
+        Assert.NotNull(index.Projected().GetDocument(newFormKey, two.TargetPlugin));
+        Assert.Null(index.Projected(RecordRef.Head).GetDocument(newFormKey, two.TargetPlugin));
     }
 
     // A row under a brand-new FormKey the filter's one-shot snapshot never evaluated, with the old
@@ -77,7 +82,8 @@ public sealed class IndexAfterARenumberTests
         Assert.True(result.Applied, result.Message);
 
         var reads = index.Projected();
-        Assert.Contains(reads.GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
+        var newFormKey = RequireNewFormKey(result);
+        Assert.Contains(reads.GetReferencedBy(newFormKey), r => r.FormKey == two.ReferencerNpc.ToString());
         Assert.Empty(reads.GetReferencedBy(two.TargetRace.ToString()));
     }
 
@@ -95,8 +101,9 @@ public sealed class IndexAfterARenumberTests
         Assert.True(result.Applied, result.Message);
 
         var reads = index.SettledReads();
+        var newFormKey = RequireNewFormKey(result);
         Assert.Null(reads.GetDocument(oldFormKey));
-        Assert.NotNull(reads.GetDocument(result.NewFormKey!));
+        Assert.NotNull(reads.GetDocument(newFormKey));
         var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: 50, Offset: 0));
         Assert.DoesNotContain(listing.Items, r => r.FormKey == oldFormKey);
         Assert.Contains(listing.Items, r => r.FormKey == result.NewFormKey);
@@ -143,9 +150,10 @@ public sealed class IndexAfterARenumberTests
         // The referencer's rewrite came back off disk and its rows were re-derived from the restored
         // file, so the filter matches nothing, exactly as it did before the gesture ran.
         Assert.Equal(0, index.SettledReads().Search(query).Total);
-        var referencer = index.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
-        Assert.Contains(two.TargetRace.ToString(), referencer.Body!, StringComparison.Ordinal);
-        Assert.DoesNotContain(requestedTarget, referencer.Body!, StringComparison.Ordinal);
+        var referencer = index.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin).Require();
+        var referencerBody = referencer.Body.Require();
+        Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);
+        Assert.DoesNotContain(requestedTarget, referencerBody, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -186,9 +194,9 @@ public sealed class IndexAfterARenumberTests
         var newWorldspace = new RecordIdentity(newWorldspaceFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId);
         repository.Put(fixture.Plugin, new SourceDocument(
             newWorldspaceFormKey, "wrld", SourceContainerFixture.WorldspaceEditorId, "{}"));
-        var relocated = Path.GetDirectoryName(SourceDocumentPath.Of(
+        var relocated = PathShape.DirectoryOf(SourceDocumentPath.Of(
             fixture.ModFolder, fixture.Plugin.Name, "wrld", newWorldspaceFormKey,
-            SourceContainerFixture.WorldspaceEditorId, GameRelease.Fallout4))!;
+            SourceContainerFixture.WorldspaceEditorId, GameRelease.Fallout4));
         repository.Remove(fixture.Plugin, newWorldspace);
         Directory.CreateDirectory(relocated);
         File.WriteAllText(Path.Combine(relocated, "occupied.txt"), "something else is here");
@@ -210,7 +218,8 @@ public sealed class IndexAfterARenumberTests
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
             "chmod", ["-R", mode, path])
-        { RedirectStandardError = true })!;
+        { RedirectStandardError = true })
+            ?? throw new InvalidOperationException($"Expected chmod {mode} {path} to start a process.");
         process.WaitForExit();
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");

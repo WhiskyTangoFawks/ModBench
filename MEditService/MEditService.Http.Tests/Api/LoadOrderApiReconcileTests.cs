@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -38,7 +39,7 @@ public sealed class LoadOrderApiReconcileTests(LoadedApiFixture<TestPluginFixtur
         Assert.True((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
 
         var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
-        var byName = plugins.EnumerateArray().ToDictionary(p => p.GetProperty("name").GetString()!);
+        var byName = plugins.EnumerateArray().ToDictionary(p => DocumentNodes.StringValueOf(p.GetProperty("name")));
         Assert.True(byName["Participating.esp"].GetProperty("participates").GetBoolean());
         Assert.False(byName["Dormant.esp"].GetProperty("participates").GetBoolean());
         Assert.False(byName["Dormant.esp"].GetProperty("enabled").GetBoolean());

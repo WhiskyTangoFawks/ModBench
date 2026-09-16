@@ -208,7 +208,7 @@ public static class ModelIdentity
                 }
                 return aItems.Zip(bItems, (x, y) => JsonModelEquals(x, y, propertyName)).All(equal => equal);
             case System.Text.Json.JsonValueKind.String:
-                return NormalizeNegativeZeros(a.GetString()!) == NormalizeNegativeZeros(b.GetString()!);
+                return NormalizeNegativeZeros(DocumentNodes.StringValueOf(a)) == NormalizeNegativeZeros(DocumentNodes.StringValueOf(b));
             case System.Text.Json.JsonValueKind.Number:
                 // Only zero's spellings are tolerated (-0 vs 0) — a general numeric comparison
                 // would silently forgive genuinely different large integers that collapse to one
@@ -358,7 +358,8 @@ public static class ModelIdentity
             if (!valueType.IsGenericType || valueType.Name != "MaskItem`2") continue;
 
             // Loqui.MaskItem declares Overall/Specific as public fields; GetMemberValue finds either shape.
-            var overall = (bool)GetMemberValue(value, valueType, "Overall")!;
+            var overall = (bool)(GetMemberValue(value, valueType, "Overall")
+                ?? throw new InvalidOperationException($"Expected '{valueType.Name}' to declare 'Overall'."));
             if (overall) continue;
 
             var specific = GetMemberValue(value, valueType, "Specific");
@@ -392,7 +393,8 @@ public static class ModelIdentity
                 return;
             }
 
-            var itemOverall = (bool)GetMemberValue(item, itemType, "Overall")!;
+            var itemOverall = (bool)(GetMemberValue(item, itemType, "Overall")
+                ?? throw new InvalidOperationException($"Expected '{itemType.Name}' to declare 'Overall'."));
             if (itemOverall) continue;
 
             var itemSpecific = GetMemberValue(item, itemType, "Specific");

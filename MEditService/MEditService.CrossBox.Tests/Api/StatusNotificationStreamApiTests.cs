@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -165,9 +166,10 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
-        var modFolder = Path.GetDirectoryName(pluginPath)!;
+        var modFolder = PathShape.DirectoryOf(pluginPath);
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-        var formKey = records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
+        var formKey = records.GetProperty("items")[0].GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException("Expected the first npc_ record to carry a formKey.");
         var sourceFile = Directory
             .EnumerateFiles(Path.Combine(modFolder, "source", Plugin), "*.json", SearchOption.AllDirectories)
             .Single(f => !Path.GetFileName(f).StartsWith("RecordData", StringComparison.Ordinal)
@@ -192,7 +194,8 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", "hand edit committed outside Modbench");
         var afterCommit = await _client.GetFromJsonAsync<SequenceAwaitResponse>(
             $"/load-order/sequence/await?atLeast={beforeCommit + 1}&timeoutMs=10000");
-        Assert.True(afterCommit!.Reached, "the commit's ref move never landed a fresh projection");
+        Assert.NotNull(afterCommit);
+        Assert.True(afterCommit.Reached, "the commit's ref move never landed a fresh projection");
 
         // A plugin overwrite reaches the classifier's external-change route, as it does today.
         var changedPlugin = new Fallout4Mod(ModKey.FromFileName(Plugin), Fallout4Release.Fallout4);
@@ -212,7 +215,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
     {
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.First(p => p.Origin == Origin).Path);
         File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
 
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Everything" }))
@@ -235,7 +238,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
     {
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.First(p => p.Origin == Origin).Path);
         File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
 
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
@@ -253,7 +256,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
     {
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.First(p => p.Origin == Origin).Path);
         File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n");
 
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
@@ -272,7 +275,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
         var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
-        var modFolder = Path.GetDirectoryName(pluginPath)!;
+        var modFolder = PathShape.DirectoryOf(pluginPath);
         File.WriteAllText(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n");
 
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" }))
@@ -300,7 +303,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
         var pluginPath = fx.Plugins.First(p => p.Origin == Origin).Path;
-        var modFolder = Path.GetDirectoryName(pluginPath)!;
+        var modFolder = PathShape.DirectoryOf(pluginPath);
         var assetNames = Enumerable.Range(0, 20).Select(i => $"asset{i:D2}.dds").ToList();
         foreach (var name in assetNames) File.WriteAllText(Path.Combine(modFolder, name), "original");
 
@@ -328,7 +331,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
     {
         using var fx = BuildOneModOnePlugin();
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var modFolder = Path.GetDirectoryName(fx.Plugins.First(p => p.Origin == Origin).Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.First(p => p.Origin == Origin).Path);
         File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "original");
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Everything" }))
             .EnsureSuccessStatusCode();

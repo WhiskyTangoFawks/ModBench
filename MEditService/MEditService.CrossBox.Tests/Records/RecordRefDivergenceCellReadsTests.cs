@@ -14,13 +14,13 @@ public sealed class RecordRefDivergenceCellReadsTests
     {
         using var fixture = new IndexedContainerFixture();
         fixture.Index.Settle();
-        var index = fixture.Index.Store!;
-        var before = index.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.Plugin)!;
+        var index = fixture.Index.Store.Require();
+        var before = index.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.Plugin).Require();
 
         index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.TopCell.ToString(),
-              before.Body!.Replace(ContainerModFixture.TopCellEditorId, "RenamedTopCell", StringComparison.Ordinal))]);
+              before.Body.Require().Replace(ContainerModFixture.TopCellEditorId, "RenamedTopCell", StringComparison.Ordinal))]);
 
         var effective = index.At(RecordRef.Effective).GetWorldspaceCells(fixture.Plugin, fixture.Worldspace.ToString())
             .Single(c => c.FormKey == fixture.TopCell.ToString());
@@ -36,13 +36,13 @@ public sealed class RecordRefDivergenceCellReadsTests
     {
         using var fixture = new IndexedContainerFixture();
         fixture.Index.Settle();
-        var index = fixture.Index.Store!;
-        var before = index.At(RecordRef.Effective).GetDocument(fixture.Cell.ToString(), fixture.Plugin)!;
+        var index = fixture.Index.Store.Require();
+        var before = index.At(RecordRef.Effective).GetDocument(fixture.Cell.ToString(), fixture.Plugin).Require();
 
         index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.Cell.ToString(),
-              before.Body!.Replace(ContainerModFixture.CellEditorId, "RenamedCell", StringComparison.Ordinal))]);
+              before.Body.Require().Replace(ContainerModFixture.CellEditorId, "RenamedCell", StringComparison.Ordinal))]);
 
         var effective = index.At(RecordRef.Effective).GetInteriorCells(fixture.Plugin, 50, 0).Items
             .Single(c => c.FormKey == fixture.Cell.ToString());
@@ -58,13 +58,13 @@ public sealed class RecordRefDivergenceCellReadsTests
     {
         using var fixture = new IndexedContainerFixture();
         fixture.Index.Settle();
-        var index = fixture.Index.Store!;
-        var before = index.At(RecordRef.Effective).GetDocument(fixture.TemporaryRef.ToString(), fixture.Plugin)!;
+        var index = fixture.Index.Store.Require();
+        var before = index.At(RecordRef.Effective).GetDocument(fixture.TemporaryRef.ToString(), fixture.Plugin).Require();
 
         index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.TemporaryRef.ToString(),
-              before.Body!.Replace(ContainerModFixture.TemporaryRefEditorId, "RenamedTempRef", StringComparison.Ordinal))]);
+              before.Body.Require().Replace(ContainerModFixture.TemporaryRefEditorId, "RenamedTempRef", StringComparison.Ordinal))]);
 
         var effective = index.At(RecordRef.Effective).GetCellReferences(fixture.Plugin, fixture.EmbedCell.ToString())
             .Temporary.Single(p => p.FormKey == fixture.TemporaryRef.ToString());

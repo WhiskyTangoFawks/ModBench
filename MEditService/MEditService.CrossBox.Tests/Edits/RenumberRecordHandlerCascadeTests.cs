@@ -52,7 +52,9 @@ public sealed class RenumberRecordHandlerCascadeTests
         var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
-        var moved = fixture.Document(result.NewFormKey!)!;
+        Assert.NotNull(result.NewFormKey);
+        var moved = fixture.Document(result.NewFormKey);
+        Assert.NotNull(moved);
 
         // The Name field says the old FormKey and always did — it is text, not a link, and nothing
         // in this gesture has any business touching it.
@@ -72,8 +74,10 @@ public sealed class RenumberRecordHandlerCascadeTests
         var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
-        var referencer = fixture.Document(fixture.Referencer.ToString())!;
-        Assert.Contains(result.NewFormKey!, referencer.Body, StringComparison.Ordinal);
+        var referencer = fixture.Document(fixture.Referencer.ToString());
+        Assert.NotNull(referencer);
+        Assert.NotNull(result.NewFormKey);
+        Assert.Contains(result.NewFormKey, referencer.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(oldFormKey, referencer.Body, StringComparison.Ordinal);
     }
 
@@ -92,8 +96,9 @@ public sealed class RenumberRecordHandlerCascadeTests
         var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
         var rewritten = File.ReadAllText(referencerFile);
-        Assert.Contains(result.NewFormKey!, rewritten, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey, rewritten, StringComparison.Ordinal);
         Assert.DoesNotContain(oldFormKey, rewritten, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -133,8 +138,9 @@ public sealed class RenumberRecordHandlerCascadeTests
         var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.Target.ToString());
 
         Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
         var surviving = File.ReadAllText(survivingFile);
-        Assert.Contains(result.NewFormKey!, surviving, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey, surviving, StringComparison.Ordinal);
         Assert.DoesNotContain(fixture.Target.ToString(), surviving, StringComparison.Ordinal);
     }
 }

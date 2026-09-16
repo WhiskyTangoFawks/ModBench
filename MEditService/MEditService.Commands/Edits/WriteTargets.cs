@@ -37,7 +37,9 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseIfBlocked(plugin, out _, out var repository) is { } blocked) return blocked;
+        if (RefuseIfBlocked(plugin, out _, out var openedRepository) is { } blocked) return blocked;
+        var repository = openedRepository
+            ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         RecordIdentity? found;
@@ -88,8 +90,10 @@ internal sealed class WriteTargets(
     {
         target = default;
 
-        if (RefuseIfBlocked(destinationPlugin, out _, out var destinationRepository)
+        if (RefuseIfBlocked(destinationPlugin, out _, out var openedDestinationRepository)
             is { } blocked) return blocked;
+        var destinationRepository = openedDestinationRepository
+            ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
 
         var release = loadOrder.Current.GameRelease;
         var source = new CopySource(sourcePlugin, loadOrder.Current, adapter, codec, schemaReflector);
@@ -126,10 +130,10 @@ internal sealed class WriteTargets(
     // INVARIANT: every write gesture — the six record gestures and compile — enters here first, and
     // this is the only place the deferral refusal is raised. A write that bypasses it is not refused
     // while a question is unanswered.
-    internal RecordEditResult? RefuseIfBlocked(PluginCopyKey plugin, out string modFolder, out SourceRepository repository)
+    internal RecordEditResult? RefuseIfBlocked(PluginCopyKey plugin, out string modFolder, out SourceRepository? repository)
     {
         modFolder = "";
-        repository = null!;
+        repository = null;
 
         if (loadOrder.Current.ModFolderOf(plugin) is not { } folder) return RefuseUntracked(plugin);
         if (SourceRepository.Open(folder, loadOrder.Current.GameRelease) is not { } opened) return RefuseUntracked(plugin);

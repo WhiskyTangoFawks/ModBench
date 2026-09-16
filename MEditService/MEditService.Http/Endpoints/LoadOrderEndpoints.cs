@@ -133,13 +133,18 @@ public static class LoadOrderEndpoints
 
         // Every registration fact is Mod Management's to state, never defaulted here: a missing
         // bool silently bound to false would make every copy non-participating.
-        if (req.Plugins?.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin) || p.Enabled is null || p.Winning is null) != false)
+        if (req.Plugins is not { } plugins
+            || plugins.Any(p => string.IsNullOrEmpty(p.Name) || string.IsNullOrEmpty(p.Path) || string.IsNullOrEmpty(p.Origin) || p.Enabled is null || p.Winning is null))
+        {
             return Results.Problem("Each plugin entry must have a non-empty Name, Path, and Origin, and must state Enabled and Winning.", statusCode: 400);
+        }
 
         try
         {
-            var entries = req.Plugins
-                .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot, p.Enabled!.Value, p.Winning!.Value))
+            var entries = plugins
+                .Select(p => new LoadOrderEntry(p.Name, p.Path, p.Origin, p.Slot,
+                    p.Enabled ?? throw new InvalidOperationException("Expected a validated plugin to state Enabled."),
+                    p.Winning ?? throw new InvalidOperationException("Expected a validated plugin to state Winning.")))
                 .ToList();
             var snapshot = ForcedPlugins.Snapshot(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
             var result = handler.Put(snapshot);

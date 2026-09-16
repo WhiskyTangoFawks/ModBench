@@ -82,8 +82,10 @@ public sealed class SourceTreeDocumentsTests : IDisposable
     public void AChildInASingleValueSlot_IsTheSameBytesTheRepositorysGetAnswers()
     {
         var landscape = _fixture.Landscape.ToString();
+        var document = _fixture.Document(landscape)
+            ?? throw new InvalidOperationException("Expected the landscape to have a source document.");
 
-        Assert.Equal(_fixture.Document(landscape)!.Body, Documents()[landscape].Text);
+        Assert.Equal(document.Body, Documents()[landscape].Text);
     }
 
     [Fact]

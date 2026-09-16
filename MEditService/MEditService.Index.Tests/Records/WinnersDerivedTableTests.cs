@@ -117,13 +117,17 @@ public sealed class WinnersDerivedTableTests : IDisposable
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
         Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE plugin = '{OverKey.Name}'"));
-        Assert.Equal(BaseKey.Name, index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
+        var disabledWinner = index.At(RecordRef.Effective).GetDocument(_npc);
+        Assert.NotNull(disabledWinner);
+        Assert.Equal(BaseKey.Name, disabledWinner.Plugin.Name);
 
         index.Register(OverKey, Registration.Participating(1));
         index.UpdateWinners();
 
         Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
-        Assert.Equal(OverKey.Name, index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
+        var reEnabledWinner = index.At(RecordRef.Effective).GetDocument(_npc);
+        Assert.NotNull(reEnabledWinner);
+        Assert.Equal(OverKey.Name, reEnabledWinner.Plugin.Name);
     }
 
     [Fact]
@@ -144,7 +148,10 @@ public sealed class WinnersDerivedTableTests : IDisposable
     public void SeedCommittedOnly_GivesTheRecordItAddsAtHead_AWinnerThere()
     {
         using var index = LoadedIndex();
-        var baseBody = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey)!.Body!;
+        var baseDocument = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey);
+        Assert.NotNull(baseDocument);
+        var baseBody = baseDocument.Body;
+        Assert.NotNull(baseBody);
 
         // Both plugins' copies vanish from the working tree and turn out to be held by no commit
         // either, so nothing holds the NPC at either ref...
@@ -160,7 +167,9 @@ public sealed class WinnersDerivedTableTests : IDisposable
         index.SeedCommittedOnly(BaseKey, [(_npc, "npc_", baseBody)]);
 
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
-        Assert.Equal(BaseKey.Name, index.At(RecordRef.Head).GetDocument(_npc)!.Plugin.Name);
+        var headWinner = index.At(RecordRef.Head).GetDocument(_npc);
+        Assert.NotNull(headWinner);
+        Assert.Equal(BaseKey.Name, headWinner.Plugin.Name);
         Assert.Null(WinnerOf(index, RecordRef.Effective, _npc));
     }
 
@@ -174,10 +183,14 @@ public sealed class WinnersDerivedTableTests : IDisposable
         index.MarkWorkingTreeOnly(OverKey, [_npc]);
 
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
-        Assert.Equal(BaseKey.Name, index.At(RecordRef.Head).GetDocument(_npc)!.Plugin.Name);
+        var headWinner = index.At(RecordRef.Head).GetDocument(_npc);
+        Assert.NotNull(headWinner);
+        Assert.Equal(BaseKey.Name, headWinner.Plugin.Name);
 
         // Effective never changed: Over.esp still holds the field the editor shows.
         Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
-        Assert.Equal(OverKey.Name, index.At(RecordRef.Effective).GetDocument(_npc)!.Plugin.Name);
+        var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc);
+        Assert.NotNull(effectiveWinner);
+        Assert.Equal(OverKey.Name, effectiveWinner.Plugin.Name);
     }
 }

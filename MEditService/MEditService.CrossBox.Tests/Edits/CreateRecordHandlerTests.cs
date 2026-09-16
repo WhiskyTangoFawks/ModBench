@@ -19,11 +19,14 @@ public sealed class CreateRecordHandlerTests
         using var mod = SourceEditFixture.Tracked();
         var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
         Assert.True(created.Applied, created.Message);
+        Assert.NotNull(created.NewFormKey);
+        var newFormKey = created.NewFormKey;
 
-        var result = mod.EditHandler.Set(mod.Plugin, created.NewFormKey!, "EditorID", Json("\"RenamedNpc\""));
+        var result = mod.EditHandler.Set(mod.Plugin, newFormKey, "EditorID", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
-        var document = mod.Document(created.NewFormKey!)!;
+        var document = mod.Document(newFormKey);
+        Assert.NotNull(document);
         Assert.Equal("RenamedNpc", document.EditorId);
         Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
     }
@@ -37,12 +40,15 @@ public sealed class CreateRecordHandlerTests
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
-        Assert.EndsWith(":" + SourceEditFixture.PluginName, result.NewFormKey, StringComparison.Ordinal);
+        var newFormKey = result.NewFormKey;
+        Assert.EndsWith(":" + SourceEditFixture.PluginName, newFormKey, StringComparison.Ordinal);
 
         var sourceFile = Path.Combine(mod.ModFolder, mod.RelativeSourcePath(
-            FormKey.Factory(result.NewFormKey!), "npc_", "BrandNewNpc"));
+            FormKey.Factory(newFormKey), "npc_", "BrandNewNpc"));
         Assert.True(File.Exists(sourceFile));
-        Assert.Equal("BrandNewNpc", mod.Document(result.NewFormKey!)!.EditorId);
+        var document = mod.Document(newFormKey);
+        Assert.NotNull(document);
+        Assert.Equal("BrandNewNpc", document.EditorId);
     }
 
     [Fact]
@@ -58,9 +64,8 @@ public sealed class CreateRecordHandlerTests
 
         var npcsDir = Path.Combine(mod.ModFolder, SourceRepository.RootFor(SourceEditFixture.PluginName), "Npcs");
         var names = Directory.GetFiles(npcsDir)
-            .Select(Path.GetFileName)
+            .Select(f => Path.GetFileName(f) ?? throw new InvalidOperationException("Expected a file path to have a file name."))
             .Where(n => !string.Equals(n, "GroupRecordData.json", StringComparison.Ordinal))
-            .Select(n => n!)
             .Order(StringComparer.Ordinal)
             .ToList();
 
@@ -78,7 +83,8 @@ public sealed class CreateRecordHandlerTests
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
-        Assert.Null(mod.CommittedDocument(result.NewFormKey!, "npc_", "BrandNewNpc"));
+        Assert.NotNull(result.NewFormKey);
+        Assert.Null(mod.CommittedDocument(result.NewFormKey, "npc_", "BrandNewNpc"));
     }
 
     // A native record committed once and then deleted in the working tree: the shape an allocator
@@ -89,15 +95,19 @@ public sealed class CreateRecordHandlerTests
         using var mod = SourceEditFixture.Tracked();
         var headOnly = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "HeadOnlySeed", "F00000:Fixture.esp");
         Assert.True(headOnly.Applied, headOnly.Message);
+        Assert.NotNull(headOnly.NewFormKey);
+        var headOnlyFormKey = headOnly.NewFormKey;
         Commit(mod);
-        Assert.True(mod.DeleteHandler.DeleteRecord(mod.Plugin, headOnly.NewFormKey!).Applied);
-        Assert.Null(mod.Document(headOnly.NewFormKey!));
+        Assert.True(mod.DeleteHandler.DeleteRecord(mod.Plugin, headOnlyFormKey).Applied);
+        Assert.Null(mod.Document(headOnlyFormKey));
 
         var result = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "AllocatedAfter");
 
         Assert.True(result.Applied, result.Message);
-        Assert.True(LocalId(result.NewFormKey!) > LocalId(headOnly.NewFormKey!),
-            $"expected an ID above {headOnly.NewFormKey}, got {result.NewFormKey} — the allocator must " +
+        Assert.NotNull(result.NewFormKey);
+        var resultFormKey = result.NewFormKey;
+        Assert.True(LocalId(resultFormKey) > LocalId(headOnlyFormKey),
+            $"expected an ID above {headOnlyFormKey}, got {resultFormKey} — the allocator must " +
             "consult the committed tree, not just the working one.");
     }
 

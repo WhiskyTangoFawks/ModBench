@@ -22,7 +22,7 @@ public sealed class EmbeddedChildSearchTests
         var found = ContainerChildFields.FindEmbeddedChild(cell, placed.FormKey.ToString());
 
         Assert.NotNull(found);
-        Assert.Equal("Temporary", found!.Value.SlotName);
+        Assert.Equal("Temporary", found.Value.SlotName);
         // The real object out of the parent's graph, not a copy — mutating it is how the edit lands.
         Assert.Same(placed, found.Value.Child);
     }
@@ -42,7 +42,7 @@ public sealed class EmbeddedChildSearchTests
         var found = ContainerChildFields.FindEmbeddedChild(worldspace, placed.FormKey.ToString());
 
         Assert.NotNull(found);
-        Assert.Same(placed, found!.Value.Child);
+        Assert.Same(placed, found.Value.Child);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class EmbeddedChildSearchTests
         var found = ContainerChildFields.FindEmbeddedChild(quest, response.FormKey.ToString());
 
         Assert.NotNull(found);
-        Assert.Same(response, found!.Value.Child);
+        Assert.Same(response, found.Value.Child);
         Assert.Same(topic, found.Value.Parent);
         Assert.Equal((nameof(DialogTopic.Responses), 0), (found.Value.SlotName, found.Value.SlotIndex));
     }

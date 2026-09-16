@@ -27,9 +27,11 @@ public sealed class WatchOverflowTests : IDisposable
 
         watcher.ValidateAfterOverflow(_mod.Plugin);
 
-        Assert.Equal(
-            "EditedWhileRunning",
-            _mod.Index.Store!.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
+        var store = _mod.Index.Store
+            ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
+        var document = store.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin);
+        Assert.NotNull(document);
+        Assert.Equal("EditedWhileRunning", document.EditorId);
         // A single edited field drifts one row, not the whole document set — Validate's own
         // RowsChangedNotification, not the re-derived-whole branch.
         Assert.Contains(_notifications.Notifications, n => n is RowsChangedNotification rc && rc.Plugin == _mod.Plugin);

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
@@ -48,7 +49,7 @@ public sealed class NotificationStreamApiTests : IDisposable
     private async Task<string> FirstNpcFormKey()
     {
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-        return records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
+        return DocumentNodes.StringValueOf(records.GetProperty("items")[0].GetProperty("formKey"));
     }
 
     // Reads lines until one full "event:"/"data:" frame is assembled, bounded so a missed
@@ -64,7 +65,9 @@ public sealed class NotificationStreamApiTests : IDisposable
             if (line.StartsWith("event: ", StringComparison.Ordinal))
                 kind = line["event: ".Length..];
             else if (line.StartsWith("data: ", StringComparison.Ordinal))
-                return (kind!, JsonDocument.Parse(line["data: ".Length..]).RootElement);
+                return (
+                    kind ?? throw new InvalidOperationException("Expected an 'event:' line before this 'data:' line."),
+                    JsonDocument.Parse(line["data: ".Length..]).RootElement);
         }
     }
 

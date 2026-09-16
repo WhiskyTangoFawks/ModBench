@@ -15,6 +15,9 @@ namespace MEditService.Tests.Records;
 /// read.</summary>
 public sealed class WorkingTreeCreateSurvivesRestartTests
 {
+    private static string RequireNewFormKey(RecordEditResult result) =>
+        result.NewFormKey ?? throw new InvalidOperationException("Expected a successful create to set NewFormKey.");
+
     [Fact]
     public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterARestart()
     {
@@ -37,10 +40,12 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // so "the record is not found" reads identically whether ingest never ran or genuinely excluded
         // it.
         Assert.Empty(reloaded.Status.Failures);
-        var reread = reloaded.Store!.At(RecordRef.Effective).GetDocument(created.NewFormKey!, mod.Plugin);
+        var newFormKey = RequireNewFormKey(created);
+        var reloadedStore = reloaded.Store.Require();
+        var reread = reloadedStore.At(RecordRef.Effective).GetDocument(newFormKey, mod.Plugin);
         Assert.NotNull(reread);
-        Assert.Equal("SurvivesRestart", reread!.EditorId);
-        Assert.Null(reloaded.Store!.At(RecordRef.Head).GetDocument(created.NewFormKey!, mod.Plugin));
+        Assert.Equal("SurvivesRestart", reread.EditorId);
+        Assert.Null(reloadedStore.At(RecordRef.Head).GetDocument(newFormKey, mod.Plugin));
     }
 
     [Fact]
@@ -64,6 +69,9 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         Assert.Empty(reloaded.Status.Failures);
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.
-        Assert.True(reloaded.Store!.At(RecordRef.Effective).GetDocument(created.NewFormKey!)!.IsWinner);
+        var newFormKey = RequireNewFormKey(created);
+        var document = reloaded.Store.Require().At(RecordRef.Effective).GetDocument(newFormKey)
+            ?? throw new InvalidOperationException($"Expected {newFormKey} to resolve to a document.");
+        Assert.True(document.IsWinner);
     }
 }

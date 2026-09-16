@@ -67,7 +67,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
         var result = _mod.CopyAsNewHandler.CopyRecordAsNewRecord(_mod.SourcePlugin, readable, _mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(_mod.DestinationDocument(result.NewFormKey!));
+        Assert.NotNull(_mod.DestinationDocument(result.NewFormKey.Require()));
     }
 
     // The source stays untracked, so the copy reads it through the Plugin adapter — the one door a

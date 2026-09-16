@@ -13,7 +13,7 @@ internal static class EmbeddedChildPath
     {
         var node = root;
         foreach (var hop in hops)
-            node = hop.Kind == PathHop.MemberKind ? (node as JsonObject)?[hop.Name!] : (node as JsonArray)?[hop.Index!.Value];
+            node = hop.Kind == PathHop.MemberKind ? (node as JsonObject)?[hop.RequireName()] : (node as JsonArray)?[hop.RequireIndex()];
         return node;
     }
 

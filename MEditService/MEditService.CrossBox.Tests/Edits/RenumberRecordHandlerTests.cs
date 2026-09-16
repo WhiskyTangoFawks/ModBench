@@ -37,8 +37,9 @@ public sealed class RenumberRecordHandlerTests
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.Document(mod.Npc.ToString()));
         Assert.NotNull(mod.CommittedDocument(mod.Npc.ToString(), "npc_", SourceEditFixture.NpcEditorId));
-        Assert.NotNull(mod.Document(result.NewFormKey!));
-        Assert.Null(mod.CommittedDocument(result.NewFormKey!, "npc_", SourceEditFixture.NpcEditorId));
+        Assert.NotNull(result.NewFormKey);
+        Assert.NotNull(mod.Document(result.NewFormKey));
+        Assert.Null(mod.CommittedDocument(result.NewFormKey, "npc_", SourceEditFixture.NpcEditorId));
     }
 
     [Fact]
@@ -54,7 +55,8 @@ public sealed class RenumberRecordHandlerTests
         Assert.True(result.Applied, result.Message);
         Assert.Null(mod.Document(oldFormKey));
         Assert.Null(mod.CommittedDocument(oldFormKey, "npc_", "BrandNew"));
-        Assert.NotNull(mod.Document(result.NewFormKey!));
+        Assert.NotNull(result.NewFormKey);
+        Assert.NotNull(mod.Document(result.NewFormKey));
     }
 
     [Fact]
@@ -131,8 +133,10 @@ public sealed class RenumberRecordHandlerTests
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var referencer = two.Document(two.ReferencerPlugin, two.ReferencerNpc)!;
-        Assert.Contains(result.NewFormKey!, referencer.Body, StringComparison.Ordinal);
+        var referencer = two.Document(two.ReferencerPlugin, two.ReferencerNpc);
+        Assert.NotNull(referencer);
+        Assert.NotNull(result.NewFormKey);
+        Assert.Contains(result.NewFormKey, referencer.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
     }
 
@@ -165,7 +169,8 @@ public sealed class RenumberRecordHandlerTests
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey!));
+        Assert.NotNull(result.NewFormKey);
+        Assert.NotNull(two.Document(two.TargetPlugin, result.NewFormKey));
     }
 
     [Fact]

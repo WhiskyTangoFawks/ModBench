@@ -65,7 +65,9 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        Assert.NotEmpty(warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
+        var store = warm.Store
+            ?? throw new InvalidOperationException("Expected the warm index to already hold a built store.");
+        Assert.NotEmpty(store.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
     // The "during" half of progress, observed from inside the load loop. A load publishing its count
@@ -109,7 +111,9 @@ public sealed class WarmReconcileTests
     {
         public override void Register(PluginCopyKey key, Registration registration)
         {
-            observed.Add(owner.Index!.Status.IndexedPlugins.Count);
+            var index = owner.Index
+                ?? throw new InvalidOperationException("Expected the factory's Index to be set before any Register call.");
+            observed.Add(index.Status.IndexedPlugins.Count);
             base.Register(key, registration);
         }
     }
@@ -161,7 +165,9 @@ public sealed class WarmReconcileTests
         Assert.Equal(0, Registered(entries, "B.esp"));
 
         // And the re-index is what the load order serves: the edited record, not the stale one.
-        var documents = warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
+        var store = warm.Store
+            ?? throw new InvalidOperationException("Expected the warm index to already hold a built store.");
+        var documents = store.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }
@@ -225,7 +231,9 @@ public sealed class WarmReconcileTests
             using (var second = MakeManager(holder))
             {
                 second.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
-                var npc = second.Store!.At(RecordRef.Effective)
+                var secondStore = second.Store
+                    ?? throw new InvalidOperationException("Expected the second index to already hold a built store.");
+                var npc = secondStore.At(RecordRef.Effective)
                     .GetDocuments(new PluginCopyKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
                 npcSourceFile = SourceDocumentPath.Of(
                     modFolder, plugin, npc.RecordType, npc.FormKey, npc.EditorId, GameRelease.Fallout4);
@@ -248,8 +256,10 @@ public sealed class WarmReconcileTests
                 npcSourceFile, text.Replace("\"TrackedNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
             using var fourth = MakeManager(holder);
             fourth.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
+            var fourthStore = fourth.Store
+                ?? throw new InvalidOperationException("Expected the fourth index to already hold a built store.");
             Assert.Contains(
-                fourth.Store!.At(RecordRef.Effective).GetDocuments(new PluginCopyKey(plugin, origin)),
+                fourthStore.At(RecordRef.Effective).GetDocuments(new PluginCopyKey(plugin, origin)),
                 d => d.EditorId == "EditedBetweenLoads");
         }
         finally

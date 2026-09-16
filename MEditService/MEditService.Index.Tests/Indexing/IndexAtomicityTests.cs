@@ -34,7 +34,7 @@ public class IndexAtomicityTests
     {
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
-        return (long)cmd.ExecuteScalar()!;
+        return (long)(cmd.ExecuteScalar() ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
     }
 
     [Fact]

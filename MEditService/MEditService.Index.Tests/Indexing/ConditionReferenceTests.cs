@@ -90,7 +90,8 @@ public class ConditionReferenceTests
         repo.UpdateWinners();
 
         var document = repo.At(RecordRef.Effective)
-            .GetDocument(cobj.ToString(), new PluginCopyKey("CondCheck.esp", "Data"))!;
+            .GetDocument(cobj.ToString(), new PluginCopyKey("CondCheck.esp", "Data"))
+            ?? throw new InvalidOperationException($"Expected a document for indexed record '{cobj}'.");
         var conditions = document.Fields.Single(f => f.Metadata.Name == "Conditions");
 
         Assert.Null(conditions.CheckError);

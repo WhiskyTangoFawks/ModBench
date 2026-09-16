@@ -14,6 +14,14 @@ public sealed record PathHop(string Kind, string? Name = null, int? Index = null
     public static PathHop Member(string name) => new(MemberKind, Name: name);
     public static PathHop At(int index) => new(IndexKind, Index: index);
     public static PathHop ByKey(string key) => new(KeyKind, Key: key);
+
+    /// <summary>A well-formed member hop's name — a caller's claim this hop is well-formed.</summary>
+    public string RequireName() =>
+        Name ?? throw new InvalidOperationException("Expected a well-formed member hop to carry a name.");
+
+    /// <summary>A well-formed index hop's position — a caller's claim this hop is well-formed.</summary>
+    public int RequireIndex() =>
+        Index ?? throw new InvalidOperationException("Expected a well-formed index hop to carry a position.");
 }
 
 /// <summary>The one write shape (ADR-0005): set puts the value at the path (null clears); add

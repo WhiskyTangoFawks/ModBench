@@ -47,10 +47,13 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     // Records only: the plugin header is a document too, and its EditorID is null by definition, so
     // including it would put a meaningless null in front of every expectation here.
-    private static IReadOnlyList<string?> EditorIdsIn(IndexProjector manager) =>
-        [.. manager.Store!.At(RecordRef.Effective).GetDocuments(Key)
+    private static IReadOnlyList<string?> EditorIdsIn(IndexProjector manager)
+    {
+        var store = manager.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
+        return [.. store.At(RecordRef.Effective).GetDocuments(Key)
             .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];
+    }
 
     // Warm on both sides: the second load of each instance is the one that would register the other's
     // file_path if the store were shared.

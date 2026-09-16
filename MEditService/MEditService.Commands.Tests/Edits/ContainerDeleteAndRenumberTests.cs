@@ -1,5 +1,6 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,7 +28,7 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     [Fact]
     public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndEveryEmbeddedDescendantWithIt()
     {
-        var directory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId))!;
+        var directory = PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId));
         Assert.True(Directory.Exists(directory));
 
         var result = DeleteHandler().DeleteRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
@@ -85,7 +86,7 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         // The owner's own document picked up the rewrite.
         Assert.DoesNotContain(
             ContainerModFixture.TemporaryRefEditorId,
-            _fixture.Document(_fixture.EmbedCell.ToString())!.Body,
+            _fixture.Document(_fixture.EmbedCell.ToString()).Require().Body,
             StringComparison.Ordinal);
     }
 
@@ -118,8 +119,8 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
     [Fact]
     public void RenumberingAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
     {
-        var oldDirectory = Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.CellEditorId))!;
-        var parent = Path.GetDirectoryName(oldDirectory)!;
+        var oldDirectory = PathShape.DirectoryOf(_fixture.SourceFileContaining(ContainerModFixture.CellEditorId));
+        var parent = PathShape.DirectoryOf(oldDirectory);
 
         var result = RenumberHandler().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
@@ -127,9 +128,9 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         Assert.False(Directory.Exists(oldDirectory));
         Assert.Null(_fixture.Document(_fixture.Cell.ToString()));
 
-        var renumbered = _fixture.Document(result.NewFormKey!);
+        var renumbered = _fixture.Document(result.NewFormKey.Require());
         Assert.NotNull(renumbered);
-        Assert.Contains(result.NewFormKey!, renumbered!.Body, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey.Require(), renumbered.Body, StringComparison.Ordinal);
 
         var newFile = _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
         Assert.Equal(parent, Path.GetDirectoryName(Path.GetDirectoryName(newFile)));
@@ -148,13 +149,13 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         // Same file — an embedded record has no leaf of its own to move.
         Assert.Equal(file, _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId));
         var text = File.ReadAllText(file);
-        Assert.Contains(result.NewFormKey!, text, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey.Require(), text, StringComparison.Ordinal);
         Assert.DoesNotContain(_fixture.TemporaryRef.ToString(), text, StringComparison.Ordinal);
 
         Assert.Null(_fixture.Document(_fixture.TemporaryRef.ToString()));
         Assert.NotNull(_fixture.CommittedDocument(
             _fixture.TemporaryRef.ToString(), "refr", ContainerModFixture.TemporaryRefEditorId));
-        Assert.NotNull(_fixture.Document(result.NewFormKey!));
+        Assert.NotNull(_fixture.Document(result.NewFormKey.Require()));
     }
 
     // ---- renumbering a record a container references ----
@@ -193,7 +194,7 @@ public sealed class ContainerDeleteAndRenumberTests : IDisposable
         Assert.True(result.Applied, result.Message);
         var text = File.ReadAllText(file);
         Assert.DoesNotContain(referenced.ToString(), text, StringComparison.Ordinal);
-        Assert.Contains(result.NewFormKey!, text, StringComparison.Ordinal);
+        Assert.Contains(result.NewFormKey.Require(), text, StringComparison.Ordinal);
     }
 
     // ---- order preservation ----

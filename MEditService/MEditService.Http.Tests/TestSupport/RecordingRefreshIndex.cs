@@ -77,14 +77,15 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
             return Task.FromResult(true);
         }
 
-        var onDisk = ContentHashOnDisk(path);
+        var onDisk = ContentHashOnDisk(path)
+            ?? throw new InvalidOperationException($"Expected '{path}' to still exist after the File.Exists check above.");
         if (_indexedHashes.TryGetValue(key, out var indexed) && indexed == onDisk) return Task.FromResult(false);
 
         Record("reindex", key, []);
         Refuse();
         // Advanced only past the refusal above: a refused write must not leave the recorder
         // believing bytes it never actually landed are now indexed.
-        _indexedHashes[key] = onDisk!;
+        _indexedHashes[key] = onDisk;
         return Task.FromResult(true);
     }
 

@@ -97,7 +97,9 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.False(result.Applied);
         Assert.Equal(TrackRefusal.RoundTripFailed, result.Refusal);
 
-        Assert.Contains(extra!.Value.ToString(), result.Message);
+        var extraFormKey = extra
+            ?? throw new InvalidOperationException("Expected DeserializeThenAddAnNpc to run and set extra.");
+        Assert.Contains(extraFormKey.ToString(), result.Message);
         Assert.Contains("ExtraNpc", result.Message);
         Assert.Contains("not present in the original", result.Message);
     }

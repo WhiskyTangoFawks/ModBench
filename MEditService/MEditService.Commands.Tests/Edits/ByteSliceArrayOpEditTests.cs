@@ -34,13 +34,13 @@ public sealed class ByteSliceArrayOpEditTests : IDisposable
         var created = _mod.CreateHandler.CreateRecord(_mod.Plugin, "debr", DebrisEditorId);
         Assert.True(created.Applied, created.Message);
 
-        var seed = Service().Set(_mod.Plugin, created.NewFormKey!, "Models",
+        var seed = Service().Set(_mod.Plugin, created.NewFormKey.Require(), "Models",
             Json("[" + string.Join(",", TwoModels) + "]"));
         Assert.True(seed.Applied, seed.Message);
-        return created.NewFormKey!;
+        return created.NewFormKey.Require();
     }
 
-    private string DebrisBody(string formKey) => _mod.Document(formKey)!.Body;
+    private string DebrisBody(string formKey) => _mod.Document(formKey).Require().Body;
 
     [Fact]
     public void ArrayRemove_OnAListWhoseElementsCarryAByteSlice_LeavesTheSurvivorsBlobUntouched()

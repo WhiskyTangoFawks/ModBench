@@ -68,7 +68,9 @@ public sealed class WorldspaceQueryService(
         // fact is exactly their cells' — folded here, from the rows this response already holds.
         var blocks = cells
             .Where(c => c.BlockX != null)
-            .GroupBy(c => (X: c.BlockX!.Value, Y: c.BlockY ?? 0))
+            .GroupBy(c => (
+                X: c.BlockX ?? throw new InvalidOperationException("Expected a block cell to carry its X coordinate."),
+                Y: c.BlockY ?? 0))
             .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
             .Select(blockGroup =>
             {

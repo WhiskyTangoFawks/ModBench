@@ -30,6 +30,15 @@ public class ConflictClassifierTests
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data");
 
+    private static IReadOnlyList<FieldDiff> RequireChildren(FieldDiff diff) =>
+        diff.Children ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have children.");
+
+    private static IReadOnlyDictionary<string, FormKeyResolution> RequireResolutions(FieldDiff diff) =>
+        diff.Resolutions ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have resolutions.");
+
+    private static IReadOnlyDictionary<string, string> RequireCheckErrors(FieldDiff diff) =>
+        diff.CheckErrors ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have check errors.");
+
     private static RecordDetail MakeOverrideWithOrigin(string plugin, string origin, int loadOrder, bool isWinner,
         params (string name, object? value)[] fields) =>
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
@@ -744,8 +753,8 @@ public class ConflictClassifierTests
         var result = Classify([master, override1]);
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
-        var xChild = boundsDiff.Children!.First(c => c.FieldName == "X");
-        var yChild = boundsDiff.Children!.First(c => c.FieldName == "Y");
+        var xChild = RequireChildren(boundsDiff).First(c => c.FieldName == "X");
+        var yChild = RequireChildren(boundsDiff).First(c => c.FieldName == "Y");
 
         Assert.Equal(ConflictAll.Override, xChild.ConflictAll);
         Assert.Equal(ConflictAll.NoConflict, yChild.ConflictAll);
@@ -775,9 +784,9 @@ public class ConflictClassifierTests
         var result = Classify([master, override1]);
 
         var itemsDiff = result.Diffs.First(d => d.FieldName == "Items");
-        var elementDiff = itemsDiff.Children!.First(c => c.FieldName == "[0]");
-        var posDiff = elementDiff.Children!.First(c => c.FieldName == "Pos");
-        var xDiff = posDiff.Children!.First(c => c.FieldName == "X");
+        var elementDiff = RequireChildren(itemsDiff).First(c => c.FieldName == "[0]");
+        var posDiff = RequireChildren(elementDiff).First(c => c.FieldName == "Pos");
+        var xDiff = RequireChildren(posDiff).First(c => c.FieldName == "X");
 
         Assert.Equal(ConflictAll.Override, xDiff.ConflictAll);
         Assert.Equal(ConflictAll.Override, posDiff.ConflictAll);
@@ -835,14 +844,14 @@ public class ConflictClassifierTests
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
 
-        var xChild = boundsDiff.Children!.FirstOrDefault(c => c.FieldName == "X");
+        var xChild = RequireChildren(boundsDiff).FirstOrDefault(c => c.FieldName == "X");
         Assert.NotNull(xChild);
-        Assert.True(xChild!.CellStates.ContainsKey("B.esp"));
+        Assert.True(xChild.CellStates.ContainsKey("B.esp"));
         Assert.Equal(ConflictThis.Override, xChild.CellStates["B.esp"]);
 
-        var yChild = boundsDiff.Children!.FirstOrDefault(c => c.FieldName == "Y");
+        var yChild = RequireChildren(boundsDiff).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
-        Assert.True(yChild!.CellStates.ContainsKey("B.esp"));
+        Assert.True(yChild.CellStates.ContainsKey("B.esp"));
         Assert.Equal(ConflictThis.IdenticalToMaster, yChild.CellStates["B.esp"]);
     }
 
@@ -862,7 +871,7 @@ public class ConflictClassifierTests
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
-        Assert.All(boundsDiff.Children!, child =>
+        Assert.All(RequireChildren(boundsDiff), child =>
             Assert.Equal(ConflictThis.IdenticalToMaster, child.CellStates["B.esp"]));
     }
 
@@ -885,7 +894,7 @@ public class ConflictClassifierTests
         var posDiff = result.Diffs.First(d => d.FieldName == "Pos");
         Assert.NotNull(posDiff.Children);
 
-        var xChild = posDiff.Children!.First(c => c.FieldName == "X");
+        var xChild = RequireChildren(posDiff).First(c => c.FieldName == "X");
         Assert.Equal(ConflictThis.ConflictWins, xChild.CellStates["C.esp"]);
         Assert.Equal(ConflictThis.ConflictLoses, xChild.CellStates["B.esp"]);
     }
@@ -908,8 +917,8 @@ public class ConflictClassifierTests
 
         var posDiff = result.Diffs.FirstOrDefault(d => d.FieldName == "Pos");
         Assert.NotNull(posDiff);
-        Assert.NotNull(posDiff!.Children);
-        Assert.Contains(posDiff.Children!, c => c.FieldName == "X");
+        Assert.NotNull(posDiff.Children);
+        Assert.Contains(RequireChildren(posDiff), c => c.FieldName == "X");
     }
 
     [Fact]
@@ -931,9 +940,9 @@ public class ConflictClassifierTests
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
 
-        var yChild = boundsDiff.Children!.FirstOrDefault(c => c.FieldName == "Y");
+        var yChild = RequireChildren(boundsDiff).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
-        Assert.False(yChild!.CellStates.ContainsKey("B.esp")); // absent → omitted
+        Assert.False(yChild.CellStates.ContainsKey("B.esp")); // absent → omitted
     }
 
     [Fact]
@@ -955,13 +964,13 @@ public class ConflictClassifierTests
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
-        Assert.Contains(boundsDiff.Children!, c => c.FieldName == "X");
+        Assert.Contains(RequireChildren(boundsDiff), c => c.FieldName == "X");
 
         // Y is now recursed into, not skipped — its elements become sub-children
-        var yChild = boundsDiff.Children!.FirstOrDefault(c => c.FieldName == "Y");
+        var yChild = RequireChildren(boundsDiff).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
-        Assert.NotNull(yChild!.Children);
-        Assert.Equal(2, yChild.Children!.Count);
+        Assert.NotNull(yChild.Children);
+        Assert.Equal(2, RequireChildren(yChild).Count);
     }
 
     [Fact]
@@ -979,9 +988,9 @@ public class ConflictClassifierTests
 
         var result = Classify([master, override1]);
 
-        var xChild = result.Diffs.First(d => d.FieldName == "Pos").Children!.First(c => c.FieldName == "X");
+        var xChild = RequireChildren(result.Diffs.First(d => d.FieldName == "Pos")).First(c => c.FieldName == "X");
         Assert.Equal("B.esp", xChild.WinnerColumn);
-        Assert.Equal(5, ((System.Text.Json.JsonElement)xChild.Values[xChild.WinnerColumn]!).GetInt32());
+        Assert.Equal(5, ((System.Text.Json.JsonElement)(xChild.Values[xChild.WinnerColumn] ?? throw new InvalidOperationException("Expected the winner column value to be non-null."))).GetInt32());
     }
 
     [Fact]
@@ -1000,9 +1009,9 @@ public class ConflictClassifierTests
 
         var result = Classify([master, override1]);
 
-        var yChild = result.Diffs.First(d => d.FieldName == "Bounds").Children!.FirstOrDefault(c => c.FieldName == "Y");
+        var yChild = RequireChildren(result.Diffs.First(d => d.FieldName == "Bounds")).FirstOrDefault(c => c.FieldName == "Y");
         Assert.NotNull(yChild);
-        Assert.False(yChild!.CellStates.ContainsKey("B.esp")); // JSON null → treated as absent
+        Assert.False(yChild.CellStates.ContainsKey("B.esp")); // JSON null → treated as absent
     }
 
     // --- Resolutions (ADR-0005) ---
@@ -1023,7 +1032,7 @@ public class ConflictClassifierTests
 
         var diff = result.Diffs.First(d => d.FieldName == "Race");
         Assert.NotNull(diff.Resolutions);
-        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.ResolvedValidType, diff.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.ResolvedValidType, diff.Resolutions["A.esp"].State);
         Assert.Equal("GoodRace", diff.Resolutions["A.esp"].EditorId);
         Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, diff.Resolutions["B.esp"].State);
     }
@@ -1045,11 +1054,11 @@ public class ConflictClassifierTests
         var arrayDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
 
-        var kw1 = arrayDiff.Children!.First(c => c.FieldName == "000AAA:Test.esp");
-        var kw2 = arrayDiff.Children!.First(c => c.FieldName == "000BBB:Test.esp");
+        var kw1 = RequireChildren(arrayDiff).First(c => c.FieldName == "000AAA:Test.esp");
+        var kw2 = RequireChildren(arrayDiff).First(c => c.FieldName == "000BBB:Test.esp");
 
-        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.ResolvedValidType, kw1.Resolutions!["A.esp"].State);
-        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, kw2.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.ResolvedValidType, RequireResolutions(kw1)["A.esp"].State);
+        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, RequireResolutions(kw2)["A.esp"].State);
     }
 
     // --- CheckErrors, per column, at every depth ---
@@ -1072,13 +1081,14 @@ public class ConflictClassifierTests
         var result = Classifier.Classify([master, override1], NoMasters, GameRelease.Fallout4, Resolve);
 
         var factions = result.Diffs.First(d => d.FieldName == "Factions");
-        Assert.Equal("Faction: [000EEE:Test.esp] <Error: Could not be resolved>", factions.CheckErrors!["B.esp"]);
-        Assert.False(factions.CheckErrors.ContainsKey("A.esp"));
+        var checkErrors = RequireCheckErrors(factions);
+        Assert.Equal("Faction: [000EEE:Test.esp] <Error: Could not be resolved>", checkErrors["B.esp"]);
+        Assert.False(checkErrors.ContainsKey("A.esp"));
 
-        var children = factions.Children!;
+        var children = RequireChildren(factions);
         Assert.Equal(
             "[000EEE:Test.esp] <Error: Could not be resolved>",
-            children.First(c => c.FieldName == "Faction").CheckErrors!["B.esp"]);
+            RequireCheckErrors(children.First(c => c.FieldName == "Faction"))["B.esp"]);
         Assert.Null(children.First(c => c.FieldName == "Rank").CheckErrors);
     }
 
@@ -1127,10 +1137,11 @@ public class ConflictClassifierTests
         // dangling: every FormKey is unresolved
         var result = Classifier.Classify([master], NoMasters, GameRelease.Fallout4, _ => null);
 
-        var factionChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "Faction");
-        var rankChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "Rank");
+        var factionsDiff = result.Diffs.First(d => d.FieldName == "Factions");
+        var factionChild = RequireChildren(factionsDiff).First(c => c.FieldName == "Faction");
+        var rankChild = RequireChildren(factionsDiff).First(c => c.FieldName == "Rank");
 
-        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, factionChild.Resolutions!["A.esp"].State);
+        Assert.Equal(MEditService.Codec.Schema.FormKeyResolutionState.Unresolved, RequireResolutions(factionChild)["A.esp"].State);
         Assert.Null(rankChild.Resolutions); // non-formKey sibling never gets a Resolutions entry
     }
 

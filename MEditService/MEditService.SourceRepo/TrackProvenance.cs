@@ -1,4 +1,5 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 
 namespace MEditService.SourceRepo;
 
@@ -11,7 +12,7 @@ internal static class PristineFileWriter
         foreach (var file in files)
         {
             var fullPath = Path.Combine(baseDirectory, file.RelativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
             File.WriteAllBytes(fullPath, file.Content);
         }
     }

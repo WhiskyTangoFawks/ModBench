@@ -79,8 +79,10 @@ public sealed class RenumberRecordHandler
         // returned with the tree exactly as this method found it.
         if (ComputeReferencerRewrites(formKey, targetFormKey, release, referencers, out var rewrites)
             is { } refusedReferencer) return refusedReferencer;
-        if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var targetRewrite)
+        if (ComputeTargetRewrite(plugin, repository, identity, unit, formKey, targetFormKey, release, out var computedTargetRewrite)
             is { } refusedSelf) return refusedSelf;
+        var targetRewrite = computedTargetRewrite
+            ?? throw new InvalidOperationException("Expected ComputeTargetRewrite to compute a target when it does not refuse.");
 
         // Phase two: everything that can still fail is genuine I/O, recorded in one transaction
         // (ADR-0007).
@@ -279,9 +281,9 @@ public sealed class RenumberRecordHandler
     // Nothing here writes; every failure mode is a typed refusal.
     private RecordEditResult? ComputeTargetRewrite(
         PluginCopyKey plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
-        string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget target)
+        string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget? target)
     {
-        target = null!;
+        target = null;
         var schemas = _schemaReflector.GetSchemas(release);
 
         if (unit.IsEmbedded)

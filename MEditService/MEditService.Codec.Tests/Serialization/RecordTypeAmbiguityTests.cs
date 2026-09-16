@@ -13,6 +13,10 @@ public sealed class RecordTypeAmbiguityTests
 {
     private static readonly RecordTypeDispatch Dispatch = RecordTypeDispatch.For(GameRelease.Fallout4);
 
+    private static Type RequireType(string name) =>
+        typeof(Fallout4Mod).Assembly.GetType(name, throwOnError: true)
+            ?? throw new InvalidOperationException($"Expected type '{name}' to exist in the Fallout4 assembly.");
+
     [Fact]
     public void ConcreteFor_ResolvesEveryConcreteMajorRecordTypeByItsClrName()
     {
@@ -59,11 +63,10 @@ public sealed class RecordTypeAmbiguityTests
     [Fact]
     public void IsPathAmbiguous_ForAnOverlayReadersOwnRuntimeType_AnswersAsForTheConcreteType()
     {
-        var overlay = typeof(Fallout4Mod).Assembly.GetType("Mutagen.Bethesda.Fallout4.GlobalFloatBinaryOverlay", throwOnError: true)!;
+        var overlay = RequireType("Mutagen.Bethesda.Fallout4.GlobalFloatBinaryOverlay");
 
         Assert.True(Dispatch.IsPathAmbiguous(overlay));
-        Assert.False(Dispatch.IsPathAmbiguous(
-            typeof(Fallout4Mod).Assembly.GetType("Mutagen.Bethesda.Fallout4.WeaponBinaryOverlay", throwOnError: true)!));
+        Assert.False(Dispatch.IsPathAmbiguous(RequireType("Mutagen.Bethesda.Fallout4.WeaponBinaryOverlay")));
     }
 
     [Fact]
@@ -89,6 +92,12 @@ public sealed class RecordTypeAmbiguityTests
             .Where(t => typeof(IMajorRecordGetter).IsAssignableFrom(t))
             .Where(t => t.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static) is not null)];
 
-    private static string SignatureOf(Type type) =>
-        ((RecordType)type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!).Type;
+    private static string SignatureOf(Type type)
+    {
+        var field = type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException($"Expected '{type.Name}' to declare a static GrupRecordType field.");
+        var value = field.GetValue(null)
+            ?? throw new InvalidOperationException($"Expected '{type.Name}'.GrupRecordType to have a value.");
+        return ((RecordType)value).Type;
+    }
 }

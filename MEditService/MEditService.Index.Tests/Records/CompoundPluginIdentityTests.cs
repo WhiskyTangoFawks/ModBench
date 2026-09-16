@@ -48,7 +48,9 @@ public class CompoundPluginIdentityTests
         repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
+        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())
+            ?? throw new InvalidOperationException($"Expected an override stack for '{npcKey}'.");
+        var overrides = overrideStack.Entries;
 
         Assert.Equal(2, overrides.Count);
         Assert.Contains(overrides, o => o.Effective.EditorId == "FromModA");
@@ -144,7 +146,9 @@ public class CompoundPluginIdentityTests
         repo.IndexMod(modB, Registration.Disabled(5), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
-        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
+        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())
+            ?? throw new InvalidOperationException($"Expected an override stack for '{npcKey}'.");
+        var overrides = overrideStack.Entries;
         var fromA = overrides.Single(o => o.Effective.EditorId == "FromModA");
         var fromB = overrides.Single(o => o.Effective.EditorId == "FromModB");
 
@@ -198,7 +202,8 @@ public class CompoundPluginIdentityTests
         using var refCmd = repo.Connection.CreateCommand();
         refCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE source_form_key = $1 AND field_path = 'Race'";
         refCmd.Parameters.Add(new DuckDBParameter { Value = npcKeyA.ToString() });
-        Assert.Equal(2L, (long)refCmd.ExecuteScalar()!);
+        Assert.Equal(2L, (long)(refCmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value.")));
     }
 
     // ADR-0012: GetReferences never filters by plugin, so its rows must carry Origin, or two
@@ -227,6 +232,7 @@ public class CompoundPluginIdentityTests
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM \"{table}\" WHERE {column} = $1";
         cmd.Parameters.Add(new DuckDBParameter { Value = value });
-        return (long)cmd.ExecuteScalar()!;
+        return (long)(cmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
     }
 }

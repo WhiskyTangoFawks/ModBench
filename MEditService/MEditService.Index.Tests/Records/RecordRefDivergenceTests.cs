@@ -114,17 +114,21 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var effectiveStack = repo.At(RecordRef.Effective).GetOverrideStack(_keptNpcFormKey.ToString());
         var headStack = repo.At(RecordRef.Head).GetOverrideStack(_keptNpcFormKey.ToString());
 
-        Assert.Equal(2, effectiveStack!.Entries.Count);
+        Assert.NotNull(effectiveStack);
+        Assert.NotNull(headStack);
+        Assert.Equal(2, effectiveStack.Entries.Count);
         Assert.Equal(
             effectiveStack.Entries.Select(e => (e.Plugin, e.IsWinner)),
-            headStack!.Entries.Select(e => (e.Plugin, e.IsWinner)));
+            headStack.Entries.Select(e => (e.Plugin, e.IsWinner)));
 
         // DropMe's sole override is its own winner — the distinct case from KeepMe's losing base
         // entry above, exercised at both refs too.
         var effectiveDropped = repo.At(RecordRef.Effective).GetDocument(_droppedNpcFormKey.ToString());
         var headDropped = repo.At(RecordRef.Head).GetDocument(_droppedNpcFormKey.ToString());
-        Assert.True(effectiveDropped!.IsWinner);
-        Assert.Equal(effectiveDropped.IsWinner, headDropped!.IsWinner);
+        Assert.NotNull(effectiveDropped);
+        Assert.NotNull(headDropped);
+        Assert.True(effectiveDropped.IsWinner);
+        Assert.Equal(effectiveDropped.IsWinner, headDropped.IsWinner);
         Assert.Equal(effectiveDropped.Plugin, headDropped.Plugin);
     }
 
@@ -136,12 +140,16 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var untouched = _droppedNpcFormKey.ToString();
         var basePlugin = new PluginCopyKey("Base.esm", "Data");
 
-        var before = repo.At(RecordRef.Effective).GetDocument(edited, basePlugin)!;
+        var before = repo.At(RecordRef.Effective).GetDocument(edited, basePlugin);
+        Assert.NotNull(before);
+        var beforeBody = before.Body;
+        Assert.NotNull(beforeBody);
         repo.ProjectDocuments(
-            basePlugin, [(edited, before.Body!.Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal))]);
+            basePlugin, [(edited, beforeBody.Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal))]);
 
         // The edited record's own Base.esm entry diverges...
-        var stack = repo.At(RecordRef.Effective).GetOverrideStack(edited)!;
+        var stack = repo.At(RecordRef.Effective).GetOverrideStack(edited);
+        Assert.NotNull(stack);
         var baseEntry = stack.Entries.Single(e => e.Plugin.Name == "Base.esm");
         Assert.True(baseEntry.HasWorkingTreeChange);
         Assert.NotEqual(baseEntry.Effective.Body, baseEntry.Head.Body);
@@ -152,9 +160,11 @@ public sealed class RecordRefDivergenceTests : IDisposable
         Assert.Equal(winnerEntry.Effective.Body, winnerEntry.Head.Body);
 
         // ...and neither does an entirely different record in the same plugin.
-        Assert.Equal(
-            repo.At(RecordRef.Effective).GetDocument(untouched, basePlugin)!.Body,
-            repo.At(RecordRef.Head).GetDocument(untouched, basePlugin)!.Body);
+        var untouchedEffective = repo.At(RecordRef.Effective).GetDocument(untouched, basePlugin);
+        var untouchedHead = repo.At(RecordRef.Head).GetDocument(untouched, basePlugin);
+        Assert.NotNull(untouchedEffective);
+        Assert.NotNull(untouchedHead);
+        Assert.Equal(untouchedEffective.Body, untouchedHead.Body);
     }
 
     // Only these tests exercise the At(RecordRef.Head) path of the seven relation-parameterized twins;

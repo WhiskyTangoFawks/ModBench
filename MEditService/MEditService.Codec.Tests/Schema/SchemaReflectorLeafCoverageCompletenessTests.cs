@@ -203,11 +203,23 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             .Where(t => t is { IsAbstract: false, IsInterface: false }
                 && typeof(IFallout4MajorRecordGetter).IsAssignableFrom(t))
             .Select(t => (Grup: t.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static), Class: t))
-            .Where(x => x.Grup != null)
-            .Select(x => (
-                Signature: ((RecordType)x.Grup!.GetValue(null)!).Type.ToLowerInvariant(),
-                Getter: typeof(INpcGetter).Assembly.GetType($"Mutagen.Bethesda.Fallout4.I{x.Class.Name}Getter")!))
+            .SelectMany(x => x.Grup is not { } grup
+                ? []
+                : new[]
+                {
+                    (
+                        Signature: ((RecordType)RequireGrupValue(grup, x.Class)).Type.ToLowerInvariant(),
+                        Getter: RequireGetterType(x.Class)
+                    ),
+                })
             .ToLookup(x => x.Signature, x => x.Getter, StringComparer.OrdinalIgnoreCase);
+
+    private static object RequireGrupValue(FieldInfo field, Type owner) =>
+        field.GetValue(null) ?? throw new InvalidOperationException($"Expected '{owner.Name}'.GrupRecordType to have a value.");
+
+    private static Type RequireGetterType(Type concreteClass) =>
+        typeof(INpcGetter).Assembly.GetType($"Mutagen.Bethesda.Fallout4.I{concreteClass.Name}Getter")
+            ?? throw new InvalidOperationException($"Expected getter type 'I{concreteClass.Name}Getter' to exist.");
 
     private static IReadOnlyList<Type> OwnersOf(RecordTableSchema schema) =>
         SiblingsBySignature[schema.TableName] is var siblings && siblings.Any()

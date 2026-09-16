@@ -39,7 +39,8 @@ public sealed class SourceWatchTests : IDisposable
         _mod.Dispose();
     }
 
-    private IRecordIndex Index => _mod.Index.Store!;
+    private IRecordIndex Index =>
+        _mod.Index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
 
     private string? EditorIdAt(RecordRef recordRef) =>
         Index.At(recordRef).GetDocument(_mod.Npc.ToString(), _mod.Plugin)?.EditorId;
@@ -148,10 +149,10 @@ public sealed class SourceWatchTests : IDisposable
         Assert.True(edit.Applied);
 
         Assert.True(await Settles(before));
-        Assert.Contains(
-            "0.75",
-            Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!,
-            StringComparison.Ordinal);
+        var document = Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin);
+        Assert.NotNull(document);
+        Assert.NotNull(document.Body);
+        Assert.Contains("0.75", document.Body, StringComparison.Ordinal);
         var afterTheProjection = _mod.Index.Sequence;
         var projections = _notifications.Notifications.Count;
 
@@ -182,10 +183,10 @@ public sealed class SourceWatchTests : IDisposable
             "\"ModHeader\": {", "\"ModHeader\": {\n    \"Author\": \"RenamedByHand\",", StringComparison.Ordinal));
 
         Assert.True(await Settles(before));
-        Assert.Contains(
-            "RenamedByHand",
-            Index.At(RecordRef.Effective).GetDocument(headerFormKey, _mod.Plugin)!.Body!,
-            StringComparison.Ordinal);
+        var document = Index.At(RecordRef.Effective).GetDocument(headerFormKey, _mod.Plugin);
+        Assert.NotNull(document);
+        Assert.NotNull(document.Body);
+        Assert.Contains("RenamedByHand", document.Body, StringComparison.Ordinal);
     }
 
     // The gesture a user makes in the Source Control panel's "Discard Changes" — a working-tree
@@ -204,9 +205,12 @@ public sealed class SourceWatchTests : IDisposable
         Git("restore", "--", relativePath);
 
         Assert.True(await Settles(afterEdit));
-        var entry = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var stack = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString());
+        Assert.NotNull(stack);
+        var entry = stack.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
-        Assert.DoesNotContain("0.75", entry.Effective.Body!, StringComparison.Ordinal);
+        Assert.NotNull(entry.Effective.Body);
+        Assert.DoesNotContain("0.75", entry.Effective.Body, StringComparison.Ordinal);
     }
 
     // A BOM-carrying rewrite resolves identical to the codec's BOM-free text, so nothing about it
@@ -222,7 +226,9 @@ public sealed class SourceWatchTests : IDisposable
         WaitOutTheWatcher();
 
         Assert.Equal(before, _mod.Index.Sequence);
-        var entry = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var stack = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString());
+        Assert.NotNull(stack);
+        var entry = stack.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal(entry.Head.Body, entry.Effective.Body);
     }
@@ -233,7 +239,9 @@ public sealed class SourceWatchTests : IDisposable
     public async Task AHandEditThatMatchesAnActiveFilter_ReachesTheFilteredListing()
     {
         _mod.Index.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
-        Assert.Equal(0, _mod.Index.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        var reads = _mod.Index.Reads
+            ?? throw new InvalidOperationException("Expected the index to already hold Reads.");
+        Assert.Equal(0, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         var before = _mod.Index.Sequence;
         RenameTheNpcByHand("RenamedByHand");
@@ -249,11 +257,13 @@ public sealed class SourceWatchTests : IDisposable
     private async Task<PagedResult<RecordSummary>> FilteredNpcListingReachesOneRow()
     {
         var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
+        var reads = _mod.Index.Reads
+            ?? throw new InvalidOperationException("Expected the index to already hold Reads.");
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
         PagedResult<RecordSummary> result;
         do
         {
-            result = _mod.Index.Reads!.Search(query);
+            result = reads.Search(query);
             if (result.Total > 0) return result;
             await Task.Delay(50);
         } while (DateTime.UtcNow < deadline);
@@ -269,7 +279,7 @@ public sealed class SourceWatchTests : IDisposable
         var before = _mod.Index.Sequence;
         var originalPath = _mod.NpcSourceFile;
         var renamed = Path.Combine(
-            Path.GetDirectoryName(originalPath)!, $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
+            PathShape.DirectoryOf(originalPath), $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
 
         File.Move(originalPath, renamed);
         WaitOutTheWatcher();

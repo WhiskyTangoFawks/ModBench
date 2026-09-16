@@ -36,10 +36,11 @@ internal static class DocumentEdit
 
         if (JsonNode.Parse(request.Text) is not JsonObject root) return Malformed(spelled, "the document is not a JSON object");
         var record = WalkPrefix(root, request.Prefix);
-        var before = WalkPrefix((JsonObject)JsonNode.Parse(request.Text)!, request.Prefix);
+        var before = WalkPrefix((JsonObject)root.DeepClone(), request.Prefix);
 
         var creating = envelope.Op is RecordEditEnvelope.Set or RecordEditEnvelope.Add;
-        if (Resolve(record, request.Schema, envelope.Path, creating, out var cursor) is { } unresolved) return unresolved;
+        if (Resolve(record, request.Schema, envelope.Path, creating, out var resolvedCursor) is { } unresolved) return unresolved;
+        var cursor = resolvedCursor ?? throw new InvalidOperationException("Expected Resolve to set a cursor when it does not refuse.");
 
         if (RefuseIfPartialForm(record, request.Schema, cursor, spelled) is { } partialForm) return partialForm;
 
@@ -47,11 +48,13 @@ internal static class DocumentEdit
         FieldMetadata editedMeta;
         var patched = cursor.Column.Synthetic is { } bit
             ? PatchSyntheticBit(record, bit, envelope, spelled, out edited, out editedMeta)
-            : envelope.Op switch
+            : envelope switch
             {
-                RecordEditEnvelope.Set => Set(cursor, envelope.Value!.Value, spelled, out edited, out editedMeta),
-                RecordEditEnvelope.Add => Add(cursor, envelope.Value, spelled, out edited, out editedMeta),
-                RecordEditEnvelope.Remove => Remove(cursor, out edited, out editedMeta),
+                { Op: RecordEditEnvelope.Set, Value: { } setValue } => Set(cursor, setValue, spelled, out edited, out editedMeta),
+                { Op: RecordEditEnvelope.Set } =>
+                    throw new InvalidOperationException("ValidateEnvelope should have refused a set with no value."),
+                { Op: RecordEditEnvelope.Add } => Add(cursor, envelope.Value, spelled, out edited, out editedMeta),
+                { Op: RecordEditEnvelope.Remove } => Remove(cursor, out edited, out editedMeta),
                 _ => Move(cursor, envelope.Value, spelled, out edited, out editedMeta),
             };
         if (patched is { } refused) return refused;
@@ -64,7 +67,7 @@ internal static class DocumentEdit
                 "identified by that key rather than by position, so rename or remove one of the two.");
         }
 
-        var chain = IndexChain(edited!);
+        var chain = IndexChain(edited ?? throw new InvalidOperationException("Expected the edit to set which node changed."));
         string written;
         try
         {
@@ -76,7 +79,8 @@ internal static class DocumentEdit
                 RecordEditRefusal.CodecRejected, spelled, $"'{spelled}': the codec rejected the document — {ex.Message}");
         }
 
-        var writtenRoot = (JsonObject)JsonNode.Parse(written)!;
+        var writtenRoot = JsonNode.Parse(written) as JsonObject
+            ?? throw new InvalidOperationException("Expected the codec's round trip to produce a JSON object.");
         if (!SilentSkipGuard.Keeps(At(writtenRoot, chain), edited, editedMeta, spelled, out var dropped))
         {
             return RecordEditResult.RefusedAt(
@@ -86,9 +90,10 @@ internal static class DocumentEdit
 
         var after = JsonSerializer.SerializeToElement(WalkPrefix(writtenRoot, request.Prefix));
         var was = JsonSerializer.SerializeToElement(before);
-        foreach (var column in request.Schema.RecordColumns.Where(c => c.Synthetic != null && c != cursor.Column))
+        foreach (var column in request.Schema.RecordColumns)
         {
-            if (SyntheticBits.IsSet(was, column.Synthetic!) != SyntheticBits.IsSet(after, column.Synthetic!))
+            if (column.Synthetic is not { } synthetic || column == cursor.Column) continue;
+            if (SyntheticBits.IsSet(was, synthetic) != SyntheticBits.IsSet(after, synthetic))
             {
                 return RecordEditResult.RefusedAt(
                     RecordEditRefusal.SyntheticMemberIndirectWrite, spelled,
@@ -147,14 +152,26 @@ internal static class DocumentEdit
         internal string? MemberName { get; set; }
         internal JsonArray? OwnerArray { get; set; }
         internal int Index { get; set; }
+
+        internal JsonArray RequireOwnerArray() =>
+            OwnerArray ?? throw new InvalidOperationException("Expected this cursor to sit in an array, not an object.");
+
+        internal string RequireMemberName() =>
+            MemberName ?? throw new InvalidOperationException("Expected this cursor to name a member.");
+
+        internal FieldMetadata RequireOwnerMeta() =>
+            OwnerMeta ?? throw new InvalidOperationException("Expected this cursor to carry its owner's metadata.");
+
+        internal FieldMetadata RequireField() =>
+            Field ?? throw new InvalidOperationException("Expected this cursor to carry the field it resolved to.");
     }
 
     private static RecordEditResult? Resolve(
-        JsonObject record, RecordTableSchema schema, IReadOnlyList<PathHop> path, bool creating, out Cursor cursor)
+        JsonObject record, RecordTableSchema schema, IReadOnlyList<PathHop> path, bool creating, out Cursor? cursor)
     {
-        cursor = null!;
+        cursor = null;
         var spelled = RecordEditEnvelope.Spell(path);
-        var name = path[0].Name!;
+        var name = path[0].RequireName();
         var column = schema.RecordColumns.FirstOrDefault(c => c.Name == name);
         if (column == null)
         {
@@ -227,7 +244,7 @@ internal static class DocumentEdit
                 cursor = new Cursor
                 {
                     Column = column,
-                    Node = obj[hop.Name!],
+                    Node = obj[hop.RequireName()],
                     Meta = DocumentNodes.VariantFor(field, obj),
                     Field = field,
                     OwnerObject = obj,
@@ -249,7 +266,7 @@ internal static class DocumentEdit
             int index;
             if (hop.Kind == PathHop.IndexKind)
             {
-                index = hop.Index!.Value;
+                index = hop.RequireIndex();
             }
             else
             {
@@ -292,8 +309,8 @@ internal static class DocumentEdit
 
     private static void Attach(Cursor cursor, JsonNode node)
     {
-        if (cursor.OwnerObject != null) cursor.OwnerObject[cursor.MemberName!] = node;
-        else cursor.OwnerArray![cursor.Index] = node;
+        if (cursor.OwnerObject != null) cursor.OwnerObject[cursor.RequireMemberName()] = node;
+        else cursor.RequireOwnerArray()[cursor.Index] = node;
         cursor.Node = node;
     }
 
@@ -335,19 +352,21 @@ internal static class DocumentEdit
         if (cursor.OwnerArray != null)
         {
             cursor.OwnerArray[cursor.Index] = node;
-            edited = node!;
+            // An element is never cleared with null (refused above), so parsing its value succeeded.
+            edited = node ?? throw new InvalidOperationException("Expected a non-null element value.");
             return null;
         }
 
-        var owner = cursor.OwnerObject!;
-        var field = cursor.Field!;
+        var owner = cursor.OwnerObject ?? throw new InvalidOperationException("Expected this cursor to sit in an object, not an array.");
+        var field = cursor.RequireField();
+        var memberName = cursor.RequireMemberName();
         if (field.IsDiscriminator)
         {
             if (node is not JsonValue leafValue || !leafValue.TryGetValue<string>(out var leaf) || !field.EnumMembers.Any(m => m.Value == leaf))
                 return DiscriminatorRefusal(spelled, field);
-            SwitchLeaf(owner, cursor.OwnerMeta!, LeafOf(owner), leaf);
+            SwitchLeaf(owner, cursor.RequireOwnerMeta(), LeafOf(owner), leaf);
             edited = owner;
-            editedMeta = cursor.OwnerMeta!;
+            editedMeta = cursor.RequireOwnerMeta();
             return null;
         }
 
@@ -355,20 +374,20 @@ internal static class DocumentEdit
         {
             // A stale slot posted under an earlier value is cleared here, never carried.
             foreach (var idle in Idle(inUse, node, field)) owner.Remove(idle);
-            if (node == null) owner.Remove(cursor.MemberName!); else owner[cursor.MemberName!] = node;
+            if (node == null) owner.Remove(memberName); else owner[memberName] = node;
             edited = owner;
-            editedMeta = cursor.OwnerMeta!;
+            editedMeta = cursor.RequireOwnerMeta();
             return null;
         }
 
         if (node == null)
         {
-            owner.Remove(cursor.MemberName!);
+            owner.Remove(memberName);
             edited = owner;
-            editedMeta = cursor.OwnerMeta!;
+            editedMeta = cursor.RequireOwnerMeta();
             return null;
         }
-        owner[cursor.MemberName!] = node;
+        owner[memberName] = node;
         edited = node;
         return null;
     }
@@ -414,10 +433,13 @@ internal static class DocumentEdit
     // discriminator leads, as the codec requires.
     private static void SwitchLeaf(JsonObject owner, FieldMetadata ownerMeta, string? from, string to)
     {
-        foreach (var member in ownerMeta.Fields!.Where(f => f.Variants != null && owner.ContainsKey(f.Name)))
+        var fields = ownerMeta.Fields
+            ?? throw new InvalidOperationException($"Expected '{ownerMeta.LeafTypeName ?? ownerMeta.Name}' to declare its own fields.");
+        foreach (var member in fields)
         {
-            var kept = member.Variants!.TryGetValue(to, out var incoming)
-                && (from == null || !member.Variants.TryGetValue(from, out var outgoing) || SameShape(incoming, outgoing));
+            if (member.Variants is not { } variants || !owner.ContainsKey(member.Name)) continue;
+            var kept = variants.TryGetValue(to, out var incoming)
+                && (from == null || !variants.TryGetValue(from, out var outgoing) || SameShape(incoming, outgoing));
             if (!kept) owner.Remove(member.Name);
         }
 
@@ -486,7 +508,7 @@ internal static class DocumentEdit
 
     private static RecordEditResult? Remove(Cursor cursor, out JsonNode? edited, out FieldMetadata editedMeta)
     {
-        var array = cursor.OwnerArray!;
+        var array = cursor.RequireOwnerArray();
         array.RemoveAt(cursor.Index);
         edited = array;
         editedMeta = ArrayMeta(cursor);
@@ -497,8 +519,9 @@ internal static class DocumentEdit
     {
         edited = null;
         editedMeta = cursor.Meta;
-        var array = cursor.OwnerArray!;
-        var destination = value!.Value.GetInt32();
+        var array = cursor.RequireOwnerArray();
+        // ValidateEnvelope confirms a move's value is a non-null number before Move ever runs.
+        var destination = (value ?? throw new InvalidOperationException("Expected a move's destination index.")).GetInt32();
         if (destination < 0 || destination >= array.Count) return NoElement($"{Owner(spelled)}[{destination}]", array.Count);
         if (destination == cursor.Index) return Malformed(spelled, $"the element is already at position {destination}");
         var node = array[cursor.Index];
@@ -602,8 +625,13 @@ internal static class DocumentEdit
         }
         else
         {
-            var names = (owner[member] as JsonArray)?.Select(n => n!.GetValue<string>()).Where(n => n != bit.FlagName).ToList() ?? [];
-            if (set) names.Add(bit.FlagName!);
+            var flagName = bit.FlagName
+                ?? throw new InvalidOperationException("Expected a synthetic flag member to name its flag.");
+            var names = (owner[member] as JsonArray)?
+                .Select(n => (n ?? throw new InvalidOperationException("Expected every flag-array element to be a non-null string."))
+                    .GetValue<string>())
+                .Where(n => n != flagName).ToList() ?? [];
+            if (set) names.Add(flagName);
             if (names.Count == 0) owner.Remove(member); else owner[member] = new JsonArray([.. names.Select(n => (JsonNode)n)]);
         }
         edited = owner;

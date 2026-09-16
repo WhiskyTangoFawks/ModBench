@@ -46,12 +46,14 @@ public sealed class DeleteRecordHandlerTests
         using var mod = SourceEditFixture.Tracked();
         var created = mod.CreateHandler.CreateRecord(mod.Plugin, "npc_", "BrandNew");
         Assert.True(created.Applied, created.Message);
+        Assert.NotNull(created.NewFormKey);
+        var newFormKey = created.NewFormKey;
 
-        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, created.NewFormKey!);
+        var result = mod.DeleteHandler.DeleteRecord(mod.Plugin, newFormKey);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(mod.Document(created.NewFormKey!));
-        Assert.Null(mod.CommittedDocument(created.NewFormKey!, "npc_", "BrandNew"));
+        Assert.Null(mod.Document(newFormKey));
+        Assert.Null(mod.CommittedDocument(newFormKey, "npc_", "BrandNew"));
     }
 
     [Fact]

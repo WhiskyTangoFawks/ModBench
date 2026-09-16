@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -44,7 +45,7 @@ public sealed class PluginAdapterTests
     {
         using var data = TwoNpcPlugin("adapter-write");
         var written = Path.Combine(data.DataFolder, "Written", PluginName);
-        Directory.CreateDirectory(Path.GetDirectoryName(written)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(written));
 
         var mod = (IFallout4Mod)MutagenPluginAdapter.OpenForWrite(PathOf(data), GameRelease.Fallout4);
         mod.Npcs.AddNew("AdapterNpc03");
@@ -105,7 +106,7 @@ public sealed class PluginAdapterTests
             .Build();
         var patch = new ModPath(ModKey.FromFileName("Patch.esp"), Path.Combine(data.DataFolder, "Patch.esp"));
         var written = Path.Combine(data.DataFolder, "Reordered", "Patch.esp");
-        Directory.CreateDirectory(Path.GetDirectoryName(written)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(written));
 
         var mod = MutagenPluginAdapter.OpenForWrite(patch, GameRelease.Fallout4);
         var reversed = mod.MasterReferences.Select(m => m.Master.FileName.ToString()).Reverse().ToList();

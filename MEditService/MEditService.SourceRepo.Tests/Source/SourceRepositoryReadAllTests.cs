@@ -42,7 +42,8 @@ public sealed class SourceRepositoryReadAllTests : IDisposable
             _modFolder, SourcePreset.Edits,
             [new TreeFile(NpcRelativePath, Encoding.UTF8.GetBytes(NpcBody))],
             new TrackProvenance(null, null, new Dictionary<string, string> { [PluginName] = "abc" }));
-        return SourceRepository.Open(_modFolder, Release)!;
+        return SourceRepository.Open(_modFolder, Release)
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
     }
 
     private static (string, string, string?, string) Tuple(SourceDocument document) =>

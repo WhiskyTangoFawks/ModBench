@@ -53,7 +53,7 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     {
         using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
             "chmod", [mode, path])
-        { RedirectStandardError = true })!;
+        { RedirectStandardError = true }).Require();
         process.WaitForExit();
         if (process.ExitCode != 0)
             throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");

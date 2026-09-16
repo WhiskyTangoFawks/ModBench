@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
@@ -63,7 +64,7 @@ public sealed class CutDownPluginGenerator
         CopyInteriorCells(source, target);
 
         var outPath = Path.Combine(SourceTestDataDir(), CutDownPluginFixture.PluginFileName);
-        Directory.CreateDirectory(Path.GetDirectoryName(outPath)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(outPath));
         target.WriteToBinary(outPath, new BinaryWriteParameters
         {
             // Override records keep their Fallout4.esm FormKeys; iterate so the header lists the

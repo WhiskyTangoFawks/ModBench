@@ -40,14 +40,20 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // Constructed at the end of Initialize, once Connection is stable and the schemas and release
     // are resolved, so every dependency is captured once rather than chased through a mutable
     // back-reference.
-    private PluginIngest _pluginIngest = null!;
+    private PluginIngest? _pluginIngest;
+
+    private PluginIngest RequirePluginIngest() =>
+        _pluginIngest ?? throw new InvalidOperationException("Call Initialize before using the repository.");
 
     // Constructed after _pluginIngest, for the same reason and because it depends on PluginIngest
     // one-directionally.
-    private WorkingTreeOverlay _workingTreeOverlay = null!;
+    private WorkingTreeOverlay? _workingTreeOverlay;
+
+    private WorkingTreeOverlay RequireWorkingTreeOverlay() =>
+        _workingTreeOverlay ?? throw new InvalidOperationException("Call Initialize before using the repository.");
 
     // Validate's tracked half. Constructed alongside its siblings, for the same reason.
-    private SourceValidation _sourceValidation = null!;
+    private SourceValidation? _sourceValidation;
 
     public DuckDBConnection Connection => _indexStore.Connection;
     private DuckDBConnection OpenRead() => _indexStore.OpenReadConnection();
@@ -154,12 +160,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         _indexStore.StampIndexedFile(plugin, origin, filePath);
 
         // Must run before the appender is created.
-        _pluginIngest.DeletePriorDocuments(plugin, origin);
+        RequirePluginIngest().DeletePriorDocuments(plugin, origin);
 
         // The appender's `using` stays here so its disposal keeps the required ordering relative to
         // tx.Commit() below: tx declared first, appender second, both disposed LIFO after the commit.
         using var documentAppender = Connection.CreateAppender("mirror", "records");
-        var timing = _pluginIngest.IndexPlugin(documents, plugin, origin, schemas, documentAppender);
+        var timing = RequirePluginIngest().IndexPlugin(documents, plugin, origin, schemas, documentAppender);
         _indexStore.BumpSequence();
 
         var commitTimer = Stopwatch.StartNew();
@@ -187,7 +193,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
         using var tx = Connection.BeginTransaction();
 
-        _pluginIngest.DeleteAllRowsFor(plugin, origin);
+        RequirePluginIngest().DeleteAllRowsFor(plugin, origin);
         // The file claim goes with the rows it describes — Unindex is the file-gone verb, so leaving
         // it behind would leave the files table asserting rows the index does not hold.
         _indexStore.DeleteIndexedFile(plugin, origin);
@@ -290,7 +296,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             cmd.CommandText = $"INSERT INTO {TableDdlBuilder.ParticipatingRelation} (plugin, origin, load_order_idx) VALUES ($1, $2, $3)";
             cmd.Parameters.Add(new DuckDBParameter { Value = copy.Name });
             cmd.Parameters.Add(new DuckDBParameter { Value = copy.Origin });
-            cmd.Parameters.Add(new DuckDBParameter { Value = copy.Slot!.Value });
+            cmd.Parameters.Add(new DuckDBParameter
+            {
+                Value = copy.Slot
+                    ?? throw new InvalidOperationException(
+                        $"Expected participating copy '{copy.Name}' from '{copy.Origin}' to carry a load-order slot."),
+            });
             cmd.ExecuteNonQuery();
         }
     }
@@ -342,7 +353,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             // Only a delta that added or removed a row can move winner status. Re-swept for the whole
             // load order rather than per FormKey because UpdateWinners is the one definition of winning
             // (measured at 18 ms over 48k records).
-            var projected = _workingTreeOverlay.ProjectDocuments(key, deltas);
+            var projected = RequireWorkingTreeOverlay().ProjectDocuments(key, deltas);
             if (projected.Structural) UpdateWinnersCore();
             touched = projected.Touched;
             _indexStore.BumpSequence();
@@ -361,7 +372,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (baselines.Count == 0) return;
 
         using var tx = Connection.BeginTransaction();
-        _workingTreeOverlay.SetCommittedBaseline(key, baselines);
+        RequireWorkingTreeOverlay().SetCommittedBaseline(key, baselines);
         _indexStore.BumpSequence();
         tx.Commit();
     }
@@ -372,7 +383,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (formKeys.Count == 0) return;
 
         using var tx = Connection.BeginTransaction();
-        _workingTreeOverlay.MarkWorkingTreeOnly(key, formKeys);
+        RequireWorkingTreeOverlay().MarkWorkingTreeOnly(key, formKeys);
         // Effective is untouched, but Head just lost a row per FormKey, which can promote the next
         // plugin down at that ref; Head's winners are swept, not derived per read (ADR-0009).
         UpdateWinnersCore();
@@ -388,7 +399,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         if (records.Count == 0) return;
 
         using var tx = Connection.BeginTransaction();
-        _workingTreeOverlay.SeedCommittedOnly(key, records);
+        RequireWorkingTreeOverlay().SeedCommittedOnly(key, records);
         // The counterpart of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
         // demote whoever was winning it at that ref. Effective is untouched either way.
         UpdateWinnersCore();
@@ -512,7 +523,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     public ValidationReport Validate(PluginCopyKey key, string? modFolder)
     {
         if (modFolder != null && SourceRepository.IsTracked(modFolder))
-            return _sourceValidation.Validate(key, modFolder);
+        {
+            return (_sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository."))
+                .Validate(key, modFolder);
+        }
 
         return ValidateAgainstBinary(key);
     }
@@ -586,6 +600,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     private sealed class RelationReads(DuckDbRecordIndex owner, string records) : IRecordReads
     {
         public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies => owner._openedCopies();
+
+        // A SELECT COUNT(*) always answers exactly one row with a non-null count.
+        private static long ExecuteCount(DuckDBCommand cmd) =>
+            (long)(cmd.ExecuteScalar() ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
 
         public RecordDocument? GetDocument(string formKey)
         {
@@ -727,7 +745,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var countCmd = connection.CreateCommand();
             countCmd.CommandText = $"SELECT COUNT(*) FROM {records}{where}";
             AddParams(countCmd, paramValues);
-            var total = (long)countCmd.ExecuteScalar()!;
+            var total = ExecuteCount(countCmd);
 
             // editor_id alone is not unique — blank and duplicate EditorIDs are ordinary — so
             // LIMIT/OFFSET over it alone lets DuckDB place tied rows on either side of a page boundary
@@ -944,7 +962,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1 AND origin = $2";
             countCmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
             countCmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-            var total = (long)countCmd.ExecuteScalar()!;
+            var total = ExecuteCount(countCmd);
 
             // Same non-unique-ordering shape as Search: c.editor_id alone gives no tiebreak for
             // LIMIT/OFFSET. The WHERE already scopes to one plugin+origin, so cl.cell_form_key alone is

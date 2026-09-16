@@ -64,7 +64,9 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
     private async Task<IReadOnlyList<string>> Listed()
     {
         var plugins = await _client.GetFromJsonAsync<System.Text.Json.JsonElement[]>("/plugins");
-        return [.. plugins!.Select(p => p.GetProperty("name").GetString()!)];
+        Assert.NotNull(plugins);
+        return [.. plugins.Select(p => p.GetProperty("name").GetString()
+            ?? throw new InvalidOperationException("Expected each listed plugin to carry a name."))];
     }
 
     [Fact]
