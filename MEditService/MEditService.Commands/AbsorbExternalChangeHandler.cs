@@ -51,7 +51,7 @@ public sealed class AbsorbExternalChangeHandler
                     .GetAwaiter().GetResult();
                 allPristineFiles.AddRange(SourceRepository.PristineFilesOf(plugin.Name, tree));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 // A raw parse exception's Message carries no located identity; the diagnosis walks the
                 // tree for the innermost RecordException, as Track's own parse refusal does.

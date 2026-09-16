@@ -94,7 +94,7 @@ internal sealed class MutagenModDocuments(
             foreach (var record in mod.EnumerateMajorRecords(schema.RecordType, throwIfUnknown: false))
                 records.Add(record);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _failures.Add(new RecordTypeFailure(tableName, PluginDiagnosis.FromParseException(ex).Describe()));
         }
@@ -127,7 +127,7 @@ internal sealed class MutagenModDocuments(
                 _codec.SerializeToBytesAsync(record, mod.GameRelease).GetAwaiter().GetResult());
             return Placed(new PluginDocument(tableName, formKey, text), formKey);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             var stub = ParseFailedDocument.For(record, EditorIdOrNull(record), mod.GameRelease);
             return Placed(
@@ -150,7 +150,7 @@ internal sealed class MutagenModDocuments(
     private static string? EditorIdOrNull(IMajorRecordGetter record)
     {
         try { return record.EditorID; }
-        catch (Exception) { return null; }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { return null; }
     }
 
     // ADR-0005: the worldspace/cell GRUP hierarchy, which EnumerateMajorRecords flattens away and no

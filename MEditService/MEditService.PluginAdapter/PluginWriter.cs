@@ -125,7 +125,10 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         foreach (var f in old)
         {
             try { File.Delete(f); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Failed to delete old backup {File}", f); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(ex, "Failed to delete old backup {File}", f);
+            }
         }
     }
 }

@@ -307,7 +307,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             lock (_lock) _heldElsewhereMessage = ex.Message;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Reconcile already logged this at error; there is nothing further up to raise it
             // to, so it becomes status data instead of only a log line.
@@ -586,7 +586,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // A single plugin with malformed record data must not abort the whole reconcile. Index()
             // runs in its own DuckDB transaction, so the rollback on throw leaves no partial rows.
@@ -649,7 +649,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             // reported as one, nor absorbed into a fallback that would keep working after the cancel.
             throw;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Deliberately every other exception, not a curated set: reading a folder tree through
             // a third-party deserializer fails in open-ended ways, and a curated list would drop the

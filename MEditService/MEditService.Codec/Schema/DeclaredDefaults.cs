@@ -59,7 +59,7 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
         {
             return RecordTextCodec.DeserializeEmptyAsync(concrete, release).GetAwaiter().GetResult();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogWarning(ex, "{Prefix}: the codec refused an empty document for {Type}", RefusalPrefix, concrete.FullName);
             return null;

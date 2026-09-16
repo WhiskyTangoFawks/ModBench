@@ -31,7 +31,7 @@ internal static class OpenedPlugins
         {
             foreach (var _ in mod.EnumerateMajorRecords()) count++;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return (count, ex);
         }
