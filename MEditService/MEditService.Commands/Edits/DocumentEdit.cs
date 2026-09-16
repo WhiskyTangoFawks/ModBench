@@ -616,7 +616,7 @@ internal static class DocumentEdit
             owner = inner;
         }
         var member = segments[^1];
-        if (bit.FlagName == null)
+        if (bit.FlagName is not { } flagName)
         {
             var raw = owner[member] is JsonValue held && held.TryGetValue<long>(out var flags) ? flags : 0;
             var next = set ? raw | bit.Bit : raw & ~bit.Bit;
@@ -625,8 +625,6 @@ internal static class DocumentEdit
         }
         else
         {
-            var flagName = bit.FlagName
-                ?? throw new InvalidOperationException("Expected a synthetic flag member to name its flag.");
             var names = (owner[member] as JsonArray)?
                 .Select(n => (n ?? throw new InvalidOperationException("Expected every flag-array element to be a non-null string."))
                     .GetValue<string>())

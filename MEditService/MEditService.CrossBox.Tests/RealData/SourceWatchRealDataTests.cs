@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Commands;
@@ -141,8 +142,9 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
     // settling too, and the bound is a wait, not a per-run cost.
     private async Task WaitForEveryRow(Dictionary<string, string> renamed)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
-        while (DateTime.UtcNow < deadline)
+        var limit = TimeSpan.FromSeconds(60);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < limit)
         {
             if (renamed.All(r => fixture.Index.Store.Require().At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
                 return;

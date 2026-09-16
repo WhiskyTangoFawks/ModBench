@@ -227,7 +227,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
                 $"No record type in this game's schema matches the document's MutagenObjectType. {ex.Message}", ex);
         }
 
-        var resultProperty = task.GetType().GetProperty(nameof(Task<object>.Result))
+        // "Result": Task<T> for a T only known at runtime, so nameof(Task<object>.Result) would
+        // name the banned property; the already-awaited value comes back through reflection instead.
+        var resultProperty = task.GetType().GetProperty("Result")
             ?? throw new InvalidOperationException($"Expected '{task.GetType().Name}' to declare 'Result'.");
         return resultProperty.GetValue(task)
             ?? throw new InvalidOperationException("Expected the deserialized record to be non-null.");

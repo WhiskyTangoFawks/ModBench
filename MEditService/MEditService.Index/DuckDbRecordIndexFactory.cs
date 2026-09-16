@@ -12,19 +12,21 @@ internal sealed class DuckDbRecordIndexFactory(
     SchemaReflector schemaReflector,
     TableDdlBuilder ddlBuilder,
     INotificationPublisher? notifications = null,
-    ILogger<DuckDbRecordIndexFactory>? logger = null) : IRecordIndexFactory
+    ILogger<DuckDbRecordIndexFactory>? logger = null,
+    TimeProvider? timeProvider = null) : IRecordIndexFactory
 {
     private readonly SchemaReflector _schemaReflector = schemaReflector;
     private readonly TableDdlBuilder _ddlBuilder = ddlBuilder;
     private readonly INotificationPublisher? _notifications = notifications;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
+    private readonly TimeProvider? _timeProvider = timeProvider;
 
     public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
     {
         var repo = new DuckDbRecordIndex(
             _schemaReflector, _ddlBuilder, _logger,
             instanceRoot is null ? null : IndexFile.For(instanceRoot),
-            _notifications);
+            _notifications, _timeProvider);
         repo.Initialize(gameRelease);
         return repo;
     }
@@ -33,7 +35,7 @@ internal sealed class DuckDbRecordIndexFactory(
     public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence)
     {
         var repo = new DuckDbRecordIndex(
-            _schemaReflector, _ddlBuilder, _logger, IndexFile.For(instanceRoot), _notifications);
+            _schemaReflector, _ddlBuilder, _logger, IndexFile.For(instanceRoot), _notifications, _timeProvider);
         repo.RebuildEmpty(gameRelease, atLeastSequence);
         return repo;
     }

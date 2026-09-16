@@ -770,17 +770,21 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetPlugins_NoLoadOrder_ThrowsInvalidOperationException()
     {
-        var unloaded = MakeUnloadedService();
-        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
-        Assert.Contains("No load order", ex.Message);
+        WithUnloadedService(unloaded =>
+        {
+            var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
+            Assert.Contains("No load order", ex.Message);
+        });
     }
 
     [Fact]
     public void GetRecords_NoLoadOrder_ThrowsInvalidOperationException()
     {
-        var unloaded = MakeUnloadedService();
-        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
-        Assert.Contains("No load order", ex.Message);
+        WithUnloadedService(unloaded =>
+        {
+            var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
+            Assert.Contains("No load order", ex.Message);
+        });
     }
 
     [Fact]
@@ -881,13 +885,13 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
-    private static RecordQueryService MakeUnloadedService()
+    private static void WithUnloadedService(Action<RecordQueryService> body)
     {
         var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
-        return new RecordQueryService(manager, new LoadOrderHolder(), reflector, new ConflictClassifier());
+        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        body(new RecordQueryService(manager, new LoadOrderHolder(), reflector, new ConflictClassifier()));
     }
 
     // --- GetPlugins: HasMatchingRecords, never row pruning (plugins.md) ---

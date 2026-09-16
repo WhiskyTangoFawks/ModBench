@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Ports;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
@@ -72,8 +73,8 @@ public sealed class WatcherRearmTests : IDisposable
 
         File.WriteAllBytes(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName), "changed-by-xedit"u8.ToArray());
 
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && _notifications.Notifications.Count == 0) Thread.Sleep(20);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < TimeSpan.FromSeconds(3) && _notifications.Notifications.Count == 0) Thread.Sleep(20);
         // Past the quiet window, so a second settle would have landed its own question by now.
         Thread.Sleep(400);
 
@@ -97,8 +98,8 @@ public sealed class WatcherRearmTests : IDisposable
         using var liveWatcher = TestWatcher.Over(live.Holder, live.Index, liveNotifications, TimeSpan.FromMilliseconds(100));
         liveWatcher.Rearm(live.Holder.Current);
         File.WriteAllBytes(Path.Combine(live.ModFolder, IndexedModFixture.PluginName), "changed-by-xedit"u8.ToArray());
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && liveNotifications.Notifications.Count == 0) Thread.Sleep(20);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < TimeSpan.FromSeconds(3) && liveNotifications.Notifications.Count == 0) Thread.Sleep(20);
         Thread.Sleep(400);
         var fromLiveChange = Assert.Single(liveNotifications.Notifications.OfType<QuestionOpenNotification>());
 
@@ -212,8 +213,8 @@ public sealed class WatcherRearmTests : IDisposable
 
         File.WriteAllBytes(pluginPath, "changed-live-after-load"u8.ToArray());
 
-        var deadline = DateTime.UtcNow.AddSeconds(3);
-        while (DateTime.UtcNow < deadline && !_notifications.Notifications.OfType<QuestionOpenNotification>().Any())
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < TimeSpan.FromSeconds(3) && !_notifications.Notifications.OfType<QuestionOpenNotification>().Any())
             Thread.Sleep(20);
 
         Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());

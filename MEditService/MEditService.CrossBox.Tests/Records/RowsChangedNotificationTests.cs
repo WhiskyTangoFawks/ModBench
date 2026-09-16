@@ -35,15 +35,18 @@ public sealed class RowsChangedNotificationTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private DuckDbRecordIndex LoadedIndex()
-    {
-        var index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance, notifications: _notifications);
-        index.Initialize(GameRelease.Fallout4);
-        var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-        index.IndexMod(Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(0), BaseKey);
-        index.UpdateWinners();
-        return index;
-    }
+    private DuckDbRecordIndex LoadedIndex() =>
+        OwnedFixture.Build(
+            () => new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance, notifications: _notifications),
+            index =>
+            {
+                index.Initialize(GameRelease.Fallout4);
+                var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
+                using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
+                index.IndexMod(mod, Registration.Participating(0), BaseKey);
+                index.UpdateWinners();
+            },
+            index => index);
 
     [Fact]
     public void ProjectDocuments_PublishesRowsChanged_WithTheKeyAndTheSequenceAfterTheWrite()

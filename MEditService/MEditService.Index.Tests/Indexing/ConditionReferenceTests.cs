@@ -22,7 +22,7 @@ public class ConditionReferenceTests
     {
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        var mod = Fallout4Mod.CreateFromBinaryOverlay(
+        using var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(plugin), Path.Combine(fixture.DataFolder, plugin)), Fallout4Release.Fallout4);
         repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
@@ -83,7 +83,7 @@ public class ConditionReferenceTests
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        var mod = Fallout4Mod.CreateFromBinaryOverlay(
+        using var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("CondCheck.esp"), Path.Combine(fixture.DataFolder, "CondCheck.esp")),
             Fallout4Release.Fallout4);
         repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));

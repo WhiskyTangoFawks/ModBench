@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
@@ -44,8 +45,8 @@ public sealed class ModFolderWatcherTests
 
     private static void WaitUntil(Func<bool> condition, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < timeout)
         {
             if (condition()) return;
             Thread.Sleep(20);
@@ -117,7 +118,7 @@ public sealed class ModFolderWatcherTests
             using var _ = watcher;
 
             File.WriteAllBytes(fixture.PluginPath, bytes);
-            File.SetLastWriteTimeUtc(fixture.PluginPath, DateTime.UtcNow.AddSeconds(5));
+            File.SetLastWriteTimeUtc(fixture.PluginPath, TimeProvider.System.GetUtcNow().AddSeconds(5).UtcDateTime);
             Thread.Sleep(500); // well past the 100ms quiet window
 
             Assert.Empty(index.Projections);
@@ -196,7 +197,7 @@ public sealed class ModFolderWatcherTests
 
             // The *same* bytes settle again. Had the refused projection advanced the remembered
             // hash, this would raise nothing at all and the index would stay stale.
-            File.SetLastWriteTimeUtc(fixture.PluginPath, DateTime.UtcNow.AddSeconds(5));
+            File.SetLastWriteTimeUtc(fixture.PluginPath, TimeProvider.System.GetUtcNow().AddSeconds(5).UtcDateTime);
             File.AppendAllText(fixture.PluginPath, "");
             WaitUntil(() => index.Of("reindex").Count > 1, TimeSpan.FromSeconds(3));
 
@@ -385,8 +386,9 @@ public sealed class ModFolderWatcherTests
                 index, TimeSpan.FromMilliseconds(1500), TimeSpan.FromMilliseconds(300));
             watcher.Watch(modFolder, sourceA, "A.esp", "OneMod");
 
-            var deadline = DateTime.UtcNow + TimeSpan.FromMilliseconds(900);
-            while (DateTime.UtcNow < deadline)
+            var writeFor = TimeSpan.FromMilliseconds(900);
+            var elapsed = Stopwatch.StartNew();
+            while (elapsed.Elapsed < writeFor)
             {
                 Write(sourceA);
                 Thread.Sleep(50);

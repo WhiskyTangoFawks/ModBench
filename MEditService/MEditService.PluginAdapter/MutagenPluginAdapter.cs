@@ -34,8 +34,17 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         PluginStrings? strings = null)
     {
-        var loaded = OpenForRead(modPath, gameRelease, strings);
-        return ModDocuments.Of(loaded.Getter, schemas, loaded);
+        ILoadedMod? loaded = OpenForRead(modPath, gameRelease, strings);
+        try
+        {
+            var documents = ModDocuments.Of(loaded.Getter, schemas, loaded);
+            loaded = null;
+            return documents;
+        }
+        finally
+        {
+            loaded?.Dispose();
+        }
     }
 
     public IPluginRecordLookup OpenRecordLookup(
@@ -43,8 +52,17 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
-        var loaded = OpenForRead(modPath, gameRelease);
-        return ModDocuments.LookupOf(loaded.Getter, schemas, loaded);
+        ILoadedMod? loaded = OpenForRead(modPath, gameRelease);
+        try
+        {
+            var lookup = ModDocuments.LookupOf(loaded.Getter, schemas, loaded);
+            loaded = null;
+            return lookup;
+        }
+        finally
+        {
+            loaded?.Dispose();
+        }
     }
 
     public (PluginContent Content, Exception? Unreachable) ReadContent(
@@ -148,14 +166,24 @@ public sealed class MutagenPluginAdapter : IPluginAdapter
             .NoNextFormIDProcessing()
             .WithRecordCount(RecordCountOption.NoCheck);
 
-        // Mutagen's default StringsWriter derives its folder from the write path, so a caller writing
-        // to a temp file needs its own to keep strings under the same temp discipline.
-        if (stringsFolder != null && plugin.UsingLocalization)
+        // A caller writing to a temp file needs its own strings folder. Mutagen's write path
+        // disposes whichever StringsWriter it holds, so this one is ours only on failure.
+        StringsWriter? stringsWriter = null;
+        try
         {
-            writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(
-                plugin.GameRelease, plugin.ModKey,
-                writeDirectory: stringsFolder,
-                encodingProvider: MutagenEncoding.Default));
+            if (stringsFolder != null && plugin.UsingLocalization)
+            {
+                stringsWriter = new StringsWriter(
+                    plugin.GameRelease, plugin.ModKey,
+                    writeDirectory: stringsFolder,
+                    encodingProvider: MutagenEncoding.Default);
+                writeBuilder = writeBuilder.WithStringsWriter(stringsWriter);
+                stringsWriter = null;
+            }
+        }
+        finally
+        {
+            stringsWriter?.Dispose();
         }
 
         // ADR-0008: masters are ordered explicitly from the load order when supplied, so the written

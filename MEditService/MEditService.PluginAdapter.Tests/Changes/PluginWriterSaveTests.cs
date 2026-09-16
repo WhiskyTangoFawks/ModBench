@@ -1,5 +1,7 @@
+using System.Globalization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -84,7 +86,8 @@ public sealed class PluginWriterSaveTests
     }
 
     // Two backups of one plugin in quick succession must both survive — which at one-second
-    // timestamp resolution collided with the previous backup and threw, failing the save.
+    // timestamp resolution collided with the previous backup and threw, failing the save. The
+    // clock is set to two distinct instants now, not raced.
     [Fact]
     public void CreateBackup_TwiceInQuickSuccession_KeepsBoth()
     {
@@ -95,18 +98,28 @@ public sealed class PluginWriterSaveTests
             var pluginPath = Path.Combine(dir, "TestPlugin.esp");
             File.WriteAllText(pluginPath, "dummy");
 
-            var first = PluginWriter.CreateBackup(pluginPath);
-            var second = PluginWriter.CreateBackup(pluginPath);
+            var clock = new FakeTimeProvider(new DateTimeOffset(2024, 3, 1, 12, 0, 0, TimeSpan.Zero));
+            var firstInstant = clock.GetUtcNow();
+            var first = PluginWriter.CreateBackup(pluginPath, timeProvider: clock);
+
+            clock.SetUtcNow(firstInstant.AddTicks(1));
+            var secondInstant = clock.GetUtcNow();
+            var second = PluginWriter.CreateBackup(pluginPath, timeProvider: clock);
 
             Assert.NotEqual(first, second);
             Assert.True(File.Exists(first));
             Assert.True(File.Exists(second));
+            Assert.Contains(Stamp(firstInstant), first, StringComparison.Ordinal);
+            Assert.Contains(Stamp(secondInstant), second, StringComparison.Ordinal);
         }
         finally
         {
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    private static string Stamp(DateTimeOffset instant) =>
+        instant.ToString("yyyy-MM-ddTHH-mm-ss-fffffff", CultureInfo.InvariantCulture);
 
     [Fact]
     public void PruneOldBackups_ExcessBackups_DeletesOldestKeepsNewest()

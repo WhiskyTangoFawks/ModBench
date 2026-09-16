@@ -82,7 +82,7 @@ internal static class GitCli
         var stderrTask = process.StandardError.ReadToEndAsync();
         Task.WaitAll(stdoutTask, stderrTask);
         process.WaitForExit();
-        return (process.ExitCode, stdoutTask.Result, stderrTask.Result);
+        return (process.ExitCode, stdoutTask.GetAwaiter().GetResult(), stderrTask.GetAwaiter().GetResult());
     }
 }
 

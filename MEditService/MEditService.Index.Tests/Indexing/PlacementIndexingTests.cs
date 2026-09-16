@@ -88,15 +88,24 @@ public class PlacementIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
+            repo.UpdateWinners();
 
-        return new Built(repo, wrld.FormKey.ToString(), topCell.FormKey.ToString(),
-            extCell.FormKey.ToString(), bareCell.FormKey.ToString(),
-            intCell.FormKey.ToString(), bareIntCell.FormKey.ToString(),
-            barrel.FormKey.ToString(), nullRef.FormKey.ToString(), raider.FormKey.ToString());
+            var built = new Built(repo, wrld.FormKey.ToString(), topCell.FormKey.ToString(),
+                extCell.FormKey.ToString(), bareCell.FormKey.ToString(),
+                intCell.FormKey.ToString(), bareIntCell.FormKey.ToString(),
+                barrel.FormKey.ToString(), nullRef.FormKey.ToString(), raider.FormKey.ToString());
+            repo = null;
+            return built;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
     private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql, string param)
@@ -396,14 +405,23 @@ public class PlacementIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));
-        repo.UpdateWinners();
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
+            repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));
+            repo.UpdateWinners();
 
-        return new WorldspaceFixture(repo, wrld.FormKey.ToString(), extCell.FormKey.ToString(),
-            placed.FormKey.ToString(), intCell.FormKey.ToString());
+            var fixture = new WorldspaceFixture(repo, wrld.FormKey.ToString(), extCell.FormKey.ToString(),
+                placed.FormKey.ToString(), intCell.FormKey.ToString());
+            repo = null;
+            return fixture;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
     [Fact]

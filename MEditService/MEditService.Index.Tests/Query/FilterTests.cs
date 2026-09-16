@@ -19,15 +19,24 @@ public class FilterTests(TestPluginFixture fixture)
 
     private DuckDbRecordIndex LoadedRepository()
     {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        var modPath = new ModPath(
-            ModKey.FromFileName(TestPluginFixture.PluginName),
-            Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
-        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-        return repo;
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            var modPath = new ModPath(
+                ModKey.FromFileName(TestPluginFixture.PluginName),
+                Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
+            using var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+            repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
+            repo.UpdateWinners();
+            var loaded = repo;
+            repo = null;
+            return loaded;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
     // --- SetFilter: validation ---

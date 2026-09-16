@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -146,8 +147,9 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     // Long enough for the settle window the edit opens, and the refresh behind it.
     private async Task<string?> EditorIdReaches(FormKey formKey, PluginCopyKey plugin, string editorId)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
-        while (DateTime.UtcNow < deadline && EditorIdOf(formKey, plugin) != editorId)
+        var limit = TimeSpan.FromSeconds(15);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < limit && EditorIdOf(formKey, plugin) != editorId)
             await Task.Delay(50);
         return EditorIdOf(formKey, plugin);
     }

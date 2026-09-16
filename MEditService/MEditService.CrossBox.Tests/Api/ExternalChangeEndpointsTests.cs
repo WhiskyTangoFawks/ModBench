@@ -48,7 +48,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     public void AbsorbExternalChange_AbsorbsAndClearsTheUnansweredQuestion()
     {
         WriteExternalBinaryChange(0.9f);
-        var watcher = TestWatcher.Inert();
+        using var watcher = TestWatcher.Inert();
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
@@ -69,8 +69,9 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
+        using var watcher = TestWatcher.Inert();
         var result = PluginEndpoints.AbsorbExternalChange(new ExternalChangeActionRequest("NoSuchOrigin"),
-            _mod.Holder, TestEditService.AbsorbHandler(), TestWatcher.Inert(), loggerFactory);
+            _mod.Holder, TestEditService.AbsorbHandler(), watcher, loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);
@@ -83,7 +84,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     {
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
-        var watcher = TestWatcher.Inert();
+        using var watcher = TestWatcher.Inert();
         SourceRepository.RaiseExternalChangeQuestion(_mod.ModFolder, "unanswered");
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
@@ -109,8 +110,9 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
+        using var watcher = TestWatcher.Inert();
         var result = PluginEndpoints.KeepExternalChange(new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin),
-            _mod.Holder, TestEditService.KeepHandler(), TestWatcher.Inert(), loggerFactory);
+            _mod.Holder, TestEditService.KeepHandler(), watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         var response = ok.Value;

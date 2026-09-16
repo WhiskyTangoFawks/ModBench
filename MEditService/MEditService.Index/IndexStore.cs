@@ -20,6 +20,7 @@ internal sealed class IndexStore : IDisposable
 
     private readonly ILogger _logger;
     private readonly string? _databasePath;
+    private readonly TimeProvider _timeProvider;
 
     // The version the rows in this file were written under (IndexVersion), resolved once at
     // Initialize once the game release is known — same "one game for its whole lifetime" reasoning
@@ -28,10 +29,11 @@ internal sealed class IndexStore : IDisposable
 
     public DuckDBConnection Connection { get; private set; }
 
-    public IndexStore(ILogger logger, string? databasePath)
+    public IndexStore(ILogger logger, string? databasePath, TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _databasePath = databasePath;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         Connection = Open();
     }
 
@@ -100,10 +102,10 @@ internal sealed class IndexStore : IDisposable
     // it, with nothing said.
     private void WaitWhile(Func<bool> pending, string what)
     {
-        var deadline = DateTime.UtcNow + IndexWriteGate.DefaultTimeout;
+        var deadline = _timeProvider.GetUtcNow() + IndexWriteGate.DefaultTimeout;
         while (pending())
         {
-            var remaining = deadline - DateTime.UtcNow;
+            var remaining = deadline - _timeProvider.GetUtcNow();
             if (remaining <= TimeSpan.Zero || !Monitor.Wait(_rebuildGate, remaining))
                 throw new TimeoutException($"The index is still {what} after {IndexWriteGate.DefaultTimeout.TotalSeconds:0.###}s.");
         }
@@ -325,7 +327,7 @@ internal sealed class IndexStore : IDisposable
 
     internal IDisposable BeginProjection()
     {
-        var scope = new ProjectionScope(this, _openProjection.Value);
+        var scope = new ProjectionScope(EndProjection, _openProjection.Value);
         _openProjection.Value = scope;
         return scope;
     }
@@ -393,15 +395,17 @@ internal sealed class IndexStore : IDisposable
         foreach (var publish in announcements) publish();
     }
 
-    private sealed class ProjectionScope(IndexStore store, ProjectionScope? parent) : IDisposable
+    // Calls back into the store to end the scope rather than holding the store itself: the scope
+    // does not own the store's lifetime, so a disposable-typed field here would claim it does.
+    private sealed class ProjectionScope(Action<ProjectionScope> endProjection, ProjectionScope? parent) : IDisposable
     {
         internal ProjectionScope? Parent { get; } = parent;
         internal bool BumpOwed { get; set; }
         internal List<Action> Announcements { get; } = [];
-        private IndexStore? _store = store;
+        private Action<ProjectionScope>? _endProjection = endProjection;
 
         // Idempotent: a second Dispose would otherwise re-announce and pop a scope it does not own.
-        public void Dispose() => Interlocked.Exchange(ref _store, null)?.EndProjection(this);
+        public void Dispose() => Interlocked.Exchange(ref _endProjection, null)?.Invoke(this);
     }
 
     private sealed class NoScope : IDisposable

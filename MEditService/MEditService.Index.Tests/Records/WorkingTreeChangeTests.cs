@@ -34,12 +34,22 @@ public sealed class WorkingTreeChangeTests : IDisposable
 
     private DuckDbRecordIndex LoadedIndex()
     {
-        var index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        index.Initialize(GameRelease.Fallout4);
-        var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-        index.IndexMod(Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(0), BaseKey);
-        index.UpdateWinners();
-        return index;
+        DuckDbRecordIndex? index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            index.Initialize(GameRelease.Fallout4);
+            var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
+            using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
+            index.IndexMod(mod, Registration.Participating(0), BaseKey);
+            index.UpdateWinners();
+            var loaded = index;
+            index = null;
+            return loaded;
+        }
+        finally
+        {
+            index?.Dispose();
+        }
     }
 
     // EditorID is an identity column, not a reflected field, so this reads the projection of the

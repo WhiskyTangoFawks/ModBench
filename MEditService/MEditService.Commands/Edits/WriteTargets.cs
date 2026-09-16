@@ -97,11 +97,11 @@ internal sealed class WriteTargets(
 
         var release = loadOrder.Current.GameRelease;
         var source = new CopySource(sourcePlugin, loadOrder.Current, adapter, codec, schemaReflector);
+        CopySource? owned = source;
         try
         {
             if (source.Identity(formKey) is not { } identity)
             {
-                source.Dispose();
                 return RecordEditResult.Refused(
                     RecordEditRefusal.RecordNotFound, $"{sourcePlugin.Name} does not hold record {formKey}.");
             }
@@ -110,12 +110,16 @@ internal sealed class WriteTargets(
                 source, identity,
                 new RecordCopy.Destination(destinationRepository, destinationPlugin),
                 release, source.Body(identity));
+            owned = null;
             return null;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            source.Dispose();
             return RefuseUnreadableCopySource(formKey, source.Diagnose(ex));
+        }
+        finally
+        {
+            owned?.Dispose();
         }
     }
 

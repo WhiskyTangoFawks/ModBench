@@ -245,42 +245,58 @@ public sealed class ModFolderWatcher : IDisposable
             return existing;
         }
 
-        FileSystemWatcher fsWatcher;
+        FileSystemWatcher? fsWatcher = null;
+        Timer? quietTimer = null;
+        Timer? maxWindowTimer = null;
         try
         {
-            fsWatcher = new FileSystemWatcher(modFolder)
+            try
             {
-                IncludeSubdirectories = recursive,
-                // FileName and DirectoryName: git and a compile both write through a rename, and
-                // .NET's inotify-backed Linux watcher gates Renamed on those bits.
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
-                                | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-                // Wider than the 8KB default: a whole mod folder is a wider surface than one file's
-                // directory, and Error is still the backstop when a burst outruns even this.
-                InternalBufferSize = 65536,
-            };
+                fsWatcher = new FileSystemWatcher(modFolder)
+                {
+                    IncludeSubdirectories = recursive,
+                    // FileName and DirectoryName: git and a compile both write through a rename, and
+                    // .NET's inotify-backed Linux watcher gates Renamed on those bits.
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
+                                    | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+                    // Wider than the 8KB default: a whole mod folder is a wider surface than one file's
+                    // directory, and Error is still the backstop when a burst outruns even this.
+                    InternalBufferSize = 65536,
+                };
+            }
+            catch (ArgumentException)
+            {
+                return null;
+            }
+
+            quietTimer = new Timer(_quiet.TotalMilliseconds) { AutoReset = false };
+            maxWindowTimer = new Timer(_maxWindow.TotalMilliseconds) { AutoReset = false };
+
+            var mod = new ModEntry(
+                modFolder, SourceRepository.GitWatchPathsIn(modFolder), fsWatcher, quietTimer, maxWindowTimer);
+            mod.QuietTimer.Elapsed += (_, _) => Settle(mod);
+            mod.MaxWindowTimer.Elapsed += (_, _) => Settle(mod);
+            mod.Watcher.Changed += (_, e) => Observe(mod, e.FullPath);
+            mod.Watcher.Created += (_, e) => Observe(mod, e.FullPath);
+            // A deletion is a settle like any other: the whole point of the indexed-binary route, and a
+            // no-op for a plugin classification finds no bytes for.
+            mod.Watcher.Deleted += (_, e) => Observe(mod, e.FullPath);
+            mod.Watcher.Renamed += (_, e) => { Observe(mod, e.OldFullPath); Observe(mod, e.FullPath); };
+            mod.Watcher.Error += (_, _) => Interrupted(modFolder);
+            fsWatcher = null;
+            quietTimer = null;
+            maxWindowTimer = null;
+
+            mod.Watcher.EnableRaisingEvents = true;
+            _mods[modFolder] = mod;
+            return mod;
         }
-        catch (ArgumentException)
+        finally
         {
-            return null;
+            fsWatcher?.Dispose();
+            quietTimer?.Dispose();
+            maxWindowTimer?.Dispose();
         }
-
-        var mod = new ModEntry(modFolder, SourceRepository.GitWatchPathsIn(modFolder), fsWatcher,
-            new Timer(_quiet.TotalMilliseconds) { AutoReset = false },
-            new Timer(_maxWindow.TotalMilliseconds) { AutoReset = false });
-        mod.QuietTimer.Elapsed += (_, _) => Settle(mod);
-        mod.MaxWindowTimer.Elapsed += (_, _) => Settle(mod);
-        fsWatcher.Changed += (_, e) => Observe(mod, e.FullPath);
-        fsWatcher.Created += (_, e) => Observe(mod, e.FullPath);
-        // A deletion is a settle like any other: the whole point of the indexed-binary route, and a
-        // no-op for a plugin classification finds no bytes for.
-        fsWatcher.Deleted += (_, e) => Observe(mod, e.FullPath);
-        fsWatcher.Renamed += (_, e) => { Observe(mod, e.OldFullPath); Observe(mod, e.FullPath); };
-        fsWatcher.Error += (_, _) => Interrupted(modFolder);
-        fsWatcher.EnableRaisingEvents = true;
-
-        _mods[modFolder] = mod;
-        return mod;
     }
 
     // Called under _gate. A ref move, a document under a registered plugin's source root, a

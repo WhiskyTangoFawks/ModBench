@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Index;
@@ -61,8 +62,9 @@ public sealed class SourceWatchTests : IDisposable
     // are two: what the committed view says is the condition to wait on.
     private async Task<string?> CommittedEditorIdReaches(string editorId)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
-        while (DateTime.UtcNow < deadline && EditorIdAt(RecordRef.Head) != editorId)
+        var limit = TimeSpan.FromSeconds(15);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < limit && EditorIdAt(RecordRef.Head) != editorId)
             await Task.Delay(50);
         return EditorIdAt(RecordRef.Head);
     }
@@ -157,7 +159,7 @@ public sealed class SourceWatchTests : IDisposable
         var projections = _notifications.Notifications.Count;
 
         // The same bytes, signalled again: a projection idempotent by content writes no row.
-        File.SetLastWriteTimeUtc(_mod.NpcSourceFile, DateTime.UtcNow);
+        File.SetLastWriteTimeUtc(_mod.NpcSourceFile, TimeProvider.System.GetUtcNow().UtcDateTime);
         WaitOutTheWatcher();
 
         Assert.Equal(afterTheProjection, _mod.Index.Sequence);
@@ -259,14 +261,15 @@ public sealed class SourceWatchTests : IDisposable
         var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
         var reads = _mod.Index.Reads
             ?? throw new InvalidOperationException("Expected the index to already hold Reads.");
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        var limit = TimeSpan.FromSeconds(15);
+        var elapsed = Stopwatch.StartNew();
         PagedResult<RecordSummary> result;
         do
         {
             result = reads.Search(query);
             if (result.Total > 0) return result;
             await Task.Delay(50);
-        } while (DateTime.UtcNow < deadline);
+        } while (elapsed.Elapsed < limit);
         return result;
     }
 

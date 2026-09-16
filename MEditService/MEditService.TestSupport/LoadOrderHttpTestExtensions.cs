@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -33,8 +34,9 @@ public static class LoadOrderHttpTestExtensions
     public static async Task AwaitTerminalLoadOrderStatus(
         this HttpClient client, long appliedVersion, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(60));
-        while (DateTime.UtcNow < deadline)
+        var limit = timeout ?? TimeSpan.FromSeconds(60);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < limit)
         {
             var status = await client.GetFromJsonAsync<JsonElement>("/load-order/status");
             var version = status.GetProperty("version").GetInt64();

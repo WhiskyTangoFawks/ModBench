@@ -10,7 +10,7 @@ public sealed class PluginPortSurfaceTests
 {
     private static readonly string[] LiveObjectNamespaces =
         [.. SourceTree.ReadAllowlist(
-                Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.txt"))
+                Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.Mutagen.txt"))
             .Select(line => line.Split(';')[0].Replace("N:", "", StringComparison.Ordinal))];
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Codec.Schema;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
@@ -154,8 +155,9 @@ public sealed class CascadeRollbackFixture : IDisposable
     public async Task<bool> ProjectionReaches(Func<IRecordReads, bool> condition)
     {
         var index = Index ?? throw new InvalidOperationException("ProjectionReaches requires the Watched() fixture.");
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
-        while (DateTime.UtcNow < deadline)
+        var limit = TimeSpan.FromSeconds(20);
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < limit)
         {
             var store = index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
             if (condition(store.At(RecordRef.Effective))) return true;

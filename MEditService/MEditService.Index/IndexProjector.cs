@@ -55,13 +55,14 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         IPluginAdapter adapter,
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
-        INotificationPublisher? notifications = null)
+        INotificationPublisher? notifications = null,
+        TimeProvider? timeProvider = null)
         : this(
             holder,
             adapter,
             new DuckDbRecordIndexFactory(
                 schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
-                loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>()),
+                loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider),
             loggerFactory?.CreateLogger<IndexProjector>(), schemaReflector, notifications)
     {
     }
@@ -740,13 +741,9 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// uncommitted edits.</summary>
     public Task ReindexPlugin(PluginCopyKey key)
     {
-        // Taken before anything reaches _lock or the index: this runs on the watcher's timer, with
-        // nothing else ordering it against an in-flight edit. Reentrant, so the branch below taking
-        // it again costs a recursion count, not a deadlock.
-
-        // The `using` releases when this method returns, not when the returned Task completes, which
-        // is correct only because both branches below are synchronous. A real `await` under either
-        // must make this method `async` too, or the write is silently ungated.
+        // Taken before anything reaches _lock: this runs on the watcher's timer. IndexWriteGate is a
+        // Lock, thread-affine, so nothing under this scope may await — the thread that exits must be
+        // the one that entered.
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease, dataFolderPath) = RequireHeldCopy(key);
@@ -760,12 +757,11 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         // Asked here as a bare "is this tracked" question; the door below resolves the tree it reads
         // for itself, so neither trusts the other about a folder either could have lost in between.
         if (SourceIngest.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
-        {
             IngestFromSourceTree(key);
-            return Task.CompletedTask;
-        }
+        else
+            ReindexOne(metadata, index, gameRelease, dataFolderPath);
 
-        return ReindexOne(metadata, index, gameRelease, dataFolderPath);
+        return Task.CompletedTask;
     }
 
     // The same SourceIngest.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
@@ -829,7 +825,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease, string dataFolderPath)
+    private void ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease, string dataFolderPath)
     {
         using var documents = OpenDocuments(metadata, gameRelease, dataFolderPath);
 
@@ -839,8 +835,6 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>The file is gone, so its rows go with it. A no-op while the held copy still exists
@@ -1012,7 +1006,17 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
 
         EnterExclusive();
-        try { lock (_lock) DisposeCurrent(); }
+        try
+        {
+            lock (_lock)
+            {
+                DisposeCurrent();
+                // EndReconcile already clears this on every reconcile's own exit path; this is the
+                // exclusive-holder's own backstop, not the common case.
+                _reconcileCancellation?.Dispose();
+                _reconcileCancellation = null;
+            }
+        }
         finally { ExitExclusive(); }
         _reconcileGate.Dispose();
     }
