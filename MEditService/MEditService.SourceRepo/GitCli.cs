@@ -78,14 +78,13 @@ internal static class GitCli
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start the git process.");
         // Closed at once: git otherwise inherits this process's stdin, and a socket never reaches EOF.
         process.StandardInput.Close();
-        // A thread, not a task: Execute is a link in SourceRepository's synchronous surface.
-        var stderr = string.Empty;
-        var stderrReader = new Thread(() => stderr = process.StandardError.ReadToEnd());
-        stderrReader.Start();
-        var stdout = process.StandardOutput.ReadToEnd();
-        stderrReader.Join();
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        Task.WaitAll(stdoutTask, stderrTask);
         process.WaitForExit();
-        return (process.ExitCode, stdout, stderr);
+        // Both tasks are already complete by the WaitAll above; GetAwaiter().GetResult() reads the
+        // completed value without the banned Task<T>.Result, waiting on nothing further.
+        return (process.ExitCode, stdoutTask.GetAwaiter().GetResult(), stderrTask.GetAwaiter().GetResult());
     }
 }
 
