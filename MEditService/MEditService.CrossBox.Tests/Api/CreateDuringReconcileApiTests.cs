@@ -40,34 +40,44 @@ public sealed class CreateDuringReconcileApiTests
     [Fact]
     public async Task AReconcileRacingACreate_KeepsBothTheSnapshotsCopiesAndTheCreatedOne()
     {
-        using var data = new PluginFixtureBuilder("create-during-reconcile-http")
+        // Not `using`: `put` below is deliberately left unawaited until after the create races it,
+        // so client/app/data must outlive that gap. Disposed in the `finally` once `put` is awaited.
+        var data = new PluginFixtureBuilder("create-during-reconcile-http")
             .WithPlugin("A.esp").WithPlugin("B.esp").Build();
-        using var app = new ParkedReconcileApp();
-        using var client = app.CreateClient();
-
-        var put = client.PutAsJsonAsync("/load-order", new
+        var app = new ParkedReconcileApp();
+        var client = app.CreateClient();
+        try
         {
-            plugins = data.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
-            gameDirectory = data.DataFolder,
-            instanceRoot = data.InstanceRoot,
-            gameRelease = "Fallout4",
-        });
-        await app.Index.WaitUntilParkedAsync();
+            var put = client.PutAsJsonAsync("/load-order", new
+            {
+                plugins = data.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+                gameDirectory = data.DataFolder,
+                instanceRoot = data.InstanceRoot,
+                gameRelease = "Fallout4",
+            });
+            await app.Index.WaitUntilParkedAsync();
 
-        var created = await client.PostAsJsonAsync("/plugins/create", new
+            var created = await client.PostAsJsonAsync("/plugins/create", new
+            {
+                name = "Minted.esp",
+                path = Path.Combine(data.DataFolder, "MintedMod"),
+                origin = "MintedMod",
+            });
+
+            Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+            app.Index.Release();
+            Assert.Equal(HttpStatusCode.OK, (await put).StatusCode);
+
+            var held = app.Services.GetRequiredService<LoadOrderHolder>().Current;
+            Assert.Equal(
+                ["A.esp", "B.esp", "Minted.esp"],
+                held.Copies.Select(copy => copy.Name).Order(StringComparer.Ordinal));
+        }
+        finally
         {
-            name = "Minted.esp",
-            path = Path.Combine(data.DataFolder, "MintedMod"),
-            origin = "MintedMod",
-        });
-
-        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        app.Index.Release();
-        Assert.Equal(HttpStatusCode.OK, (await put).StatusCode);
-
-        var held = app.Services.GetRequiredService<LoadOrderHolder>().Current;
-        Assert.Equal(
-            ["A.esp", "B.esp", "Minted.esp"],
-            held.Copies.Select(copy => copy.Name).Order(StringComparer.Ordinal));
+            client.Dispose();
+            app.Dispose();
+            data.Dispose();
+        }
     }
 }

@@ -88,7 +88,7 @@ public class PlacementIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
@@ -396,7 +396,7 @@ public class PlacementIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
         repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));

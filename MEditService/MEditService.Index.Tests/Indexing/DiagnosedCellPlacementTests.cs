@@ -26,7 +26,7 @@ public sealed class DiagnosedCellPlacementTests
 
     private static DuckDbRecordIndex Indexed(string? cellDiagnosis)
     {
-        var repo = new DuckDbRecordIndex(Reflector, new TableDdlBuilder(Reflector), NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, new TableDdlBuilder(Reflector), NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         using var documents = new StubDocuments(cellDiagnosis);
         repo.Index(documents, Registration.Participating(0), new PluginCopyKey(Plugin, "Data"));

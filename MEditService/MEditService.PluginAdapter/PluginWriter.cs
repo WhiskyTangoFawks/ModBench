@@ -9,24 +9,26 @@ namespace MEditService.PluginAdapter;
 
 /// <summary>Replaces a plugin binary: sibling temp file, commit by rename, timestamped <c>.bak</c>
 /// beside it, oldest pruned. Mechanism only, no edit semantics.</summary>
-public sealed class PluginWriter(ILogger<PluginWriter> logger)
+public sealed class PluginWriter(ILogger<PluginWriter> logger, TimeProvider? timeProvider = null)
 {
     private const int MaxBackups = 5;
 
     private readonly ILogger<PluginWriter> _logger = logger;
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     /// <summary><paramref name="loadOrder"/> orders the written master list explicitly (ADR-0008,
     /// xEdit's canonical form) rather than leaving it to Mutagen's undefined default.</summary>
     public static Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         GameRelease gameRelease,
-        IReadOnlyList<string>? loadOrder = null)
+        IReadOnlyList<string>? loadOrder = null,
+        TimeProvider? timeProvider = null)
     {
         // No load order concept here, so no origin to distinguish a mod folder from the game Data folder:
         // the single-argument ForRead overload applies. The path names its own ModKey.
         var mod = MutagenPluginAdapter.OpenForWrite(
             new ModPath(pluginPath), gameRelease, PluginStrings.In(PathShape.DirectoryOf(pluginPath)));
-        return PrepareFromModAsync(mod, pluginPath, loadOrder);
+        return PrepareFromModAsync(mod, pluginPath, loadOrder, timeProvider);
     }
 
     /// <summary>Writes an already-assembled mod: compile's mod comes from the source tree, never off
@@ -34,9 +36,10 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     public static async Task<PreparedPluginSave> PrepareFromModAsync(
         IMod mod,
         string pluginPath,
-        IReadOnlyList<string>? loadOrder = null)
+        IReadOnlyList<string>? loadOrder = null,
+        TimeProvider? timeProvider = null)
     {
-        var backupPath = CreateBackup(pluginPath);
+        var backupPath = CreateBackup(pluginPath, timeProvider: timeProvider);
 
         var dir = PathShape.DirectoryOf(pluginPath);
         var tmpDir = Path.Combine(dir, ".medit_tmp_" + Path.GetRandomFileName());
@@ -80,7 +83,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         GameRelease gameRelease,
         IReadOnlyList<string>? loadOrder = null)
     {
-        using var prep = await PrepareAsync(pluginPath, gameRelease, loadOrder);
+        using var prep = await PrepareAsync(pluginPath, gameRelease, loadOrder, _timeProvider);
         prep.Commit();
         PruneOldBackups(pluginPath);
         return prep.BackupPath;
@@ -92,7 +95,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         string pluginPath,
         IReadOnlyList<string>? loadOrder = null)
     {
-        using var prep = await PrepareFromModAsync(mod, pluginPath, loadOrder);
+        using var prep = await PrepareFromModAsync(mod, pluginPath, loadOrder, _timeProvider);
         prep.Commit();
         PruneOldBackups(pluginPath);
         return prep.BackupPath;
@@ -101,12 +104,13 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     // Sub-second timestamps: one gesture can write a plugin twice in a second and the second backup
     // collided. Not a uniquifying retry, which would mask a genuine collision, nor overwrite, which
     // destroys the earlier backup.
-    internal static string CreateBackup(string pluginPath, string? timestamp = null)
+    internal static string CreateBackup(string pluginPath, string? timestamp = null, TimeProvider? timeProvider = null)
     {
         var dir = PathShape.DirectoryOf(pluginPath);
         var name = Path.GetFileNameWithoutExtension(pluginPath);
         var ext = Path.GetExtension(pluginPath);
-        var ts = timestamp ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss-fffffff", CultureInfo.InvariantCulture);
+        var ts = timestamp ?? (timeProvider ?? TimeProvider.System).GetUtcNow()
+            .ToString("yyyy-MM-ddTHH-mm-ss-fffffff", CultureInfo.InvariantCulture);
         var path = Path.Combine(dir, $"{name}.{ts}.bak{ext}");
         File.Copy(pluginPath, path, overwrite: false);
         return path;

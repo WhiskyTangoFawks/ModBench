@@ -38,6 +38,18 @@ public sealed class BannedApiScopeTests
         "N:Mutagen.Bethesda.Plugins.Records",
     ];
 
+    // The current time and a blocking wait on a task's result share BannedSymbols.txt with the
+    // Mutagen namespaces above but not their reason (ADR-0005 rule 2 governs only the namespaces),
+    // so this is pinned separately from BannedNamespaces.
+    private static readonly string[] BannedTimeAndBlockingWaitSymbols =
+    [
+        "P:System.DateTime.Now",
+        "P:System.DateTime.UtcNow",
+        "P:System.DateTimeOffset.Now",
+        "P:System.DateTimeOffset.UtcNow",
+        "P:System.Threading.Tasks.Task`1.Result",
+    ];
+
     private const string Rs0030 = "RS0030";
 
     [Fact]
@@ -98,15 +110,33 @@ public sealed class BannedApiScopeTests
     [Fact]
     public void TheSymbolList_BansTheLiveObjectNamespaces_AndLeavesIdentityLegibleEverywhere()
     {
-        var lines = SourceTree.ReadAllowlist(
-            Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.txt"));
-        var banned = lines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
+        var lines = BannedSymbolLines();
+        var namespaceLines = lines.Where(line => line.StartsWith("N:", StringComparison.Ordinal)).ToList();
+        var banned = namespaceLines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
 
         Assert.Equal(BannedNamespaces, banned);
-        Assert.All(lines, line => Assert.EndsWith(
+        Assert.All(namespaceLines, line => Assert.EndsWith(
             "a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).",
             line, StringComparison.Ordinal));
     }
+
+    // The current time and Task<T>.Result are the two banned symbols outside the namespace ban
+    // above; each message names what replaces the banned read.
+    [Fact]
+    public void TheSymbolList_BansTheCurrentTimeAndBlockingResult_NamingTheReplacement()
+    {
+        var lines = BannedSymbolLines();
+        var propertyLines = lines.Where(line => line.StartsWith("P:", StringComparison.Ordinal)).ToList();
+        var banned = propertyLines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
+
+        Assert.Equal(BannedTimeAndBlockingWaitSymbols.Order(StringComparer.Ordinal), banned);
+        Assert.All(propertyLines, line => Assert.Contains(';', line));
+        Assert.Contains(propertyLines, line => line.Contains("TimeProvider", StringComparison.Ordinal));
+        Assert.Contains(propertyLines, line => line.Contains("Await the task", StringComparison.Ordinal));
+    }
+
+    private static IReadOnlyList<string> BannedSymbolLines() =>
+        SourceTree.ReadAllowlist(Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.txt"));
 
     // Read off disk rather than listed: a box added tomorrow is banned the moment its project file
     // exists. Keyed on the project file, so a leftover obj folder is not a box.

@@ -3,3 +3,12 @@
 N:Mutagen.Bethesda.Plugins.Records;A record is a Mutagen object only while it is being read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).
 N:Mutagen.Bethesda.Plugins.Cache;A record is a Mutagen object only while it is being read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).
 N:Mutagen.Bethesda.Plugins.Binary.Parameters;A record is a Mutagen object only while it is being read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).
+
+# #877/#919: the current time is read through the injected TimeProvider, never ambiently, so a
+# fake clock can drive a test without a real wait.
+P:System.DateTime.Now;Use the injected TimeProvider (GetLocalNow/GetUtcNow) instead of the ambient clock.
+P:System.DateTime.UtcNow;Use the injected TimeProvider's GetUtcNow instead of the ambient clock.
+P:System.DateTimeOffset.Now;Use the injected TimeProvider's GetLocalNow instead of the ambient clock.
+P:System.DateTimeOffset.UtcNow;Use the injected TimeProvider's GetUtcNow instead of the ambient clock.
+# A blocking wait on a Task's result is banned; await it instead.
+P:System.Threading.Tasks.Task`1.Result;Await the task instead of blocking on Result.

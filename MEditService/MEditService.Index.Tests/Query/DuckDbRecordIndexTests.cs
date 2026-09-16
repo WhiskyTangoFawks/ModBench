@@ -21,15 +21,24 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
     private DuckDbRecordIndex LoadedRepository()
     {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        var modPath = new ModPath(
-            ModKey.FromFileName(TestPluginFixture.PluginName),
-            Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
-        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-        return repo;
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            var modPath = new ModPath(
+                ModKey.FromFileName(TestPluginFixture.PluginName),
+                Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
+            using var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+            repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
+            repo.UpdateWinners();
+            var loaded = repo;
+            repo = null;
+            return loaded;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
     // --- GetRecords ---
@@ -127,7 +136,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             })
             .Build();
 
-        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("ColumnValue.esm"),
                 Path.Combine(fixture.DataFolder, "ColumnValue.esm")),
             Fallout4Release.Fallout4);
@@ -155,7 +164,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         var modPath = new ModPath(
             ModKey.FromFileName(TestPluginFixture.PluginName),
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
-        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+        using var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
 
         repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
         repo.IndexMod(mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));
@@ -200,7 +209,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             var formKey = race.FormKey.ToString();
             mod.WriteToBinary(Path.Combine(dataFolder, "Flags.esp"));
 
-            var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName("Flags.esp"), Path.Combine(dataFolder, "Flags.esp")),
                 Fallout4Release.Fallout4);
 
@@ -245,7 +254,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             var npcKey = modA.Npcs.AddNew("SharedNPC").FormKey;
             modA.WriteToBinary(Path.Combine(dataFolder, "PluginA.esm"));
 
-            var modALoaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            using var modALoaded = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName("PluginA.esm"), Path.Combine(dataFolder, "PluginA.esm")),
                 Fallout4Release.Fallout4);
 
@@ -285,7 +294,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             var npcKey = npc.FormKey;
             modA.WriteToBinary(Path.Combine(dataFolder, "PluginA.esm"));
 
-            var modALoaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            using var modALoaded = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName("PluginA.esm"), Path.Combine(dataFolder, "PluginA.esm")),
                 Fallout4Release.Fallout4);
 
@@ -405,7 +414,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             })
             .Build();
 
-        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("ArrayTest.esm"),
                 Path.Combine(fixture.DataFolder, "ArrayTest.esm")),
             Fallout4Release.Fallout4);
@@ -454,10 +463,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             modB.Npcs.AddNew("NPC_B");
             modB.WriteToBinary(Path.Combine(dataFolder, "SearchB.esp"));
 
-            var modALoaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            using var modALoaded = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName("SearchA.esm"), Path.Combine(dataFolder, "SearchA.esm")),
                 Fallout4Release.Fallout4);
-            var modBLoaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+            using var modBLoaded = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName("SearchB.esp"), Path.Combine(dataFolder, "SearchB.esp")),
                 Fallout4Release.Fallout4);
 
@@ -492,7 +501,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             })
             .Build();
 
-        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("NullEdId.esm"),
                 Path.Combine(fixture.DataFolder, "NullEdId.esm")),
             Fallout4Release.Fallout4);
@@ -574,7 +583,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             })
             .Build();
 
-        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Dangling.esm"),
                 Path.Combine(fixture.DataFolder, "Dangling.esm")),
             Fallout4Release.Fallout4);
@@ -605,7 +614,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             })
             .Build();
 
-        var loaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Clean.esm"),
                 Path.Combine(fixture.DataFolder, "Clean.esm")),
             Fallout4Release.Fallout4);
@@ -641,10 +650,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             })
             .Build();
 
-        var baseMod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var baseMod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(fixture.DataFolder, "Base.esm")),
             Fallout4Release.Fallout4);
-        var patchMod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var patchMod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Patch.esp"), Path.Combine(fixture.DataFolder, "Patch.esp")),
             Fallout4Release.Fallout4);
 

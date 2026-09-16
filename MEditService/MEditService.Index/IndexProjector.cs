@@ -55,13 +55,14 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         IPluginAdapter adapter,
         SchemaReflector schemaReflector,
         ILoggerFactory? loggerFactory = null,
-        INotificationPublisher? notifications = null)
+        INotificationPublisher? notifications = null,
+        TimeProvider? timeProvider = null)
         : this(
             holder,
             adapter,
             new DuckDbRecordIndexFactory(
                 schemaReflector, new TableDdlBuilder(schemaReflector), notifications,
-                loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>()),
+                loggerFactory?.CreateLogger<DuckDbRecordIndexFactory>(), timeProvider),
             loggerFactory?.CreateLogger<IndexProjector>(), schemaReflector, notifications)
     {
     }
@@ -738,15 +739,11 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
     /// copy from its source tree (ADR-0007), because reading a tracked copy's binary would discard
     /// uncommitted edits.</summary>
-    public Task ReindexPlugin(PluginCopyKey key)
+    public async Task ReindexPlugin(PluginCopyKey key)
     {
         // Taken before anything reaches _lock or the index: this runs on the watcher's timer, with
         // nothing else ordering it against an in-flight edit. Reentrant, so the branch below taking
         // it again costs a recursion count, not a deadlock.
-
-        // The `using` releases when this method returns, not when the returned Task completes, which
-        // is correct only because both branches below are synchronous. A real `await` under either
-        // must make this method `async` too, or the write is silently ungated.
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease, dataFolderPath) = RequireHeldCopy(key);
@@ -762,10 +759,10 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         if (SourceIngest.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
         {
             IngestFromSourceTree(key);
-            return Task.CompletedTask;
+            return;
         }
 
-        return ReindexOne(metadata, index, gameRelease, dataFolderPath);
+        await ReindexOne(metadata, index, gameRelease, dataFolderPath);
     }
 
     // The same SourceIngest.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
@@ -1012,7 +1009,17 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
 
         EnterExclusive();
-        try { lock (_lock) DisposeCurrent(); }
+        try
+        {
+            lock (_lock)
+            {
+                DisposeCurrent();
+                // EndReconcile already clears this on every reconcile's own exit path; this is the
+                // exclusive-holder's own backstop, not the common case.
+                _reconcileCancellation?.Dispose();
+                _reconcileCancellation = null;
+            }
+        }
         finally { ExitExclusive(); }
         _reconcileGate.Dispose();
     }

@@ -76,18 +76,27 @@ public class RegistrationScopingTests
         beta.ModHeader.MasterReferences.Add(new MasterReference { Master = alpha.ModKey });
         beta.Npcs.Set(alpha.Npcs.Single().DeepCopy());
 
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.CreateRecordTypeViews();
-        repo.IndexMod((IModGetter)alpha, Registration.Participating(0), AlphaKey);
-        repo.IndexMod((IModGetter)beta, Registration.Participating(1), BetaKey);
-        repo.UpdateWinners();
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            repo.CreateRecordTypeViews();
+            repo.IndexMod((IModGetter)alpha, Registration.Participating(0), AlphaKey);
+            repo.IndexMod((IModGetter)beta, Registration.Participating(1), BetaKey);
+            repo.UpdateWinners();
 
-        // +1 for the plugin header's own row: it is an ordinary `records` row but is not an
-        // IMajorRecordGetter, so EnumerateMajorRecords cannot count it. This is a row count, not a
-        // record count — hence the name.
-        return new Fixture(repo, sharedNpcFk, betaNpc, betaRace, betaWrld, betaCell, betaPlaced, betaQuest, betaTopic,
-            beta.EnumerateMajorRecords().Count() + 1);
+            // +1 for the plugin header's own row: it is an ordinary `records` row but is not an
+            // IMajorRecordGetter, so EnumerateMajorRecords cannot count it. This is a row count, not a
+            // record count — hence the name.
+            var fixture = new Fixture(repo, sharedNpcFk, betaNpc, betaRace, betaWrld, betaCell, betaPlaced,
+                betaQuest, betaTopic, beta.EnumerateMajorRecords().Count() + 1);
+            repo = null;
+            return fixture;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
     private static long Scalar(DuckDbRecordIndex repo, string sql, params object[] args)

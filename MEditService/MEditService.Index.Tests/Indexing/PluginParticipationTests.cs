@@ -130,7 +130,7 @@ public class PluginParticipationTests
             .WithPlugin("Disabled.esp", mod => mod.Npcs.AddNew("OnlyInDisabled"))
             .Build();
 
-        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Disabled.esp"), Path.Combine(fixture.DataFolder, "Disabled.esp")),
             Fallout4Release.Fallout4);
         var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;
@@ -152,7 +152,7 @@ public class PluginParticipationTests
             .WithPlugin("Disabled.esp", mod => mod.Npcs.AddNew("OnlyInDisabled"))
             .Build();
 
-        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Disabled.esp"), Path.Combine(fixture.DataFolder, "Disabled.esp")),
             Fallout4Release.Fallout4);
         var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;

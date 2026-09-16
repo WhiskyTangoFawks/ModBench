@@ -43,7 +43,7 @@ public class LoadOrderViaRegistrationTests
             .Build();
         using var _ = fixture;
 
-        var modA = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+        using var modA = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("PluginA.esm"), Path.Combine(fixture.DataFolder, "PluginA.esm")),
             Fallout4Release.Fallout4);
         var npcKey = modA.EnumerateMajorRecords<INpcGetter>().First().FormKey;

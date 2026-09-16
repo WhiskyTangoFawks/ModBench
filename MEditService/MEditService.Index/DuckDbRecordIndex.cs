@@ -70,13 +70,14 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         TableDdlBuilder ddlBuilder,
         ILogger logger,
         string? databasePath = null,
-        INotificationPublisher? notifications = null)
+        INotificationPublisher? notifications = null,
+        TimeProvider? timeProvider = null)
     {
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
         _logger = logger;
         _notifications = notifications;
-        _indexStore = new IndexStore(logger, databasePath);
+        _indexStore = new IndexStore(logger, databasePath, timeProvider);
     }
 
     // The SQL door's per-type views, created on the first filter rather than at Initialize (ADR-0011).
@@ -212,7 +213,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         cmd.CommandText = $"INSERT INTO {TableDdlBuilder.RegistrationsRelation} (plugin, origin, load_order_idx, enabled, winning) VALUES ($1, $2, $3, $4, $5)";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = (object?)registration.LoadOrderIndex ?? DBNull.Value });
+        cmd.Parameters.Add(new DuckDBParameter
+        {
+            Value = registration.LoadOrderIndex is { } loadOrderIndex ? (object)loadOrderIndex : DBNull.Value,
+        });
         cmd.Parameters.Add(new DuckDBParameter { Value = registration.Enabled });
         cmd.Parameters.Add(new DuckDBParameter { Value = registration.Winning });
         cmd.ExecuteNonQuery();

@@ -73,14 +73,23 @@ public sealed class RecordIndexingLoggingTests : IDisposable
 
     private DuckDbRecordIndex IndexedRepository(ILogger logger)
     {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, logger);
-        repo.Initialize(GameRelease.Fallout4);
-        var modPath = new ModPath(
-            ModKey.FromFileName("LogTrace.esp"),
-            Path.Combine(_fixture.DataFolder, "LogTrace.esp"));
-        var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        return repo;
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, logger);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            var modPath = new ModPath(
+                ModKey.FromFileName("LogTrace.esp"),
+                Path.Combine(_fixture.DataFolder, "LogTrace.esp"));
+            using var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+            repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
+            var indexed = repo;
+            repo = null;
+            return indexed;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
 

@@ -19,11 +19,14 @@ public sealed class CreatePluginEndpointTests : IDisposable
     private Task<IResult> Create(string name, string origin, LoadOrderHolder? holder = null) =>
         Create(name, _mod.ModFolder, origin, holder);
 
-    private Task<IResult> Create(string name, string path, string origin, LoadOrderHolder? holder = null) =>
-        PluginEndpoints.CreatePlugin(
+    private async Task<IResult> Create(string name, string path, string origin, LoadOrderHolder? holder = null)
+    {
+        using var watcher = TestWatcher.Inert();
+        return await PluginEndpoints.CreatePlugin(
             new CreatePluginRequest(name, path, origin),
             _mod.Index, holder ?? _mod.Holder,
-            TestEditService.PluginCreateHandler(holder ?? _mod.Holder), TestWatcher.Inert(), NullLoggerFactory.Instance);
+            TestEditService.PluginCreateHandler(holder ?? _mod.Holder), watcher, NullLoggerFactory.Instance);
+    }
 
     private RegisteredCopy? Registered(string name, string origin) =>
         _mod.Holder.Current.Copy(new PluginCopyKey(name, origin));

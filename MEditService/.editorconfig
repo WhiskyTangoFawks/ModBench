@@ -87,6 +87,32 @@ dotnet_diagnostic.S2139.severity = none
 # is unaffected (a command handler's catch-all keeps its filter and its conversion to a refusal).
 dotnet_diagnostic.CA1031.severity = error
 
+# The remaining PRD analyzers (#877, #919). No per-project or per-folder exemption for any of these
+# five.
+dotnet_diagnostic.CA2000.severity = error  # Dispose objects before losing scope
+dotnet_diagnostic.CA2213.severity = error  # Disposable fields should be disposed
+dotnet_diagnostic.CA2025.severity = error  # Do not pass IDisposable instances into unawaited tasks
+dotnet_diagnostic.CA1508.severity = error  # Avoid dead conditional code
+dotnet_diagnostic.CA2016.severity = error  # Forward the CancellationToken parameter to methods that take one
+
+# CA1062: redundant under nullable reference types — a public member with a non-nullable reference
+# parameter already can't be called with null without a compiler warning at the call site.
+dotnet_diagnostic.CA1062.severity = none
+# CA2007: ConfigureAwait(false) is a library rule to avoid deadlocking a caller's sync context;
+# this is an application with no such caller.
+dotnet_diagnostic.CA2007.severity = none
+# CA2100: every SQL string in this codebase splices a constant identifier and parameterises its
+# values; there is no interpolated value the rule would be protecting.
+dotnet_diagnostic.CA2100.severity = none
+# Style rows the PRD turns off (#877).
+dotnet_diagnostic.CA1308.severity = none  # Normalize strings to uppercase
+dotnet_diagnostic.CA1034.severity = none  # Nested types should not be visible
+dotnet_diagnostic.CA1002.severity = none  # Do not expose generic lists
+dotnet_diagnostic.CA1307.severity = none  # Specify StringComparison for clarity
+dotnet_diagnostic.CA1815.severity = none  # Override equals and operator equals on value types
+dotnet_diagnostic.CA1819.severity = none  # Properties should not return arrays
+dotnet_diagnostic.CA2225.severity = none  # Operator overloads have named alternates
+
 # Complexity / maintainability rules — kept at `suggestion` (info). They never surface in normal build
 # output; the code-quality Stop hook (.claude/hooks/code-quality.py) reads them from a SARIF error log and
 # reports them per-turn, scoped to the files just changed, for per-instance triage. See /validate Step 3.

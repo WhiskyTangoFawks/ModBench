@@ -53,16 +53,27 @@ public sealed class RecordRefDivergenceTests : IDisposable
 
     private DuckDbRecordIndex LoadedRepository()
     {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        var basePath = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-        var winnerPath = new ModPath(ModKey.FromFileName("Winner.esp"), Path.Combine(_fixture.DataFolder, "Winner.esp"));
-        var baseMod = Fallout4Mod.CreateFromBinaryOverlay(basePath, Fallout4Release.Fallout4);
-        var winnerMod = Fallout4Mod.CreateFromBinaryOverlay(winnerPath, Fallout4Release.Fallout4);
-        repo.IndexMod(baseMod, Registration.Participating(0), new PluginCopyKey(baseMod.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod(winnerMod, Registration.Participating(1), new PluginCopyKey(winnerMod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-        return repo;
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            var basePath = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
+            var winnerPath =
+                new ModPath(ModKey.FromFileName("Winner.esp"), Path.Combine(_fixture.DataFolder, "Winner.esp"));
+            using var baseMod = Fallout4Mod.CreateFromBinaryOverlay(basePath, Fallout4Release.Fallout4);
+            using var winnerMod = Fallout4Mod.CreateFromBinaryOverlay(winnerPath, Fallout4Release.Fallout4);
+            repo.IndexMod(baseMod, Registration.Participating(0), new PluginCopyKey(baseMod.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(
+                winnerMod, Registration.Participating(1), new PluginCopyKey(winnerMod.ModKey.FileName.ToString(), "Data"));
+            repo.UpdateWinners();
+            var loaded = repo;
+            repo = null;
+            return loaded;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
     // One crafted divergence, five distinct At(Head) observers. Deletion is structural, so

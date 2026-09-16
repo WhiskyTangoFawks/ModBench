@@ -61,6 +61,7 @@ try
         o.SupportNonNullableReferenceTypes();
         o.SchemaFilter<MEditService.Http.Swagger.NullabilitySchemaFilter>();
     });
+    builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton<SchemaReflector>();
     // ADR-0014: one publisher instance, resolved as both types — the concrete type for the stream
     // endpoint's own subscribe/unsubscribe, the interface for every publisher.
@@ -77,7 +78,8 @@ try
         sp.GetRequiredService<IPluginAdapter>(),
         sp.GetRequiredService<SchemaReflector>(),
         sp.GetRequiredService<ILoggerFactory>(),
-        sp.GetRequiredService<INotificationPublisher>()));
+        sp.GetRequiredService<INotificationPublisher>(),
+        sp.GetRequiredService<TimeProvider>()));
     builder.Services.AddSingleton<IQueryIndex>(sp => sp.GetRequiredService<IndexProjector>());
     builder.Services.AddSingleton<IRefreshIndex>(sp => sp.GetRequiredService<IndexProjector>());
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
