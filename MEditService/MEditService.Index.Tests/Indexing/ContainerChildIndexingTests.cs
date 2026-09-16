@@ -50,15 +50,24 @@ public sealed class ContainerChildIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
+        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        try
+        {
+            repo.Initialize(GameRelease.Fallout4);
+            repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
+            repo.UpdateWinners();
 
-        return new Built(
-            repo, quest.FormKey.ToString(), topic0.FormKey.ToString(), topic1.FormKey.ToString(),
-            response0.FormKey.ToString(), response1.FormKey.ToString(), cell.FormKey.ToString(),
-            navMesh0.FormKey.ToString(), landscape.FormKey.ToString());
+            var built = new Built(
+                repo, quest.FormKey.ToString(), topic0.FormKey.ToString(), topic1.FormKey.ToString(),
+                response0.FormKey.ToString(), response1.FormKey.ToString(), cell.FormKey.ToString(),
+                navMesh0.FormKey.ToString(), landscape.FormKey.ToString());
+            repo = null;
+            return built;
+        }
+        finally
+        {
+            repo?.Dispose();
+        }
     }
 
     private static List<(string ChildFormKey, string SlotName, int SlotIndex)> QueryChildren(
