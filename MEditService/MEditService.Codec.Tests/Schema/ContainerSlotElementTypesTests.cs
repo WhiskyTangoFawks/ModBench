@@ -64,8 +64,6 @@ public sealed class ContainerSlotElementTypesTests
             .Where(type => type.IsClass && !type.IsAbstract && type.IsPublic
                            && typeof(IMajorRecord).IsAssignableFrom(type));
 
-    // Mirrors ContainerMembers' own derivation: a list slot's element, or a single-value slot's own
-    // type. Pure reflection over the property shape, not a coupling to the derivation's internals.
     private static Type? ElementTypeOf(Type slotType) =>
         slotType.GetInterfaces()
             .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))

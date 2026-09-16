@@ -22,22 +22,22 @@ public class SchemaReflectorTotalClassificationTests
         return entries;
     }
 
-    // Mirrors SchemaRefusals.UnclassifiedAnomalyPrefix, an internal: the prefix is a log message
-    // shape, not a type this test can reach without a grant.
     private const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
-    private static List<string> Anomalies() =>
-        BuildAndCollect()
+    [Fact]
+    public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded()
+    {
+        var entries = BuildAndCollect();
+        // A collector wired to nothing would also find zero anomalies below — this is the canary
+        // that it received the walk's own trace.
+        Assert.NotEmpty(entries);
+
+        var anomalies = entries
             .Where(e => e.Message.StartsWith(UnclassifiedAnomalyPrefix, StringComparison.Ordinal))
             .Select(e => e.Message)
             .Distinct()
             .Order(StringComparer.Ordinal)
             .ToList();
-
-    [Fact]
-    public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded()
-    {
-        var anomalies = Anomalies();
 
         Assert.True(anomalies.Count == 0,
             $"SchemaReflector reached {anomalies.Count} propert{(anomalies.Count == 1 ? "Y" : "ies")} it " +

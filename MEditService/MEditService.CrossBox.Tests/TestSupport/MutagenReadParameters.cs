@@ -8,8 +8,6 @@ namespace MEditService.Tests.TestSupport;
 /// public surface, for tests that open real fixture plugins straight through ModFactory.</summary>
 internal static class MutagenReadParameters
 {
-    // Mutagen's listings resolution reads LocalAppData with no injectable seam; never overwrites a
-    // real value.
     internal static void EnsureLocalAppDataDefault()
     {
         if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))

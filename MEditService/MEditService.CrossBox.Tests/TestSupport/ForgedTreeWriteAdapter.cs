@@ -39,8 +39,6 @@ internal sealed class ForgedTreeWriteAdapter(TreeDeserializer deserialize) : Rea
         }
     }
 
-    // Mirrors PluginTrees' own materialization: every file of one plugin's tree sits under that
-    // tree's root, so their common directory is it.
     private static string SharedRootOf(IReadOnlyList<TreeFile> files)
     {
         var shared = Path.GetDirectoryName(files.Count > 0 ? files[0].RelativePath : "") ?? "";

@@ -104,12 +104,12 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger, TimeProvider? tim
     // Sub-second timestamps: one gesture can write a plugin twice in a second and the second backup
     // collided. Not a uniquifying retry, which would mask a genuine collision, nor overwrite, which
     // destroys the earlier backup.
-    internal static string CreateBackup(string pluginPath, string? timestamp = null, TimeProvider? timeProvider = null)
+    internal static string CreateBackup(string pluginPath, TimeProvider? timeProvider = null)
     {
         var dir = PathShape.DirectoryOf(pluginPath);
         var name = Path.GetFileNameWithoutExtension(pluginPath);
         var ext = Path.GetExtension(pluginPath);
-        var ts = timestamp ?? (timeProvider ?? TimeProvider.System).GetUtcNow()
+        var ts = (timeProvider ?? TimeProvider.System).GetUtcNow()
             .ToString("yyyy-MM-ddTHH-mm-ss-fffffff", CultureInfo.InvariantCulture);
         var path = Path.Combine(dir, $"{name}.{ts}.bak{ext}");
         File.Copy(pluginPath, path, overwrite: false);

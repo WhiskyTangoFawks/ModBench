@@ -66,6 +66,11 @@ public sealed class PluginAdapterTests
             Assert.Equal(ModKey.FromFileName(PluginName), reread.ModKey);
             Assert.Equal(GameRelease.Fallout4, reread.GameRelease);
             Assert.Empty(reread.EnumerateMajorRecords());
+
+            // ADR-0006: the header's stored NextObjectID is written as stored, not re-derived.
+            var freshDefault = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4)
+                .ModHeader.Stats.NextFormID;
+            Assert.Equal(freshDefault, reread.ModHeader.Stats.NextFormID);
         }
         finally
         {
@@ -88,6 +93,12 @@ public sealed class PluginAdapterTests
             .Build();
         var patchPath = Path.Combine(data.DataFolder, "Patch.esp");
         var reversed = new[] { "BetaBase.esm", "AlphaBase.esm" };
+
+        using (var natural = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName("Patch.esp"), patchPath), Fallout4Release.Fallout4))
+        {
+            Assert.NotEqual(reversed, natural.ModHeader.MasterReferences.Select(m => m.Master.FileName.ToString()));
+        }
 
         var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
         await writer.SaveAsync(patchPath, GameRelease.Fallout4, reversed);

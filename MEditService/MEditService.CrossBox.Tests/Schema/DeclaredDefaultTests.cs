@@ -77,8 +77,6 @@ public sealed class DeclaredDefaultTests
         Assert.Equal(zero, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.Default);
     }
 
-    // Mirrors DeclaredDefaults.RefusalPrefix, an internal: the prefix is a log message shape, not a
-    // type this test can reach without a grant.
     private const string DeclaredDefaultsRefusalPrefix = "SchemaReflector: declared defaults unavailable";
 
     [Fact]
@@ -87,6 +85,9 @@ public sealed class DeclaredDefaultTests
         var entries = new List<LogEntry>();
         using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(entries)));
         new SchemaReflector(factory.CreateLogger<SchemaReflector>()).GetSchemas(GameRelease.Fallout4);
+        // A collector wired to nothing would also find zero refusals below — this is the canary
+        // that it received the walk's own trace.
+        Assert.NotEmpty(entries);
 
         var refused = entries.Where(e => e.Message.StartsWith(DeclaredDefaultsRefusalPrefix, StringComparison.Ordinal)).Select(e => e.Message).Distinct().ToList();
         Assert.True(refused.Count == 0, string.Join("\n", refused));

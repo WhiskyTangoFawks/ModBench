@@ -11,8 +11,6 @@ public sealed class SchemaAnnotationTests
     [Fact]
     public void ShippedFallout4Table_EveryEntryResolves()
     {
-        // The production table, through the production seam: a stale row fails here, not in a user's
-        // first load.
         var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
         Assert.NotEmpty(schemas);
     }
