@@ -136,6 +136,6 @@ internal static class ReflectedTypes
     internal static object? ReadOrNull(object obj, PropertyInfo prop)
     {
         try { return prop.GetValue(obj); }
-        catch (Exception ex) when (ex is not OutOfMemoryException) { return null; } // Stryker disable once Block: silent accessor — per-call lambdas stay silent to avoid log noise (see MEditService CLAUDE.md)
+        catch (Exception ex) when (ex is not OutOfMemoryException) { return null; } // Stryker disable once Block: silent accessor — per-call lambdas stay silent to avoid log noise
     }
 }

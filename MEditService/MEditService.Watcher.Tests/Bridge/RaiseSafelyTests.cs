@@ -20,6 +20,9 @@ public sealed class RaiseSafelyTests
 
         watcher.RaiseSafely(() => throw new InvalidOperationException("boom"));
 
-        Assert.Contains(entries, e => e.Level == LogLevel.Error && e.Message.Contains("failed unexpectedly", StringComparison.Ordinal));
+        Assert.Contains(entries, e =>
+            e.Level == LogLevel.Error
+            && e.Message.Contains("failed unexpectedly", StringComparison.Ordinal)
+            && e.Exception?.Message == "boom");
     }
 }
