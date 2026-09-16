@@ -190,8 +190,8 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
         // projection lands, provable through the same sequence-await the extension itself polls.
         var beforeCommit = await _client.GetFromJsonAsync<long>("/load-order/sequence");
         var gitDir = Path.Combine(modFolder, ".git");
-        GitCli.Run(gitDir, modFolder, "add", "-A");
-        GitCli.Run(gitDir, modFolder, "commit", "-q", "-m", "hand edit committed outside Modbench");
+        GitProbe.Run(gitDir, modFolder, "add", "-A");
+        GitProbe.Run(gitDir, modFolder, "commit", "-q", "-m", "hand edit committed outside Modbench");
         var afterCommit = await _client.GetFromJsonAsync<SequenceAwaitResponse>(
             $"/load-order/sequence/await?atLeast={beforeCommit + 1}&timeoutMs=10000");
         Assert.NotNull(afterCommit);

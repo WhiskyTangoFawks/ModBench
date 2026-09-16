@@ -233,7 +233,7 @@ public sealed class ContainerModFixture : IDisposable
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     public IReadOnlyList<string> GitStatus() =>
-        GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
+        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => UnquotePorcelainLine(l.Trim()))
             .ToList();

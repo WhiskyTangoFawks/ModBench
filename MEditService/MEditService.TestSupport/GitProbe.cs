@@ -13,7 +13,19 @@ public static class GitProbe
     public static string RunWithIndex(string gitDir, string workTree, string indexFile, params string[] args) =>
         Execute(gitDir, workTree, indexFile, args);
 
-    private static string Execute(string gitDir, string workTree, string? indexFile, string[] args)
+    /// <summary>Non-throwing: a failing exit code is an expected answer here, not a probe failure.</summary>
+    public static bool TryRun(string gitDir, string workTree, out string stdout, params string[] args)
+    {
+        var (exitCode, output, _) = Execute(gitDir, workTree, null, args, throwOnFailure: false);
+        stdout = output;
+        return exitCode == 0;
+    }
+
+    private static string Execute(string gitDir, string workTree, string? indexFile, string[] args) =>
+        Execute(gitDir, workTree, indexFile, args, throwOnFailure: true).Stdout;
+
+    private static (int ExitCode, string Stdout, string Stderr) Execute(
+        string gitDir, string workTree, string? indexFile, string[] args, bool throwOnFailure)
     {
         var psi = new ProcessStartInfo("git")
         {
@@ -33,12 +45,13 @@ public static class GitProbe
         var stderrTask = process.StandardError.ReadToEndAsync();
         Task.WaitAll(stdoutTask, stderrTask);
         process.WaitForExit();
-        if (process.ExitCode != 0)
+        var stdout = stdoutTask.GetAwaiter().GetResult();
+        var stderr = stderrTask.GetAwaiter().GetResult();
+        if (throwOnFailure && process.ExitCode != 0)
         {
             var subcommand = args.Length > 0 ? args[0] : "(no subcommand)";
-            throw new InvalidOperationException(
-                $"git {subcommand} failed ({process.ExitCode}): {stderrTask.GetAwaiter().GetResult()}");
+            throw new InvalidOperationException($"git {subcommand} failed ({process.ExitCode}): {stderr}");
         }
-        return stdoutTask.GetAwaiter().GetResult();
+        return (process.ExitCode, stdout, stderr);
     }
 }

@@ -83,5 +83,5 @@ public sealed class ValidateTests : IDisposable
     }
 
     private void Git(params string[] args) =>
-        GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
+        GitProbe.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 }

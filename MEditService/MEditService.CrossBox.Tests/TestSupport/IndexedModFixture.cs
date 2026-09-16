@@ -126,7 +126,7 @@ public sealed class IndexedModFixture : IDisposable
     public string NpcSourceFile => SourceFileFor(Npc, "npc_", NpcEditorId);
 
     public IReadOnlyList<string> GitStatus() =>
-        GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
+        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => UnquotePorcelainLine(l.Trim()))
             .ToList();
@@ -160,7 +160,7 @@ public sealed class IndexedModFixture : IDisposable
     }
 
     public string GitShowHead(string relativePath) =>
-        GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
+        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
     public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
         Path.GetRelativePath(ModFolder, SourceDocumentPath.Of(

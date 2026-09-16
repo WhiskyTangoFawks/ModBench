@@ -68,8 +68,8 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         // The dirt is real dirt, on the edit branch, in the mod's own repo — the same thing the
         // native Source Control panel would be showing a human right now.
         var gitDir = Path.Combine(modFolder, ".git");
-        Assert.NotEmpty(GitCli.Run(gitDir, modFolder, "status", "--porcelain"));
-        Assert.Equal("edit", GitCli.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
+        Assert.NotEmpty(GitProbe.Run(gitDir, modFolder, "status", "--porcelain"));
+        Assert.Equal("edit", GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
     }
 
     [Fact]

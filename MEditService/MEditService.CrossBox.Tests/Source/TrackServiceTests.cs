@@ -153,7 +153,7 @@ public sealed class TrackServiceTests
                 Assert.DoesNotContain((byte)'\r', await File.ReadAllBytesAsync(file));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
+            var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
             Assert.Contains($"Binary-SHA256: Fixture.esp=", body);
         }
         finally
@@ -189,7 +189,7 @@ public sealed class TrackServiceTests
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
+            var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
             Assert.Contains($"Meta-SHA256: {expectedHash}", body);
         }
         finally
@@ -222,7 +222,7 @@ public sealed class TrackServiceTests
             await service.TrackAsync(loadOrder, HeldIn(loadOrder), "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
+            var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
             Assert.DoesNotContain("Meta-SHA256", body);
         }
         finally

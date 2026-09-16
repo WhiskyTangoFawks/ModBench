@@ -29,7 +29,7 @@ public sealed class SourceRepositoryLayoutTests
     // recovered from the path must carry the same plugin-name bytes For() started from.
     [InlineData("Café.esp", "npc_", "000800:Café.esp", "Né")]
     [InlineData("Плагин.esp", "npc_", "0012AB:Плагин.esp", "Имя")]
-    public void Put_ThenParseDocumentPath_RoundTripsPluginAndRecordType(
+    public void Put_ThenGet_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-layout-roundtrip-").FullName;
@@ -39,82 +39,37 @@ public sealed class SourceRepositoryLayoutTests
                 modFolder, SourcePreset.Edits, [], new TrackProvenance(null, null, new Dictionary<string, string>()));
             var repository = SourceRepository.Open(modFolder, Release)
                 ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
-            repository.Put(
-                new PluginCopyKey(pluginFileName, "LayoutMod"), new SourceDocument(formKeyString, recordType, editorId, "{}"));
+            var plugin = new PluginCopyKey(pluginFileName, "LayoutMod");
+            repository.Put(plugin, new SourceDocument(formKeyString, recordType, editorId, "{}"));
 
             var path = Path.GetRelativePath(
                 modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
 
-            // Everything nests under one root "source/" folder, the plugin its own child directory, not a
-            // "<plugin>.source/" sibling tree. Asserted rather than implied by ParseDocumentPath round-tripping: a
-            // broken root four segments deep would round-trip too.
+            // Everything nests under one root "source/" folder (the on-disk root Track and Put
+            // both write to), the plugin its own child directory, not a "<plugin>.source/" sibling
+            // tree.
             var segments = path.Split(Path.DirectorySeparatorChar);
-            Assert.Equal(SourceRepository.RootFolderName, segments[0]);
+            Assert.Equal("source", segments[0]);
             Assert.Equal(pluginFileName, segments[1]);
 
-            var identity = SourceRepository.ParseDocumentPath(path, Release);
+            // The identity survives the round trip: Get, asked with the exact identity Put was
+            // given, finds the very file Put just placed.
+            var document = repository.Get(plugin, new RecordIdentity(formKeyString, recordType, editorId));
 
-            Assert.NotNull(identity);
-            Assert.Equal(pluginFileName, identity.PluginFileName);
-            // ParseDocumentPath answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
-            // two need not match textually, only resolve to the same concrete type, which this equality
-            // checks for real rather than assuming a spelling.
+            Assert.NotNull(document);
+            Assert.Equal(formKeyString, document.FormKey);
+            // Get answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
+            // two need not match textually, only resolve to the same concrete type, which this
+            // equality checks for real rather than assuming a spelling.
             var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
             Assert.NotNull(expectedConcrete);
-            Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(identity.RecordType));
+            Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(document.RecordType));
         }
         finally
         {
             try { Directory.Delete(modFolder, recursive: true); }
             catch (IOException) { /* scratch directory, best effort */ }
         }
-    }
-
-    [Theory]
-    // Too few / too many path segments — the flat shape is exactly four: source/<plugin>/<folder>/<file>.json.
-    [InlineData("source/Vendor.esp/000800.json")]
-    [InlineData("source/Vendor.esp/Npcs/Vendor.esp/000800.json")]
-    // First segment isn't the literal root folder name at all.
-    [InlineData("Vendor.esp/Npcs/000800.json")]
-    [InlineData("NotSource/Vendor.esp/Npcs/000800.json")]
-    // Root segment present but no plugin segment at all (an empty path component collapses away).
-    [InlineData("source//Npcs/000800.json")]
-    // Last segment missing the load-bearing ".json" suffix.
-    [InlineData("source/Vendor.esp/Npcs/000800.txt")]
-    [InlineData("source/Vendor.esp/Npcs/000800")]
-    // The whole-mod door's own header/group files — never a flat record's own file.
-    [InlineData("source/Vendor.esp/Npcs/RecordData.json")]
-    [InlineData("source/Vendor.esp/Cells/GroupRecordData.json")]
-    // A folder this game's schema has no group for at all.
-    [InlineData("source/Vendor.esp/NotARealFolder/000800.json")]
-    // Three segments but not literally RecordData.json — must not be mistaken for the header.
-    [InlineData("source/Vendor.esp/NotRecordData.json")]
-    public void ParseDocumentPath_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
-    {
-        // Malformed input must fail outright rather than return a wrong parse, which would mislabel a
-        // user's change. '/' is deliberate and portable: these theories build the string directly rather
-        // than through For(), and every OS accepts it here.
-        var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
-
-        var identity = SourceRepository.ParseDocumentPath(normalized, Release);
-
-        Assert.Null(identity);
-    }
-
-    // A folder whose group element is abstract reads as ambiguous, the same as the whole-mod door's
-    // discriminator policy: the document self-describes rather than ParseDocumentPath guessing one concrete
-    // type from the folder name.
-    [Fact]
-    public void ParseDocumentPath_ForAnAmbiguousGroupsFolder_FailsCleanly()
-    {
-        var ambiguousFolder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat");
-        Assert.NotNull(ambiguousFolder); // sanity: GlobalFloat is a flat type with a real folder...
-        var path = Path.Combine(
-            SourceRepository.RootFolderName, "Vendor.esp", ambiguousFolder, "SomeGlobal - 000800_Vendor.esp.json");
-
-        var identity = SourceRepository.ParseDocumentPath(path, Release);
-
-        Assert.Null(identity);
     }
 
     // The one bridge from the door's own tree to the mod folder holding it. The name is verbatim: a
@@ -132,16 +87,5 @@ public sealed class SourceRepositoryLayoutTests
              Path.Combine("source", "Mixed.ESP", "npc_", "SomeNpc - 000800_Mixed.ESP.json")],
             pristine.Select(file => file.RelativePath));
         Assert.Equal([1], pristine[0].Content);
-    }
-
-    [Fact]
-    public void ParseDocumentPath_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
-    {
-        var identity = SourceRepository.ParseDocumentPath(
-            Path.Combine("source", "Vendor.esp", "RecordData.json"), Release);
-
-        Assert.NotNull(identity);
-        Assert.Equal("Vendor.esp", identity.PluginFileName);
-        Assert.Equal(PluginHeader.RecordType, identity.RecordType);
     }
 }

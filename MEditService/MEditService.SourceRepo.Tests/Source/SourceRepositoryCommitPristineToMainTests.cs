@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -32,7 +33,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            Assert.Equal("{\"new\":true}", GitCli.Run(gitDir, modFolder, "show", $"main:{relativePath}"));
+            Assert.Equal("{\"new\":true}", GitProbe.Run(gitDir, modFolder, "show", $"main:{relativePath}"));
 
             var baseline = SourceRepository.LatestBaselineTrailers(modFolder, Plugin);
             Assert.NotNull(baseline);
@@ -60,8 +61,8 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var mainSha = GitCli.Run(gitDir, modFolder, "rev-parse", "refs/heads/main").Trim();
-            var parkedSha = GitCli.Run(gitDir, modFolder, "rev-parse", $"refs/medit/last-compile/{Plugin}").Trim();
+            var mainSha = GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/heads/main").Trim();
+            var parkedSha = GitProbe.Run(gitDir, modFolder, "rev-parse", $"refs/medit/last-compile/{Plugin}").Trim();
             Assert.Equal(mainSha, parkedSha);
         }
         finally
@@ -85,18 +86,24 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             File.WriteAllText(fullPath, "{\"my-own-edit\":true}");
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var branchBefore = GitCli.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim();
-            var headBefore = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
-            var dirtBefore = SourceRepository.WorkingTreeStatus(modFolder);
+            var branchBefore = GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim();
+            var headBefore = GitProbe.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
+            // RebaseEditBranch refuses before touching the branch whenever the source tree carries
+            // dirt (its own contract) — its refusal names every dirty path, so it stands in for
+            // WorkingTreeStatus here without reaching SourceRepo's internals.
+            var dirtBefore = SourceRepository.RebaseEditBranch(modFolder);
+            Assert.Equal(RebaseOutcome.Refused, dirtBefore.Outcome);
             var fileContentBefore = File.ReadAllText(fullPath);
 
             var newFiles = new[] { new TreeFile(relativePath, "{\"upstream\":true}"u8.ToArray()) };
             var newTrailers = new TrackProvenance(null, null, new Dictionary<string, string> { [Plugin] = "NEWBIN" });
             SourceRepository.CommitPristineToMain(modFolder, newFiles, newTrailers);
 
-            Assert.Equal(branchBefore, GitCli.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
-            Assert.Equal(headBefore, GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim());
-            Assert.Equal(dirtBefore, SourceRepository.WorkingTreeStatus(modFolder));
+            Assert.Equal(branchBefore, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
+            Assert.Equal(headBefore, GitProbe.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim());
+            var dirtAfter = SourceRepository.RebaseEditBranch(modFolder);
+            Assert.Equal(RebaseOutcome.Refused, dirtAfter.Outcome);
+            Assert.Equal(dirtBefore.RefusalReason, dirtAfter.RefusalReason);
             Assert.Equal(fileContentBefore, File.ReadAllText(fullPath));
             Assert.Equal(EditBranchName, branchBefore);
         }

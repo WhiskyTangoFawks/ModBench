@@ -1,7 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.ProcessEnvironment;
+namespace MEditService.Tests.Source;
 
 /// <summary>Git missing from PATH is one typed failure, checked once, early, never a raw
 /// <c>Win32Exception</c> from the first <c>Process.Start</c> (ADR-0019).</summary>

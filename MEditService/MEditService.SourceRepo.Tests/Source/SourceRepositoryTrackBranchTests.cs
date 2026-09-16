@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -19,14 +20,14 @@ public sealed class SourceRepositoryTrackBranchTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var currentBranch = GitCli.Run(gitDir, modFolder, "symbolic-ref", "--short", "HEAD").Trim();
+            var currentBranch = GitProbe.Run(gitDir, modFolder, "symbolic-ref", "--short", "HEAD").Trim();
 
             Assert.NotEqual("main", currentBranch);
-            Assert.Equal(SourceRepository.EditBranchName, currentBranch);
+            Assert.Equal(EditBranchName, currentBranch);
 
             // The diff-empty claim only means something once the branch is a real, separate ref: `git diff` on
             // a branch never created fails with "unknown revision" rather than returning empty.
-            var diff = GitCli.Run(gitDir, modFolder, "diff", "main", currentBranch);
+            var diff = GitProbe.Run(gitDir, modFolder, "diff", "main", currentBranch);
             Assert.Equal(string.Empty, diff);
         }
         finally
@@ -34,4 +35,8 @@ public sealed class SourceRepositoryTrackBranchTests
             Directory.Delete(modFolder, recursive: true);
         }
     }
+
+    // The product's own fixed name for the branch Track checks out (ADR-0007); SourceRepository
+    // keeps it internal, so a test names it independently.
+    private const string EditBranchName = "edit";
 }

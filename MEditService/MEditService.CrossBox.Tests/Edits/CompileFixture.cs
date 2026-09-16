@@ -114,7 +114,7 @@ public sealed class CompileFixture : IDisposable
 
     public string NpcSourceFile => SourceFileFor(Npc, NpcRecordType, NpcEditorId);
 
-    private string RunGit(params string[] args) => GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, args);
+    private string RunGit(params string[] args) => GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, args);
 
     /// <summary>Commits the working tree as it stands, so a compile at a ref reads blobs the files on
     /// disk need not still match.</summary>

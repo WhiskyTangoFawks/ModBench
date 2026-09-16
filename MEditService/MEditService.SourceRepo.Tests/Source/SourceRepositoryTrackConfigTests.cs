@@ -1,7 +1,8 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.ProcessEnvironment;
+namespace MEditService.Tests.Source;
 
 /// <summary>autocrlf=false keeps byte equality for dirty detection; gpgsign=false stops a signing
 /// config hanging a commit; gc.autoDetach=false keeps a repack inside the command that triggered
@@ -25,9 +26,9 @@ public sealed class SourceRepositoryTrackConfigTests
             Track(modFolder);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            Assert.Equal("false", GitCli.Run(gitDir, modFolder, "config", "--get", "core.autocrlf").Trim());
-            Assert.Equal("false", GitCli.Run(gitDir, modFolder, "config", "--get", "commit.gpgsign").Trim());
-            Assert.Equal("false", GitCli.Run(gitDir, modFolder, "config", "--get", "gc.autoDetach").Trim());
+            Assert.Equal("false", GitProbe.Run(gitDir, modFolder, "config", "--get", "core.autocrlf").Trim());
+            Assert.Equal("false", GitProbe.Run(gitDir, modFolder, "config", "--get", "commit.gpgsign").Trim());
+            Assert.Equal("false", GitProbe.Run(gitDir, modFolder, "config", "--get", "gc.autoDetach").Trim());
         }
         finally
         {
@@ -60,7 +61,7 @@ public sealed class SourceRepositoryTrackConfigTests
             Track(modFolder);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var author = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%an <%ae>", "main").Trim();
+            var author = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%an <%ae>", "main").Trim();
             Assert.Equal("Modbench <modbench@localhost>", author);
         }
         finally

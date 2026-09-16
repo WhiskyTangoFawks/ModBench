@@ -142,13 +142,13 @@ public sealed class SourceEditFixture : IDisposable
             ModFolder, ActualPluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
 
     public IReadOnlyList<string> GitStatus() =>
-        GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
+        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => UnquotePorcelainLine(l.Trim()))
             .ToList();
 
     public string GitShowHead(string relativePath) =>
-        GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
+        GitProbe.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
     public void Dispose() => TryDelete(InstanceRoot);
 

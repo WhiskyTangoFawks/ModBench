@@ -24,7 +24,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private string GitDir => Path.Combine(_mod.ModFolder, ".git");
-    private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
+    private string RunGit(params string[] args) => GitProbe.Run(GitDir, _mod.ModFolder, args);
 
     private EditRecordHandler EditService() => _mod.EditHandler;
 
@@ -165,7 +165,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var continueResult = SourceRepository.ContinueRebase(_mod.ModFolder);
         Assert.Equal(RebaseOutcome.Clean, continueResult.Outcome);
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
-        Assert.Empty(SourceRepository.WorkingTreeStatus(_mod.ModFolder));
+        Assert.Empty(TrackedTree.GitStatus(_mod.ModFolder));
 
         var compileService = CompileServices.Over(_mod.LoadOrder);
         var compileResult = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());

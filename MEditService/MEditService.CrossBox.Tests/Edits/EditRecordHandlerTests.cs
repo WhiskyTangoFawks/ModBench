@@ -61,8 +61,8 @@ public sealed class EditRecordHandlerTests : IDisposable
         // Measured similarity on real git runs R099 for a container document down to R050 for the
         // minimal one — exactly git's default 50% threshold, so a smaller shape puts detection at risk.
         var git = Path.Combine(_mod.ModFolder, ".git");
-        GitCli.Run(git, _mod.ModFolder, "add", "-A");
-        var staged = GitCli.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
+        GitProbe.Run(git, _mod.ModFolder, "add", "-A");
+        var staged = GitProbe.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();

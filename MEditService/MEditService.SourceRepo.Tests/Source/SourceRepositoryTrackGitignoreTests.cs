@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -32,7 +33,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             SourceRepository.Track(modFolder, preset, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitCli.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
+            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
 
             // Positive control: the sibling source file the same commit really carries, checked
             // through the identical `ls-tree` query — proves absence below means "excluded", not
@@ -43,8 +44,8 @@ public sealed class SourceRepositoryTrackGitignoreTests
             Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
 
             // Belt and braces: git itself agrees these paths are ignored, not merely never staged.
-            Assert.True(GitCli.TryRun(gitDir, modFolder, out _, "check-ignore", "meta.ini"));
-            Assert.True(GitCli.TryRun(gitDir, modFolder, out _, "check-ignore", "Test.esp"));
+            Assert.True(GitProbe.TryRun(gitDir, modFolder, out _, "check-ignore", "meta.ini"));
+            Assert.True(GitProbe.TryRun(gitDir, modFolder, out _, "check-ignore", "Test.esp"));
         }
         finally
         {
@@ -63,7 +64,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitCli.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
+            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
             Assert.Contains("source/Test.esp/npc_/Test.esp/000001.json", committedPaths);
             Assert.DoesNotContain("texture.dds", committedPaths);
         }
@@ -88,7 +89,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitCli.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
+            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
             Assert.DoesNotContain("MySource", committedPaths);
         }
         finally
@@ -120,7 +121,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitCli
+            var committedPaths = GitProbe
                 .Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main")
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries)
                 .OrderBy(p => p, StringComparer.Ordinal)
@@ -153,7 +154,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
             SourceRepository.Track(modFolder, SourcePreset.Everything, [SourceFile()], new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var committedPaths = GitCli.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
+            var committedPaths = GitProbe.Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main");
             Assert.Contains("texture.dds", committedPaths);
             Assert.DoesNotContain("Test.esp\n", committedPaths + "\n");
         }
