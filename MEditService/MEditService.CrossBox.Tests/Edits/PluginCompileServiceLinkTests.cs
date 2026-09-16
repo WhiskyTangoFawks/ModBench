@@ -96,9 +96,9 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
 
     private IReadOnlyList<FormKey> KeywordsInTheBinary()
     {
-        using var loaded = MEditService.PluginAdapter.MutagenPluginAdapter.OpenForRead(
-            new ModPath(ModKey.FromFileName(HostName), Path.Combine(_hostFolder, HostName)), GameRelease.Fallout4);
-        var keywords = ((IFallout4ModGetter)loaded.Getter).Npcs.Single().Keywords
+        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName(HostName), Path.Combine(_hostFolder, HostName)), Fallout4Release.Fallout4);
+        var keywords = loaded.Npcs.Single().Keywords
             ?? throw new InvalidOperationException("Expected the compiled NPC to carry a Keywords collection.");
         return [.. keywords.Select(k => k.FormKey)];
     }

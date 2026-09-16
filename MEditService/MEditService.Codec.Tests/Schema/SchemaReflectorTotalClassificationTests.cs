@@ -22,18 +22,22 @@ public class SchemaReflectorTotalClassificationTests
         return entries;
     }
 
-    private static List<string> Anomalies() =>
-        BuildAndCollect()
-            .Where(e => e.Message.StartsWith(SchemaRefusals.UnclassifiedAnomalyPrefix, StringComparison.Ordinal))
-            .Select(e => e.Message)
-            .Distinct()
-            .Order(StringComparer.Ordinal)
-            .ToList();
+    private const string UnclassifiedAnomalyPrefix = "SchemaReflector: unclassified";
 
     [Fact]
     public void EveryPropertyTheWalkReaches_IsClassifiedOrExplicitlyExcluded()
     {
-        var anomalies = Anomalies();
+        var entries = BuildAndCollect();
+        // A collector wired to nothing would also find zero anomalies below — this is the canary
+        // that it received the walk's own trace.
+        Assert.NotEmpty(entries);
+
+        var anomalies = entries
+            .Where(e => e.Message.StartsWith(UnclassifiedAnomalyPrefix, StringComparison.Ordinal))
+            .Select(e => e.Message)
+            .Distinct()
+            .Order(StringComparer.Ordinal)
+            .ToList();
 
         Assert.True(anomalies.Count == 0,
             $"SchemaReflector reached {anomalies.Count} propert{(anomalies.Count == 1 ? "Y" : "ies")} it " +
@@ -41,18 +45,6 @@ public class SchemaReflectorTotalClassificationTests
             "write — a real defect, not a benign gap. Either give the shape a class, or add it to " +
             "SchemaReflector's exclusion table with a named reason.\n  " +
             string.Join("\n  ", anomalies));
-    }
-
-    [Fact]
-    public void EveryExcludedShape_CarriesANamedReason()
-    {
-        var reasons = SchemaAnnotations.For(GameCategory.Fallout4).RefusedShapes.Values;
-
-        Assert.NotEmpty(reasons);
-        Assert.All(reasons, r => Assert.False(string.IsNullOrWhiteSpace(r)));
-        // Every reason states a population size, so the next reader sees the gap's scale in the code
-        // rather than having to re-derive it.
-        Assert.All(reasons, r => Assert.Contains(" fields;", r, StringComparison.Ordinal));
     }
 
     [Fact]

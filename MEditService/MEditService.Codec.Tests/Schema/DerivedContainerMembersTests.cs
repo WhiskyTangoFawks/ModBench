@@ -1,6 +1,6 @@
 using System.Reflection;
-using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -100,7 +100,7 @@ public sealed class DerivedContainerMembersTests
     // interface and Mutagen's "I<Name>Getter" naming convention.
     private static IEnumerable<Type> RecordTypes() =>
         Enum.GetValues<GameCategory>()
-            .Select(SchemaReflector.GameModule)
+            .Select(GameModuleAssembly.For)
             .OfType<Assembly>()
             .SelectMany(module => module.GetTypes()
                 .Where(type => type.IsInterface && typeof(IMajorRecordGetter).IsAssignableFrom(type))

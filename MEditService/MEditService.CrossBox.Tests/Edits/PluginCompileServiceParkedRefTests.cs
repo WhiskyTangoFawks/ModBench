@@ -85,8 +85,20 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
-        var scratchPrefix = PluginTrees.ReadScratchPrefix;
+        const string scratchPrefix = "medit-readtree-";
         var sourceRoot = SourceRepository.RootFor(CompileFixture.PluginName);
+
+        // Canary: a directory actually named with this prefix is findable through this exact glob,
+        // so the leak check below cannot pass open on a pattern that silently matches nothing.
+        var canary = Directory.CreateTempSubdirectory($"{scratchPrefix}canary-").FullName;
+        try
+        {
+            Assert.NotEmpty(Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*"));
+        }
+        finally
+        {
+            Directory.Delete(canary);
+        }
 
         // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever
         // happens, so git stores it without complaint and only the materialise step meets the OS.

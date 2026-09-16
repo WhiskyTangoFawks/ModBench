@@ -78,7 +78,10 @@ public sealed class ContainmentRederivationTests : IDisposable
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var owner = await ReadEmbedCellAsync();
-        Assert.True(ContainerChildFields.RemoveEmbeddedChild(owner, _fixture.Navmesh.ToString()));
+        // Reaches the navmesh slot through Cell's own public property, not ContainerChildFields'
+        // internal search: the fixture already knows which slot the navmesh sits in.
+        var navmesh = ((Cell)owner).NavigationMeshes.Single(n => n.FormKey == _fixture.Navmesh);
+        Assert.True(((Cell)owner).NavigationMeshes.Remove(navmesh));
         var newBody = await codec.SerializeToBytesAsync(owner, GameRelease.Fallout4);
 
         index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), Encoding.UTF8.GetString(newBody))]);
@@ -104,9 +107,9 @@ public sealed class ContainmentRederivationTests : IDisposable
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var owner = await ReadEmbedCellAsync();
-        var found = Assert.NotNull(ContainerChildFields.FindEmbeddedChild(owner, _fixture.Navmesh.ToString()));
+        var navmesh = ((Cell)owner).NavigationMeshes.Single(n => n.FormKey == _fixture.Navmesh);
         var newFormKey = FormKey.Factory("F00001:ContainerFixture.esp");
-        ((IMajorRecordInternal)found.Child).FormKey = newFormKey;
+        ((IMajorRecordInternal)navmesh).FormKey = newFormKey;
 
         // The renumber's whole file side: the owner's document is what carries the child's new
         // identity, and the projector re-reads the rows out of it (ADR-0014).
@@ -399,9 +402,9 @@ public sealed class ContainmentRederivationTests : IDisposable
         var index = _fixture.Index.Store.Require();
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var owner = await ReadEmbedCellAsync();
-        var found = Assert.NotNull(ContainerChildFields.FindEmbeddedChild(owner, _fixture.Navmesh.ToString()));
+        var navmesh = ((Cell)owner).NavigationMeshes.Single(n => n.FormKey == _fixture.Navmesh);
         var newFormKey = FormKey.Factory("F00002:ContainerFixture.esp");
-        ((IMajorRecordInternal)found.Child).FormKey = newFormKey;
+        ((IMajorRecordInternal)navmesh).FormKey = newFormKey;
 
         // The owner's source file is the whole of the renumber's file side, and a fresh reload
         // ingests that tree — so the live index has to reach the same rows from the same bytes.

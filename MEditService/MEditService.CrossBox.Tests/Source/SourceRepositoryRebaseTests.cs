@@ -44,12 +44,11 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
 
-        var deepParsed = ModFactory.ImportSetter(
+        var (treeFiles, _) = MutagenPluginAdapter.Instance.ReadSourceAsync(
             new ModPath(ModKey.FromFileName(SourceEditFixture.PluginName), pluginPath),
-            _mod.LoadOrder.GameRelease, LocalizedStrings.ForRead(PluginStrings.In(_mod.ModFolder)));
-        var pristineFiles = SourceRepository.PristineFilesOf(
-            SourceEditFixture.PluginName,
-            PluginTrees.SerializeTree(deepParsed).GetAwaiter().GetResult());
+            SourceEditFixture.PluginName, _mod.LoadOrder.GameRelease,
+            PluginStrings.In(_mod.ModFolder)).GetAwaiter().GetResult();
+        var pristineFiles = SourceRepository.PristineFilesOf(SourceEditFixture.PluginName, treeFiles);
         var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath)));
         var trailers = new TrackProvenance(
             null, null, new Dictionary<string, string> { [SourceEditFixture.PluginName] = binarySha256 });

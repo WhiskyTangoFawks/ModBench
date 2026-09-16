@@ -61,7 +61,11 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     public void ApplyingAContainersDocument_ThatNoLongerCarriesAChild_RemovesTheChildAtEffective_AndKeepsItAtHead()
     {
         var removed = _fixture.TemporaryRef.ToString();
-        var body = CellBodyAfter(cell => Assert.True(ContainerChildFields.RemoveEmbeddedChild(cell, removed)));
+        var body = CellBodyAfter(cell =>
+        {
+            var target = ((Cell)cell).Temporary.Single(p => p.FormKey.ToString() == removed);
+            Assert.True(((Cell)cell).Temporary.Remove(target));
+        });
 
         Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
 

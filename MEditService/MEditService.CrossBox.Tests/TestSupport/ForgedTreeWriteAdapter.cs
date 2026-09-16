@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.SourceRepo;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 
 namespace MEditService.Tests.TestSupport;
 
@@ -8,7 +9,49 @@ namespace MEditService.Tests.TestSupport;
 /// gate's negative tests forge a codec defect no real codec has.</summary>
 internal sealed class ForgedTreeWriteAdapter(TreeDeserializer deserialize) : ReadOnlyPluginAdapter
 {
-    public override Task WriteFromTreeAsync(
-        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default) =>
-        PluginTrees.WriteFromTreeAsync(files, destinationPath, deserialize, cancel);
+    public override async Task WriteFromTreeAsync(
+        IReadOnlyList<TreeFile> files, string destinationPath, CancellationToken cancel = default)
+    {
+        var scratchDir = Directory.CreateTempSubdirectory("medit-forged-writetree-").FullName;
+        try
+        {
+            foreach (var file in files)
+            {
+                var fullPath = Path.Combine(scratchDir, file.RelativePath);
+                Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));
+                await File.WriteAllBytesAsync(fullPath, file.Content, cancel);
+            }
+
+            var treeRoot = Path.Combine(scratchDir, SharedRootOf(files));
+            var recompiled = await deserialize(treeRoot, cancel);
+
+            await recompiled.BeginWrite
+                .ToPath(destinationPath)
+                .WithLoadOrderFromHeaderMasters()
+                .WithNoDataFolder()
+                .NoNextFormIDProcessing()
+                .WithRecordCount(RecordCountOption.NoCheck)
+                .WriteAsync();
+        }
+        finally
+        {
+            Directory.Delete(scratchDir, recursive: true);
+        }
+    }
+
+    private static string SharedRootOf(IReadOnlyList<TreeFile> files)
+    {
+        var shared = Path.GetDirectoryName(files.Count > 0 ? files[0].RelativePath : "") ?? "";
+        foreach (var file in files)
+        {
+            var directory = Path.GetDirectoryName(file.RelativePath) ?? "";
+            while (shared.Length > 0
+                   && !directory.Equals(shared, StringComparison.Ordinal)
+                   && !directory.StartsWith(shared + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                shared = Path.GetDirectoryName(shared) ?? "";
+            }
+        }
+        return shared;
+    }
 }

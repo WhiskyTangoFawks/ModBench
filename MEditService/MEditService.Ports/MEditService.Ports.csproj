@@ -18,18 +18,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.Ports.Tests</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.CrossBox.Tests</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.Tests.ProcessEnvironment</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- A kernel box references nothing above it; the port's payloads name the snapshot (ADR-0014). -->
     <ProjectReference Include="..\MEditService.LoadOrder\MEditService.LoadOrder.csproj" />
   </ItemGroup>

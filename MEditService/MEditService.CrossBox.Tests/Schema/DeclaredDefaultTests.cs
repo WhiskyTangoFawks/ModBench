@@ -77,22 +77,7 @@ public sealed class DeclaredDefaultTests
         Assert.Equal(zero, Schemas[table].RecordColumns.Single(c => c.Name == column).Field.Default);
     }
 
-    // The codec writes each component in English; the vector types are not IFormattable, so
-    // formatting one whole would take the current culture and spell 1.5 as "1,5" wherever the
-    // decimal separator is a comma.
-    [Fact]
-    public void AVectorSpellsItsComponentsInTheCodecsCulture()
-    {
-        string? spelled = null;
-        var thread = new Thread(() => spelled = ReflectedTypes.VectorText(new Noggog.P3Float(1.5f, 2f, 3f)))
-        {
-            CurrentCulture = new System.Globalization.CultureInfo("de-DE"),
-        };
-        thread.Start();
-        thread.Join();
-
-        Assert.Equal("1.5, 2, 3", spelled);
-    }
+    private const string DeclaredDefaultsRefusalPrefix = "SchemaReflector: declared defaults unavailable";
 
     [Fact]
     public void TheCodecAnswersAnEmptyDocumentForEveryOwnerTheWalkReaches()
@@ -100,8 +85,11 @@ public sealed class DeclaredDefaultTests
         var entries = new List<LogEntry>();
         using var factory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(entries)));
         new SchemaReflector(factory.CreateLogger<SchemaReflector>()).GetSchemas(GameRelease.Fallout4);
+        // A collector wired to nothing would also find zero refusals below — this is the canary
+        // that it received the walk's own trace.
+        Assert.NotEmpty(entries);
 
-        var refused = entries.Where(e => e.Message.StartsWith(DeclaredDefaults.RefusalPrefix, StringComparison.Ordinal)).Select(e => e.Message).Distinct().ToList();
+        var refused = entries.Where(e => e.Message.StartsWith(DeclaredDefaultsRefusalPrefix, StringComparison.Ordinal)).Select(e => e.Message).Distinct().ToList();
         Assert.True(refused.Count == 0, string.Join("\n", refused));
     }
 

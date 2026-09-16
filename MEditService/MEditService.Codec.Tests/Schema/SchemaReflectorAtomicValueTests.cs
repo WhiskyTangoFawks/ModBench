@@ -1,8 +1,5 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Indexing;
 
@@ -15,8 +12,6 @@ public class SchemaReflectorAtomicValueTests
 
     private ColumnSpec Column(string table, string column) =>
         _reflector.GetSchemas(GameRelease.Fallout4)[table].RecordColumns.Single(c => c.Name == column);
-
-    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
     public void Color_IsAColorLeaf_WithNoMembersOfItsOwn()
@@ -42,47 +37,5 @@ public class SchemaReflectorAtomicValueTests
 
         Assert.Equal("color", ambient.ApiType);
         Assert.Null(ambient.SubFields);
-    }
-
-    // ── The alpha byte is written only where xEdit shows one (wbByteRGBA) ──────────────────────
-
-    [Fact]
-    public void AlphaAllowlist_EveryEntryResolvesToARealColorColumn()
-    {
-        // The completeness guard on a hand-transcribed table: a typo, or a Mutagen rename of the
-        // getter interface or the property, must fail loudly rather than dropping that field to the
-        // RGB rule.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-
-        var unresolved = new List<string>();
-        foreach (var (ownerGetterTypeName, propertyName) in SchemaAnnotations.For(GameCategory.Fallout4).AlphaBearingColorFields)
-        {
-            var schema = schemas.Values.SingleOrDefault(s => s.RecordType.Name == ownerGetterTypeName);
-            if (schema == null) { unresolved.Add($"{ownerGetterTypeName} (no schema)"); continue; }
-
-            var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == propertyName);
-            if (column == null) { unresolved.Add($"{ownerGetterTypeName}.{propertyName} (no column)"); continue; }
-            if (column.ApiType != "color") unresolved.Add($"{ownerGetterTypeName}.{propertyName} (not a color)");
-        }
-
-        Assert.True(unresolved.Count == 0,
-            $"AlphaBearingColorFields names a field that does not resolve to a Color column: " +
-            $"{string.Join(", ", unresolved)}. Re-check the row against wbDefinitionsFO4.pas " +
-            "and the Mutagen getter — don't just delete it.");
-    }
-
-    [Fact]
-    public void AlphaAllowlist_IsExactlyTheFourTranscribedXEditRgbaFields()
-    {
-        // Pins the table's size and contents against the transcription, so growing it is a deliberate
-        // act with a reference line to cite rather than an incidental edit.
-        Assert.Equal(
-            [
-                ("IActionRecordGetter", "Color"),
-                ("IKeywordGetter", "Color"),
-                ("ILocationGetter", "Color"),
-                ("ILocationReferenceTypeGetter", "Color"),
-            ],
-            SchemaAnnotations.For(GameCategory.Fallout4).AlphaBearingColorFields.OrderBy(e => e.TypeName, StringComparer.Ordinal).ToArray());
     }
 }

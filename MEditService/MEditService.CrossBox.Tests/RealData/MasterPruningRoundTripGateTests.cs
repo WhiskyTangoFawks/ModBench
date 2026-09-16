@@ -6,6 +6,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -135,12 +136,18 @@ public sealed class MasterPruningRoundTripGateTests
         return ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath),
             GameRelease.Fallout4,
-            LocalizedStrings.ForRead(PluginStrings.In(PathShape.DirectoryOf(fixturePath))));
+            MutagenReadParameters.ForRead(PluginStrings.In(PathShape.DirectoryOf(fixturePath))));
     }
 
     private static async Task<IFallout4Mod> DeserializeLegendariesThroughSource(string scratchDir)
     {
-        foreach (var file in await PluginTrees.SerializeTree(DeepParseLegendaries()))
+        var fixturePath = PathTo(LegendariesFixtureFileName);
+        var modPath = new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath);
+        var (files, _) = await MutagenPluginAdapter.Instance.ReadSourceAsync(
+            modPath, LegendariesFixtureFileName, GameRelease.Fallout4,
+            PluginStrings.In(PathShape.DirectoryOf(fixturePath)));
+
+        foreach (var file in files)
         {
             var fullPath = Path.Combine(scratchDir, file.RelativePath);
             Directory.CreateDirectory(PathShape.DirectoryOf(fullPath));

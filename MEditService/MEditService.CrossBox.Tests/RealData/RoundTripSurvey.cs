@@ -85,7 +85,7 @@ public sealed class RoundTripSurvey
 
                         if (accept.Length == 0)
                         {
-                            var divergence = ModelIdentity.FindFirst(parsed, reparsed);
+                            var divergence = ModelIdentity.FindFirstDivergence(parsed, reparsed);
                             accept = divergence == null ? "accept" : $"refuse:model:{divergence.RecordType}/{divergence.Description}";
                         }
 

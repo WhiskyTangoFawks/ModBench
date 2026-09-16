@@ -24,7 +24,7 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
     // member each EmbedRecordsInSameFile names.
     private static IEnumerable<(string ParentType, string Slot)> Replay()
     {
-        foreach (var found in typeof(CellEmbedCustomization).Assembly.GetTypes()
+        foreach (var found in typeof(ContainerChildFields).Assembly.GetTypes()
                      .Where(type => type is { IsClass: true, IsAbstract: false })
                      .Select(type => (Type: type, Customized: CustomizedType(type)))
                      .Where(found => found.Customized != null))

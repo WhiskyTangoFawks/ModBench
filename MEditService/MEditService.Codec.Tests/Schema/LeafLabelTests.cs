@@ -1,29 +1,53 @@
 using MEditService.Codec.Schema;
+using MEditService.Tests.TestSupport;
+using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Tests.Schema;
 
-public class LeafLabelTests
+public sealed class LeafLabelTests
 {
-    [Theory]
-    // The base's words, dropped from the head and the tail of the leaf's.
-    [InlineData("AQuestAlias", "QuestReferenceAlias", "Reference")]
-    [InlineData("AQuestAlias", "QuestCollectionAlias", "Collection")]
-    [InlineData("AMagicEffectArchetype", "MagicEffectBoundArchetype", "Bound")]
-    // A base that isn't spelled A<Name> keeps its whole name, so less is in common.
-    [InlineData("OwnerTarget", "NpcOwner", "Npc Owner")]
-    // A leaf that is its own base keeps its own name rather than emptying out.
-    [InlineData("ANpcLevel", "NpcLevel", "Npc Level")]
-    [InlineData("ANpcLevel", "PcLevelMult", "Pc Level Mult")]
-    // A leaf with nothing in common with its base keeps all of its own words.
-    [InlineData("ASomethingElse", "PerkQuestEffect", "Perk Quest Effect")]
-    public void Labels(string abstractBaseName, string leafClassName, string expected) =>
-        Assert.Equal(expected, LeafLabel.For(abstractBaseName, leafClassName));
+    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
+        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+
+    private static IReadOnlyDictionary<string, string?> DiscriminatorLabels(FieldMetadata field)
+    {
+        var fields = field.Fields
+            ?? throw new InvalidOperationException($"Expected '{field.Name}' to have sub-fields.");
+        return fields.Single(f => f.Name == "MutagenObjectType").EnumMembers.ToDictionary(m => m.Value, m => m.Label);
+    }
 
     [Fact]
-    public void KeepsAnAcronymWhole()
+    public void ANpcLevelUnion_LabelsALeafSharingTheBasesWholeName_WithTheBasesOwnWords()
     {
-        Assert.Equal("NPC Data", LeafLabel.For("AOwnerTarget", "NPCData"));
-        // And an acronym is matched against the base as one word, like any other.
-        Assert.Equal("Data", LeafLabel.For("ANPCTarget", "NPCData"));
+        var labels = DiscriminatorLabels(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Level").ToFieldMetadata());
+
+        Assert.Equal("Npc Level", labels["NpcLevel"]);
+    }
+
+    [Fact]
+    public void ANpcLevelUnion_LabelsALeafSharingNoWordsWithTheBase_WithAllOfTheLeafsOwnWords()
+    {
+        var labels = DiscriminatorLabels(Schemas["npc_"].RecordColumns.Single(c => c.Name == "Level").ToFieldMetadata());
+
+        Assert.Equal("Pc Level Mult", labels["PcLevelMult"]);
+    }
+
+    [Fact]
+    public void AQuestAliasUnion_DropsTheWordTheBaseAndLeafShareAtTheStart()
+    {
+        var aliases = Schemas["qust"].RecordColumns.Single(c => c.Name == "Aliases").Field.ElementSpec
+            ?? throw new InvalidOperationException("Expected 'qust.Aliases' to have an array element spec.");
+        var labels = DiscriminatorLabels(aliases.ToFieldMetadata());
+
+        Assert.Equal("Reference", labels["QuestReferenceAlias"]);
+        Assert.Equal("Collection", labels["QuestCollectionAlias"]);
+    }
+
+    [Fact]
+    public void AMagicEffectArchetypeUnion_DropsTheWordsTheBaseAndLeafShareAtBothEnds()
+    {
+        var labels = DiscriminatorLabels(Schemas["mgef"].RecordColumns.Single(c => c.Name == "Archetype").ToFieldMetadata());
+
+        Assert.Equal("Bound", labels["MagicEffectBoundArchetype"]);
     }
 }

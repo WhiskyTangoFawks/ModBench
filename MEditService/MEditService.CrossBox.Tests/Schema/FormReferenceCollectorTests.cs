@@ -301,7 +301,7 @@ public class FormReferenceCollectorTests
 
         using var document = JsonDocument.Parse(HeaderDocument.Write(mod));
 
-        var masters = DocumentNodes.At(document.RootElement, $"ModHeader.{PluginHeader.MastersFieldName}");
+        var masters = DocumentNodes.At(document.RootElement, $"ModHeader.{nameof(mod.ModHeader.MasterReferences)}");
         Assert.NotNull(masters);
         Assert.Equal(
             ["Fallout4.esm"],

@@ -79,9 +79,10 @@ public sealed class RegisteredPluginSpellingTests
         // registered whatever the Track door does with the name.
         internal void TrackFromPristineFiles()
         {
-            var deepParsed = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(PluginName), PluginPath), Release);
-            var pristineFiles = SourceRepository.PristineFilesOf(
-                PluginName, PluginTrees.SerializeTree(deepParsed).GetAwaiter().GetResult());
+            var (treeFiles, _) = MutagenPluginAdapter.Instance.ReadSourceAsync(
+                new ModPath(ModKey.FromFileName(PluginName), PluginPath), PluginName, Release,
+                PluginStrings.In(ModFolder)).GetAwaiter().GetResult();
+            var pristineFiles = SourceRepository.PristineFilesOf(PluginName, treeFiles);
 
             SourceRepository.Track(
                 ModFolder, SourcePreset.Edits, pristineFiles,
