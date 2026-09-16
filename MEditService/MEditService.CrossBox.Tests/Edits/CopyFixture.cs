@@ -105,8 +105,8 @@ public sealed class CopyFixture : IDisposable
     public void CommitDestination()
     {
         var gitDir = Path.Combine(DestinationModFolder, ".git");
-        GitCli.Run(gitDir, DestinationModFolder, "add", "-A");
-        GitCli.Run(gitDir, DestinationModFolder, "commit", "-m", "fixture");
+        GitProbe.Run(gitDir, DestinationModFolder, "add", "-A");
+        GitProbe.Run(gitDir, DestinationModFolder, "commit", "-m", "fixture");
     }
 
     /// <summary>The source plugin's own bytes, so "a copy, not a move" is asserted against the file

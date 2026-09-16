@@ -53,7 +53,7 @@ public sealed class SourceWatchTests : IDisposable
     }
 
     private void Git(params string[] args) =>
-        GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
+        GitProbe.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 
     private async Task<bool> Settles(long from) =>
         await _mod.Index.AwaitSequenceAsync(from + 1, TimeSpan.FromSeconds(15));

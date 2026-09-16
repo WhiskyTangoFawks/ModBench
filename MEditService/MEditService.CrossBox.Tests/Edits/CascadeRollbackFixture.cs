@@ -173,7 +173,7 @@ public sealed class CascadeRollbackFixture : IDisposable
     public IReadOnlyDictionary<string, IReadOnlyList<string>> GitStatuses() =>
         AllPlugins.ToDictionary(
             p => p.Name,
-            IReadOnlyList<string> (p) => GitCli
+            IReadOnlyList<string> (p) => GitProbe
                 .Run(Path.Combine(ModFolderOf(p), ".git"), ModFolderOf(p), "status", "--porcelain")
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries)
                 .Select(l => l.Trim())

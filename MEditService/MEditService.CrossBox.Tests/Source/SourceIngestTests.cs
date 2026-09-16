@@ -154,8 +154,8 @@ public sealed class SourceIngestTests
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
             IndexedModFixture.NpcEditorId, "CommittedRename", StringComparison.Ordinal));
         var gitDir = Path.Combine(mod.ModFolder, ".git");
-        GitCli.Run(gitDir, mod.ModFolder, "add", "-A");
-        GitCli.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "external rename");
+        GitProbe.Run(gitDir, mod.ModFolder, "add", "-A");
+        GitProbe.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "external rename");
 
         using var reloaded = Reload(holder, mod);
 
@@ -293,8 +293,8 @@ public sealed class SourceIngestTests
         // orders porcelain output by path, so the good deletion below is processed first.
         var poison = Path.Combine(sourceRoot, "Npcs", "zzbroken.json");
         File.WriteAllText(poison, "{ not a record");
-        GitCli.Run(gitDir, mod.ModFolder, "add", "-A");
-        GitCli.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "commit an unreadable record");
+        GitProbe.Run(gitDir, mod.ModFolder, "add", "-A");
+        GitProbe.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "commit an unreadable record");
 
         // Two working-tree deletions. The first re-seeds Head and commits; the second throws when its
         // HEAD blob is parsed, aborting the ingest partway through the dirty set.

@@ -2,6 +2,7 @@ using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -39,7 +40,7 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         Assert.True(result.Applied, result.RefusalReason);
         var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", SourceEditFixture.NpcEditorId).Replace('\\', '/');
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
-        var newBaseline = GitCli.Run(gitDir, _mod.ModFolder, "show", $"main:{relativePath}");
+        var newBaseline = GitProbe.Run(gitDir, _mod.ModFolder, "show", $"main:{relativePath}");
         Assert.Contains("\"HeightMax\": 0.9", newBaseline, StringComparison.Ordinal);
     }
 
@@ -57,9 +58,9 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal(RebaseOutcome.Clean, result.Rebase?.Outcome);
-        var mainSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
-        Assert.Equal("edit", GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
-        Assert.Equal(mainSha, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
+        var mainSha = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
+        Assert.Equal("edit", GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
+        Assert.Equal(mainSha, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
         // Only the ignored plugin binary shows, same as before Absorb ran — nothing git tracks is dirty.
         Assert.Equal(dirtBefore, _mod.GitStatus());
     }
@@ -87,7 +88,7 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         _mod.AbsorbHandler.Absorb(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
-        var tree = GitCli.Run(gitDir, _mod.ModFolder, "ls-tree", "-r", "--name-only", "main")
+        var tree = GitProbe.Run(gitDir, _mod.ModFolder, "ls-tree", "-r", "--name-only", "main")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();
@@ -103,14 +104,14 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
     {
         var pluginPath = Path.Combine(_mod.ModFolder, SourceEditFixture.PluginName);
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
-        var mainBefore = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
+        var mainBefore = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
         File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
         var result = _mod.AbsorbHandler.Absorb(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
 
         Assert.False(result.Applied);
         Assert.Contains(SourceEditFixture.PluginName, result.RefusalReason, StringComparison.Ordinal);
-        Assert.Equal(mainBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim());
+        Assert.Equal(mainBefore, GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim());
     }
 
     [Fact]
@@ -122,8 +123,8 @@ public sealed class AbsorbExternalChangeHandlerTests : IDisposable
         _mod.AbsorbHandler.Absorb(_mod.ModFolder, _mod.PluginCopies(pluginPath), _mod.LoadOrder);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
-        var mainSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
-        var parkedSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", $"refs/medit/last-compile/{SourceEditFixture.PluginName}").Trim();
+        var mainSha = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();
+        var parkedSha = GitProbe.Run(gitDir, _mod.ModFolder, "rev-parse", $"refs/medit/last-compile/{SourceEditFixture.PluginName}").Trim();
         Assert.Equal(mainSha, parkedSha);
     }
 }

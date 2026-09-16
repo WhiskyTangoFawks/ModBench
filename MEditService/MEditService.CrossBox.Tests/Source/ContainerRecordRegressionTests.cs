@@ -113,8 +113,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             StringComparison.Ordinal);
 
         var git = Path.Combine(_fixture.ModFolder, ".git");
-        GitCli.Run(git, _fixture.ModFolder, "add", "-A");
-        var staged = GitCli.Run(git, _fixture.ModFolder, "diff", "--cached", "-M", "--name-status")
+        GitProbe.Run(git, _fixture.ModFolder, "add", "-A");
+        var staged = GitProbe.Run(git, _fixture.ModFolder, "diff", "--cached", "-M", "--name-status")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();
@@ -186,15 +186,15 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
-        var beforeMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
+        var beforeMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
         TestEditService.AbsorbHandler().Absorb(
             _fixture.ModFolder, IndexedContainerFixture.PluginCopies(pluginPath), _fixture.Holder.Current);
 
-        var afterMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
+        var afterMain = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);
 
-        var tree = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "ls-tree", "-r", "--name-only", "main")
+        var tree = GitProbe.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "ls-tree", "-r", "--name-only", "main")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();

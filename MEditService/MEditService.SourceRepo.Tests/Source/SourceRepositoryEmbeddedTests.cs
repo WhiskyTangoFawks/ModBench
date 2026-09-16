@@ -247,12 +247,12 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         Assert.NotNull(found);
         Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyOf(found.Body));
         Assert.Equal(
-            FullPath(ExteriorCellPath),
-            repository.Locate(Plugin, Identity(_temporaryRef, "refr"))?.FullPath);
+            Path.GetRelativePath(_modFolder, FullPath(ExteriorCellPath)),
+            repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr"))?.RelativePath);
     }
 
     [Fact]
-    public void Locate_AfterTheMapHasRebuiltOnce_AnswersAbsentForAChildTheListedOwnerHasLost()
+    public void UnitHolding_AfterTheMapHasRebuiltOnce_AnswersAbsentForAChildTheListedOwnerHasLost()
     {
         var repository = Repository;
         // A miss spends this repository's one rebuild, so the move below cannot buy a second.
@@ -265,11 +265,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         // Absent, never the interior cell the map still lists: an answer the tree does not bear out
         // would send a write into a document that does not carry the record.
-        Assert.Null(repository.Locate(Plugin, Identity(_temporaryRef, "refr")));
+        Assert.Null(repository.UnitHolding(Plugin, Identity(_temporaryRef, "refr")));
     }
 
     [Fact]
-    public void Locate_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument()
+    public void UnitHolding_ForAChildInsideADocumentOfAPathAmbiguousGroup_FindsThatDocument()
     {
         // "Globals" maps to GlobalBool/Float/Int/Short, so no path can name the type; the document
         // names its own, and the map still has to carry the children it holds.
@@ -282,10 +282,11 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +
             "  \"Temporary\": [ { \"FormKey\": \"00A001:Embedded.esp\" } ]\n}");
 
-        var unit = Repository.Locate(Plugin, new RecordIdentity("00A001:Embedded.esp", "refr", null));
+        var unit = Repository.UnitHolding(Plugin, new RecordIdentity("00A001:Embedded.esp", "refr", null));
 
-        Assert.Equal(carrier, unit?.FullPath);
-        Assert.True(unit?.IsEmbedded);
+        Assert.NotNull(unit);
+        Assert.Equal(Path.GetRelativePath(_modFolder, carrier), unit.RelativePath);
+        Assert.True(unit.IsEmbedded);
     }
 
     [Fact]
@@ -335,7 +336,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     }
 
     [Fact]
-    public void Locate_ForAKeyADocumentNamesOutsideEveryEmbedSlot_FindsNoOwner()
+    public void UnitHolding_ForAKeyADocumentNamesOutsideEveryEmbedSlot_FindsNoOwner()
     {
         // The codec writes a link as a bare string under its own field name and a child as an object
         // inside the slot its container embeds; a FormKey anywhere else is a reference, not a child.
@@ -346,7 +347,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
 
         var identity = new RecordIdentity("00A001:Embedded.esp", "refr", "Absent");
 
-        Assert.Null(Repository.Locate(Plugin, identity));
+        Assert.Null(Repository.UnitHolding(Plugin, identity));
         Assert.Equal(SourceRemoval.NoDocumentHoldsIt, Repository.Remove(Plugin, identity));
     }
 

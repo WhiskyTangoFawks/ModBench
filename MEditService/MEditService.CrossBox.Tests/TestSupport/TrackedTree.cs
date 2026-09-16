@@ -34,7 +34,7 @@ internal static class TrackedTree
     }
 
     internal static IReadOnlyList<string> GitStatus(string modFolder) =>
-        GitCli.Run(Path.Combine(modFolder, ".git"), modFolder, "status", "--porcelain")
+        GitProbe.Run(Path.Combine(modFolder, ".git"), modFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(line => line.Trim())
             .ToList();
