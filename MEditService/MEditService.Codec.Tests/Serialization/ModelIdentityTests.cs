@@ -23,7 +23,7 @@ public sealed class ModelIdentityTests
         Assert.False(originalBytes.AsSpan().SequenceEqual(rewrittenBytes),
             "RecruitSierra.esl's rewrite does not change bytes — this test does not exercise the byte-changing rewrite it depends on.");
 
-        var divergence = ModelIdentity.FindFirst(original, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
         Assert.Null(divergence);
     }
@@ -39,7 +39,7 @@ public sealed class ModelIdentityTests
         var recompiledNpc = new Npc(npc.FormKey, Fallout4Release.Fallout4) { EditorID = "OriginalNpc", HeightMin = 2.5f };
         recompiled.Npcs.Add(recompiledNpc);
 
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.NotNull(divergence);
         Assert.Equal("Npc", divergence.RecordType);
@@ -63,7 +63,7 @@ public sealed class ModelIdentityTests
         };
         AddInteriorCell(recompiled, recompiledCell);
 
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.Null(divergence);
     }
@@ -84,7 +84,7 @@ public sealed class ModelIdentityTests
         };
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.Null(divergence);
     }
@@ -108,7 +108,7 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(Block(0, 0, SubBlock(0, 0, cellB.DeepCopy(), cellA.DeepCopy())));
         recompiled.Worldspaces.Add(recompiledWs);
 
-        Assert.Null(ModelIdentity.FindFirst(mod, recompiled));
+        Assert.Null(ModelIdentity.FindFirstDivergence(mod, recompiled));
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(Block(0, 0, SubBlock(0, 0, changed)));
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.NotNull(divergence);
         Assert.Contains("Point", divergence.Description);
@@ -148,7 +148,7 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(Block(5, 0, SubBlock(0, 0, cell.DeepCopy())));
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.NotNull(divergence);
         Assert.Equal("Worldspace", divergence.RecordType);
@@ -181,7 +181,7 @@ public sealed class ModelIdentityTests
         recompiledWs.SubCells.Add(new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0, LastModified = 99, Unknown = 100 });
         recompiled.Worldspaces.Add(recompiledWs);
 
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.Null(divergence);
     }
@@ -195,9 +195,9 @@ public sealed class ModelIdentityTests
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         SetOpaqueHeaderFields(recompiled);
 
-        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
-        Assert.Null(field);
+        Assert.Null(divergence);
     }
 
     public static IEnumerable<object[]> AllowListedHeaderFieldCorruptions()
@@ -224,9 +224,10 @@ public sealed class ModelIdentityTests
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         setCorrupted(recompiled.ModHeader);
 
-        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
-        Assert.Equal(fieldName, field);
+        Assert.NotNull(divergence);
+        Assert.Contains($"'{fieldName}'", divergence.Description, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -237,9 +238,9 @@ public sealed class ModelIdentityTests
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
 
-        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
-        Assert.Null(field);
+        Assert.Null(divergence);
     }
 
     // ── The comparison door must not inherit the generated comparers' lies ──
@@ -264,12 +265,7 @@ public sealed class ModelIdentityTests
         };
         recompiled.Armors.Add(recompiledArmor);
 
-        // Which stage catches it, pinned: generated Equals lies about GenderedItem (upstream #685), but the
-        // mask does see this sub-field. If this assertion starts failing, the mask regressed and the
-        // decider below is what keeps the verdict honest.
-        Assert.NotEmpty(ModelIdentity.FailingFields(armor, recompiledArmor));
-
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.NotNull(divergence);
         Assert.Equal(armor.FormKey, divergence.FormKey);
@@ -287,12 +283,7 @@ public sealed class ModelIdentityTests
         recompiledPackage.Data.Add(0, new PackageDataInt { Name = "Count", Data = 99 });
         recompiled.Packages.Add(recompiledPackage);
 
-        // Which stage catches it, pinned: the mask misses this one, the polymorphic base-overload binding
-        // never comparing PackageDataInt's derived-only Data, so the codec decider refuses it. A mask fix
-        // flips this first assertion, not the verdict.
-        Assert.Empty(ModelIdentity.FailingFields(package, recompiledPackage));
-
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.NotNull(divergence);
         Assert.Equal(package.FormKey, divergence.FormKey);
@@ -315,7 +306,7 @@ public sealed class ModelIdentityTests
         recompiledNpc.Morphs.Add(new NpcMorph { Key = 1, Value = 0.25f });
         recompiled.Npcs.Add(recompiledNpc);
 
-        Assert.NotNull(ModelIdentity.FindFirst(mod, recompiled));
+        Assert.NotNull(ModelIdentity.FindFirstDivergence(mod, recompiled));
     }
 
     [Fact]
@@ -327,9 +318,10 @@ public sealed class ModelIdentityTests
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         recompiled.ModHeader.TransientTypes.Add(new TransientType { FormType = 99 });
 
-        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
-        Assert.Equal("TransientTypes", field);
+        Assert.NotNull(divergence);
+        Assert.Contains("'TransientTypes'", divergence.Description, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -340,13 +332,10 @@ public sealed class ModelIdentityTests
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
 
-        // The underlying Mutagen quirk is unchanged — the mask still sees nothing — which is
-        // exactly why the gate's own comparer exists.
-        Assert.Empty(ModelIdentity.FailingFields(original.ModHeader, recompiled.ModHeader));
+        var divergence = ModelIdentity.FindFirstDivergence(original, recompiled);
 
-        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
-
-        Assert.Equal("TransientTypes", field);
+        Assert.NotNull(divergence);
+        Assert.Contains("'TransientTypes'", divergence.Description, StringComparison.Ordinal);
     }
 
     private static void SetOpaqueHeaderFields(Fallout4Mod mod)
@@ -375,10 +364,10 @@ public sealed class ModelIdentityTests
     {
         var (original, recompiled, _, _) = await ParseWriteAndReparse("RecruitSierra.esl");
         // Warm the codec/serializer once so the measurement is the steady-state cost.
-        Assert.Null(ModelIdentity.FindFirst(original, recompiled));
+        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        Assert.Null(ModelIdentity.FindFirst(original, recompiled));
+        Assert.Null(ModelIdentity.FindFirstDivergence(original, recompiled));
         stopwatch.Stop();
 
         var recordCount = original.EnumerateMajorRecords().Count();

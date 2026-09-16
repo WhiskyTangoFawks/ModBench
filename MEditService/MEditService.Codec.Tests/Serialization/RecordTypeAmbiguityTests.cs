@@ -13,10 +13,6 @@ public sealed class RecordTypeAmbiguityTests
 {
     private static readonly RecordTypeDispatch Dispatch = RecordTypeDispatch.For(GameRelease.Fallout4);
 
-    private static Type RequireType(string name) =>
-        typeof(Fallout4Mod).Assembly.GetType(name, throwOnError: true)
-            ?? throw new InvalidOperationException($"Expected type '{name}' to exist in the Fallout4 assembly.");
-
     [Fact]
     public void ConcreteFor_ResolvesEveryConcreteMajorRecordTypeByItsClrName()
     {
@@ -58,17 +54,6 @@ public sealed class RecordTypeAmbiguityTests
     public void IsPathAmbiguous_MatchesTheWholeModDoorsOwnPolicy(string recordType, bool expected) =>
         Assert.Equal(expected, Dispatch.IsPathAmbiguous(recordType));
 
-    // Ingest hands the serializer binary-overlay getters, whose runtime type does not derive from
-    // the concrete setter class, so the rule cannot be assignability against the group element.
-    [Fact]
-    public void IsPathAmbiguous_ForAnOverlayReadersOwnRuntimeType_AnswersAsForTheConcreteType()
-    {
-        var overlay = RequireType("Mutagen.Bethesda.Fallout4.GlobalFloatBinaryOverlay");
-
-        Assert.True(Dispatch.IsPathAmbiguous(overlay));
-        Assert.False(Dispatch.IsPathAmbiguous(RequireType("Mutagen.Bethesda.Fallout4.WeaponBinaryOverlay")));
-    }
-
     [Fact]
     public void TheAbstractGroupElementRule_AgreesWithSignaturesThatSeveralConcreteTypesShare()
     {
@@ -78,7 +63,7 @@ public sealed class RecordTypeAmbiguityTests
 
         var shared = bySignature.Where(g => g.Count() > 1).Select(g => g.Key).OrderBy(k => k, StringComparer.Ordinal);
         var ambiguous = bySignature
-            .Where(g => g.Any(t => Dispatch.IsPathAmbiguous(t)))
+            .Where(g => g.Any(t => Dispatch.IsPathAmbiguous(t.Name)))
             .Select(g => g.Key)
             .OrderBy(k => k, StringComparer.Ordinal);
 

@@ -24,7 +24,7 @@ public sealed class ModelIdentityFloatEpsilonCharacterizationTests
 
         Assert.NotEqual(npc.HeightMin, recompiledNpc.HeightMin);
 
-        var divergence = ModelIdentity.FindFirst(mod, recompiled);
+        var divergence = ModelIdentity.FindFirstDivergence(mod, recompiled);
 
         Assert.NotNull(divergence);
         Assert.Equal(npc.FormKey, divergence.FormKey);

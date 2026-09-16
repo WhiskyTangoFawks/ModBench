@@ -75,7 +75,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
         var compiled = Fallout4Mod.CreateFromBinary(
             new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
-        var divergence = ModelIdentity.FindFirst(original, compiled);
+        var divergence = ModelIdentity.FindFirstDivergence(original, compiled);
         Assert.Null(divergence);
     }
 

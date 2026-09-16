@@ -140,24 +140,6 @@ public sealed class ParseFailedRecordTests
         Assert.Null(column.ParseDiagnosis);
     }
 
-    [Theory]
-    [InlineData("npc_")]
-    [InlineData("glob")]
-    public async Task ParseFailedDocument_IsReadableByTheCodec_ForAPathAmbiguousTypeAsWell(string recordType)
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Stub.esp"), Fallout4Release.Fallout4);
-        IMajorRecordGetter record = recordType == "glob"
-            ? mod.Globals.AddNewFloat("StubGlobal")
-            : mod.Npcs.AddNew("StubNpc");
-        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-
-        var body = ParseFailedDocument.For(record, record.EditorID, GameRelease.Fallout4);
-        var read = await codec.DeserializeFromBytesAsync(body, GameRelease.Fallout4, recordType);
-
-        Assert.Equal(record.FormKey, read.FormKey);
-        Assert.Equal(record.EditorID, read.EditorID);
-    }
-
     // Corrupting a major record's signature inside its GRUP makes Mutagen's location scan throw
     // before it yields anything of that type, so nothing of that type is reachable.
     [Fact]

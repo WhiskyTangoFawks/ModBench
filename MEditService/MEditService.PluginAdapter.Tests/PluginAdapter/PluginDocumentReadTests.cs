@@ -37,12 +37,13 @@ public sealed class PluginDocumentReadTests
             new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4, Schemas);
         var npc = documents.Records.Single(d => d.RecordType == "npc_");
 
-        using var loaded = MutagenPluginAdapter.OpenForRead(new ModPath(ModKey.FromFileName(PluginName), path), GameRelease.Fallout4);
+        using var loaded = Fallout4Mod.CreateFromBinaryOverlay(
+            new ModPath(ModKey.FromFileName(PluginName), path), Fallout4Release.Fallout4);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var expected = codec.SerializeToText(loaded.Getter.EnumerateMajorRecords().Single(), GameRelease.Fallout4);
+        var expected = codec.SerializeToText(loaded.EnumerateMajorRecords().Single(), GameRelease.Fallout4);
 
         Assert.Equal(expected, npc.Text);
-        Assert.Equal(loaded.Getter.EnumerateMajorRecords().Single().FormKey.ToString(), npc.FormKey);
+        Assert.Equal(loaded.EnumerateMajorRecords().Single().FormKey.ToString(), npc.FormKey);
         Assert.Null(npc.ParseDiagnosis);
     }
 

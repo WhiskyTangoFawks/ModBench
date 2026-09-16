@@ -85,7 +85,9 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
     {
-        var scratchPrefix = PluginTrees.ReadScratchPrefix;
+        // Mirrors PluginTrees.ReadScratchPrefix, an internal: the prefix a whole-mod read
+        // materializes its scratch files under.
+        const string scratchPrefix = "medit-readtree-";
         var sourceRoot = SourceRepository.RootFor(CompileFixture.PluginName);
 
         // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever

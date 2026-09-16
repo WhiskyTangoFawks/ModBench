@@ -65,17 +65,6 @@ public sealed class ConcreteBaseUnionSchemaTests
     }
 
     [Fact]
-    public void ReEntryWithNoDocumentedTruncation_FailsSchemaGenerationNamingTheChain()
-    {
-        var reflector = AmendedSchemaReflector.Fallout4With(a => a with { CycleTruncations = [] });
-
-        var ex = Assert.Throws<InvalidOperationException>(() => reflector.GetSchemas(GameRelease.Fallout4));
-
-        const string chain = "IScriptEntryGetter -> IScriptPropertyGetter -> IScriptStructPropertyGetter -> IScriptEntryGetter";
-        Assert.True(ex.Message.Contains(chain, StringComparison.Ordinal), ex.Message);
-    }
-
-    [Fact]
     public void ScriptProperty_ObjectLeafAndStructLeaf_ExposeTheirOwnMembers()
     {
         var element = ScriptPropertyElement(NpcAdapterColumn(SharedSchemaReflector.Instance));

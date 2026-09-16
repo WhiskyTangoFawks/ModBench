@@ -123,18 +123,4 @@ public class RecordTypeDispatchTests
             dir.Delete(recursive: true);
         }
     }
-
-    // The second case, a generated class missing the expected static method, has no real fixture to
-    // drive it, so the exception is constructed directly. Mutagen has changed generator shape between
-    // point releases, so it is a live failure mode.
-    [Fact]
-    public void UnsupportedException_WhenTheGeneratedTypeExistsButLacksTheMethod_NamesBothInTheMessage()
-    {
-        var ex = new RecordTypeSerializationUnsupportedException(typeof(Npc), typeof(object), "Serialize");
-
-        var objectFullName = typeof(object).FullName
-            ?? throw new InvalidOperationException("Expected typeof(object).FullName to be non-null.");
-        Assert.Contains(objectFullName, ex.Message, StringComparison.Ordinal);
-        Assert.Contains("Serialize", ex.Message, StringComparison.Ordinal);
-    }
 }

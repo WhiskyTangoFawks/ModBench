@@ -1,4 +1,3 @@
-using System.Globalization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
@@ -63,119 +62,67 @@ public sealed class PluginWriterSaveTests
         Assert.Matches(@"TestPlugin\.\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}[-\d]*\.bak\.esp$", backupPath);
     }
 
+    // Two saves at the same instant must throw, not silently overwrite the earlier backup.
     [Fact]
-    public void CreateBackup_FileAlreadyExists_ThrowsIOException()
+    public async Task SaveAsync_SameInstantTwice_ThrowsIOExceptionOnTheSecondSave()
     {
-        var dir = Path.Combine(Path.GetTempPath(), $"pw-backup-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dir);
-        try
-        {
-            var pluginPath = Path.Combine(dir, "TestPlugin.esp");
-            File.WriteAllText(pluginPath, "dummy");
+        using var data = new PluginFixtureBuilder("pw-save-collide")
+            .WithPlugin("TestPlugin.esp")
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var clock = new FakeTimeProvider(new DateTimeOffset(2024, 3, 1, 12, 0, 0, TimeSpan.Zero));
+        var writer = new PluginWriter(NullLogger<PluginWriter>.Instance, clock);
 
-            var ts = "2020-01-01T00-00-00";
-            PluginWriter.CreateBackup(pluginPath, ts);
+        await writer.SaveAsync(pluginPath, GameRelease.Fallout4);
 
-            // Second call with the same timestamp must throw, not silently overwrite.
-            Assert.Throws<IOException>(() => PluginWriter.CreateBackup(pluginPath, ts));
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        await Assert.ThrowsAsync<IOException>(() => writer.SaveAsync(pluginPath, GameRelease.Fallout4));
     }
 
     // Two backups of one plugin in quick succession must both survive — which at one-second
     // timestamp resolution collided with the previous backup and threw, failing the save. The
     // clock is set to two distinct instants now, not raced.
     [Fact]
-    public void CreateBackup_TwiceInQuickSuccession_KeepsBoth()
+    public async Task SaveAsync_TwiceInQuickSuccession_KeepsBothBackups()
     {
-        var dir = Path.Combine(Path.GetTempPath(), $"pw-backup-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dir);
-        try
-        {
-            var pluginPath = Path.Combine(dir, "TestPlugin.esp");
-            File.WriteAllText(pluginPath, "dummy");
+        using var data = new PluginFixtureBuilder("pw-save-quick")
+            .WithPlugin("TestPlugin.esp")
+            .Build();
+        var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
+        var clock = new FakeTimeProvider(new DateTimeOffset(2024, 3, 1, 12, 0, 0, TimeSpan.Zero));
+        var writer = new PluginWriter(NullLogger<PluginWriter>.Instance, clock);
 
-            var clock = new FakeTimeProvider(new DateTimeOffset(2024, 3, 1, 12, 0, 0, TimeSpan.Zero));
-            var firstInstant = clock.GetUtcNow();
-            var first = PluginWriter.CreateBackup(pluginPath, timeProvider: clock);
+        var first = await writer.SaveAsync(pluginPath, GameRelease.Fallout4);
+        clock.SetUtcNow(clock.GetUtcNow().AddTicks(1));
+        var second = await writer.SaveAsync(pluginPath, GameRelease.Fallout4);
 
-            clock.SetUtcNow(firstInstant.AddTicks(1));
-            var secondInstant = clock.GetUtcNow();
-            var second = PluginWriter.CreateBackup(pluginPath, timeProvider: clock);
-
-            Assert.NotEqual(first, second);
-            Assert.True(File.Exists(first));
-            Assert.True(File.Exists(second));
-            Assert.Contains(Stamp(firstInstant), first, StringComparison.Ordinal);
-            Assert.Contains(Stamp(secondInstant), second, StringComparison.Ordinal);
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
+        Assert.NotEqual(first, second);
+        Assert.True(File.Exists(first));
+        Assert.True(File.Exists(second));
     }
 
-    private static string Stamp(DateTimeOffset instant) =>
-        instant.ToString("yyyy-MM-ddTHH-mm-ss-fffffff", CultureInfo.InvariantCulture);
-
+    // Repeated saves prune down to the newest five, deleting the oldest as more arrive.
     [Fact]
-    public void PruneOldBackups_ExcessBackups_DeletesOldestKeepsNewest()
-    {
-        const int maxBackups = 5;
-        var dir = Path.Combine(Path.GetTempPath(), $"pw-prune-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dir);
-        try
-        {
-            var pluginPath = Path.Combine(dir, "TestPlugin.esp");
-            File.WriteAllText(pluginPath, "dummy");
-
-            string[] timestamps =
-            [
-                "2020-01-01T00-00-01", "2020-01-01T00-00-02", "2020-01-01T00-00-03",
-                "2020-01-01T00-00-04", "2020-01-01T00-00-05", "2020-01-01T00-00-06",
-                "2020-01-01T00-00-07",
-            ];
-
-            var createdPaths = timestamps.Select(ts => PluginWriter.CreateBackup(pluginPath, ts)).ToList();
-
-            var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
-            writer.PruneOldBackups(pluginPath);
-
-            var surviving = Directory.GetFiles(dir, "TestPlugin.*.bak.esp");
-            Assert.Equal(maxBackups, surviving.Length);
-            Assert.False(File.Exists(createdPaths[0]), "Oldest backup should be deleted");
-            Assert.False(File.Exists(createdPaths[1]), "Second oldest backup should be deleted");
-            for (int i = 2; i < timestamps.Length; i++)
-                Assert.True(File.Exists(createdPaths[i]), $"Backup {i} should survive");
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task SaveAsync_WithExcessBackups_PrunesAfterSave()
+    public async Task SaveAsync_MoreThanFiveSaves_KeepsOnlyTheNewestFiveBackups()
     {
         using var data = new PluginFixtureBuilder("pw-save-prune")
             .WithPlugin("TestPlugin.esp")
             .Build();
-
         var pluginPath = Path.Combine(data.DataFolder, "TestPlugin.esp");
-        var dir = PathShape.DirectoryOf(pluginPath);
-        var name = Path.GetFileNameWithoutExtension(pluginPath);
+        var clock = new FakeTimeProvider(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var writer = new PluginWriter(NullLogger<PluginWriter>.Instance, clock);
 
-        // Pre-create maxBackups + 1 backups; SaveAsync adds one more before pruning.
-        for (int i = 1; i <= 6; i++)
-            PluginWriter.CreateBackup(pluginPath, $"2020-01-0{i}T00-00-00");
+        var backups = new List<string>();
+        for (var i = 0; i < 7; i++)
+        {
+            backups.Add(await writer.SaveAsync(pluginPath, GameRelease.Fallout4));
+            clock.SetUtcNow(clock.GetUtcNow().AddSeconds(1));
+        }
 
-        var writer = new PluginWriter(NullLogger<PluginWriter>.Instance);
-        await writer.SaveAsync(pluginPath, GameRelease.Fallout4);
-
-        var backups = Directory.GetFiles(dir, $"{name}.*.bak.esp");
-        Assert.True(backups.Length <= 5, $"Expected at most 5 backups after prune, got {backups.Length}");
+        var surviving = Directory.GetFiles(data.DataFolder, "TestPlugin.*.bak.esp");
+        Assert.Equal(5, surviving.Length);
+        Assert.False(File.Exists(backups[0]), "Oldest backup should be deleted");
+        Assert.False(File.Exists(backups[1]), "Second oldest backup should be deleted");
+        for (var i = 2; i < backups.Count; i++)
+            Assert.True(File.Exists(backups[i]), $"Backup {i} should survive");
     }
 }

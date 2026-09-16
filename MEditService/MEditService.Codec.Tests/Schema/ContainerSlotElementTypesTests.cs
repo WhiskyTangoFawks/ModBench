@@ -1,5 +1,6 @@
 using System.Reflection;
 using MEditService.Codec.Schema;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -21,7 +22,7 @@ public sealed class ContainerSlotElementTypesTests
         {
             var property = RecordTypes().First(type => type.Name == parentType).GetProperty(slot)
                 ?? throw new InvalidOperationException($"Expected '{parentType}' to declare property '{slot}'.");
-            var declared = ContainerMembers.ElementTypeOf(property.PropertyType)
+            var declared = ElementTypeOf(property.PropertyType)
                 ?? throw new InvalidOperationException($"Expected '{parentType}.{slot}' to have a derivable element type.");
             Assert.Equal(declared.Name, element);
         }
@@ -57,9 +58,18 @@ public sealed class ContainerSlotElementTypesTests
 
     private static IEnumerable<Type> RecordTypes() =>
         Enum.GetValues<GameCategory>()
-            .Select(SchemaReflector.GameModule)
+            .Select(GameModuleAssembly.For)
             .OfType<Assembly>()
             .SelectMany(module => module.GetTypes())
             .Where(type => type.IsClass && !type.IsAbstract && type.IsPublic
                            && typeof(IMajorRecord).IsAssignableFrom(type));
+
+    // Mirrors ContainerMembers' own derivation: a list slot's element, or a single-value slot's own
+    // type. Pure reflection over the property shape, not a coupling to the derivation's internals.
+    private static Type? ElementTypeOf(Type slotType) =>
+        slotType.GetInterfaces()
+            .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            .Select(i => i.GetGenericArguments()[0])
+            .FirstOrDefault()
+        ?? slotType;
 }
