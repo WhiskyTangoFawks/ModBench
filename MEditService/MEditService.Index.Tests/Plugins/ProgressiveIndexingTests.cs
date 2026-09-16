@@ -1,24 +1,19 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
-using Microsoft.Extensions.Logging.Abstractions;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Plugins;
 
-/// <summary>Each test drives a load to a known point with <see cref="GatedIndexRepositoryFactory"/>
-/// and asserts at that instant: no sleeps, no timing assumptions (ADR-0013).</summary>
+/// <summary>Each test drives a load to a known point with <see cref="GatedPluginAdapter"/> and
+/// asserts at that instant: no sleeps, no timing assumptions (ADR-0013).</summary>
 public sealed class ProgressiveIndexingTests
 {
-    private static (IndexProjector Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
+    private static (IndexProjector Manager, GatedPluginAdapter Gate) MakeGatedManager(LoadOrderHolder holder, string gateBefore)
     {
-        var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var gate = new GatedIndexRepositoryFactory(inner, gateBefore);
-        var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, gate);
-        return (manager, gate);
+        var gate = new GatedPluginAdapter(gateBefore);
+        return (Indexes.Open(holder, gate), gate);
     }
 
     private static ScatteredFixtureData ThreePlugins(string prefix) =>
@@ -44,19 +39,16 @@ public sealed class ProgressiveIndexingTests
         // fully queryable — not published only after the whole load order has been indexed and swept.
         var reads = manager.Reads;
         Assert.NotNull(reads);
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
+        Assert.Equal(1, reads.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
         // And B.esp — the one being indexed right now — reads as absent rather than half-there.
-        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
+        Assert.Equal(0, reads.CountOf(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), "npc_"));
 
         gate.Release();
         await load;
 
         var readsAfterLoad = manager.Reads
             ?? throw new InvalidOperationException("Expected an active reads after the load finished.");
-        Assert.Equal(1, readsAfterLoad.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
+        Assert.Equal(1, readsAfterLoad.CountOf(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -105,10 +97,8 @@ public sealed class ProgressiveIndexingTests
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
             .BuildScattered();
 
-        var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp", poisonPlugin: "A.esp");
-        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, gate);
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp", poisonPlugin: "A.esp");
+        using var manager = Indexes.Open(holder, gate);
 
         var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
@@ -216,8 +206,7 @@ public sealed class ProgressiveIndexingTests
         Assert.Null(manager.Reads);
         Assert.Equal(LoadOrderState.None, manager.Status.State);
         // The load stopped where it was told to rather than running to completion first.
-        Assert.DoesNotContain("C.esp", gate.Created.Single().Indexed);
-        Assert.True(gate.Created.Single().Disposed);
+        Assert.DoesNotContain("C.esp", gate.Opened);
     }
 
     [Fact]
@@ -231,6 +220,8 @@ public sealed class ProgressiveIndexingTests
 
         var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
+        var readsWhileParked = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads while the load is parked.");
 
         // A second snapshot while a reconcile is running is an ordinary event (a watcher firing
         // during activation), not an edge case.
@@ -244,16 +235,12 @@ public sealed class ProgressiveIndexingTests
 
         // ADR-0013: the same instance is reconciled in place, one index rather than a second replacing the
         // first. What the superseded reconcile landed stays, and its successor finishes the set.
-        var index = Assert.Single(gate.Created);
-        Assert.False(index.Disposed);
+        Assert.Same(readsWhileParked, manager.Reads);
         Assert.Equal(LoadOrderState.Ready, manager.Status.State);
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
-        Assert.True(index.WinnersComputed);
-        Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], index.Indexed);
-        var reads = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads after the load finished.");
-        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
+        Assert.True(manager.Status.ConflictsComputed);
+        Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
+        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -273,8 +260,7 @@ public sealed class ProgressiveIndexingTests
         var read = Task.Run(() =>
         {
             var repo = manager.Reads;
-            return repo == null ? (int?)null : repo.GetRecordTypeCounts(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory))
-                .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+            return repo == null ? (int?)null : repo.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_");
         });
         var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));
 

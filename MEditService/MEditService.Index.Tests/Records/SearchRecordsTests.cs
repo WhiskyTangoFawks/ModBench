@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
-using Microsoft.Extensions.Logging.Abstractions;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
@@ -13,9 +12,7 @@ public class SearchRecordsTests(TestPluginFixture fixture)
 
     private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
     {
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        var manager = Indexes.Open(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return manager;
     }

@@ -1,12 +1,6 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
@@ -14,30 +8,8 @@ namespace MEditService.Tests.Query;
 public class FilterTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private DuckDbRecordIndex LoadedRepository()
-    {
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            repo.Initialize(GameRelease.Fallout4);
-            var modPath = new ModPath(
-                ModKey.FromFileName(TestPluginFixture.PluginName),
-                Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
-            using var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-            repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-            repo.UpdateWinners();
-            var loaded = repo;
-            repo = null;
-            return loaded;
-        }
-        finally
-        {
-            repo?.Dispose();
-        }
-    }
+    private IndexProjector LoadedIndex() => Indexes.Reconciled(_fixture.DataFolder, _fixture.Plugins);
 
     // --- SetFilter: validation ---
 
@@ -45,13 +17,14 @@ public class FilterTests(TestPluginFixture fixture)
     public void SetFilter_ValidSqlWithExtraColumns_FiltersByFormKey()
     {
         // A filter projecting extra columns beyond form_key is accepted and still filters.
-        using var repo = LoadedRepository();
-        var all = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
-        repo.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin");
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin");
 
-        var filtered = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var filtered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -59,33 +32,34 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void SetFilter_SqlWithoutFormKeyColumn_ThrowsArgumentException()
     {
-        using var repo = LoadedRepository();
+        using var index = LoadedIndex();
         var ex = Assert.Throws<ArgumentException>(() =>
-            repo.SetFilter("SELECT editor_id FROM \"NPC_\""));
+            index.SetFilter("SELECT editor_id FROM \"NPC_\""));
         Assert.Contains("form_key", ex.Message);
     }
 
     [Fact]
     public void SetFilter_BadSyntax_ThrowsException()
     {
-        using var repo = LoadedRepository();
-        Assert.ThrowsAny<Exception>(() => repo.SetFilter("NOT VALID SQL!!!"));
+        using var index = LoadedIndex();
+        Assert.ThrowsAny<Exception>(() => index.SetFilter("NOT VALID SQL!!!"));
     }
 
-    // --- SetFilter: filter injection into GetRecords ---
+    // --- SetFilter: filter injection into Search ---
 
     [Fact]
     public void GetRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
     {
-        using var repo = LoadedRepository();
-        var all = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
         // filter to first record only
         var firstFormKey = all.Items[0].FormKey;
-        repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var filtered = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var filtered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -93,48 +67,47 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void GetRecords_AfterClearFilter_ReturnsAllRecords()
     {
-        using var repo = LoadedRepository();
-        var all = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
-        repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
-        repo.SetFilter(null);
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key");
+        index.ClearFilter();
 
-        var restored = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var restored = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, restored.Total);
     }
-
-    // --- SetFilter: filter injection into SearchRecords ---
 
     [Fact]
     public void SearchRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
     {
-        using var repo = LoadedRepository();
-        var all = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
         var firstFormKey = all.Items[0].FormKey;
-        repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var filtered = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        var filtered = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
 
-    // --- SetFilter: filter injection into CountRecordsForPlugin ---
+    // --- SetFilter: filter injection into GetRecordTypeCounts ---
 
     [Fact]
     public void CountRecordsForPlugin_WithActiveFilter_CountsOnlyMatching()
     {
-        using var repo = LoadedRepository();
-        var all = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
-        repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var count = repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data"))
-            .FirstOrDefault(c => string.Equals(c.Type, "NPC_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
-        Assert.Equal(1, count);
+        Assert.Equal(1, reads.CountOf(new PluginCopyKey(TestPluginFixture.PluginName, "Data"), "NPC_"));
     }
 
     // --- GetPluginsWithMatchingRecords ---
@@ -142,33 +115,34 @@ public class FilterTests(TestPluginFixture fixture)
     [Fact]
     public void GetPluginsWithMatchingRecords_WithActiveFilter_ReturnsPluginWithMatches()
     {
-        using var repo = LoadedRepository();
-        var all = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
+        using var index = LoadedIndex();
+        var reads = index.RequireReads();
+        var all = reads.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
-        repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
+        index.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var plugins = repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["NPC_"]);
+        var plugins = reads.GetPluginsWithMatchingRecords(["NPC_"]);
         Assert.Contains(TestPluginFixture.PluginName, plugins);
     }
 
     [Fact]
     public void GetPluginsWithMatchingRecords_NoMatchingRecords_ReturnsEmpty()
     {
-        using var repo = LoadedRepository();
-        repo.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key");
+        using var index = LoadedIndex();
+        index.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key");
 
-        var plugins = repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["NPC_"]);
+        var plugins = index.RequireReads().GetPluginsWithMatchingRecords(["NPC_"]);
         Assert.Empty(plugins);
     }
 
     [Fact]
     public void GetPluginsWithMatchingRecords_EmptyTableList_ReturnsEmpty()
     {
-        using var repo = LoadedRepository();
-        repo.SetFilter($"SELECT form_key FROM \"NPC_\"");
+        using var index = LoadedIndex();
+        index.SetFilter($"SELECT form_key FROM \"NPC_\"");
 
-        var plugins = repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords([]);
+        var plugins = index.RequireReads().GetPluginsWithMatchingRecords([]);
         Assert.Empty(plugins);
     }
 }

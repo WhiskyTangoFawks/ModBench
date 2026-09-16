@@ -1,6 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
@@ -35,8 +35,7 @@ public sealed class LoadOrderLocalizedTests
             // plugin-listings path.
             File.WriteAllBytes(Path.Combine(data.DataFolder, "UnrelatedMod - Main.ba2"), []);
 
-            var reflector = SharedSchemaReflector.Instance;
-            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+            using var manager = Indexes.Open(holder);
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             // Asserted directly, not just implied by GetDocument coming back null below: a

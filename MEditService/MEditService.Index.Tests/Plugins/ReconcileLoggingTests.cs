@@ -1,6 +1,5 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -32,11 +31,7 @@ public sealed class ReconcileLoggingTests
             .Build();
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        var reflector = SharedSchemaReflector.Instance;
-        using var index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), loggerFactory.CreateLogger<IndexProjector>());
+        using var index = Indexes.Open(holder, loggerFactory: loggerFactory);
 
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
 

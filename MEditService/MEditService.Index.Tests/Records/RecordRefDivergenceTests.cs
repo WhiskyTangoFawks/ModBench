@@ -1,9 +1,6 @@
-using System.Text;
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,17 +8,16 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary><c>At(Head)</c> is a different relation, not the same instance, so identical answers on
-/// unchanged records are a property to prove: a broken Head that dropped the active filter fails
-/// here.</summary>
+/// <summary>An override stack entry carries a record's committed state beside its effective one,
+/// so identical answers on unchanged records are a property to prove, not a given.</summary>
 public sealed class RecordRefDivergenceTests : IDisposable
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private readonly PluginFixtureData _fixture;
-    private readonly FormKey _keptNpcFormKey;
-    private readonly FormKey _droppedNpcFormKey;
+    private readonly ScatteredFixtureData _fixture;
+    private readonly LoadOrderEntry _base;
+    private readonly PluginCopyKey _baseKey;
+    private readonly PluginCopyKey _winnerKey;
+    private readonly string _keptNpc;
+    private readonly string _droppedNpc;
 
     public RecordRefDivergenceTests()
     {
@@ -31,195 +27,96 @@ public sealed class RecordRefDivergenceTests : IDisposable
             {
                 keptFk = mod.Npcs.AddNew("KeepMe").FormKey;
                 droppedFk = mod.Npcs.AddNew("DropMe").FormKey;
-            })
+            }, origin: "BaseMod")
             .WithPlugin("Winner.esp", (mod, built) =>
             {
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
                 // Only "KeepMe" is overridden — "DropMe" stays sole-sourced from Base.esm, so its
                 // one override is its own winner (a distinct case from KeepMe's non-winning base
-                // entry, catching a would-be At(Head) that miscomputes IsWinner).
+                // entry, catching a would-be committed read that miscomputes IsWinner).
                 var basePlugin = built.Single(m => m.ModKey.FileName == "Base.esm");
                 mod.Npcs.Set(basePlugin.Npcs.First(n => n.FormKey == keptFk).DeepCopy());
-            })
-            .Build();
-        _keptNpcFormKey = keptFk;
-        _droppedNpcFormKey = droppedFk;
+            }, origin: "WinnerMod")
+            .BuildScattered()
+            .Tracked();
+        _base = _fixture.Plugins.Single(p => p.Name == "Base.esm");
+        _baseKey = _base.KeyOf();
+        _winnerKey = _fixture.Plugins.Single(p => p.Name == "Winner.esp").KeyOf();
+        _keptNpc = keptFk.ToString();
+        _droppedNpc = droppedFk.ToString();
     }
 
     public void Dispose() => _fixture.Dispose();
 
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
-    private static readonly PluginCopyKey WinnerKey = new("Winner.esp", "Data");
-
-    private DuckDbRecordIndex LoadedRepository()
+    [Fact]
+    public void ACleanRecord_CarriesOneDocumentForBothRefs_WithAnActiveFilterNarrowingTheListing()
     {
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        // Narrows the listing to KeepMe's two override rows out of the fixture's three.
+        index.SetFilter($"SELECT '{_keptNpc}' AS form_key");
+
+        var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        Assert.Equal(2, listing.Total);
+        Assert.All(listing.Items, i => Assert.Equal(_keptNpc, i.FormKey));
+
+        var stack = reads.GetOverrideStack(_keptNpc);
+        Assert.NotNull(stack);
+        Assert.All(stack.Entries, e =>
         {
-            repo.Initialize(GameRelease.Fallout4);
-            var basePath = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-            var winnerPath =
-                new ModPath(ModKey.FromFileName("Winner.esp"), Path.Combine(_fixture.DataFolder, "Winner.esp"));
-            using var baseMod = Fallout4Mod.CreateFromBinaryOverlay(basePath, Fallout4Release.Fallout4);
-            using var winnerMod = Fallout4Mod.CreateFromBinaryOverlay(winnerPath, Fallout4Release.Fallout4);
-            repo.IndexMod(baseMod, Registration.Participating(0), new PluginCopyKey(baseMod.ModKey.FileName.ToString(), "Data"));
-            repo.IndexMod(
-                winnerMod, Registration.Participating(1), new PluginCopyKey(winnerMod.ModKey.FileName.ToString(), "Data"));
-            repo.UpdateWinners();
-            var loaded = repo;
-            repo = null;
-            return loaded;
-        }
-        finally
-        {
-            repo?.Dispose();
-        }
-    }
-
-    // One crafted divergence, five distinct At(Head) observers. Deletion is structural, so
-    // ProjectDocuments' own UpdateWinners() resweep already covers it.
-    private DuckDbRecordIndex RepositoryWithWinnerOverrideDeleted()
-    {
-        var repo = LoadedRepository();
-        repo.ProjectDocuments(WinnerKey, [(_keptNpcFormKey.ToString(), null)]);
-        return repo;
-    }
-
-    // A record the working tree created and no commit holds yet: ingest reconciles it into exactly
-    // this state, and every read below is about the state, not about how it was reached.
-    private string NpcCreatedInTheWorkingTree(DuckDbRecordIndex repo)
-    {
-        var formKey = _droppedNpcFormKey.ToString();
-        repo.MarkWorkingTreeOnly(BaseKey, [formKey]);
-        return formKey;
+            Assert.False(e.HasWorkingTreeChange);
+            Assert.Same(e.Effective, e.Head);
+        });
     }
 
     [Fact]
-    public void AtHead_Search_MatchesEffective_WithAnActiveFilterNarrowingTheListing()
+    public void TheCommittedEntry_MatchesTheEffectiveOne_IncludingTheNonWinningEntry()
     {
-        using var repo = LoadedRepository();
-        // Narrows the listing to KeepMe's two override rows out of the fixture's three. A broken At(Head)
-        // that dropped the active filter would return all three and diverge from Effective here.
-        repo.SetFilter($"SELECT '{_keptNpcFormKey}' AS form_key");
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
 
-        var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
-        var effective = repo.At(RecordRef.Effective).Search(query);
-        var head = repo.At(RecordRef.Head).Search(query);
-
-        Assert.Equal(2, effective.Total);
-        Assert.All(effective.Items, i => Assert.Equal(_keptNpcFormKey.ToString(), i.FormKey));
-        Assert.Equal(effective.Total, head.Total);
+        // KeepMe has two overrides (Base.esm loses, Winner.esp wins): the committed document of each
+        // entry carries the same winner status as its effective one, without changing the entry count.
+        var stack = reads.GetOverrideStack(_keptNpc);
+        Assert.NotNull(stack);
+        Assert.Equal(2, stack.Entries.Count);
         Assert.Equal(
-            effective.Items.Select(i => (i.FormKey, i.Plugin)),
-            head.Items.Select(i => (i.FormKey, i.Plugin)));
-    }
-
-    [Fact]
-    public void AtHead_GetOverrideStack_MatchesEffective_IncludingTheNonWinningEntry()
-    {
-        using var repo = LoadedRepository();
-
-        // KeepMe has two overrides (Base.esm loses, Winner.esp wins) — a broken At(Head) that
-        // recomputed winner status differently (e.g. always true, or by load-order alone ignoring
-        // participation) would diverge on IsWinner here without changing the entry count.
-        var effectiveStack = repo.At(RecordRef.Effective).GetOverrideStack(_keptNpcFormKey.ToString());
-        var headStack = repo.At(RecordRef.Head).GetOverrideStack(_keptNpcFormKey.ToString());
-
-        Assert.NotNull(effectiveStack);
-        Assert.NotNull(headStack);
-        Assert.Equal(2, effectiveStack.Entries.Count);
-        Assert.Equal(
-            effectiveStack.Entries.Select(e => (e.Plugin, e.IsWinner)),
-            headStack.Entries.Select(e => (e.Plugin, e.IsWinner)));
+            stack.Entries.Select(e => (e.Plugin, e.IsWinner)),
+            stack.Entries.Select(e => (e.Head.Plugin, e.Head.IsWinner)));
 
         // DropMe's sole override is its own winner — the distinct case from KeepMe's losing base
-        // entry above, exercised at both refs too.
-        var effectiveDropped = repo.At(RecordRef.Effective).GetDocument(_droppedNpcFormKey.ToString());
-        var headDropped = repo.At(RecordRef.Head).GetDocument(_droppedNpcFormKey.ToString());
-        Assert.NotNull(effectiveDropped);
-        Assert.NotNull(headDropped);
-        Assert.True(effectiveDropped.IsWinner);
-        Assert.Equal(effectiveDropped.IsWinner, headDropped.IsWinner);
-        Assert.Equal(effectiveDropped.Plugin, headDropped.Plugin);
+        // entry above.
+        var dropped = reads.StackEntry(_droppedNpc, _baseKey);
+        Assert.NotNull(dropped);
+        Assert.True(dropped.IsWinner);
+        Assert.True(dropped.Head.IsWinner);
+        Assert.Equal(dropped.Effective.Plugin, dropped.Head.Plugin);
     }
 
     [Fact]
     public void AWorkingTreeChange_DivergesOnlyTheEditedRecord_LeavingEveryOtherRefAnswerAlone()
     {
-        using var repo = LoadedRepository();
-        var edited = _keptNpcFormKey.ToString();
-        var untouched = _droppedNpcFormKey.ToString();
-        var basePlugin = new PluginCopyKey("Base.esm", "Data");
-
-        var before = repo.At(RecordRef.Effective).GetDocument(edited, basePlugin);
-        Assert.NotNull(before);
-        var beforeBody = before.Body;
-        Assert.NotNull(beforeBody);
-        repo.ProjectDocuments(
-            basePlugin, [(edited, beforeBody.Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal))]);
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        var before = reads.DocumentOf(_keptNpc, _baseKey);
+        index.Edit(_base, before, before.BodyOf().Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal));
 
         // The edited record's own Base.esm entry diverges...
-        var stack = repo.At(RecordRef.Effective).GetOverrideStack(edited);
+        var stack = reads.GetOverrideStack(_keptNpc);
         Assert.NotNull(stack);
-        var baseEntry = stack.Entries.Single(e => e.Plugin.Name == "Base.esm");
+        var baseEntry = stack.Entries.Single(e => e.Plugin.Equals(_baseKey));
         Assert.True(baseEntry.HasWorkingTreeChange);
         Assert.NotEqual(baseEntry.Effective.Body, baseEntry.Head.Body);
 
         // ...while Winner.esp's entry for that same FormKey, which nothing edited, does not.
-        var winnerEntry = stack.Entries.Single(e => e.Plugin.Name == "Winner.esp");
+        var winnerEntry = stack.Entries.Single(e => e.Plugin.Equals(_winnerKey));
         Assert.False(winnerEntry.HasWorkingTreeChange);
         Assert.Equal(winnerEntry.Effective.Body, winnerEntry.Head.Body);
 
         // ...and neither does an entirely different record in the same plugin.
-        var untouchedEffective = repo.At(RecordRef.Effective).GetDocument(untouched, basePlugin);
-        var untouchedHead = repo.At(RecordRef.Head).GetDocument(untouched, basePlugin);
-        Assert.NotNull(untouchedEffective);
-        Assert.NotNull(untouchedHead);
-        Assert.Equal(untouchedEffective.Body, untouchedHead.Body);
-    }
-
-    // Only these tests exercise the At(RecordRef.Head) path of the seven relation-parameterized twins;
-    // everything else in the suite exercises them at Effective only, so a relation plumbed wrong would
-    // otherwise pass by construction.
-
-    [Fact]
-    public void AtHead_GetPluginsWithMatchingRecords_StillNamesThePluginWithAnEffectivelyDeletedOverride()
-    {
-        using var repo = RepositoryWithWinnerOverrideDeleted();
-        repo.SetFilter($"SELECT '{_keptNpcFormKey}' AS form_key");
-
-        var effective = repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["npc_"]);
-        var head = repo.At(RecordRef.Head).GetPluginsWithMatchingRecords(["npc_"]);
-
-        Assert.DoesNotContain("Winner.esp", effective);
-        Assert.Contains("Winner.esp", head);
-        // Base.esm's own row was never touched, so it matches at both — proving the difference above
-        // is Winner.esp's row specifically, not the filter or the plugin set collapsing wholesale.
-        Assert.Contains("Base.esm", effective);
-        Assert.Contains("Base.esm", head);
-    }
-
-    [Fact]
-    public void AtHead_GetRecordTypeCounts_ExcludesAWorkingTreeOnlyCreatedRecord()
-    {
-        using var repo = LoadedRepository();
-        // What a created record is once the projector has re-read the tree: an Effective row no
-        // committed ref holds (ADR-0007), which is the state ingest marks rather than a verb of its own.
-        var newFormKey = NpcCreatedInTheWorkingTree(repo);
-
-        var effectiveCount = repo.At(RecordRef.Effective).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
-        var headCount = repo.At(RecordRef.Head).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
-
-        Assert.Equal(headCount + 1, effectiveCount);
-    }
-
-    [Fact]
-    public void AtHead_GetNativeFormKeys_ExcludesAWorkingTreeOnlyCreatedRecord()
-    {
-        using var repo = LoadedRepository();
-        var newFormKey = NpcCreatedInTheWorkingTree(repo);
-
-        Assert.Contains(newFormKey, repo.At(RecordRef.Effective).GetNativeFormKeys(BaseKey));
-        Assert.DoesNotContain(newFormKey, repo.At(RecordRef.Head).GetNativeFormKeys(BaseKey));
+        var untouched = reads.StackEntry(_droppedNpc, _baseKey);
+        Assert.NotNull(untouched);
+        Assert.False(untouched.HasWorkingTreeChange);
+        Assert.Equal(untouched.Effective.Body, untouched.Head.Body);
     }
 }

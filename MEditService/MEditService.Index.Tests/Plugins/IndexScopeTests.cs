@@ -1,17 +1,11 @@
-using System.Text.Json;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
-using MEditService.Ports;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Binary.Parameters;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
@@ -22,14 +16,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
-
-    private static IndexProjector MakeManager(LoadOrderHolder holder, IPluginAdapter? adapter = null)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(holder, adapter ?? MutagenPluginAdapter.Instance, factory);
-    }
+    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     // An explicit request for a release this build has no Mutagen assembly for must refuse with a
     // typed, actionable exception rather than a FileNotFoundException from inside Initialize.
@@ -43,49 +30,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
             () => manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE));
 
         Assert.Contains("SkyrimSE", ex.Message);
-    }
-
-    // Faulting UpdateWinners fails after IndexAndStore publishes, inside its own catch, and nothing
-    // after this call touches state, so the assertions observe that catch's cleanup rather than a later
-    // call masking it.
-    [Fact]
-    public void Reconcile_WhenUpdateWinnersFaults_LeavesWhatLandedHeldAndUnsettled()
-    {
-        var holder = new LoadOrderHolder();
-        var data = new PluginFixtureBuilder("solo-mid-load-failure")
-            .WithPlugin("Base.esp")
-            .Build();
-        using (data)
-        {
-            var reflector = SharedSchemaReflector.Instance;
-            var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            var faulting = new FaultingUpdateWinnersRepositoryFactory(inner);
-            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, faulting);
-
-            Assert.Throws<InvalidOperationException>(() =>
-                manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4));
-
-            // ADR-0013: nothing is torn down — what landed stays held, honestly reported as not
-            // yet settled, for the next snapshot to finish.
-            Assert.NotNull(manager.Reads);
-            Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
-            Assert.False(manager.Status.ConflictsComputed);
-        }
-    }
-
-    [Fact]
-    public void Load_DelegatesToFactory()
-    {
-        var holder = new LoadOrderHolder();
-        var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var spy = new SpyRepositoryFactory(inner);
-        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, spy);
-
-        manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-
-        Assert.Equal(1, spy.CreateCallCount);
-        Assert.Equal(GameRelease.Fallout4, spy.LastGameRelease);
     }
 
     [Fact]
@@ -107,9 +51,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
-        var count = reads.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data"))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+        var count = manager.RequireReads().CountOf(new PluginCopyKey(TestPluginFixture.PluginName, "Data"), "npc_");
 
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
@@ -121,8 +63,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
-        var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var result = manager.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
 
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
@@ -156,9 +97,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         // ADR-0013: a snapshot for the same instance reconciles in place — nothing is replaced.
         Assert.Same(firstRepo, manager.Reads);
     }
-
-
-
 
     // --- SetFilter / ClearFilter ---
 
@@ -216,16 +154,12 @@ public class IndexScopeTests(TestPluginFixture fixture)
         {
             using var manager = MakeManager(holder);
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+            var reads = manager.RequireReads();
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
             Assert.Equal(0, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
-            var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
-            var onDisk = Fallout4Mod.CreateFromBinary(
-                new ModPath(ModKey.FromFileName("Plugin.esp"), pluginPath), Fallout4Release.Fallout4);
-            onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NowMatches";
-            onDisk.WriteToBinary(pluginPath);
+            RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NowMatches");
 
             var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             await manager.ReindexPlugin(pluginKey);
@@ -248,16 +182,12 @@ public class IndexScopeTests(TestPluginFixture fixture)
         {
             using var manager = MakeManager(holder);
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+            var reads = manager.RequireReads();
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'");
             Assert.Equal(1, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
-            var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
-            var onDisk = Fallout4Mod.CreateFromBinary(
-                new ModPath(ModKey.FromFileName("Plugin.esp"), pluginPath), Fallout4Release.Fallout4);
-            onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NoLongerMatches";
-            onDisk.WriteToBinary(pluginPath);
+            RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NoLongerMatches");
 
             var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             await manager.ReindexPlugin(pluginKey);
@@ -267,108 +197,50 @@ public class IndexScopeTests(TestPluginFixture fixture)
         }
     }
 
-
+    // A filter valid over the rows it was set on and not over the rows a re-index lands: the one
+    // way a re-materialization can fail after the write it follows is already durable.
     [Fact]
     public async Task ReindexPlugin_WhenReapplyingTheFilterFaults_DoesNotThrow_AndLogsAWarningNamingTheException()
     {
         var holder = new LoadOrderHolder();
+        FormKey npcKey = default;
         var data = new PluginFixtureBuilder("reindex-filter-fault")
-            .WithPlugin("Plugin.esp", mod => mod.Npcs.AddNew("Npc"))
+            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("7").FormKey)
             .Build();
         using (data)
         {
-            var reflector = SharedSchemaReflector.Instance;
-            var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            var faulting = new FaultingSetFilterRepositoryFactory(inner);
             var entries = new List<LogEntry>();
             using var loggerFactory = LoggerFactory.Create(b =>
             {
                 b.SetMinimumLevel(LogLevel.Debug);
                 b.AddProvider(new CollectingLoggerProvider(entries));
             });
-            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, faulting, loggerFactory.CreateLogger<IndexProjector>());
+            using var manager = Indexes.Open(holder, loggerFactory: loggerFactory);
 
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            manager.SetFilter("SELECT form_key FROM npc_");
-            faulting.FaultNextCall = true;
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE CAST(editor_id AS INTEGER) = 7");
+
+            RenameNpcOnDisk(data, "Plugin.esp", npcKey, "NotANumber");
 
             var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             var ex = await Record.ExceptionAsync(() => manager.ReindexPlugin(pluginKey));
 
             Assert.Null(ex);
             Assert.Contains(entries, e =>
-                e.Level == LogLevel.Warning && e.Message.Contains("simulated re-materialization fault", StringComparison.Ordinal));
+                e.Level == LogLevel.Warning
+                && e.Message.Contains("re-materialize the active filter", StringComparison.Ordinal)
+                && e.Message.Contains("NotANumber", StringComparison.Ordinal));
         }
     }
 
-    // --- helpers ---
-
-    private sealed class SpyRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
+    private static void RenameNpcOnDisk(PluginFixtureData data, string pluginName, FormKey npcKey, string editorId)
     {
-        private readonly IRecordIndexFactory _inner = inner;
-        public int CreateCallCount { get; private set; }
-        public GameRelease? LastGameRelease { get; private set; }
-
-        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
-        {
-            CreateCallCount++;
-            LastGameRelease = gameRelease;
-            return _inner.Create(gameRelease);
-        }
-
-        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
-            _inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
+        var pluginPath = Path.Combine(data.DataFolder, pluginName);
+        var onDisk = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName(pluginName), pluginPath), Fallout4Release.Fallout4);
+        onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = editorId;
+        onDisk.WriteToBinary(pluginPath);
     }
-
-    // A real DuckDbRecordIndex wrapped through DelegatingRecordIndex (TestSupport) with one member
-    // intercepted — real DuckDB behaviour everywhere except the one call this test needs to fault.
-    private sealed class FaultingSetFilterRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
-    {
-        public bool FaultNextCall;
-
-        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
-            new FaultingSetFilterRepository(inner.Create(gameRelease, instanceRoot), this);
-        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
-            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
-    }
-
-    private sealed class FaultingSetFilterRepository(IRecordIndex inner, FaultingSetFilterRepositoryFactory owner)
-        : DelegatingRecordIndex(inner)
-    {
-        public override void SetFilter(string? sql)
-        {
-            if (owner.FaultNextCall)
-            {
-                owner.FaultNextCall = false;
-                throw new FakeDbFault("simulated re-materialization fault");
-            }
-            base.SetFilter(sql);
-        }
-    }
-
-    // DuckDBException is the type SetFilter's SQL execution really throws, but its constructors are
-    // internal to that assembly, so this is the smallest concrete DbException provable from outside.
-    // The catch is typed on the DbException base.
-    private sealed class FakeDbFault(string message) : System.Data.Common.DbException(message);
-
-    // UpdateWinners runs once, after IndexProgressively's per-plugin loop — faulting it fails
-    // the load synchronously, on the calling thread, after publish, with no gate/thread coordination
-    // needed to isolate IndexAndStore's own catch (DisposeCurrent) from a later call's cleanup.
-    private sealed class FaultingUpdateWinnersRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
-    {
-        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
-            new FaultingUpdateWinnersRepository(inner.Create(gameRelease, instanceRoot));
-        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
-            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
-    }
-
-    private sealed class FaultingUpdateWinnersRepository(IRecordIndex inner) : DelegatingRecordIndex(inner)
-    {
-        public override void UpdateWinners(IReadOnlyList<RegisteredCopy> participating) =>
-            throw new InvalidOperationException("simulated mid-load winner-sweep fault");
-    }
-
-
 
     // --- Disposal actually releases resources ---
 
@@ -382,14 +254,13 @@ public class IndexScopeTests(TestPluginFixture fixture)
             ?? throw new InvalidOperationException("Expected an active reads before reconciling against a different instance.");
 
         // ADR-0013: only a snapshot for another instance replaces what is held; the same instance
-        // reconciles in place (Reconcile_SameInstance_KeepsTheRepositoryAndLoadOrder).
+        // reconciles in place (Reconcile_SameInstance_KeepsTheStore).
         var otherInstance = Directory.CreateDirectory(Path.Combine(_fixture.InstanceRoot, "other-instance")).FullName;
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
         Assert.ThrowsAny<Exception>(() =>
             oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
-
 
     [Fact]
     public void Dispose_RepositoryBecomesUnusable()
@@ -405,14 +276,6 @@ public class IndexScopeTests(TestPluginFixture fixture)
         Assert.ThrowsAny<Exception>(() =>
             oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
-
-
-
-
-
-    // --- Load disposes previous load order ---
-
-    // --- helpers ---
 
     private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
     {

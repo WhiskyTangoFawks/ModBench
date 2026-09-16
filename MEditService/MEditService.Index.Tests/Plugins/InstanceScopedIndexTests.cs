@@ -1,7 +1,7 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -26,11 +26,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     private string GameDirectory => Directory.CreateDirectory(Path.Combine(_root, "GameDir")).FullName;
 
-    private static IndexProjector MakeManager(LoadOrderHolder holder)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-    }
+    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     private string AnInstance(string name, string editorId)
     {
@@ -47,13 +43,10 @@ public sealed class InstanceScopedIndexTests : IDisposable
 
     // Records only: the plugin header is a document too, and its EditorID is null by definition, so
     // including it would put a meaningless null in front of every expectation here.
-    private static IReadOnlyList<string?> EditorIdsIn(IndexProjector manager)
-    {
-        var store = manager.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
-        return [.. store.At(RecordRef.Effective).GetDocuments(Key)
+    private static IReadOnlyList<string?> EditorIdsIn(IndexProjector manager) =>
+        [.. manager.RequireReads().GetDocuments(Key)
             .Where(d => d.RecordType != PluginHeader.RecordType)
             .Select(d => d.EditorId)];
-    }
 
     // Warm on both sides: the second load of each instance is the one that would register the other's
     // file_path if the store were shared.

@@ -1,9 +1,6 @@
-using DuckDB.NET.Data;
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -13,28 +10,18 @@ namespace MEditService.Tests.Indexing;
 
 public class FormReferencesTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    // Every reference aimed at the target, as (source, field path, record type). Each test asserts
+    // the full set: another walk seeing that FormKey would push the count past one and fail.
+    private static List<(string Source, string FieldPath, string RecordType)> ReferencesTo(IRecordReads reads, FormKey target) =>
+        [.. reads.GetReferencedBy(target.ToString()).Select(r => (r.FormKey, r.FieldPath, r.RecordType))];
 
-    private static DuckDbRecordIndex OpenRepo()
-    {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        return repo;
-    }
-
-    private static IModGetter LoadMod(string dataFolder, string pluginName)
-    {
-        var modPath = new ModPath(ModKey.FromFileName(pluginName), Path.Combine(dataFolder, pluginName));
-        return Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-    }
+    private static (string Source, string FieldPath, string RecordType) TheReferenceTo(IRecordReads reads, FormKey target) =>
+        Assert.Single(ReferencesTo(reads, target));
 
     [Fact]
     public void Index_ScalarFormKeyField_IsIndexedInFormReferences()
     {
-        FormKey raceFormKey = default;
-        FormKey npcFormKey = default;
-
+        FormKey raceFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-scalar")
             .WithPlugin("References.esp", mod =>
             {
@@ -45,52 +32,33 @@ public class FormReferencesTests
                 npc.Race.SetTo(race.FormKey);
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "References.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path, record_type FROM form_references WHERE source_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string Target, string FieldPath, string RecordType)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-
-        var raceRow = rows.FirstOrDefault(r => r.FieldPath == "Race");
-        Assert.NotEqual(default, raceRow);
-        Assert.Equal(raceFormKey.ToString(), raceRow.Target);
-        Assert.Equal("npc_", raceRow.RecordType);
+        var row = Assert.Single(ReferencesTo(index.RequireReads(), raceFormKey), r => r.FieldPath == "Race");
+        Assert.Equal(npcFormKey.ToString(), row.Source);
+        Assert.Equal("npc_", row.RecordType);
     }
 
     [Fact]
-    public void Index_NoFormLinkFieldsSet_FormReferencesIsEmpty()
-    {
-        using var fixture = new PluginFixtureBuilder("form-refs-empty")
-            .WithPlugin("NoRefs.esp", mod => mod.Npcs.AddNew("BareNPC"))
-            .Build();
-
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "NoRefs.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM form_references";
-        var count = (long)(cmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
-
-        Assert.Equal(0, count);
-    }
-
-    [Fact]
-    public void Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates()
+    public void Index_NoFormLinkFieldsSet_NothingReferencesItsNeighbour()
     {
         FormKey raceFormKey = default;
+        using var fixture = new PluginFixtureBuilder("form-refs-empty")
+            .WithPlugin("NoRefs.esp", mod =>
+            {
+                raceFormKey = mod.Races.AddNew("UnreferencedRace").FormKey;
+                mod.Npcs.AddNew("BareNPC");
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
 
+        Assert.Empty(index.RequireReads().GetReferencedBy(raceFormKey.ToString()));
+    }
+
+    [Fact]
+    public async Task Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates()
+    {
+        FormKey raceFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-reindex")
             .WithPlugin("Reindex.esp", mod =>
             {
@@ -100,26 +68,17 @@ public class FormReferencesTests
                 npc.Race.SetTo(race.FormKey);
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "Reindex.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));  // re-index same plugin
-        repo.UpdateWinners();
+        await index.ReindexPlugin(new PluginCopyKey("Reindex.esp", "Data"));
 
-        using var raceCmd = repo.Connection.CreateCommand();
-        raceCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE field_path = 'Race' AND source_plugin = 'Reindex.esp'";
-        var raceCount = (long)(raceCmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
-        Assert.Equal(1, raceCount);
+        Assert.Single(ReferencesTo(index.RequireReads(), raceFormKey), r => r.FieldPath == "Race");
     }
 
     [Fact]
     public void Index_ArrayFormKeyField_IsIndexedInFormReferences()
     {
-        FormKey kwFormKey = default;
-        FormKey npcFormKey = default;
-
+        FormKey kwFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-array-fk")
             .WithPlugin("ArrayFk.esp", mod =>
             {
@@ -132,32 +91,16 @@ public class FormReferencesTests
                 npc.Keywords = [new FormLink<IKeywordGetter>(kwFormKey)];
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "ArrayFk.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path FROM form_references WHERE source_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string Target, string FieldPath)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1)));
-
-        var kwRow = rows.FirstOrDefault(r => r.FieldPath == "Keywords[0]");
-        Assert.NotEqual(default, kwRow);
-        Assert.Equal(kwFormKey.ToString(), kwRow.Target);
+        var row = Assert.Single(ReferencesTo(index.RequireReads(), kwFormKey), r => r.FieldPath == "Keywords[0]");
+        Assert.Equal(npcFormKey.ToString(), row.Source);
     }
 
     [Fact]
     public void Index_ArrayOfStructWithFormKeySubField_IsIndexedInFormReferences()
     {
-        FormKey factionFormKey = default;
-        FormKey npcFormKey = default;
-
+        FormKey factionFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-array-struct")
             .WithPlugin("ArrayStruct.esp", mod =>
             {
@@ -169,32 +112,16 @@ public class FormReferencesTests
                 npc.Factions.Add(new RankPlacement { Faction = new FormLink<IFactionGetter>(factionFormKey) });
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "ArrayStruct.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path FROM form_references WHERE source_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string Target, string FieldPath)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1)));
-
-        var factionRow = rows.FirstOrDefault(r => r.FieldPath == "Factions[0].Faction");
-        Assert.NotEqual(default, factionRow);
-        Assert.Equal(factionFormKey.ToString(), factionRow.Target);
+        var row = Assert.Single(ReferencesTo(index.RequireReads(), factionFormKey), r => r.FieldPath == "Factions[0].Faction");
+        Assert.Equal(npcFormKey.ToString(), row.Source);
     }
 
     [Fact]
     public void Index_VmadStructWithObjectMember_IsIndexedInFormReferences()
     {
-        FormKey targetFormKey = default;
-        FormKey npcFormKey = default;
-
+        FormKey targetFormKey = default, npcFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-struct")
             .WithPlugin("VmadStructRef.esp", mod =>
             {
@@ -217,33 +144,18 @@ public class FormReferencesTests
                 npc.VirtualMachineAdapter = vmad;
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "VmadStructRef.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path, record_type FROM form_references WHERE source_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string Target, string FieldPath, string RecordType)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-
-        var row = rows.FirstOrDefault(r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Object");
-        Assert.NotEqual(default, row);
-        Assert.Equal(targetFormKey.ToString(), row.Target);
-        Assert.Equal("npc_", row.RecordType);  // ResolveRecordType must tag the source record's own table
+        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
+        Assert.Equal(npcFormKey.ToString(), row.Source);
+        Assert.Equal("VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Object", row.FieldPath);
+        Assert.Equal("npc_", row.RecordType);  // the source record's own table
     }
 
     [Fact]
     public void Index_VmadStructNestedInsideAStruct_IsNotWalked_TheDocumentedTruncation()
     {
         FormKey targetFormKey = default;
-        FormKey npcFormKey = default;
-
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-nested-struct")
             .WithPlugin("VmadNestedStructRef.esp", mod =>
             {
@@ -251,7 +163,6 @@ public class FormReferencesTests
                 targetFormKey = target.FormKey;
 
                 var npc = mod.Npcs.AddNew("VmadNestedStructNpc");
-                npcFormKey = npc.FormKey;
 
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
@@ -274,33 +185,18 @@ public class FormReferencesTests
                 npc.VirtualMachineAdapter = vmad;
             })
             .Build();
-
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "VmadNestedStructRef.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path FROM form_references WHERE source_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string Target, string FieldPath)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1)));
+        using var index = Indexes.Reconciled(fixture);
 
         // The walk stops at the re-entry, by SchemaAnnotations.CycleTruncations' ruling: a Fallout 4
         // Papyrus struct member is never itself a struct, so the shape built above is unreachable from
         // real data and the schema does not model it.
-        Assert.Empty(rows);
+        Assert.Empty(ReferencesTo(index.RequireReads(), targetFormKey));
     }
 
     [Fact]
     public void Index_VmadStructWithObjectListMember_IsIndexedInFormReferences()
     {
         FormKey target0Fk = default, target1Fk = default;
-        FormKey npcFormKey = default;
-
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-struct-objlist")
             .WithPlugin("VmadStructObjList.esp", mod =>
             {
@@ -308,7 +204,6 @@ public class FormReferencesTests
                 var t1 = mod.Npcs.AddNew("ObjListTarget1"); target1Fk = t1.FormKey;
 
                 var npc = mod.Npcs.AddNew("VmadObjListNpc");
-                npcFormKey = npc.FormKey;
 
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
@@ -327,31 +222,17 @@ public class FormReferencesTests
                 npc.VirtualMachineAdapter = vmad;
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "VmadStructObjList.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path FROM form_references WHERE source_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string Target, string FieldPath)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1)));
-
-        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[0].Object" && r.Target == target0Fk.ToString());
-        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[1].Object" && r.Target == target1Fk.ToString());
+        Assert.Contains(ReferencesTo(reads, target0Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[0].Object");
+        Assert.Contains(ReferencesTo(reads, target1Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Members[0].Properties[0].Objects[1].Object");
     }
 
     [Fact]
     public void Index_VmadStructListProperty_IsIndexedInFormReferences()
     {
         FormKey target0Fk = default, target1Fk = default;
-        FormKey npcFormKey = default;
-
         using var fixture = new PluginFixtureBuilder("form-refs-vmad-struct-structlist")
             .WithPlugin("VmadStructStructList.esp", mod =>
             {
@@ -359,7 +240,6 @@ public class FormReferencesTests
                 var t1 = mod.Npcs.AddNew("StructListTarget1"); target1Fk = t1.FormKey;
 
                 var npc = mod.Npcs.AddNew("VmadStructListNpc");
-                npcFormKey = npc.FormKey;
 
                 var vmad = new VirtualMachineAdapter();
                 var script = new ScriptEntry { Name = "DefaultScript", Flags = ScriptEntry.Flag.Local };
@@ -385,52 +265,14 @@ public class FormReferencesTests
                 npc.VirtualMachineAdapter = vmad;
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "VmadStructStructList.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT target_form_key, field_path FROM form_references WHERE source_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<(string Target, string FieldPath)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1)));
-
-        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[0].Members[0].Object" && r.Target == target0Fk.ToString());
-        Assert.Contains(rows, r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[1].Members[0].Object" && r.Target == target1Fk.ToString());
+        Assert.Contains(ReferencesTo(reads, target0Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[0].Members[0].Object");
+        Assert.Contains(ReferencesTo(reads, target1Fk), r => r.FieldPath == "VirtualMachineAdapter.Scripts[0].Properties[0].Structs[1].Members[0].Object");
     }
 
     // ── Scripts reachable only through an adapter sub-structure ──
-    //
-    // Each test asserts the full set of form_references rows aimed at the target, not just "contains
-    // one": another walk seeing that FormKey would push the count past one and fail.
-
-    private static List<(string Source, string Target, string FieldPath, string RecordType)> ReferencesTo(
-        DuckDbRecordIndex repo, FormKey target)
-    {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText =
-            "SELECT source_form_key, target_form_key, field_path, record_type FROM form_references WHERE target_form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = target.ToString() });
-        using var reader = cmd.ExecuteReader();
-        var rows = new List<(string, string, string, string)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3)));
-        return rows;
-    }
-
-    private static DuckDbRecordIndex IndexOnly(PluginFixtureData fixture, string pluginName)
-    {
-        var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, pluginName);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-        return repo;
-    }
 
     private static ScriptEntry ScriptWithObjectProperty(string scriptName, string propName, FormKey target)
     {
@@ -444,9 +286,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_QuestAliasScriptObjectProperty_IsIndexedInFormReferences()
     {
-        FormKey targetFormKey = default;
-        FormKey questFormKey = default;
-
+        FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-script")
             .WithPlugin("QuestAliasScript.esp", mod =>
             {
@@ -461,10 +301,9 @@ public class FormReferencesTests
                 quest.VirtualMachineAdapter = adapter;
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = IndexOnly(fixture, "QuestAliasScript.esp");
-
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
         Assert.Equal(questFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
@@ -473,9 +312,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_QuestAliasOwnScriptObjectProperty_IsIndexedInFormReferences()
     {
-        FormKey targetFormKey = default;
-        FormKey questFormKey = default;
-
+        FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-property")
             .WithPlugin("QuestAliasProperty.esp", mod =>
             {
@@ -491,10 +328,9 @@ public class FormReferencesTests
                 quest.VirtualMachineAdapter = adapter;
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = IndexOnly(fixture, "QuestAliasProperty.esp");
-
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
         Assert.Equal(questFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Property.Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
@@ -503,9 +339,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_QuestFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
-        FormKey targetFormKey = default;
-        FormKey questFormKey = default;
-
+        FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-fragment-script")
             .WithPlugin("QuestFragmentScript.esp", mod =>
             {
@@ -519,10 +353,9 @@ public class FormReferencesTests
                 };
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = IndexOnly(fixture, "QuestFragmentScript.esp");
-
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
         Assert.Equal(questFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
@@ -531,9 +364,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_PackageFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
-        FormKey targetFormKey = default;
-        FormKey packageFormKey = default;
-
+        FormKey targetFormKey = default, packageFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-package-fragment-script")
             .WithPlugin("PackageFragmentScript.esp", mod =>
             {
@@ -550,10 +381,9 @@ public class FormReferencesTests
                 };
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = IndexOnly(fixture, "PackageFragmentScript.esp");
-
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey));
+        var row = TheReferenceTo(index.RequireReads(), targetFormKey);
         Assert.Equal(packageFormKey.ToString(), row.Source);
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("pack", row.RecordType);
@@ -562,9 +392,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_SceneFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
-        FormKey targetFormKey = default;
-        FormKey sceneFormKey = default;
-
+        FormKey targetFormKey = default, sceneFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-scene-fragment-script")
             .WithPlugin("SceneFragmentScript.esp", mod =>
             {
@@ -582,11 +410,10 @@ public class FormReferencesTests
                 quest.Scenes.Add(scene);
             })
             .Build();
-
-        using var repo = IndexOnly(fixture, "SceneFragmentScript.esp");
+        using var index = Indexes.Reconciled(fixture);
 
         // The scene's own row: it is inline in its quest's document, and its links are its own.
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey), r => r.Source == sceneFormKey.ToString());
+        var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == sceneFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("scen", row.RecordType);
     }
@@ -596,9 +423,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_AQuest_CarriesItsInlineScenesScriptReference_AsItsOwn()
     {
-        FormKey targetFormKey = default;
-        FormKey questFormKey = default;
-
+        FormKey targetFormKey = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-carries-scene")
             .WithPlugin("QuestCarriesScene.esp", mod =>
             {
@@ -616,10 +441,9 @@ public class FormReferencesTests
                 quest.Scenes.Add(scene);
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = IndexOnly(fixture, "QuestCarriesScene.esp");
-
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey), r => r.Source == questFormKey.ToString());
+        var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == questFormKey.ToString());
         Assert.Equal("Scenes[0].VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("qust", row.RecordType);
     }
@@ -627,9 +451,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_DialogInfoFragmentScriptObjectProperty_IsIndexedInFormReferences()
     {
-        FormKey targetFormKey = default;
-        FormKey responseFormKey = default;
-
+        FormKey targetFormKey = default, responseFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-info-fragment-script")
             .WithPlugin("InfoFragmentScript.esp", mod =>
             {
@@ -649,11 +471,10 @@ public class FormReferencesTests
                 topic.Responses.Add(response);
             })
             .Build();
-
-        using var repo = IndexOnly(fixture, "InfoFragmentScript.esp");
+        using var index = Indexes.Reconciled(fixture);
 
         // The response's own row: it is inline in its topic's document, and its links are its own.
-        var row = Assert.Single(ReferencesTo(repo, targetFormKey), r => r.Source == responseFormKey.ToString());
+        var row = Assert.Single(ReferencesTo(index.RequireReads(), targetFormKey), r => r.Source == responseFormKey.ToString());
         Assert.Equal("VirtualMachineAdapter.ScriptFragments.Script.Properties[0].Object", row.FieldPath);
         Assert.Equal("info", row.RecordType);
     }
@@ -664,10 +485,7 @@ public class FormReferencesTests
     [Fact]
     public void Index_QuestAliasScriptNestedStructMembers_AreWalkedToFullDepth()
     {
-        FormKey nestedTarget = default;
-        FormKey listTarget = default;
-        FormKey questFormKey = default;
-
+        FormKey nestedTarget = default, listTarget = default, questFormKey = default;
         using var fixture = new PluginFixtureBuilder("form-refs-quest-alias-nested")
             .WithPlugin("QuestAliasNested.esp", mod =>
             {
@@ -703,14 +521,14 @@ public class FormReferencesTests
                 quest.VirtualMachineAdapter = adapter;
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = IndexOnly(fixture, "QuestAliasNested.esp");
-
-        var nestedRow = Assert.Single(ReferencesTo(repo, nestedTarget));
+        var nestedRow = TheReferenceTo(reads, nestedTarget);
         Assert.Equal(questFormKey.ToString(), nestedRow.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[0].Members[0].Properties[0].Object", nestedRow.FieldPath);
 
-        var listRow = Assert.Single(ReferencesTo(repo, listTarget));
+        var listRow = TheReferenceTo(reads, listTarget);
         Assert.Equal(questFormKey.ToString(), listRow.Source);
         Assert.Equal("VirtualMachineAdapter.Aliases[0].Scripts[0].Properties[1].Structs[0].Members[0].Object", listRow.FieldPath);
     }

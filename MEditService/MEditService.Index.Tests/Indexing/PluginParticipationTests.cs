@@ -1,8 +1,6 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -10,59 +8,43 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// ADR-0013: UpdateWinners() and form_lookup's own winner sweep carry a participation
-// predicate — an indexed-but-non-participating plugin's row can never be a winner, regardless of
-// its load_order_idx.
+// ADR-0013: the winner sweep carries a participation predicate: an indexed-but-non-participating
+// plugin's copy can never be a winner, regardless of its slot.
 public class PluginParticipationTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private static DuckDbRecordIndex OpenRepo()
-    {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        return repo;
-    }
-
     // PluginA.esm defines SharedNPC; PluginB.esp overrides it. Deterministic FormID assignment
-    // means npcKey is identical across independently-built fixtures, so two repos built from two
+    // means npcKey is identical across independently-built fixtures, so two indexes built from two
     // calls to this helper can be compared directly by (plugin -> IsWinner).
-    private static (PluginFixtureData Fixture, IModGetter ModA, Fallout4Mod ModB, FormKey NpcKey) BuildSharedNpcFixture(string prefix)
+    private static PluginFixtureData SharedNpcFixture(string prefix, out FormKey npcKey, bool pluginBEnabled = true)
     {
+        FormKey key = default;
         var fixture = new PluginFixtureBuilder(prefix)
-            .WithPlugin("PluginA.esm", mod => mod.Npcs.AddNew("SharedNPC"))
+            .WithPlugin("PluginA.esm", mod => key = mod.Npcs.AddNew("SharedNPC").FormKey)
+            .WithPlugin("PluginB.esp", (mod, built) =>
+            {
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("PluginA.esm") });
+                mod.Npcs.Set(built[0].Npcs.First().DeepCopy());
+            }, enabled: pluginBEnabled)
             .Build();
-
-        var modA = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName("PluginA.esm"), Path.Combine(fixture.DataFolder, "PluginA.esm")),
-            Fallout4Release.Fallout4);
-        var npcKey = modA.EnumerateMajorRecords<INpcGetter>().First().FormKey;
-
-        var modB = new Fallout4Mod(ModKey.FromFileName("PluginB.esp"), Fallout4Release.Fallout4);
-        modB.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("PluginA.esm") });
-        modB.Npcs.Set(modA.EnumerateMajorRecords<INpcGetter>().First().DeepCopy());
-
-        return (fixture, modA, modB, npcKey);
+        npcKey = key;
+        return fixture;
     }
 
-    private static Dictionary<string, bool> WinnersByPlugin(DuckDbRecordIndex repo, string npcKey) =>
-        repo.At(RecordRef.Effective).GetOverrideStack(npcKey)?.Entries.ToDictionary(o => o.Plugin.Name, o => o.IsWinner) ?? [];
+    private static IReadOnlyList<LoadOrderEntry> WithBDisabled(PluginFixtureData fixture) =>
+        [.. fixture.Plugins.Select(p => p.Name == "PluginB.esp" ? p with { Enabled = false } : p)];
+
+    private static Dictionary<string, bool> WinnersByPlugin(IndexProjector index, FormKey npcKey) =>
+        index.RequireReads().GetOverrideStack(npcKey.ToString())?.Entries.ToDictionary(o => o.Plugin.Name, o => o.IsWinner) ?? [];
 
     [Fact]
     public void DisabledPlugin_LaterInLoadOrder_DoesNotDisplaceEnabledWinner()
     {
-        var (fixture, modA, modB, npcKey) = BuildSharedNpcFixture("participation-winner");
-        using var _ = fixture;
+        // PluginB sits last in the load order (highest slot) but is disabled — a bare MAX(slot)
+        // sweep would incorrectly make it the winner.
+        using var fixture = SharedNpcFixture("participation-winner", out var npcKey, pluginBEnabled: false);
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        // PluginB sits last in the load order (highest load_order_idx) but is disabled — a bare
-        // MAX(load_order_idx) sweep would incorrectly make it the winner.
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod(modB, Registration.Disabled(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())
+        var overrideStack = index.RequireReads().GetOverrideStack(npcKey.ToString())
             ?? throw new InvalidOperationException($"Expected an override stack for indexed record '{npcKey}'.");
         var overrides = overrideStack.Entries;
 
@@ -76,49 +58,37 @@ public class PluginParticipationTests
     [Fact]
     public void SetPluginParticipation_FlipToDisabled_MatchesLoadingDisabledFromStart()
     {
-        var (fixtureX, modAX, modBX, npcKeyX) = BuildSharedNpcFixture("participation-flip-x");
-        using var _x = fixtureX;
-        var (fixtureY, modAY, modBY, npcKeyY) = BuildSharedNpcFixture("participation-flip-y");
-        using var _y = fixtureY;
+        using var fixtureX = SharedNpcFixture("participation-flip-x", out var npcKeyX);
+        using var fixtureY = SharedNpcFixture("participation-flip-y", out var npcKeyY, pluginBEnabled: false);
 
-        using var repoFlipped = OpenRepo();
-        repoFlipped.IndexMod(modAX, Registration.Participating(0), new PluginCopyKey(modAX.ModKey.FileName.ToString(), "Data"));
-        repoFlipped.IndexMod(modBX, Registration.Participating(1), new PluginCopyKey(modBX.ModKey.FileName.ToString(), "Data"));
-        repoFlipped.UpdateWinners();
-        repoFlipped.Register(new PluginCopyKey("PluginB.esp", "Data"), Registration.Disabled(1));
-        repoFlipped.UpdateWinners();
+        var holder = new LoadOrderHolder();
+        using var flipped = Indexes.Open(holder);
+        flipped.Reconcile(holder, fixtureX.DataFolder, fixtureX.Plugins, GameRelease.Fallout4);
+        flipped.Reconcile(holder, fixtureX.DataFolder, WithBDisabled(fixtureX), GameRelease.Fallout4);
 
-        using var repoFromStart = OpenRepo();
-        repoFromStart.IndexMod(modAY, Registration.Participating(0), new PluginCopyKey(modAY.ModKey.FileName.ToString(), "Data"));
-        repoFromStart.IndexMod(modBY, Registration.Disabled(1), new PluginCopyKey(modBY.ModKey.FileName.ToString(), "Data"));
-        repoFromStart.UpdateWinners();
+        using var fromStart = Indexes.Reconciled(fixtureY);
 
-        var flipped = WinnersByPlugin(repoFlipped, npcKeyX.ToString());
-        var fromStart = WinnersByPlugin(repoFromStart, npcKeyY.ToString());
+        var flippedWinners = WinnersByPlugin(flipped, npcKeyX);
+        var fromStartWinners = WinnersByPlugin(fromStart, npcKeyY);
 
-        Assert.Equal(fromStart, flipped);
-        Assert.False(flipped["PluginB.esp"]);
-        Assert.True(flipped["PluginA.esm"]);
+        Assert.Equal(fromStartWinners, flippedWinners);
+        Assert.False(flippedWinners["PluginB.esp"]);
+        Assert.True(flippedWinners["PluginA.esm"]);
     }
 
     [Fact]
     public void SetPluginParticipation_FlippedTwice_IsIdempotent()
     {
-        var (fixture, modA, modB, npcKey) = BuildSharedNpcFixture("participation-idempotent");
-        using var _ = fixture;
+        using var fixture = SharedNpcFixture("participation-idempotent", out var npcKey);
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
 
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
+        index.Reconcile(holder, fixture.DataFolder, WithBDisabled(fixture), GameRelease.Fallout4);
+        var afterFirstFlip = WinnersByPlugin(index, npcKey);
 
-        repo.Register(new PluginCopyKey("PluginB.esp", "Data"), Registration.Disabled(1));
-        repo.UpdateWinners();
-        var afterFirstFlip = WinnersByPlugin(repo, npcKey.ToString());
-
-        repo.Register(new PluginCopyKey("PluginB.esp", "Data"), Registration.Disabled(1));
-        repo.UpdateWinners();
-        var afterSecondFlip = WinnersByPlugin(repo, npcKey.ToString());
+        index.Reconcile(holder, fixture.DataFolder, WithBDisabled(fixture), GameRelease.Fallout4);
+        var afterSecondFlip = WinnersByPlugin(index, npcKey);
 
         Assert.Equal(afterFirstFlip, afterSecondFlip);
     }
@@ -126,41 +96,27 @@ public class PluginParticipationTests
     [Fact]
     public void DisabledOnlyFormKey_HasNoWinner()
     {
+        FormKey npcKey = default;
         using var fixture = new PluginFixtureBuilder("participation-lone")
-            .WithPlugin("Disabled.esp", mod => mod.Npcs.AddNew("OnlyInDisabled"))
+            .WithPlugin("Disabled.esp", mod => npcKey = mod.Npcs.AddNew("OnlyInDisabled").FormKey, enabled: false)
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var mod = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName("Disabled.esp"), Path.Combine(fixture.DataFolder, "Disabled.esp")),
-            Fallout4Release.Fallout4);
-        var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;
-
-        using var repo = OpenRepo();
-        repo.IndexMod(mod, Registration.Disabled(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString(), new PluginCopyKey("Disabled.esp", "Data"));
+        var record = index.RequireReads().GetDocument(npcKey.ToString(), new PluginCopyKey("Disabled.esp", "Data"));
 
         Assert.NotNull(record);
         Assert.False(record.IsWinner);
     }
 
     [Fact]
-    public void DisabledOnlyFormKey_DoesNotResolveViaFormLookup()
+    public void DisabledOnlyFormKey_DoesNotResolve()
     {
+        FormKey npcKey = default;
         using var fixture = new PluginFixtureBuilder("participation-lookup")
-            .WithPlugin("Disabled.esp", mod => mod.Npcs.AddNew("OnlyInDisabled"))
+            .WithPlugin("Disabled.esp", mod => npcKey = mod.Npcs.AddNew("OnlyInDisabled").FormKey, enabled: false)
             .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var mod = Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName("Disabled.esp"), Path.Combine(fixture.DataFolder, "Disabled.esp")),
-            Fallout4Release.Fallout4);
-        var npcKey = mod.EnumerateMajorRecords<INpcGetter>().First().FormKey;
-
-        using var repo = OpenRepo();
-        repo.IndexMod(mod, Registration.Disabled(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        Assert.Null(repo.At(RecordRef.Effective).Resolve(npcKey.ToString()));
+        Assert.Null(index.RequireReads().Resolve(npcKey.ToString()));
     }
 }

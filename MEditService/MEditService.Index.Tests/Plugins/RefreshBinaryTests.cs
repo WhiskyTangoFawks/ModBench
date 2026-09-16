@@ -1,7 +1,5 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -25,9 +23,7 @@ public sealed class RefreshBinaryTests : IDisposable
 
     public RefreshBinaryTests()
     {
-        var reflector = SharedSchemaReflector.Instance;
-        _index = new IndexProjector(
-            _holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _index = Indexes.Open(_holder);
         var modFolder = Directory.CreateDirectory(Path.Combine(_instanceRoot, "mods", Origin)).FullName;
         _pluginPath = Path.Combine(modFolder, PluginName);
     }
@@ -138,10 +134,7 @@ public sealed class RefreshBinaryTests : IDisposable
     public async Task RefreshBinary_PublishesStatus_WhenACopyStillFailsToOpen()
     {
         var notifications = new InMemoryNotificationPublisher();
-        var reflector = SharedSchemaReflector.Instance;
-        using var index = new IndexProjector(
-            _holder, MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), notifications: notifications);
+        using var index = Indexes.Open(_holder, notifications: notifications);
 
         File.WriteAllText(_pluginPath, "not a plugin");
         index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
