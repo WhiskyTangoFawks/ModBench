@@ -1,8 +1,8 @@
 using System.Linq;
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using Microsoft.AspNetCore.Mvc.Testing;
 using MEditService.Tests.TestSupport;
+using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace MEditService.Tests.Api;
 

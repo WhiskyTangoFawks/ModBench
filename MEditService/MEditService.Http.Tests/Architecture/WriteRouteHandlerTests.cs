@@ -1,11 +1,11 @@
 using System.Reflection;
 using MEditService.Commands;
 using MEditService.Tests.Api;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Architecture;
 
