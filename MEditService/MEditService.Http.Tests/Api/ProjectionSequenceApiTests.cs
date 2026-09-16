@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Tests.TestSupport;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
