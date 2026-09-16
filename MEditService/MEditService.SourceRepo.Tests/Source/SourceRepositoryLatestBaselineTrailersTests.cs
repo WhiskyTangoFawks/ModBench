@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -70,7 +71,7 @@ public sealed class SourceRepositoryLatestBaselineTrailersTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            Assert.Equal(SourceRepository.EditBranchName, GitCli.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
+            Assert.Equal(EditBranch.Name, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
 
             Assert.Equal("9.9.9", SourceRepository.LatestBaselineTrailers(modFolder, "Test.esp")?.UpstreamVersion);
         }

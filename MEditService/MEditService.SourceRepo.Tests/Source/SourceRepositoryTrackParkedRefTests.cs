@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -27,10 +28,10 @@ public sealed class SourceRepositoryTrackParkedRefTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var baselineSha = GitCli.Run(gitDir, modFolder, "rev-parse", "main").Trim();
+            var baselineSha = GitProbe.Run(gitDir, modFolder, "rev-parse", "main").Trim();
 
-            Assert.Equal(baselineSha, GitCli.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Test.esp").Trim());
-            Assert.Equal(baselineSha, GitCli.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Other.esp").Trim());
+            Assert.Equal(baselineSha, GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Test.esp").Trim());
+            Assert.Equal(baselineSha, GitProbe.Run(gitDir, modFolder, "rev-parse", "refs/medit/last-compile/Other.esp").Trim());
         }
         finally
         {
@@ -48,7 +49,7 @@ public sealed class SourceRepositoryTrackParkedRefTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            Assert.False(GitCli.TryRun(gitDir, modFolder, out _, "rev-parse", "refs/medit/last-compile/Test.esp"));
+            Assert.False(GitProbe.TryRun(gitDir, modFolder, out _, "rev-parse", "refs/medit/last-compile/Test.esp"));
         }
         finally
         {

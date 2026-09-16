@@ -121,12 +121,12 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         Assert.True(SourceRepository.IsTracked(modFolder));
 
         var gitDir = Path.Combine(modFolder, ".git");
-        var commitsBefore = GitCli.Run(gitDir, modFolder, "rev-list", "--count", "main");
+        var commitsBefore = GitProbe.Run(gitDir, modFolder, "rev-list", "--count", "main");
 
         var second = await _client.PostAsJsonAsync("/plugins/create", new { name = "Second.esp", path = modFolder, origin = "AlreadyTrackedMod" });
 
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
-        var commitsAfter = GitCli.Run(gitDir, modFolder, "rev-list", "--count", "main");
+        var commitsAfter = GitProbe.Run(gitDir, modFolder, "rev-list", "--count", "main");
         Assert.Equal(commitsBefore, commitsAfter);
     }
 }

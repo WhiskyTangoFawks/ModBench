@@ -4,6 +4,7 @@ using MEditService.Commands.Edits;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -24,7 +25,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     private string GitDir => Path.Combine(_mod.ModFolder, ".git");
     private static string ParkedRef => $"refs/medit/last-compile/{CompileFixture.PluginName}";
 
-    private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
+    private string RunGit(params string[] args) => GitProbe.Run(GitDir, _mod.ModFolder, args);
 
     private static string Sha256Of(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 
@@ -106,10 +107,10 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-test-index-{Guid.NewGuid():N}");
         try
         {
-            GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex, "read-tree", "main");
-            GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex,
+            GitProbe.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex, "read-tree", "main");
+            GitProbe.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex,
                 "update-index", "--add", "--cacheinfo", $"100644,{blob},{sourceRoot}/Npcs/{new string('n', 300)}.json");
-            var tree = GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex, "write-tree").Trim();
+            var tree = GitProbe.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex, "write-tree").Trim();
             var commit = RunGit("commit-tree", tree, "-p", "main", "-m", "unwritable path").Trim();
             RunGit("update-ref", "refs/heads/unwritable", commit);
         }

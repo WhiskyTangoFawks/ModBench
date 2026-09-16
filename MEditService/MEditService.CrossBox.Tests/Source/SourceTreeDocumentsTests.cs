@@ -124,9 +124,9 @@ public sealed class SourceTreeDocumentsTests : IDisposable
 
     private Dictionary<string, PluginDocument> Documents()
     {
-        using var tree = new SourceTreeDocuments(
-            _fixture.ModFolder, ContainerModFixture.PluginName, Release,
-            SharedSchemaReflector.Instance.GetSchemas(Release));
+        var repository = SourceRepository.Open(_fixture.ModFolder, Release)
+            ?? throw new InvalidOperationException("Expected the fixture's mod folder to already be tracked.");
+        using var tree = repository.OpenDocuments(_fixture.Plugin, SharedSchemaReflector.Instance.GetSchemas(Release));
         return tree.Records.ToDictionary(document => document.FormKey, document => document, StringComparer.Ordinal);
     }
 }

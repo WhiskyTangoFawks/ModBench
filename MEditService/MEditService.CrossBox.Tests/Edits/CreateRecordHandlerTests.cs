@@ -114,8 +114,8 @@ public sealed class CreateRecordHandlerTests
     private static void Commit(SourceEditFixture mod)
     {
         var git = Path.Combine(mod.ModFolder, ".git");
-        GitCli.Run(git, mod.ModFolder, "add", "-A");
-        GitCli.Run(git, mod.ModFolder, "commit", "-q", "-m", "seed");
+        GitProbe.Run(git, mod.ModFolder, "add", "-A");
+        GitProbe.Run(git, mod.ModFolder, "commit", "-q", "-m", "seed");
     }
 
     private static uint LocalId(string formKey) =>

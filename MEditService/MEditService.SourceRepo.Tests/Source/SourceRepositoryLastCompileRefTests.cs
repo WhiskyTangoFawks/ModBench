@@ -1,5 +1,6 @@
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -40,11 +41,11 @@ public sealed class SourceRepositoryLastCompileRefTests
         var workTree = PathShape.DirectoryOf(gitDir);
         try
         {
-            GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");
+            GitProbe.Run(gitDir, workTree, "init", "-q", "-b", "main");
 
             var refName = SourceRepository.LastCompileRef(plugin);
 
-            Assert.True(GitCli.TryRun(gitDir, workTree, out _, "check-ref-format", "--normalize", refName));
+            Assert.True(GitProbe.TryRun(gitDir, workTree, out _, "check-ref-format", "--normalize", refName));
         }
         finally
         {

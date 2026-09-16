@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -17,7 +18,7 @@ public sealed class SourceRepositoryTrackAlreadyTrackedTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, firstFiles, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var firstMainSha = GitCli.Run(gitDir, modFolder, "rev-parse", "main").Trim();
+            var firstMainSha = GitProbe.Run(gitDir, modFolder, "rev-parse", "main").Trim();
 
             var secondFiles = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000002.json", "{\"second\":true}"u8.ToArray()) };
             Assert.Throws<SourceAlreadyTrackedException>(() =>
@@ -26,7 +27,7 @@ public sealed class SourceRepositoryTrackAlreadyTrackedTests
             // The original repo, and specifically its original main commit, must survive intact —
             // not merely "a .git directory exists again from some other cause".
             Assert.True(SourceRepository.IsTracked(modFolder));
-            Assert.Equal(firstMainSha, GitCli.Run(gitDir, modFolder, "rev-parse", "main").Trim());
+            Assert.Equal(firstMainSha, GitProbe.Run(gitDir, modFolder, "rev-parse", "main").Trim());
         }
         finally
         {
