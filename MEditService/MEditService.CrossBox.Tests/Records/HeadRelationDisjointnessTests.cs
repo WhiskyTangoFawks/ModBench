@@ -10,13 +10,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Records;
 
-/// <summary><c>records_head</c>'s <c>UNION ALL</c> is exact only if its halves are disjoint. Read
-/// straight off the index, since a read-time self-heal would repair the damage before it could be
-/// seen.</summary>
+/// <summary>The committed state is one row per record, never two. Read straight off the Index,
+/// since a read-time self-heal would repair the damage before it could be seen.</summary>
 public sealed class HeadRelationDisjointnessTests
 {
     [Fact]
-    public async Task ReindexingATrackedPluginWithADirtyRecord_KeepsTheUncommittedEdit_AndLeavesExactlyOneRowAtHead()
+    public async Task ReindexingATrackedPluginWithADirtyRecord_KeepsTheUncommittedEdit_AndOneCommittedState()
     {
         using var mod = IndexedModFixture.Tracked();
 
@@ -45,15 +44,15 @@ public sealed class HeadRelationDisjointnessTests
             mod.Index.Projected().Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: 100))
                 .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
-        var atHead = mod.Index.Projected(RecordRef.Head)
-            .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
-            .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
-
-        Assert.Equal(1, atHead);
+        var stack = mod.Index.Projected().GetOverrideStack(mod.Npc.ToString());
+        Assert.NotNull(stack);
+        var entry = Assert.Single(stack.Entries);
+        Assert.True(entry.HasWorkingTreeChange);
+        Assert.NotEqual(entry.Effective.Body, entry.Head.Body);
     }
 
     [Fact]
-    public void UnindexingAPluginWithADirtyRecord_LeavesNothingAtHead()
+    public async Task UnindexingAPluginWithADirtyRecord_LeavesNoRowsBehind()
     {
         using var mod = IndexedModFixture.Tracked();
 
@@ -61,10 +60,11 @@ public sealed class HeadRelationDisjointnessTests
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.8").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
-        var store = mod.Index.Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
-        store.Unindex(mod.Plugin);
+        var pluginPath = Path.Combine(mod.ModFolder, mod.ActualPluginName);
+        File.Delete(pluginPath);
+        Assert.True(await mod.Index.RefreshBinary(mod.Plugin, pluginPath));
 
-        Assert.Null(mod.Index.Projected(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(mod.Index.RequireReads().HeadDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(mod.Index.IndexedContentHash(mod.Plugin));
     }
 }

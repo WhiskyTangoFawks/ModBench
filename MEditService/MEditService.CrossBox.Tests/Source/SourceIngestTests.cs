@@ -23,19 +23,13 @@ public sealed class SourceIngestTests
 {
     private static IndexProjector Reload(LoadOrderHolder holder, IndexedModFixture mod)
     {
-        var index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        var index = Indexes.Open(holder);
         index.Reconcile(holder,
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
         return index;
     }
-
-    private static IRecordIndex Store(IndexProjector index) =>
-        index.Store ?? throw new InvalidOperationException("Expected Reconcile to have populated the index store.");
 
     // ---- The working tree is Effective ----
 
@@ -53,7 +47,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var record = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var record = reloaded.RequireReads().GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(record);
         Assert.Equal("ExternallyRenamed", record.EditorId);
     }
@@ -70,23 +64,25 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        Assert.Null(Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(reloaded.RequireReads().GetDocument(mod.Npc.ToString(), mod.Plugin));
         // Positive control: the load really happened and really indexed this plugin, or "absent"
         // would be true of a load that did nothing at all.
-        Assert.NotNull(Store(reloaded).At(RecordRef.Effective).GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
+        Assert.NotNull(reloaded.RequireReads().GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
     }
 
     [Fact]
-    public void AWorkingTreeDeletedRecord_StillAnswersAtHead()
+    public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_ServedAsGitShowServesThem()
     {
         var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
 
-        File.Delete(mod.NpcSourceFile);
+        var text = File.ReadAllText(mod.NpcSourceFile);
+        File.WriteAllText(mod.NpcSourceFile, text.Replace(
+            IndexedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
 
         using var reloaded = Reload(holder, mod);
 
-        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = reloaded.RequireReads().HeadDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
         Assert.Equal(IndexedModFixture.NpcEditorId, head.EditorId);
         // The Head row is HEAD's own bytes, not a reconstruction: same text `git show` serves.
@@ -108,10 +104,10 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var effective = reloaded.RequireReads().GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("ExternallyRenamed", effective.EditorId);
-        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = reloaded.RequireReads().HeadDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
         Assert.Equal(IndexedModFixture.NpcEditorId, head.EditorId);
     }
@@ -133,8 +129,8 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin);
-        var head = Store(reloaded).At(RecordRef.Head).GetDocument(headerFormKey, mod.Plugin);
+        var effective = reloaded.RequireReads().GetDocument(headerFormKey, mod.Plugin);
+        var head = reloaded.RequireReads().HeadDocument(headerFormKey, mod.Plugin);
 
         Assert.NotNull(effective);
         Assert.NotNull(head);
@@ -161,10 +157,10 @@ public sealed class SourceIngestTests
 
         // HEAD moved with the working tree, so the record is clean against its *new* baseline —
         // not dirty against a baseline no ref holds any more.
-        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var effective = reloaded.RequireReads().GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("CommittedRename", effective.EditorId);
-        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = reloaded.RequireReads().HeadDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
         Assert.Equal("CommittedRename", head.EditorId);
     }
@@ -181,8 +177,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var byFormKey = Store(reloaded)
-            .At(RecordRef.Effective).Search(new RecordQuery { Plugin = IndexedModFixture.PluginName, Limit = 100 })
+        var byFormKey = reloaded.RequireReads().Search(new RecordQuery { Plugin = IndexedModFixture.PluginName, Limit = 100 })
             .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
 
         Assert.Equal(WorkingTreeState.Modified, byFormKey[mod.Npc.ToString()].WorkingTreeState);
@@ -229,7 +224,7 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(holder, mod);
 
         // Degraded, not dropped — the plugin's records are still queryable from the binary.
-        Assert.NotNull(Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.NotNull(reloaded.RequireReads().GetDocument(mod.Npc.ToString(), mod.Plugin));
 
         // ...and the degradation is *visible*, which is the whole mitigation: a user reading
         // pre-Track binary content while believing they are reading their tracked source is the hazard.
@@ -282,7 +277,7 @@ public sealed class SourceIngestTests
     }
 
     [Fact]
-    public void APartialReconcileThenBinaryFallback_LeavesExactlyOneRowAtHead_NotTwo()
+    public void APartialReconcileThenBinaryFallback_LeavesExactlyOneEntry_NotTwo()
     {
         var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
@@ -307,11 +302,9 @@ public sealed class SourceIngestTests
         // Precondition: the ingest really did fail partway and fall back, or this proves nothing.
         Assert.NotEmpty(reloaded.Status.Failures);
 
-        var atHead = Store(reloaded).At(RecordRef.Head)
-            .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
-            .Items.Count(r => string.Equals(r.FormKey, mod.Keyword.ToString(), StringComparison.Ordinal));
-
-        Assert.Equal(1, atHead);
+        var stack = reloaded.RequireReads().GetOverrideStack(mod.Keyword.ToString());
+        Assert.NotNull(stack);
+        Assert.Single(stack.Entries);
     }
 
     // ---- A renamed source unit is one dirty record, not two half-records ----
@@ -330,20 +323,20 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(holder, mod);
 
         // Effective is the working tree: the new name.
-        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var effective = reloaded.RequireReads().GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedAcrossReload", effective.EditorId);
 
         // Head is HEAD: the old name, served from the blob at the record's former path. Without the pairing
         // this is null, the new path marking the record working-tree-only while the old path seeds it as
         // committed-only.
-        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = reloaded.RequireReads().HeadDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
         Assert.Equal(IndexedModFixture.NpcEditorId, head.EditorId);
     }
 
     [Fact]
-    public void AnEditorIdRename_LeavesExactlyOneRowAtHead()
+    public void AnEditorIdRename_LeavesExactlyOneEntry_WithTheOldNameCommitted()
     {
         var holder = new LoadOrderHolder();
         using var mod = IndexedModFixture.Tracked();
@@ -354,10 +347,9 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var atHead = Store(reloaded).At(RecordRef.Head)
-            .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
-            .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
-
-        Assert.Equal(1, atHead);
+        var stack = reloaded.RequireReads().GetOverrideStack(mod.Npc.ToString());
+        Assert.NotNull(stack);
+        var entry = Assert.Single(stack.Entries);
+        Assert.Equal(IndexedModFixture.NpcEditorId, entry.Head.EditorId);
     }
 }

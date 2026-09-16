@@ -1,9 +1,10 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Queries;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -65,6 +66,7 @@ public sealed class SpatialParseFailurePrefixTests
         internal const string Origin = PluginOrigin.DataDirectory;
 
         private readonly string _dataFolder = Directory.CreateTempSubdirectory("medit-spatial-").FullName;
+        private readonly DiagnosingAdapter _adapter = new();
         private readonly IndexProjector _index;
 
         internal string WorldspaceFormKey { get; }
@@ -102,10 +104,7 @@ public sealed class SpatialParseFailurePrefixTests
             var path = Path.Combine(_dataFolder, PluginName);
             mod.WriteToBinary(path);
 
-            _index = new IndexProjector(
-                holder,
-                MutagenPluginAdapter.Instance,
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            _index = Indexes.Open(holder, _adapter);
             _index.Reconcile(holder,
                 _dataFolder,
                 [new LoadOrderEntry(PluginName, path, Origin, Slot: 0, Enabled: true, Winning: true)],
@@ -114,14 +113,12 @@ public sealed class SpatialParseFailurePrefixTests
             Query = new WorldspaceQueryService(_index, holder);
         }
 
+        // The record's document arrives as an identity-only stub carrying a diagnosis, the shape
+        // the adapter hands over for a record it could not read, and the copy is re-derived.
         internal void MarkUnreadable(string formKey)
         {
-            var store = _index.Store
-                ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
-            using var cmd = ((DuckDbRecordIndex)store).Connection.CreateCommand();
-            cmd.CommandText = "UPDATE mirror.records SET parse_diagnosis = 'could not be read' WHERE form_key = $1";
-            cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-            cmd.ExecuteNonQuery();
+            _adapter.Unreadable = formKey;
+            _index.ReindexPlugin(new PluginCopyKey(PluginName, Origin)).GetAwaiter().GetResult();
         }
 
         public void Dispose()
@@ -129,5 +126,28 @@ public sealed class SpatialParseFailurePrefixTests
             _index.Dispose();
             try { Directory.Delete(_dataFolder, recursive: true); } catch (IOException) { }
         }
+    }
+
+    private sealed class DiagnosingAdapter() : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
+    {
+        public string? Unreadable { get; set; }
+
+        public override IPluginDocuments OpenDocuments(
+            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+            PluginStrings? strings = null) =>
+            new Diagnosed(base.OpenDocuments(modPath, gameRelease, schemas, strings), Unreadable);
+    }
+
+    private sealed class Diagnosed(IPluginDocuments inner, string? unreadable) : IPluginDocuments
+    {
+        public PluginDocument Header => inner.Header;
+        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
+
+        public IEnumerable<PluginDocument> Records => inner.Records.Select(record =>
+            record.FormKey == unreadable
+                ? record with { Text = $"{{\"FormKey\": \"{record.FormKey}\"}}", ParseDiagnosis = "could not be read" }
+                : record);
+
+        public void Dispose() => inner.Dispose();
     }
 }

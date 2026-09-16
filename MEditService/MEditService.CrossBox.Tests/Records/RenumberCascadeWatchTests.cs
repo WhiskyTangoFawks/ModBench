@@ -25,7 +25,7 @@ public sealed class RenumberCascadeWatchTests
                 && reads.GetReferencedBy(NewRaceFormKey).Select(r => r.FormKey).Distinct().Count() == 3),
             "the renumbered race and its three rewritten referencers never reached the index");
 
-        var landed = Store(fixture).At(RecordRef.Effective);
+        var landed = ReadsOf(fixture);
         Assert.Null(landed.GetDocument(fixture.Race.ToString(), fixture.TargetPlugin));
         Assert.Empty(landed.GetReferencedBy(fixture.Race.ToString()));
 
@@ -59,15 +59,14 @@ public sealed class RenumberCascadeWatchTests
                 && reads.GetDocument(NewRaceFormKey, fixture.TargetPlugin) == null),
             "the restored trees never brought the index back to the old identity");
 
-        Assert.NotNull(Store(fixture).At(RecordRef.Effective)
+        Assert.NotNull(ReadsOf(fixture)
             .GetDocument(fixture.Race.ToString(), fixture.TargetPlugin));
     }
 
-    private static IRecordIndex Store(CascadeRollbackFixture fixture)
+    private static IRecordReads ReadsOf(CascadeRollbackFixture fixture)
     {
         var index = fixture.Index
             ?? throw new InvalidOperationException("Expected the Watched() fixture to carry an Index.");
-        return index.Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+        return index.RequireReads();
     }
 }

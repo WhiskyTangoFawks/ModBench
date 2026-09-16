@@ -1,16 +1,10 @@
 using System.Collections.Concurrent;
-using MEditService.Codec.Schema;
-using MEditService.Codec.Serialization;
-using MEditService.Http;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
-using MEditService.Queries;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using MEditService.Watcher;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -19,38 +13,15 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>ADR-0015 invariant 3 and ADR-0013 invariant 4, at the Index's own seam: a load order value in,
-/// registration rows and one sequence advance out, over a real DuckDB.</summary>
+/// registrations and one sequence advance out, over a real DuckDB.</summary>
 public sealed class IndexProjectorTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static IndexProjector MakeProjector(LoadOrderHolder holder) => Indexes.Open(holder);
 
-    // Counts the verb the "without re-indexing" criterion is about.
-    private sealed class CountingFactory(IRecordIndexFactory inner) : IRecordIndexFactory
+    private static (IndexProjector Projector, GatedPluginAdapter Opens) MakeCountingProjector(LoadOrderHolder holder)
     {
-        public int Indexed { get; set; }
-        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
-            new CountingIndex(inner.Create(gameRelease, instanceRoot), this);
-        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
-            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
-    }
-
-    private sealed class CountingIndex(IRecordIndex inner, CountingFactory owner) : DelegatingRecordIndex(inner)
-    {
-        public override void Index(
-            IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null)
-        {
-            owner.Indexed++;
-            base.Index(documents, registration, key, filePath);
-        }
-    }
-
-    private static IndexProjector MakeProjector(LoadOrderHolder holder) =>
-        new(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
-
-    private static (IndexProjector Projector, CountingFactory Counts) MakeCountingProjector(LoadOrderHolder holder)
-    {
-        var counts = new CountingFactory(new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector)));
-        return (new IndexProjector(holder, MutagenPluginAdapter.Instance, counts), counts);
+        var opens = new GatedPluginAdapter();
+        return (Indexes.Open(holder, opens), opens);
     }
 
     // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack the winner assertions read.
@@ -72,24 +43,6 @@ public sealed class IndexProjectorTests
     {
         holder.Apply(snapshot);
         projector.Reconcile(snapshot);
-    }
-
-    private static IReadOnlyList<RegisteredCopy> RegistrationRows(IndexProjector projector)
-    {
-        var store = projector.Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
-        var connection = ((DuckDbRecordIndex)store).Connection;
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT plugin, origin, load_order_idx, enabled, winning FROM registrations";
-        using var reader = cmd.ExecuteReader();
-        var rows = new List<RegisteredCopy>();
-        while (reader.Read())
-        {
-            rows.Add(new RegisteredCopy(
-                reader.GetString(0), reader.GetString(1), Path: string.Empty,
-                reader.IsDBNull(2) ? null : reader.GetInt32(2), reader.GetBoolean(3), reader.GetBoolean(4)));
-        }
-        return rows;
     }
 
     private static string SharedNpc(IndexProjector projector) =>
@@ -126,7 +79,7 @@ public sealed class IndexProjectorTests
     }
 
     [Fact]
-    public void Reconcile_MakesTheRegistrationRowsEqualTheLoadOrdersCopies()
+    public void Reconcile_RegistersExactlyTheLoadOrdersCopies()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-registrations");
@@ -136,10 +89,11 @@ public sealed class IndexProjectorTests
 
         Reconcile(projector, holder, snapshot);
 
-        // Path is not a registration fact, so the rows are compared on the five that are.
+        Assert.All(snapshot.Copies, copy => Assert.True(projector.Registers(copy.Key)));
         Assert.Equal(
-            snapshot.Copies.Select(c => (c.Name, c.Origin, c.Slot, c.Enabled, c.Winning)).OrderBy(c => c.Name).ToList(),
-            RegistrationRows(projector).Select(c => (c.Name, c.Origin, c.Slot, c.Enabled, c.Winning)).OrderBy(c => c.Name).ToList());
+            snapshot.Copies.Select(c => c.Key).OrderBy(k => k.Name, StringComparer.Ordinal),
+            projector.RequireReads().OpenedCopies.Keys.OrderBy(k => k.Name, StringComparer.Ordinal));
+        Assert.False(projector.Registers(new PluginCopyKey("Nobody.esp", PluginOrigin.DataDirectory)));
     }
 
     // Header flags, the master list and the record count are read out of the file when the copy is
@@ -183,37 +137,40 @@ public sealed class IndexProjectorTests
     }
 
     [Fact]
-    public void ACopyDroppedFromTheSnapshot_LosesItsRegistrationRow_OnTheNextReconcile()
+    public void ACopyDroppedFromTheSnapshot_LosesItsRegistration_OnTheNextReconcile()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-registrations-drop");
         var projector = MakeProjector(holder);
         using var _1 = projector;
         Reconcile(projector, holder, Snapshot(fx));
+        var b = fx.Plugins.Single(p => p.Name == "B.esp");
 
         var withoutB = fx.Plugins.Where(p => p.Name != "B.esp").ToList();
         Reconcile(projector, holder, Snapshot(fx, withoutB));
 
-        Assert.Equal(["A.esm"], RegistrationRows(projector).Select(r => r.Name));
+        Assert.False(projector.Registers(new PluginCopyKey("B.esp", b.Origin)));
+        Assert.True(projector.Registers(new PluginCopyKey("A.esm", fx.Plugins.Single(p => p.Name == "A.esm").Origin)));
     }
 
     [Fact]
-    public void ACopyThatStopsParticipating_LosesItsWinners_OnTheNextReconcile_WithNoReindex()
+    public void ACopyThatStopsParticipating_LosesItsWinners_OnTheNextReconcile_WithNoPluginReopened()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-stops-participating");
-        var (projector, counts) = MakeCountingProjector(holder);
+        var (projector, opens) = MakeCountingProjector(holder);
         using var _1 = projector;
+        using var _2 = opens;
         Reconcile(projector, holder, Snapshot(fx));
         var npc = SharedNpc(projector);
         Assert.Equal("B.esp", WinnerOf(projector, npc));
-        var indexed = counts.Indexed;
+        var opened = opens.OpenedTotal;
 
         var bDisabled = fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Enabled = false } : p).ToList();
         Reconcile(projector, holder, Snapshot(fx, bDisabled));
 
         Assert.Equal("A.esm", WinnerOf(projector, npc));
-        Assert.Equal(indexed, counts.Indexed);
+        Assert.Equal(opened, opens.OpenedTotal);
     }
 
     [Fact]
@@ -285,8 +242,11 @@ public sealed class IndexProjectorTests
     [Fact]
     public async Task TwoProjectionsOpenAtOnce_EachLandsItsOwnAdvance_AndNothingIsAnnouncedAheadOfTheStore()
     {
-        using var index = new DuckDbRecordIndex(Reflector, new TableDdlBuilder(Reflector), NullLogger.Instance);
-        index.Initialize(GameRelease.Fallout4);
+        using var fixture = IndexedModFixture.Tracked();
+        var index = (IndexProjector)fixture.Index;
+        var otherNpcSource = fixture.SourceFileFor(fixture.OtherNpc, "npc_", IndexedModFixture.OtherNpcEditorId);
+        RenameByHand(fixture.NpcSourceFile, IndexedModFixture.NpcEditorId, "RenamedByHand");
+        RenameByHand(otherNpcSource, IndexedModFixture.OtherNpcEditorId, "AlsoRenamedByHand");
         var before = index.Sequence;
         var announced = new ConcurrentBag<long>();
 
@@ -301,7 +261,7 @@ public sealed class IndexProjectorTests
         {
             using (index.BeginProjection())
             {
-                index.Register(new PluginCopyKey("First.esm", PluginOrigin.DataDirectory), Registration.Participating(0));
+                index.RefreshKeys(fixture.Plugin, [fixture.Npc.ToString()]);
                 index.Announce(() => announced.Add(index.Sequence));
                 firstOpen.Set();
                 Wait(secondOpen);
@@ -314,7 +274,7 @@ public sealed class IndexProjectorTests
             Wait(firstOpen);
             using (index.BeginProjection())
             {
-                index.Register(new PluginCopyKey("Second.esp", PluginOrigin.DataDirectory), Registration.Participating(1));
+                index.RefreshKeys(fixture.Plugin, [fixture.OtherNpc.ToString()]);
                 index.Announce(() => announced.Add(index.Sequence));
                 secondOpen.Set();
                 Wait(firstClosed);

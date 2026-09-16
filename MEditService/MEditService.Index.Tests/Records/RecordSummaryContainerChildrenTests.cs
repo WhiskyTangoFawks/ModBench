@@ -1,8 +1,6 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -14,8 +12,6 @@ namespace MEditService.Tests.Records;
 /// per-row follow-up call; the Plugins tree's collapsible state reads this flag directly.</summary>
 public sealed class RecordSummaryContainerChildrenTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
     private static readonly PluginCopyKey Key = new("Dialogue.esp", "Data");
 
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
@@ -27,20 +23,21 @@ public sealed class RecordSummaryContainerChildrenTests
     [Fact]
     public void Search_QuestWithChildren_ReportsHasContainerChildrenTrue_QuestWithoutReportsFalse()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Dialogue.esp"), Fallout4Release.Fallout4);
-        var withChildren = mod.Quests.AddNew("QuestWithChildren");
-        var topic = new DialogTopic(mod) { EditorID = "Topic0" };
-        withChildren.DialogTopics.Add(topic);
-        var withoutChildren = mod.Quests.AddNew("QuestWithoutChildren");
+        FormKey withChildren = default, withoutChildren = default;
+        using var fixture = new PluginFixtureBuilder("container-children")
+            .WithPlugin(Key.Name, mod =>
+            {
+                var quest = mod.Quests.AddNew("QuestWithChildren");
+                quest.DialogTopics.Add(new DialogTopic(mod) { EditorID = "Topic0" });
+                withChildren = quest.FormKey;
+                withoutChildren = mod.Quests.AddNew("QuestWithoutChildren").FormKey;
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        index.Initialize(GameRelease.Fallout4);
-        index.IndexMod((IModGetter)mod, Registration.Participating(0), Key);
-        index.UpdateWinners();
+        var page = index.RequireReads().Search(new RecordQuery(Plugin: Key.Name, Origin: Key.Origin, RecordTypes: ["qust"], Limit: 50));
 
-        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: Key.Name, Origin: Key.Origin, RecordTypes: ["qust"], Limit: 50));
-
-        Assert.True(SummaryFor(page, withChildren.FormKey.ToString()).HasContainerChildren);
-        Assert.False(SummaryFor(page, withoutChildren.FormKey.ToString()).HasContainerChildren);
+        Assert.True(SummaryFor(page, withChildren.ToString()).HasContainerChildren);
+        Assert.False(SummaryFor(page, withoutChildren.ToString()).HasContainerChildren);
     }
 }

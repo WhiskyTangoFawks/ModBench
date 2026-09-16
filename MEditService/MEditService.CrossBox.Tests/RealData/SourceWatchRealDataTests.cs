@@ -43,8 +43,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        Index = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(
-            SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), Notifications));
+        Index = Indexes.Open(holder, notifications: Notifications);
         Index.Reconcile(holder,
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
@@ -66,7 +65,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
         // Well past the debounce window and the projection behind it, so what the recorder holds is
         // everything Track cost.
         Thread.Sleep(2000);
-        AfterTrack = Notifications.Notifications;
+        AfterTrack = [.. Notifications.Notifications.Where(n => n is RowsChangedNotification or PluginChangedNotification)];
 
         // The reconcile request every tracked copy takes at load, so the rows the burst below drifts
         // from are the source tree's own.
@@ -135,7 +134,7 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         Assert.True(await fixture.Index.AwaitSequenceAsync(before + 1, TimeSpan.FromSeconds(60)));
         await WaitForEveryRow(renamed);
         foreach (var (formKey, editorId) in renamed)
-            Assert.Equal(editorId, fixture.Index.Store.Require().At(RecordRef.Effective).GetDocument(formKey, fixture.Plugin)?.EditorId);
+            Assert.Equal(editorId, fixture.Index.RequireReads().GetDocument(formKey, fixture.Plugin)?.EditorId);
     }
 
     // 60s to match the sequence await above: the same load that delays the projection delays this
@@ -146,7 +145,7 @@ public sealed class SourceWatchRealDataTests(SourceWatchRealDataFixture fixture,
         var elapsed = Stopwatch.StartNew();
         while (elapsed.Elapsed < limit)
         {
-            if (renamed.All(r => fixture.Index.Store.Require().At(RecordRef.Effective).GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
+            if (renamed.All(r => fixture.Index.RequireReads().GetDocument(r.Key, fixture.Plugin)?.EditorId == r.Value))
                 return;
             await Task.Delay(50);
         }

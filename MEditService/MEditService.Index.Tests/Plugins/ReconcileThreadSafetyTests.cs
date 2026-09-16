@@ -1,7 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
-using Microsoft.Extensions.Logging.Abstractions;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
@@ -11,12 +10,7 @@ public class ReconcileThreadSafetyTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private static IndexProjector MakeManager(LoadOrderHolder holder)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
-    }
+    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     private IndexProjector MakeLoadedManager(LoadOrderHolder holder)
     {

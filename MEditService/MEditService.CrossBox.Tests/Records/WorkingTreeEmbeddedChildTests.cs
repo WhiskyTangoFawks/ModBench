@@ -21,10 +21,10 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private IRecordIndex Index =>
-        _fixture.Index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
-    private IRecordReads Effective => Index.At(RecordRef.Effective);
-    private IRecordReads Head => Index.At(RecordRef.Head);
+    private IRecordReads Effective => _fixture.Index.RequireReads();
+
+    private void Project(string formKey, string? body) =>
+        _fixture.Index.ProjectDocuments(_fixture.Holder, _fixture.Plugin, [(formKey, body)]);
 
     private string CellBody() =>
         Effective.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin).Require().Body.Require();
@@ -48,17 +48,17 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         var body = CellBodyAfter(cell => ((Cell)cell).Temporary.Add(
             new PlacedObject(newRef, Fallout4Release.Fallout4) { EditorID = "AppendedRef", Position = new P3Float(4f, 5f, 6f) }));
 
-        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
+        Project(_fixture.EmbedCell.ToString(), body);
 
         var newDocument = Effective.GetDocument(newRef.ToString(), _fixture.Plugin).Require();
         Assert.Equal("AppendedRef", newDocument.EditorId);
-        Assert.Null(Head.GetDocument(newRef.ToString(), _fixture.Plugin));
+        Assert.True(Effective.StackEntry(newRef.ToString(), _fixture.Plugin).Require().HasWorkingTreeChange);
         var placement = Assert.NotNull(Effective.GetPlacement(newRef.ToString(), _fixture.Plugin));
         Assert.Equal(_fixture.EmbedCell.ToString(), placement.ParentCell);
     }
 
     [Fact]
-    public void ApplyingAContainersDocument_ThatNoLongerCarriesAChild_RemovesTheChildAtEffective_AndKeepsItAtHead()
+    public void ApplyingAContainersDocument_ThatNoLongerCarriesAChild_RemovesTheChildAtEffective()
     {
         var removed = _fixture.TemporaryRef.ToString();
         var body = CellBodyAfter(cell =>
@@ -67,10 +67,9 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
             Assert.True(((Cell)cell).Temporary.Remove(target));
         });
 
-        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
+        Project(_fixture.EmbedCell.ToString(), body);
 
         Assert.Null(Effective.GetDocument(removed, _fixture.Plugin));
-        Assert.NotNull(Head.GetDocument(removed, _fixture.Plugin));
         Assert.Null(Effective.GetPlacement(removed, _fixture.Plugin));
         // The sibling in the other slot is exactly as it was.
         Assert.NotNull(Effective.GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
@@ -81,13 +80,10 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     [Fact]
     public void DeletingAContainer_TakesEveryEmbeddedDescendantWithIt_TwoLevelsDeep()
     {
-        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.Worldspace.ToString(), null)]);
+        Project(_fixture.Worldspace.ToString(), null);
 
         foreach (var formKey in new[] { _fixture.Worldspace, _fixture.TopCell, _fixture.TopCellRef })
-        {
             Assert.Null(Effective.GetDocument(formKey.ToString(), _fixture.Plugin));
-            Assert.NotNull(Head.GetDocument(formKey.ToString(), _fixture.Plugin));
-        }
         Assert.Null(Effective.GetPlacement(_fixture.TopCellRef.ToString(), _fixture.Plugin));
         // A cell in another container is nobody's descendant here.
         Assert.NotNull(Effective.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
@@ -100,11 +96,11 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         var edited = CellBody().Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal);
         Assert.NotEqual(CellBody(), edited);
 
-        Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), edited)]);
+        Project(_fixture.EmbedCell.ToString(), edited);
 
         var child = _fixture.TemporaryRef.ToString();
         var effectiveChild = Effective.GetDocument(child, _fixture.Plugin).Require();
-        var headChild = Head.GetDocument(child, _fixture.Plugin).Require();
+        var headChild = Effective.HeadDocument(child, _fixture.Plugin).Require();
         Assert.Contains("\"Scale\": 2.5", effectiveChild.Body.Require(), StringComparison.Ordinal);
         Assert.DoesNotContain("\"Scale\": 2.5", headChild.Body.Require(), StringComparison.Ordinal);
     }

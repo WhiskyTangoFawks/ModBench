@@ -1,9 +1,6 @@
-using DuckDB.NET.Data;
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -12,26 +9,74 @@ using Noggog;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0009: registration is visibility. An unregistered plugin's rows stay physically in the
-// `mirror` schema and answer nothing anywhere; re-registering makes them answer again with no re-
-// index.
+// ADR-0009: registration is visibility. A copy the snapshot stops naming keeps its rows and
+// answers nothing anywhere; naming it again makes them answer with no re-read.
 public class RegistrationScopingTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
     private static readonly PluginCopyKey AlphaKey = new("Alpha.esp", "ModA");
     private static readonly PluginCopyKey BetaKey = new("Beta.esp", "ModB");
 
     // Every kind of row the index extracts, so every read path has something to not answer with. Beta
     // additionally overrides Alpha's Npc, so the override stack and the contested-FormKey read have a
     // Beta entry to lose.
-    private sealed record Fixture(
-        DuckDbRecordIndex Repo, string SharedNpcFk, string BetaNpcFk, string BetaRaceFk,
-        string BetaWorldspaceFk, string BetaCellFk, string BetaPlacedFk, string BetaQuestFk, string BetaTopicFk,
-        int BetaRowCount) : IDisposable
+    private sealed class Fixture : IDisposable
     {
-        public void Dispose() => Repo.Dispose();
+        public Fixture(string prefix)
+        {
+            string sharedNpcFk = "";
+            (string, string, string, string, string, string, string) betaKeys = ("", "", "", "", "", "", "");
+            Plugins = new PluginFixtureBuilder(prefix)
+                .WithPlugin(AlphaKey.Name, mod => (_, sharedNpcFk, _, _, _, _, _) = Populate(mod, "A"), origin: AlphaKey.Origin)
+                .WithPlugin(BetaKey.Name, (mod, built) =>
+                {
+                    betaKeys = Populate(mod, "B");
+                    var alpha = built[0];
+                    mod.ModHeader.MasterReferences.Add(new MasterReference { Master = alpha.ModKey });
+                    mod.Npcs.Set(alpha.Npcs.Single().DeepCopy());
+                }, origin: BetaKey.Origin)
+                .BuildScattered();
+            (BetaRaceFk, BetaNpcFk, BetaWorldspaceFk, BetaCellFk, BetaPlacedFk, BetaQuestFk, BetaTopicFk) = betaKeys;
+            SharedNpcFk = sharedNpcFk;
+
+            Holder = new LoadOrderHolder();
+            Opens = new GatedPluginAdapter();
+            Index = Indexes.Open(Holder, Opens);
+            Index.Reconcile(Holder, Plugins.GameDirectory, Plugins.Plugins, GameRelease.Fallout4);
+
+            // +1 for the plugin header's own document: it is not an IMajorRecordGetter, so
+            // EnumerateMajorRecords cannot count it. This is a row count, not a record count.
+            using var beta = Fallout4Mod.CreateFromBinaryOverlay(
+                Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path, Fallout4Release.Fallout4);
+            BetaRowCount = beta.EnumerateMajorRecords().Count() + 1;
+        }
+
+        public ScatteredFixtureData Plugins { get; }
+        public IndexProjector Index { get; }
+        public GatedPluginAdapter Opens { get; }
+        public LoadOrderHolder Holder { get; }
+        public string SharedNpcFk { get; }
+        public string BetaNpcFk { get; }
+        public string BetaRaceFk { get; }
+        public string BetaWorldspaceFk { get; }
+        public string BetaCellFk { get; }
+        public string BetaPlacedFk { get; }
+        public string BetaQuestFk { get; }
+        public string BetaTopicFk { get; }
+        public int BetaRowCount { get; }
+
+        public IRecordReads Reads => Index.RequireReads();
+
+        public void Reconcile(IReadOnlyList<LoadOrderEntry> snapshot) =>
+            Index.Reconcile(Holder, Plugins.GameDirectory, snapshot, GameRelease.Fallout4);
+
+        public IReadOnlyList<LoadOrderEntry> WithoutBeta => [.. Plugins.Plugins.Where(p => p.Name != BetaKey.Name)];
+
+        public void Dispose()
+        {
+            Index.Dispose();
+            Opens.Dispose();
+            Plugins.Dispose();
+        }
     }
 
     private static (string RaceFk, string NpcFk, string WorldspaceFk, string CellFk, string PlacedFk, string QuestFk, string TopicFk)
@@ -66,190 +111,126 @@ public class RegistrationScopingTests
             placed.FormKey.ToString(), quest.FormKey.ToString(), topic.FormKey.ToString());
     }
 
-    private static Fixture Build()
-    {
-        var alpha = new Fallout4Mod(ModKey.FromFileName(AlphaKey.Name), Fallout4Release.Fallout4);
-        var (_, sharedNpcFk, _, _, _, _, _) = Populate(alpha, "A");
-
-        var beta = new Fallout4Mod(ModKey.FromFileName(BetaKey.Name), Fallout4Release.Fallout4);
-        var (betaRace, betaNpc, betaWrld, betaCell, betaPlaced, betaQuest, betaTopic) = Populate(beta, "B");
-        beta.ModHeader.MasterReferences.Add(new MasterReference { Master = alpha.ModKey });
-        beta.Npcs.Set(alpha.Npcs.Single().DeepCopy());
-
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            repo.Initialize(GameRelease.Fallout4);
-            repo.CreateRecordTypeViews();
-            repo.IndexMod((IModGetter)alpha, Registration.Participating(0), AlphaKey);
-            repo.IndexMod((IModGetter)beta, Registration.Participating(1), BetaKey);
-            repo.UpdateWinners();
-
-            // +1 for the plugin header's own row: it is an ordinary `records` row but is not an
-            // IMajorRecordGetter, so EnumerateMajorRecords cannot count it. This is a row count, not a
-            // record count — hence the name.
-            var fixture = new Fixture(repo, sharedNpcFk, betaNpc, betaRace, betaWrld, betaCell, betaPlaced,
-                betaQuest, betaTopic, beta.EnumerateMajorRecords().Count() + 1);
-            repo = null;
-            return fixture;
-        }
-        finally
-        {
-            repo?.Dispose();
-        }
-    }
-
-    private static long Scalar(DuckDbRecordIndex repo, string sql, params object[] args)
-    {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        foreach (var arg in args) cmd.Parameters.Add(new DuckDBParameter { Value = arg });
-        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    private static long RowsFor(DuckDbRecordIndex repo, string relation, PluginCopyKey key) =>
-        Scalar(repo, $"SELECT COUNT(*) FROM {relation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
-
-    // Every schema key, with no exclusion: the plugin header has a generated view like every
-    // other record type, so it is swept here rather than named as a relation of its own below.
-    private static IEnumerable<string> GeneratedViews() =>
-        Reflector.GetSchemas(GameRelease.Fallout4).Keys;
+    private static Fixture Build(string prefix) => new(prefix);
 
     [Fact]
     public void Unregister_LeavesRowsInPlace_AndNoReadAnswersForThePlugin()
     {
-        using var fx = Build();
-        var repo = fx.Repo;
+        using var fx = Build("registration-unregister");
+        var reads = fx.Reads;
 
         // Premise: registered, everything answers — otherwise the emptiness below proves nothing.
-        Assert.Equal(fx.BetaRowCount, repo.At(RecordRef.Effective).GetDocuments(BetaKey).Count);
-        var initialSharedStack = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk);
+        Assert.Equal(fx.BetaRowCount, reads.GetDocuments(BetaKey).Count);
+        var initialSharedStack = reads.GetOverrideStack(fx.SharedNpcFk);
         Assert.NotNull(initialSharedStack);
         Assert.Equal(2, initialSharedStack.Entries.Count);
-        Assert.NotEmpty(repo.At(RecordRef.Effective).GetReferencedBy(fx.BetaRaceFk));
-        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
-        Assert.NotEmpty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.NotEmpty(reads.GetReferencedBy(fx.BetaRaceFk));
+        Assert.NotNull(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
 
-        repo.Unregister(BetaKey);
-        repo.UpdateWinners();
+        fx.Reconcile(fx.WithoutBeta);
 
-        // The rows demonstrably remain — the mirror schema is the one door that sees them.
-        Assert.Equal(fx.BetaRowCount, RowsFor(repo, "mirror.records", BetaKey));
-        foreach (var table in new[] { "mirror.form_lookup", "mirror.placement", "mirror.cell_location", "mirror.container_child" })
-            Assert.True(RowsFor(repo, table, BetaKey) > 0, $"{table} should keep Beta's rows");
-        Assert.True(Scalar(repo, "SELECT COUNT(*) FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2",
-            BetaKey.Name, BetaKey.Origin) > 0);
+        // The rows remain: the copy is indexed and unregistered.
+        Assert.NotNull(fx.Index.IndexedContentHash(BetaKey));
+        Assert.False(fx.Index.Registers(BetaKey));
 
         // Documents.
-        Assert.Null(repo.At(RecordRef.Effective).GetDocument(fx.BetaNpcFk));
-        Assert.Null(repo.At(RecordRef.Effective).GetDocument(fx.BetaNpcFk, BetaKey));
-        Assert.Empty(repo.At(RecordRef.Effective).GetDocuments(BetaKey));
-        Assert.Null(repo.At(RecordRef.Effective).GetOverrideStack(fx.BetaNpcFk));
-        var shared = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk);
+        Assert.Null(reads.GetDocument(fx.BetaNpcFk));
+        Assert.Null(reads.GetDocument(fx.BetaNpcFk, BetaKey));
+        Assert.Empty(reads.GetDocuments(BetaKey));
+        Assert.Null(reads.GetOverrideStack(fx.BetaNpcFk));
+        var shared = reads.GetOverrideStack(fx.SharedNpcFk);
         Assert.NotNull(shared);
         var only = Assert.Single(shared.Entries);
         Assert.Equal(AlphaKey.Name, only.Plugin.Name);
         Assert.True(only.IsWinner);
-        var sharedDocument = repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk);
+        var sharedDocument = reads.GetDocument(fx.SharedNpcFk);
         Assert.NotNull(sharedDocument);
         Assert.Equal(AlphaKey.Name, sharedDocument.Plugin.Name);
-        // Head answers through the same scoping, not a second implementation.
-        var head = repo.At(RecordRef.Head);
-        Assert.Null(head.GetDocument(fx.BetaNpcFk));
-        Assert.Empty(head.GetDocuments(BetaKey));
-        var headSharedStack = head.GetOverrideStack(fx.SharedNpcFk);
-        Assert.NotNull(headSharedStack);
-        Assert.Single(headSharedStack.Entries);
 
         // Listings and counts.
-        Assert.Empty(repo.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
-        Assert.DoesNotContain(repo.At(RecordRef.Effective).Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
-        Assert.Empty(repo.At(RecordRef.Effective).GetRecordTypeCounts(BetaKey));
-        Assert.Empty(repo.At(RecordRef.Effective).GetNativeFormKeys(BetaKey));
+        Assert.Empty(reads.Search(new RecordQuery(Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
+        Assert.DoesNotContain(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
+        Assert.Empty(reads.GetRecordTypeCounts(BetaKey));
+        Assert.Empty(reads.GetNativeFormKeys(BetaKey));
 
         // Extracted tables.
-        Assert.Null(repo.At(RecordRef.Effective).Resolve(fx.BetaNpcFk));
-        Assert.Empty(repo.At(RecordRef.Effective).GetReferencedBy(fx.BetaRaceFk));
-        Assert.Empty(repo.At(RecordRef.Effective).GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
-        Assert.Empty(repo.At(RecordRef.Effective).GetInteriorCells(BetaKey, 50, 0).Items);
-        var cellRefs = repo.At(RecordRef.Effective).GetCellReferences(BetaKey, fx.BetaCellFk);
+        Assert.Null(reads.Resolve(fx.BetaNpcFk));
+        Assert.Empty(reads.GetReferencedBy(fx.BetaRaceFk));
+        Assert.Empty(reads.GetWorldspaceCells(BetaKey, fx.BetaWorldspaceFk));
+        Assert.Empty(reads.GetInteriorCells(BetaKey, 50, 0).Items);
+        var cellRefs = reads.GetCellReferences(BetaKey, fx.BetaCellFk);
         Assert.Empty(cellRefs.Persistent);
         Assert.Empty(cellRefs.Temporary);
-        Assert.Null(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
-        Assert.Null(repo.At(RecordRef.Effective).GetCellLocation(BetaKey, fx.BetaCellFk));
-        Assert.Empty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));
-        Assert.Null(repo.At(RecordRef.Effective).GetContainerParent(BetaKey, fx.BetaTopicFk));
+        Assert.Null(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.Null(reads.GetCellLocation(BetaKey, fx.BetaCellFk));
+        Assert.Empty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
+        Assert.Null(reads.GetContainerParent(BetaKey, fx.BetaTopicFk));
 
-        // The SQL door: user filter SQL and the filtered-chevron read see nothing of Beta either.
-        repo.SetFilter("SELECT form_key FROM npc_");
-        Assert.DoesNotContain(BetaKey.Name, repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["npc_"]));
-        Assert.Contains(AlphaKey.Name, repo.At(RecordRef.Effective).GetPluginsWithMatchingRecords(["npc_"]));
-        repo.SetFilter(null);
+        // The SQL door: user filter SQL and the filtered-chevron read see nothing of Beta either. The
+        // shared NPC's FormKey sits in both copies, so a leaked Beta row would surface Alpha's copy.
+        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{BetaKey.Name}' AND origin = '{BetaKey.Origin}'");
+        Assert.Empty(reads.Search(new RecordQuery(Limit: 1000)).Items);
+        Assert.Empty(reads.GetPluginsWithMatchingRecords(["npc_"]));
+        fx.Index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{AlphaKey.Name}' AND origin = '{AlphaKey.Origin}'");
+        Assert.Contains(AlphaKey.Name, reads.GetPluginsWithMatchingRecords(["npc_"]));
+        Assert.Contains(reads.Search(new RecordQuery(Limit: 1000)).Items, r => r.FormKey == fx.SharedNpcFk);
+        fx.Index.ClearFilter();
 
         // Alpha, still registered, is untouched by its neighbour's unregistration.
-        Assert.NotEmpty(repo.At(RecordRef.Effective).GetDocuments(AlphaKey));
-        Assert.NotEmpty(repo.At(RecordRef.Effective).GetRecordTypeCounts(AlphaKey));
-    }
-
-    [Fact]
-    public void Unregister_EveryGeneratedViewAndPublicRelation_AnswersNothingForThePlugin()
-    {
-        using var fx = Build();
-        var repo = fx.Repo;
-        repo.Unregister(BetaKey);
-
-        // "header" is deliberately absent: it is not a relation of its own, and its rows are covered twice
-        // over, by `records` here and by the generated "header" view in the sweep below.
-        Assert.All(new[] { "records", "records_head", "form_lookup", "placement", "cell_location", "container_child" },
-            relation => Assert.Equal(0, RowsFor(repo, relation, BetaKey)));
-        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM form_references WHERE source_plugin = $1 AND source_origin = $2",
-            BetaKey.Name, BetaKey.Origin));
-
-        var viewsWithBetaRows = GeneratedViews()
-            .Where(view => RowsFor(repo, $"\"{view}\"", BetaKey) > 0)
-            .ToList();
-        Assert.Empty(viewsWithBetaRows);
-        // ...while the same views still carry Alpha, so an empty schema could not pass this vacuously.
-        Assert.True(RowsFor(repo, "\"npc_\"", AlphaKey) > 0);
+        Assert.NotEmpty(reads.GetDocuments(AlphaKey));
+        Assert.NotEmpty(reads.GetRecordTypeCounts(AlphaKey));
     }
 
     [Fact]
     public void Register_AfterUnregister_AnswersAgainWithoutReindex()
     {
-        using var fx = Build();
-        var repo = fx.Repo;
-        repo.Unregister(BetaKey);
-        repo.UpdateWinners();
-        Assert.Empty(repo.At(RecordRef.Effective).GetDocuments(BetaKey));
+        using var fx = Build("registration-reregister");
+        var reads = fx.Reads;
+        fx.Reconcile(fx.WithoutBeta);
+        Assert.Empty(reads.GetDocuments(BetaKey));
+        var opened = fx.Opens.OpenedTotal;
 
-        repo.Register(BetaKey, Registration.Participating(1));
-        repo.UpdateWinners();
+        fx.Reconcile(fx.Plugins.Plugins);
 
-        Assert.Equal(fx.BetaRowCount, repo.At(RecordRef.Effective).GetDocuments(BetaKey).Count);
-        var stackResult = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk);
+        Assert.Equal(opened, fx.Opens.OpenedTotal);
+        Assert.Equal(fx.BetaRowCount, reads.GetDocuments(BetaKey).Count);
+        var stackResult = reads.GetOverrideStack(fx.SharedNpcFk);
         Assert.NotNull(stackResult);
         var stack = stackResult.Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Name == BetaKey.Name).IsWinner);
-        var sharedAfterReregister = repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk);
+        var sharedAfterReregister = reads.GetDocument(fx.SharedNpcFk);
         Assert.NotNull(sharedAfterReregister);
         Assert.Equal(BetaKey.Name, sharedAfterReregister.Plugin.Name);
-        Assert.NotNull(repo.At(RecordRef.Effective).Resolve(fx.BetaNpcFk));
-        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
-        Assert.NotEmpty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));
-        Assert.True(RowsFor(repo, "\"npc_\"", BetaKey) > 0);
+        Assert.NotNull(reads.Resolve(fx.BetaNpcFk));
+        Assert.NotNull(reads.GetPlacement(fx.BetaPlacedFk, BetaKey));
+        Assert.NotEmpty(reads.GetContainerChildren(BetaKey, fx.BetaQuestFk));
     }
 
-    // Unindex is the file-gone verb: the inverse of Index, rows and registration alike.
+    // Unindex is the file-gone verb: the inverse of indexing, rows and registration alike, so the
+    // copy's return is a fresh read of the binary.
     [Fact]
     public void Unindex_RemovesTheRowsThemselves()
     {
-        using var fx = Build();
-        var repo = fx.Repo;
+        using var fx = Build("registration-unindex");
+        var betaPath = fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path;
+        var opened = fx.Opens.OpenedTotal;
 
-        repo.Unindex(BetaKey);
+        File.Delete(betaPath);
+        fx.Index.UnindexPlugin(BetaKey);
 
-        Assert.Equal(0, RowsFor(repo, "mirror.records", BetaKey));
-        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM registrations WHERE plugin = $1 AND origin = $2", BetaKey.Name, BetaKey.Origin));
+        Assert.Null(fx.Index.IndexedContentHash(BetaKey));
+        Assert.False(fx.Index.Registers(BetaKey));
+        Assert.Empty(fx.Reads.GetDocuments(BetaKey));
+
+        var beta = new Fallout4Mod(ModKey.FromFileName(BetaKey.Name), Fallout4Release.Fallout4);
+        beta.Npcs.AddNew("NpcBAgain");
+        beta.WriteToBinary(betaPath);
+        fx.Reconcile(fx.WithoutBeta);
+        fx.Reconcile(fx.Plugins.Plugins);
+
+        Assert.Equal(opened + 1, fx.Opens.OpenedTotal);
+        Assert.NotNull(fx.Index.IndexedContentHash(BetaKey));
     }
 }

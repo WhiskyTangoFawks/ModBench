@@ -1,6 +1,5 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
@@ -21,10 +20,7 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
 
     public UnindexPluginChecksDiskTests()
     {
-        _index = new IndexProjector(
-            _holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        _index = Indexes.Open(_holder);
         _index.Reconcile(_holder, _data.DataFolder, _data.Plugins, GameRelease.Fallout4);
     }
 
@@ -34,7 +30,7 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
         _data.Dispose();
     }
 
-    private int HeldRows() => _index.SettledReads().GetRecordTypeCounts(Key).Sum(c => c.Count);
+    private int HeldRows() => _index.Projected().GetRecordTypeCounts(Key).Sum(c => c.Count);
 
     [Fact]
     public void UnindexPlugin_WhileTheHeldCopyIsStillOnDisk_KeepsItsRows()

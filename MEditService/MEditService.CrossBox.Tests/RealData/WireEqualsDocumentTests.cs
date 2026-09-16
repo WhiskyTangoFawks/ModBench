@@ -7,6 +7,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Queries;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
@@ -27,7 +28,7 @@ public sealed class CutDownPluginCompareFixture : IDisposable
     {
         var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
-        Index = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        Index = Indexes.Open(holder);
         Index.Reconcile(holder,
             _gameDirectory,
             [new LoadOrderEntry(
@@ -54,8 +55,8 @@ public sealed class WireEqualsDocumentTests(CutDownPluginCompareFixture fixture)
     [Fact]
     public void EveryCompareValue_IsTheStoredDocumentsOwnNode()
     {
-        var store = fixture.Index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
-        var reads = store.At(RecordRef.Effective);
+        var store = fixture.Index.RequireReads();
+        var reads = store;
         var formKeys = GoldenFormKeys();
 
         Assert.NotEmpty(formKeys);

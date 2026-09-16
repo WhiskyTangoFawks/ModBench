@@ -142,10 +142,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _index = new IndexProjector(
-                Holder,
-                MutagenPluginAdapter.Instance,
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            _index = Indexes.Open(Holder);
             _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
         }
 

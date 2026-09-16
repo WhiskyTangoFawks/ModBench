@@ -1,26 +1,23 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>ADR-0014: the projection sequence advances exactly once per row-changing write,
-/// whichever collaborator did the writing, and never for a call that changed nothing.</summary>
+/// <summary>ADR-0014: the projection sequence advances exactly once per row-changing projection,
+/// whichever door landed it, and never for a call that changed nothing.</summary>
 public sealed class ProjectionSequenceTests : IDisposable
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
-
-    private readonly PluginFixtureData _fixture;
+    private readonly ScatteredFixtureData _fixture;
+    private readonly LoadOrderEntry _base;
+    private readonly PluginCopyKey _baseKey;
     private readonly FormKey _npc1;
     private readonly FormKey _npc2;
+    private readonly LoadOrderHolder _holder = new();
+    private readonly IndexProjector _index;
 
     public ProjectionSequenceTests()
     {
@@ -30,128 +27,125 @@ public sealed class ProjectionSequenceTests : IDisposable
             {
                 fk1 = mod.Npcs.AddNew("First").FormKey;
                 fk2 = mod.Npcs.AddNew("Second").FormKey;
-            })
-            .Build();
+            }, origin: "BaseMod")
+            .BuildScattered()
+            .Tracked();
+        _base = _fixture.Plugins.Single();
+        _baseKey = _base.KeyOf();
         _npc1 = fk1;
         _npc2 = fk2;
+        _index = Indexes.Open(_holder);
     }
 
-    public void Dispose() => _fixture.Dispose();
-
-    private static DuckDbRecordIndex OpenIndex()
+    public void Dispose()
     {
-        var index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        index.Initialize(GameRelease.Fallout4);
-        return index;
+        _index.Dispose();
+        _fixture.Dispose();
     }
 
-    private IModGetter LoadBaseMod() =>
-        Fallout4Mod.CreateFromBinaryOverlay(
-            new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm")),
-            Fallout4Release.Fallout4);
+    private void Reconcile(IReadOnlyList<LoadOrderEntry> plugins) =>
+        _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4);
 
     [Fact]
-    public void FreshIndex_SequenceIsZero()
-    {
-        using var index = OpenIndex();
-        Assert.Equal(0, index.Sequence);
-    }
+    public void FreshIndex_SequenceIsZero() => Assert.Equal(0, _index.Sequence);
 
     [Fact]
-    public void Index_Ingest_AdvancesTheSequence()
+    public void Reconcile_Ingest_AdvancesTheSequence()
     {
-        using var index = OpenIndex();
-        var before = index.Sequence;
+        Reconcile([]);
+        var before = _index.Sequence;
 
-        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
+        Reconcile(_fixture.Plugins);
 
-        Assert.True(index.Sequence > before);
+        Assert.True(_index.Sequence > before);
     }
 
     [Fact]
-    public void Unindex_AdvancesTheSequence()
+    public async Task RefreshBinary_OfAGoneFile_AdvancesTheSequence()
     {
-        using var index = OpenIndex();
-        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
-        var before = index.Sequence;
+        Reconcile(_fixture.Plugins);
+        var before = _index.Sequence;
 
-        index.Unindex(BaseKey);
+        File.Delete(_base.Path);
+        Assert.True(await _index.RefreshBinary(_baseKey, _base.Path));
 
-        Assert.True(index.Sequence > before);
+        Assert.True(_index.Sequence > before);
     }
 
     [Fact]
-    public void Register_AdvancesTheSequence()
+    public void Reconcile_ARegistrationMove_AdvancesTheSequence()
     {
-        using var index = OpenIndex();
-        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
-        var before = index.Sequence;
+        Reconcile(_fixture.Plugins);
+        var before = _index.Sequence;
 
-        index.Register(BaseKey, Registration.Participating(1));
+        Reconcile([.. _fixture.Plugins.Select(p => p with { Slot = 3 })]);
 
-        Assert.True(index.Sequence > before);
+        Assert.True(_index.Sequence > before);
     }
 
     [Fact]
-    public void Unregister_AdvancesTheSequence()
+    public void Reconcile_ACopyLeaving_AdvancesTheSequence()
     {
-        using var index = OpenIndex();
-        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
-        var before = index.Sequence;
+        Reconcile(_fixture.Plugins);
+        var before = _index.Sequence;
 
-        index.Unregister(BaseKey);
+        Reconcile([]);
 
-        Assert.True(index.Sequence > before);
+        Assert.True(_index.Sequence > before);
     }
 
     [Fact]
-    public void UpdateWinners_AdvancesTheSequence()
+    public async Task AwaitSequence_AnswersTheMomentTheSequenceLands_AndNotYetOnATimeout()
     {
-        using var index = OpenIndex();
-        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
-        var before = index.Sequence;
+        Reconcile(_fixture.Plugins);
+        var landed = _index.Sequence;
 
-        index.UpdateWinners();
-
-        Assert.True(index.Sequence > before);
+        Assert.True(await _index.AwaitSequenceAsync(landed, TimeSpan.FromSeconds(5)));
+        Assert.False(await _index.AwaitSequenceAsync(landed + 1, TimeSpan.FromMilliseconds(100)));
     }
 
     [Fact]
-    public void ProjectDocuments_TwoDeltasInOneCall_AdvancesTheSequenceOnce()
+    public void RefreshKeys_TwoKeysInOneCall_AdvancesTheSequenceOnce()
     {
-        using var index = OpenIndex();
-        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
-        index.UpdateWinners();
-
+        Reconcile(_fixture.Plugins);
+        var reads = _index.RequireReads();
         var formKey1 = _npc1.ToString();
         var formKey2 = _npc2.ToString();
-        var document1 = index.At(RecordRef.Effective).GetDocument(formKey1, BaseKey)
-            ?? throw new InvalidOperationException($"Expected a document for '{formKey1}'.");
-        var document2 = index.At(RecordRef.Effective).GetDocument(formKey2, BaseKey)
-            ?? throw new InvalidOperationException($"Expected a document for '{formKey2}'.");
-        var body1 = (document1.Body
-            ?? throw new InvalidOperationException($"Expected document '{formKey1}' to carry a body."))
-            .Replace("First", "FirstEdited", StringComparison.Ordinal);
-        var body2 = (document2.Body
-            ?? throw new InvalidOperationException($"Expected document '{formKey2}' to carry a body."))
-            .Replace("Second", "SecondEdited", StringComparison.Ordinal);
+        var document1 = reads.DocumentOf(formKey1, _baseKey);
+        var document2 = reads.DocumentOf(formKey2, _baseKey);
+        var repository = TrackedMods.RepositoryOf(_base);
+        repository.Put(_baseKey, new SourceRepo.SourceDocument(
+            formKey1, document1.RecordType, document1.EditorId, document1.BodyOf().Replace("First", "FirstEdited", StringComparison.Ordinal)));
+        repository.Put(_baseKey, new SourceRepo.SourceDocument(
+            formKey2, document2.RecordType, document2.EditorId, document2.BodyOf().Replace("Second", "SecondEdited", StringComparison.Ordinal)));
 
-        var before = index.Sequence;
-        index.ProjectDocuments(BaseKey, [(formKey1, body1), (formKey2, body2)]);
+        var before = _index.Sequence;
+        _index.RefreshKeys(_baseKey, [formKey1, formKey2]);
 
-        Assert.Equal(before + 1, index.Sequence);
+        Assert.Equal(before + 1, _index.Sequence);
+        Assert.Equal("FirstEdited", reads.DocumentOf(formKey1, _baseKey).EditorId);
+        Assert.Equal("SecondEdited", reads.DocumentOf(formKey2, _baseKey).EditorId);
     }
 
     [Fact]
-    public void ProjectDocuments_WithNoDeltas_DoesNotAdvanceTheSequence()
+    public void RefreshKeys_WithNoKeys_DoesNotAdvanceTheSequence()
     {
-        using var index = OpenIndex();
-        index.IndexMod(LoadBaseMod(), Registration.Participating(0), BaseKey);
-        index.UpdateWinners();
-        var before = index.Sequence;
+        Reconcile(_fixture.Plugins);
+        var before = _index.Sequence;
 
-        index.ProjectDocuments(BaseKey, []);
+        _index.RefreshKeys(_baseKey, []);
 
-        Assert.Equal(before, index.Sequence);
+        Assert.Equal(before, _index.Sequence);
+    }
+
+    [Fact]
+    public void RefreshKeys_WithUnchangedBytes_DoesNotAdvanceTheSequence()
+    {
+        Reconcile(_fixture.Plugins);
+        var before = _index.Sequence;
+
+        _index.RefreshKeys(_baseKey, [_npc1.ToString()]);
+
+        Assert.Equal(before, _index.Sequence);
     }
 }

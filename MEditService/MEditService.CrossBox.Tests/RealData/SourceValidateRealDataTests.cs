@@ -11,22 +11,19 @@ namespace MEditService.Tests.RealData;
 public sealed class SourceValidateRealDataTests(SourceParityFixture fixture, ITestOutputHelper output)
     : IClassFixture<SourceParityFixture>
 {
-    private IRecordIndex Index =>
-        fixture.FromSource.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
-
     [Fact]
     public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()
     {
-        var before = Index.Sequence;
+        var before = fixture.FromSource.Sequence;
 
         var timer = Stopwatch.StartNew();
-        var report = Index.Validate(fixture.Plugin, fixture.ModFolder);
+        var report = Assert.Single(fixture.FromSource.ValidateIndex(fixture.Plugin));
         output.WriteLine($"validate took {timer.ElapsedMilliseconds} ms; {report.ChangedKeys.Count} rows changed");
 
         Assert.Empty(report.Failures);
         Assert.False(report.NeedsRebuild);
         Assert.Empty(report.ChangedKeys);
-        Assert.Equal(before, Index.Sequence);
+        Assert.Equal(before, fixture.FromSource.Sequence);
     }
 
     // The all-plugins call, over an instance holding a real plugin: it has to finish and say how many

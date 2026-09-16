@@ -1,79 +1,63 @@
-using System.Globalization;
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>The placement side tables come from the GRUP hierarchy (ADR-0005), read without the
-/// codec, so a cell whose document the codec refuses still lists and still holds its contents.</summary>
-public sealed class DiagnosedCellPlacementTests
+/// <summary>The placement reads come from the GRUP hierarchy (ADR-0005), read without the codec,
+/// so a cell whose document the codec refuses still lists and still holds its contents.</summary>
+public sealed class DiagnosedCellPlacementTests : IDisposable
 {
     private const string Plugin = "Diagnosed.esp";
-
     private const string CellFormKey = "000800:Diagnosed.esp";
-
     private const string PersistentRef = "000801:Diagnosed.esp";
-
     private const string TemporaryRef = "000802:Diagnosed.esp";
+    private static readonly PluginCopyKey Key = new(Plugin, PluginOrigin.DataDirectory);
 
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    // Any real binary: the adapter double below answers the documents, the binary only the open.
+    private readonly PluginFixtureData _fixture = new PluginFixtureBuilder("diagnosed-cell").WithPlugin(Plugin).Build();
 
-    private static DuckDbRecordIndex Indexed(string? cellDiagnosis)
-    {
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, new TableDdlBuilder(Reflector), NullLogger.Instance);
-        try
-        {
-            repo.Initialize(GameRelease.Fallout4);
-            using var documents = new StubDocuments(cellDiagnosis);
-            repo.Index(documents, Registration.Participating(0), new PluginCopyKey(Plugin, "Data"));
-            repo.UpdateWinners();
-            var indexed = repo;
-            repo = null;
-            return indexed;
-        }
-        finally
-        {
-            repo?.Dispose();
-        }
-    }
+    public void Dispose() => _fixture.Dispose();
+
+    private IndexProjector Indexed(string? cellDiagnosis) =>
+        Indexes.Reconciled(_fixture, adapter: new StubbedDocumentsAdapter(cellDiagnosis));
 
     [Fact]
     public void ACellTheCodecRefuses_StillLandsItsLocation_WithItsGridUnknown()
     {
-        using var repo = Indexed(cellDiagnosis: "the codec refused this cell");
+        using var index = Indexed(cellDiagnosis: "the codec refused this cell");
 
-        var row = Assert.Single(Query(
-            repo, "SELECT parent_worldspace, block_x, sub_y, grid_x, is_interior FROM cell_location WHERE cell_form_key = $1",
-            CellFormKey));
+        var location = index.RequireReads().GetCellLocation(Key, CellFormKey);
 
-        Assert.Equal("000900:Diagnosed.esp", row["parent_worldspace"]);
-        Assert.Equal(3, Convert.ToInt32(row["block_x"], CultureInfo.InvariantCulture));
-        Assert.Equal(2, Convert.ToInt32(row["sub_y"], CultureInfo.InvariantCulture));
-        Assert.Null(row["grid_x"]);
-        Assert.False(Convert.ToBoolean(row["is_interior"], CultureInfo.InvariantCulture));
+        Assert.NotNull(location);
+        Assert.Equal("000900:Diagnosed.esp", location.Value.ParentWorldspace);
+        Assert.Equal(3, location.Value.BlockX);
+        Assert.Equal(2, location.Value.SubY);
+        Assert.Null(location.Value.GridX);
+        Assert.False(location.Value.IsInterior);
     }
 
     [Fact]
     public void ACellTheCodecRefuses_StillLandsAPlacementRowPerRefItHolds_WithPositionsUnknown()
     {
-        using var repo = Indexed(cellDiagnosis: "the codec refused this cell");
+        using var index = Indexed(cellDiagnosis: "the codec refused this cell");
+        var reads = index.RequireReads();
 
-        var persistent = Assert.Single(Query(
-            repo, "SELECT parent_cell, placement_group, pos_x FROM placement WHERE form_key = $1", PersistentRef));
-        Assert.Equal(CellFormKey, persistent["parent_cell"]);
-        Assert.Equal("persistent", persistent["placement_group"]);
-        Assert.Null(persistent["pos_x"]);
+        var persistent = reads.GetPlacement(PersistentRef, Key);
+        Assert.NotNull(persistent);
+        Assert.Equal(CellFormKey, persistent.Value.ParentCell);
+        Assert.Equal("persistent", persistent.Value.PlacementGroup);
+        Assert.Null(persistent.Value.PosX);
 
-        var temporary = Assert.Single(Query(
-            repo, "SELECT parent_cell, placement_group FROM placement WHERE form_key = $1", TemporaryRef));
-        Assert.Equal(CellFormKey, temporary["parent_cell"]);
-        Assert.Equal("temporary", temporary["placement_group"]);
+        var temporary = reads.GetPlacement(TemporaryRef, Key);
+        Assert.NotNull(temporary);
+        Assert.Equal(CellFormKey, temporary.Value.ParentCell);
+        Assert.Equal("temporary", temporary.Value.PlacementGroup);
     }
 
     // The same fixture with the cell readable, so what the diagnosis costs is legible: the grid and
@@ -81,52 +65,44 @@ public sealed class DiagnosedCellPlacementTests
     [Fact]
     public void TheSameCellReadable_LandsTheSameRows_WithItsGridAndPositions()
     {
-        using var repo = Indexed(cellDiagnosis: null);
+        using var index = Indexed(cellDiagnosis: null);
+        var reads = index.RequireReads();
 
-        var location = Assert.Single(Query(
-            repo, "SELECT grid_x, grid_y FROM cell_location WHERE cell_form_key = $1", CellFormKey));
-        Assert.Equal(12, Convert.ToInt32(location["grid_x"], CultureInfo.InvariantCulture));
-        Assert.Equal(-5, Convert.ToInt32(location["grid_y"], CultureInfo.InvariantCulture));
+        var location = reads.GetCellLocation(Key, CellFormKey);
+        Assert.NotNull(location);
+        Assert.Equal(12, location.Value.GridX);
+        Assert.Equal(-5, location.Value.GridY);
 
-        var persistent = Assert.Single(Query(
-            repo, "SELECT pos_x, pos_z FROM placement WHERE form_key = $1", PersistentRef));
-        Assert.Equal(10f, Convert.ToSingle(persistent["pos_x"], CultureInfo.InvariantCulture));
-        Assert.Equal(30f, Convert.ToSingle(persistent["pos_z"], CultureInfo.InvariantCulture));
+        var persistent = reads.GetPlacement(PersistentRef, Key);
+        Assert.NotNull(persistent);
+        Assert.Equal(10f, persistent.Value.PosX);
+        Assert.Equal(30f, persistent.Value.PosZ);
     }
 
     // A temporary ref whose document spells no position: the row carries none rather than the origin.
     [Fact]
     public void ARefWhoseDocumentSpellsNoPosition_LandsWithNullCoordinates()
     {
-        using var repo = Indexed(cellDiagnosis: null);
+        using var index = Indexed(cellDiagnosis: null);
 
-        var row = Assert.Single(Query(
-            repo, "SELECT pos_x, pos_y, pos_z FROM placement WHERE form_key = $1", TemporaryRef));
+        var row = index.RequireReads().GetPlacement(TemporaryRef, Key);
 
-        Assert.Null(row["pos_x"]);
-        Assert.Null(row["pos_y"]);
-        Assert.Null(row["pos_z"]);
-    }
-
-    private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql, string param)
-    {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.Parameters.Add(new DuckDBParameter { Value = param });
-        using var reader = cmd.ExecuteReader();
-        var rows = new List<Dictionary<string, object?>>();
-        while (reader.Read())
-        {
-            var row = new Dictionary<string, object?>(StringComparer.Ordinal);
-            for (var i = 0; i < reader.FieldCount; i++)
-                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            rows.Add(row);
-        }
-        return rows;
+        Assert.NotNull(row);
+        Assert.Null(row.Value.PosX);
+        Assert.Null(row.Value.PosY);
+        Assert.Null(row.Value.PosZ);
     }
 
     // Hand-built rather than serialized from a mod: no fixture plugin holds a cell the codec refuses,
     // and what is under test is what the ingest does with a diagnosis, not how one arises.
+    private sealed class StubbedDocumentsAdapter(string? cellDiagnosis) : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
+    {
+        public override IPluginDocuments OpenDocuments(
+            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+            PluginStrings? strings = null) =>
+            new StubDocuments(cellDiagnosis);
+    }
+
     private sealed class StubDocuments(string? cellDiagnosis) : IPluginDocuments
     {
         private const string ReadableCell = """

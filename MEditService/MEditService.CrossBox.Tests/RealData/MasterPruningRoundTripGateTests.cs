@@ -191,10 +191,7 @@ public sealed class MasterPruningRoundTripGateTests
             }
             inputs.Add(new LoadOrderEntry(_fixtureFileName, pluginPath, _origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _index = new IndexProjector(
-                Holder,
-                MutagenPluginAdapter.Instance,
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            _index = Indexes.Open(Holder);
             _index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
         }
 

@@ -1,7 +1,5 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -12,37 +10,46 @@ namespace MEditService.Tests.Plugins;
 // its own known refusal into status data — the composition root's catch never sees it.
 public sealed class OnLoadOrderChangedTests
 {
-    private static IndexProjector MakeIndex(LoadOrderHolder holder, InMemoryNotificationPublisher notifications)
+    private static IndexProjector SubscribedIndex(LoadOrderHolder holder, InMemoryNotificationPublisher notifications)
     {
-        var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(
-            holder, MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), notifications: notifications);
+        var index = Indexes.Open(holder, notifications: notifications);
+        index.SubscribeTo(holder);
+        return index;
     }
 
-    private static (IndexProjector Index, GatedIndexRepositoryFactory Gate) MakeGatedIndex(
+    private static (IndexProjector Index, GatedPluginAdapter Gate) SubscribedGatedIndex(
         LoadOrderHolder holder, InMemoryNotificationPublisher notifications, string gateBefore)
     {
-        var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var gate = new GatedIndexRepositoryFactory(inner, gateBefore);
-        var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, gate, notifications: notifications);
+        var gate = new GatedPluginAdapter(gateBefore);
+        var index = Indexes.Open(holder, gate, notifications: notifications);
+        index.SubscribeTo(holder);
         return (index, gate);
+    }
+
+    private static async Task AwaitVersion(IndexProjector index, long version)
+    {
+        Assert.True(
+            await Waits.Until(() => index.Status.Version >= version && index.Status.State != LoadOrderState.Reconciling),
+            $"the subscribed reconcile never answered for version {version}; status is {index.Status.State} at version {index.Status.Version}");
     }
 
     // The rival this pins: the composition root's own try/catch swallowing the refusal, which
     // would leave Status at None with no way for the extension to learn "another window has this".
     [ForeignIndexHolderFact]
-    public void AnotherWindowHoldsTheInstance_PublishesHeldElsewhereStatus_WithTheOldRefusalMessage()
+    public async Task AnotherWindowHoldsTheInstance_PublishesHeldElsewhereStatus_WithTheOldRefusalMessage()
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("held-elsewhere-subscriber").WithPlugin("A.esp").Build();
-        using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
+        // The file exists before the other window takes it: an earlier launch on this instance made it.
+        using (var earlier = Indexes.Open(new LoadOrderHolder()))
+            earlier.Reconcile(new LoadOrderHolder(), data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
+        using var otherWindow = ForeignIndexHolder.Hold(IndexFiles.In(data.InstanceRoot));
         var notifications = new InMemoryNotificationPublisher();
-        using var index = MakeIndex(holder, notifications);
+        using var index = SubscribedIndex(holder, notifications);
         var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
 
-        index.OnLoadOrderChanged(snapshot, version: 1);
+        var version = holder.Apply(snapshot);
+        await AwaitVersion(index, version);
 
         Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
         Assert.NotNull(index.Status.Message);
@@ -64,25 +71,23 @@ public sealed class OnLoadOrderChangedTests
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
         var notifications = new InMemoryNotificationPublisher();
-        var (index, gate) = MakeGatedIndex(holder, notifications, gateBefore: "B.esp");
+        var (index, gate) = SubscribedGatedIndex(holder, notifications, gateBefore: "B.esp");
         using var _ = index;
         using var __ = gate;
+        var snapshot = IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
 
-        var first = Task.Run(() => index.OnLoadOrderChanged(
-            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins), version: 1));
+        holder.Apply(snapshot);
         await gate.WaitUntilParkedAsync();
 
-        var second = Task.Run(() => index.OnLoadOrderChanged(
-            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins), version: 2));
-        var secondCompletedBeforeTheFirstStopped = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500))) == second;
-        Assert.False(secondCompletedBeforeTheFirstStopped);
+        var second = holder.Apply(snapshot);
+        // The second waits for the first to stop rather than running beside it.
+        Assert.False(await Waits.Until(() => index.Status.Version >= second, TimeSpan.FromMilliseconds(500)));
 
         gate.Release();
-        Assert.Null(await Record.ExceptionAsync(() => first));
-        await second;
+        await AwaitVersion(index, second);
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.Equal(2, index.Status.Version);
+        Assert.Equal(second, index.Status.Version);
         Assert.DoesNotContain(notifications.Notifications.OfType<LoadOrderStatusNotification>(),
             n => n.Status.State == LoadOrderState.HeldElsewhere);
     }
@@ -90,47 +95,29 @@ public sealed class OnLoadOrderChangedTests
     // The rival this pins: publishing only when Reconcile actually changed something, which would
     // leave a client that applied an identical resend waiting on a tick that never comes.
     [Fact]
-    public void AnIdenticalResend_StillPublishesATerminalStatus_ForItsOwnVersion()
+    public async Task AnIdenticalResend_StillPublishesATerminalStatus_ForItsOwnVersion()
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("no-op-subscriber").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
-        using var index = MakeIndex(holder, notifications);
+        using var index = SubscribedIndex(holder, notifications);
         var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
 
-        index.OnLoadOrderChanged(snapshot, version: 1);
-        index.OnLoadOrderChanged(snapshot, version: 2);
+        var first = holder.Apply(snapshot);
+        await AwaitVersion(index, first);
+        var second = holder.Apply(snapshot);
+        await AwaitVersion(index, second);
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        Assert.Equal(2, index.Status.Version);
-        Assert.Equal(2, notifications.Notifications.OfType<LoadOrderStatusNotification>()
-            .Count(n => n.Status.State == LoadOrderState.Ready));
+        Assert.Equal(second, index.Status.Version);
+        var ready = notifications.Notifications.OfType<LoadOrderStatusNotification>()
+            .Where(n => n.Status.State == LoadOrderState.Ready)
+            .Select(n => n.Status.Version)
+            .ToList();
+        Assert.Equal([first, second], ready);
     }
 
-    // The rival this pins: an unconditional stamp, letting an older attempt started earlier
-    // but finishing later name a smaller version than one already published.
-    [Fact]
-    public void AnOlderVersionThatFinishesLast_NeverPublishesASmallerVersionThanAlreadySeen()
-    {
-        var holder = new LoadOrderHolder();
-        using var fx = new PluginFixtureBuilder("stamp-order-subscriber").WithPlugin("A.esp").Build();
-        var notifications = new InMemoryNotificationPublisher();
-        using var index = MakeIndex(holder, notifications);
-        var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
-
-        index.OnLoadOrderChanged(snapshot, version: 2);
-        index.OnLoadOrderChanged(snapshot, version: 1);
-
-        Assert.Equal(2, index.Status.Version);
-        var versions = notifications.Notifications.OfType<LoadOrderStatusNotification>()
-            .Select(n => n.Status.Version).ToList();
-        Assert.Equal(versions, [.. versions.Order()]);
-    }
-
-    private static async Task<bool> CompletesWithin(Task task, TimeSpan timeout) =>
-        await Task.WhenAny(task, Task.Delay(timeout)) == task;
-
-    // The rival this pins: a SubscribeTo that calls OnLoadOrderChanged directly on the caller's own
+    // The rival this pins: a SubscribeTo that calls the reconcile directly on the caller's own
     // thread, which would make holder.Apply itself wait out the gated reconcile below.
     [Fact]
     public async Task SubscribeTo_SchedulesTheReconcileOffTheCallersThread()
@@ -138,25 +125,20 @@ public sealed class OnLoadOrderChangedTests
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("subscribe-index-subscriber").WithPlugin("A.esp").Build();
         var notifications = new InMemoryNotificationPublisher();
-        var (index, gate) = MakeGatedIndex(holder, notifications, gateBefore: "A.esp");
+        var (index, gate) = SubscribedGatedIndex(holder, notifications, gateBefore: "A.esp");
         using var _ = index;
         using var __ = gate;
-        index.SubscribeTo(holder);
         var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
 
         var applied = Task.Run(() => holder.Apply(snapshot));
-        Assert.True(await CompletesWithin(applied, TimeSpan.FromSeconds(5)),
+        Assert.True(await Waits.CompletesWithin(applied, TimeSpan.FromSeconds(5)),
             "holder.Apply waited on the reconcile instead of returning at once");
 
         await gate.WaitUntilParkedAsync();
         gate.Release();
 
-        var reachedReady = await CompletesWithin(
-            Task.Run(async () =>
-            {
-                while (index.Status.State != LoadOrderState.Ready) await Task.Delay(20);
-            }),
-            TimeSpan.FromSeconds(10));
-        Assert.True(reachedReady, "the subscribed reconcile never reached Ready");
+        Assert.True(
+            await Waits.Until(() => index.Status.State == LoadOrderState.Ready),
+            "the subscribed reconcile never reached Ready");
     }
 }

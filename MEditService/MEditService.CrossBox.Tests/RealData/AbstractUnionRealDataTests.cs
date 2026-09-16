@@ -14,7 +14,7 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture) : I
 {
     private JsonElement? Field(string type, string editorId, string column)
     {
-        var reads = fixture.Repo.At(RecordRef.Effective);
+        var reads = fixture.Reads;
         var summary = reads.Search(new RecordQuery(RecordTypes: [type], Search: editorId, Limit: 1, Offset: 0)).Items.Single();
         var document = reads.GetDocument(summary.FormKey, new PluginCopyKey(summary.Plugin, summary.Origin))
             ?? throw new InvalidOperationException($"Expected {summary.FormKey} to resolve to a document.");
@@ -24,7 +24,7 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture) : I
     [Fact]
     public void Level_EveryFixtureNpc_NamesItsLeafInTheDocument()
     {
-        var reads = fixture.Repo.At(RecordRef.Effective);
+        var reads = fixture.Reads;
         var npcs = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 5000, Offset: 0)).Items;
         Assert.NotEmpty(npcs);
         foreach (var npc in npcs)

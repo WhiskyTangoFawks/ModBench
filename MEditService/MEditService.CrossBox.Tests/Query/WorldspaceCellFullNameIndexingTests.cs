@@ -54,10 +54,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 
         _worldspaceFormKey = worldspace.FormKey.ToString();
 
-        _index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        _index = Indexes.Open(holder);
         _index.Reconcile(holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 

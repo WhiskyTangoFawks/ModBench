@@ -114,10 +114,7 @@ public sealed class CascadeRollbackFixture : IDisposable
 
         if (!watched) return;
 
-        Index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        Index = Indexes.Open(holder);
         Index.Reconcile(holder, _data.GameDirectory, _data.Plugins, GameRelease.Fallout4);
 
         // Short, because a test waits on the projection rather than on the clock; the composition
@@ -159,12 +156,12 @@ public sealed class CascadeRollbackFixture : IDisposable
         var elapsed = Stopwatch.StartNew();
         while (elapsed.Elapsed < limit)
         {
-            var store = index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
-            if (condition(store.At(RecordRef.Effective))) return true;
+            var store = index.RequireReads();
+            if (condition(store)) return true;
             await index.AwaitSequenceAsync(index.Sequence + 1, TimeSpan.FromSeconds(2));
         }
-        var finalStore = index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
-        return condition(finalStore.At(RecordRef.Effective));
+        var finalStore = index.RequireReads();
+        return condition(finalStore);
     }
 
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Snapshots() =>

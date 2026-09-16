@@ -1,43 +1,32 @@
-using MEditService.Codec.Schema;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// The production wiring end to end: Initialize's GameRelease has to reach FormKeyResolution.From
-// through BuildFields and CheckErrorBuilder.Build for the exemption to take effect on a real read,
-// not just at the unit seams that construct their own GameRelease.
+// End to end: the reconcile's GameRelease has to reach FormKeyResolution.From through BuildFields and
+// CheckErrorBuilder.Build for the exemption to take effect on a real read.
 public class HardcodedFormKeyResolutionTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private static DuckDbRecordIndex OpenRepo()
-    {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        return repo;
-    }
-
     [Fact]
     public void GetDocument_FieldReferencesEngineHardcodedPlayerFormKey_NoCheckError()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Hardcoded.esp"), Fallout4Release.Fallout4);
-        var npc = mod.Npcs.AddNew("PlayerReferencer");
-        // 00000007:Fallout4.esm — the Player, engine-hardcoded, never present in form_lookup.
-        npc.Race.SetTo(new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x000007));
-
-        using var repo = OpenRepo();
+        FormKey npcKey = default;
+        using var fixture = new PluginFixtureBuilder("hardcoded-formkey")
+            .WithPlugin("Hardcoded.esp", mod =>
+            {
+                var npc = mod.Npcs.AddNew("PlayerReferencer");
+                // 00000007:Fallout4.esm — the Player, engine-hardcoded, never present in form_lookup.
+                npc.Race.SetTo(new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x000007));
+                npcKey = npc.FormKey;
+            }, origin: "ModA")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
         var key = new PluginCopyKey("Hardcoded.esp", "ModA");
-        repo.IndexMod(mod, Registration.Participating(0), key);
-        repo.UpdateWinners();
 
-        var doc = repo.At(RecordRef.Effective).GetDocument(npc.FormKey.ToString(), key);
+        var doc = index.RequireReads().GetDocument(npcKey.ToString(), key);
 
         Assert.NotNull(doc);
         var raceField = doc.Fields.Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase));

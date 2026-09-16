@@ -197,10 +197,7 @@ public sealed class InjectedChildTests
             (InjectedTopic, InjectedBranch, InjectedScene, InjectedResponse) =
                 (injectedTopic.FormKey, injectedBranch.FormKey, injectedScene.FormKey, injectedResponse.FormKey);
 
-            Index = new IndexProjector(
-                Holder,
-                MutagenPluginAdapter.Instance,
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            Index = Indexes.Open(Holder);
             _holder = Index.Reconcile(Holder,
                 _gameDirectory,
                 [

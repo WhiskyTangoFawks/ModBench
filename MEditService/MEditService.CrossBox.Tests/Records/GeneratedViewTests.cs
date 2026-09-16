@@ -1,6 +1,7 @@
 using System.Globalization;
 using MEditService.Codec.Schema;
 using MEditService.Tests.RealData;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
@@ -14,25 +15,15 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
     public GeneratedViewTests(CutDownPluginFixture fixture)
     {
         _fixture = fixture;
-        _fixture.Repo.CreateRecordTypeViews();
+        // The per-type views are the filter door's, materialized by its first use.
+        _fixture.Index.SetFilter("SELECT form_key FROM records");
+        _fixture.Index.ClearFilter();
     }
 
-    private object? Scalar(string sql)
-    {
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        return cmd.ExecuteScalar();
-    }
+    private object? Scalar(string sql) => StoreFile.Scalar(_fixture.InstanceRoot, sql);
 
-    private List<string> ColumnsOf(string view)
-    {
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = $"SELECT column_name FROM duckdb_columns() WHERE table_name = '{view}'";
-        using var reader = cmd.ExecuteReader();
-        var names = new List<string>();
-        while (reader.Read()) names.Add(reader.GetString(0));
-        return names;
-    }
+    private List<string> ColumnsOf(string view) =>
+        StoreFile.Strings(_fixture.InstanceRoot, $"SELECT column_name FROM duckdb_columns() WHERE table_name = '{view}'");
 
     [Fact]
     public void EveryRecordType_HasAView_SharingItsTableName()
@@ -42,11 +33,8 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
         var expected = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT view_name FROM duckdb_views() WHERE NOT internal";
-        using var reader = cmd.ExecuteReader();
-        var actual = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        while (reader.Read()) actual.Add(reader.GetString(0));
+        var actual = StoreFile.Strings(_fixture.InstanceRoot, "SELECT view_name FROM duckdb_views() WHERE NOT internal")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         Assert.NotEmpty(expected);
         Assert.Empty(expected.Except(actual, StringComparer.OrdinalIgnoreCase));
@@ -58,7 +46,8 @@ public sealed class GeneratedViewTests : IClassFixture<CutDownPluginFixture>
         var schema = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4)["npc_"];
         var col = schema.RecordColumns.First(c => c.Name == "XpValueOffset");
 
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
+        using var connection = StoreFile.Open(_fixture.InstanceRoot);
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT form_key, \"XpValueOffset\" FROM \"npc_\" ORDER BY form_key";
         using var reader = cmd.ExecuteReader();
 

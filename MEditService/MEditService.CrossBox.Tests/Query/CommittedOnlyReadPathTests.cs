@@ -5,6 +5,7 @@ using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Queries;
 using MEditService.Tests.Api;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -22,8 +23,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
     {
         var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        _manager = Indexes.Open(holder);
         _manager.Reconcile(holder, fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }
@@ -82,8 +82,7 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
     {
         var holder = new LoadOrderHolder();
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        _manager = Indexes.Open(holder);
         _manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }

@@ -31,18 +31,13 @@ public sealed class ValidateAtLoadTests
             b.AddProvider(new CollectingLoggerProvider(entries));
         });
         var reflector = SharedSchemaReflector.Instance;
-        using var restarted = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)),
-            loggerFactory.CreateLogger<IndexProjector>());
+        using var restarted = Indexes.Open(holder, loggerFactory: loggerFactory);
 
         restarted.Reconcile(holder,
             mod.GameDirectory, [mod.Entry], GameRelease.Fallout4, mod.InstanceRoot);
 
-        var store = restarted.Store
-            ?? throw new InvalidOperationException("Expected the restarted index to already hold a built store.");
-        var document = store.At(RecordRef.Effective).GetDocument(formKey, mod.Plugin);
+        var store = restarted.RequireReads();
+        var document = store.GetDocument(formKey, mod.Plugin);
         Assert.NotNull(document);
         Assert.Equal("EditedWhileStopped", document.EditorId);
         Assert.DoesNotContain(

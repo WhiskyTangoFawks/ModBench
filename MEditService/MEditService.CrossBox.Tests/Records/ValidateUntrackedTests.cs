@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Records;
 
 /// <summary>ADR-0015 invariant 4 over the other system of record: an untracked copy's rows came from
-/// its binary, which carries no unit smaller than itself, so validate reports and the caller
+/// its binary, which carries no unit smaller than itself, so validate reports and the projector
 /// re-derives.</summary>
 public sealed class ValidateUntrackedTests : IDisposable
 {
@@ -18,19 +18,18 @@ public sealed class ValidateUntrackedTests : IDisposable
 
     private string PluginPath => Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
 
-    private IRecordIndex Store => _mod.Index.Store
-        ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+    private ValidationReport Validate() => Assert.Single(_mod.Index.ValidateIndex(_mod.Plugin));
 
     [Fact]
     public void AnUnchangedBinary_ValidatesClean()
     {
-        var before = Store.Sequence;
+        var before = _mod.Index.Sequence;
 
-        var report = Store.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = Validate();
 
         Assert.False(report.NeedsRebuild);
         Assert.Empty(report.ChangedKeys);
-        Assert.Equal(before, Store.Sequence);
+        Assert.Equal(before, _mod.Index.Sequence);
     }
 
     [Fact]
@@ -40,9 +39,10 @@ public sealed class ValidateUntrackedTests : IDisposable
         rewritten.Npcs.AddNew("WrittenByAnotherTool");
         rewritten.WriteToBinary(PluginPath);
 
-        var report = Store.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = Validate();
 
         Assert.True(report.NeedsRebuild);
+        Assert.Contains(_mod.Index.RequireReads().GetDocuments(_mod.Plugin), d => d.EditorId == "WrittenByAnotherTool");
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class ValidateUntrackedTests : IDisposable
     {
         File.Delete(PluginPath);
 
-        var report = Store.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = Validate();
 
         Assert.False(report.NeedsRebuild);
         Assert.Empty(_mod.Index.Projected().GetDocuments(_mod.Plugin));

@@ -20,7 +20,7 @@ public sealed class CodecFixedPointTests(CutDownPluginFixture fixture, ITestOutp
     public async Task EveryStoredDocument_DeserializesAndReserializesToItself()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var documents = fixture.Repo.At(RecordRef.Effective)
+        var documents = fixture.Reads
             .GetDocuments(new PluginCopyKey(CutDownPluginFixture.PluginFileName, "Data"));
 
         // The plugin's own record count, so a fixture that stopped being indexed cannot pass this
