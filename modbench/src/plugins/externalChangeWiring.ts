@@ -3,13 +3,13 @@ import * as path from 'path';
 import type { CrashRepairOffer, MEditClient } from '../medit/client';
 import {
   subscribeQuestionOpen, type OpenMergeEditor,
-} from '../medit/externalChangeCoordinator';
+} from './externalChangeCoordinator';
 import type { PluginTreeProvider } from './PluginTreeProvider';
 import { makeReporter } from '../reporter';
 import type { AskQuestion } from '../dialog';
 
 // Its own file, not externalChangeGestures.ts: `subscribeQuestionOpen` (a value import)
-// lives in medit/externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —
+// lives in ./externalChangeCoordinator.ts, which itself imports externalChangeGestures.ts —
 // importing back from here would cycle the two modules.
 
 /** ADR-0014 invariant 2: the plugin watcher's signal drives the one dialog directly — no poll,

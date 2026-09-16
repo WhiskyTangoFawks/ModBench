@@ -1,6 +1,6 @@
-import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from './client';
+import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../medit/client';
 import type { AskQuestion } from '../dialog';
-import { handleUnanswered } from '../plugins/externalChangeGestures';
+import { handleUnanswered } from './externalChangeGestures';
 
 /** `origin` rides along explicitly because re-deriving it from the unanswered queue when the
  *  merge editor opens would race the very MarkAnswered call that caused this rebase. */
