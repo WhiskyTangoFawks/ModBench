@@ -14,8 +14,6 @@ internal static class ProjectedReads
         return index.RequireReads();
     }
 
-    internal static IRecordReads SettledReads(this IndexProjector index) => index.Projected();
-
     internal static void Settle(this IndexProjector index) => index.ValidateIndex(null);
 
     /// <summary>The committed state of one copy's record, which the override stack carries beside

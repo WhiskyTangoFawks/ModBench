@@ -154,7 +154,7 @@ public sealed class IndexProjectorTests
     }
 
     [Fact]
-    public void ACopyThatStopsParticipating_LosesItsWinners_OnTheNextReconcile_WithNoReindex()
+    public void ACopyThatStopsParticipating_LosesItsWinners_OnTheNextReconcile_WithNoPluginReopened()
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("projector-stops-participating");

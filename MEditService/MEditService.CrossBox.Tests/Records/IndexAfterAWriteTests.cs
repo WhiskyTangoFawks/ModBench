@@ -84,11 +84,11 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         _mod.Index.SetFilter("SELECT form_key FROM npc_ WHERE HeightMax = 0.75");
         Assert.Equal(
-            0, _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            0, _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var result = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
     }
@@ -111,12 +111,12 @@ public sealed class IndexAfterAWriteTests : IDisposable
     public void ACreatedRecord_AppearsInAnActiveFilteredListing()
     {
         _mod.Index.SetFilter("SELECT form_key FROM npc_");
-        var before = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
+        var before = _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
 
         var result = Service().CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        var after = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
+        var after = _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
         Assert.Equal(before + 1, after.Total);
         Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
     }
@@ -156,7 +156,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
     }
 
     [Fact]
-    public void ADeletedNeverCommittedRecord_LeavesNoRowAtEitherRef()
+    public void ADeletedNeverCommittedRecord_LeavesNoRow()
     {
         var service = Service();
         var created = service.CreateRecord(_mod.Plugin, "npc_", "BrandNew");

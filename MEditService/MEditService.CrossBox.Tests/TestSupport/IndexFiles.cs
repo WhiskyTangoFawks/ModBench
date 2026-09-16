@@ -6,9 +6,4 @@ internal static class IndexFiles
 {
     internal static string In(string instanceRoot) =>
         Directory.GetFiles(instanceRoot, "*.duckdb", SearchOption.AllDirectories).Single();
-
-    internal static string? InIfAny(string instanceRoot) =>
-        Directory.Exists(instanceRoot)
-            ? Directory.GetFiles(instanceRoot, "*.duckdb", SearchOption.AllDirectories).SingleOrDefault()
-            : null;
 }

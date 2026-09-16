@@ -212,7 +212,7 @@ public sealed class ParseFailedRecordTests
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 
         public IndexProjector Index { get; }
-        public IRecordReads Reads => Index.SettledReads();
+        public IRecordReads Reads => Index.Projected();
         public PluginCopyKey Plugin { get; }
         public IRecordQueryService Query { get; }
         public string PluginPath { get; }

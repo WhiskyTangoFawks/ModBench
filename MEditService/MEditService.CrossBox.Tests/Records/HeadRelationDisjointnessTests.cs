@@ -52,7 +52,7 @@ public sealed class HeadRelationDisjointnessTests
     }
 
     [Fact]
-    public async Task UnindexingAPluginWithADirtyRecord_LeavesNothingAtHead()
+    public async Task UnindexingAPluginWithADirtyRecord_LeavesNoRowsBehind()
     {
         using var mod = IndexedModFixture.Tracked();
 

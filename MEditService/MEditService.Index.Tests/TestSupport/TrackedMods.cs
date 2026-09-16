@@ -68,7 +68,8 @@ internal static class TrackedMods
     {
         var removed = RepositoryOf(entry).Remove(
             entry.KeyOf(), new RecordIdentity(document.FormKey, document.RecordType, document.EditorId));
-        Assert.Equal(SourceRemoval.Removed, removed);
+        if (removed != SourceRemoval.Removed)
+            throw new InvalidOperationException($"The tree did not give up '{document.FormKey}': {removed}.");
         index.RefreshKeys(entry.KeyOf(), [document.FormKey]);
     }
 

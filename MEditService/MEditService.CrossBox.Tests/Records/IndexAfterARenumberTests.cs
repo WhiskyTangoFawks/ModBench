@@ -57,12 +57,12 @@ public sealed class IndexAfterARenumberTests
         using var index = MirrorOver(holder, two.GameDirectory, two.Entries);
         index.SetFilter($"SELECT form_key FROM race WHERE editor_id = '{RenumberTwoModFixture.TargetRaceEditorId}'");
         var query = new RecordQuery(RecordTypes: ["race"], Limit: 10, Offset: 0);
-        Assert.Equal(1, index.SettledReads().Search(query).Total);
+        Assert.Equal(1, index.Projected().Search(query).Total);
 
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
         Assert.True(result.Applied, result.Message);
 
-        var after = index.SettledReads().Search(query);
+        var after = index.Projected().Search(query);
         Assert.Equal(1, after.Total);
         Assert.Equal(result.NewFormKey, after.Items[0].FormKey);
     }
@@ -96,7 +96,7 @@ public sealed class IndexAfterARenumberTests
         var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, oldFormKey);
         Assert.True(result.Applied, result.Message);
 
-        var reads = index.SettledReads();
+        var reads = index.Projected();
         var newFormKey = RequireNewFormKey(result);
         Assert.Null(reads.GetDocument(oldFormKey));
         Assert.NotNull(reads.GetDocument(newFormKey));
@@ -121,7 +121,7 @@ public sealed class IndexAfterARenumberTests
             "SELECT source_form_key AS form_key FROM form_references " +
             $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
         var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
-        Assert.Equal(0, index.SettledReads().Search(query).Total);
+        Assert.Equal(0, index.Projected().Search(query).Total);
 
         Chmod(two.TargetModFolder, "500"); // read+execute only — the new race source file can't be created
         try
@@ -145,7 +145,7 @@ public sealed class IndexAfterARenumberTests
 
         // The referencer's rewrite came back off disk and its rows were re-derived from the restored
         // file, so the filter matches nothing, exactly as it did before the gesture ran.
-        Assert.Equal(0, index.SettledReads().Search(query).Total);
+        Assert.Equal(0, index.Projected().Search(query).Total);
         var referencer = index.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin).Require();
         var referencerBody = referencer.Body.Require();
         Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);

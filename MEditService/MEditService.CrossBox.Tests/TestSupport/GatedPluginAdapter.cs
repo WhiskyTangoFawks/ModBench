@@ -117,11 +117,6 @@ internal sealed class GatedPluginAdapter(
 
     public void Release() => _released.Release();
 
-    public int OpenedCount(string pluginName)
-    {
-        lock (_gate) return Opened.Count(name => name.Equals(pluginName, StringComparison.OrdinalIgnoreCase));
-    }
-
     public int OpenedTotal
     {
         get { lock (_gate) return Opened.Count; }
