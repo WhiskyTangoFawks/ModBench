@@ -5,20 +5,24 @@ using Microsoft.CodeAnalysis;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>RS0030 is error everywhere. Two banned lists split the reason: BannedSymbols.txt (time,
-/// blocking waits) binds unconditionally; BannedSymbols.Mutagen.txt (ADR-0005 rule 2) excludes by
-/// name the six boxes a live Mutagen object reaches.</summary>
+/// <summary>RS0030 is error everywhere. BannedSymbols.txt (time, blocking waits) binds
+/// unconditionally; BannedSymbols.Mutagen.txt (ADR-0005 rule 2) binds by name the eight production
+/// boxes that must never hold a live Mutagen object.</summary>
 public sealed class BannedApiScopeTests
 {
-    // Directory.Build.props sets MutagenBanExempt for exactly these six projects.
-    private static readonly string[] MutagenBanExemptProjects =
+    // Directory.Build.props sets MutagenBanIncluded for exactly these eight projects — Codec and
+    // PluginAdapter are production too, excluded because their game assembly reference already
+    // holds ADR-0005 rule 2 for them.
+    private static readonly string[] MutagenBanProductionProjects =
     [
-        "MEditService.Codec",
-        "MEditService.Codec.Tests",
-        "MEditService.CrossBox.Tests",
-        "MEditService.PluginAdapter",
-        "MEditService.PluginAdapter.Tests",
-        "MEditService.TestSupport",
+        "MEditService.Commands",
+        "MEditService.Http",
+        "MEditService.Index",
+        "MEditService.LoadOrder",
+        "MEditService.Ports",
+        "MEditService.Queries",
+        "MEditService.SourceRepo",
+        "MEditService.Watcher",
     ];
 
     private static readonly string[] BannedNamespaces =
@@ -86,22 +90,22 @@ public sealed class BannedApiScopeTests
     }
 
     [Fact]
-    public void TheMutagenBanFile_ExcludesExactlyTheSixNamedProjects()
+    public void TheMutagenBanFile_IncludesExactlyTheEightNamedProductionProjects()
     {
         var props = LoadBuildProps();
 
-        var exemptProperties = props.Descendants("MutagenBanExempt").ToList();
-        Assert.All(exemptProperties, e => Assert.Equal("true", e.Value));
-        var namedProjects = exemptProperties
+        var includedProperties = props.Descendants("MutagenBanIncluded").ToList();
+        Assert.All(includedProperties, e => Assert.Equal("true", e.Value));
+        var namedProjects = includedProperties
             .Select(e => ProjectNamedBy((string?)e.Attribute("Condition") ?? ""))
             .Order(StringComparer.Ordinal)
             .ToList();
-        Assert.Equal(MutagenBanExemptProjects, namedProjects);
+        Assert.Equal(MutagenBanProductionProjects, namedProjects);
 
         var mutagenFile = Assert.Single(
             props.Descendants("AdditionalFiles"),
             e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.Mutagen.txt", StringComparison.Ordinal) == true);
-        Assert.Equal("'$(MutagenBanExempt)' != 'true'", (string?)mutagenFile.Parent?.Attribute("Condition"));
+        Assert.Equal("'$(MutagenBanIncluded)' == 'true'", (string?)mutagenFile.Parent?.Attribute("Condition"));
     }
 
     // 'MSBuildProjectName' == 'MEditService.Codec' split on the quotes it is built from.
@@ -169,11 +173,10 @@ public sealed class BannedApiScopeTests
                 && !string.Equals(id, "Mutagen.Bethesda.Core", StringComparison.Ordinal)
                 && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal));
 
-    // ADR-0005 rule 2 across the split: naming an IMod needs a game assembly, so only these two
-    // boxes call the codec's whole-mod doors — both must be in the exempt six, or RS0030 bans
-    // them.
+    // ADR-0005 rule 2: only these two boxes call the codec's whole-mod doors, and the package
+    // edge holds the rule for them — neither belongs among the banned-file eight.
     [Fact]
-    public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndBothAreMutagenBanExempt()
+    public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndNeitherCarriesTheMutagenBanFile()
     {
         var projects = ProductionProjects();
 
@@ -183,7 +186,7 @@ public sealed class BannedApiScopeTests
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
         Assert.Equal(["MEditService.Codec", "MEditService.PluginAdapter"], holders);
-        Assert.All(holders, project => Assert.Contains(project, MutagenBanExemptProjects));
+        Assert.All(holders, project => Assert.DoesNotContain(project, MutagenBanProductionProjects));
     }
 
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)

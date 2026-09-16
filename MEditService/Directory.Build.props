@@ -17,19 +17,24 @@
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 
-  <!-- ADR-0005 rule 2: the six boxes a live Mutagen object legitimately reaches. -->
+  <!-- ADR-0005 rule 2: for Codec and PluginAdapter the package edge already holds the rule (only
+       they reference a game assembly); everything else that must never hold a live Mutagen object
+       is these eight production boxes. No test project and not TestSupport — fixtures assemble
+       plugins from live objects by design. -->
   <PropertyGroup>
-    <MutagenBanExempt Condition="'$(MSBuildProjectName)' == 'MEditService.Codec'">true</MutagenBanExempt>
-    <MutagenBanExempt Condition="'$(MSBuildProjectName)' == 'MEditService.PluginAdapter'">true</MutagenBanExempt>
-    <MutagenBanExempt Condition="'$(MSBuildProjectName)' == 'MEditService.Codec.Tests'">true</MutagenBanExempt>
-    <MutagenBanExempt Condition="'$(MSBuildProjectName)' == 'MEditService.PluginAdapter.Tests'">true</MutagenBanExempt>
-    <MutagenBanExempt Condition="'$(MSBuildProjectName)' == 'MEditService.TestSupport'">true</MutagenBanExempt>
-    <MutagenBanExempt Condition="'$(MSBuildProjectName)' == 'MEditService.CrossBox.Tests'">true</MutagenBanExempt>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Http'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Watcher'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Commands'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Queries'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.LoadOrder'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Ports'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.Index'">true</MutagenBanIncluded>
+    <MutagenBanIncluded Condition="'$(MSBuildProjectName)' == 'MEditService.SourceRepo'">true</MutagenBanIncluded>
   </PropertyGroup>
 
   <!-- RS0030 is at error for every project (.editorconfig); no folder carries its own severity.
        BannedSymbols.txt (time, blocking waits) binds unconditionally. BannedSymbols.Mutagen.txt
-       (the live-object namespaces) excludes the six projects above by name, not by folder. -->
+       (the live-object namespaces) binds only the eight projects named above. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -49,7 +54,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup Condition="'$(MutagenBanExempt)' != 'true'">
+  <ItemGroup Condition="'$(MutagenBanIncluded)' == 'true'">
     <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.Mutagen.txt" />
   </ItemGroup>
 </Project>
