@@ -58,9 +58,8 @@ public sealed class ProjectTraceTests : IDisposable
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
-    // Validate by hash, against a plugin another tool rewrote while mEdit held its rows: nothing
-    // watches an untracked copy, so the answers stay stale until the reconcile asks. A binary has
-    // no smaller unit than itself, so the copy is re-derived whole rather than by key.
+    // Nothing watches an untracked copy, so its answers stay stale until the reconcile asks; a
+    // binary has no smaller unit than itself, so the copy is re-derived whole rather than by key.
     [Fact]
     public async Task ReconcilingOnePlugin_RederivesTheCopyWhoseBytesMoved_AndTheAnswerFollows()
     {
