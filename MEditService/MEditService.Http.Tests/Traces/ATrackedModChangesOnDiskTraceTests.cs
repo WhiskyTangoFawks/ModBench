@@ -133,8 +133,10 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
         await stream.NoEventOf("question-open", Settled);
     }
 
+    // One dialog per mod: a release-sized burst reaches the client as a question that names the
+    // whole release, not one question per file.
     [Fact]
-    public async Task AReleaseTouchingManyFilesInOneWindow_OpensExactlyOneQuestion()
+    public async Task AReleaseTouchingManyFiles_OpensOneQuestionNamingAllOfThem()
     {
         var assets = Enumerable.Range(0, 20).Select(i => $"asset{i:D2}.dds").ToList();
         using var fx = await Watched("Everything", modFolder =>
@@ -148,8 +150,11 @@ public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
             OtherTool.WritesTheFile(Path.Combine(modFolder, name), "changed-by-the-release");
         ARelease(fx);
 
-        Assert.Single(await stream.EventsUntil("question-open"));
-        await stream.NoEventOf("question-open", Settled);
+        var question = Assert.Single(await stream.EventsUntil("question-open"));
+
+        var named = question.GetProperty("externalChangeTrackedFiles").EnumerateArray()
+            .Select(file => file.GetString()).ToList();
+        Assert.All(assets, name => Assert.Contains(name, named));
     }
 
     [Fact]
