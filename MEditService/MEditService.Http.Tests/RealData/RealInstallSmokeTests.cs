@@ -48,7 +48,7 @@ public sealed class RealInstallSmokeTests
             Directory.CreateDirectory(instanceRoot);
             try
             {
-                await using var app = new WebApplicationFactory<Program>();
+                await using var app = new MEditHost();
                 var client = app.CreateClient();
                 client.Timeout = TimeSpan.FromMinutes(10);
 

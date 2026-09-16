@@ -103,7 +103,7 @@ public sealed class WriteRouteHandlerTests
     // handler it takes, and a route with none says so by taking nothing.
     private static List<MappedRoute> Mapped()
     {
-        using var app = new WebApplicationFactory<Program>();
+        using var app = new MEditHost();
 
         return [.. app.Services.GetServices<EndpointDataSource>()
             .SelectMany(source => source.Endpoints)

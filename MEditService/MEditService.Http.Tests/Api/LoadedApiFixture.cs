@@ -9,7 +9,7 @@ namespace MEditService.Tests.Api;
 public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     where TPlugin : IApiPluginFixture<TPlugin>
 {
-    private readonly WebApplicationFactory<Program> _app = new();
+    private readonly MEditHost _app = new();
     private HttpClient? _client;
 
     public HttpClient Client

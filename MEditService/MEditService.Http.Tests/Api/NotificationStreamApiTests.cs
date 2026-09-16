@@ -13,7 +13,7 @@ namespace MEditService.Tests.Api;
 [Collection(WebHostCollection.Name)]
 public sealed class NotificationStreamApiTests : IDisposable
 {
-    private readonly WebApplicationFactory<Program> _app = new();
+    private readonly MEditHost _app = new();
     private readonly HttpClient _client;
 
     private const string Origin = "NotifyMod";

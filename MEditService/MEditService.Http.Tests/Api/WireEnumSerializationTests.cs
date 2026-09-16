@@ -17,7 +17,7 @@ public sealed class WireEnumSerializationTests
 {
     private static async Task<JsonSerializerOptions> AppSerializerOptionsAsync()
     {
-        await using var app = new WebApplicationFactory<Program>();
+        await using var app = new MEditHost();
         // Options come from the running app's DI: a hand-built JsonSerializerOptions would keep
         // passing if the global converter registration were dropped.
         // Force the host to build before resolving out of it.

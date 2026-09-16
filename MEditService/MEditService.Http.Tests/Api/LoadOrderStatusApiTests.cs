@@ -15,7 +15,7 @@ namespace MEditService.Tests.Api;
 [Collection(WebHostCollection.Name)]
 public sealed class LoadOrderStatusApiTests : IDisposable
 {
-    private readonly WebApplicationFactory<Program> _app = new();
+    private readonly MEditHost _app = new();
     private readonly HttpClient _client;
 
     public LoadOrderStatusApiTests() => _client = _app.CreateClient();

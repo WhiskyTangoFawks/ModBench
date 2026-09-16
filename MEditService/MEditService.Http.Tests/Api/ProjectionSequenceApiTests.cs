@@ -14,7 +14,7 @@ namespace MEditService.Tests.Api;
 [Collection(WebHostCollection.Name)]
 public sealed class ProjectionSequenceApiTests : IDisposable
 {
-    private readonly WebApplicationFactory<Program> _app = new();
+    private readonly MEditHost _app = new();
     private readonly HttpClient _client;
 
     public ProjectionSequenceApiTests() => _client = _app.CreateClient();
