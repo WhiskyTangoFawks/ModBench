@@ -29,7 +29,7 @@ public sealed class DiagnosedCellPlacementTests
         var repo = new DuckDbRecordIndex(Reflector, new TableDdlBuilder(Reflector), NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         using var documents = new StubDocuments(cellDiagnosis);
-        repo.Index(documents, Registration.Participating(0), new PluginKey(Plugin, "Data"));
+        repo.Index(documents, Registration.Participating(0), new PluginCopyKey(Plugin, "Data"));
         repo.UpdateWinners();
         return repo;
     }

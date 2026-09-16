@@ -9,6 +9,6 @@ namespace MEditService.Tests.TestSupport;
 internal static class ProjectorAccess
 {
     internal static void ProjectDocuments(
-        this IRecordIndex index, PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas) =>
+        this IRecordIndex index, PluginCopyKey key, IReadOnlyList<(string FormKey, string? Body)> deltas) =>
         ((DuckDbRecordIndex)index).ProjectDocuments(key, deltas);
 }

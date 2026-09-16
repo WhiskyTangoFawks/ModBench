@@ -41,7 +41,7 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
     [Fact]
     public void Index_RealScripts_ReadTheAdapterOffTheDocument()
     {
-        var document = _fixture.Repo.At(RecordRef.Effective).GetDocument("2499C4:Fallout4.esm", new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
+        var document = _fixture.Repo.At(RecordRef.Effective).GetDocument("2499C4:Fallout4.esm", new PluginCopyKey(CutDownPluginFixture.PluginFileName, "Data"));
 
         Assert.NotNull(document);
         var adapter = Assert.Single(document!.Fields, f => f.Metadata.Name == "VirtualMachineAdapter");

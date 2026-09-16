@@ -34,7 +34,7 @@ public sealed class ContainerChildQueryService(
     {
         origin ??= PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
         var repo = _index.RequireReads();
-        var pluginKey = new PluginKey(plugin, origin);
+        var pluginKey = new PluginCopyKey(plugin, origin);
 
         var rows = repo.GetContainerChildren(pluginKey, parentFormKey)
             .Where(r => SlotOrder.ContainsKey(r.SlotName))
@@ -47,7 +47,8 @@ public sealed class ContainerChildQueryService(
         var byFormKey = new Dictionary<string, RecordSummary>(StringComparer.Ordinal);
         foreach (var recordType in rows.Select(r => SlotOrder[r.SlotName].RecordType).Distinct(StringComparer.Ordinal))
         {
-            var page = repo.Search(new RecordQuery(RecordTypes: [recordType], Plugin: pluginKey, Limit: UnlimitedRecords, Offset: 0));
+            var page = repo.Search(new RecordQuery(
+                RecordTypes: [recordType], Plugin: pluginKey.Name, Origin: pluginKey.Origin, Limit: UnlimitedRecords, Offset: 0));
             foreach (var record in page.Items) byFormKey[record.FormKey] = record;
         }
 

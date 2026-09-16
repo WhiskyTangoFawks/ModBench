@@ -24,15 +24,15 @@ internal sealed class HeldPlugins
     // ordinarily held at once, and a filename-keyed key would silently drop one. Joined into one
     // string so a single OrdinalIgnoreCase comparer covers both halves.
     private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
-    private static string KeyOf(PluginKey key) => KeyOf(key.Origin!, key.Name);
+    private static string KeyOf(PluginCopyKey key) => KeyOf(key.Origin, key.Name);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
     // Copy-on-write, not copy-on-read: opens are a few hundred per cold reconcile, while reads walk
     // these lists on every request.
     private readonly Lock _mutation = new();
     private PluginMetadata[] _pluginsSnapshot = [];
-    private IReadOnlyDictionary<PluginKey, PluginContent> _openedSnapshot =
-        new Dictionary<PluginKey, PluginContent>(PluginKey.Comparer);
+    private IReadOnlyDictionary<PluginCopyKey, PluginContent> _openedSnapshot =
+        new Dictionary<PluginCopyKey, PluginContent>(PluginCopyKey.Comparer);
     private PluginLoadFailure[] _loadFailuresSnapshot = [];
 
     public string DataFolderPath { get; }
@@ -48,7 +48,7 @@ internal sealed class HeldPlugins
     public IReadOnlyList<PluginMetadata> Plugins => Volatile.Read(ref _pluginsSnapshot);
 
     /// <summary>What reading each open copy told the Index, for the reads to hand out.</summary>
-    public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies => Volatile.Read(ref _openedSnapshot);
+    public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies => Volatile.Read(ref _openedSnapshot);
     public IReadOnlyList<PluginLoadFailure> Failures => Volatile.Read(ref _loadFailuresSnapshot);
 
     public HeldPlugins(
@@ -62,7 +62,7 @@ internal sealed class HeldPlugins
         GameRelease = gameRelease;
     }
 
-    public PluginMetadata? Find(PluginKey key) =>
+    public PluginMetadata? Find(PluginCopyKey key) =>
         Plugins.FirstOrDefault(p =>
             p.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
             && p.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase));
@@ -148,12 +148,12 @@ internal sealed class HeldPlugins
     private void PublishPlugins()
     {
         Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
-        Volatile.Write(ref _openedSnapshot, _plugins.ToDictionary(p => p.Key, p => p.Content, PluginKey.Comparer));
+        Volatile.Write(ref _openedSnapshot, _plugins.ToDictionary(p => p.Key, p => p.Content, PluginCopyKey.Comparer));
     }
 
     /// <summary>The load order's half of a copy leaving the snapshot. The index side is
     /// the Index's own unregister: the rows stay for the next snapshot that wants them.</summary>
-    public bool Remove(PluginKey key)
+    public bool Remove(PluginCopyKey key)
     {
         lock (_mutation)
         {
@@ -203,9 +203,8 @@ internal sealed class HeldPlugins
 
     /// <summary>Lets the projector report a post-open failure (an indexing throw from malformed record
     /// data Mutagen can't parse) through the same channel as open failures.</summary>
-    internal void SetFailure(PluginKey key, string reason)
+    internal void SetFailure(PluginCopyKey key, string reason)
     {
-        ArgumentNullException.ThrowIfNull(key.Origin);
         lock (_mutation)
         {
             _loadFailures[KeyOf(key)] = new PluginLoadFailure(key.Name, key.Origin, reason);

@@ -29,7 +29,7 @@ public sealed class SourceEditFixture : IDisposable
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public PluginKey Plugin { get; }
+    public PluginCopyKey Plugin { get; }
     public string ActualPluginName { get; }
     public LoadOrderSnapshot LoadOrder { get; }
     public RenumberRecordHandler RenumberHandler { get; }
@@ -55,7 +55,7 @@ public sealed class SourceEditFixture : IDisposable
     {
         var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
-        Plugin = new PluginKey(pluginName, ModFolderOrigin);
+        Plugin = new PluginCopyKey(pluginName, ModFolderOrigin);
         InstanceRoot = Directory.CreateTempSubdirectory("medit-source-edit-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", ModFolderOrigin)).FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "game")).FullName;

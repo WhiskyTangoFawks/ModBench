@@ -23,7 +23,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-masters-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masters-game-").FullName;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginKey _plugin = new(PluginName, "MastersMod");
+    private readonly PluginCopyKey _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
     private readonly FormKey _charlieKeyword;
@@ -75,11 +75,11 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
                 new LoadOrderEntry(CharlieName, charliePath, "Data", Slot: 0, Enabled: true, Winning: true),
                 new LoadOrderEntry(BravoName, bravoPath, "Data", Slot: 1, Enabled: true, Winning: true),
                 new LoadOrderEntry(DeltaName, deltaPath, "Data", Slot: 2, Enabled: true, Winning: true),
-                new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin!, Slot: 3, Enabled: true, Winning: true),
+                new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin, Slot: 3, Enabled: true, Winning: true),
             ]));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_loadOrder, [_plugin], _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, [_plugin], _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

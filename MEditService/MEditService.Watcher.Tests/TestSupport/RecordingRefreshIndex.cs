@@ -7,7 +7,7 @@ namespace MEditService.Tests.TestSupport;
 /// <summary>What the watcher asked the Index for, in order, with the projection scope it was inside
 /// and how long after the recorder started.</summary>
 internal sealed record RecordedProjection(
-    string Verb, PluginKey? Plugin, IReadOnlyList<string> Keys, int Scope, TimeSpan At);
+    string Verb, PluginCopyKey? Plugin, IReadOnlyList<string> Keys, int Scope, TimeSpan At);
 
 /// <summary>The Index as a recorder: the watcher's routing is what it asked for, so a test reads the
 /// verb and the copy rather than the delegate that carried it.</summary>
@@ -16,7 +16,7 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
     private readonly object _gate = new();
     private readonly List<RecordedProjection> _projections = [];
     private readonly System.Diagnostics.Stopwatch _since = System.Diagnostics.Stopwatch.StartNew();
-    private readonly Dictionary<PluginKey, string> _indexedHashes = new(PluginKey.Comparer);
+    private readonly Dictionary<PluginCopyKey, string> _indexedHashes = new(PluginCopyKey.Comparer);
     private int _scope;
 
     public IndexWriteGate WriteGate { get; init; } = new();
@@ -50,13 +50,13 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
 
     public void Announce(Action publish) => publish();
 
-    public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys)
+    public void RefreshKeys(PluginCopyKey key, IReadOnlyList<string> formKeys)
     {
         Refuse();
         Record("refresh", key, formKeys);
     }
 
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin)
+    public IReadOnlyList<ValidationReport> ValidateIndex(PluginCopyKey? plugin)
     {
         Refuse();
         Record("validate", plugin, []);
@@ -65,9 +65,9 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
 
     /// <summary>Seeds this copy as already indexed with this hash — the state a prior reconcile
     /// would have left, for a test that arranges "already indexed" before watching.</summary>
-    public void SeedIndexed(PluginKey key, string hash) => _indexedHashes[key] = hash;
+    public void SeedIndexed(PluginCopyKey key, string hash) => _indexedHashes[key] = hash;
 
-    public Task<bool> RefreshBinary(PluginKey key, string path)
+    public Task<bool> RefreshBinary(PluginCopyKey key, string path)
     {
         if (!File.Exists(path))
         {
@@ -100,7 +100,7 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
         if (Refuses) throw new NoLoadOrderException();
     }
 
-    private void Record(string verb, PluginKey? plugin, IReadOnlyList<string> keys)
+    private void Record(string verb, PluginCopyKey? plugin, IReadOnlyList<string> keys)
     {
         lock (_gate) _projections.Add(new RecordedProjection(verb, plugin, keys, _scope, _since.Elapsed));
     }

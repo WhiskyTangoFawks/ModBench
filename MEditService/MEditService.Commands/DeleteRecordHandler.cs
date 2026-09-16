@@ -19,7 +19,7 @@ public sealed class DeleteRecordHandler
         (_targets, _logger) = (targets, logger);
 
     /// <summary>Every record shape resolves through the unit holding it.</summary>
-    public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
+    public RecordEditResult DeleteRecord(PluginCopyKey plugin, string formKey)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (_, identity, unit, repository) = target;

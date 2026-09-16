@@ -25,7 +25,7 @@ public class FilterTests(TestPluginFixture fixture)
             ModKey.FromFileName(TestPluginFixture.PluginName),
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -123,7 +123,7 @@ public class FilterTests(TestPluginFixture fixture)
 
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var count = repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
+        var count = repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "NPC_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         Assert.Equal(1, count);
     }

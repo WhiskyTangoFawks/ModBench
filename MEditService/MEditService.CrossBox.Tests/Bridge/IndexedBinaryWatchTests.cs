@@ -44,7 +44,7 @@ public sealed class IndexedBinaryWatchTests
         mod.WriteToBinary(Path.Combine(fixture.ModFolder, IndexedModFixture.PluginName));
     }
 
-    private static IReadOnlyList<string?> EditorIds(IndexedModFixture fixture, PluginKey key) =>
+    private static IReadOnlyList<string?> EditorIds(IndexedModFixture fixture, PluginCopyKey key) =>
         [.. fixture.Index.Projected().GetDocuments(key).Select(d => d.EditorId)];
 
     // An untracked plugin's bytes move while the backend runs and the index follows, with no reload — the

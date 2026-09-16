@@ -54,20 +54,22 @@ public sealed class RecordQueryService(
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
-        // The caller states which copy when it knows (a tree row does); otherwise resolve from the
-        // load order, since a bare filename is all most callers have.
-        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
 
         if (type != null && !schemas.ContainsKey(type))
             return new PagedResult<RecordSummary>([], 0);
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != PluginHeader.RecordType)];
-        // Written as an if rather than `plugin == null ? null : new PluginKey(plugin, origin)`
-        // — PluginKey's implicit string conversion makes that ternary's common-type inference reach
-        // for the null literal via `string`, tripping CS8625 on PluginKey.Name.
-        PluginKey? pluginKey = null;
-        if (plugin != null) pluginKey = new PluginKey(plugin, origin);
-        var query = new RecordQuery(RecordTypes: recordTypes, Plugin: pluginKey, Search: search, Limit: limit, Offset: offset);
+        PluginName? pluginFilter = null;
+        string? resolvedOrigin = null;
+        if (plugin != null)
+        {
+            // The caller states which copy when it knows (a tree row does); otherwise resolve from
+            // the load order, since a bare filename is all most callers have.
+            pluginFilter = plugin;
+            resolvedOrigin = origin ?? PluginOriginResolver.Resolve(_loadOrder.Require(), plugin);
+        }
+        var query = new RecordQuery(
+            RecordTypes: recordTypes, Plugin: pluginFilter, Origin: resolvedOrigin, Search: search, Limit: limit, Offset: offset);
         return reads.Search(query);
     }
 
@@ -93,14 +95,14 @@ public sealed class RecordQueryService(
         // Fail-open on a copy the load order lacks.
         var pluginWinning = copies.ToDictionary(c => ColumnKey.Of(c.Name, c.Origin), c => c.Winning);
         var committedOverrides = stack.Entries
-            .Where(e => pluginWinning.GetValueOrDefault(ColumnKey.Of(e.Plugin.Name, e.Plugin.Origin!), true))
+            .Where(e => pluginWinning.GetValueOrDefault(ColumnKey.Of(e.Plugin.Name, e.Plugin.Origin), true))
             .Select(e => ToRecordDetail(e.Effective))
             .ToList();
 
         // ADR-0012: keyed by the compound column identity — with a second copy of one filename
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
         var pluginMasters = reads.OpenedCopies.ToDictionary(
-            kv => ColumnKey.Of(kv.Key.Name, kv.Key.Origin!), kv => kv.Value.Masters);
+            kv => ColumnKey.Of(kv.Key.Name, kv.Key.Origin), kv => kv.Value.Masters);
         // ADR-0013: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
         var pluginParticipates = copies.ToDictionary(
@@ -140,7 +142,7 @@ public sealed class RecordQueryService(
 
         // The header is one `records` row per plugin, so this exclusion has to be real; without it
         // "Main File Header" appears as a browsable record-type node under every plugin.
-        return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
+        return [.. reads.GetRecordTypeCounts(new PluginCopyKey(plugin, origin))
             .Where(c => c.Type != PluginHeader.RecordType && schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type), c.HasParseFailure))
             .OrderBy(r => r.Type)];
@@ -151,7 +153,7 @@ public sealed class RecordQueryService(
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
-            document.Fields, Origin: document.Plugin.Origin!, RecordType: document.RecordType,
+            document.Fields, Origin: document.Plugin.Origin, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable,
             ParseDiagnosis: document.ParseDiagnosis);
 

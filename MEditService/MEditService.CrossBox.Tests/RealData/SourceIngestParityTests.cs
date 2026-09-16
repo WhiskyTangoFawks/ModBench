@@ -57,7 +57,9 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
     // ref, so LIMIT/OFFSET pages silently skip and repeat rows.
     private List<string> AllFormKeys(IndexProjector index) =>
-        [.. index.Store!.At(RecordRef.Effective).Search(new RecordQuery(Plugin: fixture.Plugin, Limit: int.MaxValue)).Items.Select(i => i.FormKey)];
+        [.. index.Store!.At(RecordRef.Effective)
+            .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
+            .Items.Select(i => i.FormKey)];
 
     private int CountOf(IndexProjector index, string recordType) =>
         index.Store!.At(RecordRef.Effective).GetRecordTypeCounts(fixture.Plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;

@@ -296,7 +296,7 @@ public sealed partial class SourceRepository
     // Where a document this plugin does not hold yet lands, from the identity alone. Null for a
     // record with no group folder: it lands inside its container's document, which its own identity
     // cannot name.
-    private SourceUnit? PlaceNewDocument(PluginKey plugin, RecordIdentity identity, CellPlacement? placement)
+    private SourceUnit? PlaceNewDocument(PluginCopyKey plugin, RecordIdentity identity, CellPlacement? placement)
     {
         var dispatch = RecordTypeDispatch.For(_release);
         if (dispatch.GroupFolderNameFor(identity.RecordType) is not { } groupFolder) return null;
@@ -324,7 +324,7 @@ public sealed partial class SourceRepository
 
     // The worldspace's directory is found by its FormKey rather than composed from it: an override
     // the destination named itself is written into, never doubled by a bare-named sibling.
-    private string ExteriorCellDirectory(PluginKey plugin, RecordIdentity identity, CellPlacement placement)
+    private string ExteriorCellDirectory(PluginCopyKey plugin, RecordIdentity identity, CellPlacement placement)
     {
         var levels = RecordTypeDispatch.For(_release).ExteriorCellBlockLevels;
         if (levels.Count != ExteriorBlockLevels)
@@ -346,7 +346,7 @@ public sealed partial class SourceRepository
 
     // A worldspace is a record and only the codec mints one, so a tree already holding it is this
     // put's precondition.
-    private string WorldspaceDirectoryHolding(PluginKey plugin, CellPlacement placement)
+    private string WorldspaceDirectoryHolding(PluginCopyKey plugin, CellPlacement placement)
     {
         if (placement.ParentWorldspace is not { } worldspace)
             throw new InvalidOperationException("An exterior cell's placement names no worldspace to place it under.");

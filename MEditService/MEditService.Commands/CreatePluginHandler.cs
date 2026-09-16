@@ -20,7 +20,7 @@ public sealed class CreatePluginHandler
     /// created plugin is editable the moment it exists. <paramref name="loadOrder"/> already
     /// registers <paramref name="copy"/>.</summary>
     public async Task<PluginCreateResult> CreatePlugin(
-        LoadOrderSnapshot loadOrder, RegisteredCopy copy, IReadOnlyCollection<PluginKey> heldCopies)
+        LoadOrderSnapshot loadOrder, RegisteredCopy copy, IReadOnlyCollection<PluginCopyKey> heldCopies)
     {
         // A new plugin defaults to an ESL-flagged ESP, silently; the flag is an ordinary editable
         // header field afterward. An explicit .esl is already light, an explicit .esm asked for a

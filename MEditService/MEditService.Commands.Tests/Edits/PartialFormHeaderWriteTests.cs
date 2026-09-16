@@ -27,7 +27,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-partialform-header-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-partialform-header-game-").FullName;
 
-    public PluginKey Plugin { get; } = new(PluginName, Origin);
+    public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrderSnapshot LoadOrder { get; }
     public EditRecordHandler EditHandler { get; }
     public FormKey PartialCell { get; }

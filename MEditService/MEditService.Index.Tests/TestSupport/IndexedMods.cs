@@ -10,7 +10,7 @@ namespace MEditService.Tests.TestSupport;
 internal static class IndexedMods
 {
     internal static void IndexMod(
-        this IRecordIndex index, IModGetter mod, Registration registration, PluginKey key, string? filePath = null)
+        this IRecordIndex index, IModGetter mod, Registration registration, PluginCopyKey key, string? filePath = null)
     {
         using var documents = Documents(mod);
         index.Index(documents, registration, key, filePath);

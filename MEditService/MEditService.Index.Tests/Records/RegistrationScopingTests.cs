@@ -20,8 +20,8 @@ public class RegistrationScopingTests
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private static readonly PluginKey AlphaKey = new("Alpha.esp", "ModA");
-    private static readonly PluginKey BetaKey = new("Beta.esp", "ModB");
+    private static readonly PluginCopyKey AlphaKey = new("Alpha.esp", "ModA");
+    private static readonly PluginCopyKey BetaKey = new("Beta.esp", "ModB");
 
     // Every kind of row the index extracts, so every read path has something to not answer with. Beta
     // additionally overrides Alpha's Npc, so the override stack and the contested-FormKey read have a
@@ -98,8 +98,8 @@ public class RegistrationScopingTests
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    private static long RowsFor(DuckDbRecordIndex repo, string relation, PluginKey key) =>
-        Scalar(repo, $"SELECT COUNT(*) FROM {relation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!);
+    private static long RowsFor(DuckDbRecordIndex repo, string relation, PluginCopyKey key) =>
+        Scalar(repo, $"SELECT COUNT(*) FROM {relation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin);
 
     // Every schema key, with no exclusion: the plugin header has a generated view like every
     // other record type, so it is swept here rather than named as a relation of its own below.
@@ -127,7 +127,7 @@ public class RegistrationScopingTests
         foreach (var table in new[] { "mirror.form_lookup", "mirror.placement", "mirror.cell_location", "mirror.container_child" })
             Assert.True(RowsFor(repo, table, BetaKey) > 0, $"{table} should keep Beta's rows");
         Assert.True(Scalar(repo, "SELECT COUNT(*) FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2",
-            BetaKey.Name, BetaKey.Origin!) > 0);
+            BetaKey.Name, BetaKey.Origin) > 0);
 
         // Documents.
         Assert.Null(repo.At(RecordRef.Effective).GetDocument(fx.BetaNpcFk));
@@ -146,7 +146,7 @@ public class RegistrationScopingTests
         Assert.Single(head.GetOverrideStack(fx.SharedNpcFk)!.Entries);
 
         // Listings and counts.
-        Assert.Empty(repo.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BetaKey, Limit: 1000)).Items);
+        Assert.Empty(repo.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
         Assert.DoesNotContain(repo.At(RecordRef.Effective).Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(repo.At(RecordRef.Effective).GetRecordTypeCounts(BetaKey));
         Assert.Empty(repo.At(RecordRef.Effective).GetNativeFormKeys(BetaKey));
@@ -187,7 +187,7 @@ public class RegistrationScopingTests
         Assert.All(new[] { "records", "records_head", "form_lookup", "placement", "cell_location", "container_child" },
             relation => Assert.Equal(0, RowsFor(repo, relation, BetaKey)));
         Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM form_references WHERE source_plugin = $1 AND source_origin = $2",
-            BetaKey.Name, BetaKey.Origin!));
+            BetaKey.Name, BetaKey.Origin));
 
         var viewsWithBetaRows = GeneratedViews()
             .Where(view => RowsFor(repo, $"\"{view}\"", BetaKey) > 0)
@@ -230,6 +230,6 @@ public class RegistrationScopingTests
         repo.Unindex(BetaKey);
 
         Assert.Equal(0, RowsFor(repo, "mirror.records", BetaKey));
-        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM registrations WHERE plugin = $1 AND origin = $2", BetaKey.Name, BetaKey.Origin!));
+        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM registrations WHERE plugin = $1 AND origin = $2", BetaKey.Name, BetaKey.Origin));
     }
 }

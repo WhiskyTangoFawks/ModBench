@@ -168,10 +168,10 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();
         var held = Open(data);
 
-        Assert.NotNull(held.Find(new PluginKey("CASEMOD.ESP", PluginOrigin.DataDirectory)));
-        Assert.NotNull(held.Find(new PluginKey("casemod.esp", PluginOrigin.DataDirectory)));
-        Assert.Null(held.Find(new PluginKey("Unknown.esp", PluginOrigin.DataDirectory)));
-        Assert.Null(held.Find(new PluginKey("CaseMod.esp", "SomeOtherOrigin")));
+        Assert.NotNull(held.Find(new PluginCopyKey("CASEMOD.ESP", PluginOrigin.DataDirectory)));
+        Assert.NotNull(held.Find(new PluginCopyKey("casemod.esp", PluginOrigin.DataDirectory)));
+        Assert.Null(held.Find(new PluginCopyKey("Unknown.esp", PluginOrigin.DataDirectory)));
+        Assert.Null(held.Find(new PluginCopyKey("CaseMod.esp", "SomeOtherOrigin")));
     }
 
     // ── Mutation in place ───────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ public sealed class HeldPluginsTests
     {
         using var data = new PluginFixtureBuilder("lo-remove").WithPlugin("A.esp").WithPlugin("B.esp").Build();
         var held = Open(data);
-        var removed = new PluginKey("A.esp", PluginOrigin.DataDirectory);
+        var removed = new PluginCopyKey("A.esp", PluginOrigin.DataDirectory);
 
         Assert.True(held.Remove(removed));
 

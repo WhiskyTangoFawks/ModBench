@@ -6,7 +6,7 @@ namespace MEditService.Index;
 /// record's source file holds — for the header, the root <c>RecordData.json</c>.</summary>
 public record RecordDocument(
     string FormKey,
-    PluginKey Plugin,
+    PluginCopyKey Plugin,
     int LoadOrderIndex,
     bool IsWinner,
     string? EditorId,
@@ -23,7 +23,7 @@ public record RecordDocument(
 /// instance (an identity, not merely equal values); for a dirty one, Head is resolved separately
 /// from the committed baseline.</summary>
 public record OverrideStackEntry(
-    PluginKey Plugin,
+    PluginCopyKey Plugin,
     int LoadOrderIndex,
     bool IsWinner,
     RecordDocument Effective,
@@ -35,12 +35,12 @@ public record OverrideStackEntry(
 /// not a collection.</summary>
 public record RecordOverrides(string FormKey, string RecordType, IReadOnlyList<OverrideStackEntry> Entries);
 
-/// <summary>Filters and paging only; a listing's projection and ordering are fixed. Null or empty
-/// <c>RecordTypes</c> means every type; <c>Plugin</c> is a filter, not an identity, so a null origin
-/// narrows nothing.</summary>
+/// <summary>Filters and paging only; ordering is fixed. Null or empty <c>RecordTypes</c> means
+/// every type; <c>Plugin</c> and <c>Origin</c> filter independently (ADR-0012).</summary>
 public sealed record RecordQuery(
     IReadOnlyList<string>? RecordTypes = null,
-    PluginKey? Plugin = null,
+    PluginName? Plugin = null,
+    string? Origin = null,
     string? Search = null,
     int Limit = 50,
     int Offset = 0);

@@ -56,7 +56,7 @@ internal sealed class GatedIndexRepository(
     public bool Disposed { get; private set; }
 
     public override void Index(
-        IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
+        IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null)
     {
         var pluginName = key.Name;
         if (gateBefore != null && pluginName.Equals(gateBefore, StringComparison.OrdinalIgnoreCase))

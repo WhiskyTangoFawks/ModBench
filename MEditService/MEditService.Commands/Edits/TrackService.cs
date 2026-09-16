@@ -23,14 +23,14 @@ public sealed class TrackService(
     // ADR-0014: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
 
-    private static bool Held(IReadOnlyCollection<PluginKey> heldCopies, RegisteredCopy copy) =>
+    private static bool Held(IReadOnlyCollection<PluginCopyKey> heldCopies, RegisteredCopy copy) =>
         heldCopies.Any(k =>
             k.Name.Equals(copy.Name, StringComparison.OrdinalIgnoreCase)
             && string.Equals(k.Origin, copy.Origin, StringComparison.OrdinalIgnoreCase));
 
     public async Task<TrackResult> TrackAsync(
         LoadOrderSnapshot loadOrder,
-        IReadOnlyCollection<PluginKey> heldCopies,
+        IReadOnlyCollection<PluginCopyKey> heldCopies,
         string origin,
         SourcePreset preset,
         CancellationToken cancel = default)

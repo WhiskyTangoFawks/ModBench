@@ -52,7 +52,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         var loadOrder = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(loadOrder, [new PluginKey(PluginA, Origin), new PluginKey(PluginB, Origin)], Origin, SourcePreset.Edits)
+            .TrackAsync(loadOrder, [new PluginCopyKey(PluginA, Origin), new PluginCopyKey(PluginB, Origin)], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         holder.Apply(loadOrder);
@@ -76,8 +76,8 @@ public sealed class TwoPluginModDeferralTests : IDisposable
     {
         RaiseExternalChangeOnA();
 
-        var resultA = _editHandler.Set(new PluginKey(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
-        var resultB = _editHandler.Set(new PluginKey(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
+        var resultA = _editHandler.Set(new PluginCopyKey(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
+        var resultB = _editHandler.Set(new PluginCopyKey(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
 
         Assert.False(resultA.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, resultA.Refusal);
@@ -92,7 +92,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         var pathB = Path.Combine(_modFolder, PluginB);
         var bytesB = File.ReadAllBytes(pathB);
 
-        var result = _compileHandler.Compile(new PluginKey(PluginB, Origin), new CompileSource.WorkingTree());
+        var result = _compileHandler.Compile(new PluginCopyKey(PluginB, Origin), new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -105,8 +105,8 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         RaiseExternalChangeOnA();
         SourceRepository.ClearExternalChangeQuestion(_modFolder);
 
-        var resultA = _editHandler.Set(new PluginKey(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
-        var resultB = _editHandler.Set(new PluginKey(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
+        var resultA = _editHandler.Set(new PluginCopyKey(PluginA, Origin), _npcA.ToString(), "HeightMax", Json("0.5"));
+        var resultB = _editHandler.Set(new PluginCopyKey(PluginB, Origin), _npcB.ToString(), "HeightMax", Json("0.5"));
 
         Assert.True(resultA.Applied, resultA.Message);
         Assert.True(resultB.Applied, resultB.Message);

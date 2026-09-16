@@ -34,9 +34,9 @@ public sealed class RenumberCascadeWatchTests
         var referencers = landed.GetReferencedBy(NewRaceFormKey)
             .Select(r => (r.Plugin, r.Origin)).Distinct().Order().ToList();
         Assert.Equal(
-            [(fixture.FirstPlugin.Name, fixture.FirstPlugin.Origin!),
-             (fixture.SecondPlugin.Name, fixture.SecondPlugin.Origin!),
-             (fixture.TargetPlugin.Name, fixture.TargetPlugin.Origin!)],
+            [(fixture.FirstPlugin.Name, fixture.FirstPlugin.Origin),
+             (fixture.SecondPlugin.Name, fixture.SecondPlugin.Origin),
+             (fixture.TargetPlugin.Name, fixture.TargetPlugin.Origin)],
             referencers.Order().ToList());
     }
 

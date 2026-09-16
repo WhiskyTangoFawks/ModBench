@@ -26,7 +26,7 @@ public sealed class DocumentEditRealDataTests(CutDownPluginFixture fixture, ITes
     public void EveryRecord_SetOfOneMember_ChangesExactlyThatPath()
     {
         var reads = fixture.Repo.At(RecordRef.Effective);
-        var documents = reads.GetDocuments(new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
+        var documents = reads.GetDocuments(new PluginCopyKey(CutDownPluginFixture.PluginFileName, "Data"));
         Assert.True(documents.Count > 3000, $"Expected the whole cut-down plugin to be indexed; got {documents.Count} documents.");
 
         var failures = new List<string>();

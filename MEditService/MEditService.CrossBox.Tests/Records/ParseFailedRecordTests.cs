@@ -27,7 +27,7 @@ public sealed class ParseFailedRecordTests
         using var scratch = new Scratch(Fixture);
 
         var perk = scratch.Reads
-            .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin, Search: null, Limit: 100, Offset: 0))
+            .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin.Name, Origin: scratch.Plugin.Origin, Search: null, Limit: 100, Offset: 0))
             .Items.Single(r => r.FormKey == UnreadablePerk);
 
         Assert.NotNull(perk.ParseDiagnosis);
@@ -51,7 +51,7 @@ public sealed class ParseFailedRecordTests
         using var scratch = new Scratch(Fixture);
 
         var readable = scratch.Reads
-            .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin, Search: null, Limit: 1000, Offset: 0))
+            .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin.Name, Origin: scratch.Plugin.Origin, Search: null, Limit: 1000, Offset: 0))
             .Items.Where(r => r.FormKey != UnreadablePerk);
 
         Assert.NotEmpty(readable);
@@ -127,7 +127,7 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
         var readable = scratch.Reads
-            .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin, Search: null, Limit: 1000, Offset: 0))
+            .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin.Name, Origin: scratch.Plugin.Origin, Search: null, Limit: 1000, Offset: 0))
             .Items.First(r => r.FormKey != UnreadablePerk);
 
         var column = Assert.Single(scratch.Query.GetCompare(readable.FormKey)!.Overrides);
@@ -226,7 +226,7 @@ public sealed class ParseFailedRecordTests
 
         public IndexProjector Index { get; }
         public IRecordReads Reads => Index.SettledReads();
-        public PluginKey Plugin { get; }
+        public PluginCopyKey Plugin { get; }
         public IRecordQueryService Query { get; }
         public string PluginPath { get; }
 
@@ -237,7 +237,7 @@ public sealed class ParseFailedRecordTests
 
         public Scratch(string sourcePath, string fixtureFileName, bool corruptWholeFile = false)
         {
-            Plugin = new PluginKey(fixtureFileName, Origin);
+            Plugin = new PluginCopyKey(fixtureFileName, Origin);
             var pluginPath = PluginPath = Path.Combine(_modFolder, fixtureFileName);
             File.Copy(sourcePath, pluginPath);
 

@@ -19,7 +19,7 @@ public sealed class PeekNextFreeFormKeyHandler
     /// <summary>The allocator Create and Renumber use, exposed so the Renumber box can prefill a
     /// suggestion as xEdit does. A tracked copy answers from its tree and HEAD, an untracked one from
     /// its own binary.</summary>
-    public RecordEditResult PeekNextFreeFormKey(PluginKey plugin)
+    public RecordEditResult PeekNextFreeFormKey(PluginCopyKey plugin)
     {
         // No snapshot yet is a state, not a refusal about this plugin.
         if (_loadOrder.Current.Copies.Count == 0)

@@ -41,7 +41,7 @@ public sealed class RenumberRecordHandler
     /// <summary>A delete+create pair in source terms plus a reference cascade. Native records only; an
     /// untracked referencer refuses before any write. Written through a
     /// <see cref="SourceRepository.SourceTransaction"/> that restores every tree on failure (ADR-0007).</summary>
-    public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
+    public RecordEditResult RenumberRecord(PluginCopyKey plugin, string formKey, string? requestedFormKey = null)
     {
         if (_targets.ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
         var (release, identity, unit, repository) = target;
@@ -157,7 +157,7 @@ public sealed class RenumberRecordHandler
     // Owner is the identity of the document this rewrite lands as: the referencer's own, or its
     // container's when the referencer is embedded. Text is that whole document, remapped.
     private sealed record ComputedRewrite(
-        PluginKey Plugin, SourceRepository Repository, RecordIdentity Owner, string Text);
+        PluginCopyKey Plugin, SourceRepository Repository, RecordIdentity Owner, string Text);
 
     // One document at a time, which is what the scan answers with: a container holding several
     // referencers is remapped once. The typed remap moves links and only links, and the
@@ -217,7 +217,7 @@ public sealed class RenumberRecordHandler
 
     // The guard's conservative direction: a guard that cannot run has cleared nothing, so a document
     // whose type the schema does not name stops the gesture rather than being passed over.
-    private static RecordEditResult RefuseNoSchema(string formKey, string recordType, PluginKey plugin) =>
+    private static RecordEditResult RefuseNoSchema(string formKey, string recordType, PluginCopyKey plugin) =>
         RecordEditResult.Refused(
             RecordEditRefusal.ReferenceRemapIncomplete,
             $"'{recordType}' has no reflected schema, so the remap-completeness check for " +
@@ -227,7 +227,7 @@ public sealed class RenumberRecordHandler
     // names the member Mutagen is known to skip. Asked of the collector: text cannot tell a link
     // from an EditorID or string.
     private RecordEditResult? RefuseIfRemapIncomplete(
-        string text, string formKey, string recordType, string oldFormKey, PluginKey plugin, GameRelease release)
+        string text, string formKey, string recordType, string oldFormKey, PluginCopyKey plugin, GameRelease release)
     {
         if (!_schemaReflector.GetSchemas(release).TryGetValue(recordType, out var schema))
             return RefuseNoSchema(formKey, recordType, plugin);
@@ -278,7 +278,7 @@ public sealed class RenumberRecordHandler
     // The referencer pass skips the target, so this is the only place a self-link is remapped.
     // Nothing here writes; every failure mode is a typed refusal.
     private RecordEditResult? ComputeTargetRewrite(
-        PluginKey plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
+        PluginCopyKey plugin, SourceRepository repository, RecordIdentity identity, HoldingUnit unit,
         string oldFormKey, string newFormKey, GameRelease release, out ComputedTarget target)
     {
         target = null!;
@@ -338,7 +338,7 @@ public sealed class RenumberRecordHandler
     }
 
     private static void WriteTargetRewrite(
-        SourceRepository.SourceTransaction transaction, PluginKey plugin, ComputedTarget target, string newFormKey)
+        SourceRepository.SourceTransaction transaction, PluginCopyKey plugin, ComputedTarget target, string newFormKey)
     {
         var (repository, unit, written, held, text) = target;
 

@@ -40,7 +40,7 @@ public sealed class IndexAfterACopyTests : IDisposable
     public void ACopiedOverride_AppearsInAnActiveFilteredListing()
     {
         _index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
-        var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: _fixture.DestinationPlugin, Limit: 50, Offset: 0);
+        var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: _fixture.DestinationPlugin.Name, Origin: _fixture.DestinationPlugin.Origin, Limit: 50, Offset: 0);
         var before = _index.SettledReads().Search(query).Total;
 
         var result = Service().CopyRecordAsOverride(
@@ -58,7 +58,7 @@ public sealed class IndexAfterACopyTests : IDisposable
         // Scoped to the destination plugin: the source already holds a "cell" row under this FormKey, so
         // an unscoped filter would match pre-copy and pass whether or not the new row was re-evaluated.
         _index.SetFilter($"SELECT form_key FROM cell WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
-        var query = new RecordQuery(RecordTypes: ["cell"], Plugin: _fixture.DestinationPlugin, Limit: 50, Offset: 0);
+        var query = new RecordQuery(RecordTypes: ["cell"], Plugin: _fixture.DestinationPlugin.Name, Origin: _fixture.DestinationPlugin.Origin, Limit: 50, Offset: 0);
         var before = _index.SettledReads().Search(query).Total;
 
         var result = Service().CopyRecordAsOverride(

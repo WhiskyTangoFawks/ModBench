@@ -16,7 +16,7 @@ public sealed partial class SourceRepository
     /// <summary>Moves the container <paramref name="identity"/> names to the leaf
     /// <paramref name="newFormKey"/> computes, keeping its EditorID. Null when nothing moved. Refuses
     /// before touching the tree when that leaf is already occupied.</summary>
-    internal MovedContainer? Move(PluginKey plugin, RecordIdentity identity, string newFormKey)
+    internal MovedContainer? Move(PluginCopyKey plugin, RecordIdentity identity, string newFormKey)
     {
         if (Locate(plugin, identity) is not { IsEmbedded: false, IsDirectoryPerRecord: true } unit) return null;
 

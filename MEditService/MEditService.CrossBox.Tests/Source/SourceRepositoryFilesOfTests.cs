@@ -93,7 +93,7 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
     [Fact]
     public void FilesOf_ForAPluginTheTreeHoldsNoSourceFor_IsEmpty_AtEitherSource()
     {
-        var stranger = new PluginKey("Stranger.esp", CompileFixture.Origin);
+        var stranger = new PluginCopyKey("Stranger.esp", CompileFixture.Origin);
 
         Assert.Empty(Repository.FilesOf(stranger, gitRef: null).Files);
         Assert.Empty(Repository.FilesOf(stranger, "HEAD").Files);

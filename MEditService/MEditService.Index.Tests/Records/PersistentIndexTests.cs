@@ -56,7 +56,7 @@ public class PersistentIndexTests : IDisposable
         return path;
     }
 
-    private static PluginKey KeyOf(string name) => new(name, "Data");
+    private static PluginCopyKey KeyOf(string name) => new(name, "Data");
 
     private static void IndexFileAt(DuckDbRecordIndex index, string path, int loadOrderIndex)
     {
@@ -65,12 +65,12 @@ public class PersistentIndexTests : IDisposable
         index.IndexMod(mod, Registration.Participating(loadOrderIndex), key, path);
     }
 
-    private static long RecordRowsFor(DuckDbRecordIndex index, PluginKey key)
+    private static long RecordRowsFor(DuckDbRecordIndex index, PluginCopyKey key)
     {
         using var cmd = index.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM mirror.records WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin });
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 

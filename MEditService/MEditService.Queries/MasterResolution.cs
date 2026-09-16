@@ -24,7 +24,7 @@ internal static class MasterResolution
     /// <summary>Per-plugin master issues, keyed by plugin name; a plugin with every master
     /// resolved has no entry (never an empty list).</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> Classify(
-        IReadOnlyDictionary<PluginKey, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
+        IReadOnlyDictionary<PluginCopyKey, PluginContent> opened, IReadOnlyList<PluginLoadFailure> failures)
     {
         var loaded = opened.Keys.Select(k => k.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var failed = failures.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);

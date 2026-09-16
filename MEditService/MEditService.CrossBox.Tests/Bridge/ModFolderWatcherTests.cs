@@ -56,7 +56,7 @@ public sealed class ModFolderWatcherTests
 
     private const string IndexedOrigin = "Data";
     private const string IndexedPlugin = "Mirrored.esp";
-    private static readonly PluginKey IndexedCopy = new(IndexedPlugin, IndexedOrigin);
+    private static readonly PluginCopyKey IndexedCopy = new(IndexedPlugin, IndexedOrigin);
 
     private static string Sha256Of(byte[] bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
 

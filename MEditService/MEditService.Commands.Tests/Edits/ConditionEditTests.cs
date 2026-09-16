@@ -254,7 +254,7 @@ public sealed class ConditionEditTests : IDisposable
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-692-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-692-game-").FullName;
 
-        public PluginKey Plugin { get; } = new(PluginName, Origin);
+        public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Cobj { get; }

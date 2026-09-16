@@ -23,7 +23,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-order-damage-game-").FullName;
     private readonly IndexProjector _index;
-    private readonly PluginKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    private readonly PluginCopyKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public DialogueOrderDamageTests()
     {
@@ -37,11 +37,11 @@ public sealed class DialogueOrderDamageTests : IDisposable
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         _index.Reconcile(holder,
             _gameDirectory,
-            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_index, holder, _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_index, holder, _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

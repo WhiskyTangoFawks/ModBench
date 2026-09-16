@@ -17,33 +17,33 @@ internal sealed class ProjectingEditService(IndexProjector index, IServiceProvid
     internal static ProjectingEditService Over(IndexProjector index, LoadOrderHolder holder) =>
         new(index, TestEditService.Over(holder));
 
-    internal RecordEditResult Edit(PluginKey plugin, string formKey, RecordEditEnvelope envelope) =>
+    internal RecordEditResult Edit(PluginCopyKey plugin, string formKey, RecordEditEnvelope envelope) =>
         Projected(Current<EditRecordHandler>().Edit(plugin, formKey, envelope));
 
-    internal RecordEditResult Set(PluginKey plugin, string formKey, string member, JsonElement value) =>
+    internal RecordEditResult Set(PluginCopyKey plugin, string formKey, string member, JsonElement value) =>
         Projected(Current<EditRecordHandler>().Set(plugin, formKey, member, value));
 
-    internal RecordEditResult DeleteRecord(PluginKey plugin, string formKey) =>
+    internal RecordEditResult DeleteRecord(PluginCopyKey plugin, string formKey) =>
         Projected(Current<DeleteRecordHandler>().DeleteRecord(plugin, formKey));
 
     internal RecordEditResult CreateRecord(
-        PluginKey plugin, string recordType, string? editorId, string? requestedFormKey = null) =>
+        PluginCopyKey plugin, string recordType, string? editorId, string? requestedFormKey = null) =>
         Projected(Current<CreateRecordHandler>().CreateRecord(plugin, recordType, editorId, requestedFormKey));
 
-    internal RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin) =>
+    internal RecordEditResult CopyRecordAsOverride(PluginCopyKey sourcePlugin, string formKey, PluginCopyKey destinationPlugin) =>
         Projected(Current<CopyRecordAsOverrideHandler>()
             .CopyRecordAsOverride(sourcePlugin, formKey, destinationPlugin));
 
     internal RecordEditResult CopyRecordAsNewRecord(
-        PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null) =>
+        PluginCopyKey sourcePlugin, string formKey, PluginCopyKey destinationPlugin, string? requestedFormKey = null) =>
         Projected(Current<CopyRecordAsNewRecordHandler>()
             .CopyRecordAsNewRecord(sourcePlugin, formKey, destinationPlugin, requestedFormKey));
 
-    internal RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null) =>
+    internal RecordEditResult RenumberRecord(PluginCopyKey plugin, string formKey, string? requestedFormKey = null) =>
         Projected(Current<RenumberRecordHandler>().RenumberRecord(plugin, formKey, requestedFormKey));
 
     /// <summary>A read, so nothing follows it.</summary>
-    internal RecordEditResult PeekNextFreeFormKey(PluginKey plugin) =>
+    internal RecordEditResult PeekNextFreeFormKey(PluginCopyKey plugin) =>
         Current<PeekNextFreeFormKeyHandler>().PeekNextFreeFormKey(plugin);
 
     private T Current<T>() where T : notnull => handlers.GetRequiredService<T>();

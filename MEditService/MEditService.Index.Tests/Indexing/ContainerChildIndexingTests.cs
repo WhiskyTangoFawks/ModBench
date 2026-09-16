@@ -52,7 +52,7 @@ public sealed class ContainerChildIndexingTests
 
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         return new Built(
@@ -128,7 +128,7 @@ public sealed class ContainerChildIndexingTests
     public void Unindex_RemovesContainerChildRows()
     {
         using var built = IndexFixture();
-        built.Repo.Unindex(new PluginKey("Dialogue.esp", "Data"));
+        built.Repo.Unindex(new PluginCopyKey("Dialogue.esp", "Data"));
 
         using var cmd = built.Repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM container_child";

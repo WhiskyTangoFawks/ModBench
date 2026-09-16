@@ -18,8 +18,8 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private static readonly PluginKey BaseKey = new("Base.esm", "Data");
-    private static readonly PluginKey WinnerKey = new("Winner.esp", "Data");
+    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
+    private static readonly PluginCopyKey WinnerKey = new("Winner.esp", "Data");
 
     private readonly PluginFixtureData _fixture;
     private readonly string _npc;
@@ -64,7 +64,7 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     {
         var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
         index.IndexMod(
-            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginKey(name, "Data"));
+            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginCopyKey(name, "Data"));
     }
 
     [Fact]

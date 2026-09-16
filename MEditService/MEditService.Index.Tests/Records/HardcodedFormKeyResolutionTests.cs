@@ -33,7 +33,7 @@ public class HardcodedFormKeyResolutionTests
         npc.Race.SetTo(new FormKey(ModKey.FromFileName("Fallout4.esm"), 0x000007));
 
         using var repo = OpenRepo();
-        var key = new PluginKey("Hardcoded.esp", "ModA");
+        var key = new PluginCopyKey("Hardcoded.esp", "ModA");
         repo.IndexMod(mod, Registration.Participating(0), key);
         repo.UpdateWinners();
 

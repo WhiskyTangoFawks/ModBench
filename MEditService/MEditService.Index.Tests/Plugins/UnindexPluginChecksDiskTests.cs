@@ -17,7 +17,7 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
     private readonly LoadOrderHolder _holder = new();
     private readonly IndexProjector _index;
 
-    private PluginKey Key => new(_data.Plugins[0].Name, _data.Plugins[0].Origin);
+    private PluginCopyKey Key => new(_data.Plugins[0].Name, _data.Plugins[0].Origin);
 
     public UnindexPluginChecksDiskTests()
     {

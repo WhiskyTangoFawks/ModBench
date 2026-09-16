@@ -50,7 +50,7 @@ public sealed class WatchOverflowTests : IDisposable
 
         var validated = Assert.Single(index.Of("validate"));
         Assert.Equal(
-            new PluginKey(IndexedModFixture.PluginName, IndexedModFixture.ModFolderOrigin), validated.Plugin);
+            new PluginCopyKey(IndexedModFixture.PluginName, IndexedModFixture.ModFolderOrigin), validated.Plugin);
     }
 
     [Fact]

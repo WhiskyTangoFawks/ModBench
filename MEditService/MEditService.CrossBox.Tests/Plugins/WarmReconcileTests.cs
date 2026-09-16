@@ -65,7 +65,7 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        Assert.NotEmpty(warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
     // The "during" half of progress, observed from inside the load loop. A load publishing its count
@@ -107,7 +107,7 @@ public sealed class WarmReconcileTests
     private sealed class ProgressWatchingIndex(IRecordIndex inner, ProgressWatchingFactory owner, List<int> observed)
         : DelegatingRecordIndex(inner)
     {
-        public override void Register(PluginKey key, Registration registration)
+        public override void Register(PluginCopyKey key, Registration registration)
         {
             observed.Add(owner.Index!.Status.IndexedPlugins.Count);
             base.Register(key, registration);
@@ -161,7 +161,7 @@ public sealed class WarmReconcileTests
         Assert.Equal(0, Registered(entries, "B.esp"));
 
         // And the re-index is what the load order serves: the edited record, not the stale one.
-        var documents = warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey("B.esp", PluginOrigin.DataDirectory));
+        var documents = warm.Store!.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }
@@ -226,7 +226,7 @@ public sealed class WarmReconcileTests
             {
                 second.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
                 var npc = second.Store!.At(RecordRef.Effective)
-                    .GetDocuments(new PluginKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
+                    .GetDocuments(new PluginCopyKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
                 npcSourceFile = SourceDocumentPath.Of(
                     modFolder, plugin, npc.RecordType, npc.FormKey, npc.EditorId, GameRelease.Fallout4);
             }
@@ -249,7 +249,7 @@ public sealed class WarmReconcileTests
             using var fourth = MakeManager(holder);
             fourth.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
             Assert.Contains(
-                fourth.Store!.At(RecordRef.Effective).GetDocuments(new PluginKey(plugin, origin)),
+                fourth.Store!.At(RecordRef.Effective).GetDocuments(new PluginCopyKey(plugin, origin)),
                 d => d.EditorId == "EditedBetweenLoads");
         }
         finally

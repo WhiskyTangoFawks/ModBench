@@ -21,7 +21,7 @@ public sealed class PluginCompileService(
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
-    public CompileResult Compile(PluginKey plugin, CompileSource source)
+    public CompileResult Compile(PluginCopyKey plugin, CompileSource source)
     {
         var loadOrder = loadOrderHolder.Current;
         if (loadOrder.Copies.Count == 0)
@@ -146,7 +146,7 @@ public sealed class PluginCompileService(
     // The binary is written and the snapshot parked, so the report is the only thing left to go
     // wrong: it becomes a diagnostic saying so, never a refusal of a compile that happened.
     private List<CompileDiagnostic> Reported(
-        Content content, PluginKey plugin, RegisteredCopy copy, LoadOrderSnapshot loadOrder,
+        Content content, PluginCopyKey plugin, RegisteredCopy copy, LoadOrderSnapshot loadOrder,
         SourceRepository repository, string? atRef)
     {
         try
@@ -169,7 +169,7 @@ public sealed class PluginCompileService(
 
     // ADR-0015 invariant 1: the write side never reads the Index, so the masters content requires
     // (ADR-0008) come from the records here, through the collector and the schema.
-    private Content ContentFacts(CompiledTree tree, PluginKey plugin, LoadOrderSnapshot loadOrder)
+    private Content ContentFacts(CompiledTree tree, PluginCopyKey plugin, LoadOrderSnapshot loadOrder)
     {
         // One walk, and the record type is the one RecordTableName gives, so what compile files a
         // record under and what the tree calls it cannot differ. A type no schema claims has no
@@ -208,7 +208,7 @@ public sealed class PluginCompileService(
     // ADR-0007 invariant 4: a dangling link is emittable, so compile writes the plugin and reports
     // it afterwards, answered by the files the game loads with the one just written among them.
     private List<CompileDiagnostic> LinkDiagnostics(
-        Content content, PluginKey plugin, RegisteredCopy copy, LoadOrderSnapshot loadOrder,
+        Content content, PluginCopyKey plugin, RegisteredCopy copy, LoadOrderSnapshot loadOrder,
         SourceRepository repository, string? atRef)
     {
         var answers = adapter.LinkTargets(
@@ -249,7 +249,7 @@ public sealed class PluginCompileService(
 
     // A plugin-level problem is the header record's: it is the one source unit that stands for the
     // whole plugin, so the Problems entry lands on a file the author can open.
-    private static CompileDiagnostic PluginDiagnostic(PluginKey plugin, string message) =>
+    private static CompileDiagnostic PluginDiagnostic(PluginCopyKey plugin, string message) =>
         new(PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name)),
             SourceRepository.HeaderDocumentFor(plugin.Name),
             message);

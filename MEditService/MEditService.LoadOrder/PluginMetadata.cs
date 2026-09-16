@@ -27,7 +27,7 @@ public record PluginMetadata(
     bool Enabled,
     bool Winning)
 {
-    public PluginKey Key => new(Name, Origin);
+    public PluginCopyKey Key => new(Name, Origin);
 
     public Registration Registration => new(LoadOrderIndex, Enabled, Winning);
 

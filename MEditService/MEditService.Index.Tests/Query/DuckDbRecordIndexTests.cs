@@ -27,7 +27,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             ModKey.FromFileName(TestPluginFixture.PluginName),
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -47,7 +47,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void GetRecords_WithPluginFilter_ReturnsMatchingOnly()
     {
         using var repo = LoadedRepository();
-        var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey(TestPluginFixture.PluginName), Limit: 100, Offset: 0));
+        var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: TestPluginFixture.PluginName, Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.Equal(TestPluginFixture.PluginName, r.Plugin));
     }
@@ -56,7 +56,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void GetRecords_WithPluginFilter_WrongPlugin_ReturnsEmpty()
     {
         using var repo = LoadedRepository();
-        var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("NonExistent.esp"), Limit: 100, Offset: 0));
+        var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Limit: 100, Offset: 0));
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
     }
@@ -134,7 +134,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(loaded, Registration.Participating(0), new PluginCopyKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
@@ -157,8 +157,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
 
-        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         var formKey = _fixture.Npc1FormKey.ToString();
@@ -175,7 +175,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.At(RecordRef.Effective).GetDocument(formKey, new PluginKey(TestPluginFixture.PluginName, "Data"));
+        var record = repo.At(RecordRef.Effective).GetDocument(formKey, new PluginCopyKey(TestPluginFixture.PluginName, "Data"));
 
         Assert.NotNull(record);
         Assert.Equal(TestPluginFixture.PluginName, record.Plugin.Name);
@@ -204,7 +204,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(loaded, Registration.Participating(0), new PluginCopyKey(loaded.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
             var record = repo.At(RecordRef.Effective).GetDocument(formKey);
@@ -253,8 +253,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod(modALoaded, Registration.Participating(0), new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
-            repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(modALoaded, Registration.Participating(0), new PluginCopyKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
             var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString());
@@ -294,8 +294,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod(modALoaded, Registration.Participating(0), new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
-            repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(modALoaded, Registration.Participating(0), new PluginCopyKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
             var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
@@ -318,7 +318,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void CountRecordsForPlugin_ReturnsCorrectCount()
     {
         using var repo = LoadedRepository();
-        var count = repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
+        var count = repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
@@ -327,7 +327,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void CountRecordsForPlugin_UnknownPlugin_ReturnsZero()
     {
         using var repo = LoadedRepository();
-        var count = repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("NonExistent.esp", "Data"))
+        var count = repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey("NonExistent.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         Assert.Equal(0, count);
     }
@@ -408,7 +408,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(loaded, Registration.Participating(0), new PluginCopyKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
@@ -429,7 +429,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         // Both conditions active — exercises the AND separator in BuildWhere.
         // Non-existent plugin + matching search = 0 results (not "all matching search").
-        var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("NonExistent.esp"), Search: "TestNPC", Limit: 100, Offset: 0));
+        var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "NonExistent.esp", Search: "TestNPC", Limit: 100, Offset: 0));
         Assert.Equal(0, result.Total);
     }
 
@@ -459,11 +459,11 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod(modALoaded, Registration.Participating(0), new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
-            repo.IndexMod(modBLoaded, Registration.Participating(1), new PluginKey(modBLoaded.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(modALoaded, Registration.Participating(0), new PluginCopyKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.IndexMod(modBLoaded, Registration.Participating(1), new PluginCopyKey(modBLoaded.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
-            var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("SearchA.esm"), Limit: 100, Offset: 0));
+            var result = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "SearchA.esm", Limit: 100, Offset: 0));
 
             Assert.Equal(1, result.Total);
             Assert.All(result.Items, r => Assert.Equal("SearchA.esm", r.Plugin));
@@ -495,7 +495,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(loaded, Registration.Participating(0), new PluginCopyKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var summary = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0)).Items.Single();
@@ -577,7 +577,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(loaded, Registration.Participating(0), new PluginCopyKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
@@ -608,7 +608,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(loaded, Registration.Participating(0), new PluginCopyKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var record = repo.At(RecordRef.Effective).GetDocument(npcFormKey.ToString());
@@ -646,8 +646,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(baseMod, Registration.Participating(0), new PluginKey(baseMod.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod(patchMod, Registration.Participating(1), new PluginKey(patchMod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(baseMod, Registration.Participating(0), new PluginCopyKey(baseMod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(patchMod, Registration.Participating(1), new PluginCopyKey(patchMod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcFormKey.ToString())!.Entries;
@@ -678,7 +678,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var full = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));

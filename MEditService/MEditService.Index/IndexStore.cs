@@ -202,9 +202,9 @@ internal sealed class IndexStore : IDisposable
     /// <summary>ADR-0009: validity is by content, never by clock: a hash, not mtime, since MO2, xEdit
     /// and the user all write these files. Registrations are not cleared (ADR-0013); the first
     /// reconcile corrects them.</summary>
-    public List<PluginKey> ValidateAgainstDisk()
+    public List<PluginCopyKey> ValidateAgainstDisk()
     {
-        var stale = new List<PluginKey>();
+        var stale = new List<PluginCopyKey>();
         if (_databasePath == null) return stale;
 
         var timer = Stopwatch.StartNew();
@@ -245,14 +245,14 @@ internal sealed class IndexStore : IDisposable
         return stale;
     }
 
-    private List<(PluginKey Key, string FilePath, string ContentHash)> IndexedFiles()
+    private List<(PluginCopyKey Key, string FilePath, string ContentHash)> IndexedFiles()
     {
-        var rows = new List<(PluginKey Key, string FilePath, string ContentHash)>();
+        var rows = new List<(PluginCopyKey Key, string FilePath, string ContentHash)>();
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}";
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
-            rows.Add((new PluginKey(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
+            rows.Add((new PluginCopyKey(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
         return rows;
     }
 
@@ -272,22 +272,22 @@ internal sealed class IndexStore : IDisposable
     /// <summary>The disk claim <paramref name="key"/>'s rows carry, or null when nothing backs them.
     /// Validate's untracked half asks for both halves at once: the path to re-hash and the hash the
     /// rows were built under.</summary>
-    internal (string FilePath, string ContentHash)? IndexedFile(PluginKey key)
+    internal (string FilePath, string ContentHash)? IndexedFile(PluginCopyKey key)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"SELECT file_path, content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2";
-        DuckDbSql.AddParams(cmd, [key.Name, key.Origin!]);
+        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         return reader.Read() ? (reader.GetString(0), reader.GetString(1)) : null;
     }
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
-    public string? IndexedContentHash(PluginKey key)
+    public string? IndexedContentHash(PluginCopyKey key)
     {
         using var connection = OpenReadConnection();
         return DuckDbSql.ScalarString(connection,
             $"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
-            key.Name, key.Origin!);
+            key.Name, key.Origin);
     }
 
     // ADR-0009: the file half of an Index() call, inside its transaction. A caller naming no file

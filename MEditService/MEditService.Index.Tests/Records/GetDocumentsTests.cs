@@ -40,7 +40,7 @@ public class GetDocumentsTests
     public void GetDocuments_ReturnsEveryDocumentThePluginIndexed_IdenticalToPointReads()
     {
         var mod = BuildMod();
-        var key = new PluginKey("Bulk.esp", "ModA");
+        var key = new PluginCopyKey("Bulk.esp", "ModA");
 
         using var repo = OpenRepo();
         repo.IndexMod(mod, Registration.Participating(0), key);
@@ -88,14 +88,14 @@ public class GetDocumentsTests
         modB.Npcs.AddNew("SecondFromModB");
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey("Shared.esp", "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey("Shared.esp", "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey("Shared.esp", "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey("Shared.esp", "ModB"));
 
         // Records only: each copy also carries its own header document, which is scoped
         // by origin exactly like the records are (asserted separately below) but says nothing about
         // the per-origin *record* scoping this test is about.
-        var fromA = repo.At(RecordRef.Effective).GetDocuments(new PluginKey("Shared.esp", "ModA"));
-        var fromB = repo.At(RecordRef.Effective).GetDocuments(new PluginKey("Shared.esp", "ModB"));
+        var fromA = repo.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("Shared.esp", "ModA"));
+        var fromB = repo.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("Shared.esp", "ModB"));
         var recordsFromA = fromA.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
         var recordsFromB = fromB.Where(d => d.RecordType != PluginHeader.RecordType).ToList();
 

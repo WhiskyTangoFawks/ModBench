@@ -37,7 +37,7 @@ public sealed class IndexProjectorTests
     private sealed class CountingIndex(IRecordIndex inner, CountingFactory owner) : DelegatingRecordIndex(inner)
     {
         public override void Index(
-            IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
+            IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null)
         {
             owner.Indexed++;
             base.Index(documents, registration, key, filePath);
@@ -92,7 +92,7 @@ public sealed class IndexProjectorTests
 
     private static string SharedNpc(IndexProjector projector) =>
         projector.Reads!
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esm"), Limit: 10, Offset: 0))
+            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
     private static string? WinnerOf(IndexProjector projector, string formKey) =>
@@ -114,7 +114,7 @@ public sealed class IndexProjectorTests
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
         holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
-        await projector.ReindexPlugin(new PluginKey("B.esp", b.Origin));
+        await projector.ReindexPlugin(new PluginCopyKey("B.esp", b.Origin));
 
         Assert.Equal("A.esm", WinnerOf(projector, npc));
     }
@@ -172,7 +172,7 @@ public sealed class IndexProjectorTests
         Reconcile(projector, holder, snapshot);
 
         var opened = projector.RequireReads().OpenedCopies;
-        Assert.DoesNotContain(new PluginKey("Gone.esp", "SomeMod"), opened.Keys);
+        Assert.DoesNotContain(new PluginCopyKey("Gone.esp", "SomeMod"), opened.Keys);
         Assert.Contains(snapshot.Copies.Single(c => c.Name == "A.esm").Key, opened.Keys);
     }
 
@@ -235,7 +235,7 @@ public sealed class IndexProjectorTests
         Reconcile(projector, holder, Snapshot(fx));
         var before = projector.Sequence;
 
-        await projector.ReindexPlugin(new PluginKey("B.esp", PluginOrigin.DataDirectory));
+        await projector.ReindexPlugin(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
 
         Assert.Equal(before + 1, projector.Sequence);
     }
@@ -269,8 +269,8 @@ public sealed class IndexProjectorTests
 
         using (projector.BeginProjection())
         {
-            await projector.ReindexPlugin(new PluginKey("A.esm", PluginOrigin.DataDirectory));
-            await projector.ReindexPlugin(new PluginKey("B.esp", PluginOrigin.DataDirectory));
+            await projector.ReindexPlugin(new PluginCopyKey("A.esm", PluginOrigin.DataDirectory));
+            await projector.ReindexPlugin(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
         }
 
         Assert.Equal(before + 1, projector.Sequence);
@@ -295,7 +295,7 @@ public sealed class IndexProjectorTests
         {
             using (index.BeginProjection())
             {
-                index.Register(new PluginKey("First.esm", PluginOrigin.DataDirectory), Registration.Participating(0));
+                index.Register(new PluginCopyKey("First.esm", PluginOrigin.DataDirectory), Registration.Participating(0));
                 index.Announce(() => announced.Add(index.Sequence));
                 firstOpen.Set();
                 Wait(secondOpen);
@@ -308,7 +308,7 @@ public sealed class IndexProjectorTests
             Wait(firstOpen);
             using (index.BeginProjection())
             {
-                index.Register(new PluginKey("Second.esp", PluginOrigin.DataDirectory), Registration.Participating(1));
+                index.Register(new PluginCopyKey("Second.esp", PluginOrigin.DataDirectory), Registration.Participating(1));
                 index.Announce(() => announced.Add(index.Sequence));
                 secondOpen.Set();
                 Wait(firstClosed);
@@ -375,7 +375,7 @@ public sealed class IndexProjectorTests
 
         var arrived = fx.Plugins[1];
         var rows = projector.Reads!.Search(new RecordQuery(
-            Plugin: new PluginKey(arrived.Name, arrived.Origin), Limit: 10, Offset: 0));
+            Plugin: arrived.Name, Origin: arrived.Origin, Limit: 10, Offset: 0));
         Assert.NotEmpty(rows.Items);
     }
 
@@ -419,7 +419,7 @@ public sealed class IndexProjectorTests
         Reconcile(projector, holder, Snapshot(fx));
 
         var matched = projector.Reads!
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("C.esp", PluginOrigin.DataDirectory), Limit: 10, Offset: 0));
+            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "C.esp", Origin: PluginOrigin.DataDirectory, Limit: 10, Offset: 0));
         Assert.Equal(["CharlieNpc"], matched.Items.Select(i => i.EditorId));
     }
 }

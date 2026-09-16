@@ -209,7 +209,7 @@ public static class RecordEndpoints
                 return null;
             },
             execute: () => edits.Edit(
-                new PluginKey(request.Plugin, request.Origin), decoded,
+                new PluginCopyKey(request.Plugin, request.Origin), decoded,
                 new RecordEditEnvelope(request.Op, request.Path ?? [], request.Value)),
             onApplied: result => Results.Ok(new RecordEditResponse(true, decoded, spelled)),
             onWriteFailure: ex =>
@@ -243,7 +243,7 @@ public static class RecordEndpoints
                 string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin)
                     ? Results.Problem("Plugin name and origin are required.", statusCode: 400)
                     : null,
-            execute: () => edits.DeleteRecord(new PluginKey(request.Plugin, request.Origin), decoded),
+            execute: () => edits.DeleteRecord(new PluginCopyKey(request.Plugin, request.Origin), decoded),
             onApplied: result => Results.Ok(new RecordDeleteResponse(true, decoded)),
             onWriteFailure: ex =>
             {
@@ -276,7 +276,7 @@ public static class RecordEndpoints
                 string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin)
                     ? Results.Problem("Plugin name and origin are required.", statusCode: 400)
                     : null,
-            execute: () => edits.RenumberRecord(new PluginKey(request.Plugin, request.Origin), decoded, request.NewFormKey),
+            execute: () => edits.RenumberRecord(new PluginCopyKey(request.Plugin, request.Origin), decoded, request.NewFormKey),
             onApplied: result => Results.Ok(new RecordRenumberResponse(true, decoded, result.NewFormKey!)),
             onWriteFailure: ex =>
             {
@@ -324,8 +324,8 @@ public static class RecordEndpoints
                 return null;
             },
             execute: () => edits.CopyRecordAsOverride(
-                new PluginKey(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginKey(request.DestinationPlugin, request.DestinationOrigin)),
+                new PluginCopyKey(request.SourcePlugin, request.SourceOrigin), decoded,
+                new PluginCopyKey(request.DestinationPlugin, request.DestinationOrigin)),
             onApplied: result => Results.Ok(new RecordCopyAsOverrideResponse(true, decoded)),
             onWriteFailure: ex =>
             {
@@ -363,8 +363,8 @@ public static class RecordEndpoints
                 return null;
             },
             execute: () => edits.CopyRecordAsNewRecord(
-                new PluginKey(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey),
+                new PluginCopyKey(request.SourcePlugin, request.SourceOrigin), decoded,
+                new PluginCopyKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey),
             onApplied: result => Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, result.NewFormKey!)),
             onWriteFailure: ex =>
             {

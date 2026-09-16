@@ -111,7 +111,7 @@ public static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/records/next-form-key", (
             string plugin, string origin, PeekNextFreeFormKeyHandler edits) =>
         {
-            var result = edits.PeekNextFreeFormKey(WriteEndpointMapping.PluginKeyOf(plugin, origin));
+            var result = edits.PeekNextFreeFormKey(WriteEndpointMapping.PluginCopyKeyOf(plugin, origin));
             return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : WriteEndpointMapping.Refusal(result);
         })
             .WithName("PeekNextFreeFormKey")
@@ -173,7 +173,7 @@ public static class PluginEndpoints
         LoadOrderSnapshot previous;
         LoadOrderSnapshot registered;
         RegisteredCopy copy;
-        IReadOnlyCollection<PluginKey> held;
+        IReadOnlyCollection<PluginCopyKey> held;
         long version;
         try
         {
@@ -231,7 +231,7 @@ public static class PluginEndpoints
 
     // No file was created, so the registration goes; only it, because a snapshot may have landed
     // meanwhile, and the copy this one displaced under the same identity goes back.
-    internal static LoadOrderSnapshot Unregistered(LoadOrderSnapshot current, LoadOrderSnapshot previous, PluginKey key) =>
+    internal static LoadOrderSnapshot Unregistered(LoadOrderSnapshot current, LoadOrderSnapshot previous, PluginCopyKey key) =>
         previous.Copy(key) is { } displaced
             ? current.Without(key).With(displaced)
             : current.Without(key);
@@ -260,7 +260,7 @@ public static class PluginEndpoints
 
     // Which registered copies Editing actually holds: the copies the Index has open. A copy it
     // could not open is registered like any other but has no bytes to read.
-    private static IReadOnlyCollection<PluginKey> HeldCopies(IQueryIndex index) =>
+    private static IReadOnlyCollection<PluginCopyKey> HeldCopies(IQueryIndex index) =>
         [.. index.RequireReads().OpenedCopies.Keys];
 
     // ADR-0007: the Track gesture. Origin names the mod folder (every loaded plugin sharing
@@ -312,7 +312,7 @@ public static class PluginEndpoints
         try
         {
             CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
-            var result = compileHandler.Compile(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), source);
+            var result = compileHandler.Compile(WriteEndpointMapping.PluginCopyKeyOf(plugin, req.Origin), source);
             return Results.Ok(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -340,7 +340,7 @@ public static class PluginEndpoints
                     return Results.Problem("A record type is required.", statusCode: 400);
                 return null;
             },
-            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
+            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginCopyKeyOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
             onApplied: result => Results.Ok(new RecordCreateResponse(true, result.NewFormKey!, req.RecordType)),
             onWriteFailure: ex =>
             {

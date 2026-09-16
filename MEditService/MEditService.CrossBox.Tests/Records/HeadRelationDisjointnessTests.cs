@@ -27,7 +27,7 @@ public sealed class HeadRelationDisjointnessTests
         // Precondition: the record really is dirty, so a snapshot row exists to be duplicated.
         Assert.Equal(
             WorkingTreeState.Modified,
-            mod.Index.Projected().Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
+            mod.Index.Projected().Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: 100))
                 .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
         await mod.Index.ReindexPlugin(mod.Plugin);
@@ -41,11 +41,11 @@ public sealed class HeadRelationDisjointnessTests
         // dirty, so it is still diffable and revertable.
         Assert.Equal(
             WorkingTreeState.Modified,
-            mod.Index.Projected().Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
+            mod.Index.Projected().Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: 100))
                 .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
         var atHead = mod.Index.Projected(RecordRef.Head)
-            .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
+            .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
 
         Assert.Equal(1, atHead);

@@ -132,7 +132,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             using var overlay = ModFactory.ImportGetter(
                 new ModPath(ModKey.FromFileName(name), path), gameRelease,
                 LocalizedStrings.ForRead(new PluginStrings(null, dataFolderPath)));
-            repo.IndexMod(overlay, Registration.Participating(slot), new PluginKey(name, "Data"));
+            repo.IndexMod(overlay, Registration.Participating(slot), new PluginCopyKey(name, "Data"));
         }
     }
 
@@ -151,7 +151,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
         using var overlay = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
         using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(overlay, Registration.Participating(0), new PluginKey(overlay.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(overlay, Registration.Participating(0), new PluginCopyKey(overlay.ModKey.FileName.ToString(), "Data"));
     }
 
     // Open through the importer, enumerate every major record, serialise each through

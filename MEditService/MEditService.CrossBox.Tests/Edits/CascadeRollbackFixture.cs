@@ -47,9 +47,9 @@ public sealed class CascadeRollbackFixture : IDisposable
     public IReadOnlyList<LoadOrderEntry> Entries => _data.Plugins;
 
     public string GameDirectory => _data.GameDirectory;
-    public PluginKey TargetPlugin { get; } = new(TargetName, TargetMod);
-    public PluginKey FirstPlugin { get; } = new(FirstName, FirstMod);
-    public PluginKey SecondPlugin { get; } = new(SecondName, SecondMod);
+    public PluginCopyKey TargetPlugin { get; } = new(TargetName, TargetMod);
+    public PluginCopyKey FirstPlugin { get; } = new(FirstName, FirstMod);
+    public PluginCopyKey SecondPlugin { get; } = new(SecondName, SecondMod);
 
     public FormKey Race { get; }
     public FormKey HomeNpc { get; }
@@ -126,9 +126,9 @@ public sealed class CascadeRollbackFixture : IDisposable
         _watcher.Rearm(holder.Current);
     }
 
-    public string ModFolderOf(PluginKey plugin) => LoadOrder.ModFolderOf(plugin)!;
+    public string ModFolderOf(PluginCopyKey plugin) => LoadOrder.ModFolderOf(plugin)!;
 
-    public string SourceFileOf(PluginKey plugin, FormKey formKey, string recordType, string editorId) =>
+    public string SourceFileOf(PluginCopyKey plugin, FormKey formKey, string recordType, string editorId) =>
         SourceDocumentPath.Of(
             ModFolderOf(plugin), plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
@@ -173,7 +173,7 @@ public sealed class CascadeRollbackFixture : IDisposable
                 .Select(l => l.Trim())
                 .ToList());
 
-    public PluginKey[] AllPlugins => [TargetPlugin, FirstPlugin, SecondPlugin];
+    public PluginCopyKey[] AllPlugins => [TargetPlugin, FirstPlugin, SecondPlugin];
 
     public void Dispose()
     {

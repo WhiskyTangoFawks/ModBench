@@ -22,7 +22,7 @@ namespace MEditService.Tests.Source;
 /// reported number, not a suite-gating assertion.</summary>
 public sealed class TrackServiceTests
 {
-    private static IReadOnlyCollection<PluginKey> HeldIn(LoadOrderSnapshot loadOrder) =>
+    private static IReadOnlyCollection<PluginCopyKey> HeldIn(LoadOrderSnapshot loadOrder) =>
         [.. loadOrder.Copies.Select(copy => copy.Key)];
 
     // Track answers with a refusal for every way out it has, so the endpoint maps one value rather
@@ -72,7 +72,7 @@ public sealed class TrackServiceTests
             ]);
 
             await new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(loadOrder, [new PluginKey("Fixture.esp", "FixtureMod")], "FixtureMod", SourcePreset.Edits);
+                .TrackAsync(loadOrder, [new PluginCopyKey("Fixture.esp", "FixtureMod")], "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
             Assert.True(Directory.Exists(Path.Combine(modFolder, SourceRepository.RootFor("Fixture.esp"))));

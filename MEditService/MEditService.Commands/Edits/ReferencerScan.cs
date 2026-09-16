@@ -21,13 +21,13 @@ internal sealed class ReferencerScan(
     /// and the embedded children inside it holding a link of their own. A null
     /// <c>SchemaType</c> is a document nothing could read.</summary>
     internal sealed record Referencing(
-        PluginKey Plugin, SourceRepository Repository, SourceDocument Document, string? SchemaType,
+        PluginCopyKey Plugin, SourceRepository Repository, SourceDocument Document, string? SchemaType,
         IReadOnlyList<string> EmbeddedFormKeys);
 
     /// <summary>Every copy linking <paramref name="targetFormKey"/>, the target record itself excluded:
     /// one typed remap moves its whole graph. <c>Untracked</c> names the copies whose links no
     /// renumber can rewrite.</summary>
-    public (List<Referencing> Tracked, List<string> Untracked) Of(string targetFormKey, PluginKey targetPlugin)
+    public (List<Referencing> Tracked, List<string> Untracked) Of(string targetFormKey, PluginCopyKey targetPlugin)
     {
         var tracked = new List<Referencing>();
         var untracked = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -57,7 +57,7 @@ internal sealed class ReferencerScan(
     }
 
     private IEnumerable<Referencing> InTree(
-        SourceRepository repository, PluginKey plugin, FormKey target, FormKey? itself,
+        SourceRepository repository, PluginCopyKey plugin, FormKey target, FormKey? itself,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, ContainerDocuments containers)
     {
         var spelled = target.ToString();
@@ -78,7 +78,7 @@ internal sealed class ReferencerScan(
     // Null is "this document links nothing". Every reader here is over text something else may have
     // written, so one that throws yields a document no schema names, which the caller refuses on.
     private Referencing? Decide(
-        SourceRepository repository, PluginKey plugin, SourceDocument document, FormKey target, FormKey? itself,
+        SourceRepository repository, PluginCopyKey plugin, SourceDocument document, FormKey target, FormKey? itself,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, ContainerDocuments containers)
     {
         try

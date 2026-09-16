@@ -38,7 +38,7 @@ public sealed class SourceRepositoryLayoutTests
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits, [], new TrackProvenance(null, null, new Dictionary<string, string>()));
             SourceRepository.Open(modFolder, Release)!.Put(
-                new PluginKey(pluginFileName), new SourceDocument(formKeyString, recordType, editorId, "{}"));
+                new PluginCopyKey(pluginFileName, "LayoutMod"), new SourceDocument(formKeyString, recordType, editorId, "{}"));
 
             var path = Path.GetRelativePath(
                 modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());

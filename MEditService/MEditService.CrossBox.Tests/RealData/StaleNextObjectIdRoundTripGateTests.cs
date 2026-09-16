@@ -119,13 +119,13 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-stale-header-").FullName;
         public string PluginPath { get; }
-        public PluginKey Plugin { get; }
+        public PluginCopyKey Plugin { get; }
 
         public TrackedScratch(string fileName)
         {
             PluginPath = Path.Combine(ModFolder, fileName);
             File.Copy(FixturePath(fileName), PluginPath);
-            Plugin = new PluginKey(fileName, "FixtureMod");
+            Plugin = new PluginCopyKey(fileName, "FixtureMod");
 
             var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
@@ -138,7 +138,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
                     inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
                 }
             }
-            inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin!, Slot: inputs.Count, Enabled: true, Winning: true));
+            inputs.Add(new LoadOrderEntry(fileName, PluginPath, Plugin.Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
             _index = new IndexProjector(
                 Holder,
@@ -151,7 +151,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             new TrackService(
                     NullLogger<TrackService>.Instance,
                     deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : MutagenPluginAdapter.Instance)
-                .TrackAsync(_index, Holder, Plugin.Origin!, SourcePreset.Edits);
+                .TrackAsync(_index, Holder, Plugin.Origin, SourcePreset.Edits);
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(Holder.Current);

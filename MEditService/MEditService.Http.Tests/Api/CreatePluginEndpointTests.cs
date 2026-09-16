@@ -26,7 +26,7 @@ public sealed class CreatePluginEndpointTests : IDisposable
             TestEditService.PluginCreateHandler(holder ?? _mod.Holder), TestWatcher.Inert(), NullLoggerFactory.Instance);
 
     private RegisteredCopy? Registered(string name, string origin) =>
-        _mod.Holder.Current.Copy(new PluginKey(name, origin));
+        _mod.Holder.Current.Copy(new PluginCopyKey(name, origin));
 
     // ADR-0007: a created plugin is a registered copy at once, so the Track that follows it in the
     // same gesture, and every later reader, find it without waiting for the next snapshot.
@@ -156,7 +156,7 @@ public sealed class CreatePluginEndpointTests : IDisposable
             await Create("Editable.esp", IndexedModFixture.ModFolderOrigin));
 
         var edit = TestEditService.CreateHandler(_mod.Holder).CreateRecord(
-            new PluginKey("Editable.esp", IndexedModFixture.ModFolderOrigin), "npc_", "MintedNpc");
+            new PluginCopyKey("Editable.esp", IndexedModFixture.ModFolderOrigin), "npc_", "MintedNpc");
 
         Assert.True(edit.Applied);
         Assert.EndsWith("Editable.esp", edit.NewFormKey!, StringComparison.OrdinalIgnoreCase);

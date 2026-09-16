@@ -87,7 +87,7 @@ public sealed class LoadOrderEndpointsTests
         await reconcile;
 
         Assert.IsAssignableFrom<Ok<PluginCreatedResponse>>(created);
-        Assert.NotNull(holder.Current.Copy(new PluginKey("Interleaved.esp", "InterleavedMod")));
+        Assert.NotNull(holder.Current.Copy(new PluginCopyKey("Interleaved.esp", "InterleavedMod")));
         Assert.Contains(holder.Current.Copies, c => c.Name == "A.esp");
     }
 

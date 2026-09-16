@@ -46,13 +46,13 @@ public sealed partial class SourceRepository
 
     /// <summary>The mod folder only when it is tracked — the single condition under which a plugin
     /// has source text at all.</summary>
-    public static string? TrackedModFolderOf(LoadOrderSnapshot loadOrder, PluginKey plugin) =>
+    public static string? TrackedModFolderOf(LoadOrderSnapshot loadOrder, PluginCopyKey plugin) =>
         loadOrder.ModFolderOf(plugin) is { } modFolder && IsTracked(modFolder) ? modFolder : null;
 
     /// <summary>The record's own text, or null when no document holds it. The identity comes back as
     /// asked; the body is the tree's answer, spliced out of another record's document when that is
     /// what carries it.</summary>
-    public SourceDocument? Get(PluginKey plugin, RecordIdentity identity)
+    public SourceDocument? Get(PluginCopyKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit || !File.Exists(unit.FullPath)) return null;
 
@@ -63,12 +63,12 @@ public sealed partial class SourceRepository
     /// <summary>Creates or replaces the record's document, placing an absent one from its identity
     /// alone and minting the levels above it. A record another document carries is replaced at its
     /// own slot, every other byte untouched.</summary>
-    public void Put(PluginKey plugin, SourceDocument document) => Put(plugin, document, placement: null);
+    public void Put(PluginCopyKey plugin, SourceDocument document) => Put(plugin, document, placement: null);
 
     /// <summary>The put of an exterior cell, the one record whose directory sits inside another
     /// record's: <paramref name="placement"/> names the worldspace holding it and its block numbers.
     /// Every other record is placed from its identity alone.</summary>
-    public void Put(PluginKey plugin, SourceDocument document, CellPlacement? placement)
+    public void Put(PluginCopyKey plugin, SourceDocument document, CellPlacement? placement)
     {
         var identity = new RecordIdentity(document.FormKey, document.RecordType, document.EditorId);
         var unit = Locate(plugin, identity)
@@ -94,7 +94,7 @@ public sealed partial class SourceRepository
     /// <summary>Takes the record out of the tree: its file, its directory, or its element of another
     /// record's document. Already gone is the state asked for; the other two outcomes say what
     /// stopped it.</summary>
-    public SourceRemoval Remove(PluginKey plugin, RecordIdentity identity)
+    public SourceRemoval Remove(PluginCopyKey plugin, RecordIdentity identity)
     {
         if (Locate(plugin, identity) is not { } unit) return SourceRemoval.NoDocumentHoldsIt;
 
@@ -125,7 +125,7 @@ public sealed partial class SourceRepository
     /// <summary>Moves the record's file or directory to the name <paramref name="newEditorId"/>
     /// computes, and answers the leaf it now has. Null when nothing moved: the header and an inlined
     /// record have no leaf name of their own.</summary>
-    public string? Rename(PluginKey plugin, RecordIdentity identity, string? newEditorId)
+    public string? Rename(PluginCopyKey plugin, RecordIdentity identity, string? newEditorId)
     {
         if (identity.RecordType == PluginHeader.RecordType) return null;
         // The name it already has, so nothing moves — and a leaf something else renamed keeps that
@@ -156,7 +156,7 @@ public sealed partial class SourceRepository
 
     private static byte[] OwnerBytes(SourceUnit unit) => StripUtf8Bom(File.ReadAllBytes(unit.FullPath));
 
-    private static InvalidOperationException NoPlaceInTheTree(PluginKey plugin, RecordIdentity identity) =>
+    private static InvalidOperationException NoPlaceInTheTree(PluginCopyKey plugin, RecordIdentity identity) =>
         new($"No document in {plugin.Name}'s tree holds {identity.FormKey}, and its type has no file of " +
             "its own, so there is nowhere to write it.");
 
