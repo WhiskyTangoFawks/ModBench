@@ -53,12 +53,11 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
     public async Task CreatePlugin_IsQueryable_OnceItsOwnSnapshotReachesTheIndex()
     {
         var modFolder = ModFolder("QueryableMod");
-        var beforeSequence = await _client.GetFromJsonAsync<long>("/load-order/sequence");
-
         var created = await _client.PostAsJsonAsync("/plugins/create", new { name = "Queryable.esp", path = modFolder, origin = "QueryableMod" });
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var version = (await created.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("version").GetInt64();
 
-        await _client.AwaitTerminalLoadOrderStatus(beforeSequence);
+        await _client.AwaitTerminalLoadOrderStatus(version);
         Assert.Contains(await Listed(), name => name == "Queryable.esp");
     }
 

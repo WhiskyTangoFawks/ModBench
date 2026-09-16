@@ -45,7 +45,10 @@ public sealed record LoadOrderStatus(
     IReadOnlyList<PluginLoadFailure> Failures,
     // Non-null only for HeldElsewhere or Failed: the ready-to-show reason, carried here because
     // neither ever reaches the put's own response.
-    string? Message = null)
+    string? Message = null,
+    // The Apply this status answers for — a client waits for this to reach its own Apply's
+    // version, never for a tick a fast or no-op reconcile can settle before one is subscribed.
+    long Version = 0)
 {
     public static readonly LoadOrderStatus None =
         new(LoadOrderState.None, 0, [], ConflictsComputed: false, []);

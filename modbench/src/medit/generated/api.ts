@@ -780,6 +780,8 @@ export interface components {
         };
         LoadOrderResponse: {
             applied: boolean;
+            /** Format: int64 */
+            version: number;
         };
         /** @enum {string} */
         LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere" | "Failed";
@@ -791,6 +793,8 @@ export interface components {
             conflictsComputed: boolean;
             failures: components["schemas"]["PluginLoadFailure"][];
             message?: string | null;
+            /** Format: int64 */
+            version: number;
         };
         MasterIssue: {
             masterName: string;
@@ -836,6 +840,8 @@ export interface components {
             origin: string;
             /** Format: int32 */
             slot?: number | null;
+            /** Format: int64 */
+            version: number;
         };
         PluginDiagnosisReport: {
             plugin: string;

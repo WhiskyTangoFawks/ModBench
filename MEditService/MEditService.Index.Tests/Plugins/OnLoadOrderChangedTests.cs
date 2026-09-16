@@ -42,7 +42,7 @@ public sealed class OnLoadOrderChangedTests
         using var index = MakeIndex(holder, notifications);
         var snapshot = IndexReconcile.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
 
-        index.OnLoadOrderChanged(snapshot);
+        index.OnLoadOrderChanged(snapshot, version: 1);
 
         Assert.Equal(LoadOrderState.HeldElsewhere, index.Status.State);
         Assert.NotNull(index.Status.Message);
@@ -69,11 +69,11 @@ public sealed class OnLoadOrderChangedTests
         using var __ = gate;
 
         var first = Task.Run(() => index.OnLoadOrderChanged(
-            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins)));
+            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins), version: 1));
         await gate.WaitUntilParkedAsync();
 
         var second = Task.Run(() => index.OnLoadOrderChanged(
-            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins)));
+            IndexReconcile.Snapshot(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins), version: 2));
         var secondCompletedBeforeTheFirstStopped = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500))) == second;
         Assert.False(secondCompletedBeforeTheFirstStopped);
 
@@ -82,8 +82,29 @@ public sealed class OnLoadOrderChangedTests
         await second;
 
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.Equal(2, index.Status.Version);
         Assert.DoesNotContain(notifications.Notifications.OfType<LoadOrderStatusNotification>(),
             n => n.Status.State == LoadOrderState.HeldElsewhere);
+    }
+
+    // The rival this pins: publishing only when Reconcile actually changed something, which would
+    // leave a client that applied an identical resend waiting on a tick that never comes.
+    [Fact]
+    public void AnIdenticalResend_StillPublishesATerminalStatus_ForItsOwnVersion()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("no-op-subscriber").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = MakeIndex(holder, notifications);
+        var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
+
+        index.OnLoadOrderChanged(snapshot, version: 1);
+        index.OnLoadOrderChanged(snapshot, version: 2);
+
+        Assert.Equal(LoadOrderState.Ready, index.Status.State);
+        Assert.Equal(2, index.Status.Version);
+        Assert.Equal(2, notifications.Notifications.OfType<LoadOrderStatusNotification>()
+            .Count(n => n.Status.State == LoadOrderState.Ready));
     }
 
     private static async Task<bool> CompletesWithin(Task task, TimeSpan timeout) =>

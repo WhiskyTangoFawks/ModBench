@@ -45,14 +45,14 @@ describe('toLoadOrderStatus', () => {
   it('keys indexedPlugins on filename alone, dropping origin and state', () => {
     const status = toLoadOrderStatus({
       state: 'Reconciling',
-      totalPlugins: 3,
+      totalPlugins: 3, version: 1,
       indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'TestMod.esp', origin: 'ModA' }],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
 
     expect(status).toEqual({
-      totalPlugins: 3,
+      totalPlugins: 3, version: 1,
       indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
@@ -65,7 +65,7 @@ describe('toLoadOrderStatus', () => {
   it('carries refusalMessage for the HeldElsewhere state', () => {
     const status = toLoadOrderStatus({
       state: 'HeldElsewhere',
-      totalPlugins: 0,
+      totalPlugins: 0, version: 1,
       indexedPlugins: [],
       conflictsComputed: false,
       failures: [],
@@ -78,7 +78,7 @@ describe('toLoadOrderStatus', () => {
   it('carries refusalMessage for the Failed state', () => {
     const status = toLoadOrderStatus({
       state: 'Failed',
-      totalPlugins: 0,
+      totalPlugins: 0, version: 1,
       indexedPlugins: [],
       conflictsComputed: false,
       failures: [],

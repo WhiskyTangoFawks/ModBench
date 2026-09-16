@@ -44,6 +44,9 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     private string? _heldElsewhereMessage;
     // The same lifetime as _heldElsewhereMessage, for the reconcile's other known-unknown outcome.
     private string? _failureMessage;
+    // The version OnLoadOrderChanged last finished answering for — never a superseded attempt's,
+    // since that one returns before reaching its own update (ADR-0013).
+    private long _version;
 
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside this
     /// project names the store, its factory or how a file is opened (ADR-0009).</summary>
@@ -167,12 +170,12 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
                 LoadOrderStatus held;
                 if (_heldPlugins is null)
                 {
-                    held = LoadOrderStatus.None;
+                    held = LoadOrderStatus.None with { Version = _version };
                 }
                 else
                 {
                     var state = _conflictsComputed ? LoadOrderState.Ready : LoadOrderState.Reconciling;
-                    held = new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures);
+                    held = new LoadOrderStatus(state, _plannedCount, [.. _indexed], _conflictsComputed, _heldPlugins.Failures, Version: _version);
                 }
 
                 if (_heldElsewhereMessage is { } heldElsewhere)
@@ -278,16 +281,17 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): subscribes
     /// itself, off the caller's thread — the exclusive gate below already supersedes an in-flight
     /// reconcile, so nothing here waits for one to finish before returning.</summary>
-    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += snapshot => RunLongRunning(() => OnLoadOrderChanged(snapshot));
+    public void SubscribeTo(LoadOrderHolder holder) =>
+        holder.Changed += (snapshot, version) => RunLongRunning(() => OnLoadOrderChanged(snapshot, version));
 
     // A dedicated thread, not the shared pool: a reconcile can run minutes long, and queuing it
     // behind whatever else the pool is busy with would make an unrelated backlog its own delay.
     private static void RunLongRunning(Action action) =>
         Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-    /// <summary>Reconciles, turning every outcome Reconcile can throw into status data: the two
-    /// known refusals, and anything else as a Failed state rather than a log line nobody reads.</summary>
-    internal void OnLoadOrderChanged(LoadOrderSnapshot snapshot)
+    /// <summary>Reconciles, turning every outcome into status data. Publishes once this version
+    /// is answered even when nothing changed, never only a tick a subscriber could miss.</summary>
+    internal void OnLoadOrderChanged(LoadOrderSnapshot snapshot, long version)
     {
         try
         {
@@ -295,21 +299,22 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
         catch (OperationCanceledException)
         {
-            // Already logged at information by Reconcile itself; a newer snapshot superseding
-            // this one is normal, never raised further.
+            // Superseded: the reconcile that cancelled this one answers for this version or
+            // higher, so nothing here is ever the last word for it.
+            return;
         }
         catch (IndexHeldElsewhereException ex)
         {
             lock (_lock) _heldElsewhereMessage = ex.Message;
-            PublishStatus();
         }
         catch (Exception ex)
         {
             // Reconcile already logged this at error; there is nothing further up to raise it
             // to, so it becomes status data instead of only a log line.
             lock (_lock) _failureMessage = ex.Message;
-            PublishStatus();
         }
+        lock (_lock) _version = version;
+        PublishStatus();
     }
 
     // Called with the exclusive right held, so no other reconcile can be in flight.
@@ -482,8 +487,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         var winnersTimer = Stopwatch.StartNew();
         index.UpdateWinners(snapshot.Participating);
         lock (_lock) _conflictsComputed = true;
-        // Ready: the last status transition a subscriber sees for this reconcile.
-        PublishStatus();
+        // Ready itself publishes from OnLoadOrderChanged, once this version is stamped in.
         ReapplyFilter();
 
         if (_logger.IsEnabled(LogLevel.Information))

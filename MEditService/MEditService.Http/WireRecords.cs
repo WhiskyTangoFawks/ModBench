@@ -15,7 +15,7 @@ public record SequenceAwaitResponse(bool Reached, long Sequence);
 
 /// <summary>Applied or refusal (ADR-0019): failures already ride LoadOrderStatus, and a repair
 /// offer is a question-open notification, so this names neither.</summary>
-public record LoadOrderResponse(bool Applied);
+public record LoadOrderResponse(bool Applied, long Version = 0);
 // ADR-0013: Mod Management's snapshot. InstanceRoot (ADR-0009) must be the MO2 instance rather
 // than anything wider, because Origin is a mod folder name unique only within one.
 public record LoadOrderRequest(

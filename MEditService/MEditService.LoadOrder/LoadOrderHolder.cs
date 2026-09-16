@@ -8,17 +8,26 @@ public sealed class LoadOrderHolder
     // Replaced wholesale, never mutated, so a reader mid-Apply sees the previous value whole rather
     // than a half-applied one.
     private LoadOrderSnapshot _current = LoadOrderSnapshot.Empty;
+    private long _version;
 
     public LoadOrderSnapshot Current => Volatile.Read(ref _current);
 
-    /// <summary>Every reader of a snapshot change subscribes here, wired at composition, rather than
-    /// being named by an endpoint.</summary>
-    public event Action<LoadOrderSnapshot>? Changed;
+    /// <summary>The version of the last Apply, for a caller waiting until nothing is still
+    /// reconciling — a status poll needs this to know which arrival is the latest.</summary>
+    public long Version => Volatile.Read(ref _version);
 
-    public void Apply(LoadOrderSnapshot snapshot)
+    /// <summary>Every reader of a snapshot change subscribes here, wired at composition. Carries
+    /// this Apply's own version, so a subscriber and its caller name the same arrival.</summary>
+    public event Action<LoadOrderSnapshot, long>? Changed;
+
+    /// <summary>Monotonic, one higher per Apply: this arrival's version, for a caller later asking
+    /// whether the Index has reconciled it yet (ADR-0013).</summary>
+    public long Apply(LoadOrderSnapshot snapshot)
     {
+        var version = Interlocked.Increment(ref _version);
         Volatile.Write(ref _current, snapshot);
-        Changed?.Invoke(snapshot);
+        Changed?.Invoke(snapshot, version);
+        return version;
     }
 
     /// <summary>The value a read must have. The one place a read refuses for want of a load order:

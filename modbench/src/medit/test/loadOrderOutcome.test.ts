@@ -12,7 +12,7 @@ function plugin(over: Partial<{ enabled: boolean; winning: boolean; slot: number
   return { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true, ...over };
 }
 
-const readyStatus = { totalPlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [] };
+const readyStatus = { totalPlugins: 0, version: 1, indexedPlugins: [], conflictsComputed: true, failures: [] };
 const applied = { outcome: 'applied' as const, status: readyStatus };
 type PluginLoadFailure = components['schemas']['PluginLoadFailure'];
 
@@ -105,7 +105,7 @@ describe('reportLoadOrderResult — applied', () => {
 describe('reportLoadOrderResult — applied with a terminal refusal', () => {
   const heldElsewhere = {
     outcome: 'applied' as const,
-    status: { totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], refusalMessage: 'another Modbench window holds this instance' },
+    status: { totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [], refusalMessage: 'another Modbench window holds this instance' },
   };
 
   it('writes the refusal to the status bar, never the ready text', () => {
@@ -285,7 +285,7 @@ describe('applyLoadOrderOutcome', () => {
     const deps = makeApplyDeps();
     const heldElsewhere = {
       outcome: 'applied' as const,
-      status: { totalPlugins: 1, indexedPlugins: [], conflictsComputed: false, failures: [], refusalMessage: 'another window' },
+      status: { totalPlugins: 1, version: 1, indexedPlugins: [], conflictsComputed: false, failures: [], refusalMessage: 'another window' },
     };
 
     await applyLoadOrderOutcome([plugin()], heldElsewhere, [], 1, deps);

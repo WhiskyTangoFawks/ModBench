@@ -7,7 +7,7 @@ import type { LoadOrderProgress } from '../client';
 // expanded row — a request storm for no visible change.
 describe('makeReconcileProgressHandler', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
-    ({ totalPlugins: 3, indexedPlugins: [], conflictsComputed: false, failures: [], ...over });
+    ({ totalPlugins: 3, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, ...over });
 
   const handler = () => {
     const applyLoadOrder = vi.fn();
@@ -49,7 +49,7 @@ describe('makeReconcileProgressHandler', () => {
 // found, so a tick carrying either refusal is the only place it ever reaches the extension.
 describe('reportIndexRefusal', () => {
   const status = (over: Partial<LoadOrderProgress> = {}): LoadOrderProgress =>
-    ({ totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], ...over });
+    ({ totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 1, ...over });
 
   it('shows the ready-to-show message on the status bar, held-elsewhere', () => {
     const setStatusText = vi.fn();

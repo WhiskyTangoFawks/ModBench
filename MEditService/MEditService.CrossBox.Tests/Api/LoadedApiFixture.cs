@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
+using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Api;
 
@@ -37,9 +39,15 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
         Plugin.Dispose();
     }
 
-    public Task DisposeAsync()
+    // Any test's create-plugin call started a reconcile on its own thread and never awaited it:
+    // deleting Plugin's files out from under one still running would race it (ADR-0003).
+    public async Task DisposeAsync()
     {
+        if (!_disposed && Client is not null)
+        {
+            var holder = Services.GetRequiredService<LoadOrderHolder>();
+            await Client.AwaitTerminalLoadOrderStatus(holder.Version, TimeSpan.FromSeconds(10));
+        }
         Dispose();
-        return Task.CompletedTask;
     }
 }

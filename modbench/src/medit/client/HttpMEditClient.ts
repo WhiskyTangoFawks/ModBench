@@ -1,7 +1,7 @@
 import type { RecordEditEnvelope } from '../messages';
 import {
-  createApiClient, errorText, isTerminalLoadOrderStatus, openNotificationStream,
-  toLoadOrderStatus, type ApiClient,
+  createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
+  toLoadOrderStatus, type ApiClient, type LoadOrderStatus,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
@@ -48,6 +48,9 @@ export class HttpMEditClient implements MEditClient {
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
+  // The most recent load-order-status tick, held from construction on — so a version this call's
+  // own PUT answers with, already reached before this call ever subscribes, is not missed.
+  private lastLoadOrderStatus: LoadOrderStatus | undefined;
 
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
@@ -56,6 +59,9 @@ export class HttpMEditClient implements MEditClient {
     this.notifications = new SseNotificationSubscriber({
       openStream: (signal) => openNotificationStream(this.apiClient, signal),
       log: deps.log,
+    });
+    this.notifications.subscribe('load-order-status', (event) => {
+      if (event.loadOrderStatus) this.lastLoadOrderStatus = toLoadOrderStatus(event.loadOrderStatus);
     });
     this.lifecycle = new BackendLifecycle(deps.backend);
     // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no
@@ -131,7 +137,7 @@ export class HttpMEditClient implements MEditClient {
       this.log(`[HttpMEditClient] createPlugin failed (${response.status}): ${text}`);
       return { refused: true, message: `mEdit: Failed to create plugin — ${text}` };
     }
-    return data ?? { name, path, origin, slot: null };
+    return data ?? { name, path, origin, slot: null, version: 0 };
   }
 
   /** ADR-0014: Refresh's first step — drops the instance's index file and reopens it empty,
@@ -164,15 +170,16 @@ export class HttpMEditClient implements MEditClient {
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
 
-    // Applied answers as soon as the snapshot lands; the Index catches up on its own
-    // subscription, learned here by a terminal tick, never the PUT's own resolution.
     let resolveTerminal: (status: LoadOrderProgress) => void;
     const terminal = new Promise<LoadOrderProgress>((resolve) => { resolveTerminal = resolve; });
+    // A box, not a `let`: the subscriber below closes over it before this call's own PUT answers
+    // with the version it holds.
+    const applying: { version?: number } = {};
     const unsubscribe = this.notifications.subscribe('load-order-status', (event) => {
       if (!event.loadOrderStatus) return;
       const status = toLoadOrderStatus(event.loadOrderStatus);
       options.onProgress?.(status);
-      if (isTerminalLoadOrderStatus(status)) resolveTerminal(status);
+      if (applying.version !== undefined && isTerminalLoadOrderStatusFor(status, applying.version)) resolveTerminal(status);
     });
 
     let result;
@@ -188,12 +195,21 @@ export class HttpMEditClient implements MEditClient {
       throw e;
     }
 
-    const { error, response } = result;
-    if (!response.ok) {
+    const { error, response, data } = result;
+    if (!response.ok || !data) {
       unsubscribe();
       const text = errorText(error);
       this.log(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
       return { outcome: 'failed', message: `mEdit: Failed to send the load order — ${text}` };
+    }
+
+    // Applied answers at once; the Index catches up on its own subscription, learned here by
+    // version, never a tick a fast reconcile can publish before this call even subscribes.
+    applying.version = data.version;
+    // Already known, from a tick this call's own subscription was too late to catch.
+    if (this.lastLoadOrderStatus && isTerminalLoadOrderStatusFor(this.lastLoadOrderStatus, applying.version)) {
+      unsubscribe();
+      return { outcome: 'applied', status: this.lastLoadOrderStatus };
     }
 
     const status = await this.awaitTerminalOrAbort(terminal, options.signal);

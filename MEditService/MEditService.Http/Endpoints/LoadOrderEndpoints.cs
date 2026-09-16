@@ -143,7 +143,7 @@ public static class LoadOrderEndpoints
                 .ToList();
             var snapshot = ForcedPlugins.Snapshot(req.GameDirectory, req.InstanceRoot, gameRelease, entries);
             var result = handler.Put(snapshot);
-            return result.Applied ? Results.Ok(new LoadOrderResponse(true)) : WriteEndpointMapping.Refusal(result);
+            return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex)
         {

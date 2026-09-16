@@ -37,14 +37,14 @@ function pushableStreamResponse(): { response: Response; push: (chunk: Uint8Arra
 }
 
 function loadOrderStatusTick(loadOrderStatus: {
-  totalPlugins: number; indexedPlugins: { name: string; origin: string }[]; conflictsComputed: boolean; failures: unknown[];
+  totalPlugins: number; indexedPlugins: { name: string; origin: string }[]; conflictsComputed: boolean; failures: unknown[]; version: number;
 }): Uint8Array {
   const tick = { kind: 'load-order-status', plugin: '', origin: '', keys: [], sequence: 0, loadOrderStatus };
   return new TextEncoder().encode(`data: ${JSON.stringify(tick)}\n\n`);
 }
 
 // The tick putLoadOrder's own promise waits for: Ready, since that is what settles it (ADR-0013).
-const readyTick = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [] });
+const readyTick = () => loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: true, failures: [], version: 1 });
 
 // Dispatches by URL substring — for a test that scripts both the notification stream and one
 // API call through the same injected `fetch`.
@@ -237,7 +237,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
   const plugins = [
     { name: 'Foo.esp', path: '/mods/A/Foo.esp', origin: 'A', slot: 0, enabled: true, winning: true },
   ];
-  const appliedBody = { applied: true };
+  const appliedBody = { applied: true, version: 1 };
 
   it('PUTs the ordered plugin list, game directory and instance root', async () => {
     let putBody: unknown;
@@ -292,7 +292,7 @@ describe('HttpMEditClient — putLoadOrder', () => {
 
     const onProgress = vi.fn();
     const load = client.putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
-    pushFrame(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: false, failures: [] }));
+    pushFrame(loadOrderStatusTick({ totalPlugins: 1, indexedPlugins: [{ name: 'Foo.esp', origin: 'A' }], conflictsComputed: false, failures: [], version: 1 }));
     await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
 
     resolvePut(jsonResponse(200, appliedBody));

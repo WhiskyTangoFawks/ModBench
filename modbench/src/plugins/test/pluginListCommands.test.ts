@@ -54,7 +54,7 @@ describe('registerCreatePluginCommand', () => {
 
   it('appends the created plugin to the load order and lands the created toast', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null });
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null, version: 1 });
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ choice: 'overwrite' });
@@ -92,7 +92,7 @@ describe('registerCreatePluginCommand', () => {
   // the user is told that much rather than a bare "created".
   it('reports a failed load-order append at error with the refusal as its detail, never the created toast', async () => {
     const client = new InMemoryMEditClient();
-    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null });
+    client.setCommandResult('createPlugin', { name: 'MyPatch.esp', path: '/mods/MyMod/MyPatch.esp', origin: 'MyMod', slot: null, version: 1 });
     const mo2 = makeMo2();
     showInputBox.mockResolvedValue('MyPatch.esp');
     showQuickPick.mockResolvedValue({ choice: 'overwrite' });

@@ -47,11 +47,27 @@ public sealed class LoadOrderHolderTests
         var holder = new LoadOrderHolder();
         var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, []);
         LoadOrderSnapshot? seen = null;
-        holder.Changed += snapshot => seen = snapshot;
+        holder.Changed += (snapshot, _) => seen = snapshot;
 
         holder.Apply(applied);
 
         Assert.Same(applied, seen);
+    }
+
+    // A client waits for the Index's status to reach the version this call answers with — Changed
+    // must carry the same number Apply itself returns, not a separately counted one.
+    [Fact]
+    public void Apply_ReturnsAMonotonicVersion_MatchingWhatChangedCarries()
+    {
+        var holder = new LoadOrderHolder();
+        var seen = new List<long>();
+        holder.Changed += (_, version) => seen.Add(version);
+
+        var first = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
+        var second = holder.Apply(new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", null, GameRelease.Fallout4, []));
+
+        Assert.True(second > first);
+        Assert.Equal([first, second], seen);
     }
 
     // The rival: a single subscriber field (rather than a multicast event) would let a second
@@ -63,8 +79,8 @@ public sealed class LoadOrderHolderTests
         var applied = new LoadOrderSnapshot(@"C:\Games\Fallout4\Data", @"C:\MO2\Fallout4", GameRelease.Fallout4, []);
         var firstSeen = false;
         var secondSeen = false;
-        holder.Changed += _ => firstSeen = true;
-        holder.Changed += _ => secondSeen = true;
+        holder.Changed += (_, _) => firstSeen = true;
+        holder.Changed += (_, _) => secondSeen = true;
 
         holder.Apply(applied);
 

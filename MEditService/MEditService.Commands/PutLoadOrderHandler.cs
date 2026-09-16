@@ -28,7 +28,7 @@ public sealed class PutLoadOrderHandler
             return PutLoadOrderResult.Refused(PutLoadOrderRefusal.UnsupportedGameRelease, ex.Message);
         }
 
-        _holder.Apply(snapshot);
-        return PutLoadOrderResult.Success();
+        var version = _holder.Apply(snapshot);
+        return PutLoadOrderResult.Success(version);
     }
 }

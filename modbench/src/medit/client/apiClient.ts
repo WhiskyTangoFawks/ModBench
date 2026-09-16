@@ -109,6 +109,9 @@ export interface LoadOrderStatus {
   /** Set for the wire's `HeldElsewhere` or `Failed` state (ADR-0009 point 5; ADR-0019) — the one
    *  place either reaches the extension, since the put's own outcome reports applied regardless. */
   refusalMessage?: string;
+  /** The Apply this status answers for. A client waits for this to reach its own Apply's
+   *  version, never for a tick a fast or no-op reconcile can settle before it subscribes. */
+  version: number;
 }
 
 const REFUSAL_STATES = new Set<Schemas['LoadOrderStatus']['state']>(['HeldElsewhere', 'Failed']);
@@ -123,12 +126,14 @@ export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderSt
     conflictsComputed: wire.conflictsComputed,
     failures: wire.failures,
     refusalMessage: REFUSAL_STATES.has(wire.state) ? (wire.message ?? undefined) : undefined,
+    version: wire.version,
   };
 }
 
-/** Ready, or either refusal — the three states a settled PUT's own tick never advances past. */
-export function isTerminalLoadOrderStatus(status: LoadOrderStatus): boolean {
-  return status.conflictsComputed || status.refusalMessage !== undefined;
+/** Ready, or either refusal, and for the version an Apply actually answers — a status still
+ *  settling an older version, or one a no-op resend left untouched, is not this one's answer. */
+export function isTerminalLoadOrderStatusFor(status: LoadOrderStatus, appliedVersion: number): boolean {
+  return status.version >= appliedVersion && (status.conflictsComputed || status.refusalMessage !== undefined);
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {
