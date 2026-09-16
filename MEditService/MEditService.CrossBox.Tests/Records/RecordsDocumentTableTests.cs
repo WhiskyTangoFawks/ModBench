@@ -1,9 +1,9 @@
 using System.Globalization;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Index;
 using MEditService.SourceRepo;
 using MEditService.Tests.RealData;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -23,14 +23,8 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
         GameRelease.Fallout4);
 
-    private object? Scalar(string sql, params string[] parameters)
-    {
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        foreach (var p in parameters)
-            cmd.Parameters.Add(new DuckDB.NET.Data.DuckDBParameter { Value = p });
-        return cmd.ExecuteScalar();
-    }
+    private object? Scalar(string sql, params string[] parameters) =>
+        StoreFile.Scalar(_fixture.InstanceRoot, sql, [.. parameters]);
 
     [Fact]
     public void Index_WritesOneDocumentPerRecordOfEveryIndexedType()
@@ -89,7 +83,8 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
     [Fact]
     public void Index_ContentHash_IsTheRepositorysHashOfTheStoredBody()
     {
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
+        using var connection = StoreFile.Open(_fixture.InstanceRoot);
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT form_key, body, content_hash FROM records";
         using var reader = cmd.ExecuteReader();
 
@@ -114,7 +109,8 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First(n => n.EditorID != null);
 
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
+        using var connection = StoreFile.Open(_fixture.InstanceRoot);
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             SELECT plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref"
             FROM records WHERE form_key = $1
@@ -129,6 +125,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         Assert.Equal(record.EditorID, reader.GetString(3));
         Assert.Equal(0, reader.GetInt32(4));
         Assert.True(reader.GetBoolean(5), "The only plugin indexed should win its own records.");
-        Assert.Equal(SourceRef.Committed, reader.GetString(6));
+        Assert.Equal("committed", reader.GetString(6));
     }
 }

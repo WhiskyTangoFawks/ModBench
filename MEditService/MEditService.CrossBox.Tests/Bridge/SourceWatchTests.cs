@@ -40,11 +40,11 @@ public sealed class SourceWatchTests : IDisposable
         _mod.Dispose();
     }
 
-    private IRecordIndex Index =>
-        _mod.Index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
+    private IRecordReads Reads => _mod.Index.RequireReads();
 
-    private string? EditorIdAt(RecordRef recordRef) =>
-        Index.At(recordRef).GetDocument(_mod.Npc.ToString(), _mod.Plugin)?.EditorId;
+    private string? EffectiveEditorId() => Reads.GetDocument(_mod.Npc.ToString(), _mod.Plugin)?.EditorId;
+
+    private string? CommittedEditorId() => Reads.HeadDocument(_mod.Npc.ToString(), _mod.Plugin)?.EditorId;
 
     private void RenameTheNpcByHand(string editorId)
     {
@@ -64,9 +64,9 @@ public sealed class SourceWatchTests : IDisposable
     {
         var limit = TimeSpan.FromSeconds(15);
         var elapsed = Stopwatch.StartNew();
-        while (elapsed.Elapsed < limit && EditorIdAt(RecordRef.Head) != editorId)
+        while (elapsed.Elapsed < limit && CommittedEditorId() != editorId)
             await Task.Delay(50);
-        return EditorIdAt(RecordRef.Head);
+        return CommittedEditorId();
     }
 
     // Long enough for a debounce window and the projection behind it to have run, so "nothing
@@ -102,7 +102,7 @@ public sealed class SourceWatchTests : IDisposable
         RenameTheNpcByHand("RenamedByHand");
 
         Assert.True(await Settles(before));
-        Assert.Equal("RenamedByHand", EditorIdAt(RecordRef.Effective));
+        Assert.Equal("RenamedByHand", EffectiveEditorId());
         Assert.Contains(RowsChanged(), n => n.Plugin == _mod.Plugin && n.Keys.Contains(_mod.Npc.ToString(), StringComparer.Ordinal));
     }
 
@@ -112,7 +112,7 @@ public sealed class SourceWatchTests : IDisposable
         var before = _mod.Index.Sequence;
         RenameTheNpcByHand("RenamedByHand");
         Assert.True(await Settles(before));
-        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Head));
+        Assert.Equal(IndexedModFixture.NpcEditorId, CommittedEditorId());
 
         var beforeCommit = _mod.Index.Sequence;
         Git("add", "-A");
@@ -120,7 +120,7 @@ public sealed class SourceWatchTests : IDisposable
 
         Assert.True(await Settles(beforeCommit));
         Assert.Equal("RenamedByHand", await CommittedEditorIdReaches("RenamedByHand"));
-        Assert.Equal("RenamedByHand", EditorIdAt(RecordRef.Effective));
+        Assert.Equal("RenamedByHand", EffectiveEditorId());
     }
 
     [Fact]
@@ -136,7 +136,7 @@ public sealed class SourceWatchTests : IDisposable
         Git("checkout", "-q", "main");
 
         Assert.Equal(IndexedModFixture.NpcEditorId, await CommittedEditorIdReaches(IndexedModFixture.NpcEditorId));
-        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
+        Assert.Equal(IndexedModFixture.NpcEditorId, EffectiveEditorId());
     }
 
     // ADR-0015 invariant 2: our own write reaches the Index the way a hand edit does, and a second
@@ -151,7 +151,7 @@ public sealed class SourceWatchTests : IDisposable
         Assert.True(edit.Applied);
 
         Assert.True(await Settles(before));
-        var document = Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin);
+        var document = Reads.GetDocument(_mod.Npc.ToString(), _mod.Plugin);
         Assert.NotNull(document);
         Assert.NotNull(document.Body);
         Assert.Contains("0.75", document.Body, StringComparison.Ordinal);
@@ -167,7 +167,7 @@ public sealed class SourceWatchTests : IDisposable
         // The watch is live all the same: the next hand edit lands through it.
         RenameTheNpcByHand("RenamedByHand");
         Assert.True(await Settles(afterTheProjection));
-        Assert.Equal("RenamedByHand", EditorIdAt(RecordRef.Effective));
+        Assert.Equal("RenamedByHand", EffectiveEditorId());
     }
 
     // The header is a source unit too (ADR-0007, ADR-0011): the watcher's own root is the mod
@@ -185,7 +185,7 @@ public sealed class SourceWatchTests : IDisposable
             "\"ModHeader\": {", "\"ModHeader\": {\n    \"Author\": \"RenamedByHand\",", StringComparison.Ordinal));
 
         Assert.True(await Settles(before));
-        var document = Index.At(RecordRef.Effective).GetDocument(headerFormKey, _mod.Plugin);
+        var document = Reads.GetDocument(headerFormKey, _mod.Plugin);
         Assert.NotNull(document);
         Assert.NotNull(document.Body);
         Assert.Contains("RenamedByHand", document.Body, StringComparison.Ordinal);
@@ -207,7 +207,7 @@ public sealed class SourceWatchTests : IDisposable
         Git("restore", "--", relativePath);
 
         Assert.True(await Settles(afterEdit));
-        var stack = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString());
+        var stack = Reads.GetOverrideStack(_mod.Npc.ToString());
         Assert.NotNull(stack);
         var entry = stack.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
@@ -228,7 +228,7 @@ public sealed class SourceWatchTests : IDisposable
         WaitOutTheWatcher();
 
         Assert.Equal(before, _mod.Index.Sequence);
-        var stack = Index.At(RecordRef.Effective).GetOverrideStack(_mod.Npc.ToString());
+        var stack = Reads.GetOverrideStack(_mod.Npc.ToString());
         Assert.NotNull(stack);
         var entry = stack.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
@@ -288,8 +288,8 @@ public sealed class SourceWatchTests : IDisposable
         WaitOutTheWatcher();
 
         Assert.Equal(before, _mod.Index.Sequence);
-        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
-        Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.Equal(IndexedModFixture.NpcEditorId, EffectiveEditorId());
+        Assert.NotNull(Reads.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
     // Never exclusive owners of the folder (ADR-0007): MO2's Replace install shell-deletes a mod
@@ -307,6 +307,6 @@ public sealed class SourceWatchTests : IDisposable
         Assert.False(SourceRepository.IsTracked(_mod.ModFolder));
         Assert.False(SourceRepository.IsEditable(IndexedModFixture.ModFolderOrigin, Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName)));
         Assert.Equal(before, _mod.Index.Sequence);
-        Assert.Equal(IndexedModFixture.NpcEditorId, EditorIdAt(RecordRef.Effective));
+        Assert.Equal(IndexedModFixture.NpcEditorId, EffectiveEditorId());
     }
 }

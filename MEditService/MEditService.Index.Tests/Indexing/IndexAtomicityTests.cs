@@ -1,63 +1,68 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
+// A plugin whose ingest throws partway lands no row at all: the copy is a failure on the status,
+// and every read answers as if it were never indexed.
 public class IndexAtomicityTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private static DuckDbRecordIndex OpenRepo()
-    {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.CreateRecordTypeViews();
-        return repo;
-    }
-
-    private static IModGetter LoadMod(string dataFolder, string pluginName)
-    {
-        var modPath = new ModPath(ModKey.FromFileName(pluginName), Path.Combine(dataFolder, pluginName));
-        return Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-    }
-
-    private static long RowCount(DuckDbRecordIndex repo, string table)
-    {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";
-        return (long)(cmd.ExecuteScalar() ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
-    }
-
     [Fact]
     public void Index_ThrowingPartway_CommitsNoPartialRows()
     {
         using var fixture = new PluginFixtureBuilder("index-atomicity")
-            .WithPlugin("Atomic.esp", mod => mod.Npcs.AddNew("AtomicNPC"))
+            .WithPlugin("Atomic.esp", mod =>
+            {
+                mod.Npcs.AddNew("AtomicNPC1");
+                mod.Npcs.AddNew("AtomicNPC2");
+                mod.Npcs.AddNew("AtomicNPC3");
+            })
             .Build();
+        var key = new PluginCopyKey("Atomic.esp", "Data");
+        using var index = Indexes.Reconciled(fixture, adapter: new ThrowingPartwayAdapter(afterRecords: 2));
+        var reads = index.RequireReads();
 
-        using var repo = OpenRepo();
+        Assert.Contains(index.Status.Failures, f => f.Name == "Atomic.esp");
+        Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "Atomic.esp");
+        Assert.Equal(0, reads.CountOf(key, "npc_"));
+        Assert.Empty(reads.GetDocuments(key));
+        Assert.Empty(reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items);
+        Assert.Null(index.IndexedContentHash(key));
+    }
 
-        // form_lookup, not form_references: it is appended unconditionally for any indexed record,
-        // and its flush runs after the record-table appends, so without an enclosing transaction the
-        // npc_ rows would survive the throw.
-        using (var drop = repo.Connection.CreateCommand())
+    // Real documents up to a point, then the throw an unreadable record would raise mid-plugin.
+    private sealed class ThrowingPartwayAdapter(int afterRecords) : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
+    {
+        public override IPluginDocuments OpenDocuments(
+            ModPath modPath, GameRelease gameRelease, IReadOnlyDictionary<string, RecordTableSchema> schemas,
+            PluginStrings? strings = null) =>
+            new ThrowingPartway(base.OpenDocuments(modPath, gameRelease, schemas, strings), afterRecords);
+    }
+
+    private sealed class ThrowingPartway(IPluginDocuments inner, int afterRecords) : IPluginDocuments
+    {
+        public PluginDocument Header => inner.Header;
+        public IReadOnlyList<RecordTypeFailure> Failures => inner.Failures;
+
+        public IEnumerable<PluginDocument> Records
         {
-            drop.CommandText = "DROP TABLE mirror.form_lookup";
-            drop.ExecuteNonQuery();
+            get
+            {
+                var yielded = 0;
+                foreach (var record in inner.Records)
+                {
+                    if (yielded++ == afterRecords) throw new InvalidOperationException("injected mid-plugin read failure");
+                    yield return record;
+                }
+            }
         }
 
-        var mod = LoadMod(fixture.DataFolder, "Atomic.esp");
-        Assert.ThrowsAny<Exception>(() => repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data")));
-
-        Assert.Equal(0, RowCount(repo, "npc_"));
+        public void Dispose() => inner.Dispose();
     }
 }

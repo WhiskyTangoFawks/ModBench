@@ -2,6 +2,7 @@ using DuckDB.NET.Data;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.Api;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Records;
@@ -33,17 +34,16 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         return names;
     }
 
-    private DuckDbRecordIndex Index() =>
-        (DuckDbRecordIndex)(loaded.Services.GetRequiredService<IndexProjector>().Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store."));
-
-    private DuckDBConnection Connection() => Index().Connection;
+    private DuckDBConnection Connection() => StoreFile.Open(loaded.Plugin.InstanceRoot);
 
     [Fact]
     public void AHeldLoadOrder_HasNoPerTypeWideTables_OnlyViewsOverRecords()
     {
-        Index().CreateRecordTypeViews();
-        var connection = Connection();
+        // The per-type views are the filter door's, materialized by its first use.
+        var index = loaded.Services.GetRequiredService<IndexProjector>();
+        index.SetFilter("SELECT form_key FROM records");
+        index.ClearFilter();
+        using var connection = Connection();
         var baseTables = BaseTableNamesOf(connection);
         var views = ViewNamesOf(connection);
 
@@ -63,7 +63,8 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     [Fact]
     public void AHeldLoadOrder_HasNoVmadTables()
     {
-        var tables = TableNamesOf(Connection());
+        using var connection = Connection();
+        var tables = TableNamesOf(connection);
 
         Assert.Contains("form_references", tables);
 
@@ -75,7 +76,8 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     [Fact]
     public void AHeldLoadOrder_HasNoConditionTables()
     {
-        var tables = TableNamesOf(Connection());
+        using var connection = Connection();
+        var tables = TableNamesOf(connection);
 
         Assert.Contains("form_references", tables);
 

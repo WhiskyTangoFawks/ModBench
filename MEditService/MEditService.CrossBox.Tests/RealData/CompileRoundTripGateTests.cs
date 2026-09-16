@@ -263,10 +263,9 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         using var scope = new MutationScope(fixture);
 
-        var scopeStore = scope.Index.Store
-            ?? throw new InvalidOperationException("Expected the index to hold a store.");
+        var scopeStore = scope.Index.RequireReads();
         var npc = scopeStore
-            .At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin.Name, Origin: scope.Plugin.Origin, Limit: 1))
+            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin.Name, Origin: scope.Plugin.Origin, Limit: 1))
             .Items[0];
         // Asked of the repository rather than computed: the path needs an order index this test
         // would otherwise reverse-engineer from Track's own output.
@@ -346,10 +345,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             CompileRoundTripGateFixture.CopyDirectory(fixture.TrackedTemplateFolder, ModFolder);
             Plugin = fixture.Plugin;
 
-            Index = new IndexProjector(
-                Holder,
-                MutagenPluginAdapter.Instance,
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            Index = Indexes.Open(Holder);
             Index.Reconcile(Holder,
                 fixture.GameDirectory,
                 [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin, Slot: 0, Enabled: true, Winning: true)],

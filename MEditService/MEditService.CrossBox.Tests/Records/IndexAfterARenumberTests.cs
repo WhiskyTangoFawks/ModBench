@@ -22,10 +22,7 @@ public sealed class IndexAfterARenumberTests
 
     private static IndexProjector MirrorOver(LoadOrderHolder holder, string gameDirectory, IReadOnlyList<LoadOrderEntry> entries)
     {
-        var index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        var index = Indexes.Open(holder);
         index.Reconcile(holder, gameDirectory, entries, GameRelease.Fallout4);
         return index;
     }
@@ -34,7 +31,7 @@ public sealed class IndexAfterARenumberTests
         result.NewFormKey ?? throw new InvalidOperationException("Expected a successful renumber to set NewFormKey.");
 
     [Fact]
-    public void ARenumberedRecord_IsGoneAtEffective_StillAtHead_AndItsNewKeyIsAbsentAtHead()
+    public void ARenumberedRecord_IsGoneAtEffective_AndItsNewKeyIsAWorkingTreeAddition()
     {
         var holder = new LoadOrderHolder();
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
@@ -46,9 +43,8 @@ public sealed class IndexAfterARenumberTests
 
         var newFormKey = RequireNewFormKey(result);
         Assert.Null(index.Projected().GetDocument(oldFormKey, two.TargetPlugin));
-        Assert.NotNull(index.Projected(RecordRef.Head).GetDocument(oldFormKey, two.TargetPlugin));
         Assert.NotNull(index.Projected().GetDocument(newFormKey, two.TargetPlugin));
-        Assert.Null(index.Projected(RecordRef.Head).GetDocument(newFormKey, two.TargetPlugin));
+        Assert.True(index.Projected().StackEntry(newFormKey, two.TargetPlugin).Require().HasWorkingTreeChange);
     }
 
     // A row under a brand-new FormKey the filter's one-shot snapshot never evaluated, with the old
@@ -61,12 +57,12 @@ public sealed class IndexAfterARenumberTests
         using var index = MirrorOver(holder, two.GameDirectory, two.Entries);
         index.SetFilter($"SELECT form_key FROM race WHERE editor_id = '{RenumberTwoModFixture.TargetRaceEditorId}'");
         var query = new RecordQuery(RecordTypes: ["race"], Limit: 10, Offset: 0);
-        Assert.Equal(1, index.SettledReads().Search(query).Total);
+        Assert.Equal(1, index.Projected().Search(query).Total);
 
         var result = two.RenumberHandler.RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
         Assert.True(result.Applied, result.Message);
 
-        var after = index.SettledReads().Search(query);
+        var after = index.Projected().Search(query);
         Assert.Equal(1, after.Total);
         Assert.Equal(result.NewFormKey, after.Items[0].FormKey);
     }
@@ -100,7 +96,7 @@ public sealed class IndexAfterARenumberTests
         var result = mod.RenumberHandler.RenumberRecord(mod.Plugin, oldFormKey);
         Assert.True(result.Applied, result.Message);
 
-        var reads = index.SettledReads();
+        var reads = index.Projected();
         var newFormKey = RequireNewFormKey(result);
         Assert.Null(reads.GetDocument(oldFormKey));
         Assert.NotNull(reads.GetDocument(newFormKey));
@@ -125,7 +121,7 @@ public sealed class IndexAfterARenumberTests
             "SELECT source_form_key AS form_key FROM form_references " +
             $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
         var query = new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0);
-        Assert.Equal(0, index.SettledReads().Search(query).Total);
+        Assert.Equal(0, index.Projected().Search(query).Total);
 
         Chmod(two.TargetModFolder, "500"); // read+execute only — the new race source file can't be created
         try
@@ -149,7 +145,7 @@ public sealed class IndexAfterARenumberTests
 
         // The referencer's rewrite came back off disk and its rows were re-derived from the restored
         // file, so the filter matches nothing, exactly as it did before the gesture ran.
-        Assert.Equal(0, index.SettledReads().Search(query).Total);
+        Assert.Equal(0, index.Projected().Search(query).Total);
         var referencer = index.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin).Require();
         var referencerBody = referencer.Body.Require();
         Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);

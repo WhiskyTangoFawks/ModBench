@@ -1,9 +1,7 @@
-using DuckDB.NET.Data;
-using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,60 +9,14 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0013: PUT /load-order's one verb, at the Index seam. Every loadout gesture is the same
-// reconcile, and the counting factory below tells a cheap SQL-only one from a cold indexing one.
+// ADR-0013: PUT /load-order's one verb, at the Index seam. The adapter's opens tell a cheap SQL-only
+// move from a cold indexing one, and the sequence tells whether a sweep ran.
 public sealed class ReconcileDiffTests
 {
-    // Counts the two verbs whose cost the acceptance criteria are about: Index (a re-read plus a re-
-    // index) and UpdateWinners (the whole-set sweep).
-    private sealed class CountingFactory(IRecordIndexFactory inner) : IRecordIndexFactory
+    private static (IndexProjector Index, GatedPluginAdapter Opens) MakeIndex(LoadOrderHolder holder)
     {
-        public int Indexed { get; set; }
-        public int Sweeps { get; set; }
-        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
-            new CountingIndex(inner.Create(gameRelease, instanceRoot), this);
-        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
-            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
-    }
-
-    private sealed class CountingIndex(IRecordIndex inner, CountingFactory owner) : DelegatingRecordIndex(inner)
-    {
-        public override void Index(
-            IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null)
-        {
-            owner.Indexed++;
-            base.Index(documents, registration, key, filePath);
-        }
-
-        public override void UpdateWinners(IReadOnlyList<RegisteredCopy> participating)
-        {
-            owner.Sweeps++;
-            base.UpdateWinners(participating);
-        }
-    }
-
-    private static (IndexProjector Index, CountingFactory Counts) MakeIndex(LoadOrderHolder holder)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        var counts = new CountingFactory(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        return (new IndexProjector(holder, MutagenPluginAdapter.Instance, counts), counts);
-    }
-
-    // What the Index registered, read from its own rows: asserting the snapshot back off the holder
-    // would say only that the test applied what it applied.
-    private static Registration RegistrationOf(IndexProjector index, string plugin, string origin)
-    {
-        var store = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
-        var connection = DelegatingRecordIndex.DuckDbUnder(store).Connection;
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText =
-            "SELECT load_order_idx, enabled, winning FROM registrations WHERE plugin = ? AND origin = ?";
-        cmd.Parameters.Add(new DuckDBParameter(plugin));
-        cmd.Parameters.Add(new DuckDBParameter(origin));
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read(), $"no registration row for {plugin} ({origin})");
-        return new Registration(
-            reader.IsDBNull(0) ? null : reader.GetInt32(0), reader.GetBoolean(1), reader.GetBoolean(2));
+        var opens = new GatedPluginAdapter();
+        return (Indexes.Open(holder, opens), opens);
     }
 
     // A.esm defines SharedNPC; B.esp overrides it — the two-provider stack every winner assertion
@@ -102,18 +54,21 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-noop");
-        var (index, counts) = MakeIndex(holder);
+        var (index, opens) = MakeIndex(holder);
         using var _ = index;
+        using var __ = opens;
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var indexedAfterFirst = counts.Indexed;
+        var openedAfterFirst = opens.OpenedTotal;
         var statusAfterFirst = index.Status;
-        Assert.Equal(1, counts.Sweeps);
+        var sequenceAfterFirst = index.Sequence;
+        Assert.True(statusAfterFirst.ConflictsComputed);
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.Equal(1, counts.Sweeps);
-        Assert.Equal(indexedAfterFirst, counts.Indexed);
+        // No sweep: a sweep is a projection, and a projection advances the sequence.
+        Assert.Equal(sequenceAfterFirst, index.Sequence);
+        Assert.Equal(openedAfterFirst, opens.OpenedTotal);
         Assert.Equal(statusAfterFirst.IndexedPlugins, index.Status.IndexedPlugins);
         Assert.Equal(statusAfterFirst.State, index.Status.State);
         Assert.True(index.Status.ConflictsComputed);
@@ -124,20 +79,22 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-reorder");
-        var (index, counts) = MakeIndex(holder);
+        var (index, opens) = MakeIndex(holder);
         using var _ = index;
+        using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index);
         Assert.Equal("B.esp", WinnerOf(index, npc));
-        var indexed = counts.Indexed;
+        var opened = opens.OpenedTotal;
+        var sequence = index.Sequence;
 
         // Swap the two slots: A now loads after B.
         var swapped = fx.Plugins.Select(p => p with { Slot = p.Name == "A.esm" ? 1 : 0 }).ToList();
         index.Reconcile(holder, fx.GameDirectory, swapped, GameRelease.Fallout4);
 
-        Assert.Equal(indexed, counts.Indexed);
+        Assert.Equal(opened, opens.OpenedTotal);
         Assert.Equal("A.esm", WinnerOf(index, npc));
-        Assert.Equal(2, counts.Sweeps);
+        Assert.True(index.Sequence > sequence, "a reorder is a sweep, and a sweep is a projection");
     }
 
     [Fact]
@@ -145,23 +102,27 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-disable");
-        var (index, counts) = MakeIndex(holder);
+        var (index, opens) = MakeIndex(holder);
         using var _ = index;
+        using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index);
-        var indexed = counts.Indexed;
+        var opened = opens.OpenedTotal;
+        var bKey = new PluginCopyKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
 
         index.Reconcile(holder, fx.GameDirectory, With(fx.Plugins, "B.esp", p => p with { Enabled = false }), GameRelease.Fallout4);
 
-        Assert.Equal(indexed, counts.Indexed);
-        var b = RegistrationOf(index, "B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
-        Assert.False(b.Enabled);
-        Assert.False(b.Participates);
-        Assert.True(b.InLoadOrder);
+        Assert.Equal(opened, opens.OpenedTotal);
+        // Still registered and still in the load order — browsable at its slot — but a disabled copy
+        // competes for nothing.
+        Assert.True(index.Registers(bKey));
+        var b = OverrideStackOf(index, npc).Entries.Single(e => e.Plugin.Equals(bKey));
+        Assert.Equal(1, b.LoadOrderIndex);
+        Assert.False(b.IsWinner);
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        Assert.Equal(indexed, counts.Indexed);
+        Assert.Equal(opened, opens.OpenedTotal);
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
 
@@ -179,33 +140,32 @@ public sealed class ReconcileDiffTests
         var snapshot = fx.Plugins
             .Select(p => p.Origin == "ModB" ? p with { Slot = winner.Slot, Winning = false } : p)
             .ToList();
-        var (index, _) = MakeIndex(holder);
-        using var __ = index;
+        var (index, opens) = MakeIndex(holder);
+        using var _ = index;
+        using var __ = opens;
 
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
-        var modA = RegistrationOf(index, "Shared.esp", "ModA");
-        var modB = RegistrationOf(index, "Shared.esp", "ModB");
-        Assert.True(modA.Participates);
-        Assert.False(modB.Participates);
-        Assert.False(modB.InLoadOrder);
-        Assert.Equal(modA.LoadOrderIndex, modB.LoadOrderIndex);
-
+        var modA = new PluginCopyKey("Shared.esp", "ModA");
+        var modB = new PluginCopyKey("Shared.esp", "ModB");
         var stack = OverrideStackOf(index, "000800:Shared.esp").Entries;
         Assert.Equal(2, stack.Count);
-        Assert.True(stack.Single(e => e.Plugin.Origin == "ModA").IsWinner);
-        Assert.False(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
+        Assert.True(stack.Single(e => e.Plugin.Equals(modA)).IsWinner);
+        Assert.False(stack.Single(e => e.Plugin.Equals(modB)).IsWinner);
+        Assert.Equal(stack.Single(e => e.Plugin.Equals(modA)).LoadOrderIndex, stack.Single(e => e.Plugin.Equals(modB)).LoadOrderIndex);
 
         // Both copies are registered — the losing one is browsable, not absent.
-        var store = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
-        Assert.Contains(store.RegisteredPlugins(), k => k.Origin == "ModB");
+        Assert.True(index.Registers(modB));
+        Assert.NotEmpty(ReadsOf(index).GetDocuments(modB));
 
         // Reprioritising the mods flips which copy wins — SQL-only, like every other move.
+        var opened = opens.OpenedTotal;
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
         index.Reconcile(holder, fx.GameDirectory, flipped, GameRelease.Fallout4);
         stack = OverrideStackOf(index, "000800:Shared.esp").Entries;
-        Assert.True(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
-        Assert.False(RegistrationOf(index, "Shared.esp", "ModA").InLoadOrder);
+        Assert.True(stack.Single(e => e.Plugin.Equals(modB)).IsWinner);
+        Assert.False(stack.Single(e => e.Plugin.Equals(modA)).IsWinner);
+        Assert.Equal(opened, opens.OpenedTotal);
     }
 
     // Uninstall: a copy absent from the snapshot is unregistered, its rows kept for its return.
@@ -214,26 +174,27 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-leave");
-        var (index, counts) = MakeIndex(holder);
+        var (index, opens) = MakeIndex(holder);
         using var _ = index;
+        using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index);
-        var indexed = counts.Indexed;
+        var opened = opens.OpenedTotal;
         var bKey = new PluginCopyKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 
         var readsAfterLeaving = ReadsOf(index);
-        var storeAfterLeaving = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
         Assert.DoesNotContain(readsAfterLeaving.OpenedCopies.Keys, k => k.Name == "B.esp");
-        Assert.DoesNotContain(storeAfterLeaving.RegisteredPlugins(), k => k.Name == "B.esp");
+        Assert.False(index.Registers(bKey));
+        Assert.Empty(readsAfterLeaving.GetDocuments(bKey));
         Assert.DoesNotContain(index.Status.IndexedPlugins, p => p.Name == "B.esp");
-        Assert.NotNull(storeAfterLeaving.IndexedContentHash(bKey));
+        Assert.NotNull(index.IndexedContentHash(bKey));
         Assert.Equal("A.esm", WinnerOf(index, npc));
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.Equal(indexed, counts.Indexed);
+        Assert.Equal(opened, opens.OpenedTotal);
         Assert.Contains(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "B.esp");
         Assert.Equal("B.esp", WinnerOf(index, npc));
     }
@@ -245,30 +206,32 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-restart");
-        var (first, _) = MakeIndex(holder);
+        var (first, firstOpens) = MakeIndex(holder);
         using (first)
+        using (firstOpens)
         {
             first.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
         }
 
-        var (second, counts) = MakeIndex(holder);
+        var (second, opens) = MakeIndex(holder);
         using (second)
+        using (opens)
         {
             second.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
 
-            Assert.Equal(0, counts.Indexed);
+            Assert.Equal(0, opens.OpenedTotal);
             Assert.Equal("B.esp", WinnerOf(second, SharedNpc(second)));
             Assert.Equal(fx.Plugins.Count, second.Status.IndexedPlugins.Count);
         }
 
-        var (third, thirdCounts) = MakeIndex(holder);
+        var (third, thirdOpens) = MakeIndex(holder);
         using (third)
+        using (thirdOpens)
         {
             third.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4, fx.InstanceRoot);
 
-            Assert.Equal(0, thirdCounts.Indexed);
-            var thirdStore = third.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
-            Assert.DoesNotContain(thirdStore.RegisteredPlugins(), k => k.Name == "B.esp");
+            Assert.Equal(0, thirdOpens.OpenedTotal);
+            Assert.False(third.Registers(new PluginCopyKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin)));
             Assert.Equal("A.esm", WinnerOf(third, SharedNpc(third)));
         }
     }
@@ -281,8 +244,9 @@ public sealed class ReconcileDiffTests
         var badPath = Path.Combine(fx.Root, "Bad.esp");
         File.WriteAllBytes(badPath, [0xDE, 0xAD, 0xBE, 0xEF]);
         var snapshot = fx.Plugins.Append(new LoadOrderEntry("Bad.esp", badPath, "BadMod", 1, Enabled: true, Winning: true)).ToList();
-        var (index, counts) = MakeIndex(holder);
+        var (index, opens) = MakeIndex(holder);
         using var _ = index;
+        using var __ = opens;
 
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 
@@ -290,10 +254,10 @@ public sealed class ReconcileDiffTests
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
         Assert.DoesNotContain(ReadsOf(index).OpenedCopies.Keys, k => k.Name == "Bad.esp");
 
-        // The same snapshot again is a no-op — the failed parse is not paid twice.
-        var sweeps = counts.Sweeps;
+        // The same snapshot again is a no-op — the failed parse is not paid twice, and no sweep runs.
+        var sequence = index.Sequence;
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
-        Assert.Equal(sweeps, counts.Sweeps);
+        Assert.Equal(sequence, index.Sequence);
 
         new Fallout4Mod(ModKey.FromFileName("Bad.esp"), Fallout4Release.Fallout4).WriteToBinary(badPath);
         index.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
@@ -307,15 +271,16 @@ public sealed class ReconcileDiffTests
     {
         var holder = new LoadOrderHolder();
         using var fx = TwoProviders("reconcile-other-instance");
-        var (index, _) = MakeIndex(holder);
-        using var __ = index;
+        var (index, opens) = MakeIndex(holder);
+        using var _ = index;
+        using var __ = opens;
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, fx.InstanceRoot);
-        var first = index.Store;
+        var first = index.Reads;
         var otherInstance = Directory.CreateDirectory(Path.Combine(fx.Root, "other-instance")).FullName;
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4, otherInstance);
 
-        Assert.NotSame(first, index.Store);
+        Assert.NotSame(first, index.Reads);
         Assert.Equal(otherInstance, holder.Current.InstanceRoot);
     }
 }

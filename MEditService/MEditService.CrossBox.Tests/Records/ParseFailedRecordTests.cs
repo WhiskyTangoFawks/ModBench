@@ -212,7 +212,7 @@ public sealed class ParseFailedRecordTests
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-parsefail-mod-").FullName;
 
         public IndexProjector Index { get; }
-        public IRecordReads Reads => Index.SettledReads();
+        public IRecordReads Reads => Index.Projected();
         public PluginCopyKey Plugin { get; }
         public IRecordQueryService Query { get; }
         public string PluginPath { get; }
@@ -244,10 +244,7 @@ public sealed class ParseFailedRecordTests
             // Truncated below a TES4 header: no record identity exists to hang a status on.
             if (corruptWholeFile) File.WriteAllBytes(pluginPath, [0x54, 0x45, 0x53, 0x34, 0xFF]);
 
-            Index = new IndexProjector(
-                Holder,
-                MutagenPluginAdapter.Instance,
-                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            Index = Indexes.Open(Holder);
             Index.Reconcile(Holder, _gameDirectory, inputs, GameRelease.Fallout4);
             Query = new RecordQueryService(Index, Holder, SharedSchemaReflector.Instance, new ConflictClassifier());
         }

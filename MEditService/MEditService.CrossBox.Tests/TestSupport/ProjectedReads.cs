@@ -4,25 +4,24 @@ using MEditService.LoadOrder;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>ADR-0015 invariant 2: a write reaches the Index through the projector, never a push, so
-/// a test that writes and then reads asks for the projection first. The reconcile is the channel
-/// with no timer in it.</summary>
+/// a test that writes and then reads asks for the projection first. Validate is the channel with no
+/// timer in it.</summary>
 internal static class ProjectedReads
 {
-    /// <summary>The index, once every tracked copy's rows agree with the source tree again.</summary>
-    internal static IRecordReads Projected(this IndexProjector index, RecordRef recordRef = RecordRef.Effective)
+    internal static IRecordReads Projected(this IndexProjector index)
     {
         index.Settle();
-        var store = index.Store ?? throw new InvalidOperationException("Expected Settle to have populated the index store.");
-        return store.At(recordRef);
-    }
-
-    /// <summary>The Index's own reads — filter-aware and load-order-wide — behind the same
-    /// projection.</summary>
-    internal static IRecordReads SettledReads(this IndexProjector index)
-    {
-        index.Settle();
-        return index.Reads ?? throw new InvalidOperationException("Expected Settle to have populated the index reads.");
+        return index.RequireReads();
     }
 
     internal static void Settle(this IndexProjector index) => index.ValidateIndex(null);
+
+    /// <summary>The committed state of one copy's record, which the override stack carries beside
+    /// its effective state; null when the copy holds no effective row for it.</summary>
+    internal static RecordDocument? HeadDocument(this IRecordReads reads, string formKey, PluginCopyKey plugin) =>
+        reads.GetOverrideStack(formKey)?.Entries
+            .SingleOrDefault(e => e.Plugin.Equals(plugin))?.Head;
+
+    internal static OverrideStackEntry? StackEntry(this IRecordReads reads, string formKey, PluginCopyKey plugin) =>
+        reads.GetOverrideStack(formKey)?.Entries.SingleOrDefault(e => e.Plugin.Equals(plugin));
 }

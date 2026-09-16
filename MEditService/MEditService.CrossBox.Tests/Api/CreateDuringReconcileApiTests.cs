@@ -1,7 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using MEditService.Codec.Schema;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Tests.TestSupport;
@@ -17,23 +15,19 @@ namespace MEditService.Tests.Api;
 [Collection(WebHostCollection.Name)]
 public sealed class CreateDuringReconcileApiTests
 {
-    // The reconcile parks inside the Index, which is where a create can be raced against it over
-    // the wire; nothing else about the host changes.
+    // The reconcile parks at the adapter the Index reads through, which is where a create can be
+    // raced against it over the wire; nothing else about the host changes.
     private sealed class ParkedReconcileApp : WebApplicationFactory<Program>
     {
-        internal GatedIndexRepositoryFactory Index { get; } = new(
-            new DuckDbRecordIndexFactory(
-                SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)),
-            gateBefore: "A.esp");
+        internal GatedPluginAdapter Gate { get; } = new(gateBefore: "A.esp");
 
         protected override void ConfigureWebHost(IWebHostBuilder builder) =>
-            builder.ConfigureTestServices(services => services.AddSingleton(sp => new IndexProjector(
-                sp.GetRequiredService<LoadOrderHolder>(), sp.GetRequiredService<IPluginAdapter>(), Index)));
+            builder.ConfigureTestServices(services => services.AddSingleton<IPluginAdapter>(Gate));
 
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
-            if (disposing) Index.Dispose();
+            if (disposing) Gate.Dispose();
         }
     }
 
@@ -55,7 +49,7 @@ public sealed class CreateDuringReconcileApiTests
                 instanceRoot = data.InstanceRoot,
                 gameRelease = "Fallout4",
             });
-            await app.Index.WaitUntilParkedAsync();
+            await app.Gate.WaitUntilParkedAsync();
 
             var created = await client.PostAsJsonAsync("/plugins/create", new
             {
@@ -65,7 +59,7 @@ public sealed class CreateDuringReconcileApiTests
             });
 
             Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-            app.Index.Release();
+            app.Gate.Release();
             Assert.Equal(HttpStatusCode.OK, (await put).StatusCode);
 
             var held = app.Services.GetRequiredService<LoadOrderHolder>().Current;

@@ -1,11 +1,9 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
@@ -14,43 +12,24 @@ namespace MEditService.Tests.Records;
 /// codec never emits.</summary>
 public sealed class WorkingTreeChangeTests : IDisposable
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private readonly PluginFixtureData _fixture;
-    private readonly FormKey _npcFormKey;
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
+    private readonly ScatteredFixtureData _fixture;
+    private readonly LoadOrderEntry _base;
+    private readonly PluginCopyKey _baseKey;
+    private readonly string _formKey;
 
     public WorkingTreeChangeTests()
     {
         FormKey fk = default;
         _fixture = new PluginFixtureBuilder("working-tree-change")
-            .WithPlugin("Base.esm", mod => fk = mod.Npcs.AddNew("OriginalName").FormKey)
-            .Build();
-        _npcFormKey = fk;
+            .WithPlugin("Base.esm", mod => fk = mod.Npcs.AddNew("OriginalName").FormKey, origin: "BaseMod")
+            .BuildScattered()
+            .Tracked();
+        _base = _fixture.Plugins.Single();
+        _baseKey = _base.KeyOf();
+        _formKey = fk.ToString();
     }
 
     public void Dispose() => _fixture.Dispose();
-
-    private DuckDbRecordIndex LoadedIndex()
-    {
-        DuckDbRecordIndex? index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            index.Initialize(GameRelease.Fallout4);
-            var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-            using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-            index.IndexMod(mod, Registration.Participating(0), BaseKey);
-            index.UpdateWinners();
-            var loaded = index;
-            index = null;
-            return loaded;
-        }
-        finally
-        {
-            index?.Dispose();
-        }
-    }
 
     // EditorID is an identity column, not a reflected field, so this reads the projection of the
     // body every listing, resolve and tree row is built from.
@@ -58,84 +37,69 @@ public sealed class WorkingTreeChangeTests : IDisposable
         document.EditorId ?? throw new InvalidOperationException("The fixture record has no EditorID.");
 
     [Fact]
-    public void ProjectDocuments_EffectiveServesTheNewBody_WhileHeadKeepsTheCommittedOne()
+    public void RefreshKeys_EffectiveServesTheNewBody_WhileHeadKeepsTheCommittedOne()
     {
-        using var index = LoadedIndex();
-        var formKey = _npcFormKey.ToString();
-        var committed = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey);
-        Assert.NotNull(committed);
-        var committedBody = committed.Body;
-        Assert.NotNull(committedBody);
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        var committed = reads.DocumentOf(_formKey, _baseKey);
+        var committedBody = committed.BodyOf();
         var editedBody = committedBody.Replace("OriginalName", "EditedName", StringComparison.Ordinal);
         Assert.NotEqual(committedBody, editedBody); // the fixture really does carry the text being replaced
 
-        index.ProjectDocuments(BaseKey, [(formKey, editedBody)]);
+        index.Edit(_base, committed, editedBody);
 
-        var effective = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey);
-        Assert.NotNull(effective);
+        var effective = reads.DocumentOf(_formKey, _baseKey);
         Assert.Equal(editedBody, effective.Body);
         Assert.Equal("EditedName", EditorIdOf(effective));
 
-        var head = index.At(RecordRef.Head).GetDocument(formKey, BaseKey);
+        var head = reads.HeadDocument(_formKey, _baseKey);
         Assert.NotNull(head);
         Assert.Equal(committedBody, head.Body);
         Assert.Equal("OriginalName", EditorIdOf(head));
     }
 
     [Fact]
-    public void ProjectDocuments_MarksTheOverrideStackEntryAsCarryingAWorkingTreeChange()
+    public void RefreshKeys_MarksTheOverrideStackEntryAsCarryingAWorkingTreeChange()
     {
-        using var index = LoadedIndex();
-        var formKey = _npcFormKey.ToString();
-        var committed = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey);
-        Assert.NotNull(committed);
-        var committedBody = committed.Body;
-        Assert.NotNull(committedBody);
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        var committed = reads.DocumentOf(_formKey, _baseKey);
 
-        var cleanStack = index.At(RecordRef.Effective).GetOverrideStack(formKey);
-        Assert.NotNull(cleanStack);
-        var clean = cleanStack.Entries.Single();
+        var clean = reads.StackEntry(_formKey, _baseKey);
+        Assert.NotNull(clean);
         Assert.False(clean.HasWorkingTreeChange);
         Assert.Equal(clean.Effective.Body, clean.Head.Body);
 
-        index.ProjectDocuments(
-            BaseKey, [(formKey, committedBody.Replace("OriginalName", "EditedName", StringComparison.Ordinal))]);
+        index.Edit(_base, committed, committed.BodyOf().Replace("OriginalName", "EditedName", StringComparison.Ordinal));
 
-        var dirtyStack = index.At(RecordRef.Effective).GetOverrideStack(formKey);
-        Assert.NotNull(dirtyStack);
-        var dirty = dirtyStack.Entries.Single();
+        var dirty = reads.StackEntry(_formKey, _baseKey);
+        Assert.NotNull(dirty);
         Assert.True(dirty.HasWorkingTreeChange);
         Assert.Equal("EditedName", EditorIdOf(dirty.Effective));
         Assert.Equal("OriginalName", EditorIdOf(dirty.Head));
     }
 
     [Fact]
-    public void ProjectDocuments_EditingBackToTheCommittedBytes_ConvergesToClean()
+    public void RefreshKeys_EditingBackToTheCommittedBytes_ConvergesToClean()
     {
-        using var index = LoadedIndex();
-        var formKey = _npcFormKey.ToString();
-        var committed = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey);
-        Assert.NotNull(committed);
-        var committedBody = committed.Body;
-        Assert.NotNull(committedBody);
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        var committed = reads.DocumentOf(_formKey, _baseKey);
+        var committedBody = committed.BodyOf();
 
-        index.ProjectDocuments(
-            BaseKey, [(formKey, committedBody.Replace("OriginalName", "EditedName", StringComparison.Ordinal))]);
-        var dirtyStack = index.At(RecordRef.Effective).GetOverrideStack(formKey);
-        Assert.NotNull(dirtyStack);
-        Assert.True(dirtyStack.Entries.Single().HasWorkingTreeChange);
+        index.Edit(_base, committed, committedBody.Replace("OriginalName", "EditedName", StringComparison.Ordinal));
+        var dirty = reads.StackEntry(_formKey, _baseKey);
+        Assert.NotNull(dirty);
+        Assert.True(dirty.HasWorkingTreeChange);
 
         // Byte compare *is* the revert-convergence detection — an edit back to the
         // committed bytes is not "a change that happens to match", it is no change at all.
-        index.ProjectDocuments(BaseKey, [(formKey, committedBody)]);
+        index.Edit(_base, reads.DocumentOf(_formKey, _baseKey), committedBody);
 
-        var revertedStack = index.At(RecordRef.Effective).GetOverrideStack(formKey);
-        Assert.NotNull(revertedStack);
-        var reverted = revertedStack.Entries.Single();
+        var reverted = reads.StackEntry(_formKey, _baseKey);
+        Assert.NotNull(reverted);
         Assert.False(reverted.HasWorkingTreeChange);
         Assert.Equal(committedBody, reverted.Effective.Body);
-        var head = index.At(RecordRef.Head).GetDocument(formKey, BaseKey);
-        Assert.NotNull(head);
-        Assert.Equal(committedBody, head.Body);
+        Assert.Equal(committedBody, reverted.Head.Body);
     }
 }

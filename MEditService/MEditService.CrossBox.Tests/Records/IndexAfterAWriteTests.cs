@@ -49,11 +49,11 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The file write and the projection are two events (ADR-0014), and both have to have landed:
         // dirt on disk with the editor showing the old value is half a write path.
-        var index = _mod.Index.Store.Require();
-        var effective = index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        var index = _mod.Index.RequireReads();
+        var effective = index.GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         Assert.Contains("0.75", effective.Body.Require(), StringComparison.Ordinal);
 
-        var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        var head = index.HeadDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         Assert.DoesNotContain("0.75", head.Body.Require(), StringComparison.Ordinal);
         Assert.Equal(
             _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)), head.Body);
@@ -68,10 +68,10 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The second edit must not re-baseline against the first: Head is what the last commit
         // holds, not "the value before the most recent keystroke".
-        var index = _mod.Index.Store.Require();
-        var effective = index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        var index = _mod.Index.RequireReads();
+        var effective = index.GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         Assert.Contains("0.5", effective.Body.Require(), StringComparison.Ordinal);
-        var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        var head = index.HeadDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         Assert.Equal(
             _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)),
             head.Body);
@@ -84,17 +84,17 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         _mod.Index.SetFilter("SELECT form_key FROM npc_ WHERE HeightMax = 0.75");
         Assert.Equal(
-            0, _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            0, _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        var result = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
     }
 
     [Fact]
-    public void ACreatedRecord_IsReadableAtEffective_AndAbsentAtHead()
+    public void ACreatedRecord_IsReadableAtEffective_AsAWorkingTreeAddition()
     {
         var result = Service().CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
 
@@ -102,7 +102,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
         var newFormKey = RequireNewFormKey(result);
         var document = _mod.Index.Projected().GetDocument(newFormKey, _mod.Plugin).Require();
         Assert.Equal("BrandNewNpc", document.EditorId);
-        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(newFormKey, _mod.Plugin));
+        Assert.True(_mod.Index.Projected().StackEntry(newFormKey, _mod.Plugin).Require().HasWorkingTreeChange);
     }
 
     // _filter never evaluated a brand-new row against its SQL, so it stays hidden until the create
@@ -111,12 +111,12 @@ public sealed class IndexAfterAWriteTests : IDisposable
     public void ACreatedRecord_AppearsInAnActiveFilteredListing()
     {
         _mod.Index.SetFilter("SELECT form_key FROM npc_");
-        var before = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
+        var before = _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
 
         var result = Service().CreateRecord(_mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        var after = _mod.Index.SettledReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
+        var after = _mod.Index.Projected().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
         Assert.Equal(before + 1, after.Total);
         Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
     }
@@ -147,16 +147,16 @@ public sealed class IndexAfterAWriteTests : IDisposable
     }
 
     [Fact]
-    public void ADeletedRecord_IsGoneAtEffective_AndStillServedAtHead()
+    public void ADeletedRecord_IsGoneAtEffective()
     {
         Assert.True(Service().DeleteRecord(_mod.Plugin, _mod.Npc.ToString()).Applied);
 
         Assert.Null(_mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin));
-        Assert.NotNull(_mod.Index.Projected(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Index.Projected().GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin));
     }
 
     [Fact]
-    public void ADeletedNeverCommittedRecord_LeavesNoRowAtEitherRef()
+    public void ADeletedNeverCommittedRecord_LeavesNoRow()
     {
         var service = Service();
         var created = service.CreateRecord(_mod.Plugin, "npc_", "BrandNew");
@@ -166,7 +166,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
         Assert.True(service.DeleteRecord(_mod.Plugin, createdFormKey).Applied);
 
         Assert.Null(_mod.Index.Projected().GetDocument(createdFormKey, _mod.Plugin));
-        Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(createdFormKey, _mod.Plugin));
+        Assert.Null(_mod.Index.Projected().HeadDocument(createdFormKey, _mod.Plugin));
     }
 
     [Fact]

@@ -38,17 +38,16 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
     public void CodecPath_OnCutDownFixture_StaysUnderCeilingSetFromBinaryFirstIndex()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var ddl = new TableDdlBuilder(reflector);
         var schemas = reflector.GetSchemas(GameRelease.Fallout4);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var modPath = new ModPath(
             ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath);
 
         // Unmeasured: settles JIT and reflection caches before either timed pass below.
-        RunBinaryFirstIndex(reflector, ddl, modPath);
+        RunBinaryFirstIndex(modPath);
         RunCodecPath(schemas, codec, modPath);
 
-        var binaryFirstIndexMs = Time(() => RunBinaryFirstIndex(reflector, ddl, modPath));
+        var binaryFirstIndexMs = Time(() => RunBinaryFirstIndex(modPath));
         var codecRecords = 0;
         var codecPathMs = Time(() => codecRecords = RunCodecPath(schemas, codec, modPath));
 
@@ -88,7 +87,6 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
         var masterNames = ForcedPlugins.Names(dataDir.Path, gameRelease);
         Assert.NotEmpty(masterNames);
 
-        var ddl = new TableDdlBuilder(reflector);
         var schemas = reflector.GetSchemas(gameRelease);
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
 
@@ -110,7 +108,7 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             codecRecords += records;
         }
 
-        var binaryMs = Time(() => RunBinaryFirstIndexOverMasters(reflector, ddl, gameRelease, dataDir.Path, masterNames));
+        var binaryMs = Time(() => RunBinaryFirstIndexOverMasters(gameRelease, dataDir.Path, masterNames));
 
         output.WriteLine(
             $"binary first-index over {masterNames.Count} full vanilla master(s) ({gameRelease}): {binaryMs} ms; " +
@@ -119,20 +117,15 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
 
     // One fresh DuckDB index, every master indexed into it in load-order slots.
     private static void RunBinaryFirstIndexOverMasters(
-        SchemaReflector reflector, TableDdlBuilder ddl, GameRelease gameRelease, string dataFolderPath,
-        IReadOnlyList<string> masterNames)
+        GameRelease gameRelease, string dataFolderPath, IReadOnlyList<string> masterNames)
     {
-        using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
-        repo.Initialize(gameRelease);
-        for (var slot = 0; slot < masterNames.Count; slot++)
-        {
-            var name = masterNames[slot];
-            var path = Path.Combine(dataFolderPath, name);
-            using var overlay = ModFactory.ImportGetter(
-                new ModPath(ModKey.FromFileName(name), path), gameRelease,
-                MutagenReadParameters.ForRead(new PluginStrings(null, dataFolderPath)));
-            repo.IndexMod(overlay, Registration.Participating(slot), new PluginCopyKey(name, "Data"));
-        }
+        var holder = new LoadOrderHolder();
+        using var index = Indexes.Open(holder);
+        index.Reconcile(
+            holder, dataFolderPath,
+            [.. masterNames.Select((name, slot) => new LoadOrderEntry(
+                name, Path.Combine(dataFolderPath, name), PluginOrigin.DataDirectory, slot, Enabled: true, Winning: true))],
+            gameRelease);
     }
 
     private static long Time(Action action)
@@ -145,12 +138,13 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
 
     // The existing projector path, the shape the cut-down plugin index tests already use: a fresh
     // DuckDB index, one Index() call.
-    private static void RunBinaryFirstIndex(SchemaReflector reflector, TableDdlBuilder ddl, ModPath modPath)
+    private static void RunBinaryFirstIndex(ModPath modPath)
     {
-        using var overlay = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
-        using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod(overlay, Registration.Participating(0), new PluginCopyKey(overlay.ModKey.FileName.ToString(), "Data"));
+        var folder = Path.GetDirectoryName(modPath.Path)
+            ?? throw new InvalidOperationException("Expected the plugin path to sit in a folder.");
+        using var index = Indexes.Reconciled(
+            folder,
+            [new LoadOrderEntry(modPath.ModKey.FileName.ToString(), modPath.Path, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true)]);
     }
 
     // Open through the importer, enumerate every major record, serialise each through

@@ -1,9 +1,6 @@
-using DuckDB.NET.Data;
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,140 +8,123 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-/// <summary>Slots already covered by <c>placement</c>/<c>cell_location</c> must not get a second,
-/// competing copy in <c>container_child</c>.</summary>
-public sealed class ContainerChildIndexingTests
+/// <summary>Slots already answered by the placement reads must not get a second, competing copy
+/// among the container children.</summary>
+public sealed class ContainerChildIndexingTests : IDisposable
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly PluginCopyKey Key = new("Dialogue.esp", "Data");
 
-    private sealed record Built(
-        DuckDbRecordIndex Repo, string QuestFk, string Topic0Fk, string Topic1Fk,
-        string Response0Fk, string Response1Fk, string CellFk, string NavMesh0Fk, string LandscapeFk) : IDisposable
+    private readonly PluginFixtureData _fixture;
+    private readonly string _questFk;
+    private readonly string _topic0Fk;
+    private readonly string _topic1Fk;
+    private readonly string _response0Fk;
+    private readonly string _response1Fk;
+    private readonly string _cellFk;
+    private readonly string _navMesh0Fk;
+    private readonly string _landscapeFk;
+    private readonly string _placedFk;
+
+    public ContainerChildIndexingTests()
     {
-        public void Dispose() => Repo.Dispose();
+        FormKey quest = default, topic0 = default, topic1 = default, response0 = default, response1 = default;
+        FormKey cell = default, navMesh0 = default, landscape = default, placed = default;
+        _fixture = new PluginFixtureBuilder("container-child")
+            .WithPlugin(Key.Name, mod =>
+            {
+                var q = mod.Quests.AddNew("TestQuest");
+                var t0 = new DialogTopic(mod) { EditorID = "Topic0" };
+                var r0 = new DialogResponses(mod) { EditorID = "Response0" };
+                var r1 = new DialogResponses(mod) { EditorID = "Response1" };
+                t0.Responses.Add(r0);
+                t0.Responses.Add(r1);
+                var t1 = new DialogTopic(mod) { EditorID = "Topic1" };
+                q.DialogTopics.Add(t0);
+                q.DialogTopics.Add(t1);
+
+                var c = new Cell(mod) { EditorID = "NavCell" };
+                var nav = new NavigationMesh(mod);
+                c.NavigationMeshes.Add(nav);
+                var land = new Landscape(mod);
+                c.Landscape = land;
+                var placedObject = new PlacedObject(mod) { EditorID = "PlacedInNavCell" };
+                c.Persistent.Add(placedObject);
+                var intSub = new CellSubBlock { BlockNumber = 0 };
+                intSub.Cells.Add(c);
+                var intBlock = new CellBlock { BlockNumber = 0 };
+                intBlock.SubBlocks.Add(intSub);
+                mod.Cells.Records.Add(intBlock);
+
+                (quest, topic0, topic1, response0, response1) = (q.FormKey, t0.FormKey, t1.FormKey, r0.FormKey, r1.FormKey);
+                (cell, navMesh0, landscape, placed) = (c.FormKey, nav.FormKey, land.FormKey, placedObject.FormKey);
+            })
+            .Build();
+        (_questFk, _topic0Fk, _topic1Fk, _response0Fk, _response1Fk) =
+            (quest.ToString(), topic0.ToString(), topic1.ToString(), response0.ToString(), response1.ToString());
+        (_cellFk, _navMesh0Fk, _landscapeFk, _placedFk) =
+            (cell.ToString(), navMesh0.ToString(), landscape.ToString(), placed.ToString());
     }
 
-    private static Built IndexFixture()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Dialogue.esp"), Fallout4Release.Fallout4);
+    public void Dispose() => _fixture.Dispose();
 
-        var quest = mod.Quests.AddNew("TestQuest");
-        var topic0 = new DialogTopic(mod) { EditorID = "Topic0" };
-        var response0 = new DialogResponses(mod) { EditorID = "Response0" };
-        var response1 = new DialogResponses(mod) { EditorID = "Response1" };
-        topic0.Responses.Add(response0);
-        topic0.Responses.Add(response1);
-        var topic1 = new DialogTopic(mod) { EditorID = "Topic1" };
-        quest.DialogTopics.Add(topic0);
-        quest.DialogTopics.Add(topic1);
-
-        var cell = new Cell(mod) { EditorID = "NavCell" };
-        var navMesh0 = new NavigationMesh(mod);
-        cell.NavigationMeshes.Add(navMesh0);
-        var landscape = new Landscape(mod);
-        cell.Landscape = landscape;
-        var intSub = new CellSubBlock { BlockNumber = 0 };
-        intSub.Cells.Add(cell);
-        var intBlock = new CellBlock { BlockNumber = 0 };
-        intBlock.SubBlocks.Add(intSub);
-        mod.Cells.Records.Add(intBlock);
-
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-            repo.UpdateWinners();
-
-            var built = new Built(
-                repo, quest.FormKey.ToString(), topic0.FormKey.ToString(), topic1.FormKey.ToString(),
-                response0.FormKey.ToString(), response1.FormKey.ToString(), cell.FormKey.ToString(),
-                navMesh0.FormKey.ToString(), landscape.FormKey.ToString());
-            repo = null;
-            return built;
-        }
-        finally
-        {
-            repo?.Dispose();
-        }
-    }
-
-    private static List<(string ChildFormKey, string SlotName, int SlotIndex)> QueryChildren(
-        DuckDbRecordIndex repo, string parentFormKey)
-    {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT child_form_key, slot_name, slot_index FROM container_child
-            WHERE parent_form_key = $1 ORDER BY slot_name, slot_index
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = parentFormKey });
-        using var reader = cmd.ExecuteReader();
-        var rows = new List<(string, string, int)>();
-        while (reader.Read())
-            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
-        return rows;
-    }
+    private static List<(string ChildFormKey, string SlotName, int SlotIndex)> Children(IRecordReads reads, string parentFormKey) =>
+        [.. reads.GetContainerChildren(Key, parentFormKey)
+            .OrderBy(r => r.SlotName, StringComparer.Ordinal).ThenBy(r => r.SlotIndex)
+            .Select(r => (r.ChildFormKey, r.SlotName, r.SlotIndex))];
 
     [Fact]
     public void Index_PopulatesQuestDialogTopics_InOriginalOrder()
     {
-        using var built = IndexFixture();
-        var rows = QueryChildren(built.Repo, built.QuestFk)
-            .Where(r => r.SlotName == "DialogTopics").ToList();
+        using var index = Indexes.Reconciled(_fixture);
+        var rows = Children(index.RequireReads(), _questFk).Where(r => r.SlotName == "DialogTopics").ToList();
 
-        Assert.Equal([(built.Topic0Fk, "DialogTopics", 0), (built.Topic1Fk, "DialogTopics", 1)], rows);
+        Assert.Equal([(_topic0Fk, "DialogTopics", 0), (_topic1Fk, "DialogTopics", 1)], rows);
     }
 
     [Fact]
     public void Index_PopulatesDialogTopicResponses_InOriginalOrder()
     {
-        using var built = IndexFixture();
-        var rows = QueryChildren(built.Repo, built.Topic0Fk);
+        using var index = Indexes.Reconciled(_fixture);
+        var rows = Children(index.RequireReads(), _topic0Fk);
 
-        Assert.Equal(
-            [(built.Response0Fk, "Responses", 0), (built.Response1Fk, "Responses", 1)],
-            rows);
+        Assert.Equal([(_response0Fk, "Responses", 0), (_response1Fk, "Responses", 1)], rows);
     }
 
     [Fact]
     public void Index_PopulatesCellNavigationMeshesAndLandscape()
     {
-        using var built = IndexFixture();
-        var rows = QueryChildren(built.Repo, built.CellFk);
+        using var index = Indexes.Reconciled(_fixture);
+        var rows = Children(index.RequireReads(), _cellFk);
 
-        Assert.Contains((built.NavMesh0Fk, "NavigationMeshes", 0), rows);
-        Assert.Contains((built.LandscapeFk, "Landscape", 0), rows);
+        Assert.Contains((_navMesh0Fk, "NavigationMeshes", 0), rows);
+        Assert.Contains((_landscapeFk, "Landscape", 0), rows);
     }
 
-    // placement/cell_location already cover
-    // Persistent/Temporary/TopCell/SubCells, so container_child must never carry a second, competing
-    // copy of those slots — a naive "index every ContainerChildFields relationship" implementation
-    // would fail this.
+    // The placement reads already answer Persistent/Temporary/TopCell/SubCells, so the container
+    // children must never carry a second, competing copy of those slots.
     [Fact]
-    public void Index_DoesNotDuplicate_RelationshipsAlreadyCoveredByPlacementTables()
+    public void Index_DoesNotDuplicate_RelationshipsAlreadyCoveredByPlacementReads()
     {
-        using var built = IndexFixture();
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
 
-        using var cmd = built.Repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM container_child WHERE slot_name IN ('Persistent', 'Temporary', 'TopCell', 'SubCells')";
-        var count = (long)(cmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
-
-        Assert.Equal(0, count);
+        Assert.NotNull(reads.GetPlacement(_placedFk, Key));
+        Assert.DoesNotContain(Children(reads, _cellFk), r => r.SlotName is "Persistent" or "Temporary" or "TopCell" or "SubCells");
+        Assert.Null(reads.GetContainerParent(Key, _placedFk));
     }
 
     [Fact]
-    public void Unindex_RemovesContainerChildRows()
+    public async Task Unindex_RemovesContainerChildRows()
     {
-        using var built = IndexFixture();
-        built.Repo.Unindex(new PluginCopyKey("Dialogue.esp", "Data"));
+        using var index = Indexes.Reconciled(_fixture);
+        var reads = index.RequireReads();
+        Assert.NotEmpty(reads.GetContainerChildren(Key, _questFk));
 
-        using var cmd = built.Repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM container_child";
-        var count = (long)(cmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
+        File.Delete(_fixture.Plugins.Single().Path);
+        Assert.True(await index.RefreshBinary(Key, _fixture.Plugins.Single().Path));
 
-        Assert.Equal(0, count);
+        Assert.Empty(reads.GetContainerChildren(Key, _questFk));
+        Assert.Empty(reads.GetContainerChildren(Key, _topic0Fk));
+        Assert.Null(reads.GetContainerParent(Key, _topic0Fk));
     }
 }

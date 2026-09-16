@@ -4,6 +4,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Queries;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -32,9 +33,8 @@ public sealed class MasterIssuesDuringLoadTests
             .BuildScattered();
 
         var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
-        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, gate);
+        using var gate = new GatedPluginAdapter(gateBefore: "B.esp");
+        using var manager = Indexes.Open(holder, gate);
         var svc = new RecordQueryService(
             manager, holder, reflector, new ConflictClassifier());
 
@@ -67,10 +67,7 @@ public sealed class MasterIssuesDuringLoadTests
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
         var reflector = SharedSchemaReflector.Instance;
-        using var manager = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        using var manager = Indexes.Open(holder);
         manager.Reconcile(holder, fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(
             manager, holder, reflector, new ConflictClassifier());

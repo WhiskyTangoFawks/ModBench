@@ -11,15 +11,15 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>Both ingest paths call the same <see cref="IRecordIndex.Index"/> over the same mod shape, so
-/// there is no second extraction to drift; this checks it on 3,940 authentic records.</summary>
+/// <summary>Both ingest paths land the same rows over the same mod shape, so there is no second
+/// extraction to drift; this checks it on 3,940 authentic records.</summary>
 public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClassFixture<SourceParityFixture>
 {
     [Fact]
     public void TheTrackedPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
     {
         Assert.Empty(fixture.FromSource.Status.Failures);
-        Assert.True(SourceIngest.HoldsTree(SourceParityFixture.Origin, Path.Combine(fixture.ModFolder, CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginFileName));
+        Assert.True(SourceRepository.HoldsTreeFor(fixture.ModFolder, CutDownPluginFixture.PluginFileName));
     }
 
     [Fact]
@@ -58,15 +58,15 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     // One unpaged query: Search orders by editor_id, which is non-unique and null for every placed
     // ref, so LIMIT/OFFSET pages silently skip and repeat rows.
     private List<string> AllFormKeys(IndexProjector index) =>
-        [.. index.Store.Require().At(RecordRef.Effective)
+        [.. index.RequireReads()
             .Search(new RecordQuery(Plugin: fixture.Plugin.Name, Origin: fixture.Plugin.Origin, Limit: int.MaxValue))
             .Items.Select(i => i.FormKey)];
 
     private int CountOf(IndexProjector index, string recordType) =>
-        index.Store.Require().At(RecordRef.Effective).GetRecordTypeCounts(fixture.Plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
+        index.RequireReads().GetRecordTypeCounts(fixture.Plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
 
     private Dictionary<string, RecordDocument> DocumentsByFormKey(IndexProjector index) =>
-        index.Store.Require().At(RecordRef.Effective).GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
+        index.RequireReads().GetDocuments(fixture.Plugin).ToDictionary(d => d.FormKey, StringComparer.Ordinal);
 
     [Fact]
     public void EveryRecordsDocument_IsByteIdentical_ExceptOnePinnedOverlayVsDeepParseCellDivergence()
@@ -108,8 +108,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(CutDownPluginFixture.PluginFileName));
 
-        var binary = fixture.FromBinary.Store.Require().At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
-        var source = fixture.FromSource.Store.Require().At(RecordRef.Effective).GetDocument(headerFormKey, fixture.Plugin);
+        var binary = fixture.FromBinary.RequireReads().GetDocument(headerFormKey, fixture.Plugin);
+        var source = fixture.FromSource.RequireReads().GetDocument(headerFormKey, fixture.Plugin);
 
         Assert.NotNull(binary);
         Assert.NotNull(source);
@@ -123,7 +123,7 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.Contains("\"MasterReferences\"", binary.Body, StringComparison.Ordinal);
 
         Assert.Equal(binary.Body, source.Body);
-        Assert.Equal(ContentHashOf(fixture.FromBinary, headerFormKey), ContentHashOf(fixture.FromSource, headerFormKey));
+        Assert.Equal(ContentHashOf(fixture.BinaryInstanceRoot, headerFormKey), ContentHashOf(fixture.SourceInstanceRoot, headerFormKey));
 
         // The third arm: against the tracked plugin's own file on disk, as raw bytes. `records.body`
         // is VARCHAR, so this is the only comparison here that is genuinely about bytes.
@@ -134,13 +134,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         Assert.Equal(File.ReadAllBytes(headerFile), Encoding.UTF8.GetBytes(sourceBody));
     }
 
-    private static string ContentHashOf(IndexProjector index, string formKey)
-    {
-        using var cmd = ((DuckDbRecordIndex)index.Store.Require()).Connection.CreateCommand();
-        cmd.CommandText = "SELECT content_hash FROM records WHERE form_key = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        return Assert.IsType<string>(cmd.ExecuteScalar());
-    }
+    private static string ContentHashOf(string instanceRoot, string formKey) =>
+        Assert.IsType<string>(StoreFile.Scalar(instanceRoot, "SELECT content_hash FROM records WHERE form_key = $1", formKey));
 
     private static string StripVersioningBlock(string body) =>
         System.Text.RegularExpressions.Regex.Replace(
@@ -176,8 +171,8 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
 
     private int AssertTableIdentical(string table, string pluginColumn = "plugin", string originColumn = "origin")
     {
-        var binary = Rows(fixture.FromBinary, table, pluginColumn, originColumn);
-        var source = Rows(fixture.FromSource, table, pluginColumn, originColumn);
+        var binary = Rows(fixture.BinaryInstanceRoot, table, pluginColumn, originColumn);
+        var source = Rows(fixture.SourceInstanceRoot, table, pluginColumn, originColumn);
 
         var firstDifference = Enumerable.Range(0, Math.Max(binary.Count, source.Count))
             .FirstOrDefault(i => i >= binary.Count || i >= source.Count || binary[i] != source[i], -1);
@@ -187,9 +182,10 @@ public sealed class SourceIngestParityTests(SourceParityFixture fixture) : IClas
         return binary.Count;
     }
 
-    private List<string> Rows(IndexProjector index, string table, string pluginColumn, string originColumn)
+    private List<string> Rows(string instanceRoot, string table, string pluginColumn, string originColumn)
     {
-        using var cmd = ((DuckDbRecordIndex)index.Store.Require()).Connection.CreateCommand();
+        using var connection = StoreFile.Open(instanceRoot);
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT * FROM {table} WHERE {pluginColumn} = $1 AND {originColumn} = $2 ORDER BY ALL";
         cmd.Parameters.Add(new DuckDBParameter { Value = fixture.Plugin.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = fixture.Plugin.Origin });

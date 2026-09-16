@@ -1,54 +1,45 @@
-using DuckDB.NET.Data;
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Tests.Records;
 
-// ADR-0012: plugin identity is (origin, filename), not filename alone. These tests exercise
-// the DuckDbRecordIndex seam directly with two independently-built Fallout4Mods that share a
-// filename.
+// ADR-0012: plugin identity is (origin, filename), not filename alone. Two independently built
+// plugins share a filename, each in its own mod folder.
 public class CompoundPluginIdentityTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private static DuckDbRecordIndex OpenRepo()
-    {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        return repo;
-    }
+    private static readonly PluginCopyKey ModA = new("Shared.esp", "ModA");
+    private static readonly PluginCopyKey ModB = new("Shared.esp", "ModB");
 
     // Both mods share ModKey "Shared.esp" and each adds one NPC first, so deterministic FormID
     // assignment lands them on the identical FormKey: the collision at its sharpest, differing only
     // in origin.
-    private static (Fallout4Mod ModA, Fallout4Mod ModB, FormKey NpcKey) BuildSharedFilenameFixture()
+    private static ScatteredFixtureData SharedFilenameFixture(string prefix, out FormKey npcKey, bool modBEnabled = true, int modBSlot = 1)
     {
-        var modA = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-        var npcA = modA.Npcs.AddNew("FromModA");
-        var modB = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-        modB.Npcs.AddNew("FromModB");
-
-        return (modA, modB, npcA.FormKey);
+        FormKey key = default;
+        var fixture = new PluginFixtureBuilder(prefix)
+            .WithPlugin("Shared.esp", mod => key = mod.Npcs.AddNew("FromModA").FormKey, origin: "ModA")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB"), origin: "ModB", enabled: modBEnabled)
+            .BuildScattered();
+        npcKey = key;
+        return fixture with
+        {
+            Plugins = [.. fixture.Plugins.Select(p => p.Origin == "ModB" ? p with { Slot = modBSlot } : p)],
+        };
     }
 
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_IndexBothWithoutCollidingOnDelete()
     {
-        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
+        using var fixture = SharedFilenameFixture("identity-both", out var npcKey);
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())
+        var overrideStack = index.RequireReads().GetOverrideStack(npcKey.ToString())
             ?? throw new InvalidOperationException($"Expected an override stack for '{npcKey}'.");
         var overrides = overrideStack.Entries;
 
@@ -57,17 +48,14 @@ public class CompoundPluginIdentityTests
         Assert.Contains(overrides, o => o.Effective.EditorId == "FromModB");
     }
 
-    // ADR-0012: GetRecord's plugin filter must pick one origin's copy over the other's.
+    // ADR-0012: GetDocument's plugin filter must pick one origin's copy over the other's.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecord_ScopesToRequestedOrigin()
     {
-        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
+        using var fixture = SharedFilenameFixture("identity-get", out var npcKey);
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString(), new PluginCopyKey("Shared.esp", "ModA"));
+        var record = index.RequireReads().GetDocument(npcKey.ToString(), ModA);
 
         Assert.NotNull(record);
         Assert.Equal("FromModA", record.EditorId);
@@ -78,16 +66,12 @@ public class CompoundPluginIdentityTests
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_CountRecordsForPlugin_CountsRequestedOriginOnly()
     {
-        var (modA, modB, _) = BuildSharedFilenameFixture();
+        using var fixture = SharedFilenameFixture("identity-count", out _);
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey("Shared.esp", "ModA"))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey("Shared.esp", "ModB"))
-            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
+        Assert.Equal(1, reads.CountOf(ModA, "npc_"));
+        Assert.Equal(1, reads.CountOf(ModB, "npc_"));
     }
 
     // ADR-0012: GetNativeFormKeys must not filter by plugin filename alone. The origins need genuinely
@@ -96,18 +80,20 @@ public class CompoundPluginIdentityTests
     [Fact]
     public void TwoOrigins_SameFilenameDifferentNativeFormKeys_GetNativeFormKeys_ScopesToRequestedOrigin()
     {
-        var modA = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-        var sharedFirstKey = modA.Npcs.AddNew("First").FormKey;
-        var modB = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-        modB.Npcs.AddNew("First");
-        var secondKey = modB.Npcs.AddNew("SecondOnlyInModB").FormKey;
+        FormKey sharedFirstKey = default, secondKey = default;
+        using var fixture = new PluginFixtureBuilder("identity-native")
+            .WithPlugin("Shared.esp", mod => sharedFirstKey = mod.Npcs.AddNew("First").FormKey, origin: "ModA")
+            .WithPlugin("Shared.esp", mod =>
+            {
+                mod.Npcs.AddNew("First");
+                secondKey = mod.Npcs.AddNew("SecondOnlyInModB").FormKey;
+            }, origin: "ModB")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        var modAKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginCopyKey("Shared.esp", "ModA"));
-        var modBKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginCopyKey("Shared.esp", "ModB"));
+        var modAKeys = reads.GetNativeFormKeys(ModA);
+        var modBKeys = reads.GetNativeFormKeys(ModB);
 
         Assert.Single(modAKeys);
         Assert.Equal(sharedFirstKey.ToString(), modAKeys[0]);
@@ -119,13 +105,10 @@ public class CompoundPluginIdentityTests
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_GetRecords_FiltersToRequestedOriginAndSurfacesIt()
     {
-        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
+        using var fixture = SharedFilenameFixture("identity-list", out var npcKey);
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        var modAResult = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "Shared.esp", Origin: "ModA", Limit: 100, Offset: 0));
+        var modAResult = index.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "Shared.esp", Origin: "ModA", Limit: 100, Offset: 0));
 
         var item = Assert.Single(modAResult.Items);
         Assert.Equal(npcKey.ToString(), item.FormKey);
@@ -136,17 +119,13 @@ public class CompoundPluginIdentityTests
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKey_NonParticipatingOriginNeverWinsViaOtherOriginsParticipation()
     {
-        var (modA, modB, npcKey) = BuildSharedFilenameFixture();
-
-        using var repo = OpenRepo();
-        // ModB sits later in its own load order and would compute as winner if UpdateWinners' join
+        // ModB sits later in its own load order and would compute as winner if the sweep's join
         // matched by filename alone: ModA's participation is a different origin's row and must not
         // leak.
-        repo.IndexMod(modA, Registration.Participating(1), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Disabled(5), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-        repo.UpdateWinners();
+        using var fixture = SharedFilenameFixture("identity-winner", out var npcKey, modBEnabled: false, modBSlot: 5);
+        using var index = Indexes.Reconciled(fixture);
 
-        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())
+        var overrideStack = index.RequireReads().GetOverrideStack(npcKey.ToString())
             ?? throw new InvalidOperationException($"Expected an override stack for '{npcKey}'.");
         var overrides = overrideStack.Entries;
         var fromA = overrides.Single(o => o.Effective.EditorId == "FromModA");
@@ -157,12 +136,10 @@ public class CompoundPluginIdentityTests
     }
 
     // The same identical-build-sequence trick, extended to the re-keyed side tables, so the
-    // corresponding records land on identical FormKeys: the same collision, on the three tables the
-    // two tests above do not reach.
-    private static (Fallout4Mod Mod, FormKey CellKey, FormKey PlacedKey, FormKey NpcKey) BuildStructuralMod(string suffix)
+    // corresponding records land on identical FormKeys: the same collision, on the placement,
+    // cell-location and reference reads the tests above do not reach.
+    private static void PopulateStructural(Fallout4Mod mod, string suffix, out FormKey cellKey, out FormKey placedKey, out FormKey npcKey, out FormKey raceKey)
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-
         var wrld = mod.Worldspaces.AddNew($"World{suffix}");
         var cell = new Cell(mod) { EditorID = $"Cell{suffix}", Grid = new CellGrid { Point = new P2Int(0, 0) } };
         var placed = new PlacedObject(mod) { EditorID = $"Placed{suffix}", Position = new P3Float(1f, 2f, 3f) };
@@ -177,62 +154,56 @@ public class CompoundPluginIdentityTests
         var npc = mod.Npcs.AddNew($"Npc{suffix}");
         npc.Race.SetTo(race.FormKey);
 
-        return (mod, cell.FormKey, placed.FormKey, npc.FormKey);
+        (cellKey, placedKey, npcKey, raceKey) = (cell.FormKey, placed.FormKey, npc.FormKey, race.FormKey);
+    }
+
+    private static ScatteredFixtureData StructuralFixture(
+        string prefix, out FormKey cellKey, out FormKey placedKey, out FormKey npcKey, out FormKey raceKey)
+    {
+        FormKey cellA = default, placedA = default, npcA = default, raceA = default;
+        FormKey cellB = default, placedB = default, npcB = default, raceB = default;
+        var fixture = new PluginFixtureBuilder(prefix)
+            .WithPlugin("Shared.esp", mod => PopulateStructural(mod, "A", out cellA, out placedA, out npcA, out raceA), origin: "ModA")
+            .WithPlugin("Shared.esp", mod => PopulateStructural(mod, "B", out cellB, out placedB, out npcB, out raceB), origin: "ModB")
+            .BuildScattered();
+
+        // Confirms the premise before testing the consequence: identical build order really does
+        // produce identical FormKeys across the two independently-built mods.
+        Assert.Equal(cellA, cellB);
+        Assert.Equal(placedA, placedB);
+        Assert.Equal(npcA, npcB);
+        Assert.Equal(raceA, raceB);
+        (cellKey, placedKey, npcKey, raceKey) = (cellA, placedA, npcA, raceA);
+        return fixture;
     }
 
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKeys_PlacementCellLocationAndFormReferencesBothPersist()
     {
-        var (modA, cellKeyA, placedKeyA, npcKeyA) = BuildStructuralMod("A");
-        var (modB, cellKeyB, placedKeyB, npcKeyB) = BuildStructuralMod("B");
+        using var fixture = StructuralFixture("identity-structural", out var cellKey, out var placedKey, out _, out var raceKey);
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        // Confirms the premise before testing the consequence: identical build order really does
-        // produce identical FormKeys across the two independently-built mods.
-        Assert.Equal(cellKeyA, cellKeyB);
-        Assert.Equal(placedKeyA, placedKeyB);
-        Assert.Equal(npcKeyA, npcKeyB);
-
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        Assert.Equal(2L, Count(repo, "cell_location", "cell_form_key", cellKeyA.ToString()));
-        Assert.Equal(2L, Count(repo, "placement", "form_key", placedKeyA.ToString()));
-
-        using var refCmd = repo.Connection.CreateCommand();
-        refCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE source_form_key = $1 AND field_path = 'Race'";
-        refCmd.Parameters.Add(new DuckDBParameter { Value = npcKeyA.ToString() });
-        Assert.Equal(2L, (long)(refCmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value.")));
+        foreach (var origin in new[] { ModA, ModB })
+        {
+            Assert.NotNull(reads.GetCellLocation(origin, cellKey.ToString()));
+            Assert.NotNull(reads.GetPlacement(placedKey.ToString(), origin));
+        }
+        Assert.Equal(2, reads.GetReferencedBy(raceKey.ToString()).Count(r => r.FieldPath == "Race"));
     }
 
-    // ADR-0012: GetReferences never filters by plugin, so its rows must carry Origin, or two
+    // ADR-0012: GetReferencedBy never filters by plugin, so its rows must carry Origin, or two
     // same-filename sources referencing one target cannot be told apart by any caller.
     [Fact]
     public void TwoOrigins_SameFilenameSameFormKeys_GetReferences_SurfacesOriginPerRow()
     {
-        var (modA, _, _, npcKeyA) = BuildStructuralMod("A");
-        var (modB, _, _, npcKeyB) = BuildStructuralMod("B");
-        Assert.Equal(npcKeyA, npcKeyB);
-        var raceFormKey = modA.Races.First().FormKey.ToString();
+        using var fixture = StructuralFixture("identity-references", out _, out _, out _, out var raceKey);
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        var refs = repo.At(RecordRef.Effective).GetReferencedBy(raceFormKey);
+        var refs = index.RequireReads().GetReferencedBy(raceKey.ToString());
 
         Assert.Equal(2, refs.Count);
         Assert.Contains(refs, r => r.Origin == "ModA");
         Assert.Contains(refs, r => r.Origin == "ModB");
-    }
-
-    private static long Count(DuckDbRecordIndex repo, string table, string column, string value)
-    {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM \"{table}\" WHERE {column} = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = value });
-        return (long)(cmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
     }
 }

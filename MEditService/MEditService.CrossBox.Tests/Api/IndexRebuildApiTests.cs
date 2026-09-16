@@ -59,14 +59,9 @@ public sealed class IndexRebuildApiTests : IDisposable
             ?? throw new InvalidOperationException("Expected the first npc_ record to carry a formKey.");
     }
 
-    private void CorruptTheStoredBody(string formKey)
-    {
-        var store = _app.Services.GetRequiredService<IndexProjector>().Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
-        var index = (DuckDbRecordIndex)store;
-        DuckDbSql.ExecuteFor(index.Connection,
+    private static void CorruptTheStoredBody(string instanceRoot, string formKey) =>
+        StoreFile.Execute(instanceRoot,
             "UPDATE mirror.records SET body = '{\"EditorID\": \"CorruptedInTheStore\"}' WHERE form_key = $1", formKey);
-    }
 
     // A second connection succeeding proves the backend released its own handle by the time the
     // rebuild POST answers — the old store's own Connection is gone by then.
@@ -84,14 +79,14 @@ public sealed class IndexRebuildApiTests : IDisposable
     {
         using var fx = await LoadAndTrack();
         var formKey = await FirstNpcFormKey();
-        CorruptTheStoredBody(formKey);
+        CorruptTheStoredBody(fx.InstanceRoot, formKey);
 
         var rebuild = await _client.PostAsJsonAsync("/index/rebuild", new { instanceRoot = fx.InstanceRoot, gameRelease = "Fallout4" });
         rebuild.EnsureSuccessStatusCode();
 
         // The endpoint's own job, proven directly on disk: the file the corrupted row lived in
         // holds nothing at all once the rebuild answers, not merely a self-healed row.
-        Assert.Equal(0, RecordRowCount(IndexFile.For(fx.InstanceRoot)));
+        Assert.Equal(0, RecordRowCount(IndexFiles.In(fx.InstanceRoot)));
 
         (await PutLoadOrder(fx)).EnsureSuccessStatusCode();
 

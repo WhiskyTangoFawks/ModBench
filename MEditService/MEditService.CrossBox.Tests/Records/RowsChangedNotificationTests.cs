@@ -1,70 +1,30 @@
-using MEditService.Codec.Schema;
-using MEditService.Index;
-using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
 /// <summary>ADR-0014 invariant 2, the in-memory adapter: the same Index verbs the write API
 /// reaches publish rows-changed through the port with no HTTP or SSE stream involved, proving the
 /// port — not the transport — is the seam.</summary>
-public sealed class RowsChangedNotificationTests : IDisposable
+public sealed class RowsChangedNotificationTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
-
-    private readonly PluginFixtureData _fixture;
-    private readonly FormKey _npc;
-    private readonly InMemoryNotificationPublisher _notifications = new();
-
-    public RowsChangedNotificationTests()
-    {
-        FormKey npc = default;
-        _fixture = new PluginFixtureBuilder("rows-changed-notification")
-            .WithPlugin("Base.esm", mod => npc = mod.Npcs.AddNew("OriginalName").FormKey)
-            .Build();
-        _npc = npc;
-    }
-
-    public void Dispose() => _fixture.Dispose();
-
-    private DuckDbRecordIndex LoadedIndex() =>
-        OwnedFixture.Build(
-            () => new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance, notifications: _notifications),
-            index =>
-            {
-                index.Initialize(GameRelease.Fallout4);
-                var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-                using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-                index.IndexMod(mod, Registration.Participating(0), BaseKey);
-                index.UpdateWinners();
-            },
-            index => index);
-
     [Fact]
-    public void ProjectDocuments_PublishesRowsChanged_WithTheKeyAndTheSequenceAfterTheWrite()
+    public void RefreshKeys_PublishesRowsChanged_WithTheKeyAndTheSequenceAfterTheWrite()
     {
-        using var index = LoadedIndex();
-        var formKey = _npc.ToString();
-        var document = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey);
-        Assert.NotNull(document);
-        var body = document.Body
-            ?? throw new InvalidOperationException("Expected the indexed NPC document to carry a body.");
-        var editedBody = body.Replace("OriginalName", "EditedName", StringComparison.Ordinal);
+        var notifications = new InMemoryNotificationPublisher();
+        using var fixture = IndexedModFixture.Tracked(notifications);
+        var formKey = fixture.Npc.ToString();
+        var text = File.ReadAllText(fixture.NpcSourceFile);
+        File.WriteAllText(fixture.NpcSourceFile, text.Replace(
+            $"\"{IndexedModFixture.NpcEditorId}\"", "\"EditedName\"", StringComparison.Ordinal));
 
-        index.ProjectDocuments(BaseKey, [(formKey, editedBody)]);
+        fixture.Index.RefreshKeys(fixture.Plugin, [formKey]);
 
-        var notification = Assert.IsType<RowsChangedNotification>(Assert.Single(_notifications.Notifications));
-        Assert.Equal(BaseKey, notification.Plugin);
+        var notification = Assert.Single(notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Equal(fixture.Plugin, notification.Plugin);
         Assert.Equal([formKey], notification.Keys);
-        Assert.Equal(index.Sequence, notification.Sequence);
+        Assert.Equal(fixture.Index.Sequence, notification.Sequence);
     }
 
     // A container's document is one row plus every embedded child's, so naming only the key the
@@ -84,9 +44,7 @@ public sealed class RowsChangedNotificationTests : IDisposable
             File.ReadAllText(document).Replace(
                 $"\"{ContainerModFixture.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        var store = fixture.Index.Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
-        store.RefreshByKeys(fixture.Plugin, fixture.ModFolder, [cell]);
+        fixture.Index.RefreshKeys(fixture.Plugin, [cell]);
 
         var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
         Assert.Contains(cell, rowsChanged.Keys);

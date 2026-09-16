@@ -1,11 +1,9 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
@@ -13,11 +11,9 @@ namespace MEditService.Tests.Records;
 /// Plugins tree calls, and it is the only real producer of a non-None value.</summary>
 public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
-
-    private readonly PluginFixtureData _fixture;
+    private readonly ScatteredFixtureData _fixture;
+    private readonly LoadOrderEntry _base;
+    private readonly PluginCopyKey _baseKey;
     private readonly FormKey _editedFormKey;
     private readonly FormKey _untouchedFormKey;
 
@@ -29,50 +25,32 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
             {
                 edited = mod.Npcs.AddNew("EditedOriginal").FormKey;
                 untouched = mod.Npcs.AddNew("Untouched").FormKey;
-            })
-            .Build();
+            }, origin: "BaseMod")
+            .BuildScattered()
+            .Tracked();
+        _base = _fixture.Plugins.Single();
+        _baseKey = _base.KeyOf();
         _editedFormKey = edited;
         _untouchedFormKey = untouched;
     }
 
     public void Dispose() => _fixture.Dispose();
 
-    private DuckDbRecordIndex LoadedIndex()
-    {
-        DuckDbRecordIndex? index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            index.Initialize(GameRelease.Fallout4);
-            var path = new ModPath(ModKey.FromFileName("Base.esm"), Path.Combine(_fixture.DataFolder, "Base.esm"));
-            using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-            index.IndexMod(mod, Registration.Participating(0), BaseKey);
-            index.UpdateWinners();
-            var loaded = index;
-            index = null;
-            return loaded;
-        }
-        finally
-        {
-            index?.Dispose();
-        }
-    }
-
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
         page.Items.Single(i => i.FormKey == formKey);
+
+    private PagedResult<RecordSummary> Listing(IndexProjector index) =>
+        index.RequireReads().Search(new RecordQuery(Plugin: _baseKey.Name, Origin: _baseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 
     [Fact]
     public void Search_EditedRecord_ReportsModified_AndUntouchedSiblingReportsNone()
     {
-        using var index = LoadedIndex();
+        using var index = Indexes.Reconciled(_fixture);
         var edited = _editedFormKey.ToString();
-        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)
-            ?? throw new InvalidOperationException($"Expected a committed document for '{edited}'.");
-        var committedBody = committed.Body
-            ?? throw new InvalidOperationException($"Expected committed document '{edited}' to carry a body.");
-        index.ProjectDocuments(
-            BaseKey, [(edited, committedBody.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
+        var committed = index.RequireReads().DocumentOf(edited, _baseKey);
+        index.Edit(_base, committed, committed.BodyOf().Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal));
 
-        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
+        var page = Listing(index);
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(page, edited).WorkingTreeState);
         Assert.Equal(WorkingTreeState.None, SummaryFor(page, _untouchedFormKey.ToString()).WorkingTreeState);
@@ -81,34 +59,19 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     [Fact]
     public void Search_NewlyCreatedRecord_ReportsAdded()
     {
-        using var index = LoadedIndex();
-        // A created record is one no committed ref holds — the state ingest reconciles a new source
-        // document into, and the only thing the listing can read.
-        var created = _untouchedFormKey.ToString();
-        index.MarkWorkingTreeOnly(BaseKey, [created]);
+        using var index = Indexes.Reconciled(_fixture);
+        // A created record is one no committed ref holds: a document the working tree gains and the
+        // tree is re-read for.
+        var template = index.RequireReads().DocumentOf(_untouchedFormKey.ToString(), _baseKey);
+        var created = new FormKey(_untouchedFormKey.ModKey, _untouchedFormKey.ID + 1).ToString();
+        var body = template.BodyOf()
+            .Replace(_untouchedFormKey.ToString(), created, StringComparison.Ordinal)
+            .Replace("Untouched", "CreatedInTree", StringComparison.Ordinal);
+        index.Create(_base, created, "npc_", "CreatedInTree", body);
 
-        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
+        var page = Listing(index);
 
         Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
-    }
-
-    // A ref-scoped Search forwarding the same reader logic without HeadRelation's "Ref" column being
-    // uniformly 'committed' would leak Effective's Modified/Added values into the Head answer, which
-    // never has dirt.
-    [Fact]
-    public void Search_AtHead_AlwaysReportsNone_EvenForARecordDirtyAtEffective()
-    {
-        using var index = LoadedIndex();
-        var edited = _editedFormKey.ToString();
-        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)
-            ?? throw new InvalidOperationException($"Expected a committed document for '{edited}'.");
-        var committedBody = committed.Body
-            ?? throw new InvalidOperationException($"Expected committed document '{edited}' to carry a body.");
-        index.ProjectDocuments(
-            BaseKey, [(edited, committedBody.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
-
-        var headPage = index.At(RecordRef.Head).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
-
-        Assert.All(headPage.Items, i => Assert.Equal(WorkingTreeState.None, i.WorkingTreeState));
+        Assert.Equal(WorkingTreeState.None, SummaryFor(page, _untouchedFormKey.ToString()).WorkingTreeState);
     }
 }

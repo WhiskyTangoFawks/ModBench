@@ -1,94 +1,59 @@
-using System.Globalization;
-using System.Text;
 using System.Text.Json;
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// The plugin header is an ordinary `records` row at the synthetic FormKey `000000:<plugin>`, whose
+// The plugin header is an ordinary document at the synthetic FormKey `000000:<plugin>`, whose
 // body is the whole-mod door's root RecordData.json.
 public class HeaderIndexingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private static long ToLong(object? v) => Convert.ToInt64(v, CultureInfo.InvariantCulture);
-
-    private static DuckDbRecordIndex NewRepo()
-    {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        return repo;
-    }
-
-    private static DuckDbRecordIndex Indexed(IFallout4Mod mod, string origin = "Data")
-    {
-        var repo = NewRepo();
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), origin));
-        repo.UpdateWinners();
-        return repo;
-    }
-
-    private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql, params string[] parameters)
-    {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        foreach (var p in parameters)
-            cmd.Parameters.Add(new DuckDBParameter { Value = p });
-        using var reader = cmd.ExecuteReader();
-        var rows = new List<Dictionary<string, object?>>();
-        while (reader.Read())
-        {
-            var row = new Dictionary<string, object?>();
-            for (int i = 0; i < reader.FieldCount; i++)
-                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            rows.Add(row);
-        }
-        return rows;
-    }
 
     private static object? FieldValueOf(RecordDocument doc, string name) =>
         doc.Fields.Single(f => f.Metadata.Name == name).Value;
 
+    // Declared masters are kept as declared: the default write recomputes them from the links the
+    // records carry, and a header-only plugin carries none.
+    private static PluginFixtureData OnePlugin(string prefix, string name, Action<Fallout4Mod>? configure = null) =>
+        new PluginFixtureBuilder(prefix)
+            .WithPlugin(name, configure, writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck, MastersListOrdering = MastersListOrderingOption.NoCheck })
+            .Build();
+
+    private static RecordDocument Header(IndexProjector index, string name) =>
+        index.RequireReads().DocumentOf(PluginHeader.FormKeyFor(ModKey.FromFileName(name)), new PluginCopyKey(name, "Data"));
+
     [Fact]
-    public void Index_Fo4Plugin_WritesHeaderRowIntoRecords_WithSyntheticFormKeyAndHeaderType()
+    public void Index_Fo4Plugin_WritesHeaderDocument_WithSyntheticFormKeyAndHeaderType()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("HeaderTest.esp"), Fallout4Release.Fallout4);
+        using var fixture = OnePlugin("header-row", "HeaderTest.esp");
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = Indexed(mod);
+        var header = Header(index, "HeaderTest.esp");
 
-        var rows = Query(repo,
-            "SELECT form_key, record_type, editor_id, \"ref\" FROM records WHERE record_type = 'header' AND plugin = $1",
-            "HeaderTest.esp");
-        var row = Assert.Single(rows);
-        Assert.Equal("000000:HeaderTest.esp", row["form_key"]);
-        Assert.Equal("header", row["record_type"]);
+        Assert.Equal("000000:HeaderTest.esp", header.FormKey);
+        Assert.Equal("header", header.RecordType);
         // Headers have no EditorID concept — the one identity column that stays null.
-        Assert.Null(row["editor_id"]);
-        Assert.Equal(SourceRef.Committed, row["ref"]);
+        Assert.Null(header.EditorId);
+        var entry = index.RequireReads().StackEntry(header.FormKey, header.Plugin);
+        Assert.NotNull(entry);
+        Assert.False(entry.HasWorkingTreeChange);
     }
 
     [Fact]
-    public void Index_Header_BodyIsTheRootDocument_AndContentHashIsTheRepositorys()
+    public void Index_Header_BodyIsTheRootDocument()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("BodyTest.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.Author = "Vault Dweller";
+        using var fixture = OnePlugin("header-body", "BodyTest.esp", mod => mod.ModHeader.Author = "Vault Dweller");
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = Indexed(mod);
-
-        var row = Assert.Single(Query(repo,
-            "SELECT body, content_hash FROM records WHERE record_type = 'header' AND plugin = $1", "BodyTest.esp"));
-        var body = Assert.IsType<string>(row["body"]);
+        var body = Header(index, "BodyTest.esp").BodyOf();
 
         // The root document's own shape, spelled out: the header nests one level inside a wrapper
         // carrying the mod's identity. This is what makes the header's column paths
@@ -97,8 +62,6 @@ public class HeaderIndexingTests
         Assert.Contains("\"GameRelease\": \"Fallout4\"", body, StringComparison.Ordinal);
         Assert.Contains("\"ModHeader\"", body, StringComparison.Ordinal);
         Assert.Contains("\"Author\": \"Vault Dweller\"", body, StringComparison.Ordinal);
-
-        Assert.Equal(SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body)), row["content_hash"]);
     }
 
     // The three fields the record editor renders for a header, read back through the ordinary document
@@ -106,26 +69,20 @@ public class HeaderIndexingTests
     [Fact]
     public void GetDocument_Header_AuthorField_MatchesModHeaderAuthor()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("AuthorTest.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.Author = "Vault Dweller";
+        using var fixture = OnePlugin("header-author", "AuthorTest.esp", mod => mod.ModHeader.Author = "Vault Dweller");
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = Indexed(mod);
-
-        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginCopyKey("AuthorTest.esp", "Data"));
-        Assert.NotNull(doc);
+        var doc = Header(index, "AuthorTest.esp");
         Assert.Equal("Vault Dweller", Assert.IsType<JsonElement>(FieldValueOf(doc, "Author")).GetString());
     }
 
     [Fact]
     public void GetDocument_Header_FlagsField_ReflectsSmallMasterFlagForEsl()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("EslTest.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small;
+        using var fixture = OnePlugin("header-flags", "EslTest.esp", mod => mod.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Small);
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = Indexed(mod);
-
-        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginCopyKey("EslTest.esp", "Data"));
-        Assert.NotNull(doc);
+        var doc = Header(index, "EslTest.esp");
         // The document spells the flags by Mutagen's member names.
         Assert.Equal(
             [nameof(Fallout4ModHeader.HeaderFlag.Small)],
@@ -135,14 +92,14 @@ public class HeaderIndexingTests
     [Fact]
     public void GetDocument_Header_MastersField_ListsPluginFilenamesInOrder()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("MastersTest.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
-        mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("DLCRobot.esm") });
+        using var fixture = OnePlugin("header-masters", "MastersTest.esp", mod =>
+        {
+            mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Fallout4.esm") });
+            mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("DLCRobot.esm") });
+        });
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = Indexed(mod);
-
-        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginCopyKey("MastersTest.esp", "Data"));
-        Assert.NotNull(doc);
+        var doc = Header(index, "MastersTest.esp");
         // The document's own shape: one object per master, naming it.
         var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, "MasterReferences"));
         Assert.Equal(
@@ -160,84 +117,73 @@ public class HeaderIndexingTests
     }
 
     [Fact]
-    public void Index_ReIndexSamePlugin_ReplacesHeaderRowRatherThanDuplicating()
+    public async Task Index_ReIndexSamePlugin_ReplacesHeaderDocumentRatherThanDuplicating()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("ReindexHeader.esp"), Fallout4Release.Fallout4);
-
-        using var repo = NewRepo();
+        using var fixture = OnePlugin("header-reindex", "ReindexHeader.esp");
+        using var index = Indexes.Reconciled(fixture);
         var key = new PluginCopyKey("ReindexHeader.esp", "Data");
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), key);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), key);
 
-        var rows = Query(repo,
-            "SELECT COUNT(*) AS c FROM records WHERE record_type = 'header' AND plugin = $1", "ReindexHeader.esp");
-        Assert.Equal(1L, ToLong(rows[0]["c"]));
+        await index.ReindexPlugin(key);
+
+        var stack = index.RequireReads().GetOverrideStack("000000:ReindexHeader.esp");
+        Assert.NotNull(stack);
+        Assert.Single(stack.Entries);
+        Assert.Single(index.RequireReads().GetDocuments(key), d => d.RecordType == PluginHeader.RecordType);
     }
 
     [Fact]
-    public void Index_Header_GetsItsOwnFormLookupRow_LikeEveryOtherRecord()
+    public void Index_Header_Resolves_LikeEveryOtherRecord()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("LookupHeader.esp"), Fallout4Release.Fallout4);
-        mod.Npcs.AddNew().EditorID = "SomeNpc";
+        using var fixture = OnePlugin("header-lookup", "LookupHeader.esp", mod => mod.Npcs.AddNew().EditorID = "SomeNpc");
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
+        var key = new PluginCopyKey("LookupHeader.esp", "Data");
 
-        using var repo = Indexed(mod);
+        var documents = reads.GetDocuments(key);
+        // Positive control: more than just the header, or the sweep below is a 1==1 that would
+        // hold even if records stopped resolving entirely.
+        Assert.True(documents.Count > 1, $"expected the header and at least one record; got {documents.Count}");
+        Assert.All(documents, d => Assert.NotNull(reads.Resolve(d.FormKey)));
 
-        var records = ToLong(Assert.Single(Query(repo,
-            "SELECT COUNT(*) AS c FROM records WHERE plugin = $1", "LookupHeader.esp"))["c"]);
-        var lookups = ToLong(Assert.Single(Query(repo,
-            "SELECT COUNT(*) AS c FROM form_lookup WHERE plugin = $1", "LookupHeader.esp"))["c"]);
-
-        // Positive control: more than just the header, or the equality below is a 1==1 that would
-        // hold even if records rows stopped producing lookup rows entirely.
-        Assert.True(records > 1, $"expected the header and at least one record; got {records}");
-        Assert.Equal(records, lookups);
-
-        var resolved = repo.At(RecordRef.Effective).Resolve(PluginHeader.FormKeyFor(mod.ModKey));
+        var resolved = reads.Resolve(PluginHeader.FormKeyFor(ModKey.FromFileName("LookupHeader.esp")));
         Assert.NotNull(resolved);
         Assert.Equal("header", resolved.Value.RecordType);
         Assert.Null(resolved.Value.EditorId);
     }
 
     [Fact]
-    public void Index_TwoPlugins_EachGetsOwnHeaderRow_NeitherOverridesTheOther()
+    public void Index_TwoPlugins_EachGetsOwnHeaderDocument_NeitherOverridesTheOther()
     {
-        var modA = new Fallout4Mod(ModKey.FromFileName("PluginA.esp"), Fallout4Release.Fallout4);
-        var modB = new Fallout4Mod(ModKey.FromFileName("PluginB.esp"), Fallout4Release.Fallout4);
+        using var fixture = new PluginFixtureBuilder("header-two-plugins")
+            .WithPlugin("PluginA.esp")
+            .WithPlugin("PluginB.esp")
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = NewRepo();
-        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-
-        var overrideStackA = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginA.esp")
+        var overrideStackA = reads.GetOverrideStack("000000:PluginA.esp")
             ?? throw new InvalidOperationException("Expected an override stack for PluginA.esp's header.");
-        var overrideStackB = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginB.esp")
+        var overrideStackB = reads.GetOverrideStack("000000:PluginB.esp")
             ?? throw new InvalidOperationException("Expected an override stack for PluginB.esp's header.");
-        var overridesA = overrideStackA.Entries;
-        var overridesB = overrideStackB.Entries;
 
-        Assert.Single(overridesA);
-        Assert.Single(overridesB);
-        Assert.Equal("PluginA.esp", overridesA[0].Plugin.Name);
-        Assert.Equal("PluginB.esp", overridesB[0].Plugin.Name);
+        Assert.Single(overrideStackA.Entries);
+        Assert.Single(overrideStackB.Entries);
+        Assert.Equal("PluginA.esp", overrideStackA.Entries[0].Plugin.Name);
+        Assert.Equal("PluginB.esp", overrideStackB.Entries[0].Plugin.Name);
     }
 
-    // ADR-0012: two origins loading the same physical filename — a filename-only delete step would
-    // make indexing ModB's copy of a shared-filename plugin silently delete ModA's header row before
-    // inserting ModB's.
+    // ADR-0012: two origins holding the same filename — a filename-only delete step would make
+    // indexing ModB's copy silently delete ModA's header document before inserting ModB's.
     [Fact]
-    public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderRow_NeitherOverridesTheOther()
+    public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderDocument_NeitherOverridesTheOther()
     {
-        var modA = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-        modA.ModHeader.Author = "Author A";
-        var modB = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-        modB.ModHeader.Author = "Author B";
+        using var fixture = new PluginFixtureBuilder("header-two-origins")
+            .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author A", origin: "ModA")
+            .WithPlugin("Shared.esp", mod => mod.ModHeader.Author = "Author B", origin: "ModB")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
 
-        using var repo = NewRepo();
-        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
-
-        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack("000000:Shared.esp")
+        var overrideStack = index.RequireReads().GetOverrideStack("000000:Shared.esp")
             ?? throw new InvalidOperationException("Expected an override stack for Shared.esp's header.");
         var overrides = overrideStack.Entries;
 
@@ -250,5 +196,4 @@ public class HeaderIndexingTests
         Assert.Equal("Author A", Assert.IsType<JsonElement>(FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModA").Effective, "Author")).GetString());
         Assert.Equal("Author B", Assert.IsType<JsonElement>(FieldValueOf(overrides.Single(o => o.Plugin.Origin == "ModB").Effective, "Author")).GetString());
     }
-
 }

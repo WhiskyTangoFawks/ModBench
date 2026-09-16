@@ -72,10 +72,8 @@ public sealed class LoadOrderEndpointsTests
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("create-during-reconcile")
             .WithPlugin("A.esp").WithPlugin("B.esp").Build();
-        var reflector = SharedSchemaReflector.Instance;
-        using var factory = new GatedIndexRepositoryFactory(
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), gateBefore: "A.esp");
-        using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        using var factory = new GatedPluginAdapter(gateBefore: "A.esp");
+        using var index = Indexes.Open(holder, factory);
         var snapshot = ForcedPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
         holder.Apply(snapshot);
         var reconcile = Task.Run(() => index.Reconcile(snapshot));
@@ -99,10 +97,10 @@ public sealed class LoadOrderEndpointsTests
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("second-window-rebuild").WithPlugin("A.esp").Build();
-        using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var thisWindow = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        // The file exists before the other window takes it: an earlier launch on this instance made it.
+        using (var earlier = Indexes.Reconciled(data, data.InstanceRoot)) { }
+        using var otherWindow = ForeignIndexHolder.Hold(IndexFiles.In(data.InstanceRoot));
+        using var thisWindow = Indexes.Open(holder);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
         var result = LoadOrderEndpoints.PostRebuildIndex(request, thisWindow, NullLoggerFactory.Instance);
@@ -117,9 +115,7 @@ public sealed class LoadOrderEndpointsTests
     {
         var holder = new LoadOrderHolder();
         using var data = new PluginFixtureBuilder("rebuild-ok").WithPlugin("A.esp").Build();
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        using var index = Indexes.Open(holder);
         var request = new RebuildIndexRequest(data.InstanceRoot, "Fallout4");
 
         var result = LoadOrderEndpoints.PostRebuildIndex(request, index, NullLoggerFactory.Instance);

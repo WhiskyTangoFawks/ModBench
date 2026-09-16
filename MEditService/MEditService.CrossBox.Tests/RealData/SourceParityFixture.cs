@@ -5,6 +5,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -20,6 +21,10 @@ public sealed class SourceParityFixture : IDisposable
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-parity-").FullName;
     public IndexProjector FromBinary { get; }
     public IndexProjector FromSource { get; }
+
+    // One store file per launch, so each side's rows can be read back from disk on their own.
+    public string BinaryInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-binary-").FullName;
+    public string SourceInstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-source-parity-source-").FullName;
     public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-parity-game-").FullName;
@@ -30,25 +35,23 @@ public sealed class SourceParityFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        FromBinary = NewLoadOrder(holder, pluginPath);
+        FromBinary = NewLoadOrder(holder, pluginPath, BinaryInstanceRoot);
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
             .TrackAsync(FromBinary, holder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
-        FromSource = NewLoadOrder(holder, pluginPath);
+        FromSource = NewLoadOrder(holder, pluginPath, SourceInstanceRoot);
     }
 
-    private IndexProjector NewLoadOrder(LoadOrderHolder holder, string pluginPath)
+    private IndexProjector NewLoadOrder(LoadOrderHolder holder, string pluginPath, string instanceRoot)
     {
-        var index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        var index = Indexes.Open(holder);
         index.Reconcile(holder,
             _gameDirectory,
             [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
-            GameRelease.Fallout4);
+            GameRelease.Fallout4,
+            instanceRoot);
         return index;
     }
 
@@ -58,6 +61,8 @@ public sealed class SourceParityFixture : IDisposable
         FromBinary.Dispose();
         TryDelete(ModFolder);
         TryDelete(_gameDirectory);
+        TryDelete(BinaryInstanceRoot);
+        TryDelete(SourceInstanceRoot);
     }
 
     private static void TryDelete(string path)

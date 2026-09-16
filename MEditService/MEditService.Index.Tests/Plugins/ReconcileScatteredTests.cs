@@ -1,9 +1,6 @@
-using DuckDB.NET.Data;
-using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
-using Microsoft.Extensions.Logging.Abstractions;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -13,12 +10,7 @@ namespace MEditService.Tests.Plugins;
 
 public sealed class ReconcileScatteredTests
 {
-    private static IndexProjector MakeManager(LoadOrderHolder holder)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        return new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
-    }
+    private static IndexProjector MakeManager(LoadOrderHolder holder) => Indexes.Open(holder);
 
     [Fact]
     public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()
@@ -95,10 +87,8 @@ public sealed class ReconcileScatteredTests
             .WithPlugin("Bad.esp", mod => mod.Npcs.AddNew("FromBad"))
             .BuildScattered();
 
-        var reflector = SharedSchemaReflector.Instance;
-        var innerFactory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var factory = new ThrowingOnIndexRepositoryFactory(innerFactory, "Bad.esp");
-        using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+        using var adapter = new GatedPluginAdapter(poisonPlugin: "Bad.esp");
+        using var manager = Indexes.Open(holder, adapter);
 
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
@@ -108,32 +98,7 @@ public sealed class ReconcileScatteredTests
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         Assert.Equal(0, reads.GetRecordTypeCounts(new PluginCopyKey("Bad.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        // The failed plugin's own indexing throw must hit the `continue` in IndexProgressively's
-        // catch, not fall through into the "recorded once Index() has returned" block below it —
-        // it never returned.
+        // A plugin whose open threw never returned, so it is never listed as indexed.
         Assert.DoesNotContain(manager.Status.IndexedPlugins, p => p.Name == "Bad.esp");
-    }
-
-    private sealed class ThrowingOnIndexRepositoryFactory(IRecordIndexFactory inner, string poisonPlugin)
-        : IRecordIndexFactory
-    {
-        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
-            new ThrowingOnIndexRepository(inner.Create(gameRelease), poisonPlugin);
-        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
-            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
-    }
-
-    // Only Index is interesting here; DelegatingRecordIndex forwards the rest of the (wide)
-    // interface.
-    private sealed class ThrowingOnIndexRepository(IRecordIndex inner, string poisonPlugin)
-        : DelegatingRecordIndex(inner)
-    {
-        public override void Index(
-            IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null)
-        {
-            if (key.Name.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
-            base.Index(documents, registration, key, filePath);
-        }
     }
 }

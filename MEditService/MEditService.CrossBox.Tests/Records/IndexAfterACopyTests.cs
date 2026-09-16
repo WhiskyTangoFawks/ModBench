@@ -19,10 +19,7 @@ public sealed class IndexAfterACopyTests : IDisposable
 
     public IndexAfterACopyTests()
     {
-        _index = new IndexProjector(
-            _holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        _index = Indexes.Open(_holder);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Entries, GameRelease.Fallout4);
     }
 
@@ -41,13 +38,13 @@ public sealed class IndexAfterACopyTests : IDisposable
     {
         _index.SetFilter($"SELECT form_key FROM npc_ WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
         var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: _fixture.DestinationPlugin.Name, Origin: _fixture.DestinationPlugin.Origin, Limit: 50, Offset: 0);
-        var before = _index.SettledReads().Search(query).Total;
+        var before = _index.Projected().Search(query).Total;
 
         var result = Service().CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.FlatNpc.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before + 1, _index.SettledReads().Search(query).Total);
+        Assert.Equal(before + 1, _index.Projected().Search(query).Total);
     }
 
     // The spatial mint writes directories rather than one document, and its rows reach the filter by
@@ -59,13 +56,13 @@ public sealed class IndexAfterACopyTests : IDisposable
         // an unscoped filter would match pre-copy and pass whether or not the new row was re-evaluated.
         _index.SetFilter($"SELECT form_key FROM cell WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
         var query = new RecordQuery(RecordTypes: ["cell"], Plugin: _fixture.DestinationPlugin.Name, Origin: _fixture.DestinationPlugin.Origin, Limit: 50, Offset: 0);
-        var before = _index.SettledReads().Search(query).Total;
+        var before = _index.Projected().Search(query).Total;
 
         var result = Service().CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(before + 1, _index.SettledReads().Search(query).Total);
+        Assert.Equal(before + 1, _index.Projected().Search(query).Total);
     }
 
     // Block and sub-block are the directories the mint wrote and the grid is a field the mint carried

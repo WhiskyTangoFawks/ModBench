@@ -1,10 +1,6 @@
-using System.Globalization;
-using DuckDB.NET.Data;
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -17,268 +13,214 @@ namespace MEditService.Tests.Indexing;
 // exercised on both null and non-null columns.
 public class PlacementIndexingTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly PluginCopyKey Key = new("TestWorld.esp", "Data");
 
-    private sealed record Built(
-        DuckDbRecordIndex Repo,
-        string WorldspaceFk,
-        string TopCellFk,
-        string ExtCellFk,
-        string BareCellFk,
-        string IntCellFk,
-        string BareIntCellFk,
-        string BarrelFk,
-        string NullRefFk,
-        string RaiderFk) : IDisposable
+    private sealed class Built : IDisposable
     {
-        public void Dispose() => Repo.Dispose();
-    }
-
-    private static float ToF(object? v) => Convert.ToSingle(v, CultureInfo.InvariantCulture);
-    private static int ToI(object? v) => Convert.ToInt32(v, CultureInfo.InvariantCulture);
-    private static bool ToB(object? v) => Convert.ToBoolean(v, CultureInfo.InvariantCulture);
-
-    private static Built IndexFixture()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("TestWorld.esp"), Fallout4Release.Fallout4);
-
-        var wrld = mod.Worldspaces.AddNew("CommonwealthTest");
-
-        // Worldspace TopCell — no block/sub coordinates, no grid (null columns).
-        var topCell = new Cell(mod) { EditorID = "TopCell" };
-        wrld.TopCell = topCell;
-
-        // Fully-populated exterior cell with a persistent + temporary ref.
-        var extCell = new Cell(mod) { EditorID = "ExtCell", Grid = new CellGrid { Point = new P2Int(12, -5) } };
-        var barrel = new PlacedObject(mod)
+        public Built()
         {
-            EditorID = "barrelRef",
-            Position = new P3Float(10f, 20f, 30f),
-            Base = new FormLinkNullable<IPlaceableObjectGetter>(FormKey.Factory("000ABC:TestWorld.esp")),
-        };
-        var nullRef = new PlacedObject(mod);   // no EditorID, no Base — null label columns
-        var raider = new PlacedObject(mod) { EditorID = "raiderRef" };
-        extCell.Persistent.Add(barrel);
-        extCell.Persistent.Add(nullRef);
-        extCell.Temporary.Add(raider);
+            FormKey wrld = default, top = default, ext = default, bare = default, intCell = default, bareInt = default;
+            FormKey barrel = default, nullRef = default, raider = default;
+            Fixture = new PluginFixtureBuilder("placement")
+                .WithPlugin(Key.Name, mod =>
+                {
+                    var w = mod.Worldspaces.AddNew("CommonwealthTest");
 
-        // Exterior cell with no EditorID and no grid — null editor_id / grid columns.
-        var bareCell = new Cell(mod);
+                    // Worldspace TopCell — no block/sub coordinates, no grid (null columns).
+                    var topCell = new Cell(mod) { EditorID = "TopCell" };
+                    w.TopCell = topCell;
 
-        var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        subBlock.Items.Add(extCell);
-        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        block.Items.Add(subBlock);
+                    // Fully-populated exterior cell with a persistent + temporary ref.
+                    var extCell = new Cell(mod) { EditorID = "ExtCell", Grid = new CellGrid { Point = new P2Int(12, -5) } };
+                    var barrelRef = new PlacedObject(mod)
+                    {
+                        EditorID = "barrelRef",
+                        Position = new P3Float(10f, 20f, 30f),
+                        Base = new FormLinkNullable<IPlaceableObjectGetter>(FormKey.Factory("000ABC:TestWorld.esp")),
+                    };
+                    var bareRef = new PlacedObject(mod);   // no EditorID, no Base — null label columns
+                    var raiderRef = new PlacedObject(mod) { EditorID = "raiderRef" };
+                    extCell.Persistent.Add(barrelRef);
+                    extCell.Persistent.Add(bareRef);
+                    extCell.Temporary.Add(raiderRef);
 
-        var subBlock2 = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 1 };
-        subBlock2.Items.Add(bareCell);
-        var block2 = new WorldspaceBlock { BlockNumberX = 1, BlockNumberY = 0 };
-        block2.Items.Add(subBlock2);
+                    // Exterior cell with no EditorID and no grid — null editor_id / grid columns.
+                    var bareCell = new Cell(mod);
 
-        wrld.SubCells.Add(block);
-        wrld.SubCells.Add(block2);
+                    var subBlock = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                    subBlock.Items.Add(extCell);
+                    var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                    block.Items.Add(subBlock);
 
-        var intCell = new Cell(mod) { EditorID = "IntCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
-        var bareIntCell = new Cell(mod);   // no EditorID, no grid
-        var intSub = new CellSubBlock { BlockNumber = 0 };
-        intSub.Cells.Add(intCell);
-        intSub.Cells.Add(bareIntCell);
-        var intBlock = new CellBlock { BlockNumber = 0 };
-        intBlock.SubBlocks.Add(intSub);
-        mod.Cells.Records.Add(intBlock);
+                    var subBlock2 = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 1 };
+                    subBlock2.Items.Add(bareCell);
+                    var block2 = new WorldspaceBlock { BlockNumberX = 1, BlockNumberY = 0 };
+                    block2.Items.Add(subBlock2);
 
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-            repo.UpdateWinners();
+                    w.SubCells.Add(block);
+                    w.SubCells.Add(block2);
 
-            var built = new Built(repo, wrld.FormKey.ToString(), topCell.FormKey.ToString(),
-                extCell.FormKey.ToString(), bareCell.FormKey.ToString(),
-                intCell.FormKey.ToString(), bareIntCell.FormKey.ToString(),
-                barrel.FormKey.ToString(), nullRef.FormKey.ToString(), raider.FormKey.ToString());
-            repo = null;
-            return built;
+                    var interior = new Cell(mod) { EditorID = "IntCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
+                    var bareInterior = new Cell(mod);   // no EditorID, no grid
+                    var intSub = new CellSubBlock { BlockNumber = 0 };
+                    intSub.Cells.Add(interior);
+                    intSub.Cells.Add(bareInterior);
+                    var intBlock = new CellBlock { BlockNumber = 0 };
+                    intBlock.SubBlocks.Add(intSub);
+                    mod.Cells.Records.Add(intBlock);
+
+                    (wrld, top, ext, bare, intCell, bareInt) = (w.FormKey, topCell.FormKey, extCell.FormKey, bareCell.FormKey, interior.FormKey, bareInterior.FormKey);
+                    (barrel, nullRef, raider) = (barrelRef.FormKey, bareRef.FormKey, raiderRef.FormKey);
+                })
+                .Build();
+            Index = Indexes.Reconciled(Fixture);
+            (WorldspaceFk, TopCellFk, ExtCellFk, BareCellFk, IntCellFk, BareIntCellFk) =
+                (wrld.ToString(), top.ToString(), ext.ToString(), bare.ToString(), intCell.ToString(), bareInt.ToString());
+            (BarrelFk, NullRefFk, RaiderFk) = (barrel.ToString(), nullRef.ToString(), raider.ToString());
         }
-        finally
+
+        public PluginFixtureData Fixture { get; }
+        public IndexProjector Index { get; }
+        public IRecordReads Reads => Index.RequireReads();
+        public string WorldspaceFk { get; }
+        public string TopCellFk { get; }
+        public string ExtCellFk { get; }
+        public string BareCellFk { get; }
+        public string IntCellFk { get; }
+        public string BareIntCellFk { get; }
+        public string BarrelFk { get; }
+        public string NullRefFk { get; }
+        public string RaiderFk { get; }
+
+        public void Dispose()
         {
-            repo?.Dispose();
+            Index.Dispose();
+            Fixture.Dispose();
         }
     }
 
-    private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql, string param)
+    private static PluginFixtureData OneWorldspaceCell(string prefix, string plugin, out FormKey cellKey, out FormKey placedKey, out FormKey worldspaceKey)
     {
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.Parameters.Add(new DuckDBParameter { Value = param });
-        using var reader = cmd.ExecuteReader();
-        var rows = new List<Dictionary<string, object?>>();
-        while (reader.Read())
-        {
-            var row = new Dictionary<string, object?>();
-            for (int i = 0; i < reader.FieldCount; i++)
-                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            rows.Add(row);
-        }
-        return rows;
-    }
-
-    // Production loads plugins as binary overlays, whose group wrapper exposes records by being
-    // IEnumerable rather than via a "Records" member, so this round-trips through disk to exercise
-    // the overlay path the in-memory fixture cannot.
-    [Fact]
-    public void Index_FromBinaryOverlay_PopulatesPlacementAndCellLocation()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("OverlayWorld.esp"), Fallout4Release.Fallout4);
-        var wrld = mod.Worldspaces.AddNew("OverlayWrld");
-        var cell = new Cell(mod) { EditorID = "OverlayCell", Grid = new CellGrid { Point = new P2Int(3, 4) } };
-        var placed = new PlacedObject(mod) { EditorID = "overlayRef", Position = new P3Float(7f, 8f, 9f) };
-        cell.Persistent.Add(placed);
-        var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        sub.Items.Add(cell);
-        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        block.Items.Add(sub);
-        wrld.SubCells.Add(block);
-
-        var dir = Directory.CreateTempSubdirectory("medit-overlay");
-        try
-        {
-            var path = Path.Combine(dir.FullName, "OverlayWorld.esp");
-            mod.WriteToBinary(path, new Mutagen.Bethesda.Plugins.Binary.Parameters.BinaryWriteParameters
+        FormKey cell = default, placed = default, wrld = default;
+        var fixture = new PluginFixtureBuilder(prefix)
+            .WithPlugin(plugin, mod =>
             {
-                MastersListContent = Mutagen.Bethesda.Plugins.Binary.Parameters.MastersListContentOption.NoCheck,
-            });
-
-            using var overlay = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(
-                new ModPath(mod.ModKey, path), GameRelease.Fallout4);
-
-            using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-            repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod(overlay, Registration.Participating(0), new PluginCopyKey(overlay.ModKey.FileName.ToString(), "Data"));
-            repo.UpdateWinners();
-
-            var rows = Query(repo,
-                "SELECT parent_cell, placement_group, pos_x FROM placement WHERE form_key = $1",
-                placed.FormKey.ToString());
-            var row = Assert.Single(rows);
-            Assert.Equal(cell.FormKey.ToString(), row["parent_cell"]);
-            Assert.Equal("persistent", row["placement_group"]);
-            Assert.Equal(7f, ToF(row["pos_x"]));
-
-            var cellRows = Query(repo,
-                "SELECT parent_worldspace FROM cell_location WHERE cell_form_key = $1", cell.FormKey.ToString());
-            Assert.Equal(wrld.FormKey.ToString(), Assert.Single(cellRows)["parent_worldspace"]);
-        }
-        finally { dir.Delete(recursive: true); }
+                var w = mod.Worldspaces.AddNew("OverlayWrld");
+                var c = new Cell(mod) { EditorID = "OverlayCell", Grid = new CellGrid { Point = new P2Int(3, 4) } };
+                var p = new PlacedObject(mod) { EditorID = "overlayRef", Position = new P3Float(7f, 8f, 9f) };
+                c.Persistent.Add(p);
+                var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                sub.Items.Add(c);
+                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                block.Items.Add(sub);
+                w.SubCells.Add(block);
+                (cell, placed, wrld) = (c.FormKey, p.FormKey, w.FormKey);
+            })
+            .Build();
+        (cellKey, placedKey, worldspaceKey) = (cell, placed, wrld);
+        return fixture;
     }
 
-    // IndexPlacement must clear a plugin's prior placement/cell_location rows before rebuilding, the
-    // way every other indexed table does; otherwise re-scanning after an external edit duplicates
-    // rows instead of replacing them.
     [Fact]
-    public void Index_ReIndexSamePlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
+    public void Index_FromBinary_PopulatesPlacementAndCellLocation()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("ReindexPlacement.esp"), Fallout4Release.Fallout4);
-        var wrld = mod.Worldspaces.AddNew("ReindexWrld");
-        var cell = new Cell(mod) { EditorID = "ReindexCell", Grid = new CellGrid { Point = new P2Int(1, 1) } };
-        var placed = new PlacedObject(mod) { EditorID = "reindexRef", Position = new P3Float(1f, 2f, 3f) };
-        cell.Persistent.Add(placed);
-        var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        sub.Items.Add(cell);
-        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        block.Items.Add(sub);
-        wrld.SubCells.Add(block);
+        using var fixture = OneWorldspaceCell("placement-overlay", "OverlayWorld.esp", out var cell, out var placed, out var wrld);
+        using var index = Indexes.Reconciled(fixture);
+        var key = new PluginCopyKey("OverlayWorld.esp", "Data");
+        var reads = index.RequireReads();
 
-        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));  // re-index same plugin
-        repo.UpdateWinners();
+        var placement = reads.GetPlacement(placed.ToString(), key);
+        Assert.NotNull(placement);
+        Assert.Equal(cell.ToString(), placement.Value.ParentCell);
+        Assert.Equal("persistent", placement.Value.PlacementGroup);
+        Assert.Equal(7f, placement.Value.PosX);
 
-        var cellRows = Query(repo,
-            "SELECT COUNT(*) AS c FROM cell_location WHERE cell_form_key = $1", cell.FormKey.ToString());
-        Assert.Equal(1L, cellRows[0]["c"]);
-
-        var placementRows = Query(repo,
-            "SELECT COUNT(*) AS c FROM placement WHERE form_key = $1", placed.FormKey.ToString());
-        Assert.Equal(1L, placementRows[0]["c"]);
+        var location = reads.GetCellLocation(key, cell.ToString());
+        Assert.NotNull(location);
+        Assert.Equal(wrld.ToString(), location.Value.ParentWorldspace);
     }
 
-    // Index_PersistentPlacedObject persistent-row content (parent cell / group / position) is
-    // covered behaviorally by GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition.
+    // A re-index must replace a plugin's prior placement and cell-location rows the way every other
+    // indexed table does; otherwise re-scanning after an external edit duplicates rather than replaces.
+    [Fact]
+    public async Task Index_ReIndexSamePlugin_ReplacesPlacementAndCellLocationRatherThanDuplicating()
+    {
+        using var fixture = OneWorldspaceCell("placement-reindex", "ReindexPlacement.esp", out var cell, out var placed, out var wrld);
+        using var index = Indexes.Reconciled(fixture);
+        var key = new PluginCopyKey("ReindexPlacement.esp", "Data");
+
+        await index.ReindexPlugin(key);
+
+        var reads = index.RequireReads();
+        Assert.Single(reads.GetWorldspaceCells(key, wrld.ToString()), c => c.FormKey == cell.ToString());
+        Assert.Single(reads.GetCellReferences(key, cell.ToString()).Persistent, p => p.FormKey == placed.ToString());
+        Assert.NotNull(reads.GetPlacement(placed.ToString(), key));
+    }
 
     [Fact]
     public void Index_TemporaryPlacedObject_WritesTemporaryPlacementRow()
     {
-        using var b = IndexFixture();
-        var rows = Query(b.Repo,
-            "SELECT parent_cell, placement_group FROM placement WHERE form_key = $1", b.RaiderFk);
-        var row = Assert.Single(rows);
-        Assert.Equal(b.ExtCellFk, row["parent_cell"]);
-        Assert.Equal("temporary", row["placement_group"]);
+        using var b = new Built();
+        var placement = b.Reads.GetPlacement(b.RaiderFk, Key);
+        Assert.NotNull(placement);
+        Assert.Equal(b.ExtCellFk, placement.Value.ParentCell);
+        Assert.Equal("temporary", placement.Value.PlacementGroup);
     }
 
     [Fact]
     public void Index_ExteriorCell_WritesCellLocationWithWorldspaceBlockAndGrid()
     {
-        using var b = IndexFixture();
-        var rows = Query(b.Repo,
-            "SELECT parent_worldspace, block_x, block_y, sub_x, sub_y, grid_x, grid_y, is_interior FROM cell_location WHERE cell_form_key = $1",
-            b.ExtCellFk);
-        var row = Assert.Single(rows);
-        Assert.Equal(b.WorldspaceFk, row["parent_worldspace"]);
-        Assert.Equal(0, ToI(row["block_x"]));
-        Assert.Equal(0, ToI(row["block_y"]));
-        Assert.Equal(12, ToI(row["grid_x"]));
-        Assert.Equal(-5, ToI(row["grid_y"]));
-        Assert.False(ToB(row["is_interior"]));
+        using var b = new Built();
+        var location = b.Reads.GetCellLocation(Key, b.ExtCellFk);
+        Assert.NotNull(location);
+        Assert.Equal(b.WorldspaceFk, location.Value.ParentWorldspace);
+        Assert.Equal(0, location.Value.BlockX);
+        Assert.Equal(0, location.Value.BlockY);
+        Assert.Equal(12, location.Value.GridX);
+        Assert.Equal(-5, location.Value.GridY);
+        Assert.False(location.Value.IsInterior);
     }
 
     [Fact]
     public void Index_WorldspaceTopCell_WritesCellLocationWithWorldspaceButNoBlock()
     {
-        using var b = IndexFixture();
-        var rows = Query(b.Repo,
-            "SELECT parent_worldspace, block_x, sub_x, grid_x, grid_y, is_interior FROM cell_location WHERE cell_form_key = $1",
-            b.TopCellFk);
-        var row = Assert.Single(rows);
-        Assert.Equal(b.WorldspaceFk, row["parent_worldspace"]);
-        Assert.Null(row["block_x"]);
-        Assert.Null(row["sub_x"]);
-        Assert.Null(row["grid_x"]);
-        Assert.Null(row["grid_y"]);
-        Assert.False(ToB(row["is_interior"]));
+        using var b = new Built();
+        var location = b.Reads.GetCellLocation(Key, b.TopCellFk);
+        Assert.NotNull(location);
+        Assert.Equal(b.WorldspaceFk, location.Value.ParentWorldspace);
+        Assert.Null(location.Value.BlockX);
+        Assert.Null(location.Value.SubX);
+        Assert.Null(location.Value.GridX);
+        Assert.Null(location.Value.GridY);
+        Assert.False(location.Value.IsInterior);
     }
 
     [Fact]
     public void Index_InteriorCell_WritesCellLocationWithNullWorldspaceAndInteriorFlag()
     {
-        using var b = IndexFixture();
-        var rows = Query(b.Repo,
-            "SELECT parent_worldspace, is_interior FROM cell_location WHERE cell_form_key = $1", b.IntCellFk);
-        var row = Assert.Single(rows);
-        Assert.Null(row["parent_worldspace"]);
-        Assert.True(ToB(row["is_interior"]));
+        using var b = new Built();
+        var location = b.Reads.GetCellLocation(Key, b.IntCellFk);
+        Assert.NotNull(location);
+        Assert.Null(location.Value.ParentWorldspace);
+        Assert.True(location.Value.IsInterior);
     }
 
     [Fact]
     public void Index_PlacedObjects_AreAlsoIndexedAsRefrRecords()
     {
-        using var b = IndexFixture();
-        // refr is now a normal record table; the placed objects appear there too.
-        var result = b.Repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["refr"], Plugin: "TestWorld.esp", Limit: 100, Offset: 0));
+        using var b = new Built();
+        // refr is a normal record table; the placed objects appear there too.
+        var result = b.Reads.Search(new RecordQuery(RecordTypes: ["refr"], Plugin: Key.Name, Limit: 100, Offset: 0));
         Assert.Equal(3, result.Total);
     }
 
-    // ── repository read methods (back the worldspace tree) ─────────────────────
+    // ── reads that back the worldspace tree ─────────────────────
 
     [Fact]
     public void GetCellReferences_SplitsPersistentAndTemporary()
     {
-        using var b = IndexFixture();
-        var refs = b.Repo.At(RecordRef.Effective).GetCellReferences(new PluginCopyKey("TestWorld.esp", "Data"), b.ExtCellFk);
+        using var b = new Built();
+        var refs = b.Reads.GetCellReferences(Key, b.ExtCellFk);
 
         Assert.Equal(2, refs.Persistent.Count);
         Assert.Single(refs.Temporary);
@@ -297,8 +239,8 @@ public class PlacementIndexingTests
     [Fact]
     public void GetWorldspaceCells_ReturnsCellsWithBlockGridAndNullVariants()
     {
-        using var b = IndexFixture();
-        var cells = b.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginCopyKey("TestWorld.esp", "Data"), b.WorldspaceFk);
+        using var b = new Built();
+        var cells = b.Reads.GetWorldspaceCells(Key, b.WorldspaceFk);
         Assert.Equal(3, cells.Count);  // TopCell + ExtCell + BareCell
 
         var ext = cells.Single(c => c.FormKey == b.ExtCellFk);
@@ -327,8 +269,8 @@ public class PlacementIndexingTests
     [Fact]
     public void GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition()
     {
-        using var b = IndexFixture();
-        var placement = b.Repo.At(RecordRef.Effective).GetPlacement(b.BarrelFk, new PluginCopyKey("TestWorld.esp", "Data"));
+        using var b = new Built();
+        var placement = b.Reads.GetPlacement(b.BarrelFk, Key);
 
         Assert.NotNull(placement);
         Assert.Equal(b.ExtCellFk, placement.Value.ParentCell);
@@ -341,136 +283,134 @@ public class PlacementIndexingTests
     [Fact]
     public void GetPlacement_NonPlacedRecord_ReturnsNull()
     {
-        using var b = IndexFixture();
-        Assert.Null(b.Repo.At(RecordRef.Effective).GetPlacement(b.ExtCellFk, new PluginCopyKey("TestWorld.esp", "Data")));
+        using var b = new Built();
+        Assert.Null(b.Reads.GetPlacement(b.ExtCellFk, Key));
     }
 
     [Fact]
     public void GetPlacement_AbsentFormKey_ReturnsNull()
     {
-        using var b = IndexFixture();
-        Assert.Null(b.Repo.At(RecordRef.Effective).GetPlacement("FFFFFF:TestWorld.esp", new PluginCopyKey("TestWorld.esp", "Data")));
+        using var b = new Built();
+        Assert.Null(b.Reads.GetPlacement("FFFFFF:TestWorld.esp", Key));
     }
 
-    // ADR-0012: two origins loading the same physical file — the `placement` table
-    // carries `origin` and IndexPlacement scopes its delete by it; GetPlacement's own
-    // read side must scope by it too, not by filename alone.
+    // ADR-0012: two origins holding the same filename — the placement read scopes by origin, not
+    // by filename alone.
     [Fact]
     public void GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
-        var mod = new Fallout4Mod(ModKey.FromFileName("Placed.esp"), Fallout4Release.Fallout4);
-        var wrld = mod.Worldspaces.AddNew("PlacedTestWorld");
-        var cell = new Cell(mod) { EditorID = "PlacedCell" };
-        wrld.TopCell = cell;
-        var barrel = new PlacedObject(mod) { EditorID = "barrelRef", Position = new P3Float(1f, 2f, 3f) };
-        cell.Persistent.Add(barrel);
+        FormKey barrel = default;
+        Action<Fallout4Mod> configure = mod =>
+        {
+            var wrld = mod.Worldspaces.AddNew("PlacedTestWorld");
+            var cell = new Cell(mod) { EditorID = "PlacedCell" };
+            wrld.TopCell = cell;
+            var b = new PlacedObject(mod) { EditorID = "barrelRef", Position = new P3Float(1f, 2f, 3f) };
+            cell.Persistent.Add(b);
+            barrel = b.FormKey;
+        };
+        using var fixture = new PluginFixtureBuilder("placement-origins")
+            .WithPlugin("Placed.esp", configure, origin: "ModA")
+            .WithPlugin("Placed.esp", configure, origin: "ModB")
+            .BuildScattered();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));
-
-        var formKey = barrel.FormKey.ToString();
-        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModA")));
-        Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModB")));
-        Assert.Null(repo.At(RecordRef.Effective).GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModC")));
+        var formKey = barrel.ToString();
+        Assert.NotNull(reads.GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModA")));
+        Assert.NotNull(reads.GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModB")));
+        Assert.Null(reads.GetPlacement(formKey, new PluginCopyKey("Placed.esp", "ModC")));
     }
 
-    // ADR-0012: one mod indexed twice under the same filename at two real origins. A worldspace tree
+    // ADR-0012: one plugin held twice under the same filename at two real origins. A worldspace tree
     // read filtering by plugin filename alone answers an origin-scoped query with both origins merged.
-    private sealed record WorldspaceFixture(
-        DuckDbRecordIndex Repo, string WorldspaceFk, string ExtCellFk, string PlacedFk, string IntCellFk)
-        : IDisposable
+    private sealed class TwoOriginWorldspace : IDisposable
     {
-        public void Dispose() => Repo.Dispose();
+        public TwoOriginWorldspace()
+        {
+            FormKey wrld = default, ext = default, placed = default, intCell = default;
+            Action<Fallout4Mod> configure = mod =>
+            {
+                var w = mod.Worldspaces.AddNew("SharedWrld");
+                var extCell = new Cell(mod) { EditorID = "SharedExtCell", Grid = new CellGrid { Point = new P2Int(1, 1) } };
+                var p = new PlacedObject(mod) { EditorID = "SharedRef", Position = new P3Float(1f, 2f, 3f) };
+                extCell.Persistent.Add(p);
+                var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                sub.Items.Add(extCell);
+                var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
+                block.Items.Add(sub);
+                w.SubCells.Add(block);
+
+                var interior = new Cell(mod) { EditorID = "SharedIntCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
+                var intSub = new CellSubBlock { BlockNumber = 0 };
+                intSub.Cells.Add(interior);
+                var intBlock = new CellBlock { BlockNumber = 0 };
+                intBlock.SubBlocks.Add(intSub);
+                mod.Cells.Records.Add(intBlock);
+                (wrld, ext, placed, intCell) = (w.FormKey, extCell.FormKey, p.FormKey, interior.FormKey);
+            };
+            Fixture = new PluginFixtureBuilder("placement-two-origins")
+                .WithPlugin("SharedWorld.esp", configure, origin: "ModA")
+                .WithPlugin("SharedWorld.esp", configure, origin: "ModB")
+                .BuildScattered();
+            Index = Indexes.Reconciled(Fixture);
+            (WorldspaceFk, ExtCellFk, PlacedFk, IntCellFk) = (wrld.ToString(), ext.ToString(), placed.ToString(), intCell.ToString());
+        }
+
+        public ScatteredFixtureData Fixture { get; }
+        public IndexProjector Index { get; }
+        public IRecordReads Reads => Index.RequireReads();
+        public string WorldspaceFk { get; }
+        public string ExtCellFk { get; }
+        public string PlacedFk { get; }
+        public string IntCellFk { get; }
+
+        public void Dispose()
+        {
+            Index.Dispose();
+            Fixture.Dispose();
+        }
     }
 
-    private static WorldspaceFixture BuildTwoOriginWorldspaceFixture()
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("SharedWorld.esp"), Fallout4Release.Fallout4);
-        var wrld = mod.Worldspaces.AddNew("SharedWrld");
-        var extCell = new Cell(mod) { EditorID = "SharedExtCell", Grid = new CellGrid { Point = new P2Int(1, 1) } };
-        var placed = new PlacedObject(mod) { EditorID = "SharedRef", Position = new P3Float(1f, 2f, 3f) };
-        extCell.Persistent.Add(placed);
-        var sub = new WorldspaceSubBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        sub.Items.Add(extCell);
-        var block = new WorldspaceBlock { BlockNumberX = 0, BlockNumberY = 0 };
-        block.Items.Add(sub);
-        wrld.SubCells.Add(block);
-
-        var intCell = new Cell(mod) { EditorID = "SharedIntCell", Grid = new CellGrid { Point = new P2Int(0, 0) } };
-        var intSub = new CellSubBlock { BlockNumber = 0 };
-        intSub.Cells.Add(intCell);
-        var intBlock = new CellBlock { BlockNumber = 0 };
-        intBlock.SubBlocks.Add(intSub);
-        mod.Cells.Records.Add(intBlock);
-
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            repo.Initialize(GameRelease.Fallout4);
-            repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
-            repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));
-            repo.UpdateWinners();
-
-            var fixture = new WorldspaceFixture(repo, wrld.FormKey.ToString(), extCell.FormKey.ToString(),
-                placed.FormKey.ToString(), intCell.FormKey.ToString());
-            repo = null;
-            return fixture;
-        }
-        finally
-        {
-            repo?.Dispose();
-        }
-    }
+    private static readonly PluginCopyKey SharedA = new("SharedWorld.esp", "ModA");
+    private static readonly PluginCopyKey SharedB = new("SharedWorld.esp", "ModB");
+    private static readonly PluginCopyKey SharedC = new("SharedWorld.esp", "ModC");
 
     [Fact]
     public void GetWorldspaceCells_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
-        using var f = BuildTwoOriginWorldspaceFixture();
+        using var f = new TwoOriginWorldspace();
 
-        var modACells = f.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginCopyKey("SharedWorld.esp", "ModA"), f.WorldspaceFk);
-        var modBCells = f.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginCopyKey("SharedWorld.esp", "ModB"), f.WorldspaceFk);
-        var modCCells = f.Repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginCopyKey("SharedWorld.esp", "ModC"), f.WorldspaceFk);
-
-        Assert.Single(modACells);
-        Assert.Single(modBCells);
-        Assert.Empty(modCCells);
+        Assert.Single(f.Reads.GetWorldspaceCells(SharedA, f.WorldspaceFk));
+        Assert.Single(f.Reads.GetWorldspaceCells(SharedB, f.WorldspaceFk));
+        Assert.Empty(f.Reads.GetWorldspaceCells(SharedC, f.WorldspaceFk));
     }
 
     [Fact]
     public void GetInteriorCells_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
-        using var f = BuildTwoOriginWorldspaceFixture();
+        using var f = new TwoOriginWorldspace();
 
-        var modAPage = f.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginCopyKey("SharedWorld.esp", "ModA"), 50, 0);
-        var modBPage = f.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginCopyKey("SharedWorld.esp", "ModB"), 50, 0);
-        var modCPage = f.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginCopyKey("SharedWorld.esp", "ModC"), 50, 0);
-
-        Assert.Equal(1, modAPage.Total);
-        Assert.Equal(1, modBPage.Total);
-        Assert.Equal(0, modCPage.Total);
+        Assert.Equal(1, f.Reads.GetInteriorCells(SharedA, 50, 0).Total);
+        Assert.Equal(1, f.Reads.GetInteriorCells(SharedB, 50, 0).Total);
+        Assert.Equal(0, f.Reads.GetInteriorCells(SharedC, 50, 0).Total);
     }
 
     [Fact]
     public void GetCellReferences_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
-        using var f = BuildTwoOriginWorldspaceFixture();
+        using var f = new TwoOriginWorldspace();
 
-        var modARefs = f.Repo.At(RecordRef.Effective).GetCellReferences(new PluginCopyKey("SharedWorld.esp", "ModA"), f.ExtCellFk);
-        var modBRefs = f.Repo.At(RecordRef.Effective).GetCellReferences(new PluginCopyKey("SharedWorld.esp", "ModB"), f.ExtCellFk);
-        var modCRefs = f.Repo.At(RecordRef.Effective).GetCellReferences(new PluginCopyKey("SharedWorld.esp", "ModC"), f.ExtCellFk);
-
-        Assert.Single(modARefs.Persistent);
-        Assert.Single(modBRefs.Persistent);
-        Assert.Empty(modCRefs.Persistent);
+        Assert.Single(f.Reads.GetCellReferences(SharedA, f.ExtCellFk).Persistent);
+        Assert.Single(f.Reads.GetCellReferences(SharedB, f.ExtCellFk).Persistent);
+        Assert.Empty(f.Reads.GetCellReferences(SharedC, f.ExtCellFk).Persistent);
     }
 
     [Fact]
     public void GetInteriorCells_ReturnsInteriorCellsWithNullVariants()
     {
-        using var b = IndexFixture();
-        var page = b.Repo.At(RecordRef.Effective).GetInteriorCells(new PluginCopyKey("TestWorld.esp", "Data"), 50, 0);
+        using var b = new Built();
+        var page = b.Reads.GetInteriorCells(Key, 50, 0);
         Assert.Equal(2, page.Total);
 
         var named = page.Items.Single(c => c.FormKey == b.IntCellFk);
@@ -487,35 +427,31 @@ public class PlacementIndexingTests
     // Several cells share "DupCell" and two more share a blank EditorID, ordinary in real plugin
     // data, so an ORDER BY with no tiebreak lets DuckDB place tied rows either side of a LIMIT
     // boundary.
-    private static DuckDbRecordIndex BuildDuplicateEditorIdInteriorCellsFixture(out int total)
-    {
-        var mod = new Fallout4Mod(ModKey.FromFileName("DupCells.esp"), Fallout4Release.Fallout4);
-        var intSub = new CellSubBlock { BlockNumber = 0 };
-        for (var i = 0; i < 3; i++)
-            intSub.Cells.Add(new Cell(mod) { EditorID = "DupCell" });
-        for (var i = 0; i < 2; i++)
-            intSub.Cells.Add(new Cell(mod)); // blank EditorID
-        intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellA" });
-        intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellB" });
-        var intBlock = new CellBlock { BlockNumber = 0 };
-        intBlock.SubBlocks.Add(intSub);
-        mod.Cells.Records.Add(intBlock);
-
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
-        total = intSub.Cells.Count;
-        return repo;
-    }
-
     [Fact]
     public void GetInteriorCells_PagesCellsWithSharedAndBlankEditorId_ReturnsEveryRowExactlyOnceAndStably()
     {
-        using var repo = BuildDuplicateEditorIdInteriorCellsFixture(out var total);
+        var total = 0;
+        using var fixture = new PluginFixtureBuilder("placement-dup-cells")
+            .WithPlugin("DupCells.esp", mod =>
+            {
+                var intSub = new CellSubBlock { BlockNumber = 0 };
+                for (var i = 0; i < 3; i++)
+                    intSub.Cells.Add(new Cell(mod) { EditorID = "DupCell" });
+                for (var i = 0; i < 2; i++)
+                    intSub.Cells.Add(new Cell(mod)); // blank EditorID
+                intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellA" });
+                intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellB" });
+                var intBlock = new CellBlock { BlockNumber = 0 };
+                intBlock.SubBlocks.Add(intSub);
+                mod.Cells.Records.Add(intBlock);
+                total = intSub.Cells.Count;
+            })
+            .Build();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
         var plugin = new PluginCopyKey("DupCells.esp", "Data");
 
-        var full = repo.At(RecordRef.Effective).GetInteriorCells(plugin, 100, 0);
+        var full = reads.GetInteriorCells(plugin, 100, 0);
         Assert.Equal(total, full.Total);
         var expected = full.Items.Select(i => i.FormKey).ToList();
 
@@ -524,7 +460,7 @@ public class PlacementIndexingTests
             var seen = new List<string>();
             for (var offset = 0; offset < full.Total; offset += 2)
             {
-                var page = repo.At(RecordRef.Effective).GetInteriorCells(plugin, 2, offset);
+                var page = reads.GetInteriorCells(plugin, 2, offset);
                 seen.AddRange(page.Items.Select(i => i.FormKey));
             }
             return seen;

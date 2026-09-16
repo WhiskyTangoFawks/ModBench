@@ -1,9 +1,7 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -11,186 +9,95 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>Reads the <c>winners</c> table directly because where the answer is stored is the point
-/// (ADR-0009: winning is a function of the registered load order, never a column on a data row).</summary>
+/// <summary>ADR-0009: winning is a function of the registered load order, never a column on a
+/// data row, so every move of the load order moves the winner with no document re-read.</summary>
 public sealed class WinnersDerivedTableTests : IDisposable
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly PluginCopyKey BaseKey = new("Base.esm", "BaseMod");
+    private static readonly PluginCopyKey OverKey = new("Over.esp", "OverMod");
 
-    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
-    private static readonly PluginCopyKey OverKey = new("Over.esp", "Data");
-
-    private readonly PluginFixtureData _fixture;
+    private readonly ScatteredFixtureData _fixture;
+    private readonly LoadOrderHolder _holder = new();
+    private readonly IndexProjector _index;
     private readonly string _npc;
 
     public WinnersDerivedTableTests()
     {
         FormKey npc = default;
         _fixture = new PluginFixtureBuilder("winners-derived-table")
-            .WithPlugin("Base.esm", mod => npc = mod.Npcs.AddNew("TestNpc").FormKey)
+            .WithPlugin("Base.esm", mod => npc = mod.Npcs.AddNew("TestNpc").FormKey, origin: BaseKey.Origin)
             .WithPlugin("Over.esp", (mod, built) =>
             {
                 mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Base.esm") });
                 var basePlugin = built.Single(m => m.ModKey.FileName == "Base.esm");
                 mod.Npcs.Set(basePlugin.Npcs.First(n => n.FormKey == npc).DeepCopy());
-            })
-            .Build();
+            }, origin: OverKey.Origin)
+            .BuildScattered();
         _npc = npc.ToString();
+        _index = Indexes.Open(_holder);
+        Reconcile(_fixture.Plugins);
     }
 
-    public void Dispose() => _fixture.Dispose();
-
-    private DuckDbRecordIndex LoadedIndex()
+    public void Dispose()
     {
-        var index = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        index.Initialize(GameRelease.Fallout4);
-        Open(index, "Base.esm", 0);
-        Open(index, "Over.esp", 1);
-        index.UpdateWinners();
-        return index;
+        _index.Dispose();
+        _fixture.Dispose();
     }
 
-    private void Open(DuckDbRecordIndex index, string name, int loadOrderIndex)
-    {
-        var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
-        using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-        index.IndexMod(mod, Registration.Participating(loadOrderIndex), new PluginCopyKey(name, "Data"));
-    }
+    private void Reconcile(IReadOnlyList<LoadOrderEntry> plugins) =>
+        _index.Reconcile(_holder, _fixture.GameDirectory, plugins, GameRelease.Fallout4);
 
-    private static (string Plugin, string Origin)? WinnerOf(DuckDbRecordIndex index, RecordRef recordRef, string formKey)
-    {
-        using var cmd = index.Connection.CreateCommand();
-        cmd.CommandText = "SELECT plugin, origin FROM winners WHERE record_ref = $1 AND form_key = $2";
-        cmd.Parameters.Add(new DuckDBParameter { Value = WinnerRef.Of(recordRef) });
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        using var reader = cmd.ExecuteReader();
-        return reader.Read() ? (reader.GetString(0), reader.GetString(1)) : null;
-    }
+    private IRecordReads Reads => _index.RequireReads();
 
-    private static (string Plugin, string Origin)? Expected(PluginCopyKey key) => (key.Name, key.Origin);
-
-    private static long Scalar(DuckDbRecordIndex index, string sql)
-    {
-        using var cmd = index.Connection.CreateCommand();
-        cmd.CommandText = sql;
-        return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
-    }
+    private PluginCopyKey? WinnerOf(string formKey) => Reads.GetDocument(formKey)?.Plugin;
 
     [Fact]
-    public void TheSweep_NamesTheLatestParticipatingPlugin_OncePerFormKeyPerRef()
+    public void TheSweep_NamesTheLatestParticipatingPlugin_OncePerFormKey()
     {
-        using var index = LoadedIndex();
+        Assert.Equal(OverKey, WinnerOf(_npc));
 
-        Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
-        Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Head, _npc));
+        // A winner is a function of the FormKey: exactly one entry of the stack carries it.
+        var stack = Reads.GetOverrideStack(_npc);
+        Assert.NotNull(stack);
+        Assert.Single(stack.Entries, e => e.IsWinner);
 
-        // The table is a function, not a set of flags: (record_ref, form_key) is its key, so a reader can
-        // LEFT JOIN it without risking a duplicated record row.
-        Assert.Equal(2, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE form_key = '{_npc}'"));
-
-        // Every plugin header wins its own FormKey, swept by construction as an ordinary `records` row.
-        // Still asserted, because "no winner" reads as "no header exists" through Open Header's
-        // winner-only lookup.
+        // Every plugin header wins its own FormKey, swept as an ordinary record. Still asserted,
+        // because "no winner" reads as "no header exists" through Open Header's winner-only lookup.
         foreach (var plugin in new[] { BaseKey, OverKey })
         {
             var headerFk = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
-            Assert.Equal(Expected(plugin), WinnerOf(index, RecordRef.Effective, headerFk));
+            Assert.Equal(plugin, WinnerOf(headerFk));
         }
 
-        // Re-running the sweep is idempotent — it rebuilds the table wholesale rather than adding to it.
-        var before = Scalar(index, "SELECT COUNT(*) FROM winners");
-        index.UpdateWinners();
-        Assert.Equal(before, Scalar(index, "SELECT COUNT(*) FROM winners"));
+        // Re-running the sweep is idempotent: a second reconcile of the same snapshot moves nothing.
+        Reconcile(_fixture.Plugins);
+        Assert.Equal(OverKey, WinnerOf(_npc));
+        Assert.Single((Reads.GetOverrideStack(_npc) ?? throw new InvalidOperationException()).Entries, e => e.IsWinner);
     }
 
     [Fact]
     public void ADisabledPlugin_WinsNothing_AndWinsAgainOnceReEnabledAndSwept()
     {
-        using var index = LoadedIndex();
-
-        index.Register(OverKey, Registration.Disabled(1));
-        index.UpdateWinners();
+        Reconcile([.. _fixture.Plugins.Select(p => p.Name == OverKey.Name ? p with { Enabled = false } : p)]);
 
         // Disabled in plugins.txt: Over.esp is registered (so its rows are still visible) but out of
-        // the stack, so the plugin below it holds the field at both refs.
-        Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
-        Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
-        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE plugin = '{OverKey.Name}'"));
-        var disabledWinner = index.At(RecordRef.Effective).GetDocument(_npc);
-        Assert.NotNull(disabledWinner);
-        Assert.Equal(BaseKey.Name, disabledWinner.Plugin.Name);
+        // the stack, so the plugin below it holds the field.
+        Assert.Equal(BaseKey, WinnerOf(_npc));
+        Assert.NotNull(Reads.GetDocument(_npc, OverKey));
+        Assert.DoesNotContain(Reads.GetDocuments(OverKey), d => d.IsWinner);
 
-        index.Register(OverKey, Registration.Participating(1));
-        index.UpdateWinners();
+        Reconcile(_fixture.Plugins);
 
-        Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
-        var reEnabledWinner = index.At(RecordRef.Effective).GetDocument(_npc);
-        Assert.NotNull(reEnabledWinner);
-        Assert.Equal(OverKey.Name, reEnabledWinner.Plugin.Name);
+        Assert.Equal(OverKey, WinnerOf(_npc));
     }
 
     [Fact]
     public void AnUnregisteredPlugin_WinsNothing_EvenThoughItsRowsAreStillThere()
     {
-        using var index = LoadedIndex();
+        Reconcile([.. _fixture.Plugins.Where(p => p.Name != OverKey.Name)]);
 
-        index.Unregister(OverKey);
-        index.UpdateWinners();
-
-        Assert.True(Scalar(index, $"SELECT COUNT(*) FROM mirror.records WHERE plugin = '{OverKey.Name}'") > 0,
-            "Premise: unregistering leaves the index rows in place.");
-        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE plugin = '{OverKey.Name}'"));
-        Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
-    }
-
-    [Fact]
-    public void SeedCommittedOnly_GivesTheRecordItAddsAtHead_AWinnerThere()
-    {
-        using var index = LoadedIndex();
-        var baseDocument = index.At(RecordRef.Effective).GetDocument(_npc, BaseKey);
-        Assert.NotNull(baseDocument);
-        var baseBody = baseDocument.Body;
-        Assert.NotNull(baseBody);
-
-        // Both plugins' copies vanish from the working tree and turn out to be held by no commit
-        // either, so nothing holds the NPC at either ref...
-        index.ProjectDocuments(OverKey, [(_npc, null)]);
-        index.ProjectDocuments(BaseKey, [(_npc, null)]);
-        index.MarkWorkingTreeOnly(OverKey, [_npc]);
-        index.MarkWorkingTreeOnly(BaseKey, [_npc]);
-        Assert.Null(WinnerOf(index, RecordRef.Effective, _npc));
-        Assert.Null(index.At(RecordRef.Head).GetDocument(_npc));
-
-        // Base.esm, not the plugin that had been winning: a stale winners table naming Over.esp
-        // would leave this row losing to a plugin holding nothing at Head.
-        index.SeedCommittedOnly(BaseKey, [(_npc, "npc_", baseBody)]);
-
-        Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
-        var headWinner = index.At(RecordRef.Head).GetDocument(_npc);
-        Assert.NotNull(headWinner);
-        Assert.Equal(BaseKey.Name, headWinner.Plugin.Name);
-        Assert.Null(WinnerOf(index, RecordRef.Effective, _npc));
-    }
-
-    [Fact]
-    public void MarkWorkingTreeOnly_PromotesTheNextPluginDown_AtHead()
-    {
-        using var index = LoadedIndex();
-        Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Head, _npc));
-
-        // Over.esp's copy turns out to be a working-tree create that no commit holds.
-        index.MarkWorkingTreeOnly(OverKey, [_npc]);
-
-        Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
-        var headWinner = index.At(RecordRef.Head).GetDocument(_npc);
-        Assert.NotNull(headWinner);
-        Assert.Equal(BaseKey.Name, headWinner.Plugin.Name);
-
-        // Effective never changed: Over.esp still holds the field the editor shows.
-        Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
-        var effectiveWinner = index.At(RecordRef.Effective).GetDocument(_npc);
-        Assert.NotNull(effectiveWinner);
-        Assert.Equal(OverKey.Name, effectiveWinner.Plugin.Name);
+        Assert.NotNull(_index.IndexedContentHash(OverKey));
+        Assert.Equal(BaseKey, WinnerOf(_npc));
+        Assert.Empty(Reads.GetDocuments(OverKey));
     }
 }

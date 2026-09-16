@@ -1,6 +1,5 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Ports;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -11,11 +10,7 @@ namespace MEditService.Tests.Plugins;
 // window, so a second window is refused plainly, with no read-only mode and no second file.
 public sealed class SecondWindowRefusedTests
 {
-    private static IndexProjector MakeIndex(LoadOrderHolder holder)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-    }
+    private static IndexProjector MakeIndex(LoadOrderHolder holder) => Indexes.Open(holder);
 
     // One story, because the three assertions are one lifecycle: refused while the first
     // holds the file, nothing minted on disk meanwhile, admitted once the first lets go.
@@ -28,7 +23,7 @@ public sealed class SecondWindowRefusedTests
             .Build();
         // The file exists with real rows before the other window takes it, so the final load is warm.
         using (var earlier = MakeIndex(holder)) earlier.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
-        var indexPath = IndexFile.For(data.InstanceRoot);
+        var indexPath = IndexFiles.In(data.InstanceRoot);
         var indexDir = PathShape.DirectoryOf(indexPath);
 
         using var otherWindow = ForeignIndexHolder.Hold(indexPath);
@@ -50,7 +45,6 @@ public sealed class SecondWindowRefusedTests
         otherWindow.Dispose();
         index.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
         Assert.Equal(LoadOrderState.Ready, index.Status.State);
-        var store = index.Store ?? throw new InvalidOperationException("Expected an open store after reconciling.");
-        Assert.NotEmpty(store.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(index.RequireReads().GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
     }
 }

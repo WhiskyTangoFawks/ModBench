@@ -16,18 +16,16 @@ public sealed class BrokenLinkProjectionTests
 
     private static IndexProjector Reload(IndexedModFixture mod)
     {
-        var index = new IndexProjector(
-            new LoadOrderHolder(),
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        index.Reconcile(new LoadOrderHolder(), mod.GameDirectory, [mod.Entry], GameRelease.Fallout4);
+        var holder = new LoadOrderHolder();
+        var index = Indexes.Open(holder);
+        index.Reconcile(holder, mod.GameDirectory, [mod.Entry], GameRelease.Fallout4);
         return index;
     }
 
     private static string? CheckErrorOnKeywords(IndexProjector index, IndexedModFixture mod)
     {
-        var store = index.Store ?? throw new InvalidOperationException("Expected Reconcile to have populated the index store.");
-        var record = store.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var store = index.RequireReads();
+        var record = store.GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(record);
         return record.Fields.Single(field => field.Metadata.Name == "Keywords").CheckError;
     }

@@ -1,92 +1,59 @@
-using DuckDB.NET.Data;
 using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// ADR-0005: form_lookup population — mirrors FormReferencesTests.cs.
+// ADR-0005: every indexed record resolves by FormKey, the plugin header included.
 public class FormLookupTests
 {
-    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-
-    private static DuckDbRecordIndex OpenRepo()
-    {
-        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        return repo;
-    }
-
-    private static IModGetter LoadMod(string dataFolder, string pluginName)
-    {
-        var modPath = new ModPath(ModKey.FromFileName(pluginName), Path.Combine(dataFolder, pluginName));
-        return Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-    }
-
     [Fact]
-    public void Index_TwoRecords_PopulatesOneFormLookupRowEach()
+    public void Index_TwoRecords_ResolvesEachAndTheHeader()
     {
+        FormKey npc = default, race = default;
         using var fixture = new PluginFixtureBuilder("form-lookup-population")
             .WithPlugin("Lookup.esp", mod =>
             {
-                mod.Npcs.AddNew("TestNPC01");
-                mod.Races.AddNew("TestRace01");
+                npc = mod.Npcs.AddNew("TestNPC01").FormKey;
+                race = mod.Races.AddNew("TestRace01").FormKey;
             })
             .Build();
+        using var index = Indexes.Reconciled(fixture);
+        var reads = index.RequireReads();
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "Lookup.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.UpdateWinners();
+        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.Resolve(npc.ToString()));
+        Assert.Equal(new RecordLookupEntry("race", "TestRace01"), reads.Resolve(race.ToString()));
 
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM form_lookup WHERE plugin = 'Lookup.esp'";
-        var count = (long)(cmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
-
-        // Two records and the plugin header: ADR-0005 keeps exactly one lookup row per `records` row, and
-        // the header is one of those rows. Written as the sum so the reason for each row stays visible.
-        Assert.Equal(2 + 1, count);
-
-        // ...and the header's is a real, resolvable row rather than filler that makes the count add
-        // up: this is what lets Open Header's synthetic FormKey resolve like every other one.
-        using var headerCmd = repo.Connection.CreateCommand();
-        headerCmd.CommandText =
-            "SELECT record_type, editor_id FROM form_lookup WHERE plugin = 'Lookup.esp' AND form_key = '000000:Lookup.esp'";
-        using var reader = headerCmd.ExecuteReader();
-        Assert.True(reader.Read(), "the plugin header must have its own form_lookup row");
-        Assert.Equal(PluginHeader.RecordType, reader.GetString(0));
-        Assert.True(reader.IsDBNull(1), "a header has no EditorID");
+        // ...and the header's is a real, resolvable entry rather than filler: this is what lets Open
+        // Header's synthetic FormKey resolve like every other one.
+        var header = reads.Resolve(PluginHeader.FormKeyFor(ModKey.FromFileName("Lookup.esp")));
+        Assert.NotNull(header);
+        Assert.Equal(PluginHeader.RecordType, header.Value.RecordType);
+        Assert.Null(header.Value.EditorId);
+        // One lookup per document, the header among them.
+        Assert.Equal(3, reads.GetDocuments(new PluginCopyKey("Lookup.esp", "Data")).Count);
     }
 
     [Fact]
-    public void Index_ReIndexSamePlugin_ReplacesRatherThanDuplicatesFormLookup()
+    public async Task Index_ReIndexSamePlugin_ReplacesRatherThanDuplicates()
     {
         FormKey npcFormKey = default;
-
         using var fixture = new PluginFixtureBuilder("form-lookup-reindex")
             .WithPlugin("Reindex.esp", mod => npcFormKey = mod.Npcs.AddNew("TestNPC01").FormKey)
             .Build();
+        using var index = Indexes.Reconciled(fixture);
+        var key = new PluginCopyKey("Reindex.esp", "Data");
+        var reads = index.RequireReads();
+        var before = reads.GetDocuments(key).Count;
 
-        using var repo = OpenRepo();
-        var mod = LoadMod(fixture.DataFolder, "Reindex.esp");
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data")); // re-index same plugin
-        repo.UpdateWinners();
+        await index.ReindexPlugin(key);
 
-        using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM form_lookup WHERE form_key = $1 AND plugin = 'Reindex.esp'";
-        cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        var count = (long)(cmd.ExecuteScalar()
-            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
-
-        Assert.Equal(1, count);
+        Assert.Equal(before, reads.GetDocuments(key).Count);
+        Assert.Equal(1, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Total);
+        Assert.Equal(new RecordLookupEntry("npc_", "TestNPC01"), reads.Resolve(npcFormKey.ToString()));
     }
 }

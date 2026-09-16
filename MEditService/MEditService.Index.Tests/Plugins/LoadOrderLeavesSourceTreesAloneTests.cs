@@ -1,6 +1,6 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -34,9 +34,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
             Directory.CreateDirectory(PathShape.DirectoryOf(orphanFile));
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");
 
-            var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
+            using var manager = Indexes.Open(holder);
             IndexProjector index = manager;
 
             index.Reconcile(holder,
