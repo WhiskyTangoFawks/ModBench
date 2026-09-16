@@ -26,7 +26,7 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-520-compile-game-").FullName;
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-520-compile-mod-").FullName;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginKey _plugin = new(FixtureFileName, Origin);
+    private readonly PluginCopyKey _plugin = new(FixtureFileName, Origin);
 
     public PluginCompileServiceMasterPruningTests()
     {

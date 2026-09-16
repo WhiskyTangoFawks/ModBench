@@ -81,8 +81,8 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     {
         var first = Track(_firstFolder, "First.esp");
         var second = Track(_secondFolder, "Second.esp");
-        var firstPlugin = new PluginKey("First.esp", "FirstMod");
-        var secondPlugin = new PluginKey("Second.esp", "SecondMod");
+        var firstPlugin = new PluginCopyKey("First.esp", "FirstMod");
+        var secondPlugin = new PluginCopyKey("Second.esp", "SecondMod");
         var (beforeFirst, beforeSecond) = (TreeSnapshot.Of(_firstFolder), TreeSnapshot.Of(_secondFolder));
 
         var transaction = new SourceRepository.SourceTransaction();
@@ -106,8 +106,8 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     {
         var first = Track(_firstFolder, "First.esp");
         var second = Track(_secondFolder, "Second.esp");
-        var firstPlugin = new PluginKey("First.esp", "FirstMod");
-        var secondPlugin = new PluginKey("Second.esp", "SecondMod");
+        var firstPlugin = new PluginCopyKey("First.esp", "FirstMod");
+        var secondPlugin = new PluginCopyKey("Second.esp", "SecondMod");
 
         var transaction = new SourceRepository.SourceTransaction();
         transaction.Put(
@@ -128,7 +128,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     {
         var (files, cell) = ContainerFiles("First.esp");
         var repository = Track(_firstFolder, "First.esp", files);
-        var plugin = new PluginKey("First.esp", "FirstMod");
+        var plugin = new PluginCopyKey("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
         var transaction = new SourceRepository.SourceTransaction();
@@ -148,7 +148,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     public void ABatchAskedToPutAContainerTheTreeDoesNotHold_RefusesBeforeTouchingTheTree()
     {
         var repository = Track(_firstFolder, "First.esp");
-        var plugin = new PluginKey("First.esp", "FirstMod");
+        var plugin = new PluginCopyKey("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
         var transaction = new SourceRepository.SourceTransaction();
@@ -165,7 +165,7 @@ public sealed class SourceTransactionAcrossRepositoriesTests : IDisposable
     public void ABatchWhoseRemoveFollowsAPut_PutsBothBackOnRollback()
     {
         var repository = Track(_firstFolder, "First.esp");
-        var plugin = new PluginKey("First.esp", "FirstMod");
+        var plugin = new PluginCopyKey("First.esp", "FirstMod");
         var before = TreeSnapshot.Of(_firstFolder);
 
         var transaction = new SourceRepository.SourceTransaction();

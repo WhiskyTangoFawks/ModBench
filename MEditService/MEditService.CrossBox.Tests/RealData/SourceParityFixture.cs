@@ -20,7 +20,7 @@ public sealed class SourceParityFixture : IDisposable
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-parity-").FullName;
     public IndexProjector FromBinary { get; }
     public IndexProjector FromSource { get; }
-    public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
+    public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-parity-game-").FullName;
 

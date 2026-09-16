@@ -27,7 +27,7 @@ public sealed class CascadeFixture : IDisposable
 
     public LoadOrderSnapshot LoadOrder { get; }
     public RenumberRecordHandler RenumberHandler { get; }
-    public PluginKey Plugin { get; } = new(PluginName, Origin);
+    public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
     public FormKey Target { get; private set; }
     public FormKey Referencer { get; private set; }
     public FormKey SecondReferencer { get; private set; }

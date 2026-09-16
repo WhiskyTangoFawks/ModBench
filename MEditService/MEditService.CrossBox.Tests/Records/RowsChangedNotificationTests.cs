@@ -18,7 +18,7 @@ public sealed class RowsChangedNotificationTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-    private static readonly PluginKey BaseKey = new("Base.esm", "Data");
+    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
 
     private readonly PluginFixtureData _fixture;
     private readonly FormKey _npc;

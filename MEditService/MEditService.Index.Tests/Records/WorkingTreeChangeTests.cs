@@ -19,7 +19,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
 
     private readonly PluginFixtureData _fixture;
     private readonly FormKey _npcFormKey;
-    private static readonly PluginKey BaseKey = new("Base.esm", "Data");
+    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
 
     public WorkingTreeChangeTests()
     {

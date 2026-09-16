@@ -21,7 +21,7 @@ public sealed class RefreshBinaryTests : IDisposable
     private const string PluginName = "Untracked.esp";
     private const string Origin = "UntrackedMod";
     private readonly string _pluginPath;
-    private readonly PluginKey _key = new(PluginName, Origin);
+    private readonly PluginCopyKey _key = new(PluginName, Origin);
 
     public RefreshBinaryTests()
     {

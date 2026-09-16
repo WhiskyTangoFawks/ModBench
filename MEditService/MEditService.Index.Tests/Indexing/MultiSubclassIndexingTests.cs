@@ -43,7 +43,7 @@ public class MultiSubclassIndexingTests
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var summary in repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [table], Limit: 100, Offset: 0)).Items)
         {
-            var detail = repo.At(RecordRef.Effective).GetDocument(summary.FormKey, new PluginKey(summary.Plugin, summary.Origin));
+            var detail = repo.At(RecordRef.Effective).GetDocument(summary.FormKey, new PluginCopyKey(summary.Plugin, summary.Origin));
             Assert.NotNull(detail);
             var value = detail.Fields.FirstOrDefault(f => f.Metadata.Name == field);
             Assert.NotNull(value);
@@ -66,7 +66,7 @@ public class MultiSubclassIndexingTests
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var byEdid = FieldByEditorId(repo, "gmst", "Data").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
@@ -92,7 +92,7 @@ public class MultiSubclassIndexingTests
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var byEdid = FieldByEditorId(repo, "glob", "Data").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);
@@ -132,7 +132,7 @@ public class MultiSubclassIndexingTests
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var byEdid = FieldByEditorId(repo, "omod", "Properties").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
@@ -162,7 +162,7 @@ public class MultiSubclassIndexingTests
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var values = FieldByEditorId(repo, "dmgt", "DamageTypes").ToDictionary(kv => kv.Key, kv => (JsonElement)kv.Value!);

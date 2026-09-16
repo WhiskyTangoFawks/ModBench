@@ -8,7 +8,7 @@ namespace MEditService.LoadOrder;
 public sealed record RegisteredCopy(
     string Name, string Origin, string Path, int? Slot, bool Enabled, bool Winning, bool IsForced = false)
 {
-    public PluginKey Key => new(Name, Origin);
+    public PluginCopyKey Key => new(Name, Origin);
 
     public Registration Registration => new(Slot, Enabled, Winning);
 
@@ -55,19 +55,19 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>ADR-0013: participation is derived, never stored — enabled, winning, and named by a
     /// <c>plugins.txt</c> line. Only a participating copy competes for winner or counts in a
     /// conflict.</summary>
-    public bool Participates(PluginKey key) => Copy(key)?.Registration.Participates ?? false;
+    public bool Participates(PluginCopyKey key) => Copy(key)?.Registration.Participates ?? false;
 
     /// <summary>The copy the Mod override order resolves <paramref name="name"/> to, or null when no
     /// registered copy of that name wins.</summary>
-    public RegisteredCopy? WinningCopy(string name) =>
-        Copies.FirstOrDefault(c => c.Winning && c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    public RegisteredCopy? WinningCopy(PluginName name) =>
+        Copies.FirstOrDefault(c => c.Winning && c.Name.Equals(name.Name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The participating copies in slot order — the load order the game actually has.</summary>
     public IReadOnlyList<RegisteredCopy> Participating =>
         [.. Copies.Where(c => c.Registration.Participates).OrderBy(c => c.Slot!.Value)];
 
     /// <summary>The three facts one copy is registered with, or null when it is not registered.</summary>
-    public Registration? Registration(PluginKey key) => Copy(key)?.Registration;
+    public Registration? Registration(PluginCopyKey key) => Copy(key)?.Registration;
 
     /// <summary>This load order with one more registered copy, replacing any copy already
     /// registered under the same identity (ADR-0007: a created plugin is a member at once).</summary>
@@ -77,12 +77,12 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
     /// <summary>This load order without the copy registered under <paramref name="key"/>, unchanged
     /// when none is (ADR-0007: a create that could not write its file takes its registration back).
     /// </summary>
-    public LoadOrderSnapshot Without(PluginKey key) =>
+    public LoadOrderSnapshot Without(PluginCopyKey key) =>
         new(DataFolderPath, InstanceRoot, GameRelease, [.. Copies.Where(c => !SameKey(c, key))]);
 
     /// <summary>The folder holding the plugin's file, or null for a master resolved from the game's
     /// own Data directory (Track does not apply there) or a plugin no copy here names.</summary>
-    public string? ModFolderOf(PluginKey plugin) =>
+    public string? ModFolderOf(PluginCopyKey plugin) =>
         Copy(plugin) is { } copy ? ModFolderOf(copy.Origin, copy.Path) : null;
 
     /// <summary>The same rule for a caller already holding a copy's origin and path.</summary>
@@ -110,9 +110,9 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     /// <summary>ADR-0012: origin is required, not optional — the load order can register two copies
     /// of one filename, so the filename alone does not say which.</summary>
-    public RegisteredCopy? Copy(PluginKey key) => Copies.FirstOrDefault(c => SameKey(c, key));
+    public RegisteredCopy? Copy(PluginCopyKey key) => Copies.FirstOrDefault(c => SameKey(c, key));
 
-    private static bool SameKey(RegisteredCopy copy, PluginKey key) =>
+    private static bool SameKey(RegisteredCopy copy, PluginCopyKey key) =>
         copy.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
         && copy.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase);
 

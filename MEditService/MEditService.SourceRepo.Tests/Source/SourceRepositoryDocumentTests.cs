@@ -15,7 +15,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     private const string NpcEditorId = "FixtureNpc";
     private const string NpcBody = "{\n  \"FormKey\": \"000800:Fixture.esp\",\n  \"EditorID\": \"FixtureNpc\"\n}";
 
-    private static readonly PluginKey Plugin = new(PluginName, "FixtureMod");
+    private static readonly PluginCopyKey Plugin = new(PluginName, "FixtureMod");
     private static readonly RecordIdentity Npc = new(NpcFormKey, "npc_", NpcEditorId);
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-repository-").FullName;

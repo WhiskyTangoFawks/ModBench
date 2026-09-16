@@ -16,7 +16,7 @@ public sealed class RecordSummaryContainerChildrenTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-    private static readonly PluginKey Key = new("Dialogue.esp", "Data");
+    private static readonly PluginCopyKey Key = new("Dialogue.esp", "Data");
 
     private static RecordSummary SummaryFor(PagedResult<RecordSummary> page, string formKey) =>
         page.Items.Single(i => i.FormKey == formKey);
@@ -38,7 +38,7 @@ public sealed class RecordSummaryContainerChildrenTests
         index.IndexMod((IModGetter)mod, Registration.Participating(0), Key);
         index.UpdateWinners();
 
-        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: Key, RecordTypes: ["qust"], Limit: 50));
+        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: Key.Name, Origin: Key.Origin, RecordTypes: ["qust"], Limit: 50));
 
         Assert.True(SummaryFor(page, withChildren.FormKey.ToString()).HasContainerChildren);
         Assert.False(SummaryFor(page, withoutChildren.FormKey.ToString()).HasContainerChildren);

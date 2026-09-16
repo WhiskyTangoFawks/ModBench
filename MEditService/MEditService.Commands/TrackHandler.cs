@@ -14,7 +14,7 @@ public sealed class TrackHandler
     internal TrackHandler(TrackService trackService) => _trackService = trackService;
 
     public Task<TrackResult> TrackAsync(
-        LoadOrderSnapshot loadOrder, IReadOnlyCollection<PluginKey> heldCopies, string origin, SourcePreset preset,
+        LoadOrderSnapshot loadOrder, IReadOnlyCollection<PluginCopyKey> heldCopies, string origin, SourcePreset preset,
         CancellationToken cancel = default) =>
         _trackService.TrackAsync(loadOrder, heldCopies, origin, preset, cancel);
 }

@@ -120,11 +120,11 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Indexing ---
 
-    public void Index(IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null) =>
-        Index(documents, registration, key.Name, key.Origin!, filePath);
+    public void Index(IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null) =>
+        Index(documents, registration, key.Name, key.Origin, filePath);
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
-    public string? IndexedContentHash(PluginKey key) => _indexStore.IndexedContentHash(key);
+    public string? IndexedContentHash(PluginCopyKey key) => _indexStore.IndexedContentHash(key);
 
     /// <summary>See <see cref="IRecordIndex.Sequence"/>.</summary>
     public long Sequence => _indexStore.CurrentSequence();
@@ -175,7 +175,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
-    public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
+    public void Unindex(PluginCopyKey key) => Unindex(key.Name, key.Origin);
 
     // The `registrations` row is dropped last: while it exists this (origin, plugin) is still a
     // known member of the read model, so no read can meet rows that have already gone.
@@ -215,36 +215,36 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // ADR-0009: registration is visibility. Every public relation is a view over its `mirror.` table
     // joined to this row, so writing or deleting the row makes a plugin's rows answer or fall
     // silent; neither verb touches a data row.
-    public void Register(PluginKey key, Registration registration)
+    public void Register(PluginCopyKey key, Registration registration)
     {
         using var tx = Connection.BeginTransaction();
-        UpsertRegistration(key.Name, key.Origin!, registration);
+        UpsertRegistration(key.Name, key.Origin, registration);
         _indexStore.BumpSequence();
         tx.Commit();
     }
 
-    public void Unregister(PluginKey key)
+    public void Unregister(PluginCopyKey key)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Unregistering {Plugin} from {Origin}", key.Name, key.Origin);
         }
         using var tx = Connection.BeginTransaction();
-        DeleteRegistration(key.Name, key.Origin!);
+        DeleteRegistration(key.Name, key.Origin);
         _indexStore.BumpSequence();
         tx.Commit();
     }
 
     /// <summary>See <see cref="IRecordIndex.RegisteredPlugins"/>.</summary>
-    public IReadOnlyList<PluginKey> RegisteredPlugins()
+    public IReadOnlyList<PluginCopyKey> RegisteredPlugins()
     {
-        var keys = new List<PluginKey>();
+        var keys = new List<PluginCopyKey>();
         using var connection = OpenRead();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.RegistrationsRelation}";
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
-            keys.Add(new PluginKey(reader.GetString(0), reader.GetString(1)));
+            keys.Add(new PluginCopyKey(reader.GetString(0), reader.GetString(1)));
         return keys;
     }
 
@@ -332,7 +332,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>The projector's landing of re-derived documents: one transaction for the batch, so a
     /// throw partway cannot leave Effective and Head disagreeing. A null body is the document
     /// gone.</summary>
-    internal void ProjectDocuments(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+    internal void ProjectDocuments(PluginCopyKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         if (deltas.Count == 0) return;
 
@@ -356,7 +356,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
-    public void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
+    public void SetCommittedBaseline(PluginCopyKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
     {
         if (baselines.Count == 0) return;
 
@@ -367,7 +367,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     /// <summary>See <see cref="IRecordIndex.MarkWorkingTreeOnly"/>.</summary>
-    public void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys)
+    public void MarkWorkingTreeOnly(PluginCopyKey key, IReadOnlyList<string> formKeys)
     {
         if (formKeys.Count == 0) return;
 
@@ -383,7 +383,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>. One transaction for the whole batch:
     /// the three head-state writes are all-or-nothing together, so a throw partway through a
     /// reconciliation pass cannot leave half of one applied.</summary>
-    public void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
+    public void SeedCommittedOnly(PluginCopyKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
     {
         if (records.Count == 0) return;
 
@@ -399,7 +399,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // --- Refresh ---
 
     /// <summary>See <see cref="IRecordIndex.RefreshByKeys"/>.</summary>
-    public void RefreshByKeys(PluginKey key, string modFolder, IReadOnlyList<string> formKeys)
+    public void RefreshByKeys(PluginCopyKey key, string modFolder, IReadOnlyList<string> formKeys)
     {
         // One signal, one advance, however many documents and refs it moves.
         using var projection = BeginProjection();
@@ -421,7 +421,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // Re-derives one key's rows at both refs. Called again with the same bytes, nothing below fires.
-    private void RefreshOneKey(SourceRepository repository, PluginKey key, string formKey)
+    private void RefreshOneKey(SourceRepository repository, PluginCopyKey key, string formKey)
     {
         var effective = At(RecordRef.Effective).GetDocument(formKey, key);
         var head = At(RecordRef.Head).GetDocument(formKey, key);
@@ -470,7 +470,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // The whole tree, read as one mod: where a record sits is a fact about the tree, not about one
     // document. Idempotent by construction, being the ingest Track and a re-index run.
-    private void RederiveWholeCopyFromSource(PluginKey key, string modFolder)
+    private void RederiveWholeCopyFromSource(PluginCopyKey key, string modFolder)
     {
         // Nothing to re-derive from: the tree went away between the signal and this line, or this
         // copy's rows came from its binary and a source key is not its to answer for.
@@ -493,13 +493,13 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // The three facts the copy's registration row carries (ADR-0013), read back for a re-ingest that
     // must not change what the load order said about this copy.
-    private Registration? RegistrationOf(PluginKey key)
+    private Registration? RegistrationOf(PluginCopyKey key)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText =
             $"SELECT load_order_idx, enabled, winning FROM {TableDdlBuilder.RegistrationsRelation} " +
             "WHERE plugin = $1 AND origin = $2";
-        DuckDbSql.AddParams(cmd, [key.Name, key.Origin!]);
+        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
         return new Registration(
@@ -509,7 +509,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // --- Validate ---
 
     /// <summary>See <see cref="IRecordIndex.Validate"/>.</summary>
-    public ValidationReport Validate(PluginKey key, string? modFolder)
+    public ValidationReport Validate(PluginCopyKey key, string? modFolder)
     {
         if (modFolder != null && SourceRepository.IsTracked(modFolder))
             return _sourceValidation.Validate(key, modFolder);
@@ -519,12 +519,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // Validate's own publish. MarkWorkingTreeOnly does not publish for itself: ingest calls it for
     // every reconciled record of a whole plugin, where a notification per record would be noise.
-    internal void PublishRowsChanged(PluginKey key, IReadOnlyList<string> formKeys) =>
+    internal void PublishRowsChanged(PluginCopyKey key, IReadOnlyList<string> formKeys) =>
         _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, formKeys, Sequence)));
 
     // ADR-0009's load-time check, asked of one copy: the stored hash against the bytes on disk. A
     // binary has no smaller unit, so a mismatch is a rebuild the caller owns.
-    private ValidationReport ValidateAgainstBinary(PluginKey key)
+    private ValidationReport ValidateAgainstBinary(PluginCopyKey key)
     {
         // Nothing vouches for these rows (an in-memory mod, or a tracked copy whose folder went
         // away), so there is nothing to compare them against.
@@ -561,10 +561,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // Empty until the projector points it somewhere: a store opened by a test that never reconciles
     // has no copies open, which is what an empty set says.
-    private Func<IReadOnlyDictionary<PluginKey, PluginContent>> _openedCopies =
-        () => new Dictionary<PluginKey, PluginContent>();
+    private Func<IReadOnlyDictionary<PluginCopyKey, PluginContent>> _openedCopies =
+        () => new Dictionary<PluginCopyKey, PluginContent>();
 
-    public void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginKey, PluginContent>> opened) =>
+    public void ReadOpenedCopiesFrom(Func<IReadOnlyDictionary<PluginCopyKey, PluginContent>> opened) =>
         _openedCopies = opened;
 
     /// <summary>Reads answering from the extracted tables (<c>Resolve</c>, <c>GetReferencedBy</c>,
@@ -585,7 +585,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // names, so a read cannot be ref-aware on one path and not the other.
     private sealed class RelationReads(DuckDbRecordIndex owner, string records) : IRecordReads
     {
-        public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies => owner._openedCopies();
+        public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies => owner._openedCopies();
 
         public RecordDocument? GetDocument(string formKey)
         {
@@ -595,7 +595,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return tableName == null ? null : owner.ReadDocument(connection, records, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
         }
 
-        public RecordDocument? GetDocument(string formKey, PluginKey plugin)
+        public RecordDocument? GetDocument(string formKey, PluginCopyKey plugin)
         {
             using var connection = owner.OpenRead();
             owner.RequireSchemas();
@@ -606,7 +606,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // One query rather than two point queries per record. Rows are materialized before
         // reconstitution: resolving a FormKey opens its own command on this connection, which would
         // interleave two readers.
-        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin)
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginCopyKey plugin)
         {
             using var connection = owner.OpenRead();
             var schemas = owner.RequireSchemas();
@@ -616,7 +616,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 FROM {records}
                 WHERE plugin = $1 AND origin = $2
                 """;
-            AddParams(cmd, [plugin.Name, plugin.Origin!]);
+            AddParams(cmd, [plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
             var rows = new List<(string FormKey, string Plugin, string Origin, int LoadOrderIndex,
@@ -701,7 +701,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         {
             using var connection = owner.OpenRead();
             var (where, paramValues) = BuildWhere(
-                query.Plugin?.Name, query.Search, owner._filterActive, query.Plugin?.Origin, query.RecordTypes);
+                query.Plugin?.Name, query.Search, owner._filterActive, query.Origin, query.RecordTypes);
             // Modified is ref='working-tree' with a committed snapshot; Added is the same ref with no
             // snapshot (a create writes nothing into records_committed). has_container_children is the
             // same correlated-EXISTS shape against container_child, which is never duplicated per ref.
@@ -751,7 +751,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // The filter narrows counts the same way it narrows listings (invariant: SetFilter affects
         // Search/counts/plugin-highlight, never a point read), routed through the same BuildWhere
         // every other filterable query here uses.
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin)
+        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin)
         {
             using var connection = owner.OpenRead();
             var (where, paramValues) = BuildWhere(plugin.Name, null, owner._filterActive, plugin.Origin, recordTypes: null);
@@ -780,12 +780,12 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         // Unfiltered: a record filter narrows what is listed, never whether a type could be read.
-        private static HashSet<string> FailedRecordTypes(DuckDBConnection connection, PluginKey plugin)
+        private static HashSet<string> FailedRecordTypes(DuckDBConnection connection, PluginCopyKey plugin)
         {
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
                 "SELECT DISTINCT record_type FROM record_type_failure WHERE plugin = $1 AND origin = $2";
-            AddParams(cmd, [plugin.Name, plugin.Origin ?? PluginOrigin.DataDirectory]);
+            AddParams(cmd, [plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
             var types = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -846,7 +846,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginKey plugin)
+        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey plugin)
         {
             using var connection = owner.OpenRead();
             using var cmd = connection.CreateCommand();
@@ -862,7 +862,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
                       AND pr.parse_diagnosis IS NOT NULL))
                 """;
-            AddParams(cmd, [plugin.Name, plugin.Origin ?? PluginOrigin.DataDirectory]);
+            AddParams(cmd, [plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -870,7 +870,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin)
+        public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin)
         {
             using var connection = owner.OpenRead();
             // The header is excluded explicitly: its synthetic 000000:<plugin> FormKey names no record,
@@ -894,7 +894,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey)
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey)
         {
             using var connection = owner.OpenRead();
             using var cmd = connection.CreateCommand();
@@ -915,7 +915,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                 WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
                 ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
                 """;
-            AddParams(cmd, [worldspaceFormKey, plugin.Name, plugin.Origin!]);
+            AddParams(cmd, [worldspaceFormKey, plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
             var rows = new List<CellLocationSummary>();
@@ -937,7 +937,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return rows;
         }
 
-        public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset)
+        public PagedResult<CellSummary> GetInteriorCells(PluginCopyKey plugin, int limit, int offset)
         {
             using var connection = owner.OpenRead();
             using var countCmd = connection.CreateCommand();
@@ -982,7 +982,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return new PagedResult<CellSummary>(items, (int)total);
         }
 
-        public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey)
+        public CellReferences GetCellReferences(PluginCopyKey plugin, string cellFormKey)
         {
             var schemas = owner.RequireSchemas();
             var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
@@ -1006,7 +1006,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                   AND r.record_type IN ({typeList})
                 ORDER BY r.editor_id
                 """;
-            AddParams(cmd, [cellFormKey, plugin.Name, plugin.Origin!]);
+            AddParams(cmd, [cellFormKey, plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
             var persistent = new List<PlacedSummary>();
@@ -1025,28 +1025,28 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return new CellReferences(persistent, temporary);
         }
 
-        public PlacementRow? GetPlacement(string formKey, PluginKey plugin)
+        public PlacementRow? GetPlacement(string formKey, PluginCopyKey plugin)
         {
             using var connection = owner.OpenRead();
-            return GetPlacement(connection, formKey, plugin.Name, plugin.Origin!);
+            return GetPlacement(connection, formKey, plugin.Name, plugin.Origin);
         }
 
-        public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey)
+        public CellLocationRow? GetCellLocation(PluginCopyKey plugin, string cellFormKey)
         {
             using var connection = owner.OpenRead();
-            return GetCellLocation(connection, cellFormKey, plugin.Name, plugin.Origin!);
+            return GetCellLocation(connection, cellFormKey, plugin.Name, plugin.Origin);
         }
 
-        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey)
+        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginCopyKey plugin, string parentFormKey)
         {
             using var connection = owner.OpenRead();
-            return GetContainerChildren(connection, plugin.Name, plugin.Origin!, parentFormKey);
+            return GetContainerChildren(connection, plugin.Name, plugin.Origin, parentFormKey);
         }
 
-        public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey)
+        public ContainerChildRow? GetContainerParent(PluginCopyKey plugin, string childFormKey)
         {
             using var connection = owner.OpenRead();
-            return GetContainerParent(connection, plugin.Name, plugin.Origin!, childFormKey);
+            return GetContainerParent(connection, plugin.Name, plugin.Origin, childFormKey);
         }
 
         // Column 6 is "ref", column 7 the correlated records_committed EXISTS Search's SELECT adds.
@@ -1292,7 +1292,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         var root = parsed.RootElement;
 
         return new RecordDocument(
-            formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
+            formKey, new PluginCopyKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
             body, BuildFields(schema, root, resolveFormKey, _release),
             // A ModHeader can neither carry the Partial Form flag nor be a type that could.
             IsPartialForm: !schema.IsHeader && PartialFormFlag.IsSet(root, schema.RecordType),

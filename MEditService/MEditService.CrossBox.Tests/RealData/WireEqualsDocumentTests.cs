@@ -19,7 +19,7 @@ public sealed class CutDownPluginCompareFixture : IDisposable
 
     public IndexProjector Index { get; }
     public RecordQueryService Compare { get; }
-    public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
+    public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
 
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-wire-equals-document-").FullName;
 

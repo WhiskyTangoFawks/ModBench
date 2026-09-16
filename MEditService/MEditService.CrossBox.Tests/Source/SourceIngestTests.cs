@@ -296,7 +296,7 @@ public sealed class SourceIngestTests
         Assert.NotEmpty(reloaded.Status.Failures);
 
         var atHead = reloaded.Store!.At(RecordRef.Head)
-            .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
+            .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Keyword.ToString(), StringComparison.Ordinal));
 
         Assert.Equal(1, atHead);
@@ -343,7 +343,7 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(holder, mod);
 
         var atHead = reloaded.Store!.At(RecordRef.Head)
-            .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
+            .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
 
         Assert.Equal(1, atHead);

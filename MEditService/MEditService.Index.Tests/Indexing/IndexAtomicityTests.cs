@@ -56,7 +56,7 @@ public class IndexAtomicityTests
         }
 
         var mod = LoadMod(fixture.DataFolder, "Atomic.esp");
-        Assert.ThrowsAny<Exception>(() => repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data")));
+        Assert.ThrowsAny<Exception>(() => repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data")));
 
         Assert.Equal(0, RowCount(repo, "npc_"));
     }

@@ -28,7 +28,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     {
         d.FormKey,
         Plugin = d.Plugin.Name,
-        Origin = d.Plugin.Origin ?? "",
+        Origin = d.Plugin.Origin,
         d.LoadOrderIndex,
         d.IsWinner,
         d.EditorId,
@@ -48,7 +48,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     // is 90% repetition is one nobody re-reads when it fails.
     private object WholeListing(string type)
     {
-        var page = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [type], Plugin: new PluginKey(TestPluginName, Origin), Limit: WholeType, Offset: 0));
+        var page = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [type], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0));
         return new
         {
             page.Total,
@@ -62,7 +62,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         var captured = Types.ToDictionary(
             type => type,
             type => FormKeysOf(type)
-                .Select(fk => _repo.At(RecordRef.Effective).GetDocument(fk, new PluginKey(TestPluginName, Origin)))
+                .Select(fk => _repo.At(RecordRef.Effective).GetDocument(fk, new PluginCopyKey(TestPluginName, Origin)))
                 .Where(d => d != null)
                 .Select(d => Project(d!))
                 .ToList());
@@ -75,13 +75,13 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     {
         var captured = new
         {
-            Counts = Types.ToDictionary(t => t, t => _repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey(TestPluginName, Origin))
+            Counts = Types.ToDictionary(t => t, t => _repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey(TestPluginName, Origin))
                 .FirstOrDefault(c => string.Equals(c.Type, t, StringComparison.OrdinalIgnoreCase))?.Count ?? 0),
             Listings = Types.ToDictionary(t => t, WholeListing),
-            SearchAllTypesTotal = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [.. Types], Plugin: new PluginKey(TestPluginName, Origin), Limit: WholeType, Offset: 0)).Total,
-            SearchByEditorId = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [.. Types], Plugin: new PluginKey(TestPluginName, Origin), Search: "Workshop", Limit: WholeType, Offset: 0))
+            SearchAllTypesTotal = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0)).Total,
+            SearchByEditorId = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Search: "Workshop", Limit: WholeType, Offset: 0))
                 .Items.OrderBy(r => r.FormKey, StringComparer.Ordinal).Take(20).ToList(),
-            NativeFormKeyCount = _repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginKey(TestPluginName, Origin)).Count,
+            NativeFormKeyCount = _repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginCopyKey(TestPluginName, Origin)).Count,
         };
 
         Golden.Verify("realdata-listings", captured);
@@ -95,14 +95,14 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         var captured = new
         {
             WorldspaceCells = worldspaces.ToDictionary(
-                fk => fk, fk => _repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginKey(TestPluginName, Origin), fk)
+                fk => fk, fk => _repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginCopyKey(TestPluginName, Origin), fk)
                     .OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList()),
-            InteriorCells = _repo.At(RecordRef.Effective).GetInteriorCells(new PluginKey(TestPluginName, Origin), WholeType, 0)
+            InteriorCells = _repo.At(RecordRef.Effective).GetInteriorCells(new PluginCopyKey(TestPluginName, Origin), WholeType, 0)
                 .Items.OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList(),
             CellReferences = cells.ToDictionary(
                 fk => fk, fk =>
                 {
-                    var refs = _repo.At(RecordRef.Effective).GetCellReferences(new PluginKey(TestPluginName, Origin), fk);
+                    var refs = _repo.At(RecordRef.Effective).GetCellReferences(new PluginCopyKey(TestPluginName, Origin), fk);
                     return new
                     {
                         Persistent = refs.Persistent.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
@@ -110,7 +110,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
                     };
                 }),
             Placements = FormKeysOf("refr").ToDictionary(
-                fk => fk, fk => _repo.At(RecordRef.Effective).GetPlacement(fk, new PluginKey(TestPluginName, Origin))),
+                fk => fk, fk => _repo.At(RecordRef.Effective).GetPlacement(fk, new PluginCopyKey(TestPluginName, Origin))),
         };
 
         Golden.Verify("realdata-spatial", captured);

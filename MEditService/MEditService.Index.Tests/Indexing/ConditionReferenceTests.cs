@@ -24,7 +24,7 @@ public class ConditionReferenceTests
         repo.Initialize(GameRelease.Fallout4);
         var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName(plugin), Path.Combine(fixture.DataFolder, plugin)), Fallout4Release.Fallout4);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -86,11 +86,11 @@ public class ConditionReferenceTests
         var mod = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("CondCheck.esp"), Path.Combine(fixture.DataFolder, "CondCheck.esp")),
             Fallout4Release.Fallout4);
-        repo.IndexMod(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var document = repo.At(RecordRef.Effective)
-            .GetDocument(cobj.ToString(), new PluginKey("CondCheck.esp", "Data"))!;
+            .GetDocument(cobj.ToString(), new PluginCopyKey("CondCheck.esp", "Data"))!;
         var conditions = document.Fields.Single(f => f.Metadata.Name == "Conditions");
 
         Assert.Null(conditions.CheckError);

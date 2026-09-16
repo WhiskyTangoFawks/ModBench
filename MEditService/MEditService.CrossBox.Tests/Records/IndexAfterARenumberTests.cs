@@ -97,7 +97,7 @@ public sealed class IndexAfterARenumberTests
         var reads = index.SettledReads();
         Assert.Null(reads.GetDocument(oldFormKey));
         Assert.NotNull(reads.GetDocument(result.NewFormKey!));
-        var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.Plugin, Limit: 50, Offset: 0));
+        var listing = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: 50, Offset: 0));
         Assert.DoesNotContain(listing.Items, r => r.FormKey == oldFormKey);
         Assert.Contains(listing.Items, r => r.FormKey == result.NewFormKey);
     }

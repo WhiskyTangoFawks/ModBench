@@ -29,7 +29,7 @@ public sealed class CopyRecordAsNewRecordHandler
     /// <summary>The fresh FormKey comes from the same allocator create draws on. A self-link is
     /// remapped onto it, as xEdit does.</summary>
     public RecordEditResult CopyRecordAsNewRecord(
-        PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null)
+        PluginCopyKey sourcePlugin, string formKey, PluginCopyKey destinationPlugin, string? requestedFormKey = null)
     {
         if (_targets.ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var copy) is { } blocked) return blocked;
         using var source = copy.Source;
@@ -37,7 +37,7 @@ public sealed class CopyRecordAsNewRecordHandler
     }
 
     private RecordEditResult CopyAsNewRecord(
-        WriteTargets.CopyTarget copy, PluginKey destinationPlugin, string? requestedFormKey)
+        WriteTargets.CopyTarget copy, PluginCopyKey destinationPlugin, string? requestedFormKey)
     {
         var (source, identity, destination, release, body) = copy;
         var formKey = identity.FormKey;
@@ -78,7 +78,7 @@ public sealed class CopyRecordAsNewRecordHandler
     // The embedded subtree rides along, each record under a fresh key drawn before anything is written.
     // A missing container chain auto-creates bare and Partial Form.
     private RecordEditResult CopyEmbeddedChildAsNewRecord(
-        WriteTargets.CopyTarget copy, DocumentContainment container, PluginKey destinationPlugin, string? requestedFormKey)
+        WriteTargets.CopyTarget copy, DocumentContainment container, PluginCopyKey destinationPlugin, string? requestedFormKey)
     {
         var (source, identity, destination, release, body) = copy;
 

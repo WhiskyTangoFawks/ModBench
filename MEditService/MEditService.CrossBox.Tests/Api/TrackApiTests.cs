@@ -97,7 +97,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             .BuildScattered();
         await LoadOnly(fx, "WatchedMod");
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "WatchedMod").Path)!;
-        var key = new PluginKey("Watched.esp", "WatchedMod");
+        var key = new PluginCopyKey("Watched.esp", "WatchedMod");
 
         var response = await _client.PostAsJsonAsync("/plugins/track", new { origin = "WatchedMod", preset = "Edits" });
         response.EnsureSuccessStatusCode();
@@ -117,7 +117,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             .BuildScattered();
         await LoadOnly(fx, "CreatedIntoMod");
         var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == "CreatedIntoMod").Path)!;
-        var key = new PluginKey("Held.esp", "CreatedIntoMod");
+        var key = new PluginCopyKey("Held.esp", "CreatedIntoMod");
 
         var response = await _client.PostAsJsonAsync(
             "/plugins/create", new { name = "Minted.esp", path = modFolder, origin = "CreatedIntoMod" });
@@ -136,12 +136,12 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
             File.ReadAllText(document).Replace($"\"{editorId}\"", $"\"{renamed}\"", StringComparison.Ordinal));
     }
 
-    private string? EditorIdOf(FormKey formKey, PluginKey plugin) =>
+    private string? EditorIdOf(FormKey formKey, PluginCopyKey plugin) =>
         loaded.Services.GetRequiredService<IndexProjector>().Store!
             .At(RecordRef.Effective).GetDocument(formKey.ToString(), plugin)?.EditorId;
 
     // Long enough for the settle window the edit opens, and the refresh behind it.
-    private async Task<string?> EditorIdReaches(FormKey formKey, PluginKey plugin, string editorId)
+    private async Task<string?> EditorIdReaches(FormKey formKey, PluginCopyKey plugin, string editorId)
     {
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
         while (DateTime.UtcNow < deadline && EditorIdOf(formKey, plugin) != editorId)

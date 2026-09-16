@@ -31,8 +31,8 @@ public sealed class PluginCompileServiceLinkTests : IDisposable
     private readonly string _hostFolder;
     private readonly string _targetFolder;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginKey _host = new(HostName, HostOrigin);
-    private readonly PluginKey _target = new(TargetName, TargetOrigin);
+    private readonly PluginCopyKey _host = new(HostName, HostOrigin);
+    private readonly PluginCopyKey _target = new(TargetName, TargetOrigin);
     private readonly FormKey _npc;
     private readonly FormKey _targetKeyword;
 

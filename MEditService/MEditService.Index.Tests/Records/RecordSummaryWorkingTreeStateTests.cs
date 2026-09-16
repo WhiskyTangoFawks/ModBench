@@ -15,7 +15,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
-    private static readonly PluginKey BaseKey = new("Base.esm", "Data");
+    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
 
     private readonly PluginFixtureData _fixture;
     private readonly FormKey _editedFormKey;
@@ -59,7 +59,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         index.ProjectDocuments(
             BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
-        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
+        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 
         Assert.Equal(WorkingTreeState.Modified, SummaryFor(page, edited).WorkingTreeState);
         Assert.Equal(WorkingTreeState.None, SummaryFor(page, _untouchedFormKey.ToString()).WorkingTreeState);
@@ -74,7 +74,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         var created = _untouchedFormKey.ToString();
         index.MarkWorkingTreeOnly(BaseKey, [created]);
 
-        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
+        var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 
         Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
     }
@@ -91,7 +91,7 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         index.ProjectDocuments(
             BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
-        var headPage = index.At(RecordRef.Head).Search(new RecordQuery(Plugin: BaseKey, RecordTypes: ["npc_"], Limit: 50));
+        var headPage = index.At(RecordRef.Head).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 
         Assert.All(headPage.Items, i => Assert.Equal(WorkingTreeState.None, i.WorkingTreeState));
     }

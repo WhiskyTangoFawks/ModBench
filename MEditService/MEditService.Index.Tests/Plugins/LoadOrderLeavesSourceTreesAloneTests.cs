@@ -45,7 +45,7 @@ public sealed class ReconcileLeavesSourceTreesAloneTests
                 GameRelease.Fallout4);
 
             // Positive control: the load really happened and really indexed the present plugin.
-            Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("StillHere.esp", "ModA"))
+            Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("StillHere.esp", "ModA"))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
             Assert.True(Directory.Exists(orphanTree), "the orphaned source tree must survive the load");

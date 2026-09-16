@@ -67,7 +67,7 @@ public sealed class ArchitectureTests
         Assert.True(offenders.Count == 0, "A plugin name travels without its origin:\n" + string.Join("\n", offenders));
     }
 
-    // A typed PluginKey parameter already carries both halves; only a string name can travel alone.
+    // A typed PluginCopyKey parameter already carries both halves; only a string name can travel alone.
     internal static IEnumerable<string> PluginStringsWithoutOrigin(ParameterInfo[] parameters) =>
         PluginStringsWithoutOrigin(parameters.Select(p => (p.Name!, p.ParameterType)).ToArray());
 
@@ -500,7 +500,7 @@ public sealed class ArchitectureTests
     {
         static void Bare(string plugin, string other) { }
         static void Paired(string sourcePlugin, string sourceOrigin, string destinationPlugin) { }
-        static void Typed(PluginKey plugin) { }
+        static void Typed(PluginCopyKey plugin) { }
 
         Assert.Equal(["plugin"], PluginStringsWithoutOrigin(ParametersOf(Bare)));
         Assert.Equal(["destinationPlugin"], PluginStringsWithoutOrigin(ParametersOf(Paired)));

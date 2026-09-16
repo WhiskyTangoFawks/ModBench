@@ -10,7 +10,7 @@ namespace MEditService.Tests.Records;
 
 public sealed class RecordTypeViewsTests
 {
-    private static readonly PluginKey Plugin = new("Lazy.esp", "Data");
+    private static readonly PluginCopyKey Plugin = new("Lazy.esp", "Data");
 
     private static (DuckDbRecordIndex Index, string NpcFormKey) IndexedPlugin()
     {
@@ -44,7 +44,7 @@ public sealed class RecordTypeViewsTests
         Assert.Equal("LazyNpc", reads.GetDocument(npc)!.EditorId);
         Assert.Equal("LazyNpc", reads.GetDocument(npc, Plugin)!.EditorId);
         Assert.Contains(reads.GetDocuments(Plugin), d => d.FormKey == npc);
-        Assert.Contains(reads.Search(new RecordQuery(Plugin: Plugin, Limit: 10)).Items, i => i.FormKey == npc);
+        Assert.Contains(reads.Search(new RecordQuery(Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
         Assert.Equal("npc_", reads.Resolve(npc)?.RecordType);
         Assert.Contains(reads.GetRecordTypeCounts(Plugin), c => c.Type == "npc_" && c.Count == 1);
         Assert.Contains("records", ViewNames(index));
@@ -54,6 +54,6 @@ public sealed class RecordTypeViewsTests
 
         Assert.Contains("npc_", ViewNames(index));
         Assert.Contains("header", ViewNames(index));
-        Assert.Contains(reads.Search(new RecordQuery(Plugin: Plugin, Limit: 10)).Items, i => i.FormKey == npc);
+        Assert.Contains(reads.Search(new RecordQuery(Plugin: Plugin.Name, Origin: Plugin.Origin, Limit: 10)).Items, i => i.FormKey == npc);
     }
 }

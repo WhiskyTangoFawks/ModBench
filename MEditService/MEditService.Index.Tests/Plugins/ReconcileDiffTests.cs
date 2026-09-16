@@ -30,7 +30,7 @@ public sealed class ReconcileDiffTests
     private sealed class CountingIndex(IRecordIndex inner, CountingFactory owner) : DelegatingRecordIndex(inner)
     {
         public override void Index(
-            IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
+            IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null)
         {
             owner.Indexed++;
             base.Index(documents, registration, key, filePath);
@@ -80,7 +80,7 @@ public sealed class ReconcileDiffTests
 
     private static string SharedNpc(IndexProjector index) =>
         index.Reads!
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esm"), Limit: 10, Offset: 0))
+            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "A.esm", Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
     private static string? WinnerOf(IndexProjector index, string formKey) =>
@@ -210,7 +210,7 @@ public sealed class ReconcileDiffTests
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
         var npc = SharedNpc(index);
         var indexed = counts.Indexed;
-        var bKey = new PluginKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
+        var bKey = new PluginCopyKey("B.esp", fx.Plugins.Single(p => p.Name == "B.esp").Origin);
 
         index.Reconcile(holder, fx.GameDirectory, fx.Plugins.Where(p => p.Name != "B.esp").ToList(), GameRelease.Fallout4);
 

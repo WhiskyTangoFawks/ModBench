@@ -22,7 +22,7 @@ public sealed partial class SourceRepository
     /// <summary>Every file one plugin's source tree holds, relative to the mod folder — the carrier
     /// Track hands in, handed back out. Null <paramref name="gitRef"/> asks the working tree; empty
     /// when there is no source there.</summary>
-    public PluginSourceFiles FilesOf(PluginKey plugin, string? gitRef)
+    public PluginSourceFiles FilesOf(PluginCopyKey plugin, string? gitRef)
     {
         var key = $"{plugin.Name}\n{gitRef}";
         if (!_filesByPluginAndRef.TryGetValue(key, out var files))
@@ -34,7 +34,7 @@ public sealed partial class SourceRepository
     /// files, not of the compiled mod: the reader's FormKey-keyed RecordCache collapses two documents
     /// in one group folder to the last read.</summary>
     public IReadOnlyList<string> CollidingFormKeys(
-        PluginKey plugin, IEnumerable<FormKey> formKeys, string? gitRef)
+        PluginCopyKey plugin, IEnumerable<FormKey> formKeys, string? gitRef)
     {
         var entriesByTail = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var name in EntryNamesIn(FilesOf(plugin, gitRef).Files, RootFor(plugin.Name)))
@@ -56,7 +56,7 @@ public sealed partial class SourceRepository
 
     /// <summary>The document holding <paramref name="identity"/>, relative to the mod folder — a
     /// diagnostic's path for the Problems panel. Null when nothing there holds it.</summary>
-    public string? RelativePathOf(PluginKey plugin, RecordIdentity identity, string? gitRef)
+    public string? RelativePathOf(PluginCopyKey plugin, RecordIdentity identity, string? gitRef)
     {
         if (gitRef == null) return Locate(plugin, identity)?.RelativePath;
 
@@ -88,12 +88,12 @@ public sealed partial class SourceRepository
     public static string HeaderDocumentFor(string pluginFileName) =>
         Path.Combine(RootFor(pluginFileName), RecordDataFileName);
 
-    private PluginSourceFiles Read(PluginKey plugin, string? gitRef) =>
+    private PluginSourceFiles Read(PluginCopyKey plugin, string? gitRef) =>
         gitRef == null
             ? WorkingTreeFiles(plugin)
             : new PluginSourceFiles(Ordered(CommittedFiles(plugin, gitRef)), null);
 
-    private PluginSourceFiles WorkingTreeFiles(PluginKey plugin)
+    private PluginSourceFiles WorkingTreeFiles(PluginCopyKey plugin)
     {
         var root = RootIn(_modFolder, plugin.Name);
         if (!Directory.Exists(root)) return new PluginSourceFiles([], null);
@@ -112,7 +112,7 @@ public sealed partial class SourceRepository
     private static IReadOnlyList<TreeFile> Ordered(IEnumerable<TreeFile> files) =>
         [.. files.OrderBy(file => file.RelativePath, StringComparer.Ordinal)];
 
-    private IEnumerable<TreeFile> CommittedFiles(PluginKey plugin, string gitRef) =>
+    private IEnumerable<TreeFile> CommittedFiles(PluginCopyKey plugin, string gitRef) =>
         BlobsAtRef(plugin.Name, gitRef)
             .Select(blob => new TreeFile(blob.RelativePath, Encoding.UTF8.GetBytes(blob.Text)));
 

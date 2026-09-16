@@ -24,7 +24,7 @@ public sealed class SourceWatchRealDataFixture : IDisposable
 
     public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-source-watch-").FullName;
     public IndexProjector Index { get; }
-    public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
+    public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, Origin);
     internal InMemoryNotificationPublisher Notifications { get; } = new();
 
     /// <summary>How many documents Track wrote, the number a projection per file would be.</summary>

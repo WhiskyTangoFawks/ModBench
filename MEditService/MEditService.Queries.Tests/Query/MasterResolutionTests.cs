@@ -8,12 +8,12 @@ namespace MEditService.Tests.Query;
 // directly-missing master from one that is itself unloadable.
 public class MasterResolutionTests
 {
-    private static (PluginKey Key, PluginContent Content) Plugin(string name, params string[] masters) =>
-        (new PluginKey(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
+    private static (PluginCopyKey Key, PluginContent Content) Plugin(string name, params string[] masters) =>
+        (new PluginCopyKey(name, "Data"), new PluginContent(IsLight: false, IsMaster: false, masters, RecordCount: 0));
 
-    private static IReadOnlyDictionary<PluginKey, PluginContent> Opened(
-        params (PluginKey Key, PluginContent Content)[] plugins) =>
-        plugins.ToDictionary(p => p.Key, p => p.Content, PluginKey.Comparer);
+    private static IReadOnlyDictionary<PluginCopyKey, PluginContent> Opened(
+        params (PluginCopyKey Key, PluginContent Content)[] plugins) =>
+        plugins.ToDictionary(p => p.Key, p => p.Content, PluginCopyKey.Comparer);
 
     [Fact]
     public void Classify_MasterAbsentFromLoadedAndFailedSets_ReturnsDirectlyMissing()

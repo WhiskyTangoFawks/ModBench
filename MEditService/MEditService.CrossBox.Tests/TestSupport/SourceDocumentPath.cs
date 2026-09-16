@@ -15,7 +15,8 @@ internal static class SourceDocumentPath
         GameRelease release)
     {
         var repository = SourceRepository.Open(modFolder, release) ?? SourceRepository.Over(modFolder, release);
-        var unit = repository.Locate(new PluginKey(pluginFileName), new RecordIdentity(formKey, recordType, editorId));
+        var unit = repository.Locate(
+            new PluginCopyKey(pluginFileName, "TestMod"), new RecordIdentity(formKey, recordType, editorId));
 
         return unit?.FullPath
             ?? throw new InvalidOperationException(

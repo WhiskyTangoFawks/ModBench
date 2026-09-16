@@ -39,7 +39,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_loadOrder, [new PluginKey(PluginName, Origin)], Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, [new PluginCopyKey(PluginName, Origin)], Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -68,7 +68,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         foreach (var fileName in originalStringsFiles.Keys)
             File.Delete(Path.Combine(stringsDir, fileName));
 
-        var plugin = new PluginKey(PluginName, Origin);
+        var plugin = new PluginCopyKey(PluginName, Origin);
         var compileService = CompileServices.Over(_loadOrder);
         var result = compileService.Compile(plugin, new CompileSource.WorkingTree());
 

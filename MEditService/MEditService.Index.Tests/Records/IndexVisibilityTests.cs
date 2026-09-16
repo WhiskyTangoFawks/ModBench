@@ -48,14 +48,14 @@ public sealed class IndexVisibilityTests
         }
     }
 
-    private static (DuckDbRecordIndex Repository, ModPath Path, string Dir, PluginKey Key) IndexedBigPlugin()
+    private static (DuckDbRecordIndex Repository, ModPath Path, string Dir, PluginCopyKey Key) IndexedBigPlugin()
     {
         var (_, modPath, dir) = BuildBigPlugin("Big.esp");
         var reflector = SharedSchemaReflector.Instance;
         var repository = (DuckDbRecordIndex)new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector))
             .Create(GameRelease.Fallout4);
         using var loaded = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
-        var key = new PluginKey("Big.esp", PluginOrigin.DataDirectory);
+        var key = new PluginCopyKey("Big.esp", PluginOrigin.DataDirectory);
         repository.IndexMod(loaded, Registration.Participating(0), key, modPath.Path);
         return (repository, modPath, dir, key);
     }
@@ -136,12 +136,12 @@ public sealed class IndexVisibilityTests
             {
                 while (!indexing.IsCancellationRequested)
                 {
-                    observed.Add(repository.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
+                    observed.Add(repository.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey("Big.esp", PluginOrigin.DataDirectory))
                         .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
                 }
             })).ToArray();
 
-            repository.IndexMod(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), PluginOrigin.DataDirectory));
+            repository.IndexMod(loaded, Registration.Participating(0), new PluginCopyKey(loaded.ModKey.FileName.ToString(), PluginOrigin.DataDirectory));
             await indexing.CancelAsync();
             await Task.WhenAll(readers);
 
@@ -155,7 +155,7 @@ public sealed class IndexVisibilityTests
             Assert.All(observed, count => Assert.True(
                 count is 0 or NpcCount,
                 $"a read observed {count} of {NpcCount} records — a partially-indexed plugin was visible"));
-            Assert.Equal(NpcCount, repository.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
+            Assert.Equal(NpcCount, repository.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey("Big.esp", PluginOrigin.DataDirectory))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         }
         finally

@@ -21,7 +21,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
     public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
     public IndexProjector Index { get; }
-    public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
+    public PluginCopyKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public CompileRoundTripGateFixture()
     {
@@ -34,11 +34,11 @@ public sealed class CompileRoundTripGateFixture : IDisposable
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         Index.Reconcile(Holder,
             GameDirectory,
-            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(Index, Holder, Plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(Index, Holder, Plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         CopyDirectory(ModFolder, TrackedTemplateFolder);

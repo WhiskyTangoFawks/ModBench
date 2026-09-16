@@ -48,8 +48,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private static readonly PluginKey BaseKey = new("Base.esm", "Data");
-    private static readonly PluginKey WinnerKey = new("Winner.esp", "Data");
+    private static readonly PluginCopyKey BaseKey = new("Base.esm", "Data");
+    private static readonly PluginCopyKey WinnerKey = new("Winner.esp", "Data");
 
     private DuckDbRecordIndex LoadedRepository()
     {
@@ -59,8 +59,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var winnerPath = new ModPath(ModKey.FromFileName("Winner.esp"), Path.Combine(_fixture.DataFolder, "Winner.esp"));
         var baseMod = Fallout4Mod.CreateFromBinaryOverlay(basePath, Fallout4Release.Fallout4);
         var winnerMod = Fallout4Mod.CreateFromBinaryOverlay(winnerPath, Fallout4Release.Fallout4);
-        repo.IndexMod(baseMod, Registration.Participating(0), new PluginKey(baseMod.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod(winnerMod, Registration.Participating(1), new PluginKey(winnerMod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(baseMod, Registration.Participating(0), new PluginCopyKey(baseMod.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod(winnerMod, Registration.Participating(1), new PluginCopyKey(winnerMod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -134,7 +134,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         using var repo = LoadedRepository();
         var edited = _keptNpcFormKey.ToString();
         var untouched = _droppedNpcFormKey.ToString();
-        var basePlugin = new PluginKey("Base.esm", "Data");
+        var basePlugin = new PluginCopyKey("Base.esm", "Data");
 
         var before = repo.At(RecordRef.Effective).GetDocument(edited, basePlugin)!;
         repo.ProjectDocuments(

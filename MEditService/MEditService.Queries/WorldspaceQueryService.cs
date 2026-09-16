@@ -33,10 +33,10 @@ public sealed class WorldspaceQueryService(
         var repo = _index.RequireReads();
         // Without an origin filter, two same-filename plugins' worldspace lists silently merge
         // into one under this plugin name.
-        var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: new PluginKey(plugin, origin), Limit: WorldspaceListLimit, Offset: 0);
+        var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: plugin, Origin: origin, Limit: WorldspaceListLimit, Offset: 0);
         // Search answers "on it or below it" through the container relation, which a worldspace's
         // cells are not part of, so the cell side is a second read rather than a walk from here.
-        var failedBelow = repo.GetWorldspacesWithFailuresBelow(new PluginKey(plugin, origin));
+        var failedBelow = repo.GetWorldspacesWithFailuresBelow(new PluginCopyKey(plugin, origin));
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(
                 r.FormKey, r.EditorId, r.HasParseFailure || failedBelow.Contains(r.FormKey)))];
@@ -45,7 +45,7 @@ public sealed class WorldspaceQueryService(
     public WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null)
     {
         origin ??= ResolveOrigin(plugin);
-        var cells = _index.RequireReads().GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
+        var cells = _index.RequireReads().GetWorldspaceCells(new PluginCopyKey(plugin, origin), worldspaceFormKey);
 
         // A TopCell has no block coordinates. Every block-less row is surfaced, but the data can't
         // say which of several is the real TopCell, so the first (deterministic order) is treated
@@ -93,12 +93,12 @@ public sealed class WorldspaceQueryService(
     public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null)
     {
         origin ??= ResolveOrigin(plugin);
-        return _index.RequireReads().GetCellReferences(new PluginKey(plugin, origin), cellFormKey);
+        return _index.RequireReads().GetCellReferences(new PluginCopyKey(plugin, origin), cellFormKey);
     }
 
     public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string? origin = null)
     {
-        var pluginKey = new PluginKey(plugin, origin ?? ResolveOrigin(plugin));
+        var pluginKey = new PluginCopyKey(plugin, origin ?? ResolveOrigin(plugin));
         return _index.RequireReads().GetInteriorCells(pluginKey, limit, offset);
     }
 

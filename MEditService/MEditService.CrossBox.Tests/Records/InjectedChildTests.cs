@@ -149,8 +149,8 @@ public sealed class InjectedChildTests
         public IndexProjector Index { get; }
 
         private readonly LoadOrderHolder _holder;
-        public PluginKey Base { get; } = new(BasePluginName, BaseOrigin);
-        public PluginKey Injector { get; } = new(InjectorPluginName, InjectorOrigin);
+        public PluginCopyKey Base { get; } = new(BasePluginName, BaseOrigin);
+        public PluginCopyKey Injector { get; } = new(InjectorPluginName, InjectorOrigin);
 
         public FormKey Quest { get; }
         public FormKey BaseTopic { get; }
@@ -219,7 +219,7 @@ public sealed class InjectedChildTests
             _ => throw new ArgumentOutOfRangeException(nameof(injection), injection, "No such injection case."),
         };
 
-        public IReadOnlyList<ContainerChildSummary> Children(PluginKey plugin, FormKey container) =>
+        public IReadOnlyList<ContainerChildSummary> Children(PluginCopyKey plugin, FormKey container) =>
             new ContainerChildQueryService(Index, _holder).GetChildren(plugin.Name, container.ToString(), plugin.Origin);
 
         public void TrackBoth()
@@ -229,7 +229,7 @@ public sealed class InjectedChildTests
                 track.TrackAsync(Index, Holder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
         }
 
-        public IModDisposeGetter CompileAndReimport(PluginKey plugin)
+        public IModDisposeGetter CompileAndReimport(PluginCopyKey plugin)
         {
             var result = CompileServices.Over(Holder.Current)
                 .Compile(plugin, new CompileSource.WorkingTree());

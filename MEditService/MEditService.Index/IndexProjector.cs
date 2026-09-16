@@ -86,7 +86,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
     // ADR-0013: a copy that failed to open stays a row in an error state until its bytes change.
     // Keyed by the plugin; the hash recorded alongside it is what changing detects.
-    private readonly Dictionary<string, (PluginKey Key, string? Hash)> _failedHashes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (PluginCopyKey Key, string? Hash)> _failedHashes = new(StringComparer.OrdinalIgnoreCase);
 
     // Two mechanisms, because one is not enough: the token asks the reconcile loop to stop, the
     // gate waits until it has. Cancelling without draining would let a teardown dispose the DuckDB
@@ -119,14 +119,14 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
     /// <summary>Whether the store registers this copy — an endpoint's 404 question, answered without
     /// handing out the store.</summary>
-    public bool Registers(PluginKey key)
+    public bool Registers(PluginCopyKey key)
     {
         lock (_lock) return _index?.RegisteredPlugins().Contains(key) == true;
     }
 
     /// <summary>ADR-0009: the hash the store's rows for this copy were built from, or null when it
     /// holds no validated rows for it.</summary>
-    public string? IndexedContentHash(PluginKey key)
+    public string? IndexedContentHash(PluginCopyKey key)
     {
         lock (_lock) return _index?.IndexedContentHash(key);
     }
@@ -389,7 +389,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     private static bool SamePath(string a, string b) =>
         string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
-    private static string KeyOf(PluginKey key) => $"{key.Origin}\0{key.Name}";
+    private static string KeyOf(PluginCopyKey key) => $"{key.Origin}\0{key.Name}";
 
     // The diff is computed first and without side effects, so an identical snapshot returns before
     // touching the index or the status: a redundant PUT is free.
@@ -403,7 +403,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         var wanted = resolved.ToDictionary(r => KeyOf(r.Key), StringComparer.OrdinalIgnoreCase);
         var open = held.Plugins.ToDictionary(p => KeyOf(p.Key), StringComparer.OrdinalIgnoreCase);
 
-        IReadOnlyList<PluginKey> failed;
+        IReadOnlyList<PluginCopyKey> failed;
         lock (_lock) failed = [.. _failedHashes.Values.Select(v => v.Key)];
         // Registered, held, or held only as a failure row — a copy the snapshot has stopped naming
         // leaves by every one of those doors, so a stale error row cannot outlive its copy.
@@ -532,7 +532,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // While the bytes are unchanged the error state stands, and the parse is not paid again.
     private bool StillFailing(RegisteredCopy plugin)
     {
-        (PluginKey, string? Hash) failedAt;
+        (PluginCopyKey, string? Hash) failedAt;
         lock (_lock)
         {
             if (!_failedHashes.TryGetValue(KeyOf(plugin.Key), out failedAt)) return false;
@@ -679,7 +679,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>ADR-0015 invariant 4's reconcile request: validates <paramref name="plugin"/>, or
     /// every registered copy when null, and repairs what differs. <c>NeedsRebuild</c> names a copy
     /// this call re-derived whole.</summary>
-    public IReadOnlyList<ValidationReport> ValidateIndex(PluginKey? plugin)
+    public IReadOnlyList<ValidationReport> ValidateIndex(PluginCopyKey? plugin)
     {
         // Outside _lock, as every mutation door here is: validate refreshes rows through the index's
         // own verbs, and the gate is reentrant so the rebuild below can take it again.
@@ -688,7 +688,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         var (_, index) = RequireScopeCore();
         // One advance for everything this validate re-derives, however many copies it names.
         using var projection = index.BeginProjection();
-        var keys = plugin is { } one ? (IReadOnlyList<PluginKey>)[one] : index.RegisteredPlugins();
+        var keys = plugin is { } one ? (IReadOnlyList<PluginCopyKey>)[one] : index.RegisteredPlugins();
 
         var order = _holder.Current;
         var reports = new List<ValidationReport>(keys.Count);
@@ -710,7 +710,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
     /// <summary>ADR-0015 invariant 2's narrow signal: re-projects these keys from the source tree
     /// under the write gate. An untracked or unheld copy is a no-op.</summary>
-    public void RefreshKeys(PluginKey key, IReadOnlyList<string> formKeys)
+    public void RefreshKeys(PluginCopyKey key, IReadOnlyList<string> formKeys)
     {
         // Taken before anything reaches _lock or the index: this runs on the Source watcher's timer,
         // with nothing else ordering it against an in-flight edit.
@@ -735,7 +735,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
     /// copy from its source tree (ADR-0007), because reading a tracked copy's binary would discard
     /// uncommitted edits.</summary>
-    public Task ReindexPlugin(PluginKey key)
+    public Task ReindexPlugin(PluginCopyKey key)
     {
         // Taken before anything reaches _lock or the index: this runs on the watcher's timer, with
         // nothing else ordering it against an in-flight edit. Reentrant, so the branch below taking
@@ -768,7 +768,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // The same SourceIngest.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
     // ingest produce the same rows by construction. A failed read is recorded and rethrown, never
     // degraded to the binary.
-    private void IngestFromSourceTree(PluginKey key)
+    private void IngestFromSourceTree(PluginCopyKey key)
     {
         // Outside _lock, always. It takes the gate for itself rather than trusting its caller; the
         // reentrant gate makes that free.
@@ -812,7 +812,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease) RequireHeldCopy(PluginKey key)
+    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease) RequireHeldCopy(PluginCopyKey key)
     {
         lock (_lock)
         {
@@ -840,7 +840,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>The file is gone, so its rows go with it. A no-op while the held copy still exists
     /// or with no load order: the watcher that calls this races teardowns and superseding load
     /// orders.</summary>
-    public void UnindexPlugin(PluginKey key)
+    public void UnindexPlugin(PluginCopyKey key)
     {
         // The watcher's timer's other index write — a vanished binary — gated like its sibling
         // above. Outside _lock, never inside it.
@@ -867,7 +867,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     /// <summary>See <see cref="IRefreshIndex.RefreshBinary"/>.</summary>
-    public async Task<bool> RefreshBinary(PluginKey key, string path)
+    public async Task<bool> RefreshBinary(PluginCopyKey key, string path)
     {
         if (!File.Exists(path))
         {
@@ -888,7 +888,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
 
     // A copy the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
     // the single-copy counterpart of ReconcileProgressively's own arriving loop.
-    private bool IndexNotYetHeld(PluginKey key)
+    private bool IndexNotYetHeld(PluginCopyKey key)
     {
         using var _ = WriteGate.Enter();
 

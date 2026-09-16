@@ -18,7 +18,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
 {
     private const string PluginName = "Splice.esp";
     private const string DroppedByTheCodec = "\"NoSuchMember\": 5";
-    private static readonly PluginKey Plugin = new(PluginName, "SpliceMod");
+    private static readonly PluginCopyKey Plugin = new(PluginName, "SpliceMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-splice-").FullName;

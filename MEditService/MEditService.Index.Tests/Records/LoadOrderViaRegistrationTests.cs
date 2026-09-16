@@ -26,12 +26,12 @@ public class LoadOrderViaRegistrationTests
         return repo;
     }
 
-    private static long MirrorRecordCount(DuckDbRecordIndex repo, PluginKey key)
+    private static long MirrorRecordCount(DuckDbRecordIndex repo, PluginCopyKey key)
     {
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM mirror.records WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin });
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
@@ -52,8 +52,8 @@ public class LoadOrderViaRegistrationTests
         modB.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("PluginA.esm") });
         modB.Npcs.Set(modA.EnumerateMajorRecords<INpcGetter>().First().DeepCopy());
 
-        var aKey = new PluginKey("PluginA.esm", "Data");
-        var bKey = new PluginKey("PluginB.esp", "Data");
+        var aKey = new PluginCopyKey("PluginA.esm", "Data");
+        var bKey = new PluginCopyKey("PluginB.esp", "Data");
 
         using var repo = OpenRepo();
         repo.IndexMod(modA, Registration.Participating(0), aKey);

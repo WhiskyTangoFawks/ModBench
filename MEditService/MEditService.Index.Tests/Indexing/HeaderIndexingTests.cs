@@ -34,7 +34,7 @@ public class HeaderIndexingTests
     private static DuckDbRecordIndex Indexed(IFallout4Mod mod, string origin = "Data")
     {
         var repo = NewRepo();
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), origin));
+        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), origin));
         repo.UpdateWinners();
         return repo;
     }
@@ -111,7 +111,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginKey("AuthorTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginCopyKey("AuthorTest.esp", "Data"));
         Assert.NotNull(doc);
         Assert.Equal("Vault Dweller", Assert.IsType<JsonElement>(FieldValueOf(doc, "Author")).GetString());
     }
@@ -124,7 +124,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginKey("EslTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginCopyKey("EslTest.esp", "Data"));
         Assert.NotNull(doc);
         // The document spells the flags by Mutagen's member names.
         Assert.Equal(
@@ -141,7 +141,7 @@ public class HeaderIndexingTests
 
         using var repo = Indexed(mod);
 
-        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginKey("MastersTest.esp", "Data"));
+        var doc = repo.At(RecordRef.Effective).GetDocument(PluginHeader.FormKeyFor(mod.ModKey), new PluginCopyKey("MastersTest.esp", "Data"));
         Assert.NotNull(doc);
         // The document's own shape: one object per master, naming it.
         var masters = Assert.IsType<JsonElement>(FieldValueOf(doc, "MasterReferences"));
@@ -165,7 +165,7 @@ public class HeaderIndexingTests
         var mod = new Fallout4Mod(ModKey.FromFileName("ReindexHeader.esp"), Fallout4Release.Fallout4);
 
         using var repo = NewRepo();
-        var key = new PluginKey("ReindexHeader.esp", "Data");
+        var key = new PluginCopyKey("ReindexHeader.esp", "Data");
         repo.IndexMod((IModGetter)mod, Registration.Participating(0), key);
         repo.IndexMod((IModGetter)mod, Registration.Participating(0), key);
 
@@ -205,8 +205,8 @@ public class HeaderIndexingTests
         var modB = new Fallout4Mod(ModKey.FromFileName("PluginB.esp"), Fallout4Release.Fallout4);
 
         using var repo = NewRepo();
-        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "Data"));
-        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "Data"));
+        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         var overridesA = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginA.esp")!.Entries;
@@ -230,8 +230,8 @@ public class HeaderIndexingTests
         modB.ModHeader.Author = "Author B";
 
         using var repo = NewRepo();
-        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var overrides = repo.At(RecordRef.Effective).GetOverrideStack("000000:Shared.esp")!.Entries;
 

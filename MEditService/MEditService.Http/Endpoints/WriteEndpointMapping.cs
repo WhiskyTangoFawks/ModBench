@@ -11,7 +11,7 @@ internal static class WriteEndpointMapping
 {
     /// <summary>For route-bound (URL-encoded) plugin names only. A body-sourced name must never pass
     /// through here: a literal <c>%</c> would be double-unescaped.</summary>
-    internal static PluginKey PluginKeyOf(string routePlugin, string origin) =>
+    internal static PluginCopyKey PluginCopyKeyOf(string routePlugin, string origin) =>
         new(Uri.UnescapeDataString(routePlugin), origin);
 
     /// <summary>The status code says what kind of problem; the refusal and path extensions say

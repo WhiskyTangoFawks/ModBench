@@ -31,8 +31,8 @@ public class RecordIndexFactoryTests : IDisposable
     }
 
     // Writes a one-Npc plugin under the instance and indexes it, mirroring the two-instance shape:
-    // both instances use the same mod folder name, so the PluginKey is identical in each.
-    private static PluginKey IndexOnePlugin(DuckDbRecordIndex index, string instanceRoot, string editorId)
+    // both instances use the same mod folder name, so the PluginCopyKey is identical in each.
+    private static PluginCopyKey IndexOnePlugin(DuckDbRecordIndex index, string instanceRoot, string editorId)
     {
         var folder = Path.Combine(instanceRoot, "mods", "Unofficial Patch");
         Directory.CreateDirectory(folder);
@@ -41,7 +41,7 @@ public class RecordIndexFactoryTests : IDisposable
         mod.Npcs.AddNew(editorId);
         mod.WriteToBinary(path);
 
-        var key = new PluginKey("UFO4P.esp", "Unofficial Patch");
+        var key = new PluginCopyKey("UFO4P.esp", "Unofficial Patch");
         using var overlay = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
         index.IndexMod(overlay, Registration.Participating(0), key, path);
         index.Register(key, Registration.Participating(0));
@@ -68,7 +68,7 @@ public class RecordIndexFactoryTests : IDisposable
         var b = Folder("instance-b");
         var factory = MakeFactory();
 
-        PluginKey key;
+        PluginCopyKey key;
         using (var first = factory.Create(GameRelease.Fallout4, a)) key = IndexOnePlugin((DuckDbRecordIndex)first, a, "NpcFromA");
 
         using (var other = factory.Create(GameRelease.Fallout4, b))
@@ -87,7 +87,7 @@ public class RecordIndexFactoryTests : IDisposable
     public void Create_WithNoInstanceRoot_KeepsNothingBetweenIndexes()
     {
         var factory = MakeFactory();
-        PluginKey key;
+        PluginCopyKey key;
         using (var first = factory.Create(GameRelease.Fallout4)) key = IndexOnePlugin((DuckDbRecordIndex)first, Folder("no-home"), "NpcNowhere");
 
         using var second = factory.Create(GameRelease.Fallout4);
@@ -102,7 +102,7 @@ public class RecordIndexFactoryTests : IDisposable
     {
         var instance = Folder("rebuild-instance");
         var factory = MakeFactory();
-        PluginKey key;
+        PluginCopyKey key;
         using (var first = factory.Create(GameRelease.Fallout4, instance)) key = IndexOnePlugin((DuckDbRecordIndex)first, instance, "NpcBeforeRebuild");
 
         using var rebuilt = factory.Rebuild(GameRelease.Fallout4, instance, atLeastSequence: 0);

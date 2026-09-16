@@ -229,9 +229,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    private static string OriginOf(LoadOrderSnapshot loadOrder, string modFolder, string pluginName) =>
+    private static string OriginOf(LoadOrderSnapshot loadOrder, string modFolder, PluginName pluginName) =>
         loadOrder.Copies.FirstOrDefault(copy =>
-            copy.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)
+            copy.Name.Equals(pluginName.Name, StringComparison.OrdinalIgnoreCase)
             && LoadOrderSnapshot.ModFolderOf(copy.Origin, copy.Path) == modFolder)?.Origin ?? "";
 
     // Called under _gate. Lazily arms the mod's watcher, recursive only once needed — the game's
@@ -347,14 +347,14 @@ public sealed class ModFolderWatcher : IDisposable
             // The registration first: a copy the load order has since dropped still knows the origin
             // its watch was armed with. The load order answers for a classification-only watch,
             // which carries none.
-            var key = new PluginKey(name, origin ?? OriginOf(_holder.Current, modFolder, name));
+            var key = new PluginCopyKey(name, origin ?? OriginOf(_holder.Current, modFolder, name));
             RaiseSafely(() => ValidateAfterOverflow(key));
         }
     }
 
     /// <summary>ADR-0015 invariant 4: an OS overflow dropped events, so this copy is compared by
     /// content hash rather than trusted.</summary>
-    internal void ValidateAfterOverflow(PluginKey key)
+    internal void ValidateAfterOverflow(PluginCopyKey key)
     {
         try
         {
@@ -462,7 +462,7 @@ public sealed class ModFolderWatcher : IDisposable
 
     private void ProjectOne(SourceChangeEvent change)
     {
-        var key = new PluginKey(change.PluginName, change.Origin);
+        var key = new PluginCopyKey(change.PluginName, change.Origin);
         try
         {
             // A mod with no repository is untracked rather than broken: nothing to project from yet,
@@ -487,7 +487,7 @@ public sealed class ModFolderWatcher : IDisposable
 
     // The answer to a ref move, a dropped event and a burst too wide to name keys for: one git
     // listing for the whole copy, where a per-key refresh asks git per record.
-    private void ValidateWholeCopy(PluginKey key)
+    private void ValidateWholeCopy(PluginCopyKey key)
     {
         foreach (var report in _index.ValidateIndex(key))
         {
@@ -522,12 +522,12 @@ public sealed class ModFolderWatcher : IDisposable
     private void SettleIndexed(PluginEntry plugin)
     {
         bool armed;
-        PluginKey key;
+        PluginCopyKey key;
         string path;
         lock (_gate)
         {
             armed = plugin.IndexedArmed;
-            key = new PluginKey(plugin.Name, plugin.Origin ?? "");
+            key = new PluginCopyKey(plugin.Name, plugin.Origin ?? "");
             path = plugin.Path!;
         }
         if (!armed) return;

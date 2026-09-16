@@ -43,16 +43,16 @@ public sealed class ProgressiveIndexingTests
         // Parked before B.esp is indexed: the load order exists, and A.esp — indexed one step ago — is
         // fully queryable — not published only after the whole load order has been indexed and swept.
         Assert.NotNull(manager.Reads);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // And B.esp — the one being indexed right now — reads as absent rather than half-there.
-        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
         gate.Release();
         await load;
 
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -245,7 +245,7 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(index.WinnersComputed);
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], index.Indexed);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("C.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -266,7 +266,7 @@ public sealed class ProgressiveIndexingTests
         var read = Task.Run(() =>
         {
             var repo = manager.Reads;
-            return repo == null ? (int?)null : repo.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
+            return repo == null ? (int?)null : repo.GetRecordTypeCounts(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         });
         var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));

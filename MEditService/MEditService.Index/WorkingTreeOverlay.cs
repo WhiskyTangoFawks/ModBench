@@ -47,7 +47,7 @@ internal sealed class WorkingTreeOverlay
     /// converges. <c>Structural</c> is an Effective row added or removed, which winners resweep on;
     /// <c>Touched</c> is every key whose rows moved.</summary>
     public (bool Structural, List<string> Touched) ProjectDocuments(
-        PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
+        PluginCopyKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         var structural = false;
         // The deltas' own keys are named whether or not their bytes moved: the caller asked about
@@ -60,14 +60,14 @@ internal sealed class WorkingTreeOverlay
 
     // Returns true when it added or removed an Effective row — a structural change, the only kind
     // that can move winner status. touched collects every key whose rows this call moved.
-    private bool ApplyOneWorkingTreeChange(PluginKey key, string formKey, string? body, ICollection<string> touched)
+    private bool ApplyOneWorkingTreeChange(PluginCopyKey key, string formKey, string? body, ICollection<string> touched)
     {
         // The committed bytes, wherever they currently live: the snapshot if this record already
         // diverged, else the still-clean Effective row itself. Reading through the Head relation is
         // what makes those two cases one question rather than two branches.
         var committedBody = DuckDbSql.ScalarString(_connection,
             $"SELECT body FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
 
         // Computed ahead of the guard because the guard must consult Effective too: a record that
         // never reached Head (straight off a materialization) is exactly as real here, and "no
@@ -104,7 +104,7 @@ internal sealed class WorkingTreeOverlay
             // references alike — while still answered at Head out of the snapshot. Dropping only the
             // document would leave the record resolvable and in the reference graph.
             DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin!);
+                formKey, key.Name, key.Origin);
             DeleteDerivationsForRecord(key, formKey);
             return existedBefore;
         }
@@ -116,7 +116,7 @@ internal sealed class WorkingTreeOverlay
             // is restored from the snapshot rather than updated.
             RestoreFromSnapshot(key, formKey);
             DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin!);
+                formKey, key.Name, key.Origin);
         }
         else
         {
@@ -127,18 +127,18 @@ internal sealed class WorkingTreeOverlay
         return !existedBefore;
     }
 
-    internal bool RowExistsAtEffective(PluginKey key, string formKey) =>
+    internal bool RowExistsAtEffective(PluginCopyKey key, string formKey) =>
         DuckDbSql.ScalarString(_connection, "SELECT form_key FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!) != null;
+            formKey, key.Name, key.Origin) != null;
 
-    internal bool RowExistsAtHead(PluginKey key, string formKey) =>
+    internal bool RowExistsAtHead(PluginCopyKey key, string formKey) =>
         DuckDbSql.ScalarString(_connection, $"SELECT form_key FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!) != null;
+            formKey, key.Name, key.Origin) != null;
 
     // A record at neither ref, materialized: the shape an embedded child re-derived out of a
     // container's document arrives in. Its caller has already established that neither ref holds it.
     private void MaterializeRecord(
-        PluginKey key, string formKey, string recordType, string body, ICollection<string> touched)
+        PluginCopyKey key, string formKey, string recordType, string body, ICollection<string> touched)
     {
         InsertNewWorkingTreeRow(key, formKey, recordType, body);
         RederiveIndexRowsForRecord(key, formKey, body, touched);
@@ -147,7 +147,7 @@ internal sealed class WorkingTreeOverlay
     // A create writes a row straight to `ref = working-tree` with nothing in records_committed; that
     // omission is what makes records_head answer nothing for this FormKey without the view knowing
     // about creation.
-    private void InsertNewWorkingTreeRow(PluginKey key, string formKey, string recordType, string body)
+    private void InsertNewWorkingTreeRow(PluginCopyKey key, string formKey, string recordType, string body)
     {
         // ADR-0009: no load_order_idx to carry into the row; this check only refuses a plugin the
         // registration doesn't know.
@@ -163,7 +163,7 @@ internal sealed class WorkingTreeOverlay
     // Both InsertNewWorkingTreeRow and SeedOneCommittedOnly write through this one column list in
     // one $-binding order, so the two cannot drift apart or leave a column off a row.
     private void InsertRecordRow(
-        PluginKey key, string table, string refValue, string formKey, string recordType, string body,
+        PluginCopyKey key, string table, string refValue, string formKey, string recordType, string body,
         string? parseDiagnosis)
     {
         using var cmd = _connection.CreateCommand();
@@ -173,7 +173,7 @@ internal sealed class WorkingTreeOverlay
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin });
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
         cmd.Parameters.Add(new DuckDBParameter { Value = SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body)) });
@@ -181,22 +181,22 @@ internal sealed class WorkingTreeOverlay
         cmd.ExecuteNonQuery();
     }
 
-    private bool IsRegisteredPlugin(PluginKey key) =>
+    private bool IsRegisteredPlugin(PluginCopyKey key) =>
         DuckDbSql.ScalarString(_connection,
-            $"SELECT plugin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!) != null;
+            $"SELECT plugin FROM {TableDdlBuilder.RegistrationsRelation} WHERE plugin = $1 AND origin = $2", key.Name, key.Origin) != null;
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
-    public void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
+    public void SetCommittedBaseline(PluginCopyKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
     {
         foreach (var (formKey, body) in baselines)
             SetOneCommittedBaseline(key, formKey, body);
     }
 
-    private void SetOneCommittedBaseline(PluginKey key, string formKey, string body)
+    private void SetOneCommittedBaseline(PluginCopyKey key, string formKey, string body)
     {
         var effectiveBody = DuckDbSql.ScalarString(_connection,
             "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         if (effectiveBody == null) return;
 
         if (string.Equals(effectiveBody, body, StringComparison.Ordinal))
@@ -204,11 +204,11 @@ internal sealed class WorkingTreeOverlay
             // The working tree agrees with the new commit, so the record is clean and there is no
             // snapshot to keep — the ordinary "the user committed their edit in a terminal" case.
             DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin!);
+                formKey, key.Name, key.Origin);
             DuckDbSql.ExecuteFor(_connection, $"""
                 UPDATE mirror.records SET "ref" = '{SourceRef.Committed}'
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
-                """, formKey, key.Name, key.Origin!);
+                """, formKey, key.Name, key.Origin);
             return;
         }
 
@@ -220,15 +220,15 @@ internal sealed class WorkingTreeOverlay
             UPDATE mirror.records_committed
             SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin!, body, SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body)));
+            """, formKey, key.Name, key.Origin, body, SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body)));
         DuckDbSql.ExecuteFor(_connection, $"""
             UPDATE mirror.records SET "ref" = '{SourceRef.WorkingTree}'
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin!);
+            """, formKey, key.Name, key.Origin);
     }
 
     /// <summary>See <see cref="IRecordIndex.MarkWorkingTreeOnly"/>.</summary>
-    public void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys)
+    public void MarkWorkingTreeOnly(PluginCopyKey key, IReadOnlyList<string> formKeys)
     {
         foreach (var formKey in formKeys)
         {
@@ -236,22 +236,22 @@ internal sealed class WorkingTreeOverlay
             // has one, and a stale snapshot would keep answering at Head through records_head's UNION —
             // the state this method exists to end.
             DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin!);
+                formKey, key.Name, key.Origin);
             DuckDbSql.ExecuteFor(_connection, $"""
                 UPDATE mirror.records SET "ref" = '{SourceRef.WorkingTree}'
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
-                """, formKey, key.Name, key.Origin!);
+                """, formKey, key.Name, key.Origin);
         }
     }
 
     /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>.</summary>
-    public void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
+    public void SeedCommittedOnly(PluginCopyKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
     {
         foreach (var (formKey, recordType, body) in records)
             SeedOneCommittedOnly(key, formKey, recordType, body);
     }
 
-    private void SeedOneCommittedOnly(PluginKey key, string formKey, string recordType, string body)
+    private void SeedOneCommittedOnly(PluginCopyKey key, string formKey, string recordType, string body)
     {
         if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
 
@@ -268,7 +268,7 @@ internal sealed class WorkingTreeOverlay
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing
     // on every later edit of the same record — so the snapshot always holds the *committed* bytes,
     // never the previous working-tree ones.
-    private void SnapshotCommittedIfFirstDivergence(PluginKey key, string formKey)
+    private void SnapshotCommittedIfFirstDivergence(PluginCopyKey key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, $"""
             INSERT INTO mirror.records_committed ({RecordColumnList})
@@ -277,21 +277,21 @@ internal sealed class WorkingTreeOverlay
               AND NOT EXISTS (
                 SELECT 1 FROM mirror.records_committed c
                 WHERE c.form_key = r.form_key AND c.plugin = r.plugin AND c.origin = r.origin)
-            """, formKey, key.Name, key.Origin!);
+            """, formKey, key.Name, key.Origin);
     }
 
-    private void RestoreFromSnapshot(PluginKey key, string formKey)
+    private void RestoreFromSnapshot(PluginCopyKey key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         DuckDbSql.ExecuteFor(_connection, $"""
             INSERT INTO mirror.records ({RecordColumnList})
             SELECT {RecordColumnList} FROM mirror.records_committed
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin!);
+            """, formKey, key.Name, key.Origin);
     }
 
-    private void UpsertEffectiveBody(PluginKey key, string formKey, string body)
+    private void UpsertEffectiveBody(PluginCopyKey key, string formKey, string body)
     {
         var contentHash = SourceRepository.ContentHash(Encoding.UTF8.GetBytes(body));
 
@@ -299,7 +299,7 @@ internal sealed class WorkingTreeOverlay
         // Effective row) and then edited back to a different value, so the row is restored from the
         // snapshot first when missing.
         if (DuckDbSql.ScalarString(_connection, "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-                formKey, key.Name, key.Origin!) == null)
+                formKey, key.Name, key.Origin) == null)
         {
             RestoreFromSnapshot(key, formKey);
         }
@@ -314,18 +314,18 @@ internal sealed class WorkingTreeOverlay
                 editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """;
-        DuckDbSql.AddParams(cmd, [formKey, key.Name, key.Origin!, body, contentHash]);
+        DuckDbSql.AddParams(cmd, [formKey, key.Name, key.Origin, body, contentHash]);
         cmd.ExecuteNonQuery();
     }
 
     // ADR-0007: the extracted tables are derived from the document, never written independently of
     // it. Rebuilt for one record through the same collectors ingest uses, so an edit cannot leave
     // derived answers describing bytes that are gone.
-    private void RederiveIndexRowsForRecord(PluginKey key, string formKey, string body, ICollection<string> touched)
+    private void RederiveIndexRowsForRecord(PluginCopyKey key, string formKey, string body, ICollection<string> touched)
     {
         var recordType = DuckDbSql.ScalarString(_connection,
             "SELECT record_type FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         if (recordType == null || !_schemas.TryGetValue(recordType, out var schema)) return;
 
         // form_lookup is *updated*, not delete-then-inserted: record_type cannot change, so editor_id
@@ -334,7 +334,7 @@ internal sealed class WorkingTreeOverlay
         DuckDbSql.ExecuteFor(_connection, """
             UPDATE mirror.form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            """, formKey, key.Name, key.Origin!, body);
+            """, formKey, key.Name, key.Origin, body);
 
         // The row is absent when this record was deleted in the working tree and has come back — the
         // one case where there is nothing to update.
@@ -346,7 +346,7 @@ internal sealed class WorkingTreeOverlay
               AND NOT EXISTS (
                 SELECT 1 FROM mirror.form_lookup l
                 WHERE l.form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin)
-            """, formKey, key.Name, key.Origin!);
+            """, formKey, key.Name, key.Origin);
 
         // The header carries no reference graph (masters are a plugin-dependency list, not FormKey
         // references), and a ModHeader cannot go through the per-record codec below, so this stops
@@ -372,7 +372,7 @@ internal sealed class WorkingTreeOverlay
         {
             using var refAppender = _connection.CreateAppender("mirror", "form_references");
             foreach (var r in refs)
-                PluginIngest.AppendFormReference(refAppender, r, key.Name, key.Origin!);
+                PluginIngest.AppendFormReference(refAppender, r, key.Name, key.Origin);
         }
 
         // placement/cell_location/container_child track Effective the same way
@@ -401,7 +401,7 @@ internal sealed class WorkingTreeOverlay
     // The children last recorded under this container. embeddedIn names the container's type and
     // keeps only the children its document carries; null takes every child, the set a deleted
     // directory held.
-    private List<string> ChildrenRecorded(PluginKey key, string parentFormKey, string? embeddedIn)
+    private List<string> ChildrenRecorded(PluginCopyKey key, string parentFormKey, string? embeddedIn)
     {
         var recorded = new List<string>();
         using var cmd = _connection.CreateCommand();
@@ -414,7 +414,7 @@ internal sealed class WorkingTreeOverlay
             SELECT child_form_key, slot_name, NULL FROM mirror.container_child
             WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3
             """;
-        DuckDbSql.AddParams(cmd, [parentFormKey, key.Name, key.Origin!]);
+        DuckDbSql.AddParams(cmd, [parentFormKey, key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
@@ -426,7 +426,7 @@ internal sealed class WorkingTreeOverlay
         return recorded;
     }
 
-    private bool HeldByAnotherContainer(PluginKey key, string childFormKey, string thisParentFormKey) =>
+    private bool HeldByAnotherContainer(PluginCopyKey key, string childFormKey, string thisParentFormKey) =>
         DuckDbSql.ScalarString(_connection, """
             SELECT form_key FROM mirror.placement
             WHERE form_key = $1 AND parent_cell <> $2 AND plugin = $3 AND origin = $4
@@ -437,13 +437,13 @@ internal sealed class WorkingTreeOverlay
             SELECT child_form_key FROM mirror.container_child
             WHERE child_form_key = $1 AND parent_form_key <> $2 AND plugin = $3 AND origin = $4
             LIMIT 1
-            """, childFormKey, thisParentFormKey, key.Name, key.Origin!) != null;
+            """, childFormKey, thisParentFormKey, key.Name, key.Origin) != null;
 
     // An embedded child's own row is a projection of its container's document, like its placement
     // row: serialized out of the container's graph through the codec ingest uses. No schema, no
     // row, as at ingest.
     private void DeriveEmbeddedChildRows(
-        PluginKey key, string containerType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
+        PluginCopyKey key, string containerType, IReadOnlyList<ContainerDocuments.ChildDocument> children,
         ICollection<string> touched)
     {
         foreach (var child in children)
@@ -462,15 +462,15 @@ internal sealed class WorkingTreeOverlay
         }
     }
 
-    private string? EffectiveBody(PluginKey key, string formKey) =>
+    private string? EffectiveBody(PluginCopyKey key, string formKey) =>
         DuckDbSql.ScalarString(_connection, "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
 
     // A container's child set and slot order live in its body, so a delete-then-insert per (parent,
     // table) is correct by construction. An embedded child that is itself a container derives its
     // own containment through its own row.
     private void RederiveContainmentForRecord(
-        PluginKey key, string formKey, string recordType, string containerType,
+        PluginCopyKey key, string formKey, string recordType, string containerType,
         IReadOnlyList<ContainerDocuments.ChildDocument> children)
     {
         // Two spellings of the type: the CLR name (Cell) is what CoveredByPlacementTables and the
@@ -504,58 +504,58 @@ internal sealed class WorkingTreeOverlay
         }
 
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         if (containerChildRows.Count > 0)
         {
             using var appender = _connection.CreateAppender("mirror", "container_child");
             foreach (var row in containerChildRows)
-                PluginIngest.AppendContainerChildRow(appender, row, key.Name, key.Origin!);
+                PluginIngest.AppendContainerChildRow(appender, row, key.Name, key.Origin);
         }
 
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         if (placementRows.Count > 0)
         {
             using var appender = _connection.CreateAppender("mirror", "placement");
             foreach (var row in placementRows)
-                PluginIngest.AppendPlacementRow(appender, row, key.Name, key.Origin!);
+                PluginIngest.AppendPlacementRow(appender, row, key.Name, key.Origin);
         }
 
         if (topCellRow is not { } cellRow) return;
 
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
-            cellRow.CellFormKey, key.Name, key.Origin!);
+            cellRow.CellFormKey, key.Name, key.Origin);
         using var cellLocationAppender = _connection.CreateAppender("mirror", "cell_location");
-        PluginIngest.AppendCellLocationRow(cellLocationAppender, cellRow, key.Name, key.Origin!);
+        PluginIngest.AppendCellLocationRow(cellLocationAppender, cellRow, key.Name, key.Origin);
     }
 
-    private void DeleteDerivationsForRecord(PluginKey key, string formKey)
+    private void DeleteDerivationsForRecord(PluginCopyKey key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         DeleteFormReferencesForRecord(key, formKey);
         DeleteContainmentForRecord(key, formKey);
     }
 
-    private void DeleteFormReferencesForRecord(PluginKey key, string formKey) =>
+    private void DeleteFormReferencesForRecord(PluginCopyKey key, string formKey) =>
         DuckDbSql.ExecuteFor(_connection,
             "DELETE FROM mirror.form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
 
     // Its own facts plus, as a backstop, whatever names it as a parent: DeleteRecord's descendant
     // cascade already gives every descendant its own null-body delta, so a deleted container's
     // children lose their rows via their own deletion.
-    private void DeleteContainmentForRecord(PluginKey key, string formKey)
+    private void DeleteContainmentForRecord(PluginCopyKey key, string formKey)
     {
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE child_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
         DuckDbSql.ExecuteFor(_connection, "DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
     }
 }

@@ -32,6 +32,6 @@ internal static class Envelopes
 
     /// <summary>A set of one top-level member: the gesture most tests make.</summary>
     internal static RecordEditResult Set(
-        this EditRecordHandler handler, PluginKey plugin, string formKey, string member, JsonElement value) =>
+        this EditRecordHandler handler, PluginCopyKey plugin, string formKey, string member, JsonElement value) =>
         handler.Edit(plugin, formKey, SetAt(value, Member(member)));
 }

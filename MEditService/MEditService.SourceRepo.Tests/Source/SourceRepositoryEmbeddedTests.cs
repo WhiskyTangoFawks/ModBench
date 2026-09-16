@@ -18,7 +18,7 @@ namespace MEditService.Tests.Source;
 public sealed class SourceRepositoryEmbeddedTests : IDisposable
 {
     private const string PluginName = "Embedded.esp";
-    private static readonly PluginKey Plugin = new(PluginName, "EmbeddedMod");
+    private static readonly PluginCopyKey Plugin = new(PluginName, "EmbeddedMod");
     private static readonly GameRelease Release = GameRelease.Fallout4;
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-embedded-").FullName;

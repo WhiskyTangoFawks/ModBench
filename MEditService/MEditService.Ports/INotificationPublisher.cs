@@ -19,19 +19,19 @@ public abstract record Notification(string Kind)
 
 /// <summary>A projection landed: Keys changed in Plugin, and Sequence is the Index's projection
 /// sequence right after — a subscriber re-reads once its own read catches up to it.</summary>
-public sealed record RowsChangedNotification(PluginKey Plugin, IReadOnlyList<string> Keys, long Sequence)
+public sealed record RowsChangedNotification(PluginCopyKey Plugin, IReadOnlyList<string> Keys, long Sequence)
     : Notification("rows-changed")
 {
-    public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin ?? "", Keys, Sequence);
+    public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, Keys, Sequence);
 }
 
 /// <summary>The plugin watcher re-indexed or removed a whole binary (ADR-0009) — too many rows to
 /// name, so this names the plugin instead.</summary>
-public sealed record PluginChangedNotification(PluginKey Plugin, long Sequence)
+public sealed record PluginChangedNotification(PluginCopyKey Plugin, long Sequence)
     : Notification("plugin-changed")
 {
     // Empty Keys: whole plugin, not named rows.
-    public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin ?? "", [], Sequence);
+    public override NotificationEvent ToEvent() => new(Kind, Plugin.Name, Plugin.Origin, [], Sequence);
 }
 
 /// <summary>The Index's <see cref="LoadOrderStatus"/> whenever it changes — reconciling through to

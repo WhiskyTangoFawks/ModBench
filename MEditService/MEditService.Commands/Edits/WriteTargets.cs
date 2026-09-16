@@ -33,7 +33,7 @@ internal sealed class WriteTargets(
 
     // The working tree is the only thing asked (ADR-0015 invariant 5): a second edit builds on the
     // first, and no document comes from the Index. The copy gestures read the source instead.
-    internal RecordEditResult? ResolveEditTarget(PluginKey plugin, string formKey, out EditTarget target)
+    internal RecordEditResult? ResolveEditTarget(PluginCopyKey plugin, string formKey, out EditTarget target)
     {
         target = default;
 
@@ -84,7 +84,7 @@ internal sealed class WriteTargets(
     // its own record. The text is read before anything is written, because a record the codec cannot
     // read would land as a stub.
     internal RecordEditResult? ResolveCopySource(
-        PluginKey destinationPlugin, PluginKey sourcePlugin, string formKey, out CopyTarget target)
+        PluginCopyKey destinationPlugin, PluginCopyKey sourcePlugin, string formKey, out CopyTarget target)
     {
         target = default;
 
@@ -126,7 +126,7 @@ internal sealed class WriteTargets(
     // INVARIANT: every write gesture — the six record gestures and compile — enters here first, and
     // this is the only place the deferral refusal is raised. A write that bypasses it is not refused
     // while a question is unanswered.
-    internal RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder, out SourceRepository repository)
+    internal RecordEditResult? RefuseIfBlocked(PluginCopyKey plugin, out string modFolder, out SourceRepository repository)
     {
         modFolder = "";
         repository = null!;
@@ -161,7 +161,7 @@ internal sealed class WriteTargets(
 
     // Two refusals, because there are two different ways out and a message that named neither
     // would be silent dead UI.
-    private RecordEditResult RefuseUntracked(PluginKey plugin) =>
+    private RecordEditResult RefuseUntracked(PluginCopyKey plugin) =>
         loadOrder.Current.ModFolderOf(plugin) is null
             ? RecordEditResult.Refused(
                 RecordEditRefusal.PluginHasNoModFolder,
@@ -176,7 +176,7 @@ internal sealed class WriteTargets(
     // Everything the allocator needs about one plugin, read from its tree once per gesture: a
     // per-child re-read would walk the whole tree again for every key drawn.
     public readonly record struct Allocator(
-        PluginKey Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
+        PluginCopyKey Plugin, GameRelease Release, bool IsLight, bool EslFlagIsRemovable,
         IReadOnlySet<string> Effective, IReadOnlySet<string> Head)
     {
         public bool HoldsAtEitherRef(string formKey) => Effective.Contains(formKey) || Head.Contains(formKey);
@@ -186,7 +186,7 @@ internal sealed class WriteTargets(
 
     // A tracked copy allocates from its source tree; an untracked one has none, so the Plugin
     // adapter answers from its own bytes.
-    internal Allocator AllocatorFor(RegisteredCopy copy, PluginKey plugin)
+    internal Allocator AllocatorFor(RegisteredCopy copy, PluginCopyKey plugin)
     {
         if (loadOrder.Current.ModFolderOf(plugin) is { } modFolder
             && SourceRepository.Open(modFolder, loadOrder.Current.GameRelease) is { } repository)
@@ -203,7 +203,7 @@ internal sealed class WriteTargets(
 
     // Both refs from the tree alone (ADR-0015 invariant 5): the working tree, plus HEAD, whose IDs a
     // working-tree deletion has not freed until the plugin is compiled.
-    internal Allocator AllocatorOver(SourceRepository repository, PluginKey plugin) =>
+    internal Allocator AllocatorOver(SourceRepository repository, PluginCopyKey plugin) =>
         AllocatorOver(
             plugin,
             IsLightByRemovableFlag(repository, plugin),
@@ -212,7 +212,7 @@ internal sealed class WriteTargets(
 
     // A .esl extension also reads as light, and no header edit can un-flag that one.
     private Allocator AllocatorOver(
-        PluginKey plugin, bool byRemovableFlag, IReadOnlySet<string> effective, IReadOnlySet<string> head) =>
+        PluginCopyKey plugin, bool byRemovableFlag, IReadOnlySet<string> effective, IReadOnlySet<string> head) =>
         new(plugin,
             loadOrder.Current.GameRelease,
             byRemovableFlag || plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase),
@@ -223,7 +223,7 @@ internal sealed class WriteTargets(
     // One allocator read per gesture, for the gestures that draw a single key. The embedded copy
     // draws several from one allocator and calls the overload below directly.
     internal RecordEditResult? ResolveTargetFormKey(
-        SourceRepository repository, PluginKey plugin, string? requestedFormKey, out string targetFormKey) =>
+        SourceRepository repository, PluginCopyKey plugin, string? requestedFormKey, out string targetFormKey) =>
         ResolveTargetFormKey(AllocatorOver(repository, plugin), requestedFormKey, out targetFormKey);
 
     // Non-null is the refusal; targetFormKey is "" then, so call sites need no second null-check.
@@ -271,7 +271,7 @@ internal sealed class WriteTargets(
 
     // The header document in the working tree is the truth (ADR-0007), so a flag flipped this session
     // caps minting immediately.
-    private static bool IsLightByRemovableFlag(SourceRepository repository, PluginKey plugin)
+    private static bool IsLightByRemovableFlag(SourceRepository repository, PluginCopyKey plugin)
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(plugin.Name));
         var header = repository.Get(plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, null));
@@ -281,7 +281,7 @@ internal sealed class WriteTargets(
     // A foreign ModKey would land a record inside this plugin's tree while claiming another origin,
     // indistinguishable from a corrupt override; xEdit never offers one either. Range is checked
     // after ownership.
-    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginKey plugin, bool isLight)
+    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginCopyKey plugin, bool isLight)
     {
         var parsed = FormKey.Factory(requestedFormKey);
         var requestedOwner = parsed.ModKey.FileName.String;
@@ -320,7 +320,7 @@ internal sealed class WriteTargets(
         return next > cap ? null : $"{next:X6}:{allocator.Plugin.Name}";
     }
 
-    internal static string FormKeySpaceExhaustedMessage(PluginKey plugin, bool isLight, bool eslContradiction = false)
+    internal static string FormKeySpaceExhaustedMessage(PluginCopyKey plugin, bool isLight, bool eslContradiction = false)
     {
         if (eslContradiction)
         {
@@ -341,7 +341,7 @@ internal sealed class WriteTargets(
     /// <summary>A source unit's leaf name carries its record's EditorID, so an EditorID change moves
     /// the unit. Never a gesture's only write, so a crash on either side of it leaves the record
     /// findable by FormKey.</summary>
-    internal void RenameTo(SourceRepository repository, PluginKey plugin, RecordIdentity target, string? newEditorId)
+    internal void RenameTo(SourceRepository repository, PluginCopyKey plugin, RecordIdentity target, string? newEditorId)
     {
         if (repository.Rename(plugin, target, newEditorId) is { } newLeaf && logger.IsEnabled(LogLevel.Information))
         {

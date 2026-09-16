@@ -18,7 +18,7 @@ public class WorldspaceQueryServiceTests
         IReadOnlyList<RecordSummary>? records = null,
         CellReferences? cellRefs = null) : IRecordReads
     {
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey)
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginCopyKey plugin, string worldspaceFormKey)
         {
             LastGetWorldspaceCellsOrigin = plugin.Origin;
             return cells;
@@ -34,36 +34,36 @@ public class WorldspaceQueryServiceTests
 
         public PagedResult<RecordSummary> Search(RecordQuery query)
         {
-            LastSearchOrigin = query.Plugin?.Origin;
+            LastSearchOrigin = query.Origin;
             return new(records ?? [], (records ?? []).Count);
         }
-        public IReadOnlyDictionary<PluginKey, PluginContent> OpenedCopies =>
-            new Dictionary<PluginKey, PluginContent>();
+        public IReadOnlyDictionary<PluginCopyKey, PluginContent> OpenedCopies =>
+            new Dictionary<PluginCopyKey, PluginContent>();
         public RecordDocument? GetDocument(string formKey) => null;
-        public RecordDocument? GetDocument(string formKey, PluginKey plugin) => null;
-        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => [];
+        public RecordDocument? GetDocument(string formKey, PluginCopyKey plugin) => null;
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginCopyKey plugin) => [];
         public RecordOverrides? GetOverrideStack(string formKey) => null;
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => [];
+        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginCopyKey plugin) => [];
         public RecordLookupEntry? Resolve(string formKey) => null;
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlySet<string> GetPluginsWithParseFailures() => new HashSet<string>();
-        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginKey p) => new HashSet<string>();
+        public IReadOnlySet<string> GetWorldspacesWithFailuresBelow(PluginCopyKey p) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
-        public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => [];
-        public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int l, int o)
+        public IReadOnlyList<string> GetNativeFormKeys(PluginCopyKey plugin) => [];
+        public PagedResult<CellSummary> GetInteriorCells(PluginCopyKey plugin, int l, int o)
         {
             LastGetInteriorCellsOrigin = plugin.Origin;
             return new(cells.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY)).ToList(), cells.Count);
         }
-        public CellReferences GetCellReferences(PluginKey plugin, string fk)
+        public CellReferences GetCellReferences(PluginCopyKey plugin, string fk)
         {
             LastGetCellReferencesOrigin = plugin.Origin;
             return cellRefs ?? new([], []);
         }
-        public PlacementRow? GetPlacement(string formKey, PluginKey plugin) => null;
-        public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) => null;
-        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) => [];
-        public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
+        public PlacementRow? GetPlacement(string formKey, PluginCopyKey plugin) => null;
+        public CellLocationRow? GetCellLocation(PluginCopyKey plugin, string cellFormKey) => null;
+        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginCopyKey plugin, string parentFormKey) => [];
+        public ContainerChildRow? GetContainerParent(PluginCopyKey plugin, string childFormKey) => null;
     }
 
     // The reads' presence is what "no load order" means for the Index side; this service takes

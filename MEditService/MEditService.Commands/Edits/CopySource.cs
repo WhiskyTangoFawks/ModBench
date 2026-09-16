@@ -12,7 +12,7 @@ namespace MEditService.Commands.Edits;
 /// answers from its working tree, an untracked one from the loaded copy through the codec. One per
 /// gesture, not thread-safe.</summary>
 internal sealed class CopySource(
-    PluginKey plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, RecordTextCodec codec, SchemaReflector schemaReflector)
+    PluginCopyKey plugin, LoadOrderSnapshot loadOrder, IPluginAdapter adapter, RecordTextCodec codec, SchemaReflector schemaReflector)
     : IDisposable
 {
     private readonly GameRelease _release = loadOrder.GameRelease;
@@ -31,7 +31,7 @@ internal sealed class CopySource(
     private IPluginRecordLookup? _loaded;
     private bool _opened;
 
-    internal PluginKey Plugin => plugin;
+    internal PluginCopyKey Plugin => plugin;
 
     /// <summary>The record type and EditorID this plugin's copy names <paramref name="formKey"/>, or
     /// null when it holds nothing under that key.</summary>

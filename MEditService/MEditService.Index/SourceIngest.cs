@@ -25,7 +25,7 @@ internal static class SourceIngest
     /// claims no file backs them.</summary>
     internal static void Ingest(
         IRecordIndex index, string modFolder, Registration registration,
-        PluginKey key, string? binaryPath, GameRelease gameRelease, SchemaReflector schemaReflector,
+        PluginCopyKey key, string? binaryPath, GameRelease gameRelease, SchemaReflector schemaReflector,
         ILogger logger, CancellationToken cancel = default)
     {
         cancel.ThrowIfCancellationRequested();
@@ -53,7 +53,7 @@ internal static class SourceIngest
     // Moves the dirty records back onto HEAD, as the tree's own dirt reports each of them: a record
     // still there with committed text behind it, one the tree has gained, one it has lost.
     private static void ReconcileHead(
-        IRecordIndex index, SourceRepository repository, PluginKey key,
+        IRecordIndex index, SourceRepository repository, PluginCopyKey key,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, ILogger logger)
     {
         var dirt = repository.DirtOf(key);
@@ -98,7 +98,7 @@ internal static class SourceIngest
     // (ADR-0003). A schema-unpublished type is skipped on the deletion side only: a
     // Head-only row for it could never be read back.
     private static void ReconcileHeadStructurally(
-        SourceRepository repository, PluginKey key,
+        SourceRepository repository, PluginCopyKey key,
         IReadOnlyDictionary<string, RecordTableSchema> schemas, ILogger logger,
         List<(string FormKey, string Body)> baselines,
         List<string> workingTreeOnly,
@@ -156,7 +156,7 @@ internal static class SourceIngest
     // The header is left out because the flat pass above already reconciles it by name: no text in the
     // tree carries the FormKey the index files it under.
     private static IEnumerable<PluginDocument> CommittedDocuments(
-        SourceRepository repository, PluginKey key, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        SourceRepository repository, PluginCopyKey key, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(key.Name));
         return repository.DocumentsAt(key, "HEAD", schemas)

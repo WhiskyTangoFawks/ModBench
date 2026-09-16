@@ -269,7 +269,7 @@ public sealed class PrimitiveListEditTests : IDisposable
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-699-game-").FullName;
         private readonly string _modFolder;
 
-        public PluginKey Plugin { get; } = new(PluginName, Origin);
+        public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
         public LoadOrderSnapshot LoadOrder { get; }
         public EditRecordHandler EditHandler { get; }
         public FormKey Race { get; }

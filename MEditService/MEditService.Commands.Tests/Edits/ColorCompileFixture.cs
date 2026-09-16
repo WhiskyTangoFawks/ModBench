@@ -24,7 +24,7 @@ public sealed class ColorCompileFixture : IDisposable
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-649-game-").FullName;
 
     public string ModFolder => _modFolder;
-    public PluginKey Plugin { get; } = new(PluginName, Origin);
+    public PluginCopyKey Plugin { get; } = new(PluginName, Origin);
     public LoadOrderSnapshot LoadOrder { get; }
     public EditRecordHandler EditHandler { get; }
 

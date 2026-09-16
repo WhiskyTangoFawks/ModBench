@@ -29,7 +29,7 @@ public sealed class IndexedModFixture : IDisposable
     public IndexProjector Index { get; }
 
     public LoadOrderHolder Holder { get; }
-    public PluginKey Plugin { get; }
+    public PluginCopyKey Plugin { get; }
 
     // PluginName unless a caller asked otherwise: ref-unsafe names need a real tracked load order.
     public string ActualPluginName { get; }
@@ -48,7 +48,7 @@ public sealed class IndexedModFixture : IDisposable
     {
         var holder = new LoadOrderHolder();
         ActualPluginName = pluginName;
-        Plugin = new PluginKey(pluginName, ModFolderOrigin);
+        Plugin = new PluginCopyKey(pluginName, ModFolderOrigin);
         InstanceRoot = Directory.CreateTempSubdirectory("medit-edit-instance-").FullName;
         ModFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", ModFolderOrigin)).FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-edit-game-").FullName;

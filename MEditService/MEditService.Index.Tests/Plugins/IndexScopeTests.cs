@@ -106,7 +106,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var count = manager.Reads!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
+        var count = manager.Reads!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 
         Assert.Equal(TestPluginFixture.RecordCount, count);
@@ -136,7 +136,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
 
         Assert.Null(manager.Reads);
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NowMatches";
             onDisk.WriteToBinary(pluginPath);
 
-            var pluginKey = new PluginKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
+            var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             await manager.ReindexPlugin(pluginKey);
 
             var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
@@ -253,7 +253,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NoLongerMatches";
             onDisk.WriteToBinary(pluginPath);
 
-            var pluginKey = new PluginKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
+            var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             await manager.ReindexPlugin(pluginKey);
 
             var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
@@ -286,7 +286,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             manager.SetFilter("SELECT form_key FROM npc_");
             faulting.FaultNextCall = true;
 
-            var pluginKey = new PluginKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
+            var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             var ex = await Record.ExceptionAsync(() => manager.ReindexPlugin(pluginKey));
 
             Assert.Null(ex);
@@ -380,7 +380,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
 
 
@@ -395,7 +395,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Dispose();
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
 
 

@@ -132,7 +132,7 @@ public sealed class CreateRecordHandlerTests
     {
         using var mod = SourceEditFixture.Tracked();
 
-        var result = mod.PeekHandler.PeekNextFreeFormKey(new PluginKey("NotRegistered.esp", "NoSuchMod"));
+        var result = mod.PeekHandler.PeekNextFreeFormKey(new PluginCopyKey("NotRegistered.esp", "NoSuchMod"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);

@@ -56,7 +56,7 @@ public sealed class RegisteredPluginSpellingTests
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-spelling-game-").FullName;
 
         public string ModFolder { get; }
-        internal PluginKey Plugin { get; } = new(PluginName, Origin);
+        internal PluginCopyKey Plugin { get; } = new(PluginName, Origin);
         internal LoadOrderSnapshot LoadOrder { get; }
 
         internal ModFolderScratch()

@@ -26,7 +26,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     private readonly string _targetFolder;
     private readonly string _referrerFolder;
     private readonly LoadOrderSnapshot _loadOrder;
-    private readonly PluginKey _referrer = new(ReferrerName, ReferrerOrigin);
+    private readonly PluginCopyKey _referrer = new(ReferrerName, ReferrerOrigin);
     private readonly string _targetPath;
     private readonly string _referrerPath;
     private readonly FormKey _embeddedTarget;
@@ -66,7 +66,7 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             ]));
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
-        trackService.TrackAsync(_loadOrder, [new PluginKey(TargetName, TargetOrigin)], TargetOrigin, SourcePreset.Edits)
+        trackService.TrackAsync(_loadOrder, [new PluginCopyKey(TargetName, TargetOrigin)], TargetOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
         trackService.TrackAsync(_loadOrder, [_referrer], ReferrerOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();

@@ -17,7 +17,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     /// <summary>One comparison per source document, so a clean plugin costs one read per file. An
     /// embedded child's system of record is its owner's document, so a matching document vouches for
     /// every row derived from it.</summary>
-    internal ValidationReport Validate(PluginKey key, string modFolder)
+    internal ValidationReport Validate(PluginCopyKey key, string modFolder)
     {
         var failures = new List<string>();
         var sourceRoot = Path.Combine(modFolder, SourceRepository.RootFor(key.Name));
@@ -72,7 +72,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
     // The committed half, from one ls-tree rather than a git process per record: a document whose
     // bytes are still a blob in that listing is clean at HEAD. Returns what the listing proves gone.
     private List<string> ValidateCommitted(
-        PluginKey key, string modFolder, IEnumerable<string> documents, HashSet<string> drifted, List<string> failures)
+        PluginCopyKey key, string modFolder, IEnumerable<string> documents, HashSet<string> drifted, List<string> failures)
     {
         var goneAtHead = new List<string>();
 
@@ -139,10 +139,10 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
 
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
 
-    private string? HeadBody(PluginKey key, string formKey) =>
+    private string? HeadBody(PluginCopyKey key, string formKey) =>
         DuckDbSql.ScalarString(connection,
             "SELECT body FROM records_head WHERE form_key = $1 AND plugin = $2 AND origin = $3",
-            formKey, key.Name, key.Origin!);
+            formKey, key.Name, key.Origin);
 
     // Keyed by the FormKey the document declares, never by its path: a file name carries an EditorID
     // that may contain the separator, so a path is not a decidable identity.
@@ -189,7 +189,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
 
     // A worldspace's TopCell is the one cell embedded rather than filed, and PlacementWalker leaves
     // its block coordinates null — what tells it from an exterior cell, which has a directory.
-    private Dictionary<string, string> HeldDocuments(PluginKey key)
+    private Dictionary<string, string> HeldDocuments(PluginCopyKey key)
     {
         var documents = new Dictionary<string, string>(StringComparer.Ordinal);
         using var cmd = connection.CreateCommand();
@@ -208,7 +208,7 @@ internal sealed class SourceValidation(DuckDbRecordIndex index, DuckDBConnection
                 WHERE l.cell_form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin
                   AND l.parent_worldspace IS NOT NULL AND l.block_x IS NULL)
             """;
-        DuckDbSql.AddParams(cmd, [key.Name, key.Origin!]);
+        DuckDbSql.AddParams(cmd, [key.Name, key.Origin]);
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
             documents[reader.GetString(0)] = reader.GetString(1);

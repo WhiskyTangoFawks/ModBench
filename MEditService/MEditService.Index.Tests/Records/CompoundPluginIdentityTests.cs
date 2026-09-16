@@ -45,8 +45,8 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
 
@@ -62,10 +62,10 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString(), new PluginKey("Shared.esp", "ModA"));
+        var record = repo.At(RecordRef.Effective).GetDocument(npcKey.ToString(), new PluginCopyKey("Shared.esp", "ModA"));
 
         Assert.NotNull(record);
         Assert.Equal("FromModA", record.EditorId);
@@ -79,12 +79,12 @@ public class CompoundPluginIdentityTests
         var (modA, modB, _) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Shared.esp", "ModA"))
+        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey("Shared.esp", "ModA"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginKey("Shared.esp", "ModB"))
+        Assert.Equal(1, repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey("Shared.esp", "ModB"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -101,11 +101,11 @@ public class CompoundPluginIdentityTests
         var secondKey = modB.Npcs.AddNew("SecondOnlyInModB").FormKey;
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var modAKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginKey("Shared.esp", "ModA"));
-        var modBKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginKey("Shared.esp", "ModB"));
+        var modAKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginCopyKey("Shared.esp", "ModA"));
+        var modBKeys = repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginCopyKey("Shared.esp", "ModB"));
 
         Assert.Single(modAKeys);
         Assert.Equal(sharedFirstKey.ToString(), modAKeys[0]);
@@ -120,10 +120,10 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var modAResult = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("Shared.esp", "ModA"), Limit: 100, Offset: 0));
+        var modAResult = repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: "Shared.esp", Origin: "ModA", Limit: 100, Offset: 0));
 
         var item = Assert.Single(modAResult.Items);
         Assert.Equal(npcKey.ToString(), item.FormKey);
@@ -140,8 +140,8 @@ public class CompoundPluginIdentityTests
         // ModB sits later in its own load order and would compute as winner if UpdateWinners' join
         // matched by filename alone: ModA's participation is a different origin's row and must not
         // leak.
-        repo.IndexMod(modA, Registration.Participating(1), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Disabled(5), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(1), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Disabled(5), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
@@ -189,8 +189,8 @@ public class CompoundPluginIdentityTests
         Assert.Equal(npcKeyA, npcKeyB);
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         Assert.Equal(2L, Count(repo, "cell_location", "cell_form_key", cellKeyA.ToString()));
         Assert.Equal(2L, Count(repo, "placement", "form_key", placedKeyA.ToString()));
@@ -212,8 +212,8 @@ public class CompoundPluginIdentityTests
         var raceFormKey = modA.Races.First().FormKey.ToString();
 
         using var repo = OpenRepo();
-        repo.IndexMod(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.IndexMod(modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var refs = repo.At(RecordRef.Effective).GetReferencedBy(raceFormKey);
 

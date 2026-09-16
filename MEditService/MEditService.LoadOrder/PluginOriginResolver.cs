@@ -12,10 +12,10 @@ namespace MEditService.LoadOrder;
 // first-match returns the right plugin today only by accident of list order.
 public static class PluginOriginResolver
 {
-    public static string Resolve(LoadOrderSnapshot loadOrder, string plugin) =>
+    public static string Resolve(LoadOrderSnapshot loadOrder, PluginName plugin) =>
         loadOrder.Copies
             .FirstOrDefault(c =>
-                c.Registration.InLoadOrder && c.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase))
+                c.Registration.InLoadOrder && c.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
             ?.Origin
         ?? PluginOrigin.DataDirectory;
 }

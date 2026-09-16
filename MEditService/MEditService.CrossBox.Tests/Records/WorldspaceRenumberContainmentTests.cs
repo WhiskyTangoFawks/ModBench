@@ -23,7 +23,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     internal LoadOrderHolder Holder { get; } = new();
     private const string PluginName = "WorldspaceRenumber.esp";
     private const string Origin = "WorldspaceRenumberMod";
-    private readonly PluginKey _plugin = new(PluginName, Origin);
+    private readonly PluginCopyKey _plugin = new(PluginName, Origin);
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-wrld-renumber-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-wrld-renumber-game-").FullName;
     private readonly IndexProjector _index;

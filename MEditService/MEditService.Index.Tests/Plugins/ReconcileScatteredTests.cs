@@ -34,9 +34,9 @@ public sealed class ReconcileScatteredTests
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.NotNull(manager.Reads);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("A.esp", "Data"))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("B.esp", "Data"))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("B.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -78,7 +78,7 @@ public sealed class ReconcileScatteredTests
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Same(firstRepo, manager.Reads);
-        Assert.NotEmpty(firstRepo!.GetRecordTypeCounts(new PluginKey("A.esp", "Data")));
+        Assert.NotEmpty(firstRepo!.GetRecordTypeCounts(new PluginCopyKey("A.esp", "Data")));
     }
 
     // A single plugin whose binary data Mutagen can't parse (e.g.
@@ -100,9 +100,9 @@ public sealed class ReconcileScatteredTests
         manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.Contains(manager.Status.Failures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("Good.esp", "Data"))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginKey("Bad.esp", "Data"))
+        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("Bad.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // The failed plugin's own indexing throw must hit the `continue` in IndexProgressively's
         // catch, not fall through into the "recorded once Index() has returned" block below it —
@@ -125,7 +125,7 @@ public sealed class ReconcileScatteredTests
         : DelegatingRecordIndex(inner)
     {
         public override void Index(
-            IPluginDocuments documents, Registration registration, PluginKey key, string? filePath = null)
+            IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null)
         {
             if (key.Name.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
