@@ -1,7 +1,7 @@
 import type { ExternalChangeDialogAnswer } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
 import { isRefused, type UnansweredExternalChange, type RebaseResult } from '../medit/client';
-import type { ExternalChangeCoordinatorDeps } from '../medit/externalChangeCoordinator';
+import type { ExternalChangeCoordinatorDeps } from './externalChangeCoordinator';
 
 // The coordinator decides *when* to call this; this decides what each dialog answer does — Absorb
 // or Keep, origin-scoped (ADR-0003), so several plugins in one group share one call.

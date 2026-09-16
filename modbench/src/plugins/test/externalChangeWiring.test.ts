@@ -16,7 +16,7 @@ vi.mock('vscode', () => ({
   EventEmitter, TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor,
 }));
 
-vi.mock('../../medit/externalChangeCoordinator', () => ({
+vi.mock('../externalChangeCoordinator', () => ({
   subscribeQuestionOpen,
 }));
 

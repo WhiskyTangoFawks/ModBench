@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CrashRepairOffer } from '../client';
+import type { CrashRepairOffer } from '../../medit/client';
 import type { AskQuestion } from '../../dialog';
 import { present } from '../../present';
 import {
