@@ -70,8 +70,10 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_modFolder, recursive: true); } catch { /* best-effort cleanup */ }
-        try { Directory.Delete(_gameDirectory, recursive: true); } catch { /* best-effort cleanup */ }
+        try { Directory.Delete(_modFolder, recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup */ }
+        try { Directory.Delete(_gameDirectory, recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* best-effort cleanup */ }
     }
 
     private EditRecordHandler Service() => EditHandler;

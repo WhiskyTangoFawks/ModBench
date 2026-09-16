@@ -82,6 +82,11 @@ dotnet_diagnostic.CA1848.severity = none
 # itself does not carry, then rethrows so the boundary handler still turns it into a response.
 dotnet_diagnostic.S2139.severity = none
 
+# CA1031: a bare catch narrows to the exception it expects or converts the fault into the
+# operation's failure shape. No per-project or per-folder exemption; a catch with a `when` filter
+# is unaffected (a command handler's catch-all keeps its filter and its conversion to a refusal).
+dotnet_diagnostic.CA1031.severity = error
+
 # Complexity / maintainability rules — kept at `suggestion` (info). They never surface in normal build
 # output; the code-quality Stop hook (.claude/hooks/code-quality.py) reads them from a SARIF error log and
 # reports them per-turn, scoped to the files just changed, for per-instance triage. See /validate Step 3.

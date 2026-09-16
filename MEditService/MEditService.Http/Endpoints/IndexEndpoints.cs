@@ -68,7 +68,7 @@ public static class IndexEndpoints
             logger.LogWarning(ex, "No load order when reconciling the index");
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to reconcile the index");
             return Results.Problem(ex.Message, statusCode: 500);

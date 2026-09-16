@@ -22,7 +22,7 @@ public static class ContainerChildEndpoints
             {
                 return Results.Ok(svc.GetChildren(decodedPlugin, decodedFk, origin));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 logger.LogError(ex, "Failed to get container children for {Plugin} {FormKey}", decodedPlugin, decodedFk);
                 return Results.Problem(ex.Message);

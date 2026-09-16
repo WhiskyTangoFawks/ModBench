@@ -62,7 +62,7 @@ public sealed class ModFolderWatcher : IDisposable
         {
             Rearm(snapshot);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogError(ex, "Re-arming the watcher after a load order change failed unexpectedly");
         }
@@ -365,7 +365,7 @@ public sealed class ModFolderWatcher : IDisposable
                 if (report.NeedsRebuild) _notifications.Publish(new PluginChangedNotification(key, _index.Sequence));
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogWarning(ex,
                 "Could not validate {Plugin} after a watch overflow; it will be re-checked at the next reconcile",
@@ -477,7 +477,7 @@ public sealed class ModFolderWatcher : IDisposable
 
             ValidateWholeCopy(key);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogWarning(ex,
                 "Could not project the source change to {Plugin} ({Origin}); it will be re-checked at the " +
@@ -542,7 +542,7 @@ public sealed class ModFolderWatcher : IDisposable
             // — the same event Track's own reindex would raise if it went through here.
             _index.Announce(() => _notifications.Publish(new PluginChangedNotification(key, _index.Sequence)));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogWarning(ex,
                 "Could not project the on-disk change to {Plugin} ({Origin}) into the index; it will be retried " +
@@ -566,16 +566,16 @@ public sealed class ModFolderWatcher : IDisposable
         mod.Plugins.Values.FirstOrDefault(p => p.Path is { } path && fullPath.Equals(path, StringComparison.Ordinal));
 
     // Runs on the FileSystemWatcher's own thread or a timer callback, with no caller to catch
-    // anything.
-    private static void RaiseSafely(Action action)
+    // anything. Internal so a test can drive it without a live filesystem watch.
+    internal void RaiseSafely(Action action)
     {
         try
         {
             action();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            System.Diagnostics.Debug.WriteLine(ex);
+            _logger.LogError(ex, "A watcher callback failed unexpectedly");
         }
     }
 

@@ -181,7 +181,7 @@ internal static class PluginTrees
                 var mod = await DeserializeTree(treeRoot, cancel);
                 return (new CompiledTree(mod, codec, gameRelease), null, null);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 return (null, PluginDiagnosis.FromSourceReadException(ex, scratchDir), ex);
             }

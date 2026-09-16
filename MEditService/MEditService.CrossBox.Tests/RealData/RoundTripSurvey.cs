@@ -104,7 +104,7 @@ public sealed class RoundTripSurvey
                         if (unequal.Count > 0) foreach (var u in unequal) tally["model-differs:" + u.Split('x')[0]] = tally.GetValueOrDefault("model-differs:" + u.Split('x')[0]) + 1;
                         tally[unequal.Count == 0 ? "_model-equal" : "_model-differs"] = tally.GetValueOrDefault(unequal.Count == 0 ? "_model-equal" : "_model-differs") + 1;
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (ex is not OutOfMemoryException)
                     {
                         model = "model-reparse-error:" + ex.GetType().Name;
                         tally["_model-reparse-error"] = tally.GetValueOrDefault("_model-reparse-error") + 1;
@@ -135,7 +135,7 @@ public sealed class RoundTripSurvey
                         foreach (var k in cats.Keys) tally[k] = tally.GetValueOrDefault(k) + 1;
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
                     result = "error";
                     accept = "refuse:parse-error:" + ex.GetType().Name;
@@ -177,7 +177,7 @@ public sealed class RoundTripSurvey
             var db = b.AsSpan(y.DataStart, Math.Min(y.DataLen, b.Length - y.DataStart)).ToArray();
             var hdrEq = a.AsSpan(x.Start, 24).SequenceEqual(b.AsSpan(y.Start, 24));
             if (hdrEq && da.AsSpan().SequenceEqual(db)) continue;
-            if ((x.Flags & CompressedFlag) != 0) { try { da = PluginBinaryWalk.Inflate(da); db = PluginBinaryWalk.Inflate(db); } catch (Exception) { o.AppendLine("  inflate failed"); return; } }
+            if ((x.Flags & CompressedFlag) != 0) { try { da = PluginBinaryWalk.Inflate(da); db = PluginBinaryWalk.Inflate(db); } catch (Exception ex) when (ex is not OutOfMemoryException) { o.AppendLine("  inflate failed"); return; } }
             o.AppendLine(CultureInfo.InvariantCulture, $"  {x.Type} {x.FormId:X8} flags {x.Flags:X8}->{y.Flags:X8}  hdr {Convert.ToHexString(a, x.Start, 24)} / {Convert.ToHexString(b, y.Start, 24)}");
             var sa = PluginBinaryWalk.WalkSubrecords(da); var sb = PluginBinaryWalk.WalkSubrecords(db);
             o.AppendLine(CultureInfo.InvariantCulture, $"  original order : {string.Join(" ", sa.Select(t => t.Sig))}");
@@ -217,7 +217,7 @@ public sealed class RoundTripSurvey
             var text = lines.Count == 0 ? "(no False entries in mask)" : string.Join(" | ", lines);
             return text.Length > 600 ? text[..600] + "…" : text;
         }
-        catch (Exception ex) { return "(mask failed: " + ex.GetType().Name + ")"; }
+        catch (Exception ex) when (ex is not OutOfMemoryException) { return "(mask failed: " + ex.GetType().Name + ")"; }
     }
 
     private static string Csv(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
@@ -292,7 +292,7 @@ public sealed class RoundTripSurvey
                 if (compA != compB) { Add($"other:{x.Type}/compressed-flag"); continue; }
                 byte[] pa, pb;
                 try { pa = PluginBinaryWalk.Inflate(dataA); pb = PluginBinaryWalk.Inflate(dataB); }
-                catch (Exception) { Add($"other:{x.Type}/inflate-failed"); continue; }
+                catch (Exception ex) when (ex is not OutOfMemoryException) { Add($"other:{x.Type}/inflate-failed"); continue; }
                 if (pa.AsSpan().SequenceEqual(pb))
                 {
                     // header may differ only in dataSize (bytes 4..8) — derived from the stream

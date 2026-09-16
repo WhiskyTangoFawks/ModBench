@@ -28,7 +28,7 @@ public static class WorldspaceEndpoints
             {
                 return Results.Ok(svc.GetWorldspaceBlocks(decodedPlugin, decodedFk, origin));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 logger.LogError(ex, "Failed to get worldspace blocks for {Plugin} {FormKey}", decodedPlugin, decodedFk);
                 return Results.Problem(ex.Message);
@@ -51,7 +51,7 @@ public static class WorldspaceEndpoints
             {
                 return Results.Ok(svc.GetCellReferences(decodedPlugin, decodedFk, origin));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 logger.LogError(ex, "Failed to get cell references for {Plugin} {FormKey}", decodedPlugin, decodedFk);
                 return Results.Problem(ex.Message);
@@ -73,7 +73,7 @@ public static class WorldspaceEndpoints
             {
                 return Results.Ok(svc.GetInteriorCells(decoded, limit, offset, origin));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 logger.LogError(ex, "Failed to get interior cells for {Plugin}", decoded);
                 return Results.Problem(ex.Message);
@@ -98,7 +98,7 @@ public static class WorldspaceEndpoints
         {
             return Results.Ok(svc.GetWorldspaces(decoded, origin));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to get worldspaces for {Plugin}", decoded);
             return Results.Problem(ex.Message);

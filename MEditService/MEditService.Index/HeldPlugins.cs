@@ -119,7 +119,7 @@ internal sealed class HeldPlugins
             }
             return metadata;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogWarning(ex, "Failed to open plugin {FileName} ({Origin}); it is held in an error state", plugin.Name, plugin.Origin);
             SetFailure(plugin.Key, PluginLoadFailure.ReasonFor(ex));

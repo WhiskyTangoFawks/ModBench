@@ -142,7 +142,7 @@ try
 
     await app.RunAsync();
 }
-catch (Exception ex)
+catch (Exception ex) when (ex is not OutOfMemoryException)
 {
     Log.Fatal(ex, "Host terminated unexpectedly");
 }

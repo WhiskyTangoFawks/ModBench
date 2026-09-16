@@ -55,7 +55,7 @@ internal sealed class IndexStore : IDisposable
         {
             throw IndexHeldElsewhereException.For(_databasePath, ex);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             // Every other exception, not DuckDBException alone: what an unreadable file throws has
             // changed between DuckDB versions, and the answer is the same for all of them.

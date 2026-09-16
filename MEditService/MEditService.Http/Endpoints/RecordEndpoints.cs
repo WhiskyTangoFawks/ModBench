@@ -397,7 +397,7 @@ public static class RecordEndpoints
             var results = svc.GetReferences(decoded);
             return Results.Ok(results);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to get references for {FormKey}", decoded);
             return Results.Problem(ex.Message);

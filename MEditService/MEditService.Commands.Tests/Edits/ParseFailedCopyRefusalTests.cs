@@ -139,7 +139,7 @@ public sealed class ParseFailedCopyRefusalTests : IDisposable
                 {
                     codec.SerializeToBytesAsync(perk, GameRelease.Fallout4).GetAwaiter().GetResult();
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
                     continue;
                 }

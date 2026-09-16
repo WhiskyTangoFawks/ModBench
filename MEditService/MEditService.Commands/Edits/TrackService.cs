@@ -79,7 +79,7 @@ public sealed class TrackService(
                 {
                     tree = await adapter.ReadSourceOfAsync(plugin, loadOrder.GameRelease, strings, cancel);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
                     // A raw parse exception's Message carries no located identity; the diagnosis walks the tree for
                     // the innermost RecordException.

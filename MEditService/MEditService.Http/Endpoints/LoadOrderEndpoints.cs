@@ -150,7 +150,7 @@ public static class LoadOrderEndpoints
             var result = handler.Put(snapshot);
             return result.Applied ? Results.Ok(new LoadOrderResponse(true, result.Version)) : WriteEndpointMapping.Refusal(result);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to apply the load order for {InstanceRoot}", req.InstanceRoot);
             return Results.Problem(ex.Message, statusCode: 500);
@@ -177,7 +177,7 @@ public static class LoadOrderEndpoints
         {
             return IndexHeldElsewhere(logger, ex);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to rebuild the index for {InstanceRoot}", req.InstanceRoot);
             return Results.Problem(ex.Message, statusCode: 500);
@@ -238,7 +238,7 @@ public static class LoadOrderEndpoints
             logger.LogError(ex, "Invalid filter SQL");
             return Results.Problem(ex.Message, statusCode: 400);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to apply filter");
             return Results.Problem(ex.Message, statusCode: 500);
@@ -259,7 +259,7 @@ public static class LoadOrderEndpoints
             logger.LogError(ex, "No load order when clearing filter");
             return WriteEndpointMapping.NoLoadOrder(ex);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             logger.LogError(ex, "Failed to clear filter");
             return Results.Problem(ex.Message, statusCode: 500);
