@@ -19,27 +19,20 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private DuckDbRecordIndex LoadedRepository()
-    {
-        DuckDbRecordIndex? repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-        try
-        {
-            repo.Initialize(GameRelease.Fallout4);
-            var modPath = new ModPath(
-                ModKey.FromFileName(TestPluginFixture.PluginName),
-                Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
-            using var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-            repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
-            repo.UpdateWinners();
-            var loaded = repo;
-            repo = null;
-            return loaded;
-        }
-        finally
-        {
-            repo?.Dispose();
-        }
-    }
+    private DuckDbRecordIndex LoadedRepository() =>
+        OwnedFixture.Build(
+            () => new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance),
+            repo =>
+            {
+                repo.Initialize(GameRelease.Fallout4);
+                var modPath = new ModPath(
+                    ModKey.FromFileName(TestPluginFixture.PluginName),
+                    Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
+                using var mod = Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
+                repo.IndexMod(mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "Data"));
+                repo.UpdateWinners();
+            },
+            repo => repo);
 
     // --- GetRecords ---
 

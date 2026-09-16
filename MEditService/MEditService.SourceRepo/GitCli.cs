@@ -82,8 +82,6 @@ internal static class GitCli
         var stderrTask = process.StandardError.ReadToEndAsync();
         Task.WaitAll(stdoutTask, stderrTask);
         process.WaitForExit();
-        // Both tasks are already complete by the WaitAll above; GetAwaiter().GetResult() reads the
-        // completed value without the banned Task<T>.Result, waiting on nothing further.
         return (process.ExitCode, stdoutTask.GetAwaiter().GetResult(), stderrTask.GetAwaiter().GetResult());
     }
 }

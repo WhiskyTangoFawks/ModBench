@@ -44,7 +44,7 @@ public sealed class ForeignIndexHolder : IDisposable
         // Bounded: a python that neither answers nor exits (a wedged native load) must fail the test
         // with a diagnosis, not hang the suite.
         var answer = Task.Run(process.StandardOutput.ReadLine);
-        var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.Result : null;
+        var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.GetAwaiter().GetResult() : null;
         if (line != "held")
         {
             process.Kill();

@@ -1,9 +1,3 @@
-# ADR-0005 rule 2. Identity is not a model of a record: Mutagen.Bethesda (GameRelease) and
-# Mutagen.Bethesda.Plugins (FormKey, ModKey, ModPath) stay allowed in every box.
-N:Mutagen.Bethesda.Plugins.Records;A record is a Mutagen object only while it is being read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).
-N:Mutagen.Bethesda.Plugins.Cache;A record is a Mutagen object only while it is being read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).
-N:Mutagen.Bethesda.Plugins.Binary.Parameters;A record is a Mutagen object only while it is being read from bytes or written to them, and a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).
-
 # The current time is read through the injected TimeProvider, never ambiently, so a fake clock
 # can drive a test without a real wait.
 P:System.DateTime.Now;Use the injected TimeProvider (GetLocalNow/GetUtcNow) instead of the ambient clock.

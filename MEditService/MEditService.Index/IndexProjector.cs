@@ -739,11 +739,11 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     /// <summary>Which truth it reads is the plugin's: an untracked copy from its binary, a tracked
     /// copy from its source tree (ADR-0007), because reading a tracked copy's binary would discard
     /// uncommitted edits.</summary>
-    public async Task ReindexPlugin(PluginCopyKey key)
+    public Task ReindexPlugin(PluginCopyKey key)
     {
-        // Taken before anything reaches _lock or the index: this runs on the watcher's timer, with
-        // nothing else ordering it against an in-flight edit. Reentrant, so the branch below taking
-        // it again costs a recursion count, not a deadlock.
+        // Taken before anything reaches _lock: this runs on the watcher's timer. IndexWriteGate is a
+        // Lock, thread-affine, so nothing under this scope may await — the thread that exits must be
+        // the one that entered.
         using var _ = WriteGate.Enter();
 
         var (metadata, index, gameRelease, dataFolderPath) = RequireHeldCopy(key);
@@ -757,12 +757,11 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         // Asked here as a bare "is this tracked" question; the door below resolves the tree it reads
         // for itself, so neither trusts the other about a folder either could have lost in between.
         if (SourceIngest.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
-        {
             IngestFromSourceTree(key);
-            return;
-        }
+        else
+            ReindexOne(metadata, index, gameRelease, dataFolderPath);
 
-        await ReindexOne(metadata, index, gameRelease, dataFolderPath);
+        return Task.CompletedTask;
     }
 
     // The same SourceIngest.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
@@ -826,7 +825,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease, string dataFolderPath)
+    private void ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease, string dataFolderPath)
     {
         using var documents = OpenDocuments(metadata, gameRelease, dataFolderPath);
 
@@ -836,8 +835,6 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             index.UpdateWinners(Participating());
             ReapplyFilter();
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>The file is gone, so its rows go with it. A no-op while the held copy still exists

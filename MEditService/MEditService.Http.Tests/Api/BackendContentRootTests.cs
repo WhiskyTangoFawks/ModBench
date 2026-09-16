@@ -157,8 +157,8 @@ public sealed class BackendContentRootTests
 
     private static async Task<bool> WaitForLineAsync(List<string> lines, Func<string, bool> predicate, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < timeout)
         {
             if (Snapshot(lines).Any(predicate)) return true;
             await Task.Delay(TimeSpan.FromMilliseconds(100));

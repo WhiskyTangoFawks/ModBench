@@ -5,30 +5,20 @@ using Microsoft.CodeAnalysis;
 
 namespace MEditService.Tests.Architecture;
 
-/// <summary>ADR-0005 rule 2 bans the live-object namespaces outside the codec and the Plugin
-/// adapter. This pins the exemption list, its order, and the severity Roslyn computes from
-/// it.</summary>
+/// <summary>RS0030 is error everywhere. Two banned lists split the reason: BannedSymbols.txt (time,
+/// blocking waits) binds unconditionally; BannedSymbols.Mutagen.txt (ADR-0005 rule 2) excludes by
+/// name the six boxes a live Mutagen object reaches.</summary>
 public sealed class BannedApiScopeTests
 {
-    // In .editorconfig order, which is the rule: a later section narrows an earlier one.
-    private static readonly string[] ExemptSections =
+    // Directory.Build.props sets MutagenBanExempt for exactly these six projects.
+    private static readonly string[] MutagenBanExemptProjects =
     [
-        "MEditService.Codec/Serialization/**.cs",
-        "MEditService.Codec/Schema/**.cs",
-        "MEditService.PluginAdapter/**.cs",
-        "MEditService.Codec.Tests/**.cs",
-        "MEditService.Commands.Tests/**.cs",
-        "MEditService.CrossBox.Tests/**.cs",
-        "MEditService.Http.Tests/**.cs",
-        "MEditService.Index.Tests/**.cs",
-        "MEditService.LoadOrder.Tests/**.cs",
-        "MEditService.PluginAdapter.Tests/**.cs",
-        "MEditService.Ports.Tests/**.cs",
-        "MEditService.Queries.Tests/**.cs",
-        "MEditService.SourceRepo.Tests/**.cs",
-        "MEditService.TestSupport/**.cs",
-        "MEditService.Tests.ProcessEnvironment/**.cs",
-        "MEditService.Watcher.Tests/**.cs",
+        "MEditService.Codec",
+        "MEditService.Codec.Tests",
+        "MEditService.CrossBox.Tests",
+        "MEditService.PluginAdapter",
+        "MEditService.PluginAdapter.Tests",
+        "MEditService.TestSupport",
     ];
 
     private static readonly string[] BannedNamespaces =
@@ -38,9 +28,6 @@ public sealed class BannedApiScopeTests
         "N:Mutagen.Bethesda.Plugins.Records",
     ];
 
-    // The current time and a blocking wait on a task's result share BannedSymbols.txt with the
-    // Mutagen namespaces above but not their reason (ADR-0005 rule 2 governs only the namespaces),
-    // so this is pinned separately from BannedNamespaces.
     private static readonly string[] BannedTimeAndBlockingWaitSymbols =
     [
         "P:System.DateTime.Now",
@@ -53,33 +40,23 @@ public sealed class BannedApiScopeTests
     private const string Rs0030 = "RS0030";
 
     [Fact]
-    public void RS0030_IsAnErrorEverywhere_AndOffOnlyInTheCodecTheAdapterAndTheTests()
+    public void RS0030_IsAnErrorEverywhere_WithNoPerFolderOrPerProjectSeverity()
     {
-        var declarations = SeverityDeclarations(File.ReadAllLines(EditorConfigPath()));
-
-        Assert.Equal(("*.cs", "error"), declarations[0]);
-        Assert.All(declarations.Skip(1), d => Assert.Equal("none", d.Severity));
-        Assert.Equal(ExemptSections, declarations.Skip(1).Select(d => d.Section).ToList());
+        var declaration = Assert.Single(SeverityDeclarations(File.ReadAllLines(EditorConfigPath())));
+        Assert.Equal(("*.cs", "error"), declaration);
     }
 
-    // A global config outranking .editorconfig would leave every section above advisory and RS0030
-    // silent everywhere, so the severity is read back through Roslyn's own config reader.
+    // A global config outranking .editorconfig would leave RS0030 advisory everywhere, so the
+    // severity is read back through Roslyn's own config reader, not just grepped.
     [Fact]
-    public void TheSeverityRoslynComputes_IsErrorOutsideTheExemptFolders_AndNoneInsideThem()
+    public void TheSeverityRoslynComputes_IsErrorForEveryProject()
     {
         var configured = ConfiguredSeverities();
 
-        Assert.Equal(
-            ReportDiagnostic.Error,
-            configured.For(Path.Combine("MEditService.Index", "Probe.cs")));
-        Assert.Equal(
-            ReportDiagnostic.Error,
-            configured.For(Path.Combine("MEditService.Commands", "Probe.cs")));
         Assert.All(
-            ExemptSections.Select(section => section.Replace("/**.cs", "", StringComparison.Ordinal)),
-            folder => Assert.Equal(
-                ReportDiagnostic.Suppress,
-                configured.For(Path.Combine(folder.Replace('/', Path.DirectorySeparatorChar), "Probe.cs"))));
+            new[] { "MEditService.Index", "MEditService.Commands", "MEditService.Codec", "MEditService.PluginAdapter",
+                "MEditService.TestSupport", "MEditService.CrossBox.Tests" },
+            project => Assert.Equal(ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
     }
 
     // The one thing the global config is for: no .editorconfig section reaches a source
@@ -91,52 +68,79 @@ public sealed class BannedApiScopeTests
     }
 
     [Fact]
-    public void TheAnalyzerAndItsSymbolList_AreWiredOnce_ForEveryProject()
+    public void TheAnalyzerAndTheTimeFile_AreWiredUnconditionally_ForEveryProject()
     {
-        var props = XDocument.Load(
-            Path.Combine(ArchitectureTests.SolutionDirectory(), "Directory.Build.props"));
+        var props = LoadBuildProps();
 
         Assert.Contains(
             props.Descendants("PackageReference"),
             e => (string?)e.Attribute("Include") == "Microsoft.CodeAnalysis.BannedApiAnalyzers");
         Assert.Contains(
-            props.Descendants("AdditionalFiles"),
-            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.txt", StringComparison.Ordinal) == true);
-        Assert.Contains(
             props.Descendants("EditorConfigFiles"),
             e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.globalconfig", StringComparison.Ordinal) == true);
+
+        var timeFile = Assert.Single(
+            props.Descendants("AdditionalFiles"),
+            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.txt", StringComparison.Ordinal) == true);
+        Assert.Null(timeFile.Parent?.Attribute("Condition"));
     }
 
     [Fact]
-    public void TheSymbolList_BansTheLiveObjectNamespaces_AndLeavesIdentityLegibleEverywhere()
+    public void TheMutagenBanFile_ExcludesExactlyTheSixNamedProjects()
     {
-        var lines = BannedSymbolLines();
-        var namespaceLines = lines.Where(line => line.StartsWith("N:", StringComparison.Ordinal)).ToList();
-        var banned = namespaceLines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
+        var props = LoadBuildProps();
+
+        var exemptProperties = props.Descendants("MutagenBanExempt").ToList();
+        Assert.All(exemptProperties, e => Assert.Equal("true", e.Value));
+        var namedProjects = exemptProperties
+            .Select(e => ProjectNamedBy((string?)e.Attribute("Condition") ?? ""))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(MutagenBanExemptProjects, namedProjects);
+
+        var mutagenFile = Assert.Single(
+            props.Descendants("AdditionalFiles"),
+            e => ((string?)e.Attribute("Include"))?.EndsWith("BannedSymbols.Mutagen.txt", StringComparison.Ordinal) == true);
+        Assert.Equal("'$(MutagenBanExempt)' != 'true'", (string?)mutagenFile.Parent?.Attribute("Condition"));
+    }
+
+    // 'MSBuildProjectName' == 'MEditService.Codec' split on the quotes it is built from.
+    private static string ProjectNamedBy(string condition)
+    {
+        var parts = condition.Split('\'');
+        Assert.True(parts.Length >= 4, $"Expected a quoted MSBuildProjectName equality condition, got '{condition}'.");
+        return parts[3];
+    }
+
+    [Fact]
+    public void TheMutagenSymbolList_BansTheLiveObjectNamespaces_AndLeavesIdentityLegibleEverywhere()
+    {
+        var lines = MutagenSymbolLines();
+        var banned = lines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
 
         Assert.Equal(BannedNamespaces, banned);
-        Assert.All(namespaceLines, line => Assert.EndsWith(
+        Assert.All(lines, line => Assert.EndsWith(
             "a live Mutagen object reaches nothing but the codec and the Plugin adapter (ADR-0005 rule 2).",
             line, StringComparison.Ordinal));
     }
 
-    // The current time and Task<T>.Result are the two banned symbols outside the namespace ban
-    // above; each message names what replaces the banned read.
     [Fact]
-    public void TheSymbolList_BansTheCurrentTimeAndBlockingResult_NamingTheReplacement()
+    public void TheTimeSymbolList_BansTheCurrentTimeAndBlockingResult_NamingTheReplacement()
     {
-        var lines = BannedSymbolLines();
-        var propertyLines = lines.Where(line => line.StartsWith("P:", StringComparison.Ordinal)).ToList();
-        var banned = propertyLines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
+        var lines = TimeSymbolLines();
+        var banned = lines.Select(line => line.Split(';')[0]).Order(StringComparer.Ordinal).ToList();
 
         Assert.Equal(BannedTimeAndBlockingWaitSymbols.Order(StringComparer.Ordinal), banned);
-        Assert.All(propertyLines, line => Assert.Contains(';', line));
-        Assert.Contains(propertyLines, line => line.Contains("TimeProvider", StringComparison.Ordinal));
-        Assert.Contains(propertyLines, line => line.Contains("Await the task", StringComparison.Ordinal));
+        Assert.All(lines, line => Assert.Contains(';', line));
+        Assert.Contains(lines, line => line.Contains("TimeProvider", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains("Await the task", StringComparison.Ordinal));
     }
 
-    private static IReadOnlyList<string> BannedSymbolLines() =>
+    private static IReadOnlyList<string> TimeSymbolLines() =>
         SourceTree.ReadAllowlist(Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.txt"));
+
+    private static IReadOnlyList<string> MutagenSymbolLines() =>
+        SourceTree.ReadAllowlist(Path.Combine(ArchitectureTests.SolutionDirectory(), "BannedSymbols.Mutagen.txt"));
 
     // Read off disk rather than listed: a box added tomorrow is banned the moment its project file
     // exists. Keyed on the project file, so a leftover obj folder is not a box.
@@ -166,10 +170,10 @@ public sealed class BannedApiScopeTests
                 && !id.StartsWith("Mutagen.Bethesda.Serialization", StringComparison.Ordinal));
 
     // ADR-0005 rule 2 across the split: naming an IMod needs a game assembly, so only these two
-    // boxes can call the codec's whole-mod doors — which are public now that the adapter is its own
-    // assembly.
+    // boxes call the codec's whole-mod doors — both must be in the exempt six, or RS0030 bans
+    // them.
     [Fact]
-    public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndBannedInEveryOtherProject()
+    public void TheGameAssemblies_AreTheCodecsAndTheAdapters_AndBothAreMutagenBanExempt()
     {
         var projects = ProductionProjects();
 
@@ -179,12 +183,7 @@ public sealed class BannedApiScopeTests
         var holders = projects.Where(HoldsAGameAssembly).ToList();
 
         Assert.Equal(["MEditService.Codec", "MEditService.PluginAdapter"], holders);
-
-        var configured = ConfiguredSeverities();
-        Assert.All(
-            projects.Except(holders, StringComparer.Ordinal),
-            project => Assert.Equal(
-                ReportDiagnostic.Error, configured.For(Path.Combine(project, "Probe.cs"))));
+        Assert.All(holders, project => Assert.Contains(project, MutagenBanExemptProjects));
     }
 
     private sealed record ConfiguredSeverity(AnalyzerConfigSet Set, string SolutionDirectory)
@@ -215,6 +214,9 @@ public sealed class BannedApiScopeTests
 
     private static string EditorConfigPath() =>
         Path.Combine(ArchitectureTests.SolutionDirectory(), ".editorconfig");
+
+    private static XDocument LoadBuildProps() =>
+        XDocument.Load(Path.Combine(ArchitectureTests.SolutionDirectory(), "Directory.Build.props"));
 
     private static List<(string Section, string Severity)> SeverityDeclarations(IEnumerable<string> lines)
     {

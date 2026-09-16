@@ -88,11 +88,11 @@ dotnet_diagnostic.S2139.severity = none
 dotnet_diagnostic.CA1031.severity = error
 
 # The remaining PRD analyzers. No per-project or per-folder exemption for any of these five.
-dotnet_diagnostic.CA2000.severity = error  # Dispose objects before losing scope
-dotnet_diagnostic.CA2213.severity = error  # Disposable fields should be disposed
-dotnet_diagnostic.CA2025.severity = error  # Do not pass IDisposable instances into unawaited tasks
-dotnet_diagnostic.CA1508.severity = error  # Avoid dead conditional code
-dotnet_diagnostic.CA2016.severity = error  # Forward the CancellationToken parameter to methods that take one
+dotnet_diagnostic.CA2000.severity = error
+dotnet_diagnostic.CA2213.severity = error
+dotnet_diagnostic.CA2025.severity = error
+dotnet_diagnostic.CA1508.severity = error
+dotnet_diagnostic.CA2016.severity = error
 
 # CA1062: redundant under nullable reference types — a public member with a non-nullable reference
 # parameter already can't be called with null without a compiler warning at the call site.
@@ -104,13 +104,13 @@ dotnet_diagnostic.CA2007.severity = none
 # values; there is no interpolated value the rule would be protecting.
 dotnet_diagnostic.CA2100.severity = none
 # Style rows the PRD turns off.
-dotnet_diagnostic.CA1308.severity = none  # Normalize strings to uppercase
-dotnet_diagnostic.CA1034.severity = none  # Nested types should not be visible
-dotnet_diagnostic.CA1002.severity = none  # Do not expose generic lists
-dotnet_diagnostic.CA1307.severity = none  # Specify StringComparison for clarity
-dotnet_diagnostic.CA1815.severity = none  # Override equals and operator equals on value types
-dotnet_diagnostic.CA1819.severity = none  # Properties should not return arrays
-dotnet_diagnostic.CA2225.severity = none  # Operator overloads have named alternates
+dotnet_diagnostic.CA1308.severity = none
+dotnet_diagnostic.CA1034.severity = none
+dotnet_diagnostic.CA1002.severity = none
+dotnet_diagnostic.CA1307.severity = none
+dotnet_diagnostic.CA1815.severity = none
+dotnet_diagnostic.CA1819.severity = none
+dotnet_diagnostic.CA2225.severity = none
 
 # Complexity / maintainability rules — kept at `suggestion` (info). They never surface in normal build
 # output; the code-quality Stop hook (.claude/hooks/code-quality.py) reads them from a SARIF error log and
@@ -423,65 +423,13 @@ dotnet_naming_style.s_camelcase.required_suffix =
 dotnet_naming_style.s_camelcase.word_separator = 
 dotnet_naming_style.s_camelcase.capitalization = camel_case
 
-# ADR-0005 rule 2: a live Mutagen object reaches nothing but the codec and the Plugin adapter.
-# RS0030 reads BannedSymbols.txt beside this file, and the sections below are the whole exemption
-# list — codec, adapter and tests — pinned by BannedApiScopeTests.
+# RS0030 reads whichever BannedSymbols files Directory.Build.props wires into a project — every
+# project gets BannedSymbols.txt, the six named there also get BannedSymbols.Mutagen.txt — so the
+# exclusion is which file a project sees, never a folder severity here.
 [*.cs]
 dotnet_diagnostic.RS0030.severity = error
 
 # No built-in analyzer reads the null-forgiving operator; NX0001 does. No per-project or
 # per-folder exemption, held at error for production and test code alike.
 dotnet_diagnostic.NX0001.severity = error
-
-# The codec — the one box a record is a CLR object in.
-[MEditService.Codec/Serialization/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Codec/Schema/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-# The Plugin adapter — bytes to a Mutagen mod and back.
-[MEditService.PluginAdapter/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-# Permanent: the fixture builder constructs plugins with live objects by design. One section per
-# test project, alphabetical, plus the process-isolated suite.
-[MEditService.Codec.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Commands.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.CrossBox.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Http.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Index.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.LoadOrder.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.PluginAdapter.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Ports.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Queries.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.SourceRepo.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.TestSupport/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Tests.ProcessEnvironment/**.cs]
-dotnet_diagnostic.RS0030.severity = none
-
-[MEditService.Watcher.Tests/**.cs]
-dotnet_diagnostic.RS0030.severity = none
 

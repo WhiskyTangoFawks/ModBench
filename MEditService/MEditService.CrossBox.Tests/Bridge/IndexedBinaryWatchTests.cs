@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
@@ -18,8 +19,8 @@ public sealed class IndexedBinaryWatchTests
 {
     private static void WaitUntil(Func<bool> condition, TimeSpan timeout)
     {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        var elapsed = Stopwatch.StartNew();
+        while (elapsed.Elapsed < timeout)
         {
             if (condition()) return;
             Thread.Sleep(20);
