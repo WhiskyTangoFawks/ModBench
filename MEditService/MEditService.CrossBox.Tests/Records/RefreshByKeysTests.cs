@@ -19,7 +19,7 @@ public sealed class RefreshByKeysTests : IDisposable
     private void Refresh(params string[] formKeys) => _mod.Index.RefreshKeys(_mod.Plugin, formKeys);
 
     private void Git(params string[] args) =>
-        GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
+        GitProbe.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 
     [Fact]
     public void ARefreshedKey_ShowsAHandEditAtTheWorkingTree_ThenAtTheCommittedRefOnceCommitted()

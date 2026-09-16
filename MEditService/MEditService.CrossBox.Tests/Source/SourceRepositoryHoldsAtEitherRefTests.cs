@@ -24,8 +24,9 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests
         // The shape a plugin minted since the last commit has: its header document is on disk and at
         // no ref at all.
         var gitDir = Path.Combine(mod.ModFolder, ".git");
-        GitCli.Run(gitDir, mod.ModFolder, "rm", "--cached", "-q", "--", SourceRepository.ToGitPath(headerPath));
-        GitCli.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "uncommit the header");
+        // git always speaks forward slashes, on every platform.
+        GitProbe.Run(gitDir, mod.ModFolder, "rm", "--cached", "-q", "--", headerPath.Replace('\\', '/'));
+        GitProbe.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "uncommit the header");
 
         var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)
             ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");

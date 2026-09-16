@@ -1,5 +1,6 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Source;
 
@@ -22,7 +23,7 @@ public sealed class SourceRepositoryTrackTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var shown = GitCli.Run(gitDir, modFolder, "show", $"main:{relativePath.Replace('\\', '/')}");
+            var shown = GitProbe.Run(gitDir, modFolder, "show", $"main:{relativePath.Replace('\\', '/')}");
             Assert.Equal("{\"formKey\":\"000800:StillHere.esp\"}", shown);
         }
         finally
@@ -46,7 +47,7 @@ public sealed class SourceRepositoryTrackTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
+            var body = GitProbe.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
             Assert.Contains("Upstream-Version: 1.2.3", body);
             Assert.Contains("Binary-SHA256: Test.esp=ABCDEF0123", body);
         }

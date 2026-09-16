@@ -168,12 +168,12 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         var libraryTree = DeriveSourceTreeFromBinary(CutDownPluginFixture.PluginPath, GameRelease.Fallout4);
         var libraryGroupDocuments = libraryTree
-            .Where(kv => Path.GetFileName(kv.Key) == SourceRepository.GroupRecordDataFileName)
+            .Where(kv => Path.GetFileName(kv.Key) == "GroupRecordData.json")
             .ToDictionary(kv => kv.Key, kv => kv.Value);
         Assert.NotEmpty(libraryGroupDocuments);
 
         var trackedGroupDocuments = fixture.ReadSourceTree()
-            .Where(kv => Path.GetFileName(kv.Key) == SourceRepository.GroupRecordDataFileName)
+            .Where(kv => Path.GetFileName(kv.Key) == "GroupRecordData.json")
             .ToDictionary(kv => kv.Key, kv => kv.Value);
 
         Assert.Equal(libraryGroupDocuments.Keys.Order(), trackedGroupDocuments.Keys.Order());

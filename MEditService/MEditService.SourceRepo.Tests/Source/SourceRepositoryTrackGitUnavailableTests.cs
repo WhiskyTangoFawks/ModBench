@@ -1,10 +1,12 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.ProcessEnvironment;
+namespace MEditService.Tests.Source;
 
 /// <summary>Git missing from PATH is one typed failure, checked once, early, never a raw
 /// <c>Win32Exception</c> from the first <c>Process.Start</c> (ADR-0019).</summary>
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceRepositoryTrackGitUnavailableTests
 {
     [Fact]
@@ -12,16 +14,11 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-track-nogit-").FullName;
         var previousPath = Environment.GetEnvironmentVariable("PATH");
-        var previousGitConfigNoSystem = Environment.GetEnvironmentVariable("GIT_CONFIG_NOSYSTEM");
         try
         {
             // Scrub PATH for this process (and the child processes it spawns) so "git" genuinely
             // cannot be found — a real repro of the missing-git-on-PATH environment, not a mock.
             Environment.SetEnvironmentVariable("PATH", string.Empty);
-            // A host /etc/gitconfig plays no part here, git never launching at all, but scrubbing it
-            // keeps this test's environment-scrubbing posture consistent with the identity-fallback
-            // test that needs it.
-            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");
 
             var files = new[] { new TreeFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var ex = Assert.Throws<GitUnavailableException>(() =>
@@ -33,7 +30,6 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
         finally
         {
             Environment.SetEnvironmentVariable("PATH", previousPath);
-            Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", previousGitConfigNoSystem);
             Directory.Delete(modFolder, recursive: true);
         }
     }

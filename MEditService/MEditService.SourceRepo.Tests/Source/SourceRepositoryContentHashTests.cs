@@ -21,7 +21,7 @@ public class SourceRepositoryContentHashTests
         {
             var file = Path.Combine(dir.FullName, "content.bin");
             File.WriteAllBytes(file, content);
-            return GitCli.Run(Path.Combine(dir.FullName, "no-such-gitdir"), dir.FullName, "hash-object", file).Trim();
+            return GitProbe.Run(Path.Combine(dir.FullName, "no-such-gitdir"), dir.FullName, "hash-object", file).Trim();
         }
         finally
         {

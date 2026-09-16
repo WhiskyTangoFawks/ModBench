@@ -19,7 +19,7 @@ public sealed class AbsorbRebaseTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private string GitDir => System.IO.Path.Combine(_mod.ModFolder, ".git");
-    private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
+    private string RunGit(params string[] args) => GitProbe.Run(GitDir, _mod.ModFolder, args);
     private string RelativeNpcPath => _mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId).Replace('\\', '/');
 
     private void CommitOnEditBranch(string message)

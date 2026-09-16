@@ -37,7 +37,7 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
     }
 
     private string GitDir => Path.Combine(Mod.ModFolder, ".git");
-    private string RunGit(params string[] args) => GitCli.Run(GitDir, Mod.ModFolder, args);
+    private string RunGit(params string[] args) => GitProbe.Run(GitDir, Mod.ModFolder, args);
 
     // Raw porcelain lines, untrimmed: the fixture's own GitStatus() trims the leading column, which
     // erases exactly the staged-vs-unstaged distinction this suite tests for.
