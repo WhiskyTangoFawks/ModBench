@@ -5,8 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>The file a record's own document sits in, asked of the repository through its public
-/// UnitHolding door rather than the internal Locate it wraps.</summary>
+/// <summary>The file a record's own document sits in, asked of the repository.</summary>
 internal static class SourceDocumentPath
 {
     public static string Of(

@@ -7,6 +7,7 @@ namespace MEditService.Tests.Source;
 /// <summary>autocrlf=false keeps byte equality for dirty detection; gpgsign=false stops a signing
 /// config hanging a commit; gc.autoDetach=false keeps a repack inside the command that triggered
 /// it; the identity fallback touches no real global identity.</summary>
+[Collection(ProcessEnvironmentCollection.Name)]
 public sealed class SourceRepositoryTrackConfigTests
 {
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-track-config-").FullName;

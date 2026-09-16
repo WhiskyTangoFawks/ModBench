@@ -71,7 +71,7 @@ public sealed class SourceRepositoryLatestBaselineTrailersTests
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
             var gitDir = Path.Combine(modFolder, ".git");
-            Assert.Equal(EditBranchName, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
+            Assert.Equal(EditBranch.Name, GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
 
             Assert.Equal("9.9.9", SourceRepository.LatestBaselineTrailers(modFolder, "Test.esp")?.UpstreamVersion);
         }
@@ -80,8 +80,4 @@ public sealed class SourceRepositoryLatestBaselineTrailersTests
             Directory.Delete(modFolder, recursive: true);
         }
     }
-
-    // The product's own fixed name for the branch Track checks out (ADR-0007); SourceRepository
-    // keeps it internal, so a test names it independently.
-    private const string EditBranchName = "edit";
 }

@@ -3,11 +3,11 @@ using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>Dirt detection through RebaseEditBranch's own refusal, since it names the same working-tree
-/// paths WorkingTreeStatus does and is the one public door that surfaces them (ADR-0003).</summary>
-public sealed class SourceRepositoryWorkingTreeStatusTests
+/// <summary>Uncommitted state through the two public doors that surface it: a rebase's own refusal,
+/// and the tracked-files-outside-source query (ADR-0003).</summary>
+public sealed class SourceRepositoryUncommittedStateTests
 {
-    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-wts-").FullName;
+    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-uncommitted-").FullName;
 
     [Fact]
     public void RebaseEditBranch_RefusesOverAnUnstagedEdit()
@@ -46,6 +46,22 @@ public sealed class SourceRepositoryWorkingTreeStatusTests
             var result = SourceRepository.RebaseEditBranch(modFolder);
 
             Assert.Equal(RebaseOutcome.Clean, result.Outcome);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    // Never-assume-exclusive-ownership: a mod folder can be asked about before it is ever tracked,
+    // and that must read as "nothing changed", not a throw.
+    [Fact]
+    public void ChangedTrackedFilesOutsideSource_ForAnUntrackedFolder_IsEmpty_NotAThrow()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            Assert.Empty(SourceRepository.ChangedTrackedFilesOutsideSource(modFolder));
         }
         finally
         {

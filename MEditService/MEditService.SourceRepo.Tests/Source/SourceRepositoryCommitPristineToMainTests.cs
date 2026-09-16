@@ -89,8 +89,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             var branchBefore = GitProbe.Run(gitDir, modFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim();
             var headBefore = GitProbe.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
             // RebaseEditBranch refuses before touching the branch whenever the source tree carries
-            // dirt (its own contract) — its refusal names every dirty path, so it stands in for
-            // WorkingTreeStatus here without reaching SourceRepo's internals.
+            // dirt, naming every dirty path in the refusal — a public probe for exactly that fact.
             var dirtBefore = SourceRepository.RebaseEditBranch(modFolder);
             Assert.Equal(RebaseOutcome.Refused, dirtBefore.Outcome);
             var fileContentBefore = File.ReadAllText(fullPath);
@@ -105,13 +104,11 @@ public sealed class SourceRepositoryCommitPristineToMainTests
             Assert.Equal(RebaseOutcome.Refused, dirtAfter.Outcome);
             Assert.Equal(dirtBefore.RefusalReason, dirtAfter.RefusalReason);
             Assert.Equal(fileContentBefore, File.ReadAllText(fullPath));
-            Assert.Equal(EditBranchName, branchBefore);
+            Assert.Equal(EditBranch.Name, branchBefore);
         }
         finally
         {
             Directory.Delete(modFolder, recursive: true);
         }
     }
-
-    private const string EditBranchName = "edit";
 }

@@ -2,9 +2,8 @@ using System.Diagnostics;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>A test's own git process wrapper, independent of MEditService.SourceRepo's internal
-/// GitCli: a test verifying tracked state from outside SourceRepo.Tests runs git itself rather than
-/// reaching for the box's internals.</summary>
+/// <summary>A test's own git process wrapper, for a test verifying tracked state directly against
+/// the real tree.</summary>
 public static class GitProbe
 {
     public static string Run(string gitDir, string workTree, params string[] args) =>
