@@ -11,7 +11,7 @@ import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { ReferencedByTreeProvider } from './editor/ReferencedByTreeProvider';
 import { EXTENSION_TO_WEBVIEW } from './medit/messages';
-import { presentCrashRepairOffers } from './medit/crashRepairOffer';
+import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { registerEditorCommands, ActiveRecordTracker } from './editor';

@@ -3,8 +3,8 @@ import {
   subscribeQuestionOpen,
   type ExternalChangeCoordinatorDeps,
 } from '../externalChangeCoordinator';
-import { BASELINE_BUTTON, APPLY_BUTTON } from '../../plugins/externalChangeDialog';
-import { InMemoryMEditClient, type NotificationEvent } from '../client';
+import { BASELINE_BUTTON, APPLY_BUTTON } from '../externalChangeDialog';
+import { InMemoryMEditClient, type NotificationEvent } from '../../medit/client';
 
 function pendingEvent(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
   return {
