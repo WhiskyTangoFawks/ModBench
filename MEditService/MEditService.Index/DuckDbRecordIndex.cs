@@ -785,7 +785,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             using var cmd = connection.CreateCommand();
             cmd.CommandText =
                 "SELECT DISTINCT record_type FROM record_type_failure WHERE plugin = $1 AND origin = $2";
-            AddParams(cmd, [plugin.Name, plugin.Origin ?? PluginOrigin.DataDirectory]);
+            AddParams(cmd, [plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
             var types = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -862,7 +862,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
                     WHERE p.parent_cell = cl.cell_form_key AND p.plugin = cl.plugin AND p.origin = cl.origin
                       AND pr.parse_diagnosis IS NOT NULL))
                 """;
-            AddParams(cmd, [plugin.Name, plugin.Origin ?? PluginOrigin.DataDirectory]);
+            AddParams(cmd, [plugin.Name, plugin.Origin]);
             using var reader = cmd.ExecuteReader();
 
             var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
