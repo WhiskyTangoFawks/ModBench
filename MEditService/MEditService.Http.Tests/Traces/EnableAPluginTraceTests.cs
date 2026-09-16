@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -13,41 +12,32 @@ namespace MEditService.Tests.Traces;
 /// <summary>enable-a-plugin: the plugins.txt splice reaches mEdit as the next snapshot, and the
 /// implicit masters the splice needs are asked of mEdit with no load order held at all.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class EnableAPluginTraceTests : IDisposable
+public sealed class EnableAPluginTraceTests : HostedTests
 {
     private const string First = "First.esp";
     private const string Second = "Second.esp";
     private const string FirstMod = "FirstMod";
     private const string SecondMod = "SecondMod";
 
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-enable-a-plugin")
         .WithPlugin(First, mod => mod.Npcs.AddNew("FirstNpc"), origin: FirstMod)
         .WithPlugin(Second, mod => mod.Npcs.AddNew("SecondNpc"), origin: SecondMod)
         .BuildScattered();
 
-    public EnableAPluginTraceTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-        _instance.Dispose();
-    }
+    protected override void DisposeFixtures() => _instance.Dispose();
 
     [Fact]
     public async Task EnablingAPlugin_FlipsItFromDormantToParticipating_WithTheFactsThatSayWhy()
     {
         var dormant = _instance.Plugins.Select(p => p.Name == Second ? p with { Enabled = false } : p);
-        (await _client.PutLoadOrder(_instance, dormant)).EnsureSuccessStatusCode();
-        var before = await _client.Plugin(Second);
+        (await Client.PutLoadOrder(_instance, dormant)).EnsureSuccessStatusCode();
+        var before = await Client.Plugin(Second);
         Assert.False(before.GetProperty("enabled").GetBoolean());
         Assert.False(before.GetProperty("participates").GetBoolean());
 
-        (await _client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
-        var after = await _client.Plugin(Second);
+        var after = await Client.Plugin(Second);
         Assert.True(after.GetProperty("enabled").GetBoolean());
         Assert.True(after.GetProperty("participates").GetBoolean());
         Assert.True(after.GetProperty("inLoadOrder").GetBoolean());
@@ -56,14 +46,14 @@ public sealed class EnableAPluginTraceTests : IDisposable
     [Fact]
     public async Task ReorderingThePlugins_ComesBackInTheNewOrder()
     {
-        (await _client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
-        Assert.Equal(0, (await _client.Plugin(First)).GetProperty("loadOrderIndex").GetInt32());
+        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
+        Assert.Equal(0, (await Client.Plugin(First)).GetProperty("loadOrderIndex").GetInt32());
 
         var swapped = _instance.Plugins.Select(p => p with { Slot = p.Name == First ? 1 : 0 });
-        (await _client.PutLoadOrder(_instance, swapped)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(_instance, swapped)).EnsureSuccessStatusCode();
 
-        Assert.Equal(1, (await _client.Plugin(First)).GetProperty("loadOrderIndex").GetInt32());
-        Assert.Equal(0, (await _client.Plugin(Second)).GetProperty("loadOrderIndex").GetInt32());
+        Assert.Equal(1, (await Client.Plugin(First)).GetProperty("loadOrderIndex").GetInt32());
+        Assert.Equal(0, (await Client.Plugin(Second)).GetProperty("loadOrderIndex").GetInt32());
     }
 
     // The splice asks this while it is still building the snapshot, so the answer comes from the
@@ -89,7 +79,7 @@ public sealed class EnableAPluginTraceTests : IDisposable
     {
         var absent = Path.Combine(Path.GetTempPath(), $"no-such-data-{Guid.NewGuid():N}");
 
-        var response = await _client.GetAsync(
+        var response = await Client.GetAsync(
             new Uri($"/implicit-masters?gameDirectory={Uri.EscapeDataString(absent)}&gameRelease=Fallout4", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -98,7 +88,7 @@ public sealed class EnableAPluginTraceTests : IDisposable
     [Fact]
     public async Task TheImplicitMastersOfAReleaseTheServiceDoesNotKnow_Is400()
     {
-        var response = await _client.GetAsync(new Uri(
+        var response = await Client.GetAsync(new Uri(
             $"/implicit-masters?gameDirectory={Uri.EscapeDataString(_instance.GameDirectory)}&gameRelease=Morrowind",
             UriKind.Relative));
 

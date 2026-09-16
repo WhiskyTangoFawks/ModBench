@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -13,32 +12,21 @@ namespace MEditService.Tests.Traces;
 /// there this is a-tracked-mod-changes-on-disk with the version as the tell that pre-selects the
 /// baseline answer.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class UpgradeAModTraceTests : IDisposable
+public sealed class UpgradeAModTraceTests : HostedTests
 {
     private const string Plugin = "Upgraded.esp";
     private const string Origin = "UpgradedMod";
     private const string Npc = "UpgradedNpc";
-
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
-
-    public UpgradeAModTraceTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-    }
 
     private async Task<ScatteredFixtureData> AnInstalledTrackedMod()
     {
         var fx = new PluginFixtureBuilder("trace-upgrade-a-mod")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
             .BuildScattered();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), "meta.ini"), "version=1.0.0\n");
-        (await _client.Track(Origin)).EnsureSuccessStatusCode();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         return fx;
     }
 
@@ -56,7 +44,7 @@ public sealed class UpgradeAModTraceTests : IDisposable
     public async Task AnUpgradeOfATrackedMod_OpensOneQuestionCarryingTheVersionTell()
     {
         using var fx = await AnInstalledTrackedMod();
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
         TheUpgradeLands(fx);
 
@@ -73,19 +61,19 @@ public sealed class UpgradeAModTraceTests : IDisposable
     public async Task TheBaselineAnswerToAnUpgrade_Applies_AndTheUpgradedContentAnswersTheNextRead()
     {
         using var fx = await AnInstalledTrackedMod();
-        var formKey = await _client.FirstFormKey(Plugin);
-        using var stream = await _client.NotificationStream();
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
         TheUpgradeLands(fx);
         await stream.EventsUntil("question-open");
-        var before = await _client.Sequence();
+        var before = await Client.Sequence();
 
-        var answered = await _client.PostAsJsonAsync("/plugins/external-change/absorb", new { origin = Origin });
+        var answered = await Client.PostAsJsonAsync("/plugins/external-change/absorb", new { origin = Origin });
 
         answered.EnsureSuccessStatusCode();
         var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(outcome.GetProperty("succeeded").GetBoolean(), outcome.GetProperty("refusalReason").GetString());
-        await _client.SequenceReaches(before + 1);
-        var height = (await _client.Record(formKey)).GetProperty("fields").EnumerateArray()
+        await Client.SequenceReaches(before + 1);
+        var height = (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax");
         Assert.Equal(0.9, height.GetProperty("value").GetDouble(), 3);
     }

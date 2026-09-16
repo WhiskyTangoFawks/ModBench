@@ -1,5 +1,4 @@
 using MEditService.LoadOrder;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,25 +10,16 @@ namespace MEditService.Tests.Traces;
 /// <summary>install-a-mod: the install renames a folder into mods/ and forgets it, so mEdit learns
 /// of a folder that appeared while it was already loaded.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class InstallAModTraceTests : IDisposable
+public sealed class InstallAModTraceTests : HostedTests
 {
     private const string Installed = "Installed.esp";
     private const string InstalledMod = "InstalledMod";
 
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-install-a-mod")
         .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("BaseNpc"), origin: "BaseMod")
         .BuildScattered();
 
-    public InstallAModTraceTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-        _instance.Dispose();
-    }
+    protected override void DisposeFixtures() => _instance.Dispose();
 
     // The staged folder renamed into mods/, as the install writes it: a folder with a plugin in it,
     // appearing while the service is up.
@@ -47,16 +37,16 @@ public sealed class InstallAModTraceTests : IDisposable
     [Fact]
     public async Task AModInstalledWhileTheServiceIsUp_IsIndexedAndAnswersOnTheNextSnapshot()
     {
-        (await _client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
         var installed = InstallTheFolder();
-        var adopted = await _client.PutLoadOrder(_instance, [.. _instance.Plugins, installed]);
+        var adopted = await Client.PutLoadOrder(_instance, [.. _instance.Plugins, installed]);
 
         adopted.EnsureSuccessStatusCode();
-        var plugin = await _client.Plugin(Installed);
+        var plugin = await Client.Plugin(Installed);
         Assert.Equal(InstalledMod, plugin.GetProperty("origin").GetString());
         Assert.Equal(1, plugin.GetProperty("loadOrderIndex").GetInt32());
-        var record = await _client.Record(await _client.FirstFormKey(Installed));
+        var record = await Client.Record(await Client.FirstFormKey(Installed));
         Assert.Equal("InstalledNpc", record.GetProperty("editorId").GetString());
     }
 }

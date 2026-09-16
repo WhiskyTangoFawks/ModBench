@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,36 +13,27 @@ namespace MEditService.Tests.Traces;
 /// progress per plugin, and arms the watch that carries a later hand edit back into the
 /// answers.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class TrackAPluginTraceTests : IDisposable
+public sealed class TrackAPluginTraceTests : HostedTests
 {
     private const string Plugin = "Tracked.esp";
     private const string Origin = "TrackedMod";
     private const string Npc = "TrackedNpc";
 
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
     private readonly ScatteredFixtureData _instance = new PluginFixtureBuilder("trace-track-a-plugin")
         .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc), origin: Origin)
         .BuildScattered();
 
-    public TrackAPluginTraceTests() => _client = _app.CreateClient();
+    protected override void DisposeFixtures() => _instance.Dispose();
 
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-        _instance.Dispose();
-    }
-
-    private async Task Loaded() => (await _client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
+    private async Task Loaded() => (await Client.PutLoadOrder(_instance)).EnsureSuccessStatusCode();
 
     [Fact]
     public async Task TrackingALoadedMod_AnswersWithTheOrigin_ReportsItsProgress_AndLeavesThePluginEditable()
     {
         await Loaded();
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
-        var tracked = await _client.Track(Origin);
+        var tracked = await Client.Track(Origin);
 
         tracked.EnsureSuccessStatusCode();
         var body = await tracked.Content.ReadFromJsonAsync<JsonElement>();
@@ -55,7 +45,7 @@ public sealed class TrackAPluginTraceTests : IDisposable
 
         // Editing is what Track is for, and an edit is refused on a plugin no repository holds, so
         // an applied edit is the tracked repository answering.
-        var edit = await _client.Edit(await _client.FirstFormKey(Plugin), Plugin, Origin, "HeightMax", 0.75);
+        var edit = await Client.Edit(await Client.FirstFormKey(Plugin), Plugin, Origin, "HeightMax", 0.75);
         edit.EnsureSuccessStatusCode();
         Assert.True((await edit.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("applied").GetBoolean());
     }
@@ -65,7 +55,7 @@ public sealed class TrackAPluginTraceTests : IDisposable
     {
         await Loaded();
 
-        var response = await _client.Track(string.Empty);
+        var response = await Client.Track(string.Empty);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -75,7 +65,7 @@ public sealed class TrackAPluginTraceTests : IDisposable
     {
         await Loaded();
 
-        var response = await _client.Track("NoSuchMod");
+        var response = await Client.Track("NoSuchMod");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -84,9 +74,9 @@ public sealed class TrackAPluginTraceTests : IDisposable
     public async Task TrackingAModAlreadyTracked_Is409()
     {
         await Loaded();
-        (await _client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
 
-        var again = await _client.Track(Origin);
+        var again = await Client.Track(Origin);
 
         Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
     }
@@ -97,13 +87,13 @@ public sealed class TrackAPluginTraceTests : IDisposable
     public async Task AfterTrack_AHandEditToTheSourceTree_ReachesTheNextQuery_WithNoLoadOrderInBetween()
     {
         await Loaded();
-        (await _client.Track(Origin)).EnsureSuccessStatusCode();
-        var formKey = await _client.FirstFormKey(Plugin);
-        var before = await _client.Sequence();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
+        var formKey = await Client.FirstFormKey(Plugin);
+        var before = await Client.Sequence();
 
         OtherTool.EditsASourceDocument(OtherTool.ModFolderOf(_instance, Origin), Plugin, Npc, "RenamedByHand");
 
-        await _client.SequenceReaches(before + 1);
-        Assert.Equal("RenamedByHand", (await _client.Record(formKey)).GetProperty("editorId").GetString());
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("RenamedByHand", (await Client.Record(formKey)).GetProperty("editorId").GetString());
     }
 }

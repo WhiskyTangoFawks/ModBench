@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,27 +13,18 @@ namespace MEditService.Tests.Traces;
 /// one question per mod reaches the client, and the human's answer comes back as an envelope whose
 /// reply says what landed.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
+public sealed class ATrackedModChangesOnDiskTraceTests : HostedTests
 {
     private const string Plugin = "Watched.esp";
     private const string Origin = "WatchedMod";
     private const string Npc = "WatchedNpc";
     private const string Asset = "texture.dds";
+    private const string ChangedAsset = "Meshes/Thing.nif";
+    private const string DeletedAsset = "Meshes/Gone.nif";
 
     // Outlasts the watcher's own settle window, so a question that should not have opened has had
     // its chance to.
     private static readonly TimeSpan Settled = TimeSpan.FromSeconds(2);
-
-    private MEditHost _app = new();
-    private HttpClient _client;
-
-    public ATrackedModChangesOnDiskTraceTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-    }
 
     private static ScatteredFixtureData OneMod() =>
         new PluginFixtureBuilder("trace-tracked-mod-changes")
@@ -46,10 +36,10 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     private async Task<ScatteredFixtureData> Watched(string preset = "Edits", Action<string>? beforeTracking = null)
     {
         var fx = OneMod();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         beforeTracking?.Invoke(OtherTool.ModFolderOf(fx, Origin));
-        (await _client.Track(Origin, preset)).EnsureSuccessStatusCode();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin, preset)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         return fx;
     }
 
@@ -62,14 +52,31 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
                 mod.Npcs.AddNew("AddedByTheRelease");
             });
 
+    // The Everything preset, with two assets git tracks beside the plugin.
+    private Task<ScatteredFixtureData> WatchedWithAssets() =>
+        Watched("Everything", modFolder =>
+        {
+            OtherTool.WritesTheFile(Path.Combine(modFolder, ChangedAsset), "original-mesh");
+            OtherTool.WritesTheFile(Path.Combine(modFolder, DeletedAsset), "going-away");
+        });
+
+    // The whole release: new plugin bytes, an asset rewritten by hand, an asset dropped.
+    private static void AReleaseOverTheAssets(ScatteredFixtureData fx)
+    {
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        OtherTool.WritesTheFile(Path.Combine(modFolder, ChangedAsset), "new-mesh-bytes");
+        OtherTool.DeletesTheFile(Path.Combine(modFolder, DeletedAsset));
+        ARelease(fx);
+    }
+
     private Task<HttpResponseMessage> Answer(string verb, string origin) =>
-        _client.PostAsJsonAsync($"/plugins/external-change/{verb}", new { origin });
+        Client.PostAsJsonAsync($"/plugins/external-change/{verb}", new { origin });
 
     [Fact]
     public async Task ATrackedPluginRewrittenByAnotherTool_OpensOneQuestion_AndTheBaselineAnswerApplies()
     {
         using var fx = await Watched();
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
         ARelease(fx);
 
@@ -90,7 +97,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     {
         using var fx = await Watched(
             "Everything", modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
         OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), Asset), "changed-by-the-release");
 
@@ -105,7 +112,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     {
         using var fx = await Watched(
             beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, Asset), "original"));
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
         OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), Asset), "changed-by-the-release");
 
@@ -119,7 +126,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     {
         using var fx = await Watched(
             beforeTracking: modFolder => OtherTool.WritesTheFile(Path.Combine(modFolder, "meta.ini"), "version=1.0.0\n"));
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
         OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), "meta.ini"), "version=2.0.0\n");
 
@@ -135,7 +142,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
             foreach (var name in assets) OtherTool.WritesTheFile(Path.Combine(modFolder, name), "original");
         });
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
         foreach (var name in assets)
             OtherTool.WritesTheFile(Path.Combine(modFolder, name), "changed-by-the-release");
@@ -154,8 +161,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
 
         OtherTool.WritesTheFile(
             Path.Combine(OtherTool.ModFolderOf(fx, Origin), Asset), "changed-while-medit-was-down");
-        using var stream = await _client.NotificationStream();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        using var stream = await Client.NotificationStream();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         var question = Assert.Single(await stream.EventsUntil("question-open"));
         Assert.Contains(
@@ -168,7 +175,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     public async Task AnAnsweredQuestion_StaysAnsweredAcrossARestart(string verb)
     {
         using var fx = await Watched();
-        using (var stream = await _client.NotificationStream())
+        using (var stream = await Client.NotificationStream())
         {
             ARelease(fx);
             await stream.EventsUntil("question-open");
@@ -177,8 +184,8 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
 
         Restart();
 
-        using var afterRestart = await _client.NotificationStream();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        using var afterRestart = await Client.NotificationStream();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         await afterRestart.NoEventOf("question-open", Settled);
     }
 
@@ -200,9 +207,9 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     public async Task KeepingAChangeThatCollidesWithALocalEdit_RefusesInsideA200_NamingTheRecord()
     {
         using var fx = await Watched();
-        var formKey = await _client.FirstFormKey(Plugin);
-        (await _client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
-        using var stream = await _client.NotificationStream();
+        var formKey = await Client.FirstFormKey(Plugin);
+        (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
+        using var stream = await Client.NotificationStream();
         ARelease(fx);
         await stream.EventsUntil("question-open");
 
@@ -219,7 +226,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     {
         using var fx = await Watched();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
         ARelease(fx);
         await stream.EventsUntil("question-open");
 
@@ -242,9 +249,9 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     public async Task TheBaselineAnswerOverALocalEdit_LandsTheBaselineAndRefusesTheRebaseNamingThePath()
     {
         using var fx = await Watched();
-        var formKey = await _client.FirstFormKey(Plugin);
-        (await _client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
-        using var stream = await _client.NotificationStream();
+        var formKey = await Client.FirstFormKey(Plugin);
+        (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.25)).EnsureSuccessStatusCode();
+        using var stream = await Client.NotificationStream();
         ARelease(fx);
         await stream.EventsUntil("question-open");
 
@@ -265,7 +272,7 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     {
         using var fx = await Watched();
 
-        var rebased = await _client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
+        var rebased = await Client.PostAsJsonAsync("/plugins/rebase", new { origin = Origin });
 
         rebased.EnsureSuccessStatusCode();
         Assert.Equal(
@@ -280,18 +287,66 @@ public sealed class ATrackedModChangesOnDiskTraceTests : IDisposable
     {
         using var fx = await Watched();
 
-        var response = await _client.PostAsJsonAsync(route, new { origin = "NoSuchMod" });
+        var response = await Client.PostAsJsonAsync(route, new { origin = "NoSuchMod" });
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
-    // Stop the service and start it again: the same mod on disk, a new process, nothing carried over
-    // in memory.
-    private void Restart()
+    // ADR-0003: the answer covers every changed tracked file, not the plugin alone. A baseline that
+    // took only the plugin would leave both assets differing from git, and the next load would ask
+    // the same question again.
+    [Fact]
+    public async Task TheBaselineAnswerUnderEverything_TakesTheChangedAndTheDroppedAssetToo()
     {
-        _client.Dispose();
-        _app.Dispose();
-        _app = new MEditHost();
-        _client = _app.CreateClient();
+        using var fx = await WatchedWithAssets();
+        using (var stream = await Client.NotificationStream())
+        {
+            AReleaseOverTheAssets(fx);
+            var question = Assert.Single(await stream.EventsUntil("question-open"));
+            var files = question.GetProperty("externalChangeTrackedFiles").EnumerateArray()
+                .Select(file => file.GetString()).ToList();
+            Assert.Contains(ChangedAsset, files);
+            Assert.Contains(DeletedAsset, files);
+        }
+
+        var answered = await Answer("absorb", Origin);
+
+        answered.EnsureSuccessStatusCode();
+        var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.True(outcome.GetProperty("succeeded").GetBoolean(), outcome.GetProperty("refusalReason").GetString());
+
+        Restart();
+        using var afterRestart = await Client.NotificationStream();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        await afterRestart.NoEventOf("question-open", Settled);
+    }
+
+    // Keep answers the question and stages what it landed, so a second release touching the same
+    // asset finds it already dirty in the index and is refused by name.
+    [Fact]
+    public async Task KeepingAnAssetTheLastKeepStaged_RefusesInsideA200_NamingThePath()
+    {
+        using var fx = await WatchedWithAssets();
+        using (var first = await Client.NotificationStream())
+        {
+            AReleaseOverTheAssets(fx);
+            await first.EventsUntil("question-open");
+        }
+        var kept = await Answer("keep", Origin);
+        kept.EnsureSuccessStatusCode();
+        Assert.True(
+            (await kept.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("succeeded").GetBoolean(),
+            "keep must land the asset change before a second one can find it staged");
+
+        using var second = await Client.NotificationStream();
+        OtherTool.WritesTheFile(Path.Combine(OtherTool.ModFolderOf(fx, Origin), ChangedAsset), "newer-mesh-bytes");
+        await second.EventsUntil("question-open");
+
+        var answered = await Answer("keep", Origin);
+
+        answered.EnsureSuccessStatusCode();
+        var outcome = await answered.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(outcome.GetProperty("succeeded").GetBoolean());
+        Assert.Contains(ChangedAsset, outcome.GetProperty("refusalReason").GetString().Require(), StringComparison.Ordinal);
     }
 }

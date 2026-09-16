@@ -6,6 +6,7 @@ using MEditService.SourceRepo;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Api;
 

@@ -6,6 +6,7 @@ using MEditService.Tests.Api;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.RealData;
 

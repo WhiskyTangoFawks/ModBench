@@ -8,6 +8,7 @@ namespace MEditService.Tests.TestSupport;
 /// from, the notification stream it listens on, and the answers it reads back.</summary>
 internal static class Wire
 {
+    // How long a client waits for anything the service does on a thread of its own.
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     internal static Task<HttpResponseMessage> PutLoadOrder(
@@ -63,7 +64,7 @@ internal static class Wire
     internal static async Task SequenceReaches(this HttpClient client, long atLeast)
     {
         var response = await client.GetAsync(
-            new Uri($"/load-order/sequence/await?atLeast={atLeast}&timeoutMs=20000", UriKind.Relative));
+            new Uri($"/load-order/sequence/await?atLeast={atLeast}&timeoutMs={(int)Patience.TotalMilliseconds}", UriKind.Relative));
         response.EnsureSuccessStatusCode();
         var answer = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.True(

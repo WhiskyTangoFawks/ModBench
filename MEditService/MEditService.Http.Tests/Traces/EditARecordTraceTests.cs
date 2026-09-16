@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,7 +13,7 @@ namespace MEditService.Tests.Traces;
 /// up, so the editor sees an applied reply or a typed refusal, then a rows-changed push, then its
 /// own re-read.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class EditARecordTraceTests : IDisposable
+public sealed class EditARecordTraceTests : HostedTests
 {
     private const string Plugin = "Editable.esp";
     private const string Origin = "EditableMod";
@@ -22,17 +21,6 @@ public sealed class EditARecordTraceTests : IDisposable
     private const string OtherPlugin = "Destination.esp";
     private const string OtherOrigin = "DestinationMod";
     private const int Refused = 422;
-
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
-
-    public EditARecordTraceTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-    }
 
     private static ScatteredFixtureData TwoMods() =>
         new PluginFixtureBuilder("trace-edit-a-record")
@@ -43,13 +31,13 @@ public sealed class EditARecordTraceTests : IDisposable
     private async Task<ScatteredFixtureData> Loaded(params string[] tracked)
     {
         var fx = TwoMods();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        foreach (var origin in tracked) (await _client.Track(origin)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        foreach (var origin in tracked) (await Client.Track(origin)).EnsureSuccessStatusCode();
         return fx;
     }
 
     private Task<HttpResponseMessage> Edit(string formKey, string member, object value) =>
-        _client.Edit(formKey, Plugin, Origin, member, value);
+        Client.Edit(formKey, Plugin, Origin, member, value);
 
     private static async Task<JsonElement> Body(HttpResponseMessage response) =>
         await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -64,8 +52,8 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task EditingARecord_IsApplied_PushedAsRowsChanged_AndAnsweredByTheNextRead()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await _client.FirstFormKey(Plugin);
-        using var stream = await _client.NotificationStream();
+        var formKey = await Client.FirstFormKey(Plugin);
+        using var stream = await Client.NotificationStream();
 
         var applied = await Edit(formKey, "HeightMax", 0.75);
 
@@ -76,9 +64,9 @@ public sealed class EditARecordTraceTests : IDisposable
             "rows-changed", e => e.GetProperty("keys").EnumerateArray().Any(k => k.GetString() == formKey)));
         Assert.Equal(Plugin, rows.GetProperty("plugin").GetString());
         Assert.Equal(Origin, rows.GetProperty("origin").GetString());
-        Assert.Equal(await _client.Sequence(), rows.GetProperty("sequence").GetInt64());
+        Assert.Equal(await Client.Sequence(), rows.GetProperty("sequence").GetInt64());
 
-        var height = (await _client.Record(formKey)).GetProperty("fields").EnumerateArray()
+        var height = (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax");
         Assert.Equal(0.75, height.GetProperty("value").GetDouble(), 3);
     }
@@ -88,7 +76,7 @@ public sealed class EditARecordTraceTests : IDisposable
     {
         using var fx = await Loaded();
 
-        var response = await Edit(await _client.FirstFormKey(Plugin), "HeightMax", 0.75);
+        var response = await Edit(await Client.FirstFormKey(Plugin), "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         var problem = await Body(response);
@@ -100,9 +88,9 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task AnEnvelopeWithAnUnknownOperation_Is400_WithItsOwnRefusal()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await _client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin);
 
-        var response = await _client.PostAsJsonAsync(
+        var response = await Client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/edit",
             new
             {
@@ -124,7 +112,7 @@ public sealed class EditARecordTraceTests : IDisposable
     {
         using var fx = await Loaded(Origin);
 
-        var response = await Edit(await _client.FirstFormKey(Plugin), "no_such_field", 1);
+        var response = await Edit(await Client.FirstFormKey(Plugin), "no_such_field", 1);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("FieldNotFound", (await Body(response)).GetProperty("refusal").GetString());
@@ -134,9 +122,9 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task AnEnvelopeWithoutAPlugin_Is400()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await _client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin);
 
-        var response = await _client.Edit(formKey, string.Empty, Origin, "HeightMax", 0.75);
+        var response = await Client.Edit(formKey, string.Empty, Origin, "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -151,7 +139,7 @@ public sealed class EditARecordTraceTests : IDisposable
         File.Delete(document);
         Directory.CreateDirectory(document);
 
-        var response = await Edit(await _client.FirstFormKey(Plugin), "HeightMax", 0.75);
+        var response = await Edit(await Client.FirstFormKey(Plugin), "HeightMax", 0.75);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.False(string.IsNullOrWhiteSpace((await Body(response)).GetProperty("detail").GetString()));
@@ -161,7 +149,7 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task EditingARecordTheCodecCannotRead_IsRefusedAsAParseFailure()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await _client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin);
         MakeTheDocumentUnreadable(OtherTool.ModFolderOf(fx, Origin), Plugin);
 
         var response = await Edit(formKey, "HeightMax", 0.75);
@@ -173,10 +161,10 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task CopyingARecordTheCodecCannotRead_AsAnOverride_IsTheSameRefusal()
     {
         using var fx = await Loaded(Origin, OtherOrigin);
-        var formKey = await _client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin);
         MakeTheDocumentUnreadable(OtherTool.ModFolderOf(fx, Origin), Plugin);
 
-        var response = await _client.PostAsJsonAsync(
+        var response = await Client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/copy-as-override",
             new
             {
@@ -193,10 +181,10 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task CopyingARecordTheCodecCannotRead_AsANewRecord_IsTheSameRefusal()
     {
         using var fx = await Loaded(Origin, OtherOrigin);
-        var formKey = await _client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin);
         MakeTheDocumentUnreadable(OtherTool.ModFolderOf(fx, Origin), Plugin);
 
-        var response = await _client.PostAsJsonAsync(
+        var response = await Client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
             new
             {
@@ -225,7 +213,7 @@ public sealed class EditARecordTraceTests : IDisposable
     {
         using var fx = await Loaded(Origin);
 
-        var response = await _client.PostAsJsonAsync(
+        var response = await Client.PostAsJsonAsync(
             $"/plugins/{Plugin}/records",
             new { origin = Origin, recordType = "npc_", editorId = "Broken", formKey = "not-a-formkey" });
 
@@ -236,9 +224,9 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task RenumberingARecordToAMalformedFormKey_Is400()
     {
         using var fx = await Loaded(Origin);
-        var formKey = await _client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin);
 
-        var response = await _client.PostAsJsonAsync(
+        var response = await Client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/renumber",
             new { plugin = Plugin, origin = Origin, newFormKey = "not-a-formkey" });
 
@@ -249,9 +237,9 @@ public sealed class EditARecordTraceTests : IDisposable
     public async Task CopyingARecordToAMalformedFormKey_Is400()
     {
         using var fx = await Loaded(Origin, OtherOrigin);
-        var formKey = await _client.FirstFormKey(Plugin);
+        var formKey = await Client.FirstFormKey(Plugin);
 
-        var response = await _client.PostAsJsonAsync(
+        var response = await Client.PostAsJsonAsync(
             $"/records/{Uri.EscapeDataString(formKey)}/copy-as-new-record",
             new
             {
@@ -270,7 +258,7 @@ public sealed class EditARecordTraceTests : IDisposable
     [Fact]
     public async Task TheServedApi_OffersNoMutatingVerbOnTheRecordRoute()
     {
-        var document = JsonDocument.Parse(await _client.GetStringAsync("/swagger/v1/swagger.json"));
+        var document = JsonDocument.Parse(await Client.GetStringAsync("/swagger/v1/swagger.json"));
         var verbs = document.RootElement.GetProperty("paths").GetProperty("/records/{formKey}")
             .EnumerateObject().Select(p => p.Name).ToList();
 

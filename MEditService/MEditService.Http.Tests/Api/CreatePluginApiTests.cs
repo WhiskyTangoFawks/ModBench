@@ -12,22 +12,11 @@ namespace MEditService.Tests.Api;
 /// <summary>The create gesture, which no trace draws: the endpoint is the load order's second
 /// writer, so what it answers and what the next reader sees are one thing.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class CreatePluginApiTests : IDisposable
+public sealed class CreatePluginApiTests : HostedTests
 {
     private const string Held = "Held.esp";
     private const string Origin = "CreatedIntoMod";
     private const string Npc = "HeldNpc";
-
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
-
-    public CreatePluginApiTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-    }
 
     private static ScatteredFixtureData OneMod() =>
         new PluginFixtureBuilder("api-create-plugin")
@@ -37,26 +26,26 @@ public sealed class CreatePluginApiTests : IDisposable
     private async Task<ScatteredFixtureData> Loaded()
     {
         var fx = OneMod();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         return fx;
     }
 
     private Task<HttpResponseMessage> Create(string name, string path, string origin = Origin) =>
-        _client.PostAsJsonAsync("/plugins/create", new { name, path, origin });
+        Client.PostAsJsonAsync("/plugins/create", new { name, path, origin });
 
     private async Task<JsonElement> CreateAndAwait(string name, string path, string origin = Origin)
     {
         var created = await Create(name, path, origin);
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         var body = await created.Content.ReadFromJsonAsync<JsonElement>();
-        await _client.AwaitTerminalLoadOrderStatus(body.GetProperty("version").GetInt64(), TimeSpan.FromSeconds(20));
+        await Client.AwaitTerminalLoadOrderStatus(body.GetProperty("version").GetInt64(), TimeSpan.FromSeconds(20));
         return body;
     }
 
     // A record gesture resolves its target from the kernel alone, so an applied one is the copy
     // being registered and its file being there.
     private Task<HttpResponseMessage> CreateARecordIn(string plugin, string origin = Origin) =>
-        _client.PostAsJsonAsync(
+        Client.PostAsJsonAsync(
             $"/plugins/{Uri.EscapeDataString(plugin)}/records",
             new { origin, recordType = "npc_", editorId = "MintedNpc", formKey = (string?)null });
 
@@ -80,7 +69,7 @@ public sealed class CreatePluginApiTests : IDisposable
     public async Task CreatingAPlugin_TakesTheSlotPastTheHighestRegisteredOne()
     {
         using var fx = await Loaded();
-        var highest = (await _client.Plugins())
+        var highest = (await Client.Plugins())
             .Max(p => p.GetProperty("loadOrderIndex").ValueKind == JsonValueKind.Null
                 ? 0
                 : p.GetProperty("loadOrderIndex").GetInt32());
@@ -134,7 +123,7 @@ public sealed class CreatePluginApiTests : IDisposable
     {
         using var fx = await Loaded();
 
-        var created = await _client.PostAsJsonAsync("/plugins/create", new { name = "NoPath.esp" });
+        var created = await Client.PostAsJsonAsync("/plugins/create", new { name = "NoPath.esp" });
 
         Assert.Equal(HttpStatusCode.BadRequest, created.StatusCode);
     }
@@ -196,15 +185,22 @@ public sealed class CreatePluginApiTests : IDisposable
     // The rival is Track's own refusal to re-track: a naive "always Track on create" would refuse the
     // second plugin instead of reusing the repository the first one made.
     [Fact]
-    public async Task CreatingASecondPluginIntoTheSameDestination_Succeeds()
+    public async Task CreatingASecondPluginIntoTheSameDestination_Succeeds_AndReusesTheRepository()
     {
         using var fx = await Loaded();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
         await CreateAndAwait("First.esp", modFolder);
+        var record = await CreateARecordIn("First.esp");
+        record.EnsureSuccessStatusCode();
+        var formKey = (await record.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("formKey").GetString().Require();
 
         var second = await Create("Second.esp", modFolder);
 
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        // Tracking the destination again would write its tree from the binaries, losing a record only
+        // the source tree holds; this edit lands, so the first create's repository was reused.
+        (await Client.Edit(formKey, "First.esp", Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
     }
 
     // The destination is Tracked inside the create gesture, so its watch is armed there too: the
@@ -214,13 +210,13 @@ public sealed class CreatePluginApiTests : IDisposable
     {
         using var fx = await Loaded();
         var modFolder = OtherTool.ModFolderOf(fx, Origin);
-        var formKey = await _client.FirstFormKey(Held);
+        var formKey = await Client.FirstFormKey(Held);
         await CreateAndAwait("Minted.esp", modFolder);
-        var before = await _client.Sequence();
+        var before = await Client.Sequence();
 
         OtherTool.EditsASourceDocument(modFolder, Held, Npc, "RenamedByHand");
 
-        await _client.SequenceReaches(before + 1);
-        Assert.Equal("RenamedByHand", (await _client.Record(formKey)).GetProperty("editorId").GetString());
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("RenamedByHand", (await Client.Record(formKey)).GetProperty("editorId").GetString());
     }
 }

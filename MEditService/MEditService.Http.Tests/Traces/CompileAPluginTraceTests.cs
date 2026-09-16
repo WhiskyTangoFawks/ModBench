@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.LoadOrder;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,21 +13,10 @@ namespace MEditService.Tests.Traces;
 /// <summary>compile-a-plugin: compile writes the source tree's documents back as the plugin's
 /// bytes, so the proof is another load of those same bytes answering with the edit.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class CompileAPluginTraceTests : IDisposable
+public sealed class CompileAPluginTraceTests : HostedTests
 {
     private const string Plugin = "Compiled.esp";
     private const string Origin = "CompiledMod";
-
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
-
-    public CompileAPluginTraceTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-    }
 
     private static ScatteredFixtureData OneTrackableMod() =>
         new PluginFixtureBuilder("trace-compile-a-plugin")
@@ -38,20 +26,20 @@ public sealed class CompileAPluginTraceTests : IDisposable
     private async Task<ScatteredFixtureData> LoadedAndTracked()
     {
         var fx = OneTrackableMod();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        (await _client.Track(Origin)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.Track(Origin)).EnsureSuccessStatusCode();
         return fx;
     }
 
     private Task<HttpResponseMessage> Compile(string origin) =>
-        _client.PostAsJsonAsync($"/plugins/{Plugin}/compile", new { origin, @ref = (string?)null });
+        Client.PostAsJsonAsync($"/plugins/{Plugin}/compile", new { origin, @ref = (string?)null });
 
     [Fact]
     public async Task CompilingAnEditedPlugin_SucceedsAndItsBytesCarryTheEdit()
     {
         using var fx = await LoadedAndTracked();
-        var formKey = await _client.FirstFormKey(Plugin);
-        (await _client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
+        var formKey = await Client.FirstFormKey(Plugin);
+        (await Client.Edit(formKey, Plugin, Origin, "HeightMax", 0.75)).EnsureSuccessStatusCode();
 
         var compiled = await Compile(Origin);
 

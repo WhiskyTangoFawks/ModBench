@@ -19,6 +19,8 @@ internal static class OtherTool
         mod.WriteToBinary(path);
     }
 
+    internal static void DeletesTheFile(string path) => File.Delete(path);
+
     internal static void WritesTheFile(string path, string contents)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path).Require());

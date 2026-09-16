@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Tests.Api;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -14,22 +13,11 @@ namespace MEditService.Tests.Traces;
 /// actually hold, and the Store announces what changed — so the client sees status, then a
 /// rows-changed push, then its own re-read.</summary>
 [Collection(WebHostCollection.Name)]
-public sealed class ProjectTraceTests : IDisposable
+public sealed class ProjectTraceTests : HostedTests
 {
     private const string Plugin = "Projected.esp";
     private const string Origin = "ProjectedMod";
     private const string Npc = "ProjectedNpc";
-
-    private readonly MEditHost _app = new();
-    private readonly HttpClient _client;
-
-    public ProjectTraceTests() => _client = _app.CreateClient();
-
-    public void Dispose()
-    {
-        _client.Dispose();
-        _app.Dispose();
-    }
 
     private static ScatteredFixtureData OneMod() =>
         new PluginFixtureBuilder("trace-project")
@@ -37,15 +25,15 @@ public sealed class ProjectTraceTests : IDisposable
             .BuildScattered();
 
     private Task<HttpResponseMessage> Reconcile(string? query = null) =>
-        _client.PostAsync(new Uri($"/index/reconcile{query}", UriKind.Relative), content: null);
+        Client.PostAsync(new Uri($"/index/reconcile{query}", UriKind.Relative), content: null);
 
     [Fact]
     public async Task PuttingALoadOrder_ReportsReconcilingThenReady_AndTheRowsAnswerAfterwards()
     {
         using var fx = OneMod();
-        using var stream = await _client.NotificationStream();
+        using var stream = await Client.NotificationStream();
 
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         var status = await stream.EventsUntil(
             "load-order-status",
@@ -54,7 +42,7 @@ public sealed class ProjectTraceTests : IDisposable
         var ready = status[^1].GetProperty("loadOrderStatus");
         Assert.True(ready.GetProperty("conflictsComputed").GetBoolean());
 
-        var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
+        var records = await Client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
         Assert.Equal(1, records.GetProperty("total").GetInt32());
     }
 
@@ -64,9 +52,9 @@ public sealed class ProjectTraceTests : IDisposable
     public async Task ReconcilingOnePlugin_RederivesTheCopyWhoseBytesMoved_AndTheAnswerFollows()
     {
         using var fx = OneMod();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
-        var formKey = await _client.FirstFormKey(Plugin);
-        var before = await _client.Sequence();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        var formKey = await Client.FirstFormKey(Plugin);
+        var before = await Client.Sequence();
 
         OtherTool.WritesThePlugin(
             fx.Plugins.Single(p => p.Origin == Origin).Path, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.9f);
@@ -84,7 +72,7 @@ public sealed class ProjectTraceTests : IDisposable
     }
 
     private async Task<double> HeightMaxOf(string formKey) =>
-        (await _client.Record(formKey)).GetProperty("fields").EnumerateArray()
+        (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
             .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == "HeightMax")
             .GetProperty("value").GetDouble();
 
@@ -92,7 +80,7 @@ public sealed class ProjectTraceTests : IDisposable
     public async Task ReconcilingEveryPlugin_ReportsHowManyCopiesItCheckedAndHowManyRowsChanged()
     {
         using var fx = OneMod();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         var reconciled = await Reconcile();
 
@@ -107,7 +95,7 @@ public sealed class ProjectTraceTests : IDisposable
     public async Task ReconcilingACopyTheLoadOrderDoesNotHold_Is404()
     {
         using var fx = OneMod();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         var reconciled = await Reconcile("?plugin=NoSuch.esp&origin=Nowhere");
 
@@ -118,7 +106,7 @@ public sealed class ProjectTraceTests : IDisposable
     public async Task ReconcilingAPluginWithoutNamingItsOrigin_Is400()
     {
         using var fx = OneMod();
-        (await _client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
+        (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
 
         var reconciled = await Reconcile($"?plugin={Plugin}");
 

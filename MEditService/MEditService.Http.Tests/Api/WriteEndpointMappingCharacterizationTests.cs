@@ -2,15 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Codec.Schema;
-using MEditService.Http.Endpoints;
 using MEditService.LoadOrder;
-using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
@@ -62,8 +57,6 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     private static string ModFolderOf(ScatteredFixtureData fx, string origin) =>
         PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == origin).Path);
 
-    private static void Chmod(string path, string mode) => OtherTool.SetsThePermissions(path, mode);
-
     // --- DeleteRecord ---
 
     [Fact]
@@ -107,7 +100,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var formKey = await FirstNpcFormKey(Plugin);
         var modFolder = ModFolderOf(fx, Origin);
 
-        Chmod(modFolder, "500"); // read+execute only
+        OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
         try
         {
             var response = await _client.PostAsJsonAsync(
@@ -119,7 +112,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
         finally
         {
-            Chmod(modFolder, "700"); // restored before fx.Dispose() needs to clean up
+            OtherTool.SetsThePermissions(modFolder, "700"); // restored before fx.Dispose() needs to clean up
         }
     }
 
@@ -150,7 +143,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var formKey = await FirstNpcFormKey(Plugin);
         var modFolder = ModFolderOf(fx, Origin);
 
-        Chmod(modFolder, "500"); // read+execute only
+        OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
         try
         {
             var response = await _client.PostAsJsonAsync(
@@ -163,7 +156,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
         finally
         {
-            Chmod(modFolder, "700"); // restored before fx.Dispose() needs to clean up
+            OtherTool.SetsThePermissions(modFolder, "700"); // restored before fx.Dispose() needs to clean up
         }
     }
 
@@ -212,7 +205,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var formKey = await FirstNpcFormKey(Plugin);
         var destModFolder = ModFolderOf(fx, DestOrigin);
 
-        Chmod(destModFolder, "500"); // read+execute only
+        OtherTool.SetsThePermissions(destModFolder, "500"); // read+execute only
         try
         {
             var response = await _client.PostAsJsonAsync(
@@ -225,7 +218,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
         finally
         {
-            Chmod(destModFolder, "700"); // restored before fx.Dispose() needs to clean up
+            OtherTool.SetsThePermissions(destModFolder, "700"); // restored before fx.Dispose() needs to clean up
         }
     }
 
@@ -289,7 +282,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var formKey = await FirstNpcFormKey(Plugin);
         var destModFolder = ModFolderOf(fx, DestOrigin);
 
-        Chmod(destModFolder, "500"); // read+execute only
+        OtherTool.SetsThePermissions(destModFolder, "500"); // read+execute only
         try
         {
             var response = await _client.PostAsJsonAsync(
@@ -309,7 +302,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
         finally
         {
-            Chmod(destModFolder, "700"); // restored before fx.Dispose() needs to clean up
+            OtherTool.SetsThePermissions(destModFolder, "700"); // restored before fx.Dispose() needs to clean up
         }
     }
 
@@ -342,7 +335,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         await Track(Origin);
         var modFolder = ModFolderOf(fx, Origin);
 
-        Chmod(modFolder, "500"); // read+execute only
+        OtherTool.SetsThePermissions(modFolder, "500"); // read+execute only
         try
         {
             var response = await _client.PostAsJsonAsync($"/plugins/{Plugin}/records", new
@@ -359,7 +352,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
         finally
         {
-            Chmod(modFolder, "700"); // restored before fx.Dispose() needs to clean up
+            OtherTool.SetsThePermissions(modFolder, "700"); // restored before fx.Dispose() needs to clean up
         }
     }
 
