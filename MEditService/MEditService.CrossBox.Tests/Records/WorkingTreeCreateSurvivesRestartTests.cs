@@ -15,9 +15,6 @@ namespace MEditService.Tests.Records;
 /// read.</summary>
 public sealed class WorkingTreeCreateSurvivesRestartTests
 {
-    private static IRecordIndex RequireStore(IndexProjector index) =>
-        index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
-
     private static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected a successful create to set NewFormKey.");
 
@@ -44,7 +41,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // it.
         Assert.Empty(reloaded.Status.Failures);
         var newFormKey = RequireNewFormKey(created);
-        var reloadedStore = RequireStore(reloaded);
+        var reloadedStore = reloaded.Store.Require();
         var reread = reloadedStore.At(RecordRef.Effective).GetDocument(newFormKey, mod.Plugin);
         Assert.NotNull(reread);
         Assert.Equal("SurvivesRestart", reread.EditorId);
@@ -73,7 +70,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.
         var newFormKey = RequireNewFormKey(created);
-        var document = RequireStore(reloaded).At(RecordRef.Effective).GetDocument(newFormKey)
+        var document = reloaded.Store.Require().At(RecordRef.Effective).GetDocument(newFormKey)
             ?? throw new InvalidOperationException($"Expected {newFormKey} to resolve to a document.");
         Assert.True(document.IsWinner);
     }

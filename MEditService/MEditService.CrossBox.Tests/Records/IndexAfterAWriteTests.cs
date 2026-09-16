@@ -20,15 +20,6 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private static IRecordIndex RequireStore(IndexProjector index) =>
-        index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
-
-    private static RecordDocument RequireDocument(RecordDocument? document, string formKey) =>
-        document ?? throw new InvalidOperationException($"Expected {formKey} to resolve to a document.");
-
-    private static string RequireBody(RecordDocument document) =>
-        document.Body ?? throw new InvalidOperationException($"Expected {document.FormKey}'s document to carry a body.");
-
     private static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected a successful edit to set NewFormKey.");
 
@@ -37,7 +28,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Assert.True(Service().Set(_mod.Plugin, _mod.Npc.ToString(), "EditorID", Json("\"RenamedNpc\"")).Applied);
 
-        var document = RequireDocument(_mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin), _mod.Npc.ToString());
+        var document = _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         Assert.Equal("RenamedNpc", document.EditorId);
     }
 
@@ -46,7 +37,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
     {
         Assert.True(Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75")).Applied);
 
-        var document = RequireDocument(_mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin), _mod.Npc.ToString());
+        var document = _mod.Index.Projected().GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         var field = document.Fields.Single(f => f.Metadata.Name == "HeightMax");
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(field.Value).GetSingle());
     }
@@ -58,12 +49,12 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The file write and the projection are two events (ADR-0014), and both have to have landed:
         // dirt on disk with the editor showing the old value is half a write path.
-        var index = RequireStore(_mod.Index);
-        var effective = RequireDocument(index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin), _mod.Npc.ToString());
-        Assert.Contains("0.75", RequireBody(effective), StringComparison.Ordinal);
+        var index = _mod.Index.Store.Require();
+        var effective = index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        Assert.Contains("0.75", effective.Body.Require(), StringComparison.Ordinal);
 
-        var head = RequireDocument(index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin), _mod.Npc.ToString());
-        Assert.DoesNotContain("0.75", RequireBody(head), StringComparison.Ordinal);
+        var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        Assert.DoesNotContain("0.75", head.Body.Require(), StringComparison.Ordinal);
         Assert.Equal(
             _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)), head.Body);
     }
@@ -77,10 +68,10 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         // The second edit must not re-baseline against the first: Head is what the last commit
         // holds, not "the value before the most recent keystroke".
-        var index = RequireStore(_mod.Index);
-        var effective = RequireDocument(index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin), _mod.Npc.ToString());
-        Assert.Contains("0.5", RequireBody(effective), StringComparison.Ordinal);
-        var head = RequireDocument(index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin), _mod.Npc.ToString());
+        var index = _mod.Index.Store.Require();
+        var effective = index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
+        Assert.Contains("0.5", effective.Body.Require(), StringComparison.Ordinal);
+        var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin).Require();
         Assert.Equal(
             _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId)),
             head.Body);
@@ -109,7 +100,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         var newFormKey = RequireNewFormKey(result);
-        var document = RequireDocument(_mod.Index.Projected().GetDocument(newFormKey, _mod.Plugin), newFormKey);
+        var document = _mod.Index.Projected().GetDocument(newFormKey, _mod.Plugin).Require();
         Assert.Equal("BrandNewNpc", document.EditorId);
         Assert.Null(_mod.Index.Projected(RecordRef.Head).GetDocument(newFormKey, _mod.Plugin));
     }
@@ -140,7 +131,7 @@ public sealed class IndexAfterAWriteTests : IDisposable
 
         Assert.True(service.Set(_mod.Plugin, createdFormKey, "EditorID", Json("\"RenamedNpc\"")).Applied);
 
-        var document = RequireDocument(_mod.Index.Projected().GetDocument(createdFormKey, _mod.Plugin), createdFormKey);
+        var document = _mod.Index.Projected().GetDocument(createdFormKey, _mod.Plugin).Require();
         Assert.Equal("RenamedNpc", document.EditorId);
         Assert.Contains("RenamedNpc", document.Body, StringComparison.Ordinal);
     }

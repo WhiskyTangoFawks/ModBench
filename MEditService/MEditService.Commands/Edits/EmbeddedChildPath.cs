@@ -13,17 +13,9 @@ internal static class EmbeddedChildPath
     {
         var node = root;
         foreach (var hop in hops)
-            node = hop.Kind == PathHop.MemberKind ? (node as JsonObject)?[RequireName(hop)] : (node as JsonArray)?[RequireIndex(hop)];
+            node = hop.Kind == PathHop.MemberKind ? (node as JsonObject)?[hop.RequireName()] : (node as JsonArray)?[hop.RequireIndex()];
         return node;
     }
-
-    // A well-formed member hop names one, and a well-formed index hop carries a position; every hop
-    // reaching here is one this class itself built, or one the envelope validated before Walk ran.
-    private static string RequireName(PathHop hop) =>
-        hop.Name ?? throw new InvalidOperationException("Expected a well-formed member hop to carry a name.");
-
-    private static int RequireIndex(PathHop hop) =>
-        hop.Index ?? throw new InvalidOperationException("Expected a well-formed index hop to carry a position.");
 
     internal static List<PathHop>? Find(JsonObject parent, string? parentTypeName, string formKey, GameRelease release) =>
         Find(parent, parentTypeName, formKey, ContainerSlots.For(release));

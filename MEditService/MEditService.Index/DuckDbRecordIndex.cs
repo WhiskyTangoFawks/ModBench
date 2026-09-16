@@ -55,9 +55,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // Validate's tracked half. Constructed alongside its siblings, for the same reason.
     private SourceValidation? _sourceValidation;
 
-    private SourceValidation RequireSourceValidation() =>
-        _sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository.");
-
     public DuckDBConnection Connection => _indexStore.Connection;
     private DuckDBConnection OpenRead() => _indexStore.OpenReadConnection();
 
@@ -526,7 +523,10 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     public ValidationReport Validate(PluginCopyKey key, string? modFolder)
     {
         if (modFolder != null && SourceRepository.IsTracked(modFolder))
-            return RequireSourceValidation().Validate(key, modFolder);
+        {
+            return (_sourceValidation ?? throw new InvalidOperationException("Call Initialize before using the repository."))
+                .Validate(key, modFolder);
+        }
 
         return ValidateAgainstBinary(key);
     }

@@ -285,7 +285,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // The generated classes live in this assembly under the game's namespace, so the lookup is
     // against typeof(RecordTextCodec).Assembly, never recordType.Assembly.
     private static Type FindGeneratedSerializationType(Type recordType) =>
-        TryFindGeneratedSerializationType(recordType)
+        LookupGeneratedSerializationType(recordType)
             ?? throw new RecordTypeSerializationUnsupportedException(recordType, null, null);
 
     private const string OverlaySuffix = "BinaryOverlay";
@@ -321,7 +321,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // An overlay reader's runtime type is "<ConcreteSetterName>BinaryOverlay"; stripping that one
     // suffix is the only safe normalization: an interface scan matched an ancestor's narrower
     // serializer and silently produced truncated text.
-    private static Type? TryFindGeneratedSerializationType(Type recordType) =>
+    private static Type? LookupGeneratedSerializationType(Type recordType) =>
         LookupGeneratedType(recordType, recordType.Name)
         ?? (recordType.Name.EndsWith(OverlaySuffix, StringComparison.Ordinal)
             ? LookupGeneratedType(recordType, recordType.Name[..^OverlaySuffix.Length])

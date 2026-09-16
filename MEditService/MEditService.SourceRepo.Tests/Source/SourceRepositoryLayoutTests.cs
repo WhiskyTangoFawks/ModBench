@@ -29,7 +29,7 @@ public sealed class SourceRepositoryLayoutTests
     // recovered from the path must carry the same plugin-name bytes For() started from.
     [InlineData("Café.esp", "npc_", "000800:Café.esp", "Né")]
     [InlineData("Плагин.esp", "npc_", "0012AB:Плагин.esp", "Имя")]
-    public void Put_ThenTryParse_RoundTripsPluginAndRecordType(
+    public void Put_ThenParseDocumentPath_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-layout-roundtrip-").FullName;
@@ -46,7 +46,7 @@ public sealed class SourceRepositoryLayoutTests
                 modFolder, Directory.EnumerateFiles(modFolder, "*.json", SearchOption.AllDirectories).Single());
 
             // Everything nests under one root "source/" folder, the plugin its own child directory, not a
-            // "<plugin>.source/" sibling tree. Asserted rather than implied by TryParse round-tripping: a
+            // "<plugin>.source/" sibling tree. Asserted rather than implied by ParseDocumentPath round-tripping: a
             // broken root four segments deep would round-trip too.
             var segments = path.Split(Path.DirectorySeparatorChar);
             Assert.Equal(SourceRepository.RootFolderName, segments[0]);
@@ -56,7 +56,7 @@ public sealed class SourceRepositoryLayoutTests
 
             Assert.NotNull(identity);
             Assert.Equal(pluginFileName, identity.PluginFileName);
-            // TryParse answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
+            // ParseDocumentPath answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
             // two need not match textually, only resolve to the same concrete type, which this equality
             // checks for real rather than assuming a spelling.
             var expectedConcrete = RecordTypeDispatch.For(Release).ConcreteFor(recordType);
@@ -89,7 +89,7 @@ public sealed class SourceRepositoryLayoutTests
     [InlineData("source/Vendor.esp/NotARealFolder/000800.json")]
     // Three segments but not literally RecordData.json — must not be mistaken for the header.
     [InlineData("source/Vendor.esp/NotRecordData.json")]
-    public void TryParse_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
+    public void ParseDocumentPath_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
     {
         // Malformed input must fail outright rather than return a wrong parse, which would mislabel a
         // user's change. '/' is deliberate and portable: these theories build the string directly rather
@@ -102,10 +102,10 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     // A folder whose group element is abstract reads as ambiguous, the same as the whole-mod door's
-    // discriminator policy: the document self-describes rather than TryParse guessing one concrete
+    // discriminator policy: the document self-describes rather than ParseDocumentPath guessing one concrete
     // type from the folder name.
     [Fact]
-    public void TryParse_ForAnAmbiguousGroupsFolder_FailsCleanly()
+    public void ParseDocumentPath_ForAnAmbiguousGroupsFolder_FailsCleanly()
     {
         var ambiguousFolder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat");
         Assert.NotNull(ambiguousFolder); // sanity: GlobalFloat is a flat type with a real folder...
@@ -135,7 +135,7 @@ public sealed class SourceRepositoryLayoutTests
     }
 
     [Fact]
-    public void TryParse_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
+    public void ParseDocumentPath_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
     {
         var identity = SourceRepository.ParseDocumentPath(
             Path.Combine("source", "Vendor.esp", "RecordData.json"), Release);

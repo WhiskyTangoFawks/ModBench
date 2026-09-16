@@ -26,14 +26,8 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     private IRecordReads Effective => Index.At(RecordRef.Effective);
     private IRecordReads Head => Index.At(RecordRef.Head);
 
-    private static RecordDocument RequireDocument(RecordDocument? document, string formKey) =>
-        document ?? throw new InvalidOperationException($"Expected {formKey} to resolve to a document.");
-
-    private static string RequireBody(RecordDocument document) =>
-        document.Body ?? throw new InvalidOperationException($"Expected {document.FormKey}'s document to carry a body.");
-
     private string CellBody() =>
-        RequireBody(RequireDocument(Effective.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin), _fixture.EmbedCell.ToString()));
+        Effective.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin).Require().Body.Require();
 
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
@@ -56,7 +50,7 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
 
         Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), body)]);
 
-        var newDocument = RequireDocument(Effective.GetDocument(newRef.ToString(), _fixture.Plugin), newRef.ToString());
+        var newDocument = Effective.GetDocument(newRef.ToString(), _fixture.Plugin).Require();
         Assert.Equal("AppendedRef", newDocument.EditorId);
         Assert.Null(Head.GetDocument(newRef.ToString(), _fixture.Plugin));
         var placement = Assert.NotNull(Effective.GetPlacement(newRef.ToString(), _fixture.Plugin));
@@ -105,9 +99,9 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
         Index.ProjectDocuments(_fixture.Plugin, [(_fixture.EmbedCell.ToString(), edited)]);
 
         var child = _fixture.TemporaryRef.ToString();
-        var effectiveChild = RequireDocument(Effective.GetDocument(child, _fixture.Plugin), child);
-        var headChild = RequireDocument(Head.GetDocument(child, _fixture.Plugin), child);
-        Assert.Contains("\"Scale\": 2.5", RequireBody(effectiveChild), StringComparison.Ordinal);
-        Assert.DoesNotContain("\"Scale\": 2.5", RequireBody(headChild), StringComparison.Ordinal);
+        var effectiveChild = Effective.GetDocument(child, _fixture.Plugin).Require();
+        var headChild = Head.GetDocument(child, _fixture.Plugin).Require();
+        Assert.Contains("\"Scale\": 2.5", effectiveChild.Body.Require(), StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Scale\": 2.5", headChild.Body.Require(), StringComparison.Ordinal);
     }
 }

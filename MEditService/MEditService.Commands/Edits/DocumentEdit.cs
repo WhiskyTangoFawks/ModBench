@@ -153,9 +153,6 @@ internal static class DocumentEdit
         internal JsonArray? OwnerArray { get; set; }
         internal int Index { get; set; }
 
-        internal JsonObject RequireOwnerObject() =>
-            OwnerObject ?? throw new InvalidOperationException("Expected this cursor to sit in an object, not an array.");
-
         internal JsonArray RequireOwnerArray() =>
             OwnerArray ?? throw new InvalidOperationException("Expected this cursor to sit in an array, not an object.");
 
@@ -169,18 +166,12 @@ internal static class DocumentEdit
             Field ?? throw new InvalidOperationException("Expected this cursor to carry the field it resolved to.");
     }
 
-    private static string RequireName(PathHop hop) =>
-        hop.Name ?? throw new InvalidOperationException("Expected a well-formed member hop to carry a name.");
-
-    private static int RequireIndex(PathHop hop) =>
-        hop.Index ?? throw new InvalidOperationException("Expected a well-formed index hop to carry a position.");
-
     private static RecordEditResult? Resolve(
         JsonObject record, RecordTableSchema schema, IReadOnlyList<PathHop> path, bool creating, out Cursor? cursor)
     {
         cursor = null;
         var spelled = RecordEditEnvelope.Spell(path);
-        var name = RequireName(path[0]);
+        var name = path[0].RequireName();
         var column = schema.RecordColumns.FirstOrDefault(c => c.Name == name);
         if (column == null)
         {
@@ -253,7 +244,7 @@ internal static class DocumentEdit
                 cursor = new Cursor
                 {
                     Column = column,
-                    Node = obj[RequireName(hop)],
+                    Node = obj[hop.RequireName()],
                     Meta = DocumentNodes.VariantFor(field, obj),
                     Field = field,
                     OwnerObject = obj,
@@ -275,7 +266,7 @@ internal static class DocumentEdit
             int index;
             if (hop.Kind == PathHop.IndexKind)
             {
-                index = RequireIndex(hop);
+                index = hop.RequireIndex();
             }
             else
             {
@@ -366,7 +357,7 @@ internal static class DocumentEdit
             return null;
         }
 
-        var owner = cursor.RequireOwnerObject();
+        var owner = cursor.OwnerObject ?? throw new InvalidOperationException("Expected this cursor to sit in an object, not an array.");
         var field = cursor.RequireField();
         var memberName = cursor.RequireMemberName();
         if (field.IsDiscriminator)

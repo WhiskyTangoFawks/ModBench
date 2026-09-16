@@ -131,9 +131,6 @@ internal sealed class IndexStore : IDisposable
         TableDdlBuilder.CreateTables(Connection);
     }
 
-    private string RequireIndexVersion() =>
-        _indexVersion ?? throw new InvalidOperationException("Call Initialize before using the repository.");
-
     // ADR-0009: a codec or schema version change invalidates the whole file, and there is no
     // in-place migration: the file is deleted and reopened empty, costing one cold load.
     private void DiscardFileWrittenUnderAnotherVersion()
@@ -305,7 +302,8 @@ internal sealed class IndexStore : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, index_version)
             VALUES ($1, $2, $3, $4, $5)
-            """, plugin, origin, Path.GetFullPath(filePath), contentHash, RequireIndexVersion());
+            """, plugin, origin, Path.GetFullPath(filePath), contentHash,
+            _indexVersion ?? throw new InvalidOperationException("Call Initialize before using the repository."));
     }
 
     public void DeleteIndexedFile(string plugin, string origin) =>

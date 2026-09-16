@@ -83,9 +83,6 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     private ProjectingEditService EditService() =>
         ProjectingEditService.Over(_index, Holder);
 
-    private static IRecordIndex RequireStore(IndexProjector index) =>
-        index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
-
     private static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected a successful renumber to set NewFormKey.");
 
@@ -94,7 +91,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameLoadOrder()
     {
-        var index = RequireStore(_index);
+        var index = _index.Store.Require();
         var before = Assert.NotNull(index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey));
         Assert.Equal(_worldspaceFormKey, before.ParentWorldspace);
 
@@ -119,7 +116,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void RenumberingAWorldspace_LeavesExactlyOneCellLocationRowForItsTopCell_NoDuplicate()
     {
-        var index = RequireStore(_index);
+        var index = _index.Store.Require();
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
@@ -154,7 +151,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             GameRelease.Fallout4);
         Assert.Empty(reloaded.Status.Failures);
 
-        var freshlyIngested = RequireStore(reloaded).At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
+        var freshlyIngested = reloaded.Store.Require().At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
         Assert.Equal(freshlyIngested, live);

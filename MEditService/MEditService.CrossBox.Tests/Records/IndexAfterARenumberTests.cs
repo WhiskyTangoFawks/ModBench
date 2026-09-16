@@ -33,12 +33,6 @@ public sealed class IndexAfterARenumberTests
     private static string RequireNewFormKey(RecordEditResult result) =>
         result.NewFormKey ?? throw new InvalidOperationException("Expected a successful renumber to set NewFormKey.");
 
-    private static RecordDocument RequireDocument(RecordDocument? document, string formKey) =>
-        document ?? throw new InvalidOperationException($"Expected {formKey} to resolve to a document.");
-
-    private static string RequireBody(RecordDocument document) =>
-        document.Body ?? throw new InvalidOperationException($"Expected {document.FormKey}'s document to carry a body.");
-
     [Fact]
     public void ARenumberedRecord_IsGoneAtEffective_StillAtHead_AndItsNewKeyIsAbsentAtHead()
     {
@@ -156,9 +150,8 @@ public sealed class IndexAfterARenumberTests
         // The referencer's rewrite came back off disk and its rows were re-derived from the restored
         // file, so the filter matches nothing, exactly as it did before the gesture ran.
         Assert.Equal(0, index.SettledReads().Search(query).Total);
-        var referencer = RequireDocument(
-            index.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin), two.ReferencerNpc.ToString());
-        var referencerBody = RequireBody(referencer);
+        var referencer = index.Projected().GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin).Require();
+        var referencerBody = referencer.Body.Require();
         Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);
         Assert.DoesNotContain(requestedTarget, referencerBody, StringComparison.Ordinal);
     }
