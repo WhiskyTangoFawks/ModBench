@@ -14,38 +14,37 @@ public sealed class ValidateTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private IRecordIndex Index => _mod.Index.Store
-        ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+    private IRecordReads Reads => _mod.Index.RequireReads();
 
-    private ValidationReport Validate() => Index.Validate(_mod.Plugin, _mod.ModFolder);
+    private ValidationReport Validate() => Assert.Single(_mod.Index.ValidateIndex(_mod.Plugin));
 
     [Fact]
     public void AHandEditToASourceDocument_IsFoundAndRefreshed()
     {
         var text = File.ReadAllText(_mod.NpcSourceFile);
         File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
-        var before = Index.Sequence;
+        var before = _mod.Index.Sequence;
 
         var report = Validate();
 
-        var effective = Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin);
+        var effective = Reads.GetDocument(_mod.Npc.ToString(), _mod.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedByHand", effective.EditorId);
         Assert.Contains(_mod.Npc.ToString(), report.ChangedKeys, StringComparer.Ordinal);
-        Assert.True(Index.Sequence > before);
+        Assert.True(_mod.Index.Sequence > before);
     }
 
     [Fact]
     public void APluginWhoseRowsAllMatch_ChangesNoRowAndAdvancesNoSequence()
     {
-        var before = Index.Sequence;
+        var before = _mod.Index.Sequence;
 
         var report = Validate();
 
         Assert.Empty(report.ChangedKeys);
         Assert.False(report.NeedsRebuild);
         Assert.Empty(report.Failures);
-        Assert.Equal(before, Index.Sequence);
+        Assert.Equal(before, _mod.Index.Sequence);
     }
 
     // The gap RefreshByKeys leaves and validate closes: git answers the same for an absent blob and a
@@ -60,8 +59,10 @@ public sealed class ValidateTests : IDisposable
 
         var report = Validate();
 
-        Assert.Null(Index.At(RecordRef.Head).GetDocument(formKey, _mod.Plugin));
-        Assert.NotNull(Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin));
+        // Held at the working tree and no committed ref: what the listing reports as an addition.
+        Assert.NotNull(Reads.GetDocument(formKey, _mod.Plugin));
+        var listing = Reads.Search(new RecordQuery(Plugin: _mod.Plugin.Name, Origin: _mod.Plugin.Origin, RecordTypes: ["npc_"], Limit: 50));
+        Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
         Assert.Contains(formKey, report.ChangedKeys, StringComparer.Ordinal);
         Assert.Empty(report.Failures);
     }
@@ -73,13 +74,15 @@ public sealed class ValidateTests : IDisposable
         // An unborn HEAD: git cannot list the committed tree, and answers the same way it would for a
         // repository mid-rebase or with a corrupt object.
         Git("symbolic-ref", "HEAD", "refs/heads/no-such-branch");
-        var before = Index.Sequence;
+        var before = _mod.Index.Sequence;
 
         var report = Validate();
 
         Assert.NotEmpty(report.Failures);
-        Assert.NotNull(Index.At(RecordRef.Head).GetDocument(formKey, _mod.Plugin));
-        Assert.Equal(before, Index.Sequence);
+        var entry = Reads.StackEntry(formKey, _mod.Plugin);
+        Assert.NotNull(entry);
+        Assert.False(entry.HasWorkingTreeChange);
+        Assert.Equal(before, _mod.Index.Sequence);
     }
 
     private void Git(params string[] args) =>

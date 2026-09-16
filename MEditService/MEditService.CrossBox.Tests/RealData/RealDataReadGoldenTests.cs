@@ -3,7 +3,6 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
@@ -12,7 +11,7 @@ namespace MEditService.Tests.RealData;
 /// construction, and would bury the values under thousands of lines of enum domains.</summary>
 public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
-    private readonly DuckDbRecordIndex _repo = fixture.Repo;
+    private readonly IRecordReads _repo = fixture.Reads;
     private const string Origin = "Data";
     private const int PerType = 3;
     // Larger than the record count of any type in the cut-down plugin (info, the largest, has 2,873).
@@ -41,14 +40,14 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     // small page returns is up to the engine's tie-breaking: sampling would make this golden's own
     // subject non-deterministic.
     private IReadOnlyList<string> FormKeysOf(string type) =>
-        [.. _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0)).Items
+        [.. _repo.Search(new RecordQuery(RecordTypes: [type], Limit: WholeType, Offset: 0)).Items
             .Select(r => r.FormKey).Order(StringComparer.Ordinal).Take(PerType)];
 
     // Total plus the first rows of the sorted listing: `info` alone has 2,873 rows, and a golden that
     // is 90% repetition is one nobody re-reads when it fails.
     private object WholeListing(string type)
     {
-        var page = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [type], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0));
+        var page = _repo.Search(new RecordQuery(RecordTypes: [type], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0));
         return new
         {
             page.Total,
@@ -62,7 +61,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         var captured = Types.ToDictionary(
             type => type,
             type => FormKeysOf(type)
-                .SelectMany(fk => _repo.At(RecordRef.Effective).GetDocument(fk, new PluginCopyKey(TestPluginName, Origin))
+                .SelectMany(fk => _repo.GetDocument(fk, new PluginCopyKey(TestPluginName, Origin))
                     is not { } document ? [] : new[] { Project(document) })
                 .ToList());
 
@@ -74,13 +73,13 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     {
         var captured = new
         {
-            Counts = Types.ToDictionary(t => t, t => _repo.At(RecordRef.Effective).GetRecordTypeCounts(new PluginCopyKey(TestPluginName, Origin))
+            Counts = Types.ToDictionary(t => t, t => _repo.GetRecordTypeCounts(new PluginCopyKey(TestPluginName, Origin))
                 .FirstOrDefault(c => string.Equals(c.Type, t, StringComparison.OrdinalIgnoreCase))?.Count ?? 0),
             Listings = Types.ToDictionary(t => t, WholeListing),
-            SearchAllTypesTotal = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0)).Total,
-            SearchByEditorId = _repo.At(RecordRef.Effective).Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Search: "Workshop", Limit: WholeType, Offset: 0))
+            SearchAllTypesTotal = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Limit: WholeType, Offset: 0)).Total,
+            SearchByEditorId = _repo.Search(new RecordQuery(RecordTypes: [.. Types], Plugin: TestPluginName, Origin: Origin, Search: "Workshop", Limit: WholeType, Offset: 0))
                 .Items.OrderBy(r => r.FormKey, StringComparer.Ordinal).Take(20).ToList(),
-            NativeFormKeyCount = _repo.At(RecordRef.Effective).GetNativeFormKeys(new PluginCopyKey(TestPluginName, Origin)).Count,
+            NativeFormKeyCount = _repo.GetNativeFormKeys(new PluginCopyKey(TestPluginName, Origin)).Count,
         };
 
         Golden.Verify("realdata-listings", captured);
@@ -94,14 +93,14 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         var captured = new
         {
             WorldspaceCells = worldspaces.ToDictionary(
-                fk => fk, fk => _repo.At(RecordRef.Effective).GetWorldspaceCells(new PluginCopyKey(TestPluginName, Origin), fk)
+                fk => fk, fk => _repo.GetWorldspaceCells(new PluginCopyKey(TestPluginName, Origin), fk)
                     .OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList()),
-            InteriorCells = _repo.At(RecordRef.Effective).GetInteriorCells(new PluginCopyKey(TestPluginName, Origin), WholeType, 0)
+            InteriorCells = _repo.GetInteriorCells(new PluginCopyKey(TestPluginName, Origin), WholeType, 0)
                 .Items.OrderBy(c => c.FormKey, StringComparer.Ordinal).ToList(),
             CellReferences = cells.ToDictionary(
                 fk => fk, fk =>
                 {
-                    var refs = _repo.At(RecordRef.Effective).GetCellReferences(new PluginCopyKey(TestPluginName, Origin), fk);
+                    var refs = _repo.GetCellReferences(new PluginCopyKey(TestPluginName, Origin), fk);
                     return new
                     {
                         Persistent = refs.Persistent.OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
@@ -109,7 +108,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
                     };
                 }),
             Placements = FormKeysOf("refr").ToDictionary(
-                fk => fk, fk => _repo.At(RecordRef.Effective).GetPlacement(fk, new PluginCopyKey(TestPluginName, Origin))),
+                fk => fk, fk => _repo.GetPlacement(fk, new PluginCopyKey(TestPluginName, Origin))),
         };
 
         Golden.Verify("realdata-spatial", captured);
@@ -128,7 +127,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
             // catches a reference index that stopped being populated; the sample catches a changed
             // row.
             ReferencedBy = allFormKeys
-                .Select(fk => (FormKey: fk, Refs: _repo.At(RecordRef.Effective).GetReferencedBy(fk)))
+                .Select(fk => (FormKey: fk, Refs: _repo.GetReferencedBy(fk)))
                 .Where(r => r.Refs.Count > 0)
                 .ToDictionary(r => r.FormKey, r => new
                 {
@@ -138,7 +137,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
                         .ThenBy(x => x.FieldPath, StringComparer.Ordinal)
                         .Take(5).ToList(),
                 }),
-            Resolved = allFormKeys.ToDictionary(fk => fk, _repo.At(RecordRef.Effective).Resolve),
+            Resolved = allFormKeys.ToDictionary(fk => fk, _repo.Resolve),
         };
 
         Assert.NotEmpty(captured.ReferencedBy);

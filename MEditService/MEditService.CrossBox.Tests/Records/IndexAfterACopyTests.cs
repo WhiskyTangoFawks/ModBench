@@ -19,10 +19,7 @@ public sealed class IndexAfterACopyTests : IDisposable
 
     public IndexAfterACopyTests()
     {
-        _index = new IndexProjector(
-            _holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        _index = Indexes.Open(_holder);
         _index.Reconcile(_holder, _fixture.GameDirectory, _fixture.Entries, GameRelease.Fallout4);
     }
 

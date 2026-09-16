@@ -59,7 +59,7 @@ public sealed class VmadCompareTests : IDisposable
             .Build();
 
         var reflector = SharedSchemaReflector.Instance;
-        _manager = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager = Indexes.Open(holder);
         _manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, holder, reflector, new ConflictClassifier());
     }

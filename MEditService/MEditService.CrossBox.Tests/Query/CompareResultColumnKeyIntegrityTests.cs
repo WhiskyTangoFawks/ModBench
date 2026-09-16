@@ -5,10 +5,8 @@ using MEditService.Codec.Schema;
 using MEditService.Commands.Edits;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.Ports;
 using MEditService.Queries;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -118,16 +116,6 @@ public sealed class CompareResultColumnKeyIntegrityTests
     private static IEnumerable<Type> CandidateInterfaces(Type type) =>
         type.IsInterface ? [type, .. type.GetInterfaces()] : type.GetInterfaces();
 
-    // One copy in the load order is all this needs: it asserts the shape of the response's column
-    // keys, not classification, and the other column falls back to fail-open defaults it never reads.
-    private sealed class FakeIndex(IRecordReads reads) : IQueryIndex
-    {
-        // This double exists for read-model shape assertions only: nothing here projects or filters.
-        public LoadOrderStatus Status => LoadOrderStatus.None;
-        public string? FilterSql => null;
-        public IRecordReads RequireReads() => reads;
-    }
-
     private static IReadOnlyList<FieldDiff> Children(FieldDiff diff) =>
         diff.Children ?? throw new InvalidOperationException($"Expected \"{diff.FieldName}\" to have children.");
 
@@ -138,60 +126,59 @@ public sealed class CompareResultColumnKeyIntegrityTests
         // Perk, not Npc: a record type carrying both a script adapter and a top-level Conditions field, so
         // one record reaches every column-keyed dictionary this guards as well as the nested condition
         // subtree.
-        var mod = new Fallout4Mod(ModKey.FromFileName("Shared.esp"), Fallout4Release.Fallout4);
-        var perk = mod.Perks.AddNew("SharedPerk");
-
-        var vmad = new PerkAdapter();
-        var script = new ScriptEntry { Name = "S", Flags = ScriptEntry.Flag.Local };
-        script.Properties.Add(new ScriptBoolProperty { Name = "IsActive", Data = true });
-
-        var structProp = new ScriptStructProperty { Name = "Config" };
-        var structMember = new ScriptEntry { Name = "SubScript" };
-        structMember.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });
-        structProp.Members.Add(structMember);
-        script.Properties.Add(structProp);
-
-        // StructList property (kind "structList") — same Raw gap, one level deeper (a list of
-        // per-instance member-node lists rather than one).
-        var structListProp = new ScriptStructListProperty { Name = "Items" };
-        var instance = new ScriptEntryStructs();
-        instance.Members.Add(new ScriptIntProperty { Name = "Qty", Data = 7 });
-        structListProp.Structs.Add(instance);
-        script.Properties.Add(structListProp);
-
-        vmad.Scripts.Add(script);
-        perk.VirtualMachineAdapter = vmad;
-
-        // A condition with a Run-On target of Reference gives the nested condition subtree a resolvable
-        // formKey leaf, so the walk reaches real per-column content rather than an empty subtree.
-        var runOnData = new FunctionConditionData
+        FormKey perkKey = default;
+        Action<Fallout4Mod> configure = mod =>
         {
-            Function = Condition.Function.GetIsID,
-            RunOnType = Condition.RunOnType.Reference,
+            var perk = mod.Perks.AddNew("SharedPerk");
+            perkKey = perk.FormKey;
+
+            var vmad = new PerkAdapter();
+            var script = new ScriptEntry { Name = "S", Flags = ScriptEntry.Flag.Local };
+            script.Properties.Add(new ScriptBoolProperty { Name = "IsActive", Data = true });
+
+            var structProp = new ScriptStructProperty { Name = "Config" };
+            var structMember = new ScriptEntry { Name = "SubScript" };
+            structMember.Properties.Add(new ScriptFloatProperty { Name = "Factor", Data = 1.5f });
+            structProp.Members.Add(structMember);
+            script.Properties.Add(structProp);
+
+            // StructList property (kind "structList") — same Raw gap, one level deeper (a list of
+            // per-instance member-node lists rather than one).
+            var structListProp = new ScriptStructListProperty { Name = "Items" };
+            var instance = new ScriptEntryStructs();
+            instance.Members.Add(new ScriptIntProperty { Name = "Qty", Data = 7 });
+            structListProp.Structs.Add(instance);
+            script.Properties.Add(structListProp);
+
+            vmad.Scripts.Add(script);
+            perk.VirtualMachineAdapter = vmad;
+
+            // A condition with a Run-On target of Reference gives the nested condition subtree a resolvable
+            // formKey leaf, so the walk reaches real per-column content rather than an empty subtree.
+            var runOnData = new FunctionConditionData
+            {
+                Function = Condition.Function.GetIsID,
+                RunOnType = Condition.RunOnType.Reference,
+            };
+            runOnData.Reference.SetTo(perk.FormKey);
+            perk.Conditions.Add(new ConditionFloat
+            {
+                CompareOperator = CompareOperator.EqualTo,
+                ComparisonValue = 1.0f,
+                Data = runOnData,
+            });
+
         };
-        runOnData.Reference.SetTo(perk.FormKey);
-        perk.Conditions.Add(new ConditionFloat
-        {
-            CompareOperator = CompareOperator.EqualTo,
-            ComparisonValue = 1.0f,
-            Data = runOnData,
-        });
-
+        using var fixture = new PluginFixtureBuilder("compare-column-keys")
+            .WithPlugin("Shared.esp", configure, origin: "ModA")
+            .WithPlugin("Shared.esp", configure, origin: "ModB")
+            .BuildScattered();
         var reflector = SharedSchemaReflector.Instance;
-        var ddl = new TableDdlBuilder(reflector);
-        using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
-        repo.Initialize(GameRelease.Fallout4);
-        repo.IndexMod((IModGetter)mod, Registration.Participating(0), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.IndexMod((IModGetter)mod, Registration.Participating(1), new PluginCopyKey(mod.ModKey.FileName.ToString(), "ModB"));
-        repo.UpdateWinners();
-
-        var index = new FakeIndex(repo.At(RecordRef.Effective));
-        holder.Apply(new LoadOrderSnapshot(
-            @"C:\Games\Fallout4\Data", null, GameRelease.Fallout4,
-            [new RegisteredCopy("Shared.esp", "Data", "", Slot: 0, Enabled: true, Winning: true)]));
+        using var index = Indexes.Open(holder);
+        index.Reconcile(holder, fixture.GameDirectory, fixture.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(index, holder, reflector, new ConflictClassifier());
 
-        var compare = svc.GetCompare(perk.FormKey.ToString());
+        var compare = svc.GetCompare(perkKey.ToString());
 
         Assert.NotNull(compare);
         var validKeys = compare.Overrides.Select(o => ColumnKey.Of(o.Plugin, o.Origin)).ToHashSet();

@@ -1,46 +1,38 @@
-using MEditService.Http;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0013: `HeldPlugins` is the held set of plugin copies — opened one at a time from the copies a
-// snapshot registers, and mutated in place as copies arrive, leave, or move.
+// ADR-0013: the held set of plugin copies, opened one at a time from the copies a snapshot
+// registers, and mutated in place as copies arrive, leave, or move, as the reads and the status
+// report it.
 public sealed class HeldPluginsTests
 {
     private const string UserPlugin = "UserMod.esp";
 
-    private static HeldPlugins Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILogger? logger = null)
-    {
-        var held = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4, logger);
-        foreach (var plugin in ForcedPlugins.Prepend(data.DataFolder, GameRelease.Fallout4, entries ?? data.Plugins))
-            held.Open(plugin);
-        return held;
-    }
+    private static IndexProjector Open(PluginFixtureData data, IReadOnlyList<LoadOrderEntry>? entries = null, ILoggerFactory? loggerFactory = null) =>
+        Indexes.Reconciled(data.DataFolder, entries ?? data.Plugins, loggerFactory: loggerFactory);
+
+    private static PluginCopyKey Key(string name, string origin = PluginOrigin.DataDirectory) => new(name, origin);
 
     // ── Open ────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Open_ForcedMaster_IsForced_AndLoadsBeforeTheSnapshotPlugin()
+    public void Open_ForcedMaster_LoadsBeforeTheSnapshotPlugin()
     {
         using var data = new PluginFixtureBuilder("lo-open")
             .WithPlugin("Fallout4.esm", listed: false)
             .WithPlugin(UserPlugin)
             .Build();
 
-        var held = Open(data);
+        using var held = Open(data);
 
-        var fo4 = held.Plugins.Single(p => p.Name.Equals("Fallout4.esm", StringComparison.OrdinalIgnoreCase));
-        var user = held.Plugins.Single(p => p.Name == UserPlugin);
-        Assert.True(fo4.IsForced);
-        Assert.False(user.IsForced);
-        Assert.True(fo4.LoadOrderIndex < user.LoadOrderIndex);
-        Assert.Equal(GameRelease.Fallout4, held.GameRelease);
+        Assert.Equal(["Fallout4.esm", UserPlugin], held.Status.IndexedPlugins.Select(p => p.Name));
+        Assert.True(held.Registers(Key("Fallout4.esm")));
+        Assert.True(held.Registers(Key(UserPlugin)));
     }
 
     [Fact]
@@ -53,11 +45,12 @@ public sealed class HeldPluginsTests
             "NonExistent.esp", Path.Combine(data.DataFolder, "NonExistent.esp"),
             PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
 
-        var held = Open(data, entries);
+        using var held = Open(data, entries);
 
-        Assert.Contains(held.Plugins, p => p.Name == "Present.esp");
-        Assert.DoesNotContain(held.Plugins, p => p.Name == "NonExistent.esp");
-        Assert.Contains(held.Failures, f => f.Name == "NonExistent.esp");
+        var opened = held.RequireReads().OpenedCopies.Keys;
+        Assert.Contains(Key("Present.esp"), opened);
+        Assert.DoesNotContain(Key("NonExistent.esp"), opened);
+        Assert.Contains(held.Status.Failures, f => f.Name == "NonExistent.esp");
     }
 
     [Fact]
@@ -71,11 +64,12 @@ public sealed class HeldPluginsTests
         var entries = data.Plugins.Append(new LoadOrderEntry(
             "Bad.esp", badPath, PluginOrigin.DataDirectory, Slot: 1, Enabled: true, Winning: true)).ToList();
 
-        var held = Open(data, entries);
+        using var held = Open(data, entries);
 
-        Assert.Contains(held.Plugins, p => p.Name == "Good.esp");
-        Assert.DoesNotContain(held.Plugins, p => p.Name == "Bad.esp");
-        var failure = Assert.Single(held.Failures);
+        var opened = held.RequireReads().OpenedCopies.Keys;
+        Assert.Contains(Key("Good.esp"), opened);
+        Assert.DoesNotContain(Key("Bad.esp"), opened);
+        var failure = Assert.Single(held.Status.Failures);
         Assert.Equal("Bad.esp", failure.Name);
     }
 
@@ -89,13 +83,11 @@ public sealed class HeldPluginsTests
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
         var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
         File.WriteAllBytes(loser.Path, [0xDE, 0xAD, 0xBE, 0xEF]);
-        var held = new HeldPlugins(MutagenPluginAdapter.Instance, fx.GameDirectory, null, GameRelease.Fallout4);
 
-        foreach (var plugin in ForcedPlugins.Prepend(fx.GameDirectory, GameRelease.Fallout4, [winner, loser]))
-            held.Open(plugin);
+        using var held = Indexes.Reconciled(fx.GameDirectory, [winner, loser]);
 
-        Assert.Equal("ModA", Assert.Single(held.Plugins).Origin);
-        var failure = Assert.Single(held.Failures);
+        Assert.Equal("ModA", Assert.Single(held.RequireReads().OpenedCopies.Keys).Origin);
+        var failure = Assert.Single(held.Status.Failures);
         Assert.Equal("Shared.esp", failure.Name);
         Assert.Equal("ModB", failure.Origin);
     }
@@ -106,15 +98,17 @@ public sealed class HeldPluginsTests
         using var data = new PluginFixtureBuilder("lo-recover")
             .WithPlugin("Fixed.esp")
             .Build();
-        var held = new HeldPlugins(MutagenPluginAdapter.Instance, data.DataFolder, null, GameRelease.Fallout4);
-        var resolved = ForcedPlugins.Prepend(data.DataFolder, GameRelease.Fallout4, data.Plugins).Single();
+        var resolved = data.Plugins.Single();
         var missing = resolved with { Path = Path.Combine(data.DataFolder, "Elsewhere.esp") };
+        var holder = new LoadOrderHolder();
+        using var held = Indexes.Open(holder);
 
-        Assert.Null(held.Open(missing));
-        Assert.Single(held.Failures);
+        held.Reconcile(holder, data.DataFolder, [missing], GameRelease.Fallout4);
+        Assert.Single(held.Status.Failures);
 
-        Assert.NotNull(held.Open(resolved));
-        Assert.Empty(held.Failures);
+        held.Reconcile(holder, data.DataFolder, [resolved], GameRelease.Fallout4);
+        Assert.Empty(held.Status.Failures);
+        Assert.Contains(Key("Fixed.esp"), held.RequireReads().OpenedCopies.Keys);
     }
 
     [Theory]
@@ -124,11 +118,11 @@ public sealed class HeldPluginsTests
     public void Open_ExtensionFlags(string name, bool isLight, bool isMaster)
     {
         using var data = new PluginFixtureBuilder("lo-ext").WithPlugin(name).Build();
-        var held = Open(data);
+        using var held = Open(data);
 
-        var plugin = held.Plugins.Single(p => p.Name == name);
-        Assert.Equal(isLight, plugin.IsLight);
-        Assert.Equal(isMaster, plugin.IsMaster);
+        var content = held.RequireReads().OpenedCopies[Key(name)];
+        Assert.Equal(isLight, content.IsLight);
+        Assert.Equal(isMaster, content.IsMaster);
     }
 
     // The overwhelmingly common light/master plugin in the wild is a header-flagged .esp, not
@@ -140,10 +134,11 @@ public sealed class HeldPluginsTests
             .WithPlugin("EslFlagged.esp", mod => mod.IsSmallMaster = true)
             .WithPlugin("EsmFlagged.esp", mod => mod.IsMaster = true)
             .Build();
-        var held = Open(data);
+        using var held = Open(data);
 
-        Assert.True(held.Plugins.Single(p => p.Name == "EslFlagged.esp").IsLight);
-        Assert.True(held.Plugins.Single(p => p.Name == "EsmFlagged.esp").IsMaster);
+        var opened = held.RequireReads().OpenedCopies;
+        Assert.True(opened[Key("EslFlagged.esp")].IsLight);
+        Assert.True(opened[Key("EsmFlagged.esp")].IsMaster);
     }
 
     [Fact]
@@ -157,21 +152,20 @@ public sealed class HeldPluginsTests
                 mod.Npcs.AddNew("Npc3");
             })
             .Build();
-        var held = Open(data);
+        using var held = Open(data);
 
-        Assert.Equal(3, held.Plugins.Single(p => p.Name == "WithRecords.esp").RecordCount);
+        Assert.Equal(3, held.RequireReads().OpenedCopies[Key("WithRecords.esp")].RecordCount);
     }
 
     [Fact]
-    public void Find_IsCaseInsensitive_AndNullForAnUnknownCopy()
+    public void Registers_TheHeldCopy_AndFalseForAnUnknownCopyOrOrigin()
     {
         using var data = new PluginFixtureBuilder("lo-find").WithPlugin("CaseMod.esp").Build();
-        var held = Open(data);
+        using var held = Open(data);
 
-        Assert.NotNull(held.Find(new PluginCopyKey("CASEMOD.ESP", PluginOrigin.DataDirectory)));
-        Assert.NotNull(held.Find(new PluginCopyKey("casemod.esp", PluginOrigin.DataDirectory)));
-        Assert.Null(held.Find(new PluginCopyKey("Unknown.esp", PluginOrigin.DataDirectory)));
-        Assert.Null(held.Find(new PluginCopyKey("CaseMod.esp", "SomeOtherOrigin")));
+        Assert.True(held.Registers(Key("CaseMod.esp")));
+        Assert.False(held.Registers(Key("Unknown.esp")));
+        Assert.False(held.Registers(Key("CaseMod.esp", "SomeOtherOrigin")));
     }
 
     // ── Mutation in place ───────────────────────────────────────────────────────
@@ -179,53 +173,49 @@ public sealed class HeldPluginsTests
     [Fact]
     public void Update_MovesTheRegistration_AndTheDerivedFactsFollow()
     {
-        using var data = new PluginFixtureBuilder("lo-update").WithPlugin("A.esp").Build();
-        var held = Open(data);
-        var copy = held.Plugins.Single();
-        Assert.True(copy.Participates);
+        using var data = new PluginFixtureBuilder("lo-update").WithPlugin("A.esp", mod => mod.Npcs.AddNew("Npc")).Build();
+        var holder = new LoadOrderHolder();
+        using var held = Indexes.Open(holder);
+        held.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+        var npc = held.RequireReads().Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10)).Items.Single().FormKey;
+        Assert.True(held.RequireReads().GetDocument(npc, Key("A.esp"))?.IsWinner);
 
-        var updated = held.Update(copy, Registration.Disabled(0));
+        held.Reconcile(holder, data.DataFolder, [data.Plugins.Single() with { Enabled = false }], GameRelease.Fallout4);
 
-        Assert.False(updated.Participates);
-        Assert.True(updated.InLoadOrder);
-        Assert.False(held.Plugins.Single().Participates);
-
-        var losing = held.Update(updated, Registration.Losing(0));
-        Assert.False(losing.InLoadOrder);
+        Assert.True(held.Registers(Key("A.esp")));
+        Assert.False(held.RequireReads().GetDocument(npc, Key("A.esp"))?.IsWinner);
+        Assert.Contains(Key("A.esp"), held.RequireReads().OpenedCopies.Keys);
     }
 
     [Fact]
     public void Remove_DropsTheCopy_AndWhatItAnswered()
     {
         using var data = new PluginFixtureBuilder("lo-remove").WithPlugin("A.esp").WithPlugin("B.esp").Build();
-        var held = Open(data);
-        var removed = new PluginCopyKey("A.esp", PluginOrigin.DataDirectory);
+        var holder = new LoadOrderHolder();
+        using var held = Indexes.Open(holder);
+        held.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+        var removed = Key("A.esp");
 
-        Assert.True(held.Remove(removed));
+        held.Reconcile(holder, data.DataFolder, [.. data.Plugins.Where(p => p.Name == "B.esp")], GameRelease.Fallout4);
 
-        Assert.Equal(["B.esp"], held.Plugins.Select(p => p.Name));
-        Assert.Null(held.Find(removed));
-        Assert.DoesNotContain(removed, held.OpenedCopies.Keys);
-        Assert.False(held.Remove(removed));
+        Assert.Equal(["B.esp"], held.Status.IndexedPlugins.Select(p => p.Name));
+        Assert.False(held.Registers(removed));
+        Assert.DoesNotContain(removed, held.RequireReads().OpenedCopies.Keys);
     }
 
     [Fact]
     public void Open_WithLogger_LogsToProvidedLogger()
     {
         using var data = new PluginFixtureBuilder("lo-logger").WithPlugin("LogTest.esp").Build();
-        var logger = new CapturingLogger();
+        var entries = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Debug);
+            b.AddProvider(new CollectingLoggerProvider(entries));
+        });
 
-        var held = Open(data, logger: logger);
+        using var held = Open(data, loggerFactory: loggerFactory);
 
-        Assert.True(logger.WasCalled);
-    }
-
-    private sealed class CapturingLogger : ILogger
-    {
-        public bool WasCalled { get; private set; }
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel logLevel) => true;
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            => WasCalled = true;
+        Assert.Contains(entries, e => e.Message.Contains("LogTest.esp", StringComparison.Ordinal));
     }
 }

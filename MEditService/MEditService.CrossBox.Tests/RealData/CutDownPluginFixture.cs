@@ -1,12 +1,6 @@
-using MEditService.Codec.Schema;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.RealData;
 
@@ -20,27 +14,26 @@ public sealed class CutDownPluginFixture : IDisposable
     public static string PluginPath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", PluginFileName);
 
-    internal DuckDbRecordIndex Repo { get; }
+    public static readonly PluginCopyKey Plugin = new(PluginFileName, PluginOrigin.DataDirectory);
 
-    private readonly IModDisposeGetter _overlay;
+    public string InstanceRoot { get; } = Directory.CreateTempSubdirectory("medit-cutdown-instance-").FullName;
+
+    public IndexProjector Index { get; }
+
+    public IRecordReads Reads => Index.RequireReads();
 
     public CutDownPluginFixture()
     {
-        var reflector = SharedSchemaReflector.Instance;
-        var ddl = new TableDdlBuilder(reflector);
-
-        _overlay = ModFactory.ImportGetter(
-            new ModPath(ModKey.FromFileName(PluginFileName), PluginPath), GameRelease.Fallout4);
-
-        Repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
-        Repo.Initialize(GameRelease.Fallout4);
-        Repo.IndexMod(_overlay, Registration.Participating(0), new PluginCopyKey(_overlay.ModKey.FileName.ToString(), "Data"));
-        Repo.UpdateWinners();
+        var gameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "GameDir")).FullName;
+        Index = Indexes.Reconciled(
+            gameDirectory,
+            [new LoadOrderEntry(PluginFileName, PluginPath, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true)],
+            InstanceRoot);
     }
 
     public void Dispose()
     {
-        Repo.Dispose();
-        _overlay.Dispose();
+        Index.Dispose();
+        try { Directory.Delete(InstanceRoot, recursive: true); } catch (IOException) { }
     }
 }

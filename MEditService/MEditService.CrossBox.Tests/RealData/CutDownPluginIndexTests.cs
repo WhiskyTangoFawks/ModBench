@@ -1,9 +1,8 @@
-using System.Globalization;
 using System.Text.Json;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
-using Microsoft.Extensions.Logging.Abstractions;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
@@ -15,12 +14,7 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
 {
     private readonly CutDownPluginFixture _fixture = fixture;
 
-    private long Count(string table)
-    {
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM {table}";
-        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
-    }
+    private long Count(string table) => StoreFile.Count(_fixture.InstanceRoot, $"SELECT COUNT(*) FROM {table}");
 
     [Fact]
     public void Index_RealWorldspaceData_PopulatesCellLocations()
@@ -41,7 +35,7 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
     [Fact]
     public void Index_RealScripts_ReadTheAdapterOffTheDocument()
     {
-        var document = _fixture.Repo.At(RecordRef.Effective).GetDocument("2499C4:Fallout4.esm", new PluginCopyKey(CutDownPluginFixture.PluginFileName, "Data"));
+        var document = _fixture.Reads.GetDocument("2499C4:Fallout4.esm", new PluginCopyKey(CutDownPluginFixture.PluginFileName, "Data"));
 
         Assert.NotNull(document);
         var adapter = Assert.Single(document.Fields, f => f.Metadata.Name == "VirtualMachineAdapter");
@@ -59,9 +53,7 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
         // Real records cross-reference other forms; this exercises form-reference indexing and
         // SchemaReflector's per-type extraction on authentic field data. Breadth is asserted via
         // the distinct record types that produced references.
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(DISTINCT record_type) FROM form_references";
-        Assert.True(Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) >= 3,
+        Assert.True(StoreFile.Count(_fixture.InstanceRoot, "SELECT COUNT(DISTINCT record_type) FROM form_references") >= 3,
             "Expected references from at least 3 record types in the cut-down plugin.");
     }
 }

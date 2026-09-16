@@ -139,9 +139,8 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 
     private string? EditorIdOf(FormKey formKey, PluginCopyKey plugin)
     {
-        var store = loaded.Services.GetRequiredService<IndexProjector>().Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
-        return store.At(RecordRef.Effective).GetDocument(formKey.ToString(), plugin)?.EditorId;
+        return loaded.Services.GetRequiredService<IndexProjector>().RequireReads()
+            .GetDocument(formKey.ToString(), plugin)?.EditorId;
     }
 
     // Long enough for the settle window the edit opens, and the refresh behind it.

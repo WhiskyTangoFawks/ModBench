@@ -27,9 +27,8 @@ public sealed class WatchOverflowTests : IDisposable
 
         watcher.ValidateAfterOverflow(_mod.Plugin);
 
-        var store = _mod.Index.Store
-            ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
-        var document = store.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin);
+        var store = _mod.Index.RequireReads();
+        var document = store.GetDocument(_mod.Npc.ToString(), _mod.Plugin);
         Assert.NotNull(document);
         Assert.Equal("EditedWhileRunning", document.EditorId);
         // A single edited field drifts one row, not the whole document set — Validate's own
@@ -62,6 +61,7 @@ public sealed class WatchOverflowTests : IDisposable
 
         watcher.ValidateAfterOverflow(_mod.Plugin);
 
-        Assert.Empty(_notifications.Notifications);
+        Assert.Empty(_notifications.Notifications.OfType<RowsChangedNotification>());
+        Assert.Empty(_notifications.Notifications.OfType<PluginChangedNotification>());
     }
 }

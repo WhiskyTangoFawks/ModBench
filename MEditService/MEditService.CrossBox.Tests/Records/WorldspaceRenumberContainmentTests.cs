@@ -54,10 +54,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         _topCellFormKey = topCell.FormKey.ToString();
         _extCellFormKey = extCell.FormKey.ToString();
 
-        _index = new IndexProjector(
-            Holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        _index = Indexes.Open(Holder);
         _index.Reconcile(Holder,
             _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
@@ -91,21 +88,21 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameLoadOrder()
     {
-        var index = _index.Store.Require();
-        var before = Assert.NotNull(index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey));
+        var index = _index.RequireReads();
+        var before = Assert.NotNull(index.GetCellLocation(_plugin, _extCellFormKey));
         Assert.Equal(_worldspaceFormKey, before.ParentWorldspace);
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
         var newFormKey = RequireNewFormKey(result);
 
-        var after = Assert.NotNull(index.At(RecordRef.Effective).GetCellLocation(_plugin, _extCellFormKey));
+        var after = Assert.NotNull(index.GetCellLocation(_plugin, _extCellFormKey));
         Assert.Equal(newFormKey, after.ParentWorldspace);
         Assert.Contains(
-            index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey),
+            index.GetWorldspaceCells(_plugin, newFormKey),
             c => c.FormKey == _extCellFormKey);
         Assert.DoesNotContain(
-            index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, _worldspaceFormKey),
+            index.GetWorldspaceCells(_plugin, _worldspaceFormKey),
             c => c.FormKey == _extCellFormKey);
     }
 
@@ -116,15 +113,15 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void RenumberingAWorldspace_LeavesExactlyOneCellLocationRowForItsTopCell_NoDuplicate()
     {
-        var index = _index.Store.Require();
+        var index = _index.RequireReads();
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
         var newFormKey = RequireNewFormKey(result);
 
-        var cells = index.At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey);
+        var cells = index.GetWorldspaceCells(_plugin, newFormKey);
         Assert.Single(cells, c => c.FormKey == _topCellFormKey);
-        var topCellLocation = Assert.NotNull(index.At(RecordRef.Effective).GetCellLocation(_plugin, _topCellFormKey));
+        var topCellLocation = Assert.NotNull(index.GetCellLocation(_plugin, _topCellFormKey));
         Assert.Equal(newFormKey, topCellLocation.ParentWorldspace);
     }
 
@@ -141,17 +138,14 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         var live = _index.Projected().GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
-        using var reloaded = new IndexProjector(
-            Holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        using var reloaded = Indexes.Open(Holder);
         reloaded.Reconcile(Holder,
             _gameDirectory,
             [new LoadOrderEntry(PluginName, Path.Combine(_modFolder, PluginName), Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
         Assert.Empty(reloaded.Status.Failures);
 
-        var freshlyIngested = reloaded.Store.Require().At(RecordRef.Effective).GetWorldspaceCells(_plugin, newFormKey)
+        var freshlyIngested = reloaded.RequireReads().GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
         Assert.Equal(freshlyIngested, live);

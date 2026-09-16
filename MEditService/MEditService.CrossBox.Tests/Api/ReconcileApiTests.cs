@@ -55,21 +55,16 @@ public sealed class ReconcileApiTests : IDisposable
             ?? throw new InvalidOperationException("Expected the first npc_ record to carry a formKey.");
     }
 
-    private void CorruptTheStoredBody(string formKey)
-    {
-        var store = _app.Services.GetRequiredService<IndexProjector>().Store
-            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
-        var index = (DuckDbRecordIndex)store;
-        DuckDbSql.ExecuteFor(index.Connection,
+    private static void CorruptTheStoredBody(string instanceRoot, string formKey) =>
+        StoreFile.Execute(instanceRoot,
             "UPDATE mirror.records SET body = '{\"EditorID\": \"CorruptedInTheStore\"}' WHERE form_key = $1", formKey);
-    }
 
     [Fact]
     public async Task ReconcilingOnePlugin_CorrectsTheRow_AdvancesTheSequence_AndNamesTheKeyOnTheStream()
     {
         using var fx = await LoadAndTrack();
         var formKey = await FirstNpcFormKey();
-        CorruptTheStoredBody(formKey);
+        CorruptTheStoredBody(fx.InstanceRoot, formKey);
         var before = await _client.GetFromJsonAsync<long>("/load-order/sequence");
 
         using var streamResponse = await _client.GetAsync(

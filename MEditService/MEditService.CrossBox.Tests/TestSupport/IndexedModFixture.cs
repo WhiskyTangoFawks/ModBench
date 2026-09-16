@@ -64,11 +64,7 @@ public sealed class IndexedModFixture : IDisposable
         mod.WriteToBinary(pluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        Index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(
-                SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance), notifications));
+        Index = Indexes.Open(holder, notifications: notifications);
         Holder = Index.Reconcile(holder,
             GameDirectory,
             [Entry],

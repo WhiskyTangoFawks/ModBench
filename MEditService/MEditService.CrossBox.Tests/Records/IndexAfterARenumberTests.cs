@@ -22,10 +22,7 @@ public sealed class IndexAfterARenumberTests
 
     private static IndexProjector MirrorOver(LoadOrderHolder holder, string gameDirectory, IReadOnlyList<LoadOrderEntry> entries)
     {
-        var index = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        var index = Indexes.Open(holder);
         index.Reconcile(holder, gameDirectory, entries, GameRelease.Fallout4);
         return index;
     }
@@ -34,7 +31,7 @@ public sealed class IndexAfterARenumberTests
         result.NewFormKey ?? throw new InvalidOperationException("Expected a successful renumber to set NewFormKey.");
 
     [Fact]
-    public void ARenumberedRecord_IsGoneAtEffective_StillAtHead_AndItsNewKeyIsAbsentAtHead()
+    public void ARenumberedRecord_IsGoneAtEffective_AndItsNewKeyIsAWorkingTreeAddition()
     {
         var holder = new LoadOrderHolder();
         using var two = RenumberTwoModFixture.Create(trackReferencer: true);
@@ -46,9 +43,8 @@ public sealed class IndexAfterARenumberTests
 
         var newFormKey = RequireNewFormKey(result);
         Assert.Null(index.Projected().GetDocument(oldFormKey, two.TargetPlugin));
-        Assert.NotNull(index.Projected(RecordRef.Head).GetDocument(oldFormKey, two.TargetPlugin));
         Assert.NotNull(index.Projected().GetDocument(newFormKey, two.TargetPlugin));
-        Assert.Null(index.Projected(RecordRef.Head).GetDocument(newFormKey, two.TargetPlugin));
+        Assert.True(index.Projected().StackEntry(newFormKey, two.TargetPlugin).Require().HasWorkingTreeChange);
     }
 
     // A row under a brand-new FormKey the filter's one-shot snapshot never evaluated, with the old

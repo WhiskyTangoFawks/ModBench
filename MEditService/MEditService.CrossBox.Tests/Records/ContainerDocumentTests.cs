@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Tests.RealData;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -17,13 +18,8 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
 
     private static readonly string[] CellChildFields = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"];
 
-    private string? StoredBody(string formKey)
-    {
-        using var cmd = _fixture.Repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT body FROM records WHERE form_key = $1";
-        cmd.Parameters.Add(new DuckDB.NET.Data.DuckDBParameter { Value = formKey });
-        return cmd.ExecuteScalar() as string;
-    }
+    private string? StoredBody(string formKey) =>
+        StoreFile.Scalar(_fixture.InstanceRoot, "SELECT body FROM records WHERE form_key = $1", formKey) as string;
 
     [Fact]
     public async Task Index_ForACellWithChildren_StoresThemEmbeddedInTheCellsOwnDocument()

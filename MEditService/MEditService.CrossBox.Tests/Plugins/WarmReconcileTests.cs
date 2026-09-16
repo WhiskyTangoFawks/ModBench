@@ -1,4 +1,5 @@
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index;
@@ -18,11 +19,8 @@ namespace MEditService.Tests.Plugins;
 // ADR-0009: loading a load order the index has seen registers its plugins rather than indexing them.
 public sealed class WarmReconcileTests
 {
-    private static IndexProjector MakeManager(LoadOrderHolder holder, ILogger<IndexProjector>? logger = null)
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        return new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
-    }
+    private static IndexProjector MakeManager(LoadOrderHolder holder, ILoggerFactory? loggerFactory = null) =>
+        Indexes.Open(holder, loggerFactory: loggerFactory);
 
     private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
     {
@@ -55,7 +53,7 @@ public sealed class WarmReconcileTests
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+        using var warm = MakeManager(holder, loggerFactory);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(0, Indexed(entries, "A.esp"));
@@ -65,9 +63,7 @@ public sealed class WarmReconcileTests
 
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
         Assert.True(warm.Status.ConflictsComputed);
-        var store = warm.Store
-            ?? throw new InvalidOperationException("Expected the warm index to already hold a built store.");
-        Assert.NotEmpty(store.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
+        Assert.NotEmpty(warm.RequireReads().GetDocuments(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
     // The "during" half of progress, observed from inside the load loop. A load publishing its count
@@ -81,40 +77,30 @@ public sealed class WarmReconcileTests
             .Build();
         using (var cold = MakeManager(holder)) cold.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        var reflector = SharedSchemaReflector.Instance;
         var observed = new List<int>();
-        var factory = new ProgressWatchingFactory(
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), observed);
-        using var warm = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
-        factory.Index = warm;
+        var watching = new ProgressWatchingAdapter(observed);
+        using var warm = Indexes.Open(holder, watching);
+        watching.Index = warm;
 
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        // Each registration saw the plugins that had already landed and no more.
+        // Each open saw the plugins that had already landed and no more.
         Assert.Equal([0, 1, 2], observed);
     }
 
-    // Every registration is asked, as it happens, how much progress the load order was reporting at
-    // that moment.
-    private sealed class ProgressWatchingFactory(IRecordIndexFactory inner, List<int> observed) : IRecordIndexFactory
+    // Every copy's open, the step before its registration, is asked how much progress the load
+    // order was reporting at that moment.
+    private sealed class ProgressWatchingAdapter(List<int> observed) : DelegatingPluginAdapter(MutagenPluginAdapter.Instance)
     {
         public IndexProjector? Index { get; set; }
 
-        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
-            new ProgressWatchingIndex(inner.Create(gameRelease, instanceRoot), this, observed);
-        public IRecordIndex Rebuild(GameRelease gameRelease, string instanceRoot, long atLeastSequence) =>
-            inner.Rebuild(gameRelease, instanceRoot, atLeastSequence);
-    }
-
-    private sealed class ProgressWatchingIndex(IRecordIndex inner, ProgressWatchingFactory owner, List<int> observed)
-        : DelegatingRecordIndex(inner)
-    {
-        public override void Register(PluginCopyKey key, Registration registration)
+        public override (PluginContent Content, Exception? Unreachable) ReadContent(
+            ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null)
         {
-            var index = owner.Index
-                ?? throw new InvalidOperationException("Expected the factory's Index to be set before any Register call.");
+            var index = Index
+                ?? throw new InvalidOperationException("Expected the adapter's Index to be set before any open.");
             observed.Add(index.Status.IndexedPlugins.Count);
-            base.Register(key, registration);
+            return base.ReadContent(modPath, gameRelease, strings);
         }
     }
 
@@ -156,7 +142,7 @@ public sealed class WarmReconcileTests
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+        using var warm = MakeManager(holder, loggerFactory);
         warm.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
@@ -165,9 +151,7 @@ public sealed class WarmReconcileTests
         Assert.Equal(0, Registered(entries, "B.esp"));
 
         // And the re-index is what the load order serves: the edited record, not the stale one.
-        var store = warm.Store
-            ?? throw new InvalidOperationException("Expected the warm index to already hold a built store.");
-        var documents = store.At(RecordRef.Effective).GetDocuments(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
+        var documents = warm.RequireReads().GetDocuments(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
         Assert.Contains(documents, d => d.EditorId == "NpcBEdited");
         Assert.DoesNotContain(documents, d => d.EditorId == "NpcB");
     }
@@ -189,7 +173,7 @@ public sealed class WarmReconcileTests
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
-        using var warm = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+        using var warm = MakeManager(holder, loggerFactory);
         warm.Reconcile(holder, data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
@@ -231,9 +215,7 @@ public sealed class WarmReconcileTests
             using (var second = MakeManager(holder))
             {
                 second.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
-                var secondStore = second.Store
-                    ?? throw new InvalidOperationException("Expected the second index to already hold a built store.");
-                var npc = secondStore.At(RecordRef.Effective)
+                var npc = second.RequireReads()
                     .GetDocuments(new PluginCopyKey(plugin, origin)).Single(d => d.EditorId == "TrackedNpc");
                 npcSourceFile = SourceDocumentPath.Of(
                     modFolder, plugin, npc.RecordType, npc.FormKey, npc.EditorId, GameRelease.Fallout4);
@@ -241,7 +223,7 @@ public sealed class WarmReconcileTests
 
             var (loggerFactory, entries) = Capturing();
             using var _ = loggerFactory;
-            using var third = MakeManager(holder, loggerFactory.CreateLogger<IndexProjector>());
+            using var third = MakeManager(holder, loggerFactory);
             third.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
 
             // An unmoved tree: registered and validated, never re-derived.
@@ -256,10 +238,8 @@ public sealed class WarmReconcileTests
                 npcSourceFile, text.Replace("\"TrackedNpc\"", "\"EditedBetweenLoads\"", StringComparison.Ordinal));
             using var fourth = MakeManager(holder);
             fourth.Reconcile(holder, gameDirectory, order, GameRelease.Fallout4, instanceRoot);
-            var fourthStore = fourth.Store
-                ?? throw new InvalidOperationException("Expected the fourth index to already hold a built store.");
             Assert.Contains(
-                fourthStore.At(RecordRef.Effective).GetDocuments(new PluginCopyKey(plugin, origin)),
+                fourth.RequireReads().GetDocuments(new PluginCopyKey(plugin, origin)),
                 d => d.EditorId == "EditedBetweenLoads");
         }
         finally

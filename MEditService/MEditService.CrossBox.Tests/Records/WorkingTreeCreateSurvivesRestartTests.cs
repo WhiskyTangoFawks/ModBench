@@ -27,10 +27,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
         Assert.True(created.Applied, created.Message);
 
-        using var reloaded = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        using var reloaded = Indexes.Open(holder);
         reloaded.Reconcile(holder,
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
@@ -41,11 +38,11 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // it.
         Assert.Empty(reloaded.Status.Failures);
         var newFormKey = RequireNewFormKey(created);
-        var reloadedStore = reloaded.Store.Require();
-        var reread = reloadedStore.At(RecordRef.Effective).GetDocument(newFormKey, mod.Plugin);
+        var reloadedStore = reloaded.RequireReads();
+        var reread = reloadedStore.GetDocument(newFormKey, mod.Plugin);
         Assert.NotNull(reread);
         Assert.Equal("SurvivesRestart", reread.EditorId);
-        Assert.Null(reloadedStore.At(RecordRef.Head).GetDocument(newFormKey, mod.Plugin));
+        Assert.True(reloadedStore.StackEntry(newFormKey, mod.Plugin).Require().HasWorkingTreeChange);
     }
 
     [Fact]
@@ -56,10 +53,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         var created = ProjectingEditService.Over(mod.Index, mod.Holder)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
 
-        using var reloaded = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        using var reloaded = Indexes.Open(holder);
         reloaded.Reconcile(holder,
             mod.GameDirectory,
             [new LoadOrderEntry(IndexedModFixture.PluginName, Path.Combine(mod.ModFolder, IndexedModFixture.PluginName), IndexedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
@@ -70,7 +64,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.
         var newFormKey = RequireNewFormKey(created);
-        var document = reloaded.Store.Require().At(RecordRef.Effective).GetDocument(newFormKey)
+        var document = reloaded.RequireReads().GetDocument(newFormKey)
             ?? throw new InvalidOperationException($"Expected {newFormKey} to resolve to a document.");
         Assert.True(document.IsWinner);
     }

@@ -19,15 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.CrossBox.Tests</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-      <_Parameter1>MEditService.Tests.ProcessEnvironment</_Parameter1>
-    </AssemblyAttribute>
-  </ItemGroup>
-
-  <ItemGroup>
     <!-- Drawn: the record index reads the adapter beside it (ADR-0015). -->
     <ProjectReference Include="..\MEditService.SourceRepo\MEditService.SourceRepo.csproj" />
     <!-- Drawn: the record index reads the adapter beside it (ADR-0015). -->

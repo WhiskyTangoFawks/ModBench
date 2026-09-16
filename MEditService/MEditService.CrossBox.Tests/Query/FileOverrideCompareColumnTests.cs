@@ -4,6 +4,7 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Queries;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 
@@ -27,10 +28,7 @@ public sealed class FileOverrideCompareColumnTests
             .BuildScattered();
         using var _ = fx;
 
-        using var manager = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        using var manager = Indexes.Open(holder);
         // ADR-0013: the snapshot carries both copies — plugins.txt names the filename once, so
         // both share its slot, and only ModA is the copy the Mod override order resolves it to.
         var winner = fx.Plugins.Single(p => p.Origin == "ModA");
@@ -65,10 +63,7 @@ public sealed class FileOverrideCompareColumnTests
             .BuildScattered();
         using var _ = fx;
 
-        using var manager = new IndexProjector(
-            holder,
-            MutagenPluginAdapter.Instance,
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        using var manager = Indexes.Open(holder);
         var snapshot = fx.Plugins.Select(p => p with { Enabled = false }).ToList();
         manager.Reconcile(holder, fx.GameDirectory, snapshot, GameRelease.Fallout4);
 

@@ -1,12 +1,7 @@
-using System.Text;
-using MEditService.Codec.Serialization;
 using MEditService.Index;
-using MEditService.Ports;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
@@ -19,8 +14,9 @@ public sealed class RefreshByKeysTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private IRecordIndex Index => _mod.Index.Store
-        ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+    private IRecordReads Reads => _mod.Index.RequireReads();
+
+    private void Refresh(params string[] formKeys) => _mod.Index.RefreshKeys(_mod.Plugin, formKeys);
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
@@ -32,12 +28,12 @@ public sealed class RefreshByKeysTests : IDisposable
         var text = File.ReadAllText(_mod.NpcSourceFile);
         File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [formKey]);
+        Refresh(formKey);
 
-        var effective = Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin);
+        var effective = Reads.GetDocument(formKey, _mod.Plugin);
         Assert.NotNull(effective);
         Assert.Equal("RenamedByHand", effective.EditorId);
-        var atHead = Index.At(RecordRef.Head).GetDocument(formKey, _mod.Plugin);
+        var atHead = Reads.HeadDocument(formKey, _mod.Plugin);
         Assert.NotNull(atHead);
         Assert.NotNull(atHead.Body);
         Assert.DoesNotContain("RenamedByHand", atHead.Body, StringComparison.Ordinal);
@@ -45,9 +41,9 @@ public sealed class RefreshByKeysTests : IDisposable
         Git("add", "-A");
         Git("commit", "-q", "-m", "committed outside Modbench");
 
-        Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [formKey]);
+        Refresh(formKey);
 
-        var stack = Index.At(RecordRef.Effective).GetOverrideStack(formKey);
+        var stack = Reads.GetOverrideStack(formKey);
         Assert.NotNull(stack);
         var entry = stack.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
@@ -57,11 +53,11 @@ public sealed class RefreshByKeysTests : IDisposable
     [Fact]
     public void RefreshingAnUnchangedKey_AdvancesNoSequence()
     {
-        var before = Index.Sequence;
+        var before = _mod.Index.Sequence;
 
-        Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [_mod.Npc.ToString()]);
+        Refresh(_mod.Npc.ToString());
 
-        Assert.Equal(before, Index.Sequence);
+        Assert.Equal(before, _mod.Index.Sequence);
     }
 
     [Fact]
@@ -69,11 +65,11 @@ public sealed class RefreshByKeysTests : IDisposable
     {
         var text = File.ReadAllText(_mod.NpcSourceFile);
         File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
-        var before = Index.Sequence;
+        var before = _mod.Index.Sequence;
 
-        Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [_mod.Npc.ToString()]);
+        Refresh(_mod.Npc.ToString());
 
-        Assert.True(Index.Sequence > before);
+        Assert.True(_mod.Index.Sequence > before);
     }
 
     [Fact]
@@ -87,21 +83,22 @@ public sealed class RefreshByKeysTests : IDisposable
             .Replace("\"FixtureNpc\"", "\"HandCreated\"", StringComparison.Ordinal);
         File.WriteAllText(_mod.SourceFileFor(FormKey.Factory(formKey), "npc_", "HandCreated"), body);
 
-        Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [formKey]);
+        Refresh(formKey);
 
         // A document alone cannot say where the tree puts a record, so the copy is re-derived whole
         // — and the record, its identity row and its EditorID all arrive with it.
-        Assert.Equal("HandCreated", Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)?.EditorId);
-        Assert.Contains(formKey, Index.At(RecordRef.Effective).GetNativeFormKeys(_mod.Plugin));
-        // Never committed, so it answers at Effective and nowhere else.
-        Assert.Null(Index.At(RecordRef.Head).GetDocument(formKey, _mod.Plugin));
+        Assert.Equal("HandCreated", Reads.GetDocument(formKey, _mod.Plugin)?.EditorId);
+        Assert.Contains(formKey, Reads.GetNativeFormKeys(_mod.Plugin));
+        // Never committed, so the listing reports it as an addition.
+        var listing = Reads.Search(new RecordQuery(Plugin: _mod.Plugin.Name, Origin: _mod.Plugin.Origin, RecordTypes: ["npc_"], Limit: 50));
+        Assert.Equal(WorkingTreeState.Added, listing.Items.Single(i => i.FormKey == formKey).WorkingTreeState);
     }
 
     [Fact]
     public void ARefreshedKeyWhoseDocumentIsNotReadable_LeavesItsRowsAsTheyStand()
     {
         var formKey = _mod.Npc.ToString();
-        var beforeDocument = Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin);
+        var beforeDocument = Reads.GetDocument(formKey, _mod.Plugin);
         Assert.NotNull(beforeDocument);
         var before = beforeDocument.Body;
 
@@ -109,9 +106,9 @@ public sealed class RefreshByKeysTests : IDisposable
         // exclusive ownership of the file.
         File.WriteAllText(_mod.NpcSourceFile, "{ this is not json");
 
-        Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [formKey]);
+        Refresh(formKey);
 
-        var afterDocument = Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin);
+        var afterDocument = Reads.GetDocument(formKey, _mod.Plugin);
         Assert.NotNull(afterDocument);
         Assert.Equal(before, afterDocument.Body);
     }
