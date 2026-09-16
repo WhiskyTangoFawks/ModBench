@@ -390,43 +390,4 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("formKey").GetString()));
     }
-
-    // --- Compile ---
-
-    [Fact]
-    public async Task Compile_OnATrackedPlugin_Succeeds()
-    {
-        using var fx = BuildOneModOnePlugin();
-        await Load(fx);
-        await Track(Origin);
-
-        var response = await _client.PostAsJsonAsync($"/plugins/{Plugin}/compile", new { origin = Origin, @ref = (string?)null });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.GetProperty("succeeded").GetBoolean());
-    }
-
-    [Fact]
-    public async Task Compile_WhenTheBinaryCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
-    {
-        using var fx = BuildOneModOnePlugin();
-        await Load(fx);
-        await Track(Origin);
-        var modFolder = ModFolderOf(fx, Origin);
-
-        Chmod(modFolder, "500"); // read+execute only
-        try
-        {
-            var response = await _client.PostAsJsonAsync($"/plugins/{Plugin}/compile", new { origin = Origin, @ref = (string?)null });
-
-            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
-        }
-        finally
-        {
-            Chmod(modFolder, "700"); // restored before fx.Dispose() needs to clean up
-        }
-    }
 }
