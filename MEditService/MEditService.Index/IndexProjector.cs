@@ -884,8 +884,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     }
 
     // A copy the load order names but no reconcile has opened (ADR-0003): opened and indexed here,
-    // the single-copy counterpart of ReconcileProgressively's own arriving loop. False for a copy
-    // still failing to open — nothing indexed, so nothing for a reader to re-fetch.
+    // the single-copy counterpart of ReconcileProgressively's own arriving loop.
     private bool IndexNotYetHeld(PluginKey key)
     {
         using var _ = WriteGate.Enter();
