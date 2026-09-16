@@ -87,8 +87,7 @@ dotnet_diagnostic.S2139.severity = none
 # is unaffected (a command handler's catch-all keeps its filter and its conversion to a refusal).
 dotnet_diagnostic.CA1031.severity = error
 
-# The remaining PRD analyzers (#877, #919). No per-project or per-folder exemption for any of these
-# five.
+# The remaining PRD analyzers. No per-project or per-folder exemption for any of these five.
 dotnet_diagnostic.CA2000.severity = error  # Dispose objects before losing scope
 dotnet_diagnostic.CA2213.severity = error  # Disposable fields should be disposed
 dotnet_diagnostic.CA2025.severity = error  # Do not pass IDisposable instances into unawaited tasks
@@ -104,7 +103,7 @@ dotnet_diagnostic.CA2007.severity = none
 # CA2100: every SQL string in this codebase splices a constant identifier and parameterises its
 # values; there is no interpolated value the rule would be protecting.
 dotnet_diagnostic.CA2100.severity = none
-# Style rows the PRD turns off (#877).
+# Style rows the PRD turns off.
 dotnet_diagnostic.CA1308.severity = none  # Normalize strings to uppercase
 dotnet_diagnostic.CA1034.severity = none  # Nested types should not be visible
 dotnet_diagnostic.CA1002.severity = none  # Do not expose generic lists
