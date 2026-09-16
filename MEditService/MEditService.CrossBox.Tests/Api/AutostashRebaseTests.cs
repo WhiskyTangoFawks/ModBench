@@ -18,7 +18,7 @@ public sealed class AutostashRebaseTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private string RunGit(params string[] args) =>
-        GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
+        GitProbe.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
 
     [Fact]
     public void RebaseEditBranch_WhenReapplyingTheAutostashConflicts_ReportsConflicted_KeepingTheStash()
