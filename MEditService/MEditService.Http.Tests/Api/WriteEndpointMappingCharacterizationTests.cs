@@ -62,19 +62,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
     private static string ModFolderOf(ScatteredFixtureData fx, string origin) =>
         PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == origin).Path);
 
-    // Process-shelled because File.SetUnixFileMode is flagged platform-unsafe (CA1416) even on a
-    // Linux-only runtime. Recursive: handlers write into subdirectories Track left writable, so a
-    // chmod on the root alone would not block the write.
-    private static void Chmod(string path, string mode)
-    {
-        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-            "chmod", ["-R", mode, path])
-        { RedirectStandardError = true })
-            ?? throw new InvalidOperationException($"Expected 'chmod {mode} {path}' to start a process.");
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
-    }
+    private static void Chmod(string path, string mode) => OtherTool.SetsThePermissions(path, mode);
 
     // --- DeleteRecord ---
 
