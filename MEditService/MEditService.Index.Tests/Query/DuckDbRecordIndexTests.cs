@@ -162,7 +162,9 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         repo.UpdateWinners();
 
         var formKey = _fixture.Npc1FormKey.ToString();
-        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(formKey)!.Entries;
+        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(formKey)
+            ?? throw new InvalidOperationException($"Expected an override stack for '{formKey}'.");
+        var overrides = overrideStack.Entries;
 
         Assert.Equal(2, overrides.Count);
         Assert.Contains(overrides, o => o.Plugin.Origin == "ModA");
@@ -298,7 +300,9 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             repo.IndexMod(modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
-            var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())!.Entries;
+            var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcKey.ToString())
+                ?? throw new InvalidOperationException($"Expected an override stack for '{npcKey}'.");
+            var overrides = overrideStack.Entries;
 
             Assert.Equal(2, overrides.Count);
             Assert.Equal(0, overrides[0].LoadOrderIndex);
@@ -360,7 +364,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         var entry = repo.At(RecordRef.Effective).Resolve(_fixture.Npc1FormKey.ToString());
         Assert.NotNull(entry);
-        Assert.Equal("npc_", entry!.Value.RecordType);
+        Assert.Equal("npc_", entry.Value.RecordType);
         Assert.Equal("TestNPC01", entry.Value.EditorId);
     }
 
@@ -650,7 +654,9 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         repo.IndexMod(patchMod, Registration.Participating(1), new PluginCopyKey(patchMod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var overrides = repo.At(RecordRef.Effective).GetOverrideStack(npcFormKey.ToString())!.Entries;
+        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack(npcFormKey.ToString())
+            ?? throw new InvalidOperationException($"Expected an override stack for '{npcFormKey}'.");
+        var overrides = overrideStack.Entries;
 
         Assert.Equal(2, overrides.Count);
         var baseKw = overrides[0].Effective.Fields.FirstOrDefault(f => f.Metadata.Name == "Keywords");

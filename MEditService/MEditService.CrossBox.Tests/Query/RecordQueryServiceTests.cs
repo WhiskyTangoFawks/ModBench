@@ -102,8 +102,9 @@ public sealed class RecordQueryServiceTests : IDisposable
 
         Assert.NotNull(detail);
         var raceField = Assert.Single(detail.Fields, f => f.Metadata.Name == "Race");
-        Assert.NotNull(raceField.Value);
-        Assert.Contains("Ghost.esm", raceField.Value!.ToString());
+        var raceValue = raceField.Value;
+        Assert.NotNull(raceValue);
+        Assert.Contains("Ghost.esm", raceValue.ToString());
         Assert.Contains("Could not be resolved", raceField.CheckError);
     }
 
@@ -225,7 +226,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetRecord_FieldsHaveMetadata()
     {
         var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var detail = _svc.GetRecord(all.Items[0].FormKey)!;
+        var detail = _svc.GetRecord(all.Items[0].FormKey);
+        Assert.NotNull(detail);
 
         Assert.All(detail.Fields, f =>
         {
@@ -258,11 +260,17 @@ public sealed class RecordQueryServiceTests : IDisposable
         File.WriteAllText(
             mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        Assert.Equal(IndexedModFixture.NpcEditorId, reads.GetRecord(mod.Npc.ToString())!.EditorId);
+        var beforeRefresh = reads.GetRecord(mod.Npc.ToString());
+        Assert.NotNull(beforeRefresh);
+        Assert.Equal(IndexedModFixture.NpcEditorId, beforeRefresh.EditorId);
 
-        mod.Index.Store!.RefreshByKeys(mod.Plugin, mod.ModFolder, [mod.Npc.ToString()]);
+        var store = mod.Index.Store;
+        Assert.NotNull(store);
+        store.RefreshByKeys(mod.Plugin, mod.ModFolder, [mod.Npc.ToString()]);
 
-        Assert.Equal("RenamedByHand", reads.GetRecord(mod.Npc.ToString())!.EditorId);
+        var afterRefresh = reads.GetRecord(mod.Npc.ToString());
+        Assert.NotNull(afterRefresh);
+        Assert.Equal("RenamedByHand", afterRefresh.EditorId);
     }
 
     // "Copy as New Record" needs the record's schema table name up front (CreateRecord
@@ -379,7 +387,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             Assert.NotNull(compare);
             // Non-VMAD fields are identical overrides, so only the adapter differs — yet the record
             // is conflicted, and the diff reaches the one property that disagrees.
-            Assert.Equal(ConflictAll.Conflict, compare!.ConflictAll);
+            Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
             Assert.Equal("Top.esp", PowerPropertyDiff(compare).WinnerColumn);
         }
     }
@@ -391,7 +399,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var compare = _svc.GetCompare(all.Items[0].FormKey);
 
         Assert.NotNull(compare);
-        Assert.DoesNotContain(compare!.Diffs, d => d.FieldName == VmadField);
+        Assert.DoesNotContain(compare.Diffs, d => d.FieldName == VmadField);
     }
 
     [Fact]
@@ -409,7 +417,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 var compare = svc.GetCompare(npcKey.ToString());
                 Assert.NotNull(compare);
                 // The master carries no adapter and the override adds one → still a diff row.
-                Assert.Contains(compare!.Diffs, d => d.FieldName == VmadField);
+                Assert.Contains(compare.Diffs, d => d.FieldName == VmadField);
                 Assert.Equal(ConflictAll.Override, compare.ConflictAll);
             });
     }
@@ -429,7 +437,11 @@ public sealed class RecordQueryServiceTests : IDisposable
             .Build();
         using (data)
             WithCompareService(data, svc =>
-                Assert.Equal(ConflictAll.Override, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+            {
+                var compare = svc.GetCompare(npcKey.ToString());
+                Assert.NotNull(compare);
+                Assert.Equal(ConflictAll.Override, compare.ConflictAll);
+            });
     }
 
     [Fact]
@@ -453,7 +465,11 @@ public sealed class RecordQueryServiceTests : IDisposable
             .Build();
         using (data)
             WithCompareService(data, svc =>
-                Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+            {
+                var compare = svc.GetCompare(npcKey.ToString());
+                Assert.NotNull(compare);
+                Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
+            });
     }
 
     [Fact]
@@ -486,7 +502,11 @@ public sealed class RecordQueryServiceTests : IDisposable
             .Build();
         using (data)
             WithCompareService(data, svc =>
-                Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+            {
+                var compare = svc.GetCompare(npcKey.ToString());
+                Assert.NotNull(compare);
+                Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
+            });
     }
 
     [Fact]
@@ -516,7 +536,11 @@ public sealed class RecordQueryServiceTests : IDisposable
             .Build();
         using (data)
             WithCompareService(data, svc =>
-                Assert.Equal(ConflictAll.Conflict, svc.GetCompare(npcKey.ToString())!.ConflictAll));
+            {
+                var compare = svc.GetCompare(npcKey.ToString());
+                Assert.NotNull(compare);
+                Assert.Equal(ConflictAll.Conflict, compare.ConflictAll);
+            });
     }
 
     [Fact]
@@ -549,7 +573,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (data)
             WithCompareService(data, svc =>
             {
-                var compare = svc.GetCompare(npcKey.ToString())!;
+                var compare = svc.GetCompare(npcKey.ToString());
+                Assert.NotNull(compare);
                 var fieldStates = compare.Diffs.First(d => d.FieldName == "Aggression").CellStates;
                 var vmadStates = PowerPropertyDiff(compare).CellStates;
 
@@ -585,10 +610,10 @@ public sealed class RecordQueryServiceTests : IDisposable
                 var compare = svc.GetCompare(cobjKey.ToString());
 
                 Assert.NotNull(compare);
-                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "Conditions");
-                var condition = Assert.Single(conditions.Children!);
-                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "Data");
-                var function = Assert.Single(data0.Children!, c => c.FieldName == "Function");
+                var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
+                var condition = Assert.Single(Children(conditions));
+                var data0 = Assert.Single(Children(condition), c => c.FieldName == "Data");
+                var function = Assert.Single(Children(data0), c => c.FieldName == "Function");
                 Assert.Equal("GetIsID", function.Values["Base.esp"]?.ToString());
                 Assert.Equal("Base.esp", conditions.WinnerColumn);
             });
@@ -623,12 +648,14 @@ public sealed class RecordQueryServiceTests : IDisposable
             {
                 var compare = svc.GetCompare(cobjKey.ToString());
 
-                var conditions = Assert.Single(compare!.Diffs, d => d.FieldName == "Conditions");
-                var condition = Assert.Single(conditions.Children!);
-                var data0 = Assert.Single(condition.Children!, c => c.FieldName == "Data");
-                var param = Assert.Single(data0.Children!, c => c.FieldName == "ParameterOneRecord");
-                Assert.NotNull(param.Resolutions);
-                var paramResolution = param.Resolutions!["Base.esp"];
+                Assert.NotNull(compare);
+                var conditions = Assert.Single(compare.Diffs, d => d.FieldName == "Conditions");
+                var condition = Assert.Single(Children(conditions));
+                var data0 = Assert.Single(Children(condition), c => c.FieldName == "Data");
+                var param = Assert.Single(Children(data0), c => c.FieldName == "ParameterOneRecord");
+                var resolutions = param.Resolutions;
+                Assert.NotNull(resolutions);
+                var paramResolution = resolutions["Base.esp"];
                 Assert.Equal(FormKeyResolutionState.ResolvedValidType, paramResolution.State);
                 Assert.Equal("SomeQuest", paramResolution.EditorId);
             });
@@ -653,12 +680,17 @@ public sealed class RecordQueryServiceTests : IDisposable
 
     private const string VmadField = "VirtualMachineAdapter";
 
-    private static FieldDiff PowerPropertyDiff(CompareResult compare) =>
-        compare.Diffs.First(d => d.FieldName == VmadField)
-            .Children!.First(c => c.FieldName == "Scripts")
-            .Children!.First(c => c.FieldName == "S")
-            .Children!.First(c => c.FieldName == "Properties")
-            .Children!.First(c => c.FieldName == "Power");
+    private static IReadOnlyList<FieldDiff> Children(FieldDiff diff) =>
+        diff.Children ?? throw new InvalidOperationException($"Expected \"{diff.FieldName}\" to have children.");
+
+    private static FieldDiff PowerPropertyDiff(CompareResult compare)
+    {
+        var vmad = compare.Diffs.First(d => d.FieldName == VmadField);
+        var scripts = Children(vmad).First(c => c.FieldName == "Scripts");
+        var script = Children(scripts).First(c => c.FieldName == "S");
+        var properties = Children(script).First(c => c.FieldName == "Properties");
+        return Children(properties).First(c => c.FieldName == "Power");
+    }
 
     private static VirtualMachineAdapter ScriptVmad(int power)
     {
@@ -819,7 +851,9 @@ public sealed class RecordQueryServiceTests : IDisposable
             Assert.Equal([nameof(Fallout4ModHeader.HeaderFlag.Small)], Assert.IsType<JsonElement>(flags.Value).EnumerateArray().Select(e => e.GetString()));
 
             var masters = detail.Fields.Single(f => f.Metadata.Name == "MasterReferences");
-            Assert.Contains("Fallout4.esm", masters.Value!.ToString());
+            var mastersValue = masters.Value;
+            Assert.NotNull(mastersValue);
+            Assert.Contains("Fallout4.esm", mastersValue.ToString());
         }
     }
 

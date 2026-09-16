@@ -14,7 +14,10 @@ internal static class SyntheticColumns
             var names = backingNames(backingMember);
             var bit = names.Count == 0
                 ? SchemaAnnotations.ParseBit(flag)
-                : long.Parse(names.Single(m => m.Value == flag).BitValue!, CultureInfo.InvariantCulture);
+                : long.Parse(
+                    names.Single(m => m.Value == flag).BitValue
+                        ?? throw new InvalidOperationException($"Expected enum member '{flag}' to carry a bit value."),
+                    CultureInfo.InvariantCulture);
             var aliases = names.Count == 0 ? game.Defaults.MembersAliasing(getterType, backingMember, bit) : [];
             yield return new ColumnSpec(
                 new SubFieldSpec(name, "bool", LeafSpec.NoFormKeyTypes, LeafSpec.NoEnumMembers),

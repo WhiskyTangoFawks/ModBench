@@ -160,7 +160,9 @@ public sealed class LoadOrderTests
             absent, null, GameRelease.Fallout4, [.. entries.Select(entry => RegisteredCopy.Of(entry))]);
 
         Assert.False(Directory.Exists(absent));
-        Assert.Equal("HighPriorityMod", order.WinningCopy("A.esp")!.Origin);
+        var winner = order.WinningCopy("A.esp");
+        Assert.NotNull(winner);
+        Assert.Equal("HighPriorityMod", winner.Origin);
         Assert.Equal([new PluginCopyKey("A.esp", "HighPriorityMod")], order.Participating.Select(c => c.Key));
         Assert.False(order.Participates(new PluginCopyKey("A.esp", "LowPriorityMod")));
     }
@@ -170,8 +172,12 @@ public sealed class LoadOrderTests
     {
         var order = Order(Copy("A.esp", "ModA", slot: 0), Copy("A.esp", "ModB", slot: 0, winning: false));
 
-        Assert.Equal("ModA", order.Copy(new PluginCopyKey("A.esp", "ModA"))!.Origin);
-        Assert.Equal("ModB", order.Copy(new PluginCopyKey("A.esp", "ModB"))!.Origin);
+        var copyA = order.Copy(new PluginCopyKey("A.esp", "ModA"));
+        Assert.NotNull(copyA);
+        Assert.Equal("ModA", copyA.Origin);
+        var copyB = order.Copy(new PluginCopyKey("A.esp", "ModB"));
+        Assert.NotNull(copyB);
+        Assert.Equal("ModB", copyB.Origin);
         Assert.Null(order.Copy(new PluginCopyKey("A.esp", "ModC")));
     }
 }

@@ -129,7 +129,9 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         // The edit survived the replay in the tree; the binary on disk is the one upstream wrote and
         // never carried it, so only the tree can be what a reader of this value reads.
-        using var document = JsonDocument.Parse(_mod.Document(_mod.Npc.ToString())!.Body);
+        var npcDocument = _mod.Document(_mod.Npc.ToString())
+            ?? throw new InvalidOperationException("Expected the Npc to have a source document after rebase.");
+        using var document = JsonDocument.Parse(npcDocument.Body);
         Assert.Equal(0.3f, document.RootElement.GetProperty("HeightMax").GetSingle());
 
         using var binary = ModFactory.ImportGetter(

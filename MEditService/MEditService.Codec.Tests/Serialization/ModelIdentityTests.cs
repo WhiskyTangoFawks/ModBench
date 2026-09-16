@@ -42,7 +42,7 @@ public sealed class ModelIdentityTests
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal("Npc", divergence!.RecordType);
+        Assert.Equal("Npc", divergence.RecordType);
         Assert.Equal(npc.FormKey, divergence.FormKey);
         Assert.Contains("HeightMin", divergence.Description);
     }
@@ -73,13 +73,14 @@ public sealed class ModelIdentityTests
     {
         var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var ws = mod.Worldspaces.AddNew("TestWs");
-        ws.TopCell = new Cell(mod) { Timestamp = 1, UnknownGroupData = 2 };
+        var topCell = new Cell(mod) { Timestamp = 1, UnknownGroupData = 2 };
+        ws.TopCell = topCell;
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var recompiledWs = new Worldspace(ws.FormKey, Fallout4Release.Fallout4)
         {
             EditorID = "TestWs",
-            TopCell = new Cell(ws.TopCell!.FormKey, Fallout4Release.Fallout4) { Timestamp = 99, UnknownGroupData = 100 },
+            TopCell = new Cell(topCell.FormKey, Fallout4Release.Fallout4) { Timestamp = 99, UnknownGroupData = 100 },
         };
         recompiled.Worldspaces.Add(recompiledWs);
 
@@ -121,14 +122,15 @@ public sealed class ModelIdentityTests
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
         var recompiledWs = new Worldspace(ws.FormKey, Fallout4Release.Fallout4) { EditorID = "TestWs" };
         var changed = cell.DeepCopy();
-        changed.Grid!.Point = new Noggog.P2Int(0, 1);
+        var grid = changed.Grid ?? throw new InvalidOperationException("Expected the deep-copied cell to keep its grid.");
+        grid.Point = new Noggog.P2Int(0, 1);
         recompiledWs.SubCells.Add(Block(0, 0, SubBlock(0, 0, changed)));
         recompiled.Worldspaces.Add(recompiledWs);
 
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Contains("Point", divergence!.Description);
+        Assert.Contains("Point", divergence.Description);
     }
 
     // The one thing the worldspace's own comparison guards that the per-record walk does not: which
@@ -149,7 +151,7 @@ public sealed class ModelIdentityTests
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal("Worldspace", divergence!.RecordType);
+        Assert.Equal("Worldspace", divergence.RecordType);
         Assert.Contains("BlockNumberX", divergence.Description);
     }
 
@@ -270,7 +272,7 @@ public sealed class ModelIdentityTests
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal(armor.FormKey, divergence!.FormKey);
+        Assert.Equal(armor.FormKey, divergence.FormKey);
     }
 
     [Fact]
@@ -293,7 +295,7 @@ public sealed class ModelIdentityTests
         var divergence = ModelIdentity.FindFirst(mod, recompiled);
 
         Assert.NotNull(divergence);
-        Assert.Equal(package.FormKey, divergence!.FormKey);
+        Assert.Equal(package.FormKey, divergence.FormKey);
     }
 
     // The dictionary tolerance's boundary: NpcMorph's elements are exactly {Key, Value} but Npc.Morphs

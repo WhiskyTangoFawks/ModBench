@@ -303,7 +303,7 @@ public sealed class ContainerCopyFixture : IDisposable
     /// wrote, read back the one way the write side reads them.</summary>
     internal CellPlacement? DestinationCellPlacement(string cellFormKey, string? editorId)
     {
-        var repository = SourceRepository.Open(DestinationModFolder, GameRelease.Fallout4)!;
+        var repository = SourceRepository.Open(DestinationModFolder, GameRelease.Fallout4).Require();
         return repository.CellPlacementOf(DestinationPlugin, new RecordIdentity(cellFormKey, "cell", editorId));
     }
 

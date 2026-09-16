@@ -16,7 +16,8 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture) : I
     {
         var reads = fixture.Repo.At(RecordRef.Effective);
         var summary = reads.Search(new RecordQuery(RecordTypes: [type], Search: editorId, Limit: 1, Offset: 0)).Items.Single();
-        var document = reads.GetDocument(summary.FormKey, new PluginCopyKey(summary.Plugin, summary.Origin))!;
+        var document = reads.GetDocument(summary.FormKey, new PluginCopyKey(summary.Plugin, summary.Origin))
+            ?? throw new InvalidOperationException($"Expected {summary.FormKey} to resolve to a document.");
         return document.Fields.Single(f => f.Metadata.Name == column).Value as JsonElement?;
     }
 
@@ -28,8 +29,9 @@ public sealed class AbstractUnionRealDataTests(CutDownPluginFixture fixture) : I
         Assert.NotEmpty(npcs);
         foreach (var npc in npcs)
         {
-            var level = reads.GetDocument(npc.FormKey, new PluginCopyKey(npc.Plugin, npc.Origin))!
-                .Fields.Single(f => f.Metadata.Name == "Level").Value;
+            var npcDocument = reads.GetDocument(npc.FormKey, new PluginCopyKey(npc.Plugin, npc.Origin))
+                ?? throw new InvalidOperationException($"Expected {npc.FormKey} to resolve to a document.");
+            var level = npcDocument.Fields.Single(f => f.Metadata.Name == "Level").Value;
             // Every real fixture NPC is NpcLevel today (verified — none is PcLevelMult), so this
             // pins the discriminator through a real binary-overlay-backed NPC without depending on
             // the one shape the fixture happens not to have.

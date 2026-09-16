@@ -11,7 +11,9 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
 {
     private readonly WebApplicationFactory<Program> _app = new();
 
-    public HttpClient Client { get; private set; } = null!;
+    private HttpClient? _client;
+    public HttpClient Client =>
+        _client ?? throw new InvalidOperationException("InitializeAsync must run before the client is used.");
     public TPlugin Plugin { get; } = TPlugin.Create();
     public IServiceProvider Services => _app.Services;
 
@@ -19,7 +21,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
 
     public async Task InitializeAsync()
     {
-        Client = _app.CreateClient();
+        _client = _app.CreateClient();
         var resp = await Client.PutLoadOrderAndAwaitReady(new
         {
             plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
@@ -34,7 +36,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        Client?.Dispose();
+        _client?.Dispose();
         _app.Dispose();
         Plugin.Dispose();
     }
@@ -43,7 +45,7 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     // deleting Plugin's files out from under one still running would race it (ADR-0003).
     public async Task DisposeAsync()
     {
-        if (!_disposed && Client is not null)
+        if (!_disposed && _client is not null)
         {
             var holder = Services.GetRequiredService<LoadOrderHolder>();
             await Client.AwaitTerminalLoadOrderStatus(holder.Version, TimeSpan.FromSeconds(10));

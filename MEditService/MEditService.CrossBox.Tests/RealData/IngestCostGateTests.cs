@@ -82,9 +82,8 @@ public sealed class IngestCostGateTests(ITestOutputHelper output)
             break;
         }
 
-        Assert.True(discovered is not null,
+        var (gameRelease, dataDir) = discovered ?? throw new InvalidOperationException(
             "MEDIT_SMOKE=1 was set but no supported game install was discovered to smoke-test.");
-        var (gameRelease, dataDir) = discovered!.Value;
 
         var masterNames = ForcedPlugins.Names(dataDir.Path, gameRelease);
         Assert.NotEmpty(masterNames);

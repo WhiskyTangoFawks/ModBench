@@ -115,7 +115,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var serialize = RecordTypeDispatch.For(gameRelease).IsPathAmbiguous(record.GetType())
             ? ResolveCheckedSerializeMethod(gameRelease)
             : ResolveConcreteSerializeMethod(generated);
-        var task = (Task)serialize.Invoke(null, [writer, record, WriterKernel, metaData])!;
+        var task = (Task)(serialize.Invoke(null, [writer, record, WriterKernel, metaData])
+            ?? throw new InvalidOperationException($"Expected '{serialize.Name}' to return a Task."));
         await task.ConfigureAwait(false);
         WriterKernel.Finalize(streamPackage, writer);
 
@@ -194,9 +195,11 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // the self-describing path and fails loudly rather than constructing a guessed type.
         var dispatch = RecordTypeDispatch.For(gameRelease);
         var record = await DeserializeObjectAsync(stream, directory, gameRelease,
-            readerType => recordType is null || dispatch.IsPathAmbiguous(recordType)
-                ? ResolveCheckedDeserializeMethod(gameRelease, readerType)
-                : ResolveConcreteDeserializeMethod(dispatch.ConcreteFor(recordType)!, readerType),
+            readerType => recordType is not null
+                && dispatch.ConcreteFor(recordType) is { } concrete
+                && !dispatch.IsPathAmbiguous(recordType)
+                    ? ResolveConcreteDeserializeMethod(concrete, readerType)
+                    : ResolveCheckedDeserializeMethod(gameRelease, readerType),
             cancel).ConfigureAwait(false);
         return (IMajorRecord)record;
     }
@@ -209,7 +212,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
         var deserialize = resolve(reader.GetType());
-        var task = (Task)deserialize.Invoke(null, [reader, ReaderKernel, metaData])!;
+        var task = (Task)(deserialize.Invoke(null, [reader, ReaderKernel, metaData])
+            ?? throw new InvalidOperationException($"Expected '{deserialize.Name}' to return a Task."));
         try
         {
             await task.ConfigureAwait(false);
@@ -223,7 +227,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
                 $"No record type in this game's schema matches the document's MutagenObjectType. {ex.Message}", ex);
         }
 
-        return task.GetType().GetProperty(nameof(Task<object>.Result))!.GetValue(task)!;
+        var resultProperty = task.GetType().GetProperty(nameof(Task<object>.Result))
+            ?? throw new InvalidOperationException($"Expected '{task.GetType().Name}' to declare 'Result'.");
+        return resultProperty.GetValue(task)
+            ?? throw new InvalidOperationException("Expected the deserialized record to be non-null.");
     }
 
     // SerializeWithCheck writes MutagenObjectType ahead of the fields and DeserializeWithCheck
@@ -278,9 +285,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // The generated classes live in this assembly under the game's namespace, so the lookup is
     // against typeof(RecordTextCodec).Assembly, never recordType.Assembly.
     private static Type FindGeneratedSerializationType(Type recordType) =>
-        TryFindGeneratedSerializationType(recordType, out var found)
-            ? found
-            : throw new RecordTypeSerializationUnsupportedException(recordType, null, null);
+        TryFindGeneratedSerializationType(recordType)
+            ?? throw new RecordTypeSerializationUnsupportedException(recordType, null, null);
 
     private const string OverlaySuffix = "BinaryOverlay";
 
@@ -315,24 +321,11 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // An overlay reader's runtime type is "<ConcreteSetterName>BinaryOverlay"; stripping that one
     // suffix is the only safe normalization: an interface scan matched an ancestor's narrower
     // serializer and silently produced truncated text.
-    private static bool TryFindGeneratedSerializationType(Type recordType, out Type found)
-    {
-        if (LookupGeneratedType(recordType, recordType.Name) is { } direct)
-        {
-            found = direct;
-            return true;
-        }
-
-        if (recordType.Name.EndsWith(OverlaySuffix, StringComparison.Ordinal)
-            && LookupGeneratedType(recordType, recordType.Name[..^OverlaySuffix.Length]) is { } viaOverlayName)
-        {
-            found = viaOverlayName;
-            return true;
-        }
-
-        found = null!;
-        return false;
-    }
+    private static Type? TryFindGeneratedSerializationType(Type recordType) =>
+        LookupGeneratedType(recordType, recordType.Name)
+        ?? (recordType.Name.EndsWith(OverlaySuffix, StringComparison.Ordinal)
+            ? LookupGeneratedType(recordType, recordType.Name[..^OverlaySuffix.Length])
+            : null);
 
     // The namespace comes from the record rather than a named game so this ingest path stays
     // game-generic; only the seed (RecordTextCodecGeneratorSeed) is per-game.

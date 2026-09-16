@@ -36,7 +36,9 @@ public class SchemaReflectorAtomicValueTests
         // above, proving the leaf kind is reached from BuildSubSchema's dispatch and not only from
         // the top-level column dispatch.
         var lighting = Column("cell", "Lighting");
-        var ambient = lighting.Field.SubFields!.Single(f => f.Name == "AmbientColor");
+        var subFields = lighting.Field.SubFields
+            ?? throw new InvalidOperationException("Expected 'cell.Lighting' to have sub-fields.");
+        var ambient = subFields.Single(f => f.Name == "AmbientColor");
 
         Assert.Equal("color", ambient.ApiType);
         Assert.Null(ambient.SubFields);

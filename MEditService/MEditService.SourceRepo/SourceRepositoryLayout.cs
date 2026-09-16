@@ -146,7 +146,7 @@ public sealed partial class SourceRepository
     /// path does not decide it, so the document names its own type.</summary>
     internal static string? RecordTypeOf(string relativePath, GameRelease gameRelease)
     {
-        if (TryParseDocumentPath(relativePath, gameRelease, out var identity)) return identity.RecordType;
+        if (ParseDocumentPath(relativePath, gameRelease) is { } identity) return identity.RecordType;
 
         var path = new LayoutPath(relativePath);
         return path.IsContainerDocument
@@ -155,26 +155,20 @@ public sealed partial class SourceRepository
             : null;
     }
 
-    /// <summary>Fails closed on anything not shaped like a flat record's path or the header's root
-    /// document, so a tree walk never misreads a container path as a flat record.</summary>
-    internal static bool TryParseDocumentPath(
-        string relativePath, GameRelease gameRelease, out SourceRecordIdentity identity)
+    /// <summary>Null on anything not shaped like a flat record's path or the header's root document,
+    /// so a tree walk never misreads a container path as a flat record.</summary>
+    internal static SourceRecordIdentity? ParseDocumentPath(string relativePath, GameRelease gameRelease)
     {
-        identity = null!;
         var path = new LayoutPath(relativePath);
 
         if (path.IsHeaderDocument)
-        {
-            identity = new SourceRecordIdentity(path.PluginFileName, PluginHeader.RecordType);
-            return true;
-        }
+            return new SourceRecordIdentity(path.PluginFileName, PluginHeader.RecordType);
 
-        if (!path.IsFlatDocument) return false;
+        if (!path.IsFlatDocument) return null;
         if (RecordTypeDispatch.For(gameRelease).RecordTypeForFolder(path.GroupFolderName) is not { } recordType)
-            return false;
+            return null;
 
-        identity = new SourceRecordIdentity(path.PluginFileName, recordType);
-        return true;
+        return new SourceRecordIdentity(path.PluginFileName, recordType);
     }
 
     /// <summary>True for a file under the source root that holds no record — group and block metadata,
@@ -357,7 +351,7 @@ public sealed partial class SourceRepository
                 $"{plugin.Name}'s tree holds no document for worldspace {worldspace}, so an exterior cell " +
                 "inside it has nowhere to land.");
         }
-        return Path.GetDirectoryName(document)!;
+        return PathShape.DirectoryOf(document);
     }
 
     // Track writes a level's document with whatever metadata the source mod carried, and a cell

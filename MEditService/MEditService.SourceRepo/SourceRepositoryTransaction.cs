@@ -49,7 +49,7 @@ public sealed partial class SourceRepository
             if (repository.Locate(plugin, identity) is not { } unit) throw NotRestorableCreate(plugin, identity);
 
             var before = Snapshot(unit.FullPath);
-            var minted = LevelsMintedBy(System.IO.Path.GetDirectoryName(unit.FullPath)!);
+            var minted = LevelsMintedBy(PathShape.DirectoryOf(unit.FullPath));
             try
             {
                 repository.Put(plugin, document);

@@ -17,12 +17,13 @@ public sealed class CopyRecordAsNewRecordHandlerTests
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
-        Assert.NotEqual(mod.SourceNpc.ToString(), result.NewFormKey);
-        Assert.EndsWith(":" + CopyFixture.DestinationPluginName, result.NewFormKey, StringComparison.Ordinal);
+        var newFormKey = result.NewFormKey;
+        Assert.NotEqual(mod.SourceNpc.ToString(), newFormKey);
+        Assert.EndsWith(":" + CopyFixture.DestinationPluginName, newFormKey, StringComparison.Ordinal);
 
-        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey!);
+        var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
-        Assert.Equal(CopyFixture.SourceNpcEditorId, document!.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId, document.EditorId);
 
         // The source plugin's own file is untouched — this is a copy, not a move.
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());
@@ -49,9 +50,11 @@ public sealed class CopyRecordAsNewRecordHandlerTests
         var result = mod.CopyAsNewHandler.CopyRecordAsNewRecord(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
+        Assert.NotNull(result.NewFormKey);
+        var newFormKey = result.NewFormKey;
         Assert.Null(mod.CommittedDocument(
             mod.DestinationPlugin,
-            new RecordIdentity(result.NewFormKey!, "npc_", CopyFixture.SourceNpcEditorId)));
+            new RecordIdentity(newFormKey, "npc_", CopyFixture.SourceNpcEditorId)));
     }
 
     // "Internal self-references follow the duplicate, not the
@@ -66,9 +69,11 @@ public sealed class CopyRecordAsNewRecordHandlerTests
             mod.SourcePlugin, mod.SelfLinkingFaction.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var document = mod.Document(mod.DestinationPlugin, result.NewFormKey!);
+        Assert.NotNull(result.NewFormKey);
+        var newFormKey = result.NewFormKey;
+        var document = mod.Document(mod.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
-        Assert.Contains(result.NewFormKey!, document!.Body, StringComparison.Ordinal);
+        Assert.Contains(newFormKey, document.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(mod.SelfLinkingFaction.ToString(), document.Body, StringComparison.Ordinal);
     }
 
@@ -160,7 +165,8 @@ public sealed class CopyRecordAsNewRecordHandlerTests
             fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, result.NewFormKey!));
+        Assert.NotNull(result.NewFormKey);
+        Assert.NotNull(fixture.Document(fixture.DestinationPlugin, result.NewFormKey));
     }
 
     [Fact]

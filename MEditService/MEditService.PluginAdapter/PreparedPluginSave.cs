@@ -1,3 +1,5 @@
+using MEditService.LoadOrder;
+
 namespace MEditService.PluginAdapter;
 
 /// <summary>An uncommitted plugin write: temp-written binary and strings files plus the <c>.bak</c>
@@ -28,7 +30,7 @@ public sealed class PreparedPluginSave(
         // re-save of the same Localized plugin is the common case, not the first.
         foreach (var (tempStringsPath, finalStringsPath) in _stringsFiles)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(finalStringsPath)!);
+            Directory.CreateDirectory(PathShape.DirectoryOf(finalStringsPath));
             File.Move(tempStringsPath, finalStringsPath, overwrite: true);
         }
     }
@@ -39,7 +41,7 @@ public sealed class PreparedPluginSave(
         {
             if (_rollbackPath != null) File.Delete(_rollbackPath); // committed but never rolled back; best-effort
             File.Delete(tmpPath); // no-op if already moved
-            var tmpDir = Path.GetDirectoryName(tmpPath)!;
+            var tmpDir = PathShape.DirectoryOf(tmpPath);
             // Recursive — tmpDir can also hold a nested Strings/ temp subfolder (moved out
             // file by file on Commit, but left behind whole on an uncommitted Dispose, or partially
             // drained on a Commit that threw partway through the strings loop above).

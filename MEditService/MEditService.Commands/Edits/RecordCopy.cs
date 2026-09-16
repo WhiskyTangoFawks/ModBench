@@ -220,12 +220,15 @@ internal sealed class RecordCopy(SchemaReflector schemaReflector, ILogger logger
 
     // A cell minted bare as a placed reference's ancestor carries none of its own grid; the source
     // cell's document does, so the grid rides along as a member and the codec respells the result.
+    private static JsonNode RequireParsed(string text) =>
+        JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected a document's text to parse as JSON.");
+
     private string WithGridFrom(string sourceCellText, SourceDocument cell, GameRelease release)
     {
-        var grid = JsonNode.Parse(sourceCellText)!.AsObject()[RecordTypeDispatch.CellGridMember];
+        var grid = RequireParsed(sourceCellText).AsObject()[RecordTypeDispatch.CellGridMember];
         if (grid == null) return cell.Body;
 
-        var withGrid = JsonNode.Parse(cell.Body)!.AsObject();
+        var withGrid = RequireParsed(cell.Body).AsObject();
         withGrid[RecordTypeDispatch.CellGridMember] = grid.DeepClone();
         return codec.RoundTrip(withGrid.ToJsonString(), release, cell.RecordType);
     }

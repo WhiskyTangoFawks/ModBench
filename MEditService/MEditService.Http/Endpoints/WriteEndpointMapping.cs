@@ -14,6 +14,11 @@ internal static class WriteEndpointMapping
     internal static PluginCopyKey PluginCopyKeyOf(string routePlugin, string origin) =>
         new(Uri.UnescapeDataString(routePlugin), origin);
 
+    /// <summary>The FormKey an applied create, renumber or copy allocated. Every caller here reaches
+    /// this only once the result is known applied.</summary>
+    internal static string RequireNewFormKey(RecordEditResult result) =>
+        result.NewFormKey ?? throw new InvalidOperationException("Expected an applied result to carry the new FormKey.");
+
     /// <summary>The status code says what kind of problem; the refusal and path extensions say
     /// exactly which, so nobody matches on prose (ADR-0019). eslContradiction marks the one
     /// refusal a header edit can resolve.</summary>

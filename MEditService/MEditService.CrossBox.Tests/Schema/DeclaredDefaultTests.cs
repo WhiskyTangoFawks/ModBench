@@ -18,7 +18,9 @@ public sealed class DeclaredDefaultTests
 
     private static FieldMetadata Vmad => Schemas["npc_"].RecordColumns.Single(c => c.Name == "VirtualMachineAdapter").ToFieldMetadata();
 
-    private static FieldMetadata Member(FieldMetadata owner, string name) => owner.Fields!.Single(f => f.Name == name);
+    private static FieldMetadata Member(FieldMetadata owner, string name) =>
+        (owner.Fields ?? throw new InvalidOperationException($"Expected '{owner.Name}' to have sub-fields."))
+            .Single(f => f.Name == name);
 
     private static long AsLong(object? value) => JsonSerializer.SerializeToElement(value).GetInt64();
 
@@ -32,7 +34,8 @@ public sealed class DeclaredDefaultTests
     [Fact]
     public void ANumericMemberWhoseDefaultIsZero_SpellsNothing()
     {
-        var script = Member(Vmad, "Scripts").ElementType!;
+        var script = Member(Vmad, "Scripts").ElementType
+            ?? throw new InvalidOperationException("Expected 'Scripts' to have an array element type.");
 
         Assert.Null(Member(script, "Name").Default);
         Assert.Null(Schemas["npc_"].RecordColumns.Single(c => c.Name == "HeightMin").Field.Default);
@@ -41,8 +44,13 @@ public sealed class DeclaredDefaultTests
     [Fact]
     public void AnEnumMember_AlwaysNamesItsDefault_DeclaredOrZero()
     {
-        var property = Member(Member(Vmad, "Scripts").ElementType!, "Properties").ElementType!;
-        var data = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec!.ToFieldMetadata().Fields!.Single(f => f.Name == "Data");
+        var scriptsElement = Member(Vmad, "Scripts").ElementType
+            ?? throw new InvalidOperationException("Expected 'Scripts' to have an array element type.");
+        var property = Member(scriptsElement, "Properties").ElementType
+            ?? throw new InvalidOperationException("Expected 'Properties' to have an array element type.");
+        var conditionsElementSpec = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec
+            ?? throw new InvalidOperationException("Expected 'Conditions' to have an array element spec.");
+        var data = Member(conditionsElementSpec.ToFieldMetadata(), "Data");
 
         Assert.Equal("Edited", Member(property, "Flags").Default);
         Assert.Equal("Subject", Member(data, "RunOnType").Default);
@@ -109,7 +117,9 @@ public sealed class DeclaredDefaultTests
         var spelled = new RecordDetail("000001:Test.esp", "B.esp", 1, true, null, [new FieldValue(meta, JsonSerializer.Deserialize<JsonElement>(overrideJson))], "Data");
 
         var result = new ConflictClassifier().Classify([master, spelled], new Dictionary<string, IReadOnlyList<string>>(), GameRelease.Fallout4);
-        var objectFormat = Assert.Single(result.Diffs).Children!.Single(c => c.FieldName == "ObjectFormat");
+        var objectFormat = (Assert.Single(result.Diffs).Children
+            ?? throw new InvalidOperationException("Expected the ObjectFormat diff to have children."))
+            .Single(c => c.FieldName == "ObjectFormat");
 
         Assert.Equal(expected, objectFormat.CellStates["B.esp"]);
     }

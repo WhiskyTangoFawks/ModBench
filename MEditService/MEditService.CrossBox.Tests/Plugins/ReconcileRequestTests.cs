@@ -14,9 +14,12 @@ public sealed class ReconcileRequestTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
+    private IRecordIndex Store =>
+        _mod.Index.Store ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
+
     private void CorruptTheStoredBody(string formKey) =>
         DuckDbSql.ExecuteFor(
-            ((DuckDbRecordIndex)_mod.Index.Store!).Connection,
+            ((DuckDbRecordIndex)Store).Connection,
             "UPDATE mirror.records SET body = '{\"EditorID\": \"CorruptedInTheStore\"}' WHERE form_key = $1",
             formKey);
 
@@ -25,15 +28,15 @@ public sealed class ReconcileRequestTests : IDisposable
     {
         var formKey = _mod.Npc.ToString();
         CorruptTheStoredBody(formKey);
-        var before = _mod.Index.Store!.Sequence;
+        var before = Store.Sequence;
 
         var reports = _mod.Index.ValidateIndex(_mod.Plugin);
 
-        Assert.Equal(
-            IndexedModFixture.NpcEditorId,
-            _mod.Index.Store!.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)!.EditorId);
+        var document = Store.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin);
+        Assert.NotNull(document);
+        Assert.Equal(IndexedModFixture.NpcEditorId, document.EditorId);
         Assert.Contains(formKey, Assert.Single(reports).ChangedKeys, StringComparer.Ordinal);
-        Assert.True(_mod.Index.Store!.Sequence > before);
+        Assert.True(Store.Sequence > before);
     }
 
     [Fact]
@@ -42,7 +45,7 @@ public sealed class ReconcileRequestTests : IDisposable
         var reports = _mod.Index.ValidateIndex(plugin: null);
 
         Assert.Equal(
-            _mod.Index.Store!.RegisteredPlugins().OrderBy(k => k.Name, StringComparer.Ordinal).Select(k => k.Name),
+            Store.RegisteredPlugins().OrderBy(k => k.Name, StringComparer.Ordinal).Select(k => k.Name),
             reports.Select(r => r.Plugin.Name).OrderBy(n => n, StringComparer.Ordinal));
     }
 }

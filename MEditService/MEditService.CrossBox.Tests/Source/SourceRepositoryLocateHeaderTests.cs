@@ -19,11 +19,12 @@ public sealed class SourceRepositoryLocateHeaderTests
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!
-            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
+        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");
+        var unit = repository.Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
 
         Assert.NotNull(unit);
-        Assert.False(unit!.Value.IsEmbedded);
+        Assert.False(unit.Value.IsEmbedded);
         Assert.Equal(headerFormKey, unit.Value.OwnerFormKey);
         Assert.Equal(PluginHeader.RecordType, unit.Value.OwnerRecordType);
         Assert.Equal(
@@ -37,10 +38,11 @@ public sealed class SourceRepositoryLocateHeaderTests
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
 
-        var unit = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!
-            .Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
+        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");
+        var unit = repository.Locate(mod.Plugin, new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null));
 
         Assert.NotNull(unit);
-        Assert.False(unit!.Value.IsDirectoryPerRecord);
+        Assert.False(unit.Value.IsDirectoryPerRecord);
     }
 }

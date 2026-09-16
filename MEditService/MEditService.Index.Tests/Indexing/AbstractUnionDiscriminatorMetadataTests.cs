@@ -13,8 +13,10 @@ public class AbstractUnionDiscriminatorMetadataTests
         var meta = schemas[table].RecordColumns.Single(c => c.Name == path[0]).ToFieldMetadata();
         foreach (var hop in path.Skip(1))
             meta = hop == "[]"
-                ? meta.ElementType!
-                : meta.Fields!.Single(f => f.Name == hop);
+                ? meta.ElementType
+                    ?? throw new InvalidOperationException($"Expected '{table}' step '{hop}' to have an element type.")
+                : (meta.Fields ?? throw new InvalidOperationException($"Expected '{table}' step '{hop}' to have fields."))
+                    .Single(f => f.Name == hop);
         return meta;
     }
 

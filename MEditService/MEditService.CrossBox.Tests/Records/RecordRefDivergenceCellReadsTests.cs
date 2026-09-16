@@ -9,18 +9,27 @@ namespace MEditService.Tests.Records;
 /// relation is joined against.</summary>
 public sealed class RecordRefDivergenceCellReadsTests
 {
+    private static IRecordIndex RequireStore(IndexProjector index) =>
+        index.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
+
+    private static RecordDocument RequireDocument(RecordDocument? document, string formKey) =>
+        document ?? throw new InvalidOperationException($"Expected {formKey} to resolve to a document.");
+
+    private static string RequireBody(RecordDocument document) =>
+        document.Body ?? throw new InvalidOperationException($"Expected {document.FormKey}'s document to carry a body.");
+
     [Fact]
     public void AtHead_GetWorldspaceCells_ShowsTheCommittedEditorId_WhenEffectiveWasRenamed()
     {
         using var fixture = new IndexedContainerFixture();
         fixture.Index.Settle();
-        var index = fixture.Index.Store!;
-        var before = index.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.Plugin)!;
+        var index = RequireStore(fixture.Index);
+        var before = RequireDocument(index.At(RecordRef.Effective).GetDocument(fixture.TopCell.ToString(), fixture.Plugin), fixture.TopCell.ToString());
 
         index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.TopCell.ToString(),
-              before.Body!.Replace(ContainerModFixture.TopCellEditorId, "RenamedTopCell", StringComparison.Ordinal))]);
+              RequireBody(before).Replace(ContainerModFixture.TopCellEditorId, "RenamedTopCell", StringComparison.Ordinal))]);
 
         var effective = index.At(RecordRef.Effective).GetWorldspaceCells(fixture.Plugin, fixture.Worldspace.ToString())
             .Single(c => c.FormKey == fixture.TopCell.ToString());
@@ -36,13 +45,13 @@ public sealed class RecordRefDivergenceCellReadsTests
     {
         using var fixture = new IndexedContainerFixture();
         fixture.Index.Settle();
-        var index = fixture.Index.Store!;
-        var before = index.At(RecordRef.Effective).GetDocument(fixture.Cell.ToString(), fixture.Plugin)!;
+        var index = RequireStore(fixture.Index);
+        var before = RequireDocument(index.At(RecordRef.Effective).GetDocument(fixture.Cell.ToString(), fixture.Plugin), fixture.Cell.ToString());
 
         index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.Cell.ToString(),
-              before.Body!.Replace(ContainerModFixture.CellEditorId, "RenamedCell", StringComparison.Ordinal))]);
+              RequireBody(before).Replace(ContainerModFixture.CellEditorId, "RenamedCell", StringComparison.Ordinal))]);
 
         var effective = index.At(RecordRef.Effective).GetInteriorCells(fixture.Plugin, 50, 0).Items
             .Single(c => c.FormKey == fixture.Cell.ToString());
@@ -58,13 +67,13 @@ public sealed class RecordRefDivergenceCellReadsTests
     {
         using var fixture = new IndexedContainerFixture();
         fixture.Index.Settle();
-        var index = fixture.Index.Store!;
-        var before = index.At(RecordRef.Effective).GetDocument(fixture.TemporaryRef.ToString(), fixture.Plugin)!;
+        var index = RequireStore(fixture.Index);
+        var before = RequireDocument(index.At(RecordRef.Effective).GetDocument(fixture.TemporaryRef.ToString(), fixture.Plugin), fixture.TemporaryRef.ToString());
 
         index.ProjectDocuments(
             fixture.Plugin,
             [(fixture.TemporaryRef.ToString(),
-              before.Body!.Replace(ContainerModFixture.TemporaryRefEditorId, "RenamedTempRef", StringComparison.Ordinal))]);
+              RequireBody(before).Replace(ContainerModFixture.TemporaryRefEditorId, "RenamedTempRef", StringComparison.Ordinal))]);
 
         var effective = index.At(RecordRef.Effective).GetCellReferences(fixture.Plugin, fixture.EmbedCell.ToString())
             .Temporary.Single(p => p.FormKey == fixture.TemporaryRef.ToString());

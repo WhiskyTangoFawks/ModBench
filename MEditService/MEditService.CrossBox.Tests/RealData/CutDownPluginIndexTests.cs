@@ -44,9 +44,10 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
         var document = _fixture.Repo.At(RecordRef.Effective).GetDocument("2499C4:Fallout4.esm", new PluginCopyKey(CutDownPluginFixture.PluginFileName, "Data"));
 
         Assert.NotNull(document);
-        var adapter = Assert.Single(document!.Fields, f => f.Metadata.Name == "VirtualMachineAdapter");
+        var adapter = Assert.Single(document.Fields, f => f.Metadata.Name == "VirtualMachineAdapter");
+        var adapterValue = adapter.Value ?? throw new InvalidOperationException("Expected VirtualMachineAdapter field to carry a value.");
         using var value = JsonDocument.Parse(
-            adapter.Value is JsonElement json ? json.GetRawText() : (string)adapter.Value!);
+            adapterValue is JsonElement json ? json.GetRawText() : (string)adapterValue);
         var scripts = value.RootElement.GetProperty("Scripts");
         Assert.Equal(2, scripts.GetArrayLength());
         Assert.Contains(scripts.EnumerateArray(), s => s.GetProperty("Name").GetString() == "RadroachLegendaryScript");

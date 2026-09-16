@@ -20,7 +20,7 @@ public sealed class RebaseHandlerTests : IDisposable
     {
         var result = TestEditService.RebaseHandler(_holder).RebaseEditBranch(SourceEditFixture.ModFolderOrigin);
 
-        Assert.Equal(RebaseOutcome.Clean, result!.Outcome);
+        Assert.Equal(RebaseOutcome.Clean, result.Require().Outcome);
     }
 
     // Which outcome a continue reports is SourceRepositoryRebaseTests' subject; that it reaches the

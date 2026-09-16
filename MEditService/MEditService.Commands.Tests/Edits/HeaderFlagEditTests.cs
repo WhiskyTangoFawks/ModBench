@@ -32,7 +32,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         // The source document is the truth: the root RecordData.json now carries the flag.
-        Assert.Contains("Small", _fixture.Document(HeaderFormKey)!.Body, StringComparison.Ordinal);
+        Assert.Contains("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
 
         var compile = CompileServices.Over(_fixture.LoadOrder)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
@@ -54,7 +54,7 @@ public sealed class HeaderFlagEditTests : IDisposable
         var result = service.Set(_fixture.Plugin, HeaderFormKey, "IsSmallMaster", Json(false));
 
         Assert.True(result.Applied, result.Message);
-        Assert.DoesNotContain("Small", _fixture.Document(HeaderFormKey)!.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("Small", _fixture.Document(HeaderFormKey).Require().Body, StringComparison.Ordinal);
     }
 
     // The allocator answers from the document, not the load order's in-memory mod object: a flag

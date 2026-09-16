@@ -80,7 +80,8 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     private byte[] Serialize(IMajorRecordGetter record) =>
         _codec.SerializeToBytesAsync(record, Release).GetAwaiter().GetResult();
 
-    private SourceRepository Repository => SourceRepository.Open(_modFolder, Release)!;
+    private SourceRepository Repository =>
+        SourceRepository.Open(_modFolder, Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);
@@ -144,7 +145,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
 
         var owner = await _codec.DeserializeFromBytesAsync(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
 
-        Assert.Equal(["RenamedRef"], ((Cell)owner).Persistent.Select(placed => placed.EditorID!).ToArray());
+        Assert.Equal(["RenamedRef"], ((Cell)owner).Persistent.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());
     }
 
     private void PutRenamedPersistentRef()
@@ -193,7 +194,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         var owner = (Cell)await _codec.DeserializeFromBytesAsync(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
 
         Assert.Empty(owner.Persistent);
-        Assert.Equal(["TempRef"], owner.Temporary.Select(placed => placed.EditorID!).ToArray());
+        Assert.Equal(["TempRef"], owner.Temporary.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());
         Assert.Equal("CellLandscape", owner.Landscape?.EditorID);
     }
 

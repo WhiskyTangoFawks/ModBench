@@ -19,9 +19,11 @@ public sealed class ContainerSlotElementTypesTests
 
         foreach (var ((parentType, slot), element) in members.ElementTypeBySlot)
         {
-            var declared = ContainerMembers.ElementTypeOf(
-                RecordTypes().First(type => type.Name == parentType).GetProperty(slot)!.PropertyType);
-            Assert.Equal(declared!.Name, element);
+            var property = RecordTypes().First(type => type.Name == parentType).GetProperty(slot)
+                ?? throw new InvalidOperationException($"Expected '{parentType}' to declare property '{slot}'.");
+            var declared = ContainerMembers.ElementTypeOf(property.PropertyType)
+                ?? throw new InvalidOperationException($"Expected '{parentType}.{slot}' to have a derivable element type.");
+            Assert.Equal(declared.Name, element);
         }
     }
 

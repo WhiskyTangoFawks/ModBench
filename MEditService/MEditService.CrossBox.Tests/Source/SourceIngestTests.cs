@@ -34,6 +34,9 @@ public sealed class SourceIngestTests
         return index;
     }
 
+    private static IRecordIndex Store(IndexProjector index) =>
+        index.Store ?? throw new InvalidOperationException("Expected Reconcile to have populated the index store.");
+
     // ---- The working tree is Effective ----
 
     [Fact]
@@ -50,9 +53,9 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var record = reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var record = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(record);
-        Assert.Equal("ExternallyRenamed", record!.EditorId);
+        Assert.Equal("ExternallyRenamed", record.EditorId);
     }
 
     // ---- The reappearing-record gap, resolved by construction ----
@@ -67,10 +70,10 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        Assert.Null(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
         // Positive control: the load really happened and really indexed this plugin, or "absent"
         // would be true of a load that did nothing at all.
-        Assert.NotNull(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
+        Assert.NotNull(Store(reloaded).At(RecordRef.Effective).GetDocument(mod.OtherNpc.ToString(), mod.Plugin));
     }
 
     [Fact]
@@ -83,9 +86,9 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var head = reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
-        Assert.Equal(IndexedModFixture.NpcEditorId, head!.EditorId);
+        Assert.Equal(IndexedModFixture.NpcEditorId, head.EditorId);
         // The Head row is HEAD's own bytes, not a reconstruction: same text `git show` serves.
         Assert.Equal(mod.GitShowHead(mod.RelativeSourcePath(
             mod.Npc, "npc_", IndexedModFixture.NpcEditorId)), head.Body);
@@ -105,10 +108,12 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        Assert.Equal("ExternallyRenamed", reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
-        Assert.Equal(
-            IndexedModFixture.NpcEditorId,
-            reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(effective);
+        Assert.Equal("ExternallyRenamed", effective.EditorId);
+        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(head);
+        Assert.Equal(IndexedModFixture.NpcEditorId, head.EditorId);
     }
 
     [Fact]
@@ -128,13 +133,15 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin);
-        var head = reloaded.Store!.At(RecordRef.Head).GetDocument(headerFormKey, mod.Plugin);
+        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin);
+        var head = Store(reloaded).At(RecordRef.Head).GetDocument(headerFormKey, mod.Plugin);
 
         Assert.NotNull(effective);
         Assert.NotNull(head);
-        Assert.Contains("RenamedByHand", effective!.Body!, StringComparison.Ordinal);
-        Assert.DoesNotContain("RenamedByHand", head!.Body!, StringComparison.Ordinal);
+        Assert.NotNull(effective.Body);
+        Assert.NotNull(head.Body);
+        Assert.Contains("RenamedByHand", effective.Body, StringComparison.Ordinal);
+        Assert.DoesNotContain("RenamedByHand", head.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -154,10 +161,12 @@ public sealed class SourceIngestTests
 
         // HEAD moved with the working tree, so the record is clean against its *new* baseline —
         // not dirty against a baseline no ref holds any more.
-        Assert.Equal("CommittedRename", reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
-        Assert.Equal(
-            "CommittedRename",
-            reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(effective);
+        Assert.Equal("CommittedRename", effective.EditorId);
+        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(head);
+        Assert.Equal("CommittedRename", head.EditorId);
     }
 
     [Fact]
@@ -172,7 +181,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var byFormKey = reloaded.Store!
+        var byFormKey = Store(reloaded)
             .At(RecordRef.Effective).Search(new RecordQuery { Plugin = IndexedModFixture.PluginName, Limit = 100 })
             .Items.ToDictionary(r => r.FormKey, StringComparer.Ordinal);
 
@@ -188,7 +197,8 @@ public sealed class SourceIngestTests
     {
         using var mod = IndexedModFixture.Tracked();
 
-        var before = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var before = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(before);
         Assert.Equal(IndexedModFixture.NpcEditorId, before.EditorId);
 
         var text = File.ReadAllText(mod.NpcSourceFile);
@@ -197,7 +207,8 @@ public sealed class SourceIngestTests
 
         await mod.Index.ReindexPlugin(mod.Plugin);
 
-        var after = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var after = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(after);
         Assert.Equal("ExternallyRenamed", after.EditorId);
     }
 
@@ -218,7 +229,7 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(holder, mod);
 
         // Degraded, not dropped — the plugin's records are still queryable from the binary.
-        Assert.NotNull(reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.NotNull(Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin));
 
         // ...and the degradation is *visible*, which is the whole mitigation: a user reading
         // pre-Track binary content while believing they are reading their tracked source is the hazard.
@@ -244,7 +255,8 @@ public sealed class SourceIngestTests
 
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
-        var document = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var document = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(document);
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(document.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
         var failure = Assert.Single(mod.Index.Status.Failures);
@@ -295,7 +307,7 @@ public sealed class SourceIngestTests
         // Precondition: the ingest really did fail partway and fall back, or this proves nothing.
         Assert.NotEmpty(reloaded.Status.Failures);
 
-        var atHead = reloaded.Store!.At(RecordRef.Head)
+        var atHead = Store(reloaded).At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Keyword.ToString(), StringComparison.Ordinal));
 
@@ -318,16 +330,16 @@ public sealed class SourceIngestTests
         using var reloaded = Reload(holder, mod);
 
         // Effective is the working tree: the new name.
-        var effective = reloaded.Store!.At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var effective = Store(reloaded).At(RecordRef.Effective).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(effective);
-        Assert.Equal("RenamedAcrossReload", effective!.EditorId);
+        Assert.Equal("RenamedAcrossReload", effective.EditorId);
 
         // Head is HEAD: the old name, served from the blob at the record's former path. Without the pairing
         // this is null, the new path marking the record working-tree-only while the old path seeds it as
         // committed-only.
-        var head = reloaded.Store!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        var head = Store(reloaded).At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
-        Assert.Equal(IndexedModFixture.NpcEditorId, head!.EditorId);
+        Assert.Equal(IndexedModFixture.NpcEditorId, head.EditorId);
     }
 
     [Fact]
@@ -342,7 +354,7 @@ public sealed class SourceIngestTests
 
         using var reloaded = Reload(holder, mod);
 
-        var atHead = reloaded.Store!.At(RecordRef.Head)
+        var atHead = Store(reloaded).At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin.Name, Origin: mod.Plugin.Origin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
 

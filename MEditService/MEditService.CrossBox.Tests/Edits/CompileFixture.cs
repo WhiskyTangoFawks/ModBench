@@ -66,7 +66,8 @@ public sealed class CompileFixture : IDisposable
 
     private string PluginPath => Path.Combine(ModFolder, PluginName);
 
-    private SourceRepository Repository => SourceRepository.Open(ModFolder, Release)!;
+    private SourceRepository Repository =>
+        SourceRepository.Open(ModFolder, Release) ?? throw new InvalidOperationException($"Expected {ModFolder} to already be a tracked repository.");
 
     public PluginCompileService CompileService() => CompileServices.Over(_loadOrder);
 
@@ -90,8 +91,9 @@ public sealed class CompileFixture : IDisposable
     {
         var identity = new RecordIdentity(formKey.ToString(), recordType, editorId);
         var renumbered = FormKey.Factory($"{newId:X6}:{PluginName}");
-        var body = Repository.Get(Plugin, identity)!.Body
-            .Replace(formKey.ToString(), renumbered.ToString(), StringComparison.Ordinal);
+        var document = Repository.Get(Plugin, identity)
+            ?? throw new InvalidOperationException($"Expected a source document for {identity}.");
+        var body = document.Body.Replace(formKey.ToString(), renumbered.ToString(), StringComparison.Ordinal);
         Repository.Remove(Plugin, identity);
         Repository.Put(Plugin, new SourceDocument(renumbered.ToString(), recordType, editorId, body));
         return renumbered;

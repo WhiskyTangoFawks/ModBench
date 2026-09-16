@@ -91,7 +91,8 @@ public sealed class PartialFormCompareTests : IDisposable
     [Fact]
     public void GetCompare_MasterOverride_IsPartialFormFalse()
     {
-        var compare = _service.GetCompare(CellKey.ToString())!;
+        var compare = _service.GetCompare(CellKey.ToString());
+        Assert.NotNull(compare);
         var master = compare.Overrides.Single(o => o.Plugin == "Base.esm");
 
         Assert.False(master.IsPartialForm);
@@ -100,7 +101,8 @@ public sealed class PartialFormCompareTests : IDisposable
     [Fact]
     public void GetCompare_PartialFormOverride_IsPartialFormTrue()
     {
-        var compare = _service.GetCompare(CellKey.ToString())!;
+        var compare = _service.GetCompare(CellKey.ToString());
+        Assert.NotNull(compare);
         var partial = compare.Overrides.Single(o => o.Plugin == "Partial.esp");
 
         Assert.True(partial.IsPartialForm);
@@ -111,15 +113,17 @@ public sealed class PartialFormCompareTests : IDisposable
     [Fact]
     public void GetCompare_CellWithPartialFormOverride_ShowsNoConflict()
     {
-        var compare = _service.GetCompare(CellKey.ToString())!;
+        var compare = _service.GetCompare(CellKey.ToString());
 
+        Assert.NotNull(compare);
         Assert.Equal(ConflictAll.NoConflict, compare.ConflictAll);
     }
 
     [Fact]
     public void GetCompare_CellWithPartialFormOverride_WaterHeightDiffCarriesNoCellStateForTheOverride()
     {
-        var compare = _service.GetCompare(CellKey.ToString())!;
+        var compare = _service.GetCompare(CellKey.ToString());
+        Assert.NotNull(compare);
         var waterHeight = compare.Diffs.Single(d => d.FieldName == "WaterHeight");
 
         Assert.Equal(ConflictAll.NoConflict, waterHeight.ConflictAll);
@@ -134,7 +138,8 @@ public sealed class PartialFormCompareTests : IDisposable
         // The record-wide winner is Partial.esp, but its own water_height is excluded: the field's
         // effective value is the master's, and WinnerColumn must say so rather than name an excluded
         // column.
-        var compare = _service.GetCompare(CellKey.ToString())!;
+        var compare = _service.GetCompare(CellKey.ToString());
+        Assert.NotNull(compare);
         var waterHeight = compare.Diffs.Single(d => d.FieldName == "WaterHeight");
 
         Assert.Equal("Base.esm", waterHeight.WinnerColumn);
@@ -144,8 +149,9 @@ public sealed class PartialFormCompareTests : IDisposable
     [Fact]
     public void GetRecord_RefIntroducedByPartialFormOverride_ShowsNormally()
     {
-        var compare = _service.GetCompare(RefKey.ToString())!;
+        var compare = _service.GetCompare(RefKey.ToString());
 
+        Assert.NotNull(compare);
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
         Assert.Single(compare.Overrides);
         Assert.Equal("Partial.esp", compare.Overrides[0].Plugin);
@@ -175,10 +181,15 @@ public sealed class PartialFormCompareTests : IDisposable
     [Fact]
     public void Compare_MasterCellAndPartialFormOverride_MatchesGolden()
     {
+        var cellCompare = _service.GetCompare(CellKey.ToString());
+        var refCompare = _service.GetCompare(RefKey.ToString());
+        Assert.NotNull(cellCompare);
+        Assert.NotNull(refCompare);
+
         var captured = new Dictionary<string, object?>
         {
-            ["cell"] = Project(_service.GetCompare(CellKey.ToString())!),
-            ["Ref"] = Project(_service.GetCompare(RefKey.ToString())!),
+            ["cell"] = Project(cellCompare),
+            ["Ref"] = Project(refCompare),
         };
 
         Golden.Verify("compare-partial-form-cell", captured);

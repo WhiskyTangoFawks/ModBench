@@ -49,12 +49,16 @@ public sealed class EditRecordHandlerExternalChangeDeferralTests : IDisposable
     [Fact]
     public void EditField_Refuses_BeforeTheDocumentTheRepositoryServesChanges()
     {
-        var before = _mod.Document(_mod.Npc.ToString())!.Body;
+        var beforeDocument = _mod.Document(_mod.Npc.ToString());
+        Assert.NotNull(beforeDocument);
+        var before = beforeDocument.Body;
         _mod.RaiseExternalChange();
 
         Service().Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
-        Assert.Equal(before, _mod.Document(_mod.Npc.ToString())!.Body);
+        var afterDocument = _mod.Document(_mod.Npc.ToString());
+        Assert.NotNull(afterDocument);
+        Assert.Equal(before, afterDocument.Body);
     }
 
     // The marker is a cache of the classifier's verdict, not the verdict: bytes restored by hand after

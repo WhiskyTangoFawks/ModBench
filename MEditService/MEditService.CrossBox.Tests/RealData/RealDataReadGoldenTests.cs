@@ -62,9 +62,8 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
         var captured = Types.ToDictionary(
             type => type,
             type => FormKeysOf(type)
-                .Select(fk => _repo.At(RecordRef.Effective).GetDocument(fk, new PluginCopyKey(TestPluginName, Origin)))
-                .Where(d => d != null)
-                .Select(d => Project(d!))
+                .SelectMany(fk => _repo.At(RecordRef.Effective).GetDocument(fk, new PluginCopyKey(TestPluginName, Origin))
+                    is not { } document ? [] : new[] { Project(document) })
                 .ToList());
 
         Golden.Verify("realdata-record-detail", captured);

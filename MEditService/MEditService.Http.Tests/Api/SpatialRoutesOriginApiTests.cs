@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -57,7 +58,10 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
             }, origin: "ModA")
             .WithPlugin("Shared.esp", mod => ConfigureCopy(mod, "ModB"), origin: "ModB")
             .BuildScattered();
-        return (fx, worldspaceFk!, cellFk!);
+        return (
+            fx,
+            worldspaceFk ?? throw new InvalidOperationException("Expected ConfigureCopy to have set the worldspace FormKey."),
+            cellFk ?? throw new InvalidOperationException("Expected ConfigureCopy to have set the cell FormKey."));
     }
 
     private async Task PutBothCopies(ScatteredFixtureData fx)
@@ -87,12 +91,12 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         await PutBothCopies(fx);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModB");
-        Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => w.GetProperty("editorId").GetString()!).ToArray());
+        Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
 
         // Omitted origin still resolves via the load order — the winning copy (ModA) — since
         // that is the path every current caller takes.
         var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces");
-        Assert.Equal(["WorldModA"], omitted.EnumerateArray().Select(w => w.GetProperty("editorId").GetString()!).ToArray());
+        Assert.Equal(["WorldModA"], omitted.EnumerateArray().Select(w => DocumentNodes.StringValueOf(w.GetProperty("editorId"))).ToArray());
     }
 
     [Fact]
@@ -135,9 +139,9 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         await PutBothCopies(fx);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB&limit=50&offset=0");
-        Assert.Equal(["InteriorModB"], modB.GetProperty("items").EnumerateArray().Select(c => c.GetProperty("editorId").GetString()!).ToArray());
+        Assert.Equal(["InteriorModB"], modB.GetProperty("items").EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray());
 
         var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?limit=50&offset=0");
-        Assert.Equal(["InteriorModA"], omitted.GetProperty("items").EnumerateArray().Select(c => c.GetProperty("editorId").GetString()!).ToArray());
+        Assert.Equal(["InteriorModA"], omitted.GetProperty("items").EnumerateArray().Select(c => DocumentNodes.StringValueOf(c.GetProperty("editorId"))).ToArray());
     }
 }

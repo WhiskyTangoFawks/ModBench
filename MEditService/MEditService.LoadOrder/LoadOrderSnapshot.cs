@@ -64,7 +64,9 @@ public sealed class LoadOrderSnapshot : IEquatable<LoadOrderSnapshot>
 
     /// <summary>The participating copies in slot order — the load order the game actually has.</summary>
     public IReadOnlyList<RegisteredCopy> Participating =>
-        [.. Copies.Where(c => c.Registration.Participates).OrderBy(c => c.Slot!.Value)];
+        [.. Copies.Where(c => c.Registration.Participates).OrderBy(c => c.Slot
+            ?? throw new InvalidOperationException(
+                $"Expected participating copy '{c.Name}' from '{c.Origin}' to carry a load-order slot."))];
 
     /// <summary>The three facts one copy is registered with, or null when it is not registered.</summary>
     public Registration? Registration(PluginCopyKey key) => Copy(key)?.Registration;

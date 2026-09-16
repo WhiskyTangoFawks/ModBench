@@ -144,7 +144,7 @@ public sealed class NestedStructSubFieldEditTests : IDisposable
 
         public EditRecordHandler Service() => EditHandler;
 
-        public string Body() => TrackedTree.Document(_modFolder, Plugin, Faction.ToString())!.Body;
+        public string Body() => TrackedTree.Body(_modFolder, Plugin, Faction.ToString());
 
         public void Dispose()
         {

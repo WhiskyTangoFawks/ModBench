@@ -10,7 +10,8 @@ namespace MEditService.Tests.Source;
 public sealed class SourceRepositoryWorkingTreeDirtTests
 {
     private static WorkingTreeDirt DirtOf(IndexedModFixture mod) =>
-        SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!.DirtOf(mod.Plugin);
+        (SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.")).DirtOf(mod.Plugin);
 
     [Fact]
     public void DirtOf_AFreshlyTrackedTree_IsClean()
@@ -39,7 +40,8 @@ public sealed class SourceRepositoryWorkingTreeDirtTests
         // The schema table's own name, which is what the group folder is named after.
         Assert.Equal("npc_", document.RecordType);
         Assert.True(document.InWorkingTree);
-        Assert.Contains(IndexedModFixture.NpcEditorId, document.CommittedText!, StringComparison.Ordinal);
+        Assert.NotNull(document.CommittedText);
+        Assert.Contains(IndexedModFixture.NpcEditorId, document.CommittedText, StringComparison.Ordinal);
         Assert.False(dirt.NeedsStructuralPass);
     }
 
@@ -64,7 +66,7 @@ public sealed class SourceRepositoryWorkingTreeDirtTests
     {
         using var mod = IndexedModFixture.Tracked();
         var created = Path.Combine(
-            Path.GetDirectoryName(mod.NpcSourceFile)!, $"Created - 000FFF_{mod.ActualPluginName}.json");
+            PathShape.DirectoryOf(mod.NpcSourceFile), $"Created - 000FFF_{mod.ActualPluginName}.json");
         File.WriteAllText(created, $"{{\"FormKey\":\"000FFF:{mod.ActualPluginName}\",\"EditorID\":\"Created\"}}");
 
         var dirt = DirtOf(mod);

@@ -22,7 +22,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Document(_mod.Npc.ToString())!.Body;
+    private string NpcBody() => _mod.Document(_mod.Npc.ToString()).Require().Body;
 
     // ── per-element payloads are refused, not silently dropped ────────────────
 

@@ -158,7 +158,9 @@ public class RecordTextCodecGeneratorSeedTests
 
     private static string[] ProductionSources([CallerFilePath] string here = "")
     {
-        var solution = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(here)!, "..", ".."));
+        var hereDirectory = Path.GetDirectoryName(here)
+            ?? throw new InvalidOperationException($"Expected '{here}' to have a directory.");
+        var solution = Path.GetFullPath(Path.Combine(hereDirectory, "..", ".."));
         return [.. ProductionProjects.SelectMany(
             project => Directory.GetFiles(Path.Combine(solution, project), "*.cs", SearchOption.AllDirectories))];
     }

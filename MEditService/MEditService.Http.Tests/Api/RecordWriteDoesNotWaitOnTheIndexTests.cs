@@ -40,6 +40,7 @@ public sealed class RecordWriteDoesNotWaitOnTheIndexTests : IDisposable
         }
 
         var ok = Assert.IsType<Ok<RecordEditResponse>>(await edit);
-        Assert.True(ok.Value!.Applied);
+        Assert.NotNull(ok.Value);
+        Assert.True(ok.Value.Applied);
     }
 }

@@ -17,7 +17,13 @@ internal static class ReflectedTypes
 
     /// <summary>Of one member declared along an interface chain, the declaration nearest the leaf.</summary>
     internal static PropertyInfo MostDerived(IEnumerable<PropertyInfo> declarations) =>
-        declarations.Aggregate((best, candidate) => best.DeclaringType!.IsAssignableFrom(candidate.DeclaringType!) ? candidate : best);
+        declarations.Aggregate((best, candidate) =>
+            DeclaringTypeOf(best).IsAssignableFrom(DeclaringTypeOf(candidate)) ? candidate : best);
+
+    /// <summary>A property's declaring type. Reflection types it nullable only for a global module
+    /// member, which no getter interface or Loqui class member is.</summary>
+    internal static Type DeclaringTypeOf(PropertyInfo prop) =>
+        prop.DeclaringType ?? throw new InvalidOperationException($"Expected '{prop.Name}' to have a declaring type.");
 
     /// <summary>A member's type with its <c>Nullable&lt;T&gt;</c> wrapper off, and whether that
     /// wrapper was there — the two questions every leaf dispatch opens with.</summary>

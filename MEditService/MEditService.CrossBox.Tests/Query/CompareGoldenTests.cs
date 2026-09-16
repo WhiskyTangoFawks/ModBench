@@ -137,13 +137,24 @@ public sealed class CompareGoldenTests : IDisposable
     [Fact]
     public void Compare_AcrossThreePlugins_MatchesGolden()
     {
+        var conflictedNpc = _service.GetCompare(ConflictedNpc.ToString());
+        var unchangedWeapon = _service.GetCompare(UnchangedWeapon.ToString());
+        var soleNpc = _service.GetCompare(SoleNpc.ToString());
+        var injectedNpc = _service.GetCompare(InjectedNpc.ToString());
+        var conflictedRecipe = _service.GetCompare(ConflictedRecipe.ToString());
+        Assert.NotNull(conflictedNpc);
+        Assert.NotNull(unchangedWeapon);
+        Assert.NotNull(soleNpc);
+        Assert.NotNull(injectedNpc);
+        Assert.NotNull(conflictedRecipe);
+
         var captured = new Dictionary<string, object?>
         {
-            ["conflicted-npc"] = Project(_service.GetCompare(ConflictedNpc.ToString())!),
-            ["unchanged-weapon"] = Project(_service.GetCompare(UnchangedWeapon.ToString())!),
-            ["sole-npc"] = Project(_service.GetCompare(SoleNpc.ToString())!),
-            ["injected-npc"] = Project(_service.GetCompare(InjectedNpc.ToString())!),
-            ["conflicted-conditions"] = Project(_service.GetCompare(ConflictedRecipe.ToString())!),
+            ["conflicted-npc"] = Project(conflictedNpc),
+            ["unchanged-weapon"] = Project(unchangedWeapon),
+            ["sole-npc"] = Project(soleNpc),
+            ["injected-npc"] = Project(injectedNpc),
+            ["conflicted-conditions"] = Project(conflictedRecipe),
         };
 
         Golden.Verify("compare-three-plugins", captured);
@@ -179,7 +190,8 @@ public sealed class CompareGoldenTests : IDisposable
             WinningRecords = new[] { ConflictedNpc, UnchangedWeapon, SoleNpc, InjectedNpc, ConflictedRecipe }
                 .ToDictionary(fk => fk.ToString(), fk =>
                 {
-                    var d = _service.GetRecord(fk.ToString())!;
+                    var d = _service.GetRecord(fk.ToString());
+                    Assert.NotNull(d);
                     return new { d.Plugin, d.Origin, d.IsWinner, d.EditorId, d.RecordType, d.LoadOrderIndex };
                 }),
             AllNpcs = _service.GetRecords("npc_", null, null, 50, 0)

@@ -95,8 +95,9 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        Assert.NotNull(manager.Reads);
-        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(manager.Reads!.OpenedCopies).Key.Name);
+        var reads = manager.Reads;
+        Assert.NotNull(reads);
+        Assert.Equal(TestPluginFixture.PluginName, Assert.Single(reads.OpenedCopies).Key.Name);
     }
 
     [Fact]
@@ -106,7 +107,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var count = manager.Reads!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data"))
+        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var count = reads.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 
         Assert.Equal(TestPluginFixture.RecordCount, count);
@@ -119,7 +121,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
+        var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
 
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
@@ -131,12 +134,13 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldRepo = manager.Reads;
+        var oldRepo = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads before closing.");
         manager.Close();
 
         Assert.Null(manager.Reads);
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
 
     [Fact]
@@ -212,9 +216,10 @@ public class IndexScopeTests(TestPluginFixture fixture)
         {
             using var manager = MakeManager(holder);
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
-            Assert.Equal(0, manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(0, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
             var onDisk = Fallout4Mod.CreateFromBinary(
@@ -225,7 +230,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             await manager.ReindexPlugin(pluginKey);
 
-            var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(1, result.Total);
             Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
         }
@@ -243,9 +248,10 @@ public class IndexScopeTests(TestPluginFixture fixture)
         {
             using var manager = MakeManager(holder);
             manager.Reconcile(holder, data.DataFolder, data.Plugins, GameRelease.Fallout4);
+            var reads = manager.Reads ?? throw new InvalidOperationException("Expected an active reads after reconciling.");
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'");
-            Assert.Equal(1, manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(1, reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
             var onDisk = Fallout4Mod.CreateFromBinary(
@@ -256,7 +262,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
             var pluginKey = new PluginCopyKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
             await manager.ReindexPlugin(pluginKey);
 
-            var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = reads.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(0, result.Total);
         }
     }
@@ -372,7 +378,8 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         using var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var oldRepo = manager.Reads;
+        var oldRepo = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads before reconciling against a different instance.");
 
         // ADR-0013: only a snapshot for another instance replaces what is held; the same instance
         // reconciles in place (Reconcile_SameInstance_KeepsTheRepositoryAndLoadOrder).
@@ -380,7 +387,7 @@ public class IndexScopeTests(TestPluginFixture fixture)
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, otherInstance);
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
 
 
@@ -390,12 +397,13 @@ public class IndexScopeTests(TestPluginFixture fixture)
         var holder = new LoadOrderHolder();
         var manager = MakeManager(holder);
         manager.Reconcile(holder, _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldRepo = manager.Reads;
+        var oldRepo = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads before disposing.");
 
         manager.Dispose();
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
+            oldRepo.GetRecordTypeCounts(new PluginCopyKey(TestPluginFixture.PluginName, "Data")));
     }
 
 

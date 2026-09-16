@@ -21,7 +21,7 @@ public sealed class SourceRepositoryInterfaceScanTests
     [
         "GitCli", "GitBlobHash", "MetaIni", "SourceUnit", "Locate", "SourceTreeDocuments",
         "PristineFileWriter", "WorkingTreeStatus", "ReadCommittedSourceText", "CommittedSourceHashes",
-        "TryParseDocumentPath", "RootStringIn", "RecordBodyFromOwnerBytes",
+        "ParseDocumentPath", "RootStringIn", "RecordBodyFromOwnerBytes",
     ];
 
     [Fact]

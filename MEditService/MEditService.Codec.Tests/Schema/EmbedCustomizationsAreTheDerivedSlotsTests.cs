@@ -24,18 +24,21 @@ public sealed class EmbedCustomizationsAreTheDerivedSlotsTests
     // member each EmbedRecordsInSameFile names.
     private static IEnumerable<(string ParentType, string Slot)> Replay()
     {
-        foreach (var customization in typeof(CellEmbedCustomization).Assembly.GetTypes()
+        foreach (var found in typeof(CellEmbedCustomization).Assembly.GetTypes()
                      .Where(type => type is { IsClass: true, IsAbstract: false })
                      .Select(type => (Type: type, Customized: CustomizedType(type)))
                      .Where(found => found.Customized != null))
         {
-            var recorder = (IEmbedRecorder)Activator.CreateInstance(
-                typeof(RecordingBuilder<>).MakeGenericType(customization.Customized!))!;
-            typeof(ICustomize<>).MakeGenericType(customization.Customized!)
-                .GetMethod(nameof(ICustomize<IMajorRecordGetter>.CustomizeFor))!
-                .Invoke(Activator.CreateInstance(customization.Type), [recorder]);
+            var customized = found.Customized
+                ?? throw new InvalidOperationException($"Expected '{found.Type.Name}' to name a customized type.");
+            var recorder = (IEmbedRecorder)(Activator.CreateInstance(typeof(RecordingBuilder<>).MakeGenericType(customized))
+                ?? throw new InvalidOperationException($"Expected RecordingBuilder<{customized.Name}> to be constructible."));
+            var customizeFor = typeof(ICustomize<>).MakeGenericType(customized)
+                .GetMethod(nameof(ICustomize<IMajorRecordGetter>.CustomizeFor))
+                ?? throw new InvalidOperationException($"Expected ICustomize<{customized.Name}> to declare CustomizeFor.");
+            customizeFor.Invoke(Activator.CreateInstance(found.Type), [recorder]);
 
-            var parent = ContainerChildFields.NormalizedTypeName(customization.Customized!);
+            var parent = ContainerChildFields.NormalizedTypeName(customized);
             foreach (var member in recorder.Embedded) yield return (parent, member);
         }
     }

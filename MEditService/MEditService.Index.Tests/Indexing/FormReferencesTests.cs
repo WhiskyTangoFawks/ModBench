@@ -80,7 +80,8 @@ public class FormReferencesTests
 
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM form_references";
-        var count = (long)cmd.ExecuteScalar()!;
+        var count = (long)(cmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
 
         Assert.Equal(0, count);
     }
@@ -108,7 +109,8 @@ public class FormReferencesTests
 
         using var raceCmd = repo.Connection.CreateCommand();
         raceCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE field_path = 'Race' AND source_plugin = 'Reindex.esp'";
-        var raceCount = (long)raceCmd.ExecuteScalar()!;
+        var raceCount = (long)(raceCmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
         Assert.Equal(1, raceCount);
     }
 

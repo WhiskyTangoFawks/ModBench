@@ -104,7 +104,8 @@ public sealed class ParseFailedRecordTests
 
         var stack = scratch.Reads.GetOverrideStack(UnreadablePerk);
 
-        var document = Assert.Single(stack!.Entries).Effective;
+        Assert.NotNull(stack);
+        var document = Assert.Single(stack.Entries).Effective;
         Assert.Equal(UnreadablePerk, document.FormKey);
         Assert.Equal("T6M_QuickReload_ReloadVATs", document.EditorId);
     }
@@ -116,7 +117,9 @@ public sealed class ParseFailedRecordTests
     {
         using var scratch = new Scratch(Fixture);
 
-        var column = Assert.Single(scratch.Query.GetCompare(UnreadablePerk)!.Overrides);
+        var compare = scratch.Query.GetCompare(UnreadablePerk);
+        Assert.NotNull(compare);
+        var column = Assert.Single(compare.Overrides);
 
         Assert.NotNull(column.ParseDiagnosis);
         Assert.Contains("did not have expected parameter type flag", column.ParseDiagnosis);
@@ -130,7 +133,9 @@ public sealed class ParseFailedRecordTests
             .Search(new RecordQuery(RecordTypes: ["perk"], Plugin: scratch.Plugin.Name, Origin: scratch.Plugin.Origin, Search: null, Limit: 1000, Offset: 0))
             .Items.First(r => r.FormKey != UnreadablePerk);
 
-        var column = Assert.Single(scratch.Query.GetCompare(readable.FormKey)!.Overrides);
+        var compare = scratch.Query.GetCompare(readable.FormKey);
+        Assert.NotNull(compare);
+        var column = Assert.Single(compare.Overrides);
 
         Assert.Null(column.ParseDiagnosis);
     }

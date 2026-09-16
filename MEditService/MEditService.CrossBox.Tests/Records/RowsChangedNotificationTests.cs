@@ -50,8 +50,11 @@ public sealed class RowsChangedNotificationTests : IDisposable
     {
         using var index = LoadedIndex();
         var formKey = _npc.ToString();
-        var editedBody = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey)!.Body!
-            .Replace("OriginalName", "EditedName", StringComparison.Ordinal);
+        var document = index.At(RecordRef.Effective).GetDocument(formKey, BaseKey);
+        Assert.NotNull(document);
+        var body = document.Body
+            ?? throw new InvalidOperationException("Expected the indexed NPC document to carry a body.");
+        var editedBody = body.Replace("OriginalName", "EditedName", StringComparison.Ordinal);
 
         index.ProjectDocuments(BaseKey, [(formKey, editedBody)]);
 
@@ -78,7 +81,9 @@ public sealed class RowsChangedNotificationTests : IDisposable
             File.ReadAllText(document).Replace(
                 $"\"{ContainerModFixture.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        fixture.Index.Store!.RefreshByKeys(fixture.Plugin, fixture.ModFolder, [cell]);
+        var store = fixture.Index.Store
+            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+        store.RefreshByKeys(fixture.Plugin, fixture.ModFolder, [cell]);
 
         var rowsChanged = notifications.Notifications.OfType<RowsChangedNotification>().Last();
         Assert.Contains(cell, rowsChanged.Keys);

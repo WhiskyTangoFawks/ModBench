@@ -19,7 +19,8 @@ public sealed class RefreshByKeysTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private IRecordIndex Index => _mod.Index.Store!;
+    private IRecordIndex Index => _mod.Index.Store
+        ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
@@ -33,16 +34,22 @@ public sealed class RefreshByKeysTests : IDisposable
 
         Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [formKey]);
 
-        Assert.Equal("RenamedByHand", Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)!.EditorId);
-        Assert.DoesNotContain(
-            "RenamedByHand", Index.At(RecordRef.Head).GetDocument(formKey, _mod.Plugin)!.Body!, StringComparison.Ordinal);
+        var effective = Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin);
+        Assert.NotNull(effective);
+        Assert.Equal("RenamedByHand", effective.EditorId);
+        var atHead = Index.At(RecordRef.Head).GetDocument(formKey, _mod.Plugin);
+        Assert.NotNull(atHead);
+        Assert.NotNull(atHead.Body);
+        Assert.DoesNotContain("RenamedByHand", atHead.Body, StringComparison.Ordinal);
 
         Git("add", "-A");
         Git("commit", "-q", "-m", "committed outside Modbench");
 
         Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [formKey]);
 
-        var entry = Index.At(RecordRef.Effective).GetOverrideStack(formKey)!.Entries.Single();
+        var stack = Index.At(RecordRef.Effective).GetOverrideStack(formKey);
+        Assert.NotNull(stack);
+        var entry = stack.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal("RenamedByHand", entry.Head.EditorId);
     }
@@ -94,7 +101,9 @@ public sealed class RefreshByKeysTests : IDisposable
     public void ARefreshedKeyWhoseDocumentIsNotReadable_LeavesItsRowsAsTheyStand()
     {
         var formKey = _mod.Npc.ToString();
-        var before = Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)!.Body;
+        var beforeDocument = Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin);
+        Assert.NotNull(beforeDocument);
+        var before = beforeDocument.Body;
 
         // Mid-save, or hand-edited into something that is not a document at all: never assume
         // exclusive ownership of the file.
@@ -102,6 +111,8 @@ public sealed class RefreshByKeysTests : IDisposable
 
         Index.RefreshByKeys(_mod.Plugin, _mod.ModFolder, [formKey]);
 
-        Assert.Equal(before, Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin)!.Body);
+        var afterDocument = Index.At(RecordRef.Effective).GetDocument(formKey, _mod.Plugin);
+        Assert.NotNull(afterDocument);
+        Assert.Equal(before, afterDocument.Body);
     }
 }

@@ -2,6 +2,7 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -19,7 +20,7 @@ public sealed class SourceRepositoryUnitHoldingTests
         using var mod = SourceEditFixture.Tracked();
         var headerFormKey = PluginHeader.FormKeyFor(ModKey.FromFileName(mod.ActualPluginName));
         var identity = new RecordIdentity(headerFormKey, PluginHeader.RecordType, EditorId: null);
-        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!;
+        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4).Require();
 
         var unit = repository.UnitHolding(mod.Plugin, identity);
 
@@ -39,7 +40,7 @@ public sealed class SourceRepositoryUnitHoldingTests
     public void UnitHolding_AnEmbeddedRecordNoDocumentCarries_AnswersNothing()
     {
         using var mod = SourceEditFixture.Tracked();
-        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!;
+        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4).Require();
 
         var unit = repository.UnitHolding(
             mod.Plugin, new RecordIdentity($"FFFFFF:{mod.ActualPluginName}", "PlacedObject", EditorId: null));

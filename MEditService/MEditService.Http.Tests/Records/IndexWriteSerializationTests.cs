@@ -107,6 +107,7 @@ public sealed class IndexWriteSerializationTests : IDisposable
             ServedWindow);
 
         Assert.True(finished, "a record listing queued behind an in-flight write");
-        Assert.NotEmpty(listing!.Items);
+        Assert.NotNull(listing);
+        Assert.NotEmpty(listing.Items);
     }
 }

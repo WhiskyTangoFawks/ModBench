@@ -18,16 +18,19 @@ public sealed class ValidateUntrackedTests : IDisposable
 
     private string PluginPath => Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
 
+    private IRecordIndex Store => _mod.Index.Store
+        ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+
     [Fact]
     public void AnUnchangedBinary_ValidatesClean()
     {
-        var before = _mod.Index.Store!.Sequence;
+        var before = Store.Sequence;
 
-        var report = _mod.Index.Store!.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = Store.Validate(_mod.Plugin, _mod.ModFolder);
 
         Assert.False(report.NeedsRebuild);
         Assert.Empty(report.ChangedKeys);
-        Assert.Equal(before, _mod.Index.Store!.Sequence);
+        Assert.Equal(before, Store.Sequence);
     }
 
     [Fact]
@@ -37,7 +40,7 @@ public sealed class ValidateUntrackedTests : IDisposable
         rewritten.Npcs.AddNew("WrittenByAnotherTool");
         rewritten.WriteToBinary(PluginPath);
 
-        var report = _mod.Index.Store!.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = Store.Validate(_mod.Plugin, _mod.ModFolder);
 
         Assert.True(report.NeedsRebuild);
     }
@@ -47,7 +50,7 @@ public sealed class ValidateUntrackedTests : IDisposable
     {
         File.Delete(PluginPath);
 
-        var report = _mod.Index.Store!.Validate(_mod.Plugin, _mod.ModFolder);
+        var report = Store.Validate(_mod.Plugin, _mod.ModFolder);
 
         Assert.False(report.NeedsRebuild);
         Assert.Empty(_mod.Index.Projected().GetDocuments(_mod.Plugin));

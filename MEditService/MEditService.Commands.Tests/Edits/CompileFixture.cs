@@ -65,7 +65,7 @@ public sealed class CompileFixture : IDisposable
 
     private string PluginPath => Path.Combine(ModFolder, PluginName);
 
-    private SourceRepository Repository => SourceRepository.Open(ModFolder, Release)!;
+    private SourceRepository Repository => SourceRepository.Open(ModFolder, Release).Require();
 
     public PluginCompileService CompileService() => CompileServices.Over(_loadOrder);
 
@@ -89,7 +89,7 @@ public sealed class CompileFixture : IDisposable
     {
         var identity = new RecordIdentity(formKey.ToString(), recordType, editorId);
         var renumbered = FormKey.Factory($"{newId:X6}:{PluginName}");
-        var body = Repository.Get(Plugin, identity)!.Body
+        var body = Repository.Get(Plugin, identity).Require().Body
             .Replace(formKey.ToString(), renumbered.ToString(), StringComparison.Ordinal);
         Repository.Remove(Plugin, identity);
         Repository.Put(Plugin, new SourceDocument(renumbered.ToString(), recordType, editorId, body));

@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
@@ -36,7 +37,7 @@ public sealed class SourceRepositoryLastCompileRefTests
     private static void AssertRefIsCheckRefFormatValid(string plugin)
     {
         var gitDir = Path.Combine(Directory.CreateTempSubdirectory("medit-checkrefformat-").FullName, ".git");
-        var workTree = Path.GetDirectoryName(gitDir)!;
+        var workTree = PathShape.DirectoryOf(gitDir);
         try
         {
             GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");

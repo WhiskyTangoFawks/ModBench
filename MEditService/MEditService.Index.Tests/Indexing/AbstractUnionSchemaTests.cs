@@ -23,7 +23,7 @@ public class AbstractUnionSchemaTests
         var level = schemas["npc_"].RecordColumns.SingleOrDefault(c => c.Name == "Level");
 
         Assert.NotNull(level);
-        Assert.Equal("struct", level!.ApiType);
+        Assert.Equal("struct", level.ApiType);
     }
 
     // ── Quest.Aliases (AQuestAlias: QuestReferenceAlias / QuestLocationAlias / QuestCollectionAlias) ──
@@ -35,9 +35,12 @@ public class AbstractUnionSchemaTests
         var aliases = schemas["qust"].RecordColumns.SingleOrDefault(c => c.Name == "Aliases");
 
         Assert.NotNull(aliases);
-        Assert.Equal("array", aliases!.ApiType);
-        Assert.NotNull(aliases.Field.ElementSpec);
-        Assert.NotEmpty(aliases.Field.ElementSpec!.SubFields!);
+        Assert.Equal("array", aliases.ApiType);
+        var elementSpec = aliases.Field.ElementSpec;
+        Assert.NotNull(elementSpec);
+        var subFields = elementSpec.SubFields;
+        Assert.NotNull(subFields);
+        Assert.NotEmpty(subFields);
     }
 
 

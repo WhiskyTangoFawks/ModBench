@@ -26,6 +26,10 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
         catch (IOException) { /* scratch directory, best effort */ }
     }
 
+    private SourceRepository RequireOpened() =>
+        SourceRepository.Open(_modFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
+
     // Track rather than a hand-made .git: the repository the tests open is the one the product makes.
     private void Track(params TreeFile[] files) =>
         SourceRepository.Track(
@@ -34,15 +38,15 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
     // Asserted against directly: "the file moved" and "the file is gone" are claims about the tree,
     // and asking the repository for them would only echo its own rule back.
     private string NpcGroupFolder =>
-        Path.GetDirectoryName(
-            SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4))!;
+        PathShape.DirectoryOf(
+            SourceDocumentPath.Of(_modFolder, PluginName, "npc_", NpcFormKey, NpcEditorId, GameRelease.Fallout4));
 
     // Tracks an empty tree, then puts the fixture's NPC through the repository — the same door a real
     // edit uses — so its file lands wherever the repository's own placement decides.
     private SourceRepository Opened()
     {
         Track();
-        var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)!;
+        var repository = RequireOpened();
         repository.Put(Plugin, new SourceDocument(NpcFormKey, "npc_", NpcEditorId, NpcBody));
         return repository;
     }
@@ -182,7 +186,7 @@ public sealed class SourceRepositoryDocumentTests : IDisposable
             new TreeFile(
                 Path.Combine("source", PluginName, "RecordData.json"),
                 System.Text.Encoding.UTF8.GetBytes("{\"MasterReferences\": []}")));
-        var repository = SourceRepository.Open(_modFolder, GameRelease.Fallout4)!;
+        var repository = RequireOpened();
 
         var header = new RecordIdentity($"000000:{PluginName}", "header", null);
 

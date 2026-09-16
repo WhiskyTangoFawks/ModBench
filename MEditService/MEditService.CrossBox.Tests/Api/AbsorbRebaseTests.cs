@@ -64,9 +64,11 @@ public sealed class AbsorbRebaseTests : IDisposable
         WriteExternalRelease();
 
         var ok = Absorb();
+        var response = ok.Value;
+        Assert.NotNull(response);
 
-        Assert.True(ok.Value!.Succeeded);
-        Assert.Equal(RebaseOutcome.Clean, ok.Value.Rebase?.Outcome);
+        Assert.True(response.Succeeded);
+        Assert.Equal(RebaseOutcome.Clean, response.Rebase?.Outcome);
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
         var mainSha = RunGit("rev-parse", "refs/heads/main").Trim();
         Assert.Equal(mainSha, RunGit("merge-base", "refs/heads/main", "edit").Trim());
@@ -85,10 +87,14 @@ public sealed class AbsorbRebaseTests : IDisposable
         WriteExternalRelease();
 
         var ok = Absorb();
+        var response = ok.Value;
+        Assert.NotNull(response);
 
-        Assert.True(ok.Value!.Succeeded, "the baseline commit lands even when the rebase that follows refuses");
-        Assert.Equal(RebaseOutcome.Refused, ok.Value.Rebase?.Outcome);
-        Assert.Contains(RelativeNpcPath, ok.Value.Rebase!.RefusalReason, StringComparison.Ordinal);
+        Assert.True(response.Succeeded, "the baseline commit lands even when the rebase that follows refuses");
+        var rebase = response.Rebase;
+        Assert.NotNull(rebase);
+        Assert.Equal(RebaseOutcome.Refused, rebase.Outcome);
+        Assert.Contains(RelativeNpcPath, rebase.RefusalReason, StringComparison.Ordinal);
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Equal(headBefore, RunGit("rev-parse", "HEAD").Trim());
         Assert.NotEqual(mainBefore, RunGit("rev-parse", "refs/heads/main").Trim());
@@ -102,10 +108,14 @@ public sealed class AbsorbRebaseTests : IDisposable
         WriteExternalRelease(npcHeightMax: 0.7f);
 
         var ok = Absorb();
+        var response = ok.Value;
+        Assert.NotNull(response);
 
-        Assert.True(ok.Value!.Succeeded);
-        Assert.Equal(RebaseOutcome.Conflicted, ok.Value.Rebase?.Outcome);
-        Assert.Contains(RelativeNpcPath, ok.Value.Rebase!.ConflictedPaths);
+        Assert.True(response.Succeeded);
+        var rebase = response.Rebase;
+        Assert.NotNull(rebase);
+        Assert.Equal(RebaseOutcome.Conflicted, rebase.Outcome);
+        Assert.Contains(RelativeNpcPath, rebase.ConflictedPaths);
         var conflictedText = File.ReadAllText(System.IO.Path.Combine(_mod.ModFolder, RelativeNpcPath));
         Assert.Contains("<<<<<<<", conflictedText, StringComparison.Ordinal);
     }

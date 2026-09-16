@@ -74,14 +74,17 @@ public sealed class HandEditedEmbeddedListTests(CompileRoundTripGateFixture fixt
     {
         QuestTopics => root[nameof(Quest.DialogTopics)] as JsonArray,
         TopicResponses => (root[nameof(Quest.DialogTopics)] as JsonArray)?
-            .Select(t => t!.AsObject())
+            .OfType<JsonNode>()
+            .Select(t => t.AsObject())
             .FirstOrDefault(t => owner == null
                 ? t[nameof(DialogTopic.Responses)] is JsonArray
                 : FormKeyOf(t) == owner)?[nameof(DialogTopic.Responses)] as JsonArray,
         _ => throw new ArgumentOutOfRangeException(nameof(list), list, "No such embedded list."),
     };
 
-    private static string FormKeyOf(JsonNode node) => node[nameof(IMajorRecordGetter.FormKey)]!.GetValue<string>();
+    private static string FormKeyOf(JsonNode node) =>
+        (node[nameof(IMajorRecordGetter.FormKey)]
+            ?? throw new InvalidOperationException("Expected node to have a FormKey member.")).GetValue<string>();
 
     // The first document holding a long enough array, the FormKey of the record owning the array,
     // and the children's FormKeys in the array's order. A real quest that has only a short list is
@@ -93,12 +96,12 @@ public sealed class HandEditedEmbeddedListTests(CompileRoundTripGateFixture fixt
             if (JsonNode.Parse(File.ReadAllText(document)) is not JsonObject root || root[nameof(Quest.DialogTopics)] is not JsonArray topics) continue;
             var candidates = list == QuestTopics
                 ? [root]
-                : topics.Select(t => t!.AsObject()).ToList();
+                : topics.OfType<JsonNode>().Select(t => t.AsObject()).ToList();
             foreach (var candidate in candidates)
             {
                 var owner = FormKeyOf(candidate);
                 if (ArrayOf(root, list, owner) is { } array && array.Count >= atLeast)
-                    return (document, owner, [.. array.Select(FormKeyOf!)]);
+                    return (document, owner, [.. array.OfType<JsonNode>().Select(FormKeyOf)]);
             }
         }
         throw new InvalidOperationException($"The real fixture holds no {list} with {atLeast} or more elements.");
@@ -117,10 +120,12 @@ public sealed class HandEditedEmbeddedListTests(CompileRoundTripGateFixture fixt
     // Reorders and drops elements of the array by identity; every element's own text is untouched.
     private static void Rewrite(string document, string list, string owner, IReadOnlyList<string> order)
     {
-        var root = JsonNode.Parse(File.ReadAllText(document))!.AsObject();
-        var array = ArrayOf(root, list, owner)!;
-        var byFormKey = array.ToDictionary(e => FormKeyOf(e!), e => e!.DeepClone());
-        var holder = array.Parent!.AsObject();
+        var root = (JsonNode.Parse(File.ReadAllText(document))
+            ?? throw new InvalidOperationException($"Expected '{document}' to parse as a JSON node.")).AsObject();
+        var array = ArrayOf(root, list, owner)
+            ?? throw new InvalidOperationException($"Expected '{list}' to resolve to a JSON array for owner '{owner}'.");
+        var byFormKey = array.OfType<JsonNode>().ToDictionary(FormKeyOf, e => e.DeepClone());
+        var holder = (array.Parent ?? throw new InvalidOperationException("Expected the array to have a parent JSON object.")).AsObject();
         var member = list == QuestTopics ? nameof(Quest.DialogTopics) : nameof(DialogTopic.Responses);
         holder[member] = new JsonArray([.. order.Select(formKey => byFormKey[formKey])]);
         File.WriteAllText(document, root.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));

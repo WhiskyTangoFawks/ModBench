@@ -114,7 +114,9 @@ public class RegistrationScopingTests
 
         // Premise: registered, everything answers — otherwise the emptiness below proves nothing.
         Assert.Equal(fx.BetaRowCount, repo.At(RecordRef.Effective).GetDocuments(BetaKey).Count);
-        Assert.Equal(2, repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk)!.Entries.Count);
+        var initialSharedStack = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk);
+        Assert.NotNull(initialSharedStack);
+        Assert.Equal(2, initialSharedStack.Entries.Count);
         Assert.NotEmpty(repo.At(RecordRef.Effective).GetReferencedBy(fx.BetaRaceFk));
         Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
         Assert.NotEmpty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));
@@ -134,16 +136,21 @@ public class RegistrationScopingTests
         Assert.Null(repo.At(RecordRef.Effective).GetDocument(fx.BetaNpcFk, BetaKey));
         Assert.Empty(repo.At(RecordRef.Effective).GetDocuments(BetaKey));
         Assert.Null(repo.At(RecordRef.Effective).GetOverrideStack(fx.BetaNpcFk));
-        var shared = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk)!;
+        var shared = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk);
+        Assert.NotNull(shared);
         var only = Assert.Single(shared.Entries);
         Assert.Equal(AlphaKey.Name, only.Plugin.Name);
         Assert.True(only.IsWinner);
-        Assert.Equal(AlphaKey.Name, repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk)!.Plugin.Name);
+        var sharedDocument = repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk);
+        Assert.NotNull(sharedDocument);
+        Assert.Equal(AlphaKey.Name, sharedDocument.Plugin.Name);
         // Head answers through the same scoping, not a second implementation.
         var head = repo.At(RecordRef.Head);
         Assert.Null(head.GetDocument(fx.BetaNpcFk));
         Assert.Empty(head.GetDocuments(BetaKey));
-        Assert.Single(head.GetOverrideStack(fx.SharedNpcFk)!.Entries);
+        var headSharedStack = head.GetOverrideStack(fx.SharedNpcFk);
+        Assert.NotNull(headSharedStack);
+        Assert.Single(headSharedStack.Entries);
 
         // Listings and counts.
         Assert.Empty(repo.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BetaKey.Name, Origin: BetaKey.Origin, Limit: 1000)).Items);
@@ -210,10 +217,14 @@ public class RegistrationScopingTests
         repo.UpdateWinners();
 
         Assert.Equal(fx.BetaRowCount, repo.At(RecordRef.Effective).GetDocuments(BetaKey).Count);
-        var stack = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk)!.Entries;
+        var stackResult = repo.At(RecordRef.Effective).GetOverrideStack(fx.SharedNpcFk);
+        Assert.NotNull(stackResult);
+        var stack = stackResult.Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Name == BetaKey.Name).IsWinner);
-        Assert.Equal(BetaKey.Name, repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk)!.Plugin.Name);
+        var sharedAfterReregister = repo.At(RecordRef.Effective).GetDocument(fx.SharedNpcFk);
+        Assert.NotNull(sharedAfterReregister);
+        Assert.Equal(BetaKey.Name, sharedAfterReregister.Plugin.Name);
         Assert.NotNull(repo.At(RecordRef.Effective).Resolve(fx.BetaNpcFk));
         Assert.NotNull(repo.At(RecordRef.Effective).GetPlacement(fx.BetaPlacedFk, BetaKey));
         Assert.NotEmpty(repo.At(RecordRef.Effective).GetContainerChildren(BetaKey, fx.BetaQuestFk));

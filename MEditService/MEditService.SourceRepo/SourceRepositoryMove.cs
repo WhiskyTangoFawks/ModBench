@@ -20,9 +20,9 @@ public sealed partial class SourceRepository
     {
         if (Locate(plugin, identity) is not { IsEmbedded: false, IsDirectoryPerRecord: true } unit) return null;
 
-        var from = Path.GetDirectoryName(unit.FullPath)!;
+        var from = PathShape.DirectoryOf(unit.FullPath);
         var to = Path.Combine(
-            Path.GetDirectoryName(from)!,
+            PathShape.DirectoryOf(from),
             LeafNameFor(FormKey.Factory(newFormKey), identity.EditorId, isDirectory: true));
         if (string.Equals(from, to, StringComparison.Ordinal)) return null;
 

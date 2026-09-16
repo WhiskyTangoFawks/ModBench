@@ -26,7 +26,7 @@ public sealed class CopyRecordAsOverrideHandlerTests
 
         var document = mod.Document(mod.DestinationPlugin, mod.SourceNpc.ToString());
         Assert.NotNull(document);
-        Assert.Equal(CopyFixture.SourceNpcEditorId, document!.EditorId);
+        Assert.Equal(CopyFixture.SourceNpcEditorId, document.EditorId);
 
         // The source plugin's own file is untouched — this is a copy, not a move.
         Assert.Equal(sourceBefore, mod.SourcePluginBytes());

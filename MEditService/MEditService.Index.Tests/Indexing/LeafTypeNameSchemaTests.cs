@@ -15,7 +15,11 @@ public class LeafTypeNameSchemaTests
         Schemas[table].RecordColumns.Single(c => c.Name == column).ToFieldMetadata();
 
     private static FieldMetadata Member(FieldMetadata meta, string name) =>
-        meta.Fields!.Single(f => f.Name == name);
+        (meta.Fields ?? throw new InvalidOperationException($"Expected fields to look up member '{name}'."))
+            .Single(f => f.Name == name);
+
+    private static FieldMetadata Element(FieldMetadata meta) =>
+        meta.ElementType ?? throw new InvalidOperationException("Expected an element type.");
 
     [Fact]
     public void StructColumn_NamesItsLoquiClass() =>
@@ -25,23 +29,23 @@ public class LeafTypeNameSchemaTests
     public void StructSubField_NamesItsLoquiClass() =>
         Assert.Equal(
             nameof(ConditionData),
-            Member(Column("acti", "Conditions").ElementType!, "Data").LeafTypeName);
+            Member(Element(Column("acti", "Conditions")), "Data").LeafTypeName);
 
     [Fact]
     public void NonUnionArrayElement_NamesItsLoquiClass() =>
         Assert.Equal(
             nameof(ScriptEntry),
-            Member(Column("npc_", "VirtualMachineAdapter"), "Scripts").ElementType!.LeafTypeName);
+            Element(Member(Column("npc_", "VirtualMachineAdapter"), "Scripts")).LeafTypeName);
 
     [Fact]
     public void NonUnionArrayElement_NestedUnderAUnionLeaf_NamesItsLoquiClass()
     {
-        var scriptProperty = Member(Column("npc_", "VirtualMachineAdapter"), "Scripts")
-            .ElementType!.Fields!.Single(f => f.Name == "Properties").ElementType!;
+        var scripts = Element(Member(Column("npc_", "VirtualMachineAdapter"), "Scripts"));
+        var scriptProperty = Element(Member(scripts, "Properties"));
 
         Assert.Equal(
             nameof(ScriptObjectProperty),
-            Member(scriptProperty, "Objects").ElementType!.LeafTypeName);
+            Element(Member(scriptProperty, "Objects")).LeafTypeName);
     }
 
     // A union element names its own base class and still carries its discriminator: the two are
@@ -50,10 +54,12 @@ public class LeafTypeNameSchemaTests
     [Fact]
     public void UnionArrayElement_NamesItsBaseClass_AndKeepsItsDiscriminator()
     {
-        var element = Column("acti", "Conditions").ElementType!;
+        var element = Element(Column("acti", "Conditions"));
 
         Assert.Equal(nameof(Condition), element.LeafTypeName);
-        Assert.Contains(element.Fields!, f => f.IsDiscriminator);
+        var fields = element.Fields
+            ?? throw new InvalidOperationException("Expected the union element to declare fields.");
+        Assert.Contains(fields, f => f.IsDiscriminator);
     }
 
     // The completeness half: naming three structs by hand proves nothing about the rest of the

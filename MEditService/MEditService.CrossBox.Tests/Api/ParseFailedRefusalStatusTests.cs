@@ -79,6 +79,7 @@ public sealed class ParseFailedRefusalStatusTests : IDisposable
             nameof(RecordEditRefusal.RecordParseFailed),
             Assert.Contains("refusal", problem.ProblemDetails.Extensions));
         // The reader's own words, which is the only thing that says why.
-        Assert.Contains("Unable to cast", problem.ProblemDetails.Detail!, StringComparison.Ordinal);
+        Assert.Contains("Unable to cast", problem.ProblemDetails.Detail
+            ?? throw new InvalidOperationException("Expected the refusal problem to carry a detail message."), StringComparison.Ordinal);
     }
 }

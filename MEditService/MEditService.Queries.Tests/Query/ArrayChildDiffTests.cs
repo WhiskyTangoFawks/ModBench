@@ -36,6 +36,9 @@ public class ArrayChildDiffTests
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [new FieldValue(meta, value)], "Data");
 
+    private static IReadOnlyList<FieldDiff> RequireChildren(FieldDiff diff) =>
+        diff.Children ?? throw new InvalidOperationException($"Expected '{diff.FieldName}' to have children.");
+
     // ── Sorted array tests ───────────────────────────────────────────────────
 
     [Fact]
@@ -52,7 +55,7 @@ public class ArrayChildDiffTests
 
         var kwdDiff = result.Diffs.First(d => d.FieldName == "Keywords");
         Assert.NotNull(kwdDiff.Children);
-        Assert.Equal(3, kwdDiff.Children!.Count);
+        Assert.Equal(3, RequireChildren(kwdDiff).Count);
 
         var kwdA = kwdDiff.Children.First(c => c.FieldName == "KwdA");
         Assert.NotNull(kwdA.Values["A.esp"]);
@@ -83,7 +86,7 @@ public class ArrayChildDiffTests
 
         var result = Classify([master, override1]);
 
-        var children = result.Diffs.First(d => d.FieldName == "Keywords").Children!;
+        var children = RequireChildren(result.Diffs.First(d => d.FieldName == "Keywords"));
         Assert.Equal(["KwdB", "KwdA", "KwdC"], children.Select(c => c.FieldName).ToList());
     }
 
@@ -98,7 +101,7 @@ public class ArrayChildDiffTests
 
         var result = Classify([MakeRecord("A.esp", 0, false, meta, a), MakeRecord("B.esp", 1, true, meta, b)]);
 
-        var keywords = result.Diffs.First(d => d.FieldName == "Owner").Children!.First(c => c.FieldName == "Keywords");
+        var keywords = RequireChildren(result.Diffs.First(d => d.FieldName == "Owner")).First(c => c.FieldName == "Keywords");
         Assert.Equal(ConflictThis.IdenticalToMaster, keywords.CellStates["B.esp"]);
         Assert.Equal(ConflictAll.NoConflict, keywords.ConflictAll);
     }
@@ -114,7 +117,7 @@ public class ArrayChildDiffTests
 
         var result = Classify([MakeRecord("A.esp", 0, false, meta, withoutSlot), MakeRecord("B.esp", 1, true, meta, withSlot)]);
 
-        var slot = result.Diffs.First(d => d.FieldName == "Keywords").Children!.First(c => c.FieldName == "Null");
+        var slot = RequireChildren(result.Diffs.First(d => d.FieldName == "Keywords")).First(c => c.FieldName == "Null");
         Assert.Equal(ConflictThis.Override, slot.CellStates["B.esp"]);
     }
 
@@ -128,7 +131,7 @@ public class ArrayChildDiffTests
 
         var result = Classify([MakeRecord("A.esp", 0, false, meta, shorter), MakeRecord("B.esp", 1, true, meta, longer)]);
 
-        var third = result.Diffs.First(d => d.FieldName == "Items").Children![2];
+        var third = RequireChildren(result.Diffs.First(d => d.FieldName == "Items"))[2];
         Assert.Equal(ConflictThis.Override, third.CellStates["B.esp"]);
     }
 
@@ -146,7 +149,7 @@ public class ArrayChildDiffTests
 
         var result = Classify([master, override1]);
 
-        var children = result.Diffs.First(d => d.FieldName == "Items").Children!;
+        var children = RequireChildren(result.Diffs.First(d => d.FieldName == "Items"));
         Assert.Equal(3, children.Count);
         Assert.Equal("[0]", children[0].FieldName);
         Assert.Equal("[1]", children[1].FieldName);
@@ -201,18 +204,18 @@ public class ArrayChildDiffTests
 
         var ranksDiff = result.Diffs.First(d => d.FieldName == "Ranks");
         Assert.NotNull(ranksDiff.Children);
-        Assert.Equal(2, ranksDiff.Children!.Count);
+        Assert.Equal(2, RequireChildren(ranksDiff).Count);
 
         // Each array child should have a "Rank" sub-field child
         foreach (var child in ranksDiff.Children)
         {
             Assert.NotNull(child.Children);
-            Assert.Contains(child.Children!, c => c.FieldName == "Rank");
+            Assert.Contains(RequireChildren(child), c => c.FieldName == "Rank");
         }
 
         // Second element differs — should have conflict state on B.esp
         var secondChild = ranksDiff.Children[1];
-        var rankSubField = secondChild.Children!.First(c => c.FieldName == "Rank");
+        var rankSubField = RequireChildren(secondChild).First(c => c.FieldName == "Rank");
         Assert.True(rankSubField.CellStates.ContainsKey("B.esp"));
         Assert.Equal(ConflictThis.Override, rankSubField.CellStates["B.esp"]);
     }
@@ -234,7 +237,7 @@ public class ArrayChildDiffTests
 
         var boundsDiff = result.Diffs.First(d => d.FieldName == "Bounds");
         Assert.NotNull(boundsDiff.Children);
-        var itemsChild = boundsDiff.Children!.First(c => c.FieldName == "Items");
+        var itemsChild = RequireChildren(boundsDiff).First(c => c.FieldName == "Items");
         Assert.Null(itemsChild.Children);
     }
 
@@ -255,9 +258,9 @@ public class ArrayChildDiffTests
 
         var outerDiff = result.Diffs.First(d => d.FieldName == "Outer");
         Assert.NotNull(outerDiff.Children);
-        var innerChild = outerDiff.Children!.First(c => c.FieldName == "Inner");
+        var innerChild = RequireChildren(outerDiff).First(c => c.FieldName == "Inner");
         Assert.NotNull(innerChild.Children);
-        Assert.Contains(innerChild.Children!, c => c.FieldName == "Value");
+        Assert.Contains(RequireChildren(innerChild), c => c.FieldName == "Value");
     }
 
     [Fact]
@@ -325,7 +328,7 @@ public class ArrayChildDiffTests
 
         var result = Classify([master]);
 
-        Assert.Equal(500, result.Diffs.First(d => d.FieldName == "Keywords").Children!.Count);
+        Assert.Equal(500, RequireChildren(result.Diffs.First(d => d.FieldName == "Keywords")).Count);
     }
 
     [Fact]
@@ -339,6 +342,6 @@ public class ArrayChildDiffTests
 
         var result = Classify([master]);
 
-        Assert.Equal(500, result.Diffs.First(d => d.FieldName == "Items").Children!.Count);
+        Assert.Equal(500, RequireChildren(result.Diffs.First(d => d.FieldName == "Items")).Count);
     }
 }

@@ -43,8 +43,10 @@ public static class MaskInspector
                 var elementType = element?.GetType();
                 if (elementType is { IsGenericType: true } && elementType.GetGenericTypeDefinition() == typeof(ValueTuple<,>))
                 {
-                    var idx = elementType.GetField("Item1")!.GetValue(element);
-                    var val = elementType.GetField("Item2")!.GetValue(element);
+                    var idx = (elementType.GetField("Item1")
+                        ?? throw new InvalidOperationException($"Expected {elementType} to declare Item1.")).GetValue(element);
+                    var val = (elementType.GetField("Item2")
+                        ?? throw new InvalidOperationException($"Expected {elementType} to declare Item2.")).GetValue(element);
                     foreach (var leaf in CountLeaves(val, $"{path}[{idx}]"))
                     {
                         yield return leaf;

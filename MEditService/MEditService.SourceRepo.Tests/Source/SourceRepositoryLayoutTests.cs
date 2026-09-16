@@ -37,7 +37,9 @@ public sealed class SourceRepositoryLayoutTests
         {
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits, [], new TrackProvenance(null, null, new Dictionary<string, string>()));
-            SourceRepository.Open(modFolder, Release)!.Put(
+            var repository = SourceRepository.Open(modFolder, Release)
+                ?? throw new InvalidOperationException($"Expected '{modFolder}' to already be tracked.");
+            repository.Put(
                 new PluginCopyKey(pluginFileName, "LayoutMod"), new SourceDocument(formKeyString, recordType, editorId, "{}"));
 
             var path = Path.GetRelativePath(
@@ -50,9 +52,9 @@ public sealed class SourceRepositoryLayoutTests
             Assert.Equal(SourceRepository.RootFolderName, segments[0]);
             Assert.Equal(pluginFileName, segments[1]);
 
-            var ok = SourceRepository.TryParseDocumentPath(path, Release, out var identity);
+            var identity = SourceRepository.ParseDocumentPath(path, Release);
 
-            Assert.True(ok, $"expected TryParse to succeed for a path Put itself produced: '{path}'");
+            Assert.NotNull(identity);
             Assert.Equal(pluginFileName, identity.PluginFileName);
             // TryParse answers RecordTypeDispatch's schema-table-name spelling; Put() accepts either. The
             // two need not match textually, only resolve to the same concrete type, which this equality
@@ -94,9 +96,8 @@ public sealed class SourceRepositoryLayoutTests
         // than through For(), and every OS accepts it here.
         var normalized = relativePath.Replace('/', Path.DirectorySeparatorChar);
 
-        var ok = SourceRepository.TryParseDocumentPath(normalized, Release, out var identity);
+        var identity = SourceRepository.ParseDocumentPath(normalized, Release);
 
-        Assert.False(ok, $"expected TryParse to fail for a malformed or unmapped path: '{relativePath}'");
         Assert.Null(identity);
     }
 
@@ -109,11 +110,10 @@ public sealed class SourceRepositoryLayoutTests
         var ambiguousFolder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat");
         Assert.NotNull(ambiguousFolder); // sanity: GlobalFloat is a flat type with a real folder...
         var path = Path.Combine(
-            SourceRepository.RootFolderName, "Vendor.esp", ambiguousFolder!, "SomeGlobal - 000800_Vendor.esp.json");
+            SourceRepository.RootFolderName, "Vendor.esp", ambiguousFolder, "SomeGlobal - 000800_Vendor.esp.json");
 
-        var ok = SourceRepository.TryParseDocumentPath(path, Release, out var identity);
+        var identity = SourceRepository.ParseDocumentPath(path, Release);
 
-        Assert.False(ok, "...but that folder is shared with GlobalBool/GlobalInt/GlobalShort, so it must not resolve.");
         Assert.Null(identity);
     }
 
@@ -137,10 +137,10 @@ public sealed class SourceRepositoryLayoutTests
     [Fact]
     public void TryParse_ForTheRootRecordDataJson_ResolvesTheHeaderIdentity()
     {
-        var ok = SourceRepository.TryParseDocumentPath(
-            Path.Combine("source", "Vendor.esp", "RecordData.json"), Release, out var identity);
+        var identity = SourceRepository.ParseDocumentPath(
+            Path.Combine("source", "Vendor.esp", "RecordData.json"), Release);
 
-        Assert.True(ok);
+        Assert.NotNull(identity);
         Assert.Equal("Vendor.esp", identity.PluginFileName);
         Assert.Equal(PluginHeader.RecordType, identity.RecordType);
     }

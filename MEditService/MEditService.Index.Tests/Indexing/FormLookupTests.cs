@@ -48,7 +48,8 @@ public class FormLookupTests
 
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM form_lookup WHERE plugin = 'Lookup.esp'";
-        var count = (long)cmd.ExecuteScalar()!;
+        var count = (long)(cmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
 
         // Two records and the plugin header: ADR-0005 keeps exactly one lookup row per `records` row, and
         // the header is one of those rows. Written as the sum so the reason for each row stays visible.
@@ -83,7 +84,8 @@ public class FormLookupTests
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM form_lookup WHERE form_key = $1 AND plugin = 'Reindex.esp'";
         cmd.Parameters.Add(new DuckDBParameter { Value = npcFormKey.ToString() });
-        var count = (long)cmd.ExecuteScalar()!;
+        var count = (long)(cmd.ExecuteScalar()
+            ?? throw new InvalidOperationException("Expected SELECT COUNT(*) to return a value."));
 
         Assert.Equal(1, count);
     }

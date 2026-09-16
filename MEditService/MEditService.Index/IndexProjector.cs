@@ -634,8 +634,11 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             {
                 _logger.LogInformation("Ingesting {Plugin} from its source tree", plugin.Name);
             }
+            var modFolder = LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)
+                ?? throw new InvalidOperationException(
+                    $"'{plugin.Name}' from '{plugin.Origin}' holds a source tree, so it cannot be the game's own Data directory.");
             SourceIngest.Ingest(
-                index, LoadOrderSnapshot.ModFolderOf(plugin.Origin, plugin.Path)!,
+                index, modFolder,
                 plugin.Registration, plugin.Key, plugin.Path, held.GameRelease,
                 _schemaReflector, _logger, token);
             return;
@@ -746,7 +749,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         // must make this method `async` too, or the write is silently ungated.
         using var _ = WriteGate.Enter();
 
-        var (metadata, index, gameRelease) = RequireHeldCopy(key);
+        var (metadata, index, gameRelease, dataFolderPath) = RequireHeldCopy(key);
         // ADR-0014: a whole copy re-derived is one projection, so it is one advance whichever
         // branch below runs.
         using var projection = index.BeginProjection();
@@ -762,7 +765,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             return Task.CompletedTask;
         }
 
-        return ReindexOne(metadata, index, gameRelease);
+        return ReindexOne(metadata, index, gameRelease, dataFolderPath);
     }
 
     // The same SourceIngest.Ingest the reconcile's tracked branch runs, so a re-ingest and a first
@@ -774,7 +777,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         // reentrant gate makes that free.
         using var _ = WriteGate.Enter();
 
-        var (metadata, index, gameRelease) = RequireHeldCopy(key);
+        var (metadata, index, gameRelease, _) = RequireHeldCopy(key);
         using var projection = index.BeginProjection();
         if (!SourceIngest.HoldsTree(metadata.Origin, metadata.Path, metadata.Name))
         {
@@ -794,8 +797,11 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         {
             try
             {
+                var modFolder = LoadOrderSnapshot.ModFolderOf(metadata.Origin, metadata.Path)
+                    ?? throw new InvalidOperationException(
+                        $"'{metadata.Name}' from '{metadata.Origin}' holds a source tree, so it cannot be the game's own Data directory.");
                 SourceIngest.Ingest(
-                    index, LoadOrderSnapshot.ModFolderOf(metadata.Origin, metadata.Path)!,
+                    index, modFolder,
                     metadata.Registration, metadata.Key, metadata.Path, gameRelease, _schemaReflector, _logger);
             }
             catch (Exception ex)
@@ -812,20 +818,20 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
         }
     }
 
-    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease) RequireHeldCopy(PluginCopyKey key)
+    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease, string DataFolderPath) RequireHeldCopy(PluginCopyKey key)
     {
         lock (_lock)
         {
             var scope = RequireScopeCore();
             var metadata = scope.Held.Find(key)
                 ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
-            return (metadata, scope.Index, _gameRelease);
+            return (metadata, scope.Index, _gameRelease, scope.Held.DataFolderPath);
         }
     }
 
-    private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease)
+    private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease, string dataFolderPath)
     {
-        using var documents = OpenDocuments(metadata, gameRelease, _heldPlugins!.DataFolderPath);
+        using var documents = OpenDocuments(metadata, gameRelease, dataFolderPath);
 
         lock (_lock)
         {

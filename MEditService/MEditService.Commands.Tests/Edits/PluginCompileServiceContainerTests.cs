@@ -180,10 +180,10 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var a = AllCells(mod).Single(c => c.FormKey == _cellA);
             var b = AllCells(mod).Single(c => c.FormKey == _cellB);
 
-            Assert.Equal(["A_Persist"], a.Persistent.Select(r => r.EditorID!).Order().ToArray());
-            Assert.Equal(["A_Temp"], a.Temporary.Select(r => r.EditorID!).Order().ToArray());
-            Assert.Equal(["B_Persist"], b.Persistent.Select(r => r.EditorID!).Order().ToArray());
-            Assert.Equal(["B_Temp"], b.Temporary.Select(r => r.EditorID!).Order().ToArray());
+            Assert.Equal(["A_Persist"], a.Persistent.Select(r => r.EditorID.Require()).Order().ToArray());
+            Assert.Equal(["A_Temp"], a.Temporary.Select(r => r.EditorID.Require()).Order().ToArray());
+            Assert.Equal(["B_Persist"], b.Persistent.Select(r => r.EditorID.Require()).Order().ToArray());
+            Assert.Equal(["B_Temp"], b.Temporary.Select(r => r.EditorID.Require()).Order().ToArray());
         }
     }
 
@@ -196,8 +196,8 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var worldspace = mod.Worldspaces.Single(w => w.FormKey == _worldspace);
 
             Assert.NotNull(worldspace.TopCell);
-            Assert.Equal(_topCell, worldspace.TopCell!.FormKey);
-            Assert.Equal(["Top_Temp"], worldspace.TopCell.Temporary.Select(r => r.EditorID!).ToArray());
+            Assert.Equal(_topCell, worldspace.TopCell.Require().FormKey);
+            Assert.Equal(["Top_Temp"], worldspace.TopCell.Temporary.Select(r => r.EditorID.Require()).ToArray());
 
             var writtenBlock = Assert.Single(worldspace.SubCells);
             Assert.Equal(0, writtenBlock.BlockNumberX);
@@ -208,8 +208,8 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
             var cell = Assert.Single(writtenSubBlock.Items);
             Assert.Equal(_exteriorCell, cell.FormKey);
-            Assert.Equal(new P2Int(3, -4), cell.Grid!.Point);
-            Assert.Equal(["Ext_Temp"], cell.Temporary.Select(r => r.EditorID!).ToArray());
+            Assert.Equal(new P2Int(3, -4), cell.Grid.Require().Point);
+            Assert.Equal(["Ext_Temp"], cell.Temporary.Select(r => r.EditorID.Require()).ToArray());
         }
     }
 
@@ -222,17 +222,17 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var a = mod.Quests.Single(q => q.FormKey == _questA);
             var b = mod.Quests.Single(q => q.FormKey == _questB);
 
-            Assert.Equal(["TopicA"], a.DialogTopics.Select(t => t.EditorID!).Order().ToArray());
-            Assert.Equal(["TopicB"], b.DialogTopics.Select(t => t.EditorID!).Order().ToArray());
-            Assert.Equal(["SceneA"], a.Scenes.Select(s => s.EditorID!).Order().ToArray());
+            Assert.Equal(["TopicA"], a.DialogTopics.Select(t => t.EditorID.Require()).Order().ToArray());
+            Assert.Equal(["TopicB"], b.DialogTopics.Select(t => t.EditorID.Require()).Order().ToArray());
+            Assert.Equal(["SceneA"], a.Scenes.Select(s => s.EditorID.Require()).Order().ToArray());
             Assert.Empty(b.Scenes);
 
             Assert.Equal(
                 ["ResponseA"],
-                a.DialogTopics.Single().Responses.Select(r => r.EditorID!).Order().ToArray());
+                a.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order().ToArray());
             Assert.Equal(
                 ["ResponseB"],
-                b.DialogTopics.Single().Responses.Select(r => r.EditorID!).Order().ToArray());
+                b.DialogTopics.Single().Responses.Select(r => r.EditorID.Require()).Order().ToArray());
         }
     }
 
@@ -276,7 +276,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     public void Compile_AfterDeletingTheMiddleOfThreeDialogTopics_Succeeds_KeepingSurvivorsInOrder()
     {
         SourceEdits.Rewrite<Quest>(
-            SourceRepository.Open(_modFolder, GameRelease.Fallout4)!, _plugin,
+            SourceRepository.Open(_modFolder, GameRelease.Fallout4).Require(), _plugin,
             new RecordIdentity(_questC.ToString(), QuestRecordType, "QuestC"), GameRelease.Fallout4,
             quest => quest.DialogTopics.Remove(quest.DialogTopics.Single(t => t.FormKey == _topicC2)));
 
@@ -286,7 +286,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
             var questC = mod.Quests.Single(q => q.FormKey == _questC);
             Assert.Equal(
                 [TopicC1EditorId, TopicC3EditorId],
-                questC.DialogTopics.Select(t => t.EditorID!).ToArray());
+                questC.DialogTopics.Select(t => t.EditorID.Require()).ToArray());
         }
     }
 

@@ -92,7 +92,7 @@ public sealed class PluginBinaryWalkTests
         var loss = PluginBinaryWalk.FindFirstSubrecordLoss(original, rewritten);
 
         Assert.NotNull(loss);
-        Assert.Equal("REGN", loss!.Value.RecordType);
+        Assert.Equal("REGN", loss.Value.RecordType);
         Assert.Equal(0x001D2AF4u, loss.Value.FormId);
         Assert.Equal(["RDMP", "RDMO"], loss.Value.Signatures);
     }
@@ -115,7 +115,7 @@ public sealed class PluginBinaryWalkTests
         var loss = PluginBinaryWalk.FindFirstSubrecordLoss(original, rewritten);
 
         Assert.NotNull(loss);
-        Assert.Equal("REGN", loss!.Value.RecordType);
+        Assert.Equal("REGN", loss.Value.RecordType);
         Assert.Equal(["RDMP", "RDMO"], loss.Value.Signatures);
     }
 
@@ -141,7 +141,7 @@ public sealed class PluginBinaryWalkTests
         var loss = PluginBinaryWalk.FindFirstSubrecordLoss(Concat(originalRecord), Concat(rewrittenRecord));
 
         Assert.NotNull(loss);
-        Assert.Equal(["RDMP"], loss!.Value.Signatures);
+        Assert.Equal(["RDMP"], loss.Value.Signatures);
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public sealed class PluginBinaryWalkTests
         var loss = PluginBinaryWalk.FindFirstSubrecordLoss(Concat(originalHeader), Concat(rewrittenHeader));
 
         Assert.NotNull(loss);
-        Assert.Equal("TES4", loss!.Value.RecordType);
+        Assert.Equal("TES4", loss.Value.RecordType);
         Assert.Equal(["SNAM"], loss.Value.Signatures);
     }
 

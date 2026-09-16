@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -76,7 +77,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
         var byOrigin = records.GetProperty("items").EnumerateArray()
             .Where(r => r.GetProperty("plugin").GetString() == "Shared.esp")
-            .ToDictionary(r => r.GetProperty("origin").GetString()!, r => r.GetProperty("editorId").GetString());
+            .ToDictionary(r => DocumentNodes.StringValueOf(r.GetProperty("origin")), r => r.GetProperty("editorId").GetString());
 
         // A load order keyed by filename alone reports two rows with the right origins and the
         // same content, so the failure being pinned is not a missing row.
@@ -110,7 +111,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var compare = await _client.GetFromJsonAsync<JsonElement>(
             $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
         var columns = compare.GetProperty("overrides").EnumerateArray()
-            .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
+            .ToDictionary(o => DocumentNodes.StringValueOf(o.GetProperty("origin")), o => o);
 
         // ADR-0012: the grid is xEdit parity, the in-game resolution stack. The game loads exactly
         // one file named Shared.esp, so the discarded copy stays indexed and browsable but never

@@ -9,6 +9,9 @@ namespace MEditService.Tests.Serialization;
 /// are checked empirically: <c>ModHeaderWriteLogic</c> never touches either.</summary>
 public sealed class OpaqueHeaderFieldsRoundTripTests
 {
+    private static T Require<T>(T? value, string name) where T : struct =>
+        value ?? throw new InvalidOperationException($"Expected '{name}' to be present.");
+
     [Fact]
     public async Task WholeModJsonRoundTrip_OfEveryOpaqueHeaderField_SurvivesByteForByte()
     {
@@ -28,11 +31,11 @@ public sealed class OpaqueHeaderFieldsRoundTripTests
             await RecordTextCodecGeneratorSeed.SerializeWholeMod(mod, folder, InlineWorkDropoff.Instance, CancellationToken.None);
             var recompiled = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, CancellationToken.None);
 
-            Assert.Equal(mod.ModHeader.INTV!.Value.ToArray(), recompiled.ModHeader.INTV!.Value.ToArray());
+            Assert.Equal(Require(mod.ModHeader.INTV, "INTV").ToArray(), Require(recompiled.ModHeader.INTV, "INTV").ToArray());
             Assert.Equal(mod.ModHeader.INCC, recompiled.ModHeader.INCC);
-            Assert.Equal(mod.ModHeader.TypeOffsets!.Value.ToArray(), recompiled.ModHeader.TypeOffsets!.Value.ToArray());
-            Assert.Equal(mod.ModHeader.Deleted!.Value.ToArray(), recompiled.ModHeader.Deleted!.Value.ToArray());
-            Assert.Equal(mod.ModHeader.Screenshot!.Value.ToArray(), recompiled.ModHeader.Screenshot!.Value.ToArray());
+            Assert.Equal(Require(mod.ModHeader.TypeOffsets, "TypeOffsets").ToArray(), Require(recompiled.ModHeader.TypeOffsets, "TypeOffsets").ToArray());
+            Assert.Equal(Require(mod.ModHeader.Deleted, "Deleted").ToArray(), Require(recompiled.ModHeader.Deleted, "Deleted").ToArray());
+            Assert.Equal(Require(mod.ModHeader.Screenshot, "Screenshot").ToArray(), Require(recompiled.ModHeader.Screenshot, "Screenshot").ToArray());
             Assert.Equal(mod.ModHeader.Author, recompiled.ModHeader.Author);
             Assert.Equal(mod.ModHeader.Description, recompiled.ModHeader.Description);
             Assert.Single(recompiled.ModHeader.TransientTypes);

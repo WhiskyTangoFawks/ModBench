@@ -99,9 +99,11 @@ public static class ContainerChildFields
                 ?? throw new InvalidOperationException(
                     $"{record.GetType().Name} has no property '{slotName}' to clear — its child members are the assembly's own.");
 
-            var value = property.GetValue(record);
+            var value = property.GetValue(record)
+                ?? throw new InvalidOperationException(
+                    $"Expected {record.GetType().Name}.{slotName} to hold a value or a collection to clear.");
             if (value is IMajorRecordGetter) property.SetValue(record, null);
-            else ((dynamic)value!).Clear();
+            else ((dynamic)value).Clear();
         }
     }
 
@@ -113,7 +115,9 @@ public static class ContainerChildFields
             ?? throw new InvalidOperationException(
                 $"{parent.GetType().Name} has no property '{slotName}' to add a child to — its child members are the assembly's own.");
 
-        ((dynamic)property.GetValue(parent)!).Add((dynamic)child);
+        var value = property.GetValue(parent)
+            ?? throw new InvalidOperationException($"Expected {parent.GetType().Name}.{slotName} to hold a collection to add a child to.");
+        ((dynamic)value).Add((dynamic)child);
     }
 
     /// <summary>The own-fields-replace half: the replacing record arrives child-stripped, and
@@ -142,14 +146,16 @@ public static class ContainerChildFields
             ?? throw new InvalidOperationException(
                 $"{parent.GetType().Name} has no property '{slotName}' to remove a child from — its child members are the assembly's own.");
 
-        var value = property.GetValue(parent);
+        var value = property.GetValue(parent)
+            ?? throw new InvalidOperationException(
+                $"Expected {parent.GetType().Name}.{slotName} to hold a value or a collection to remove a child from.");
         if (value is IMajorRecordGetter)
         {
             property.SetValue(parent, null);
             return;
         }
 
-        ((dynamic)value!).RemoveAt(slotIndex);
+        ((dynamic)value).RemoveAt(slotIndex);
     }
 
     /// <summary>The slots that serialize inline into the parent's document, which is every member the

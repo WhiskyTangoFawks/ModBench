@@ -43,7 +43,9 @@ public class ParallelPrepareParityTests
         // Counted rather than filtered silently, so "one per record, plus the header" stays an assertion.
         var header = Assert.Single(all, d => d.RecordType == PluginHeader.RecordType);
         Assert.NotNull(header.Body);
-        var stored = all.Where(d => d != header).ToDictionary(d => d.FormKey, d => d.Body!);
+        var stored = all.Where(d => d != header).ToDictionary(
+            d => d.FormKey,
+            d => d.Body ?? throw new InvalidOperationException($"Expected document '{d.FormKey}' to carry a body."));
         var records = mod.EnumerateMajorRecords().ToList();
 
         Assert.Equal(records.Count, stored.Count);

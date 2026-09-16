@@ -99,7 +99,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
     private static Dictionary<string, JsonElement> WrittenProperties(string body) =>
         JsonDocument.Parse(body).RootElement.GetProperty("VirtualMachineAdapter")
             .GetProperty("Scripts")[0].GetProperty("Properties").EnumerateArray()
-            .ToDictionary(p => p.GetProperty("Name").GetString()!, StringComparer.Ordinal);
+            .ToDictionary(p => p.GetProperty("Name").GetString().Require(), StringComparer.Ordinal);
 
     private sealed class ScriptedNpcFixture : IDisposable
     {
@@ -148,7 +148,7 @@ public sealed class ConcreteBaseUnionEditTests : IDisposable
 
         public EditRecordHandler Service() => EditHandler;
 
-        public string NpcBody() => TrackedTree.Document(_modFolder, Plugin, Npc.ToString())!.Body;
+        public string NpcBody() => TrackedTree.Body(_modFolder, Plugin, Npc.ToString());
 
         public void Dispose()
         {

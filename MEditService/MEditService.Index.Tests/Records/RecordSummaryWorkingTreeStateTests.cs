@@ -55,9 +55,12 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     {
         using var index = LoadedIndex();
         var edited = _editedFormKey.ToString();
-        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)!;
+        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)
+            ?? throw new InvalidOperationException($"Expected a committed document for '{edited}'.");
+        var committedBody = committed.Body
+            ?? throw new InvalidOperationException($"Expected committed document '{edited}' to carry a body.");
         index.ProjectDocuments(
-            BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
+            BaseKey, [(edited, committedBody.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
         var page = index.At(RecordRef.Effective).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 
@@ -87,9 +90,12 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
     {
         using var index = LoadedIndex();
         var edited = _editedFormKey.ToString();
-        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)!;
+        var committed = index.At(RecordRef.Effective).GetDocument(edited, BaseKey)
+            ?? throw new InvalidOperationException($"Expected a committed document for '{edited}'.");
+        var committedBody = committed.Body
+            ?? throw new InvalidOperationException($"Expected committed document '{edited}' to carry a body.");
         index.ProjectDocuments(
-            BaseKey, [(edited, committed.Body!.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
+            BaseKey, [(edited, committedBody.Replace("EditedOriginal", "EditedNew", StringComparison.Ordinal))]);
 
         var headPage = index.At(RecordRef.Head).Search(new RecordQuery(Plugin: BaseKey.Name, Origin: BaseKey.Origin, RecordTypes: ["npc_"], Limit: 50));
 

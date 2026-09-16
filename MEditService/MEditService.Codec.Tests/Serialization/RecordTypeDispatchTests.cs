@@ -132,7 +132,9 @@ public class RecordTypeDispatchTests
     {
         var ex = new RecordTypeSerializationUnsupportedException(typeof(Npc), typeof(object), "Serialize");
 
-        Assert.Contains(typeof(object).FullName!, ex.Message, StringComparison.Ordinal);
+        var objectFullName = typeof(object).FullName
+            ?? throw new InvalidOperationException("Expected typeof(object).FullName to be non-null.");
+        Assert.Contains(objectFullName, ex.Message, StringComparison.Ordinal);
         Assert.Contains("Serialize", ex.Message, StringComparison.Ordinal);
     }
 }

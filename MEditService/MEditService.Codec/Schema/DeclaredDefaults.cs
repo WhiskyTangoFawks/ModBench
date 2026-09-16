@@ -44,7 +44,7 @@ internal sealed class DeclaredDefaults(GameRelease release, ILogger logger)
 
     public object? Of(PropertyInfo prop)
     {
-        var owner = _instances.GetOrAdd(prop.DeclaringType!, Instance);
+        var owner = _instances.GetOrAdd(ReflectedTypes.DeclaringTypeOf(prop), Instance);
         return owner == null ? null : ReflectedTypes.ReadOrNull(owner, prop);
     }
 

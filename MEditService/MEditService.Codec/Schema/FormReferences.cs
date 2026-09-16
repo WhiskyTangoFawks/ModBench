@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace MEditService.Codec.Schema;
@@ -36,7 +37,7 @@ public static class FormReferences
         });
         if (!carriesFormKeys) return;
         Walk(DocumentNodes.VariantFor(meta, root), DocumentNodes.At(root, col.PropertyName), col.Name,
-            (path, raw, _, _) => { if (IsRealRef(raw)) visitor(path, raw!); });
+            (path, raw, _, _) => { if (IsRealRef(raw)) visitor(path, raw); });
     }
 
     // Keyed by reference: ColumnSpec is a record whose value equality would walk its whole member
@@ -66,17 +67,17 @@ public static class FormReferences
             return;
         }
 
-        if (meta.Type == "struct" && meta.Fields != null) WalkStruct(meta, value, path, onFormKeyLeaf);
-        else if (meta.Type == "array" && meta.ElementType != null) WalkArray(meta, value, path, onFormKeyLeaf);
+        if (meta.Type == "struct" && meta.Fields is { } fields) WalkStruct(fields, value, path, onFormKeyLeaf);
+        else if (meta.Type == "array" && meta.ElementType is { } elementType) WalkArray(elementType, value, path, onFormKeyLeaf);
     }
 
     private static void WalkStruct(
-        FieldMetadata meta, JsonElement? value, string path,
+        IReadOnlyList<FieldMetadata> fields, JsonElement? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (value is not { ValueKind: JsonValueKind.Object } obj) return;
-        var idle = IdleMembers(meta.Fields!, obj);
-        foreach (var field in meta.Fields!)
+        var idle = IdleMembers(fields, obj);
+        foreach (var field in fields)
         {
             if (idle?.Contains(field.Name) == true) continue;
             var present = obj.TryGetProperty(field.Name, out var prop);
@@ -99,7 +100,7 @@ public static class FormReferences
 
             var inUse = obj.TryGetProperty(governing.Name, out var current)
                 && current.ValueKind == JsonValueKind.String
-                && byValue.TryGetValue(current.GetString()!, out var named)
+                && byValue.TryGetValue(DocumentNodes.StringValueOf(current), out var named)
                     ? named
                     : [];
             idle ??= new(StringComparer.Ordinal);
@@ -110,16 +111,16 @@ public static class FormReferences
     }
 
     private static void WalkArray(
-        FieldMetadata meta, JsonElement? value, string path,
+        FieldMetadata elementType, JsonElement? value, string path,
         Action<string, string?, bool, IReadOnlyList<string>> onFormKeyLeaf)
     {
         if (value is not { ValueKind: JsonValueKind.Array } array) return;
         var idx = 0;
         foreach (var elem in array.EnumerateArray())
-            Walk(meta.ElementType!, elem, $"{path}[{idx++}]", onFormKeyLeaf);
+            Walk(elementType, elem, $"{path}[{idx++}]", onFormKeyLeaf);
     }
 
-    private static bool IsRealRef(string? s) => s is not null && s != "Null";
+    private static bool IsRealRef([NotNullWhen(true)] string? s) => s is not null && s != "Null";
 
     public static string? ExtractString(object? raw) => raw switch
     {

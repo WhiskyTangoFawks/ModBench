@@ -58,7 +58,7 @@ public readonly record struct ElementKey(IReadOnlyList<(double? Number, string T
         current.ValueKind switch
         {
             JsonValueKind.Number => (current.GetDouble(), current.GetDouble().ToString(CultureInfo.InvariantCulture)),
-            JsonValueKind.String => (null, current.GetString()!),
+            JsonValueKind.String => (null, DocumentNodes.StringValueOf(current)),
             JsonValueKind.True or JsonValueKind.False => (null, current.GetRawText()),
             // A flags member is an array of names (ScenePhaseFragment.Flags keys a fragment); its
             // order is its bits', read off the members the schema declares.

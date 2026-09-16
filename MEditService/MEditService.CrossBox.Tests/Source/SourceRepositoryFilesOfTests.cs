@@ -17,7 +17,8 @@ public sealed class SourceRepositoryFilesOfTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private SourceRepository Repository => SourceRepository.Open(_mod.ModFolder, GameRelease.Fallout4)!;
+    private SourceRepository Repository => SourceRepository.Open(_mod.ModFolder, GameRelease.Fallout4)
+        ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");
 
     private string SourceRoot =>
         Path.Combine(_mod.ModFolder, SourceRepository.RootFor(CompileFixture.PluginName));

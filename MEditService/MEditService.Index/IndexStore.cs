@@ -46,7 +46,7 @@ internal sealed class IndexStore : IDisposable
             return memory;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(_databasePath));
         try
         {
             return OpenFile();
@@ -131,6 +131,9 @@ internal sealed class IndexStore : IDisposable
         TableDdlBuilder.CreateTables(Connection);
     }
 
+    private string RequireIndexVersion() =>
+        _indexVersion ?? throw new InvalidOperationException("Call Initialize before using the repository.");
+
     // ADR-0009: a codec or schema version change invalidates the whole file, and there is no
     // in-place migration: the file is deleted and reopened empty, costing one cold load.
     private void DiscardFileWrittenUnderAnotherVersion()
@@ -188,7 +191,8 @@ internal sealed class IndexStore : IDisposable
             {
                 WaitWhile(() => _readsInFlight > 0, "serving reads");
                 Connection.Dispose();
-                File.Delete(_databasePath!);
+                File.Delete(_databasePath
+                    ?? throw new InvalidOperationException("An in-memory index has no file to rebuild."));
                 Connection = OpenFile();
             }
             finally
@@ -301,7 +305,7 @@ internal sealed class IndexStore : IDisposable
         DuckDbSql.ExecuteFor(Connection, $"""
             INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, index_version)
             VALUES ($1, $2, $3, $4, $5)
-            """, plugin, origin, Path.GetFullPath(filePath), contentHash, _indexVersion!);
+            """, plugin, origin, Path.GetFullPath(filePath), contentHash, RequireIndexVersion());
     }
 
     public void DeleteIndexedFile(string plugin, string origin) =>

@@ -209,8 +209,12 @@ public class HeaderIndexingTests
         repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var overridesA = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginA.esp")!.Entries;
-        var overridesB = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginB.esp")!.Entries;
+        var overrideStackA = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginA.esp")
+            ?? throw new InvalidOperationException("Expected an override stack for PluginA.esp's header.");
+        var overrideStackB = repo.At(RecordRef.Effective).GetOverrideStack("000000:PluginB.esp")
+            ?? throw new InvalidOperationException("Expected an override stack for PluginB.esp's header.");
+        var overridesA = overrideStackA.Entries;
+        var overridesB = overrideStackB.Entries;
 
         Assert.Single(overridesA);
         Assert.Single(overridesB);
@@ -233,7 +237,9 @@ public class HeaderIndexingTests
         repo.IndexMod((IModGetter)modA, Registration.Participating(0), new PluginCopyKey(modA.ModKey.FileName.ToString(), "ModA"));
         repo.IndexMod((IModGetter)modB, Registration.Participating(1), new PluginCopyKey(modB.ModKey.FileName.ToString(), "ModB"));
 
-        var overrides = repo.At(RecordRef.Effective).GetOverrideStack("000000:Shared.esp")!.Entries;
+        var overrideStack = repo.At(RecordRef.Effective).GetOverrideStack("000000:Shared.esp")
+            ?? throw new InvalidOperationException("Expected an override stack for Shared.esp's header.");
+        var overrides = overrideStack.Entries;
 
         Assert.Equal(2, overrides.Count);
         Assert.Contains(overrides, o => o.Plugin.Origin == "ModA");

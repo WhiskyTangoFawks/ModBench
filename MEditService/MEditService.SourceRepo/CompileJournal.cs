@@ -50,7 +50,10 @@ public static class CompileJournal
     }
 
     private static List<string> ReadStringArray(JsonElement root, string propertyName) =>
-        root.GetProperty(propertyName).EnumerateArray().Select(e => e.GetString()!).ToList();
+        root.GetProperty(propertyName).EnumerateArray()
+            .Select(e => e.GetString() ?? throw new InvalidOperationException(
+                $"Expected every '{propertyName}' element to be a non-null string."))
+            .ToList();
 
     private static void WriteMarker(string modFolder, IReadOnlyList<string> plugins, IReadOnlyList<string> landed)
     {

@@ -27,7 +27,8 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests
         GitCli.Run(gitDir, mod.ModFolder, "rm", "--cached", "-q", "--", SourceRepository.ToGitPath(headerPath));
         GitCli.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "uncommit the header");
 
-        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)!;
+        var repository = SourceRepository.Open(mod.ModFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");
         Assert.DoesNotContain(repository.ReadAll(mod.Plugin, "HEAD"), d => d.FormKey == headerFormKey);
         Assert.True(repository.HoldsAtEitherRef(mod.Plugin, headerFormKey));
     }
@@ -43,7 +44,8 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests
         var result = fixture.RenumberHandler.RenumberRecord(fixture.Plugin, fixture.TopCellRef.ToString(), renumbered);
         Assert.True(result.Applied, result.Message);
 
-        var repository = SourceRepository.Open(fixture.ModFolder, GameRelease.Fallout4)!;
+        var repository = SourceRepository.Open(fixture.ModFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");
         Assert.True(repository.HoldsAtEitherRef(fixture.Plugin, renumbered));
         Assert.True(repository.HoldsAtEitherRef(fixture.Plugin, "00080a:SourceContainer.esp"));
     }

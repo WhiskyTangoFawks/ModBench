@@ -34,7 +34,8 @@ public sealed class HeadRelationDisjointnessTests
 
         // The edit survives: Effective still serves the source's 0.75, not the binary's untouched
         // value (the binary was written by the fixture and has never been compiled since).
-        var effective = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin)!;
+        var effective = mod.Index.Projected().GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(effective);
         Assert.Equal(0.75f, Assert.IsType<JsonElement>(effective.Fields.Single(f => f.Metadata.Name == "HeightMax").Value).GetSingle());
 
         // ...and so does the divergence it created: the record is still committed-versus-working-tree
@@ -60,7 +61,9 @@ public sealed class HeadRelationDisjointnessTests
             .Set(mod.Plugin, mod.Npc.ToString(), "HeightMax", System.Text.Json.JsonDocument.Parse("0.8").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
-        mod.Index.Store!.Unindex(mod.Plugin);
+        var store = mod.Index.Store
+            ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
+        store.Unindex(mod.Plugin);
 
         Assert.Null(mod.Index.Projected(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
     }

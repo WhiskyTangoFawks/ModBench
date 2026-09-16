@@ -12,10 +12,13 @@ public sealed class ConditionSchemaTests
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
     private static FieldMetadata ConditionElement(string table = "cobj") =>
-        Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec!.ToFieldMetadata();
+        (Schemas[table].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec
+            ?? throw new InvalidOperationException($"Expected '{table}.Conditions' to have an element spec."))
+            .ToFieldMetadata();
 
     private static FieldMetadata Member(FieldMetadata owner, string name) =>
-        owner.Fields!.Single(f => f.Name == name);
+        (owner.Fields ?? throw new InvalidOperationException($"Expected fields to look up member '{name}'."))
+            .Single(f => f.Name == name);
 
     // ── the two unions ───────────────────────────────────────────────────────
 
@@ -45,9 +48,11 @@ public sealed class ConditionSchemaTests
     public void ComparisonValue_IsOneMemberWithAVariantPerLeaf_FloatAndGlobalLink()
     {
         var comparison = Member(ConditionElement(), "ComparisonValue");
+        var variants = comparison.Variants
+            ?? throw new InvalidOperationException("Expected 'ComparisonValue' to carry per-leaf variants.");
 
-        Assert.Equal("float", comparison.Variants![nameof(ConditionFloat)].Type);
-        var link = comparison.Variants[nameof(ConditionGlobal)];
+        Assert.Equal("float", variants[nameof(ConditionFloat)].Type);
+        var link = variants[nameof(ConditionGlobal)];
         Assert.Equal("formKey", link.Type);
         // Empty, meaning "any record type": the link closes over the abstract IGlobalGetter, and GLOB's
         // schema table is keyed by its four concrete sibling getters, so the base resolves to no table.
@@ -68,31 +73,34 @@ public sealed class ConditionSchemaTests
         var slots = Member(Member(ConditionElement(), "Data"), "Function").SiblingsInUse;
 
         Assert.NotNull(slots);
-        Assert.Equal(expected, slots![function]);
+        Assert.Equal(expected, slots[function]);
     }
 
     [Fact]
     public void ConditionFunction_NamesEveryFunctionTheDomainOffers()
     {
         var function = Member(Member(ConditionElement(), "Data"), "Function");
+        var siblingsInUse = function.SiblingsInUse
+            ?? throw new InvalidOperationException("Expected 'Function' to carry a siblings-in-use map.");
 
         Assert.Equal(
             function.EnumMembers.Select(m => m.Value).Order(StringComparer.Ordinal),
-            function.SiblingsInUse!.Keys.Order(StringComparer.Ordinal));
+            siblingsInUse.Keys.Order(StringComparer.Ordinal));
     }
 
     [Fact]
     public void RunOnType_NamesTheReferenceMemberUnderExactlyTheReferenceValue()
     {
         var runOn = Member(Member(ConditionElement(), "Data"), "RunOnType");
+        var siblingsInUse = runOn.SiblingsInUse;
 
-        Assert.NotNull(runOn.SiblingsInUse);
+        Assert.NotNull(siblingsInUse);
         Assert.Equal(
             runOn.EnumMembers.Select(m => m.Value).Order(StringComparer.Ordinal),
-            runOn.SiblingsInUse!.Keys.Order(StringComparer.Ordinal));
-        Assert.Equal(["Reference"], runOn.SiblingsInUse[nameof(Condition.RunOnType.Reference)]);
+            siblingsInUse.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(["Reference"], siblingsInUse[nameof(Condition.RunOnType.Reference)]);
         Assert.All(
-            runOn.SiblingsInUse.Where(kv => kv.Key != nameof(Condition.RunOnType.Reference)),
+            siblingsInUse.Where(kv => kv.Key != nameof(Condition.RunOnType.Reference)),
             kv => Assert.Empty(kv.Value));
     }
 

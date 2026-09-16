@@ -56,7 +56,8 @@ public sealed class PluginCompileService(
         var (parsedTree, deserializeRefusal) = DeserializeSource(files, plugin.Name, loadOrder.GameRelease);
         if (deserializeRefusal != null)
             return CompileResult.Refused(deserializeRefusal);
-        var tree = parsedTree!;
+        var tree = parsedTree
+            ?? throw new InvalidOperationException("Expected DeserializeSource to produce a tree when it does not refuse.");
 
         // An ESL-addressable plugin with native records outside the light FormID range would compile
         // to a binary the game mis-addresses, so refuse it. Only a header flag can be removed; a
@@ -102,7 +103,8 @@ public sealed class PluginCompileService(
 
         var loadOrderNames = loadOrder.Copies
             .Where(c => c.Registration.InLoadOrder)
-            .OrderBy(c => c.Slot!.Value)
+            .OrderBy(c => c.Slot
+                ?? throw new InvalidOperationException($"Expected copy '{c.Name}' from '{c.Origin}' in load order to carry a slot."))
             .Select(c => c.Name)
             .ToList();
 
@@ -309,9 +311,9 @@ public sealed class PluginCompileService(
         if (read.Tree is { } tree) return (tree, null);
 
         logger.LogWarning(read.Error, "{Plugin} could not be read from its source", pluginName);
-        return (null,
-            $"{pluginName} could not be read from its source: {read.Diagnosis!.Describe()} " +
-            "Re-Track to regenerate the source.");
+        var diagnosis = read.Diagnosis
+            ?? throw new InvalidOperationException("Expected a failed read to carry a diagnosis.");
+        return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} Re-Track to regenerate the source.");
     }
 
     // ADR-0006: the generated deserializer skips an unrecognized property or file without throwing,

@@ -28,10 +28,10 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
     {
         var topic = _fixture.Document(_fixture.DestinationPlugin, topicFormKey);
         Assert.NotNull(topic);
-        return [.. JsonDocument.Parse(topic!.Body).RootElement.GetProperty("Responses").EnumerateArray()];
+        return [.. JsonDocument.Parse(topic.Body).RootElement.GetProperty("Responses").EnumerateArray()];
     }
 
-    private static string Member(JsonElement response, string name) => response.GetProperty(name).GetString()!;
+    private static string Member(JsonElement response, string name) => response.GetProperty(name).GetString().Require();
 
     private IFallout4ModGetter ImportCompiled()
     {
@@ -56,14 +56,14 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var newTopicFormKey = result.NewFormKey!;
+        var newTopicFormKey = result.NewFormKey.Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newTopicFormKey, StringComparison.OrdinalIgnoreCase);
 
         // The parent chain: quest auto-created as a bare Partial Form override, same FormKey as the
         // source quest (it is an override, not a copy).
         var quest = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
         Assert.NotNull(quest);
-        Assert.True(quest!.IsPartialForm());
+        Assert.True(quest.IsPartialForm());
 
         // The new topic's own document carries both responses, fresh keys, source order preserved.
         var responses = Responses(newTopicFormKey);
@@ -90,7 +90,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         Assert.Equal(ContainerCopyFixture.DialogTopicEditorId, compiledTopic.EditorID);
         Assert.Equal(
             [ContainerCopyFixture.Response1EditorId, ContainerCopyFixture.Response2EditorId],
-            compiledTopic.Responses.Select(r => r.EditorID!).ToArray());
+            compiledTopic.Responses.Select(r => r.EditorID.Require()).ToArray());
         var copiedResponse2 = compiledTopic.Responses.Single(r => r.EditorID == ContainerCopyFixture.Response2EditorId);
         Assert.Equal(_fixture.Response1, copiedResponse2.PreviousDialog.FormKeyNullable);
     }
@@ -125,7 +125,7 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
         var landed = Assert.Single(questAfter.RootElement.GetProperty(nameof(Quest.DialogTopics)).EnumerateArray());
         Assert.Equal(result.NewFormKey, landed.GetProperty("FormKey").GetString());
 
-        Assert.False(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString())!.IsPartialForm());
+        Assert.False(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require().IsPartialForm());
 
         // One quest file total, and no directory: the topic is inside it.
         var questsDir = Path.Combine(_fixture.DestinationSourceRoot, "Quests");
@@ -147,11 +147,11 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
             _fixture.SourcePlugin, _fixture.Response1.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var newFormKey = result.NewFormKey!;
+        var newFormKey = result.NewFormKey.Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
-        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString())!.IsPartialForm());
-        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString())!.IsPartialForm());
+        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString()).Require().IsPartialForm());
+        Assert.True(_fixture.Document(_fixture.DestinationPlugin, _fixture.DialogTopic.ToString()).Require().IsPartialForm());
 
         var landed = Assert.Single(Responses(_fixture.DialogTopic.ToString()));
         Assert.Equal(newFormKey, Member(landed, "FormKey"));
@@ -176,12 +176,12 @@ public sealed class CopyRecordAsNewRecordHandlerContainerTests : IDisposable
             _fixture.SourcePlugin, _fixture.Quest.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var newFormKey = result.NewFormKey!;
+        var newFormKey = result.NewFormKey.Require();
         Assert.EndsWith(ContainerCopyFixture.DestinationPluginName, newFormKey, StringComparison.OrdinalIgnoreCase);
 
         var document = _fixture.Document(_fixture.DestinationPlugin, newFormKey);
         Assert.NotNull(document);
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, document!.EditorId);
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, document.EditorId);
 
         // Empty child lists in the document itself, not just in the binary.
         var questText = File.ReadAllText(_fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId));

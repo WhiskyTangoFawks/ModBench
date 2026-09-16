@@ -1,9 +1,11 @@
 using System.Text.Json;
+using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
 namespace MEditService.Tests.Serialization;
@@ -15,6 +17,9 @@ public sealed class RecordTextCodecEmbedTests
     private static readonly Fallout4Mod Mod = new(ModKey.FromFileName("Embed.esp"), Fallout4Release.Fallout4);
 
     private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
+
+    private static string RequireEditorID(IMajorRecordGetter record) =>
+        record.EditorID ?? throw new InvalidOperationException($"Expected '{record.FormKey}' to have an EditorID.");
 
     private static Cell MakePopulatedCell()
     {
@@ -36,13 +41,13 @@ public sealed class RecordTextCodecEmbedTests
 
         Assert.Equal(
             ["PersistentRef"],
-            root.GetProperty("Persistent").EnumerateArray().Select(e => e.GetProperty("EditorID").GetString()!).ToArray());
+            root.GetProperty("Persistent").EnumerateArray().Select(e => DocumentNodes.StringValueOf(e.GetProperty("EditorID"))).ToArray());
         Assert.Equal(
             ["TemporaryRef"],
-            root.GetProperty("Temporary").EnumerateArray().Select(e => e.GetProperty("EditorID").GetString()!).ToArray());
+            root.GetProperty("Temporary").EnumerateArray().Select(e => DocumentNodes.StringValueOf(e.GetProperty("EditorID"))).ToArray());
         Assert.Equal(
             ["CellNavmesh"],
-            root.GetProperty("NavigationMeshes").EnumerateArray().Select(e => e.GetProperty("EditorID").GetString()!).ToArray());
+            root.GetProperty("NavigationMeshes").EnumerateArray().Select(e => DocumentNodes.StringValueOf(e.GetProperty("EditorID"))).ToArray());
         Assert.Equal("CellLandscape", root.GetProperty("Landscape").GetProperty("EditorID").GetString());
     }
 
@@ -54,15 +59,16 @@ public sealed class RecordTextCodecEmbedTests
 
         var roundTripped = (Cell)await codec.DeserializeFromBytesAsync(bytes, GameRelease.Fallout4, "cell");
 
-        Assert.Equal(["PersistentRef"], roundTripped.Persistent.Select(p => p.EditorID!).ToArray());
-        Assert.Equal(["TemporaryRef"], roundTripped.Temporary.Select(p => p.EditorID!).ToArray());
-        Assert.Equal(["CellNavmesh"], roundTripped.NavigationMeshes.Select(n => n.EditorID!).ToArray());
+        Assert.Equal(["PersistentRef"], roundTripped.Persistent.Select(RequireEditorID).ToArray());
+        Assert.Equal(["TemporaryRef"], roundTripped.Temporary.Select(RequireEditorID).ToArray());
+        Assert.Equal(["CellNavmesh"], roundTripped.NavigationMeshes.Select(RequireEditorID).ToArray());
         Assert.Equal("CellLandscape", roundTripped.Landscape?.EditorID);
 
         // The parent's own fields are untouched by the embed — "embeds children" must not read as
         // "serializes children instead of itself".
         Assert.Equal("EmbedCell", roundTripped.EditorID);
-        Assert.Equal(new P2Int(1, 2), roundTripped.Grid!.Point);
+        var grid = roundTripped.Grid ?? throw new InvalidOperationException("Expected the round-tripped cell to keep its grid.");
+        Assert.Equal(new P2Int(1, 2), grid.Point);
     }
 
     [Fact]

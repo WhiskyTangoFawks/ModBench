@@ -102,7 +102,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     private byte[] Serialize(IMajorRecordGetter record) =>
         _codec.SerializeToBytesAsync(record, Release).GetAwaiter().GetResult();
 
-    private SourceRepository Repository => SourceRepository.Open(_modFolder, Release)!;
+    private SourceRepository Repository =>
+        SourceRepository.Open(_modFolder, Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
 
     private static RecordIdentity Identity(IMajorRecordGetter record, string recordType) =>
         new(record.FormKey.ToString(), recordType, record.EditorID);
@@ -243,7 +244,8 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         File.WriteAllBytes(FullPath(ExteriorCellPath), Serialize(_exteriorCell));
 
         var found = repository.Get(Plugin, Identity(_temporaryRef, "refr"));
-        Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyOf(found!.Body));
+        Assert.NotNull(found);
+        Assert.Equal(_temporaryRef.FormKey.ToString(), RootFormKeyOf(found.Body));
         Assert.Equal(
             FullPath(ExteriorCellPath),
             repository.Locate(Plugin, Identity(_temporaryRef, "refr"))?.FullPath);
@@ -271,9 +273,10 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
     {
         // "Globals" maps to GlobalBool/Float/Int/Short, so no path can name the type; the document
         // names its own, and the map still has to carry the children it holds.
-        var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")!;
+        var folder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat")
+            ?? throw new InvalidOperationException("Expected 'globalfloat' to resolve to a group folder.");
         var carrier = Path.Combine(_modFolder, Root, folder, "Carrier - 00A000_Embedded.esp.json");
-        Directory.CreateDirectory(Path.GetDirectoryName(carrier)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(carrier));
         File.WriteAllText(
             carrier,
             "{\n  \"MutagenObjectType\": \"GlobalFloat\",\n  \"FormKey\": \"00A000:Embedded.esp\",\n" +

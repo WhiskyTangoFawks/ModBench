@@ -18,7 +18,8 @@ public static class SourceEdits
         SourceRepository repository, PluginCopyKey plugin, RecordIdentity identity, GameRelease release, Action<T> change)
         where T : class, IMajorRecord
     {
-        var body = repository.Get(plugin, identity)!.Body;
+        var body = (repository.Get(plugin, identity)
+            ?? throw new InvalidOperationException($"Expected '{identity}' to have a source document to rewrite.")).Body;
         var record = (T)Codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, identity.RecordType)
             .GetAwaiter().GetResult();

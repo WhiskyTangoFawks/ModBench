@@ -340,7 +340,8 @@ public sealed class PrimitiveListEditTests : IDisposable
                 _modFolder, PluginName, "race", Race.ToString(), RaceEditorId, GameRelease.Fallout4));
 
         private string Body(FormKey formKey) =>
-            TrackedTree.Document(_modFolder, Plugin, formKey.ToString())!.Body;
+            (TrackedTree.Document(_modFolder, Plugin, formKey.ToString())
+                ?? throw new InvalidOperationException($"Expected a tracked source document for {formKey}.")).Body;
 
         public void Dispose()
         {

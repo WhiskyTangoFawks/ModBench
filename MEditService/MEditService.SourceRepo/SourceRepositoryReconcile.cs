@@ -35,7 +35,7 @@ public sealed partial class SourceRepository
             // own separator, so a raw porcelain path would simply never parse on Windows.
             var relativePath = gitPath.Replace('/', Path.DirectorySeparatorChar);
 
-            if (!TryParseDocumentPath(relativePath, _release, out var identity))
+            if (ParseDocumentPath(relativePath, _release) is not { } identity)
             {
                 // Not a flat record file: a path under this plugin's own tree (a container) defers to the
                 // structural pass; a path outside it carries nothing to reconcile.

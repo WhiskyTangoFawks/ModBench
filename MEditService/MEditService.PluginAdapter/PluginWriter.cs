@@ -1,4 +1,5 @@
 using System.Globalization;
+using MEditService.LoadOrder;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -24,7 +25,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         // No load order concept here, so no origin to distinguish a mod folder from the game Data folder:
         // the single-argument ForRead overload applies. The path names its own ModKey.
         var mod = MutagenPluginAdapter.OpenForWrite(
-            new ModPath(pluginPath), gameRelease, PluginStrings.In(Path.GetDirectoryName(pluginPath)!));
+            new ModPath(pluginPath), gameRelease, PluginStrings.In(PathShape.DirectoryOf(pluginPath)));
         return PrepareFromModAsync(mod, pluginPath, loadOrder);
     }
 
@@ -37,7 +38,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     {
         var backupPath = CreateBackup(pluginPath);
 
-        var dir = Path.GetDirectoryName(pluginPath)!;
+        var dir = PathShape.DirectoryOf(pluginPath);
         var tmpDir = Path.Combine(dir, ".medit_tmp_" + Path.GetRandomFileName());
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         var tmpStringsDir = Path.Combine(tmpDir, "Strings");
@@ -102,7 +103,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     // destroys the earlier backup.
     internal static string CreateBackup(string pluginPath, string? timestamp = null)
     {
-        var dir = Path.GetDirectoryName(pluginPath)!;
+        var dir = PathShape.DirectoryOf(pluginPath);
         var name = Path.GetFileNameWithoutExtension(pluginPath);
         var ext = Path.GetExtension(pluginPath);
         var ts = timestamp ?? DateTime.UtcNow.ToString("yyyy-MM-ddTHH-mm-ss-fffffff", CultureInfo.InvariantCulture);
@@ -113,7 +114,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
 
     internal void PruneOldBackups(string pluginPath)
     {
-        var dir = Path.GetDirectoryName(pluginPath)!;
+        var dir = PathShape.DirectoryOf(pluginPath);
         var name = Path.GetFileNameWithoutExtension(pluginPath);
         var ext = Path.GetExtension(pluginPath);
 

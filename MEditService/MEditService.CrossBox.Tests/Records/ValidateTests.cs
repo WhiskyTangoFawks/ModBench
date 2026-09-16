@@ -14,7 +14,8 @@ public sealed class ValidateTests : IDisposable
 
     public void Dispose() => _mod.Dispose();
 
-    private IRecordIndex Index => _mod.Index.Store!;
+    private IRecordIndex Index => _mod.Index.Store
+        ?? throw new InvalidOperationException("Expected the index projector to already hold a built store.");
 
     private ValidationReport Validate() => Index.Validate(_mod.Plugin, _mod.ModFolder);
 
@@ -27,7 +28,9 @@ public sealed class ValidateTests : IDisposable
 
         var report = Validate();
 
-        Assert.Equal("RenamedByHand", Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
+        var effective = Index.At(RecordRef.Effective).GetDocument(_mod.Npc.ToString(), _mod.Plugin);
+        Assert.NotNull(effective);
+        Assert.Equal("RenamedByHand", effective.EditorId);
         Assert.Contains(_mod.Npc.ToString(), report.ChangedKeys, StringComparer.Ordinal);
         Assert.True(Index.Sequence > before);
     }

@@ -44,7 +44,7 @@ public sealed class OneLeafBuilderTests
 
     private static string ArraysWhoseElement(Func<FieldMetadata, bool> lacks) =>
         string.Join("\n", FormLinkArrays()
-            .Where(x => lacks(x.Meta.ElementType!))
+            .Where(x => lacks(x.Meta.ElementType ?? throw new InvalidOperationException($"Expected '{x.Path}' to have an element type.")))
             .Select(x => x.Path)
             .Distinct(StringComparer.Ordinal));
 

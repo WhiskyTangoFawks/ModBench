@@ -54,7 +54,9 @@ public sealed class CarrierScanTests
     [Fact]
     public void TheDocs_NeverMentionFolderSplitOrTheCarrierInProse()
     {
-        var repoRoot = Directory.GetParent(ArchitectureTests.SolutionDirectory())!.FullName;
+        var solutionDirectory = ArchitectureTests.SolutionDirectory();
+        var repoRoot = (Directory.GetParent(solutionDirectory)
+            ?? throw new InvalidOperationException($"Expected '{solutionDirectory}' to have a parent directory.")).FullName;
 
         var hits = SourceTree.MarkdownFiles(Path.Combine(repoRoot, "docs"))
             .Append(Path.Combine(repoRoot, "CONTEXT.md"))

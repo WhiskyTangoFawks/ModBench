@@ -42,17 +42,20 @@ public sealed class ProgressiveIndexingTests
 
         // Parked before B.esp is indexed: the load order exists, and A.esp — indexed one step ago — is
         // fully queryable — not published only after the whole load order has been indexed and swept.
-        Assert.NotNull(manager.Reads);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory))
+        var reads = manager.Reads;
+        Assert.NotNull(reads);
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // And B.esp — the one being indexed right now — reads as absent rather than half-there.
-        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(0, reads.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
         gate.Release();
         await load;
 
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
+        var readsAfterLoad = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads after the load finished.");
+        Assert.Equal(1, readsAfterLoad.GetRecordTypeCounts(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -165,7 +168,9 @@ public sealed class ProgressiveIndexingTests
 
         // Interleaved exactly rather than raced: begin an enumeration, let the load open one more plugin,
         // then keep enumerating, which is the shape that throws on a plain List<T>, deterministically.
-        var opened = manager.Reads!.OpenedCopies;
+        var reads = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads while the load is parked.");
+        var opened = reads.OpenedCopies;
         using var enumerator = opened.GetEnumerator();
         Assert.True(enumerator.MoveNext());
 
@@ -245,7 +250,9 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(index.WinnersComputed);
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], index.Indexed);
-        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory))
+        var reads = manager.Reads
+            ?? throw new InvalidOperationException("Expected an active reads after the load finished.");
+        Assert.Equal(1, reads.GetRecordTypeCounts(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 

@@ -84,7 +84,8 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
         Refuse();
         // Advanced only past the refusal above: a refused write must not leave the recorder
         // believing bytes it never actually landed are now indexed.
-        _indexedHashes[key] = onDisk!;
+        _indexedHashes[key] = onDisk
+            ?? throw new InvalidOperationException($"Expected '{path}' to exist once reindexed.");
         return Task.FromResult(true);
     }
 

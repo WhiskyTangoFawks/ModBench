@@ -53,17 +53,21 @@ public sealed class SourceWatchContainerTests : IDisposable
             _fixture.Plugin, _fixture.Quest.ToString(), "Filter", JsonDocument.Parse("\"EditedFilter\"").RootElement);
         Assert.True(applied.Applied, applied.Message);
         Assert.True(await Settles(before));
+        var edited = Reads().GetRecord(_fixture.Quest.ToString());
+        Assert.NotNull(edited);
         Assert.Equal(
             "EditedFilter",
-            Reads().GetRecord(_fixture.Quest.ToString())!.Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
+            edited.Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
 
         var afterEdit = _fixture.Index.Sequence;
         Git("restore", "--", RelativePath(file).Replace('\\', '/'));
 
         Assert.True(await Settles(afterEdit));
+        var reverted = Reads().GetRecord(_fixture.Quest.ToString());
+        Assert.NotNull(reverted);
         Assert.NotEqual(
             "EditedFilter",
-            Reads().GetRecord(_fixture.Quest.ToString())!.Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
+            reverted.Fields.Single(f => f.Metadata.Name == "Filter").Value?.ToString());
     }
 
     [Fact]
@@ -76,17 +80,20 @@ public sealed class SourceWatchContainerTests : IDisposable
         var applied = service.Set(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "Scale", JsonDocument.Parse("2.5").RootElement);
         Assert.True(applied.Applied, applied.Message);
         Assert.True(await Settles(before));
+        var edited = Reads().GetRecord(_fixture.TemporaryRef.ToString());
+        Assert.NotNull(edited);
         Assert.Equal(
             2.5f,
-            Assert.IsType<JsonElement>(
-                Reads().GetRecord(_fixture.TemporaryRef.ToString())!.Fields.Single(f => f.Metadata.Name == "Scale").Value).GetSingle());
+            Assert.IsType<JsonElement>(edited.Fields.Single(f => f.Metadata.Name == "Scale").Value).GetSingle());
 
         var afterEdit = _fixture.Index.Sequence;
         Git("restore", "--", RelativePath(file).Replace('\\', '/'));
 
         Assert.True(await Settles(afterEdit));
+        var reverted = Reads().GetRecord(_fixture.TemporaryRef.ToString());
+        Assert.NotNull(reverted);
         Assert.NotEqual(
             2.5f,
-            (Reads().GetRecord(_fixture.TemporaryRef.ToString())!.Fields.Single(f => f.Metadata.Name == "Scale").Value as JsonElement?)?.GetSingle());
+            (reverted.Fields.Single(f => f.Metadata.Name == "Scale").Value as JsonElement?)?.GetSingle());
     }
 }

@@ -277,7 +277,7 @@ public static class RecordEndpoints
                     ? Results.Problem("Plugin name and origin are required.", statusCode: 400)
                     : null,
             execute: () => edits.RenumberRecord(new PluginCopyKey(request.Plugin, request.Origin), decoded, request.NewFormKey),
-            onApplied: result => Results.Ok(new RecordRenumberResponse(true, decoded, result.NewFormKey!)),
+            onApplied: result => Results.Ok(new RecordRenumberResponse(true, decoded, WriteEndpointMapping.RequireNewFormKey(result))),
             onWriteFailure: ex =>
             {
                 // A rolled-back cascade lands here too, with the richer message
@@ -365,7 +365,7 @@ public static class RecordEndpoints
             execute: () => edits.CopyRecordAsNewRecord(
                 new PluginCopyKey(request.SourcePlugin, request.SourceOrigin), decoded,
                 new PluginCopyKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey),
-            onApplied: result => Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, result.NewFormKey!)),
+            onApplied: result => Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, WriteEndpointMapping.RequireNewFormKey(result))),
             onWriteFailure: ex =>
             {
                 logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);

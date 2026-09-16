@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;
@@ -24,7 +25,7 @@ public sealed class RenamedSourceFileEditTests : IDisposable
         // before the hand-rename below, or every later read would just re-find the file at its new spot.
         var originalPath = _mod.NpcSourceFile;
         var renamed = Path.Combine(
-            Path.GetDirectoryName(originalPath)!,
+            PathShape.DirectoryOf(originalPath),
             $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
         File.Move(originalPath, renamed);
 

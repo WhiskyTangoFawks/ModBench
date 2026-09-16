@@ -41,7 +41,16 @@ public sealed class DocumentWireSchemaTests
     private static FieldMetadata Column(string table, string name) =>
         Schemas[table].RecordColumns.Single(c => c.Name == name).ToFieldMetadata();
 
-    private static FieldMetadata Member(FieldMetadata owner, string name) => owner.Fields!.Single(f => f.Name == name);
+    private static FieldMetadata Member(FieldMetadata owner, string name) => RequireFields(owner).Single(f => f.Name == name);
+
+    private static IReadOnlyList<FieldMetadata> RequireFields(FieldMetadata meta) =>
+        meta.Fields ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have fields.");
+
+    private static FieldMetadata RequireElementType(FieldMetadata meta) =>
+        meta.ElementType ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have an element type.");
+
+    private static IReadOnlyDictionary<string, FieldMetadata> RequireVariants(FieldMetadata meta) =>
+        meta.Variants ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have variants.");
 
     [Fact]
     public void EveryFieldName_IsAMutagenPropertyName()
@@ -97,9 +106,9 @@ public sealed class DocumentWireSchemaTests
     public void EveryUnion_CarriesTheDocumentsDiscriminator(string table, params string[] hops)
     {
         var meta = Column(table, hops[0]);
-        foreach (var hop in hops.Skip(1)) meta = hop == "[]" ? meta.ElementType! : Member(meta, hop);
+        foreach (var hop in hops.Skip(1)) meta = hop == "[]" ? RequireElementType(meta) : Member(meta, hop);
 
-        var discriminator = Assert.Single(meta.Fields!, f => f.IsDiscriminator);
+        var discriminator = Assert.Single(RequireFields(meta), f => f.IsDiscriminator);
         Assert.Equal("MutagenObjectType", discriminator.Name);
     }
 
@@ -121,17 +130,20 @@ public sealed class DocumentWireSchemaTests
     [Fact]
     public void ConditionComparisonValue_IsOneMemberWithAVariantPerLeaf()
     {
-        var comparison = Member(Column("cobj", "Conditions").ElementType!, "ComparisonValue");
+        var conditionElement = RequireElementType(Column("cobj", "Conditions"));
+        var comparison = Member(conditionElement, "ComparisonValue");
+        var variants = RequireVariants(comparison);
 
-        Assert.Equal("float", comparison.Variants![nameof(ConditionFloat)].Type);
-        Assert.Equal("formKey", comparison.Variants[nameof(ConditionGlobal)].Type);
-        Assert.DoesNotContain(Column("cobj", "Conditions").ElementType!.Fields!, f => f.Name.Contains('_'));
+        Assert.Equal("float", variants[nameof(ConditionFloat)].Type);
+        Assert.Equal("formKey", variants[nameof(ConditionGlobal)].Type);
+        Assert.DoesNotContain(RequireFields(conditionElement), f => f.Name.Contains('_'));
     }
 
     [Fact]
     public void ScriptPropertyData_IsOneMemberWithAVariantPerLeaf()
     {
-        var property = Member(Member(Column("npc_", "VirtualMachineAdapter"), "Scripts").ElementType!, "Properties").ElementType!;
+        var scriptElement = RequireElementType(Member(Column("npc_", "VirtualMachineAdapter"), "Scripts"));
+        var property = RequireElementType(Member(scriptElement, "Properties"));
         var data = Member(property, "Data");
 
         Assert.Equivalent(new Dictionary<string, string>
@@ -146,38 +158,41 @@ public sealed class DocumentWireSchemaTests
             [nameof(ScriptStringListProperty)] = "string[]",
             [nameof(ScriptVariableProperty)] = "int",
             [nameof(ScriptVariableListProperty)] = "int[]",
-        }, data.Variants!.ToDictionary(v => v.Key, v => v.Value.IsArray ? v.Value.ElementType!.Type + "[]" : v.Value.Type), strict: true);
-        Assert.Single(property.Fields!, f => f.Name == "Data");
+        }, RequireVariants(data).ToDictionary(v => v.Key, v => v.Value.IsArray ? RequireElementType(v.Value).Type + "[]" : v.Value.Type), strict: true);
+        Assert.Single(RequireFields(property), f => f.Name == "Data");
     }
 
     [Fact]
     public void ObjectModPropertyValue_IsOneMemberWithAVariantPerLeaf_SpelledAsTheCodecSpellsTheLeaf()
     {
-        var value = Member(Column("omod", "Properties").ElementType!, "Value");
+        var value = Member(RequireElementType(Column("omod", "Properties")), "Value");
+        var variants = RequireVariants(value);
 
-        Assert.Contains("ObjectModIntProperty<Armor+Property>", value.Variants!.Keys);
-        Assert.Equal("int", value.Variants["ObjectModIntProperty<Armor+Property>"].Type);
-        Assert.Equal("float", value.Variants["ObjectModFloatProperty<Armor+Property>"].Type);
+        Assert.Contains("ObjectModIntProperty<Armor+Property>", variants.Keys);
+        Assert.Equal("int", variants["ObjectModIntProperty<Armor+Property>"].Type);
+        Assert.Equal("float", variants["ObjectModFloatProperty<Armor+Property>"].Type);
     }
 
     [Fact]
     public void GameSettingData_IsOneColumnWithAVariantPerRecordClass()
     {
         var data = Column("gmst", "Data");
+        var variants = RequireVariants(data);
 
-        Assert.Equal("float", data.Variants![nameof(GameSettingFloat)].Type);
-        Assert.Equal("int", data.Variants[nameof(GameSettingInt)].Type);
-        Assert.Equal("translatedString", data.Variants[nameof(GameSettingString)].Type);
-        Assert.Equal("bool", data.Variants[nameof(GameSettingBool)].Type);
+        Assert.Equal("float", variants[nameof(GameSettingFloat)].Type);
+        Assert.Equal("int", variants[nameof(GameSettingInt)].Type);
+        Assert.Equal("translatedString", variants[nameof(GameSettingString)].Type);
+        Assert.Equal("bool", variants[nameof(GameSettingBool)].Type);
     }
 
     [Fact]
     public void DamageTypes_IsOneColumnWithAVariantPerRecordClass()
     {
         var damageTypes = Column("dmgt", "DamageTypes");
+        var variants = RequireVariants(damageTypes);
 
-        Assert.Equal("struct", damageTypes.Variants![nameof(DamageType)].ElementType!.Type);
-        Assert.Equal("int", damageTypes.Variants[nameof(DamageTypeIndexed)].ElementType!.Type);
+        Assert.Equal("struct", RequireElementType(variants[nameof(DamageType)]).Type);
+        Assert.Equal("int", RequireElementType(variants[nameof(DamageTypeIndexed)]).Type);
         Assert.DoesNotContain(Schemas["dmgt"].RecordColumns, c => c.Name != "DamageTypes" && c.Name.Contains("Damage", StringComparison.Ordinal));
     }
 
@@ -189,10 +204,11 @@ public sealed class DocumentWireSchemaTests
         {
             if (meta.Fields is not { } fields) continue;
             var domain = fields.SingleOrDefault(f => f.IsDiscriminator)?.EnumMembers.Select(m => m.Value).ToHashSet(StringComparer.Ordinal);
-            foreach (var field in fields.Where(f => f.Variants != null))
+            foreach (var field in fields)
             {
+                if (field.Variants is not { } variants) continue;
                 if (domain == null) { offenders.Add($"{path}.{field.Name}: variants with no discriminator beside them"); continue; }
-                foreach (var key in field.Variants!.Keys.Where(k => !domain.Contains(k)))
+                foreach (var key in variants.Keys.Where(k => !domain.Contains(k)))
                     offenders.Add($"{path}.{field.Name}: variant {key} names no leaf of the union");
             }
         }

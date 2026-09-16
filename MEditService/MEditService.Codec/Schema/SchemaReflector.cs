@@ -94,8 +94,9 @@ public sealed class SchemaReflector
     private static GameSchemaCache BuildForCategory(
         GameCategory category, Assembly assembly, SchemaAnnotations annotations, ILogger logger)
     {
-        var majorRecordGetterType =
-            assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
+        var majorRecordGetterTypeName = $"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter";
+        var majorRecordGetterType = assembly.GetType(majorRecordGetterTypeName)
+            ?? throw new InvalidOperationException($"Expected '{assembly.FullName}' to declare '{majorRecordGetterTypeName}'.");
         var grups = GrupRecordTypes(assembly, majorRecordGetterType, category).ToList();
 
         annotations.Validate(assembly, grups.Select(g => g.TableName));
@@ -163,9 +164,13 @@ public sealed class SchemaReflector
             var grupField = type.GetField("GrupRecordType", BindingFlags.Public | BindingFlags.Static);
             if (grupField == null) continue;
 
+            var grupRecordType = grupField.GetValue(null)
+                ?? throw new InvalidOperationException($"Expected '{type.Name}.GrupRecordType' to hold a value.");
+            var getterTypeName = $"Mutagen.Bethesda.{category}.I{type.Name}Getter";
             yield return (
-                ((RecordType)grupField.GetValue(null)!).Type.ToLowerInvariant(),
-                assembly.GetType($"Mutagen.Bethesda.{category}.I{type.Name}Getter")!);
+                ((RecordType)grupRecordType).Type.ToLowerInvariant(),
+                assembly.GetType(getterTypeName)
+                    ?? throw new InvalidOperationException($"Expected '{assembly.FullName}' to declare '{getterTypeName}'."));
         }
     }
 

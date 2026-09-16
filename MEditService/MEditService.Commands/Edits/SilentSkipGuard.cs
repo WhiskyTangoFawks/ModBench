@@ -74,7 +74,7 @@ internal static class SilentSkipGuard
         var p = JsonSerializer.SerializeToElement(patched);
         if (w.ValueKind != p.ValueKind) return false;
         if (w.ValueKind != JsonValueKind.String) return DocumentNodes.SameValue(w, p);
-        var (ws, ps) = (w.GetString()!, p.GetString()!);
+        var (ws, ps) = (DocumentNodes.StringValueOf(w), DocumentNodes.StringValueOf(p));
         return meta?.Type switch
         {
             ByteSliceHex.HexApiType or "color" => string.Equals(ws.TrimStart('#'), ps.TrimStart('#'), StringComparison.OrdinalIgnoreCase)

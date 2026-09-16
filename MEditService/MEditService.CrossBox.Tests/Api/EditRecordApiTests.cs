@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -39,7 +40,8 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
     private async Task<string> FirstNpcFormKey()
     {
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-        return records.GetProperty("items")[0].GetProperty("formKey").GetString()!;
+        return records.GetProperty("items")[0].GetProperty("formKey").GetString()
+            ?? throw new InvalidOperationException("Expected the first npc_ record to carry a formKey.");
     }
 
     // The one envelope: an operation, a path of hops and a value (ADR-0005).
@@ -53,7 +55,7 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == Origin).Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == Origin).Path);
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
 
         var formKey = await FirstNpcFormKey();
@@ -107,7 +109,8 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
         // The discriminator an agent branches on, beside the prose a human reads.
         Assert.Equal("PluginNotTracked", problem.GetProperty("refusal").GetString());
-        Assert.Contains("Track", problem.GetProperty("detail").GetString()!, StringComparison.Ordinal);
+        Assert.Contains("Track", problem.GetProperty("detail").GetString()
+            ?? throw new InvalidOperationException("Expected the refusal problem to carry a detail message."), StringComparison.Ordinal);
     }
 
     // The envelope itself could not be read as a write: malformed, so a 400 that still names the
@@ -150,7 +153,7 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
-        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == Origin).Path)!;
+        var modFolder = PathShape.DirectoryOf(fx.Plugins.Single(p => p.Origin == Origin).Path);
         (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
         var formKey = await FirstNpcFormKey();
 

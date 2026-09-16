@@ -19,9 +19,9 @@ public static class LoquiUnions
     private static ILookup<Type, (Type Class, Type Getter)> IndexLeavesByBase(Assembly assembly) =>
         assembly.GetTypes()
             .Where(t => t is { IsClass: true, IsAbstract: false } && typeof(ILoquiObjectSetter).IsAssignableFrom(t))
-            .Select(t => (Class: t, Getter: ReflectedTypes.GetOwnGetterType(t)))
-            .Where(l => l.Getter != null)
-            .SelectMany(l => ReflectedTypes.BaseChain(l.Class).Select(b => (Base: GenericDefinition(b), Leaf: (l.Class, l.Getter!))))
+            .SelectMany(t => ReflectedTypes.GetOwnGetterType(t) is not { } getter
+                ? []
+                : ReflectedTypes.BaseChain(t).Select(b => (Base: GenericDefinition(b), Leaf: (Class: t, Getter: getter))))
             .ToLookup(e => e.Base, e => e.Leaf);
 
     private static Type GenericDefinition(Type type) => type.IsGenericType ? type.GetGenericTypeDefinition() : type;
@@ -69,7 +69,8 @@ public static class LoquiUnions
     internal static LoquiUnion RecordUnion(IEnumerable<Type> siblingGetterTypes)
     {
         var leaves = siblingGetterTypes
-            .Select(g => (Getter: g, Setter: ReflectedTypes.GetSetterType(g)!))
+            .Select(g => (Getter: g, Setter: ReflectedTypes.GetSetterType(g)
+                ?? throw new InvalidOperationException($"Expected '{g.Name}' to have a setter type.")))
             .ToList();
         var common = leaves
             .Select(l => ReflectedTypes.BaseChain(l.Setter).ToList())
@@ -123,7 +124,9 @@ public static class LoquiUnions
     /// document names its class first.</summary>
     internal static List<ColumnSpec> BuildUnionColumns(LoquiUnion union, GameReflection game, ILogger logger)
     {
-        var columns = ColumnReflection.ReflectColumns(ReflectedTypes.GetOwnGetterType(union.SetterType)!, game, logger);
+        var ownGetterType = ReflectedTypes.GetOwnGetterType(union.SetterType)
+            ?? throw new InvalidOperationException($"Expected '{union.SetterType.Name}' to have its own getter type.");
+        var columns = ColumnReflection.ReflectColumns(ownGetterType, game, logger);
         var baseNames = columns.Select(c => c.Name).ToHashSet(StringComparer.Ordinal);
         var leaves = union.Leaves
             .Select(l => (l.ClassName, (IReadOnlyList<ColumnSpec>)[.. ColumnReflection.ReflectColumns(l.GetterType, game, logger).Where(c => !baseNames.Contains(c.Name))]))

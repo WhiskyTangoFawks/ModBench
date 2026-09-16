@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -26,7 +27,8 @@ public sealed class RoundTripSurvey
     [SurveyFact]
     public async Task SurveyEveryPluginInTheInstance()
     {
-        var modsDir = Environment.GetEnvironmentVariable("MEDIT_SURVEY_MODS")!;
+        var modsDir = Environment.GetEnvironmentVariable("MEDIT_SURVEY_MODS")
+            ?? throw new InvalidOperationException("Expected MEDIT_SURVEY_MODS to be set (SurveyFactAttribute skips the test otherwise).");
         var outPath = Environment.GetEnvironmentVariable("MEDIT_SURVEY_OUT") ?? "/tmp/medit-roundtrip-survey.csv";
         var plugins = Directory.EnumerateDirectories(modsDir)
             .SelectMany(d => Directory.EnumerateFiles(d, "*.es?", SearchOption.TopDirectoryOnly))
@@ -46,7 +48,7 @@ public sealed class RoundTripSurvey
             foreach (var path in plugins)
             {
                 var name = Path.GetFileName(path);
-                var mod = Path.GetFileName(Path.GetDirectoryName(path)!);
+                var mod = Path.GetFileName(PathShape.DirectoryOf(path));
                 var size = new FileInfo(path).Length;
                 string result, categories = "", detail = "", model = "", accept = "";
                 int records = 0;

@@ -15,11 +15,20 @@ public sealed class UnionMechanismSchemaTests
     private static FieldMetadata At(string table, params string[] hops)
     {
         var meta = Schemas[table].RecordColumns.Single(c => c.Name == hops[0]).ToFieldMetadata();
-        foreach (var hop in hops.Skip(1)) meta = hop == "[]" ? meta.ElementType! : meta.Fields!.Single(f => f.Name == hop);
+        foreach (var hop in hops.Skip(1)) meta = hop == "[]" ? RequireElementType(meta) : RequireFields(meta).Single(f => f.Name == hop);
         return meta;
     }
 
     private static IEnumerable<string> Domain(FieldMetadata meta) => meta.EnumMembers.Select(m => m.Value);
+
+    private static IReadOnlyList<FieldMetadata> RequireFields(FieldMetadata meta) =>
+        meta.Fields ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have fields.");
+
+    private static FieldMetadata RequireElementType(FieldMetadata meta) =>
+        meta.ElementType ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have an element type.");
+
+    private static IReadOnlyDictionary<string, FieldMetadata> RequireVariants(FieldMetadata meta) =>
+        meta.Variants ?? throw new InvalidOperationException($"Expected '{meta.Name}' to have variants.");
 
     [Theory]
     [InlineData("gmst")]
@@ -34,7 +43,7 @@ public sealed class UnionMechanismSchemaTests
     {
         var fields = hops.Length == 0
             ? Schemas[table].RecordColumns.Select(c => c.ToFieldMetadata()).ToList()
-            : At(table, hops).Fields!;
+            : RequireFields(At(table, hops));
 
         var discriminator = Assert.Single(fields, f => f.IsDiscriminator);
         Assert.Equal("MutagenObjectType", discriminator.Name);
@@ -50,8 +59,9 @@ public sealed class UnionMechanismSchemaTests
         Assert.All(varying, field =>
         {
             Assert.True(field.AllowsNull, $"{field.Name}: a member some leaf lacks or shapes differently reads as absent through the others");
-            Assert.All(field.Variants!.Keys, leaf => Assert.Contains(leaf, domain));
-            var first = field.Variants!.Values.First();
+            var variants = RequireVariants(field);
+            Assert.All(variants.Keys, leaf => Assert.Contains(leaf, domain));
+            var first = variants.Values.First();
             Assert.Equal((first.Type, first.IsArray, first.LeafTypeName, first.ElementType?.Type), (field.Type, field.IsArray, field.LeafTypeName, field.ElementType?.Type));
         });
     }
@@ -60,6 +70,7 @@ public sealed class UnionMechanismSchemaTests
     public void GameSettingData_IsOneScalarWithAVariantPerRecordClass_NotAWidenedText()
     {
         var data = At("gmst", "Data");
+        var variants = RequireVariants(data);
 
         Assert.Equal(
             new Dictionary<string, string>
@@ -70,8 +81,8 @@ public sealed class UnionMechanismSchemaTests
                 [nameof(GameSettingString)] = "translatedString",
                 [nameof(GameSettingBool)] = "bool",
             },
-            data.Variants!.ToDictionary(v => v.Key, v => v.Value.Type));
-        Assert.Contains(data.Type, data.Variants!.Values.Select(v => v.Type));
+            variants.ToDictionary(v => v.Key, v => v.Value.Type));
+        Assert.Contains(data.Type, variants.Values.Select(v => v.Type));
         Assert.NotEqual("string", data.Type);
     }
 
@@ -91,20 +102,22 @@ public sealed class UnionMechanismSchemaTests
     public void PerkEffectModification_AdvertisesEachLeafsOwnEnumDomain()
     {
         var modification = At("perk", "Effects", "[]", "Modification");
+        var variants = RequireVariants(modification);
 
-        Assert.Equal(["Set", "Add", "Multiply"], Domain(modification.Variants![nameof(PerkEntryPointModifyValue)]));
+        Assert.Equal(["Set", "Add", "Multiply"], Domain(variants[nameof(PerkEntryPointModifyValue)]));
         Assert.Equal(
             ["AddAVMult", "SetToAVMult", "MultiplyAVMult", "MultiplyOnePlusAVMult"],
-            Domain(modification.Variants[nameof(PerkEntryPointModifyActorValue)]));
+            Domain(variants[nameof(PerkEntryPointModifyActorValue)]));
     }
 
     [Fact]
     public void ObjectModPropertyFunctionType_AdvertisesEachLeafsOwnEnumDomain()
     {
         var functionType = At("omod", "Properties", "[]", "FunctionType");
+        var variants = RequireVariants(functionType);
 
-        Assert.Equal(["Set", "MultAndAdd", "Add"], Domain(functionType.Variants!["ObjectModFloatProperty<Armor+Property>"]));
-        Assert.Equal(["Set", "And", "Or"], Domain(functionType.Variants["ObjectModBoolProperty<Armor+Property>"]));
-        Assert.Equal(["Set", "Remove", "Add"], Domain(functionType.Variants["ObjectModFormLinkIntProperty<Armor+Property>"]));
+        Assert.Equal(["Set", "MultAndAdd", "Add"], Domain(variants["ObjectModFloatProperty<Armor+Property>"]));
+        Assert.Equal(["Set", "And", "Or"], Domain(variants["ObjectModBoolProperty<Armor+Property>"]));
+        Assert.Equal(["Set", "Remove", "Add"], Domain(variants["ObjectModFormLinkIntProperty<Armor+Property>"]));
     }
 }

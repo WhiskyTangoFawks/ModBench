@@ -60,7 +60,8 @@ public sealed class ArchitectureTests
         foreach (var record in DtoBoxes.SelectMany(box => box.Assembly.GetExportedTypes()
             .Where(t => t.Namespace == box.Namespace && t.GetMethod("<Clone>$") != null)))
         {
-            var primary = record.GetConstructors().MaxBy(c => c.GetParameters().Length)!;
+            var primary = record.GetConstructors().MaxBy(c => c.GetParameters().Length)
+                ?? throw new InvalidOperationException($"Expected '{record.Name}' to declare a constructor.");
             offenders.AddRange(PluginStringsWithoutOrigin(primary.GetParameters())
                 .Select(p => $"{record.Name}({p})"));
         }
@@ -69,7 +70,9 @@ public sealed class ArchitectureTests
 
     // A typed PluginCopyKey parameter already carries both halves; only a string name can travel alone.
     internal static IEnumerable<string> PluginStringsWithoutOrigin(ParameterInfo[] parameters) =>
-        PluginStringsWithoutOrigin(parameters.Select(p => (p.Name!, p.ParameterType)).ToArray());
+        PluginStringsWithoutOrigin(parameters
+            .Select(p => (p.Name ?? throw new InvalidOperationException("Expected a parameter to have a name."), p.ParameterType))
+            .ToArray());
 
     internal static IEnumerable<string> PluginStringsWithoutOrigin((string Name, Type Type)[] members)
     {
@@ -426,7 +429,8 @@ public sealed class ArchitectureTests
         var testData = Path.Combine(SolutionDirectory(), "MEditService.TestSupport", "TestData");
         var allowed = SourceTree.ReadAllowlist(Path.Combine(testData, "allowed-plugins.txt"))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var present = Directory.EnumerateFiles(testData, "*.es?").Select(Path.GetFileName).Select(n => n!)
+        var present = Directory.EnumerateFiles(testData, "*.es?")
+            .Select(f => Path.GetFileName(f) ?? throw new InvalidOperationException($"Expected '{f}' to have a file name."))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.Equal(allowed.Order(), present.Order());
     }

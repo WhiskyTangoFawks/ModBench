@@ -40,7 +40,7 @@ public class HardcodedFormKeyResolutionTests
         var doc = repo.At(RecordRef.Effective).GetDocument(npc.FormKey.ToString(), key);
 
         Assert.NotNull(doc);
-        var raceField = doc!.Fields.Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase));
+        var raceField = doc.Fields.Single(f => f.Metadata.Name.Equals("Race", StringComparison.OrdinalIgnoreCase));
         Assert.Null(raceField.CheckError);
     }
 }

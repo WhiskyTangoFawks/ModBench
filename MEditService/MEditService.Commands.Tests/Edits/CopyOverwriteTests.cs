@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Edits;
 
@@ -109,7 +110,7 @@ public sealed class CopyOverwriteTests : IDisposable
         Assert.NotNull(topic);
         Assert.Equal(
             _fixture.Response1.ToString(),
-            Assert.Single(JsonDocument.Parse(topic!.Body).RootElement.GetProperty("Responses").EnumerateArray())
+            Assert.Single(JsonDocument.Parse(topic.Require().Body).RootElement.GetProperty("Responses").EnumerateArray())
                 .GetProperty("FormKey").GetString());
     }
 
@@ -126,7 +127,7 @@ public sealed class CopyOverwriteTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         var questDocument = _fixture.Document(_fixture.DestinationPlugin, _fixture.Quest.ToString());
-        Assert.Equal(ContainerCopyFixture.QuestEditorId, questDocument!.EditorId);
+        Assert.Equal(ContainerCopyFixture.QuestEditorId, questDocument.Require().EditorId);
 
         // Replaced in place: still exactly one quest file, one document row.
         Assert.Single(

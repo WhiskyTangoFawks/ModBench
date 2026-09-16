@@ -78,8 +78,10 @@ public sealed class IndexAfterACopyTests : IDisposable
         Assert.True(result.Applied, result.Message);
 
         var reads = _index.Projected();
-        var source = reads.GetCellLocation(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())!.Value;
-        var minted = reads.GetCellLocation(_fixture.DestinationPlugin, _fixture.ExteriorCell.ToString())!.Value;
+        var source = reads.GetCellLocation(_fixture.SourcePlugin, _fixture.ExteriorCell.ToString())
+            ?? throw new InvalidOperationException("Expected the source exterior cell to carry a location row.");
+        var minted = reads.GetCellLocation(_fixture.DestinationPlugin, _fixture.ExteriorCell.ToString())
+            ?? throw new InvalidOperationException("Expected the minted exterior cell to carry a location row.");
         Assert.Equal(
             (source.ParentWorldspace, source.BlockX, source.BlockY, source.SubX, source.SubY, source.IsInterior),
             (minted.ParentWorldspace, minted.BlockX, minted.BlockY, minted.SubX, minted.SubY, minted.IsInterior));
@@ -111,13 +113,18 @@ public sealed class IndexAfterACopyTests : IDisposable
             _fixture.SourcePlugin, _fixture.DialogTopic.ToString(), _fixture.DestinationPlugin);
         Assert.True(result.Applied, result.Message);
 
+        var newFormKey = result.NewFormKey
+            ?? throw new InvalidOperationException("Expected the dialog topic copy to report its new form key.");
         var reads = _index.Projected();
-        var children = reads.GetContainerChildren(_fixture.DestinationPlugin, result.NewFormKey!);
+        var children = reads.GetContainerChildren(_fixture.DestinationPlugin, newFormKey);
         Assert.Equal(2, children.Count);
         Assert.Equal(
             [ContainerCopyFixture.Response1EditorId, ContainerCopyFixture.Response2EditorId],
             children.OrderBy(c => c.SlotIndex)
-                .Select(c => reads.GetDocument(c.ChildFormKey, _fixture.DestinationPlugin)!.EditorId!)
+                .Select(c => reads.GetDocument(c.ChildFormKey, _fixture.DestinationPlugin) is { EditorId: { } editorId }
+                    ? editorId
+                    : throw new InvalidOperationException(
+                        $"Expected the copied child {c.ChildFormKey} to resolve to a document with an EditorID."))
                 .ToArray());
         Assert.DoesNotContain(_fixture.Response1.ToString(), children.Select(c => c.ChildFormKey));
     }

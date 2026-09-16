@@ -20,8 +20,10 @@ internal static class TypedLinkCacheFactory
                            .FirstOrDefault(a => a.GetName().Name == assemblyName)
                        ?? Assembly.Load(assemblyName);
 
-        var modGetterType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}ModGetter")!;
-        var modType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}Mod")!;
+        var modGetterType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}ModGetter")
+            ?? throw new InvalidOperationException($"Expected {assemblyName} to declare I{category}ModGetter.");
+        var modType = assembly.GetType($"Mutagen.Bethesda.{category}.I{category}Mod")
+            ?? throw new InvalidOperationException($"Expected {assemblyName} to declare I{category}Mod.");
 
         var method = typeof(LinkCacheConstructionMixIn).GetMethods()
             .First(IsBareEnumerableToImmutableLinkCache)
@@ -32,7 +34,8 @@ internal static class TypedLinkCacheFactory
         for (var i = 0; i < mods.Count; i++)
             typed.SetValue(mods[i], i);
 
-        return (ILinkCache)method.Invoke(null, [typed, null])!;
+        return (ILinkCache)(method.Invoke(null, [typed, null])
+            ?? throw new InvalidOperationException("Expected ToImmutableLinkCache to return a link cache."));
     }
 
     // ToImmutableLinkCache<TMod, TModGetter>(this IEnumerable<TModGetter>) — the overload whose

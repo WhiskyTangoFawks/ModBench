@@ -31,7 +31,9 @@ public sealed class LoadOrderEndpointsTests
         var result = LoadOrderEndpoints.PutLoadOrder(Request(data), TestEditService.PutLoadOrderHandler(holder), NullLoggerFactory.Instance);
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
-        Assert.True(ok.Value!.Applied);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.True(response.Applied);
         Assert.Contains(holder.Current.Copies, c => c.Name == "A.esp");
     }
 

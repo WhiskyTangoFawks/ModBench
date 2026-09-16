@@ -1,4 +1,5 @@
 using MEditService.Http.Endpoints;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using MEditService.Watcher;
@@ -17,9 +18,12 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
     private const string AssetRelativePath = "Meshes/Thing.nif";
     private const string DeletedAssetRelativePath = "Meshes/Gone.nif";
 
-    private IndexedModFixture _mod = null!;
+    private IndexedModFixture? _mod;
 
-    public void Dispose() => _mod.Dispose();
+    private IndexedModFixture Mod =>
+        _mod ?? throw new InvalidOperationException("Test method must set up the mod fixture before using it.");
+
+    public void Dispose() => _mod?.Dispose();
 
     private void TrackWithAssets()
     {
@@ -32,8 +36,8 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         });
     }
 
-    private string GitDir => Path.Combine(_mod.ModFolder, ".git");
-    private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
+    private string GitDir => Path.Combine(Mod.ModFolder, ".git");
+    private string RunGit(params string[] args) => GitCli.Run(GitDir, Mod.ModFolder, args);
 
     // Raw porcelain lines, untrimmed: the fixture's own GitStatus() trims the leading column, which
     // erases exactly the staged-vs-unstaged distinction this suite tests for.
@@ -49,16 +53,16 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         npc.Race.SetTo(race);
         npc.HeightMax = npcHeightMax;
         mod.Npcs.AddNew(IndexedModFixture.OtherNpcEditorId);
-        mod.WriteToBinary(Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName));
+        mod.WriteToBinary(Path.Combine(Mod.ModFolder, IndexedModFixture.PluginName));
     }
 
     // The whole release: a new plugin binary, a hand-changed asset, a deleted asset, a version bump.
     private void ApplyExternalRelease()
     {
         WriteExternalRelease(0.9f);
-        File.WriteAllBytes(Path.Combine(_mod.ModFolder, AssetRelativePath), "new-mesh-bytes"u8.ToArray());
-        File.Delete(Path.Combine(_mod.ModFolder, DeletedAssetRelativePath));
-        File.WriteAllText(Path.Combine(_mod.ModFolder, "meta.ini"), "[General]\nversion=2.0\n");
+        File.WriteAllBytes(Path.Combine(Mod.ModFolder, AssetRelativePath), "new-mesh-bytes"u8.ToArray());
+        File.Delete(Path.Combine(Mod.ModFolder, DeletedAssetRelativePath));
+        File.WriteAllText(Path.Combine(Mod.ModFolder, "meta.ini"), "[General]\nversion=2.0\n");
     }
 
     private static (ILoggerFactory factory, ModFolderWatcher watcher) Backend() =>
@@ -73,11 +77,13 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         using var _dispose = loggerFactory;
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.AbsorbExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), Mod.Holder,
             TestEditService.AbsorbHandler(), watcher, loggerFactory));
 
-        Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
-        Assert.Equal(RebaseOutcome.Clean, ok.Value.Rebase?.Outcome);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.True(response.Succeeded, response.RefusalReason);
+        Assert.Equal(RebaseOutcome.Clean, response.Rebase?.Outcome);
 
         Assert.Equal("new-mesh-bytes", RunGit("show", $"main:{AssetRelativePath}"));
         var mainTree = RunGit("ls-tree", "-r", "--name-only", "main").Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -100,16 +106,18 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
 
-        var before = SourceRepository.ChangedTrackedFilesOutsideSource(_mod.ModFolder);
+        var before = SourceRepository.ChangedTrackedFilesOutsideSource(Mod.ModFolder);
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.KeepExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), Mod.Holder,
             TestEditService.KeepHandler(), watcher, loggerFactory));
 
-        Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.True(response.Succeeded, response.RefusalReason);
         Assert.NotEmpty(before);
 
         var status = RawStatusLines();
-        var recordPath = _mod.RelativeSourcePath(_mod.Npc, "npc_", IndexedModFixture.NpcEditorId).Replace('\\', '/');
+        var recordPath = Mod.RelativeSourcePath(Mod.Npc, "npc_", IndexedModFixture.NpcEditorId).Replace('\\', '/');
         // Unstaged, working-tree dirt. Contains rather than EndsWith: this fixture's own EditorID
         // carries " - ", which git's porcelain C-quotes, trailing the path with a closing quote.
         Assert.Contains(status, s => s.Contains(recordPath, StringComparison.Ordinal) && s.StartsWith(" M", StringComparison.Ordinal));
@@ -122,20 +130,22 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
     public void UnderEdits_AHandChangedAsset_IsNeitherCommittedNorStagedByEitherAnswer()
     {
         _mod = IndexedModFixture.Tracked(); // The Edits preset, the fixture's own default.
-        var assetPath = Path.Combine(_mod.ModFolder, AssetRelativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
+        var assetPath = Path.Combine(Mod.ModFolder, AssetRelativePath);
+        Directory.CreateDirectory(PathShape.DirectoryOf(assetPath));
         File.WriteAllBytes(assetPath, "hand-edited-outside-git"u8.ToArray());
         WriteExternalRelease(0.9f);
 
-        Assert.Empty(SourceRepository.ChangedTrackedFilesOutsideSource(_mod.ModFolder));
+        Assert.Empty(SourceRepository.ChangedTrackedFilesOutsideSource(Mod.ModFolder));
 
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.AbsorbExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), Mod.Holder,
             TestEditService.AbsorbHandler(), watcher, loggerFactory));
 
-        Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.True(response.Succeeded, response.RefusalReason);
         Assert.DoesNotContain(AssetRelativePath, RunGit("ls-tree", "-r", "--name-only", "main"));
     }
 
@@ -143,20 +153,22 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
     public void UnderEdits_Keep_AHandChangedAsset_IsNeitherCommittedNorStagedEither()
     {
         _mod = IndexedModFixture.Tracked(); // The Edits preset, the fixture's own default.
-        var assetPath = Path.Combine(_mod.ModFolder, AssetRelativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
+        var assetPath = Path.Combine(Mod.ModFolder, AssetRelativePath);
+        Directory.CreateDirectory(PathShape.DirectoryOf(assetPath));
         File.WriteAllBytes(assetPath, "hand-edited-outside-git"u8.ToArray());
         WriteExternalRelease(0.9f);
 
-        Assert.Empty(SourceRepository.ChangedTrackedFilesOutsideSource(_mod.ModFolder));
+        Assert.Empty(SourceRepository.ChangedTrackedFilesOutsideSource(Mod.ModFolder));
 
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.KeepExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), Mod.Holder,
             TestEditService.KeepHandler(), watcher, loggerFactory));
 
-        Assert.True(ok.Value!.Succeeded, ok.Value.RefusalReason);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.True(response.Succeeded, response.RefusalReason);
         Assert.DoesNotContain(RawStatusLines(), s => s.Contains(AssetRelativePath, StringComparison.Ordinal));
     }
 
@@ -171,11 +183,13 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
         var (loggerFactory, watcher) = Backend();
         using var _dispose = loggerFactory;
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(PluginEndpoints.KeepExternalChange(
-            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), _mod.Holder,
+            new ExternalChangeActionRequest(IndexedModFixture.ModFolderOrigin), Mod.Holder,
             TestEditService.KeepHandler(), watcher, loggerFactory));
 
-        Assert.False(ok.Value!.Succeeded);
-        Assert.Contains(AssetRelativePath, ok.Value.RefusalReason, StringComparison.Ordinal);
+        var response = ok.Value;
+        Assert.NotNull(response);
+        Assert.False(response.Succeeded);
+        Assert.Contains(AssetRelativePath, response.RefusalReason, StringComparison.Ordinal);
     }
 
     // The rival this guards: reading git's own 0 exit as Clean even though the autostash's own
@@ -187,18 +201,18 @@ public sealed class AbsorbKeepTrackedFileTests : IDisposable
 
         // Main gains a baseline value for the asset, committed by plumbing — the edit branch's own
         // history and working tree are untouched by this step.
-        File.WriteAllBytes(Path.Combine(_mod.ModFolder, AssetRelativePath), "main-baseline-mesh"u8.ToArray());
+        File.WriteAllBytes(Path.Combine(Mod.ModFolder, AssetRelativePath), "main-baseline-mesh"u8.ToArray());
         var trailers = new TrackProvenance(null, null, new Dictionary<string, string>());
         SourceRepository.CommitPristineToMain(
-            _mod.ModFolder, [], trailers,
+            Mod.ModFolder, [], trailers,
             [new TrackedFileChange(AssetRelativePath, TrackedFileChangeKind.Modified, StagedAlready: false)]);
 
         // The edit branch separately holds staged dirt on that very same asset, with different bytes.
-        File.WriteAllBytes(Path.Combine(_mod.ModFolder, AssetRelativePath), "staged-conflicting-mesh"u8.ToArray());
+        File.WriteAllBytes(Path.Combine(Mod.ModFolder, AssetRelativePath), "staged-conflicting-mesh"u8.ToArray());
         RunGit("add", "-A", "--", AssetRelativePath);
         Assert.Empty(RunGit("stash", "list").Split('\n', StringSplitOptions.RemoveEmptyEntries));
 
-        var result = SourceRepository.RebaseEditBranch(_mod.ModFolder);
+        var result = SourceRepository.RebaseEditBranch(Mod.ModFolder);
 
         Assert.Equal(RebaseOutcome.Conflicted, result.Outcome);
         Assert.Contains(AssetRelativePath, result.ConflictedPaths);

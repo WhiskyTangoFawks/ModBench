@@ -290,7 +290,7 @@ internal sealed record SchemaAnnotations(
 
     /// <summary>The defect keyed to this member, or null: a member with no row is an ordinary one.</summary>
     public KnownDefect? DefectFor(PropertyInfo prop) =>
-        KnownDefects.FirstOrDefault(d => d.TypeName == prop.DeclaringType!.Name && d.MemberName == prop.Name);
+        KnownDefects.FirstOrDefault(d => d.TypeName == ReflectedTypes.DeclaringTypeOf(prop).Name && d.MemberName == prop.Name);
 
     /// <summary>Why a defect keeps this member out of every write, or null.</summary>
     public string? ReadOnlyReasonFor(PropertyInfo prop) =>
@@ -316,7 +316,7 @@ internal sealed record SchemaAnnotations(
             .Where(e => e.Key.TypeName == getterType.Name)
             .Select(e => (e.Key.MemberName, e.Value.BackingMember, e.Value.Flag));
 
-    private static (string, string) Key(PropertyInfo prop) => (prop.DeclaringType!.Name, prop.Name);
+    private static (string, string) Key(PropertyInfo prop) => (ReflectedTypes.DeclaringTypeOf(prop).Name, prop.Name);
 
     // A generic by its definition's name, so one row reaches every closing of one open generic.
     private static string ShapeName(Type shape) =>
@@ -332,8 +332,10 @@ internal sealed record SchemaAnnotations(
                 .FirstOrDefault(t => t.GetProperty(entry.MemberName) != null);
             if (declaring == null) continue;
 
-            var enumType = Nullable.GetUnderlyingType(declaring.GetProperty(entry.MemberName)!.PropertyType)
-                ?? declaring.GetProperty(entry.MemberName)!.PropertyType;
+            var property = declaring.GetProperty(entry.MemberName)
+                ?? throw new InvalidOperationException(
+                    $"Expected '{declaring.Name}' to still declare '{entry.MemberName}'.");
+            var enumType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
             var label = $"{nameof(SiblingsInUse)}: {entry.TypeName}.{entry.MemberName}";
             if (!enumType.IsEnum)
             {
@@ -366,8 +368,11 @@ internal sealed record SchemaAnnotations(
             var declaring = typesByName[entry.TypeName].FirstOrDefault(t => t.GetProperty(entry.MemberName) != null);
             if (declaring == null) continue;
 
+            var property = declaring.GetProperty(entry.MemberName)
+                ?? throw new InvalidOperationException(
+                    $"Expected '{declaring.Name}' to still declare '{entry.MemberName}'.");
             var label = $"{nameof(KeyedArrays)}: {entry.TypeName}.{entry.MemberName}";
-            if (!ReflectedTypes.IsListType(declaring.GetProperty(entry.MemberName)!.PropertyType, out var elementType))
+            if (!ReflectedTypes.IsListType(property.PropertyType, out var elementType))
             {
                 yield return $"{label} is not a list";
                 continue;

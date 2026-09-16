@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Index;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -52,14 +53,16 @@ public sealed class KeepExternalChangeHandlerTests : IDisposable
         // A corrupt tree is Compile's refusal to report, not Keep's to crash on: taking the first
         // document keeps every unrelated record landing.
         var impostor = Path.Combine(
-            Path.GetDirectoryName(_mod.NpcSourceFile)!, $"AnImpostor - {_mod.Npc.ID:X6}_{SourceEditFixture.PluginName}.json");
+            PathShape.DirectoryOf(_mod.NpcSourceFile), $"AnImpostor - {_mod.Npc.ID:X6}_{SourceEditFixture.PluginName}.json");
         File.WriteAllText(impostor, File.ReadAllText(_mod.NpcSourceFile));
         // Staged, or the parked snapshot would not carry it: git stash create ignores untracked files.
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, "add", "-A");
         SourceRepository.ParkCompileSnapshot(_mod.ModFolder, SourceEditFixture.PluginName, atRef: null, "abc");
+        var repository = SourceRepository.Open(_mod.ModFolder, GameRelease.Fallout4)
+            ?? throw new InvalidOperationException("Expected a tracked mod folder to open a source repository.");
         Assert.Equal(
             2,
-            SourceRepository.Open(_mod.ModFolder, GameRelease.Fallout4)!
+            repository
                 .ReadAll(_mod.Plugin, SourceRepository.LastCompileRef(SourceEditFixture.PluginName))
                 .Count(d => d.FormKey == _mod.Npc.ToString()));
         File.Delete(impostor);

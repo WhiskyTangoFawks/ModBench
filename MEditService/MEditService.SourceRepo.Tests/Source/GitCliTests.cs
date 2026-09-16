@@ -1,3 +1,4 @@
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Source;
@@ -38,7 +39,7 @@ public sealed class GitCliTests
         finally
         {
             Directory.Delete(workTree, recursive: true);
-            Directory.Delete(Path.GetDirectoryName(gitDir)!, recursive: true);
+            Directory.Delete(PathShape.DirectoryOf(gitDir), recursive: true);
         }
     }
 
@@ -66,7 +67,7 @@ public sealed class GitCliTests
         finally
         {
             Directory.Delete(workTree, recursive: true);
-            Directory.Delete(Path.GetDirectoryName(gitDir)!, recursive: true);
+            Directory.Delete(PathShape.DirectoryOf(gitDir), recursive: true);
         }
     }
 }

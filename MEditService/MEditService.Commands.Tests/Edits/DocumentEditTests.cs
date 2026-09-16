@@ -81,9 +81,9 @@ public sealed class DocumentEditTests
 
     private static JsonNode Node(string text, string dotted)
     {
-        JsonNode? node = JsonNode.Parse(text);
-        foreach (var hop in dotted.Split('.')) node = node![hop];
-        return node!;
+        var node = JsonNode.Parse(text).Require();
+        foreach (var hop in dotted.Split('.')) node = node[hop].Require();
+        return node;
     }
 
     // ── set, at every depth ─────────────────────────────────────────────────
@@ -154,7 +154,7 @@ public sealed class DocumentEditTests
                 "Conditions[0].ComparisonValue: 2.5 -> <absent>",
             ],
             ConditionEditTests.DocumentDiff(before, after));
-        Assert.Equal("GreaterThan", Node(after, "Conditions")[0]!["CompareOperator"]!.GetValue<string>());
+        Assert.Equal("GreaterThan", Node(after, "Conditions")[0].Require()["CompareOperator"].Require().GetValue<string>());
     }
 
     // Association is a form link on every archetype leaf, over that leaf's own target type: a cloak
@@ -190,7 +190,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "cobj", SetAt(Json("\"ConditionMaybe\""), Member("Conditions"), At(0), Member("MutagenObjectType")), out var written);
 
-        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, refusal.Refusal);
         Assert.Equal("Conditions[0].MutagenObjectType", refusal.Path);
         Assert.Equal(before, written);
     }
@@ -207,11 +208,11 @@ public sealed class DocumentEditTests
         Assert.Equal(2, Node(added, "Keywords").AsArray().Count);
 
         var moved = Applied(added, "npc_", MoveTo(0, Member("Keywords"), At(1)));
-        Assert.Equal([_otherKeyword.FormKey.ToString(), _keyword.FormKey.ToString()], Node(moved, "Keywords").AsArray().Select(k => k!.GetValue<string>()));
+        Assert.Equal([_otherKeyword.FormKey.ToString(), _keyword.FormKey.ToString()], Node(moved, "Keywords").AsArray().Select(k => k.Require().GetValue<string>()));
         AssertOnlyChanged(added, moved, "Keywords[");
 
         var removed = Applied(moved, "npc_", RemoveAt(Member("Keywords"), At(0)));
-        Assert.Equal([_keyword.FormKey.ToString()], Node(removed, "Keywords").AsArray().Select(k => k!.GetValue<string>()));
+        Assert.Equal([_keyword.FormKey.ToString()], Node(removed, "Keywords").AsArray().Select(k => k.Require().GetValue<string>()));
         AssertOnlyChanged(moved, removed, "Keywords[");
     }
 
@@ -223,8 +224,12 @@ public sealed class DocumentEditTests
         var after = Applied(before, "cobj", AddAt(Member("Conditions")));
 
         AssertOnlyChanged(before, after, "Conditions[2]");
-        var leaf = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec!.SubFields!.Single(f => f.IsDiscriminator).EnumMembers[0].Value;
-        Assert.Equal(leaf, Node(after, "Conditions")[2]!["MutagenObjectType"]!.GetValue<string>());
+        var elementSpec = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec
+            ?? throw new InvalidOperationException("Expected 'Conditions' to be an array of a struct element.");
+        var subFields = elementSpec.SubFields
+            ?? throw new InvalidOperationException("Expected the array element to declare its own fields.");
+        var leaf = subFields.Single(f => f.IsDiscriminator).EnumMembers[0].Value;
+        Assert.Equal(leaf, Node(after, "Conditions")[2].Require()["MutagenObjectType"].Require().GetValue<string>());
     }
 
     [Fact]
@@ -234,11 +239,11 @@ public sealed class DocumentEditTests
 
         var added = Applied(before, "npc_", AddAt(Json("""{"Name": "Aardvark", "Flags": "Local"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
 
-        Assert.Equal(["Aardvark", "Alpha", "Beta"], Node(added, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s!["Name"]!.GetValue<string>()));
+        Assert.Equal(["Aardvark", "Alpha", "Beta"], Node(added, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
         AssertOnlyChanged(before, added, "VirtualMachineAdapter.Scripts[");
 
         var removed = Applied(added, "npc_", RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark")));
-        Assert.Equal(["Alpha", "Beta"], Node(removed, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s!["Name"]!.GetValue<string>()));
+        Assert.Equal(["Alpha", "Beta"], Node(removed, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
     }
 
     [Fact]
@@ -248,7 +253,7 @@ public sealed class DocumentEditTests
 
         var after = Applied(before, "npc_", SetAt(Json("\"Zulu\""), Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark"), Member("Name")));
 
-        Assert.Equal(["Alpha", "Beta", "Zulu"], Node(after, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s!["Name"]!.GetValue<string>()));
+        Assert.Equal(["Alpha", "Beta", "Zulu"], Node(after, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
     }
 
     // An element that is not there is a path the document does not know, on every operation.
@@ -263,7 +268,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "npc_", envelope, out var written);
 
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
         Assert.Equal("Keywords[7]", refusal.Path);
         Assert.Contains("holds 1 element", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(before, written);
@@ -276,7 +282,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "npc_", RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Gamma")), out var written);
 
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
         Assert.Equal("VirtualMachineAdapter.Scripts[Gamma]", refusal.Path);
         Assert.Contains("holds 2 element", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(before, written);
@@ -289,7 +296,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "npc_", MoveTo(3, Member("Keywords"), At(0)), out var written);
 
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
         Assert.Equal("Keywords[3]", refusal.Path);
         Assert.Equal(before, written);
     }
@@ -300,14 +308,14 @@ public sealed class DocumentEditTests
     public void Set_GoverningMember_IdlesEverySlotTheNewValueDoesNotUse()
     {
         var before = DocumentEdits.Serialize(_cobj);
-        Assert.Equal(10, Node(before, "Conditions")[0]!["Data"]!["ParameterTwoNumber"]!.GetValue<int>());
+        Assert.Equal(10, Node(before, "Conditions")[0].Require()["Data"].Require()["ParameterTwoNumber"].Require().GetValue<int>());
 
         var after = Applied(before, "cobj", SetAt(Json("\"HasKeyword\""), Member("Conditions"), At(0), Member("Data"), Member("Function")));
 
-        var data = Node(after, "Conditions")[0]!["Data"]!.AsObject();
-        Assert.Equal("HasKeyword", data["Function"]!.GetValue<string>());
+        var data = Node(after, "Conditions")[0].Require()["Data"].Require().AsObject();
+        Assert.Equal("HasKeyword", data["Function"].Require().GetValue<string>());
         Assert.False(data.ContainsKey("ParameterTwoNumber"));
-        Assert.Equal(_quest.FormKey.ToString(), data["ParameterOneRecord"]!.GetValue<string>());
+        Assert.Equal(_quest.FormKey.ToString(), data["ParameterOneRecord"].Require().GetValue<string>());
         AssertOnlyChanged(before, after, "Conditions[0].Data.");
     }
 
@@ -315,7 +323,7 @@ public sealed class DocumentEditTests
     public void Set_RunOnLeavingReference_ClearsTheReference()
     {
         var before = DocumentEdits.Serialize(_cobj);
-        Assert.Equal(_npc.FormKey.ToString(), Node(before, "Conditions")[1]!["Data"]!["Reference"]!.GetValue<string>());
+        Assert.Equal(_npc.FormKey.ToString(), Node(before, "Conditions")[1].Require()["Data"].Require()["Reference"].Require().GetValue<string>());
 
         var after = Applied(before, "cobj", SetAt(Json("\"Subject\""), Member("Conditions"), At(1), Member("Data"), Member("RunOnType")));
 
@@ -336,7 +344,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "npc_", SetAt(Json("1"), Member("NoSuchField")), out var written);
 
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
         Assert.Equal("NoSuchField", refusal.Path);
         Assert.Equal(before, written);
     }
@@ -346,7 +355,8 @@ public sealed class DocumentEditTests
     {
         var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", SetAt(Json("1"), Member("Weight"), Member("Bogus")), out _);
 
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
         Assert.Equal("Weight.Bogus", refusal.Path);
     }
 
@@ -355,7 +365,8 @@ public sealed class DocumentEditTests
     {
         var refusal = Apply(DocumentEdits.Serialize(_globalInt), "glob", SetAt(Json("true"), Member("OutputChar")), out _);
 
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
         Assert.Contains(nameof(GlobalInt), refusal.Message, StringComparison.Ordinal);
     }
 
@@ -364,7 +375,8 @@ public sealed class DocumentEditTests
     {
         var refusal = Apply(Encoding.UTF8.GetString(HeaderDocument.Write(_mod)), PluginHeader.RecordType, SetAt(Json("\"me\""), Member("Author")), out _);
 
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, refusal.Refusal);
         // SchemaRefusals.HeaderNoWritePathReason's wording (Codec-internal).
         Assert.Contains("the header has no write path for this column", refusal.Message, StringComparison.Ordinal);
     }
@@ -379,7 +391,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "cobj", AddAt(Json(element), Member("Conditions")), out var written);
 
-        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, refusal.Refusal);
         Assert.Equal("Conditions[2]", refusal.Path);
         Assert.Equal(before, written);
     }
@@ -391,7 +404,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "npc_", AddAt(Json("""{"Name": "Alpha"}"""), Member("VirtualMachineAdapter"), Member("Scripts")), out var written);
 
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, refusal.Refusal);
         Assert.Equal("VirtualMachineAdapter.Scripts", refusal.Path);
         Assert.Contains("'Alpha'", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(before, written);
@@ -401,11 +415,12 @@ public sealed class DocumentEditTests
     public void HexOfAnotherLength_IsRefusedNamingBothLengths()
     {
         var before = DocumentEdits.Serialize(_cobj);
-        Assert.Equal("0x000000", Node(before, "Conditions")[0]!["Unknown1"]!.GetValue<string>());
+        Assert.Equal("0x000000", Node(before, "Conditions")[0].Require()["Unknown1"].Require().GetValue<string>());
 
         var refusal = Apply(before, "cobj", SetAt(Json("\"0x0102\""), Member("Conditions"), At(0), Member("Unknown1")), out var written);
 
-        Assert.Equal(RecordEditRefusal.HexLengthMismatch, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.HexLengthMismatch, refusal.Refusal);
         Assert.Contains("3 bytes", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("2 bytes", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(before, written);
@@ -430,7 +445,8 @@ public sealed class DocumentEditTests
     {
         var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", RemoveAt(Member("Keywords"), Key("x")), out _);
 
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, refusal.Refusal);
     }
 
     [Theory]
@@ -445,7 +461,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", envelope, out _);
 
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, refusal.Refusal);
     }
 
     // ── the codec is the one shape gate ─────────────────────────────────────
@@ -457,7 +474,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "npc_", SetAt(Json("\"tall\""), Member("HeightMax")), out var written);
 
-        Assert.Equal(RecordEditRefusal.CodecRejected, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.CodecRejected, refusal.Refusal);
         Assert.Equal("HeightMax", refusal.Path);
         Assert.Contains("tall", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(before, written);
@@ -471,7 +489,8 @@ public sealed class DocumentEditTests
     {
         var refusal = Apply(DocumentEdits.Serialize(_npc), table, SetAt(Json(value), Member(column)), out _);
 
-        Assert.Equal(RecordEditRefusal.CodecRejected, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.CodecRejected, refusal.Refusal);
         Assert.Equal(column, refusal.Path);
     }
 
@@ -492,7 +511,8 @@ public sealed class DocumentEditTests
 
         var refusal = Apply(before, "npc_", SetAt(Json("""{"Thin": 0.5, "Bogus": 1}"""), Member("Weight")), out var written);
 
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.CodecDroppedValue, refusal.Refusal);
         Assert.Equal("Weight.Bogus", refusal.Path);
         Assert.Equal(before, written);
     }
@@ -544,7 +564,8 @@ public sealed class DocumentEditTests
     {
         var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", SetAt(Json("true"), Member("IsPartialForm")), out _);
 
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
     }
 
     [Fact]
@@ -554,7 +575,8 @@ public sealed class DocumentEditTests
         var before = DocumentEdits.Serialize(cell);
 
         var refusal = Apply(before, "cell", SetAt(Json("9.0"), Member("WaterHeight")), out var written);
-        Assert.Equal(RecordEditRefusal.PartialFormFieldReadOnly, refusal!.Refusal);
+        Assert.NotNull(refusal);
+        Assert.Equal(RecordEditRefusal.PartialFormFieldReadOnly, refusal.Refusal);
         Assert.Equal(before, written);
 
         Assert.Null(Apply(before, "cell", SetAt(Json("\"Renamed\""), Member("EditorID")), out _));

@@ -91,7 +91,9 @@ public sealed class IndexedBinaryWatchTests
 
         WaitUntil(() => EditorIds(fixture, fixture.Plugin).Count == 0, TimeSpan.FromSeconds(10));
         Assert.Empty(EditorIds(fixture, fixture.Plugin));
-        Assert.Null(fixture.Index.Store!.IndexedContentHash(fixture.Plugin));
+        var store = fixture.Index.Store
+            ?? throw new InvalidOperationException("Expected the index to already hold a built store.");
+        Assert.Null(store.IndexedContentHash(fixture.Plugin));
     }
 
     // A tracked plugin's binary changing is a question for the

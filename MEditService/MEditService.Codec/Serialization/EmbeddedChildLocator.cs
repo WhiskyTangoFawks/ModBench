@@ -85,7 +85,8 @@ public static class EmbeddedChildLocator
 
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
-            var member = reader.GetString()!;
+            var member = reader.GetString()
+                ?? throw new InvalidOperationException("Expected a JSON property name to read a non-null string.");
             var memberStart = (int)reader.TokenStartIndex;
             reader.Read();
 

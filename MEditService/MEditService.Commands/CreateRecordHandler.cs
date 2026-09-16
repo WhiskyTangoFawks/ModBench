@@ -36,7 +36,9 @@ public sealed class CreateRecordHandler
     /// record is never handed out twice.</summary>
     public RecordEditResult CreateRecord(PluginCopyKey plugin, string recordType, string? editorId, string? requestedFormKey = null)
     {
-        if (_targets.RefuseIfBlocked(plugin, out _, out var repository) is { } blocked) return blocked;
+        if (_targets.RefuseIfBlocked(plugin, out _, out var openedRepository) is { } blocked) return blocked;
+        var repository = openedRepository
+            ?? throw new InvalidOperationException("Expected RefuseIfBlocked to open a repository when it does not refuse.");
 
         var release = _loadOrder.Current.GameRelease;
         var schemas = _schemaReflector.GetSchemas(release);

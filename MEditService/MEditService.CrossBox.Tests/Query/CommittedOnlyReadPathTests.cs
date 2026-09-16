@@ -53,7 +53,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
     [Fact]
     public void GetCompare_OverrideCarriesTheCommittedFieldValue()
     {
-        var formKey = _manager.Reads!.OpenedCopies.Count > 0
+        var formKey = _manager.Reads is { } reads && reads.OpenedCopies.Count > 0
             ? _svc.GetRecords("npc_", TestPluginFixture.PluginName, "TestNPC01", 1, 0).Items[0].FormKey
             : throw new InvalidOperationException("fixture did not load");
 

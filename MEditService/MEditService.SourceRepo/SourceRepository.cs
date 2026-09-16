@@ -87,7 +87,7 @@ public sealed partial class SourceRepository
         }
 
         InMintedDirectory(
-            Path.GetDirectoryName(unit.FullPath)!, () => WriteTextAtomic(unit.FullPath, document.Body));
+            PathShape.DirectoryOf(unit.FullPath), () => WriteTextAtomic(unit.FullPath, document.Body));
         Forget();
     }
 
@@ -111,7 +111,7 @@ public sealed partial class SourceRepository
 
         if (unit.IsDirectoryPerRecord)
         {
-            var directory = Path.GetDirectoryName(unit.FullPath)!;
+            var directory = PathShape.DirectoryOf(unit.FullPath);
             if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
             Forget();
             return SourceRemoval.Removed;
@@ -133,9 +133,9 @@ public sealed partial class SourceRepository
         if (string.Equals(newEditorId, identity.EditorId, StringComparison.Ordinal)) return null;
         if (Locate(plugin, identity) is not { IsEmbedded: false } unit) return null;
 
-        var from = unit.IsDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
+        var from = unit.IsDirectoryPerRecord ? PathShape.DirectoryOf(unit.FullPath) : unit.FullPath;
         var to = Path.Combine(
-            Path.GetDirectoryName(from)!,
+            PathShape.DirectoryOf(from),
             LeafNameFor(
                 FormKey.Factory(identity.FormKey), newEditorId, unit.IsDirectoryPerRecord));
         if (string.Equals(from, to, StringComparison.Ordinal)) return null;
@@ -347,7 +347,7 @@ public sealed partial class SourceRepository
             {
                 if (change.Kind != TrackedFileChangeKind.Modified) continue;
                 var to = Path.Combine(scratchDir, change.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                Directory.CreateDirectory(PathShape.DirectoryOf(to));
                 File.Copy(Path.Combine(modFolder, change.RelativePath), to, overwrite: true);
             }
 

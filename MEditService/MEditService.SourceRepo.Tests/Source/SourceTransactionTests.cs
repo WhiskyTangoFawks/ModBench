@@ -46,7 +46,7 @@ public sealed class SourceTransactionTests : IDisposable
         FlatFile(_root, formKey, recordType, editorId);
 
     private string ContainerDirectory(string formKey, string recordType, string editorId) =>
-        Path.GetDirectoryName(SourceDocumentPath.Of(_root, PluginName, recordType, formKey, editorId, Release))!;
+        PathShape.DirectoryOf(SourceDocumentPath.Of(_root, PluginName, recordType, formKey, editorId, Release));
 
     // A directory at the destination's own ".tmp" name blocks the write-then-rename that lands
     // there, before it ever reaches the real path.

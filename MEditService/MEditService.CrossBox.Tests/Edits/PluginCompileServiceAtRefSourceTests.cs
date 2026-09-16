@@ -1,4 +1,5 @@
 using MEditService.Commands.Edits;
+using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 
 namespace MEditService.Tests.Edits;
@@ -19,7 +20,7 @@ public sealed class PluginCompileServiceAtRefSourceTests : IDisposable
     public void Compile_AtARefWhoseSourceHasTwoDocumentsClaimingOneFormKey_RefusesNamingTheFormKey()
     {
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
-        Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
+        Directory.CreateDirectory(PathShape.DirectoryOf(collidingPath));
         File.WriteAllText(collidingPath, File.ReadAllText(_mod.NpcSourceFile));
         _mod.CommitWorkingTree("two documents, one FormKey");
         File.Delete(collidingPath);

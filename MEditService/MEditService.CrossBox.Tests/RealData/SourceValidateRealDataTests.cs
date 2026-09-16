@@ -11,7 +11,8 @@ namespace MEditService.Tests.RealData;
 public sealed class SourceValidateRealDataTests(SourceParityFixture fixture, ITestOutputHelper output)
     : IClassFixture<SourceParityFixture>
 {
-    private IRecordIndex Index => fixture.FromSource.Store!;
+    private IRecordIndex Index =>
+        fixture.FromSource.Store ?? throw new InvalidOperationException("Expected the index to hold a store.");
 
     [Fact]
     public void AFreshlyIngestedRealPlugin_ValidatesCleanAndAdvancesNoSequence()

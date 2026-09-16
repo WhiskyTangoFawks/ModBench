@@ -100,7 +100,7 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
 
         var pluginsAfter = await _client.GetFromJsonAsync<JsonElement[]>("/plugins");
         Assert.NotNull(pluginsAfter);
-        Assert.Equal(pluginsBefore!.Length, pluginsAfter!.Length);
+        Assert.Equal(pluginsBefore.Length, pluginsAfter.Length);
         Assert.All(pluginsAfter, p => Assert.False(p.GetProperty("hasMatchingRecords").GetBoolean()));
     }
 

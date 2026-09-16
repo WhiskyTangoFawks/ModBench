@@ -23,13 +23,13 @@ public sealed class ArrayOpEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Document(_mod.Npc.ToString())!.Body;
+    private string NpcBody() => _mod.Document(_mod.Npc.ToString()).Require().Body;
 
     private string SecondKeyword()
     {
         var result = _mod.CreateHandler.CreateRecord(_mod.Plugin, "kywd", "SecondKeyword");
         Assert.True(result.Applied, result.Message);
-        return result.NewFormKey!;
+        return result.NewFormKey.Require();
     }
 
     [Fact]

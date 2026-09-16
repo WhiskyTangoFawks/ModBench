@@ -27,7 +27,7 @@ public class SearchRecordsTests(TestPluginFixture fixture)
     {
         var holder = new LoadOrderHolder();
         using var manager = MakeLoadedManager(holder);
-        var reader = manager.Reads!;
+        var reader = manager.RequireReads();
 
         var byEditorId = reader.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 10, Offset: 0));
         var formKey = byEditorId.Items[0].FormKey;
