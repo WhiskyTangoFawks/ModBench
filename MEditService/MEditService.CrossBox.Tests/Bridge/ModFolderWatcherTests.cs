@@ -276,12 +276,11 @@ public sealed class ModFolderWatcherTests
 
             // The re-arm runs off the caller's thread, so the watch may not be live the instant
             // Apply returns — retried until it is, rather than raced with a fixed sleep.
-            var deadline = DateTime.UtcNow.AddSeconds(5);
-            while (DateTime.UtcNow < deadline && index.Projections.Count == 0)
+            WaitUntil(() =>
             {
-                File.WriteAllBytes(fixture.PluginPath, Guid.NewGuid().ToByteArray());
-                Thread.Sleep(100);
-            }
+                if (index.Projections.Count == 0) File.WriteAllBytes(fixture.PluginPath, Guid.NewGuid().ToByteArray());
+                return index.Projections.Count > 0;
+            }, TimeSpan.FromSeconds(5));
 
             Assert.Equal(IndexedCopy, Assert.Single(index.Of("reindex")).Plugin);
         }

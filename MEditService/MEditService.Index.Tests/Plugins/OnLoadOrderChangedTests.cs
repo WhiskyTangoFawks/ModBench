@@ -107,6 +107,26 @@ public sealed class OnLoadOrderChangedTests
             .Count(n => n.Status.State == LoadOrderState.Ready));
     }
 
+    // The rival this pins: an unconditional stamp, letting an older attempt started earlier
+    // but finishing later name a smaller version than one already published.
+    [Fact]
+    public void AnOlderVersionThatFinishesLast_NeverPublishesASmallerVersionThanAlreadySeen()
+    {
+        var holder = new LoadOrderHolder();
+        using var fx = new PluginFixtureBuilder("stamp-order-subscriber").WithPlugin("A.esp").Build();
+        var notifications = new InMemoryNotificationPublisher();
+        using var index = MakeIndex(holder, notifications);
+        var snapshot = IndexReconcile.Snapshot(fx.DataFolder, fx.InstanceRoot, GameRelease.Fallout4, fx.Plugins);
+
+        index.OnLoadOrderChanged(snapshot, version: 2);
+        index.OnLoadOrderChanged(snapshot, version: 1);
+
+        Assert.Equal(2, index.Status.Version);
+        var versions = notifications.Notifications.OfType<LoadOrderStatusNotification>()
+            .Select(n => n.Status.Version).ToList();
+        Assert.Equal(versions, [.. versions.Order()]);
+    }
+
     private static async Task<bool> CompletesWithin(Task task, TimeSpan timeout) =>
         await Task.WhenAny(task, Task.Delay(timeout)) == task;
 

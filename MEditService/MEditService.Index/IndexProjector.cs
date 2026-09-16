@@ -313,7 +313,9 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             // to, so it becomes status data instead of only a log line.
             lock (_lock) _failureMessage = ex.Message;
         }
-        lock (_lock) _version = version;
+        // Max, not assign: the exclusive gate is released before this runs, so a newer version's
+        // own stamp can land first, and this one must never answer for it downward.
+        lock (_lock) _version = Math.Max(_version, version);
         PublishStatus();
     }
 
@@ -869,8 +871,9 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     {
         if (!File.Exists(path))
         {
+            var wasIndexed = IndexedContentHash(key) is not null;
             UnindexPlugin(key);
-            return true;
+            return wasIndexed;
         }
 
         if (IndexedContentHash(key) is { } indexedHash)

@@ -67,23 +67,29 @@ public sealed class RefreshBinaryTests : IDisposable
     }
 
     [Fact]
-    public async Task RefreshBinary_ForACopyAlreadyIndexed_ReindexesOnlyWhenTheBytesReallyChanged()
+    public async Task RefreshBinary_ForACopyAlreadyIndexed_UnchangedBytesSettlingAgainIsNotReindexed()
     {
         WriteValidPlugin(_pluginPath);
         _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
         var indexedHash = _index.IndexedContentHash(_key);
         Assert.NotNull(indexedHash);
 
-        // Unchanged bytes settle again — nothing to reindex.
-        await _index.RefreshBinary(_key, _pluginPath);
+        Assert.False(await _index.RefreshBinary(_key, _pluginPath));
         Assert.Equal(indexedHash, _index.IndexedContentHash(_key));
+    }
+
+    [Fact]
+    public async Task RefreshBinary_ForACopyAlreadyIndexed_BytesThatArrivedExternallyAreReindexed()
+    {
+        WriteValidPlugin(_pluginPath);
+        _index.Reconcile(_holder, _gameDirectory, [Entry], GameRelease.Fallout4, _instanceRoot);
+        var indexedHash = _index.IndexedContentHash(_key);
 
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("ArrivedExternally");
         mod.WriteToBinary(_pluginPath);
 
-        await _index.RefreshBinary(_key, _pluginPath);
-
+        Assert.True(await _index.RefreshBinary(_key, _pluginPath));
         Assert.NotEqual(indexedHash, _index.IndexedContentHash(_key));
     }
 
@@ -95,10 +101,16 @@ public sealed class RefreshBinaryTests : IDisposable
         Assert.NotNull(_index.IndexedContentHash(_key));
 
         File.Delete(_pluginPath);
-        await _index.RefreshBinary(_key, _pluginPath);
+        Assert.True(await _index.RefreshBinary(_key, _pluginPath));
 
         Assert.Null(_index.IndexedContentHash(_key));
     }
+
+    // The rival this pins: answering true for any missing path, which would tell a reader
+    // something was re-fetched when a copy never indexed left nothing to remove.
+    [Fact]
+    public async Task RefreshBinary_ForACopyNeverIndexed_MissingFromDisk_AnswersFalse() =>
+        Assert.False(await _index.RefreshBinary(_key, _pluginPath));
 
     // The bool itself, across every branch: true only for the two that actually changed something a
     // reader could re-fetch, false for "still failing" and "already matches" alike.
