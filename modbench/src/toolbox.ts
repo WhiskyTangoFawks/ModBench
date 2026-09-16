@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 import type {
-  CrashRepairOffer, LoadOrderStatus as LoadOrderProgress, MEditClient, PluginLoadFailure,
+  LoadOrderStatus as LoadOrderProgress, MEditClient, PluginLoadFailure,
 } from './medit/client';
 import { createLoadOrderSender, type LoadOrderSender } from './medit/client';
 import { implicitMastersFrom, rebuildIndexVia } from './toolboxClientCalls';
-import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
+import { makeReconcileProgressHandler, reportIndexRefusal } from './medit/loadOrderProgress';
 import { applyLoadOrderOutcome, syncActiveFilter } from './medit/loadOrderOutcome';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { publishLoadDiagnoses } from './medit/loadDiagnostics';
@@ -50,8 +50,6 @@ export interface ToolboxDeps {
   recordBrowser: PluginTreeProvider;
   /** The two mEdit reads the tree's badges and chevrons come from. */
   pluginFacts: PluginFactsClient;
-  /** Run the loud crash-repair offer sequence for whatever a completed reconcile found. */
-  showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
   /** The malformed-plugin scan's Problems-panel collection. Held on the session so the teardown
    *  writers can clear both diagnosis surfaces together. */
   loadDiagnostics: vscode.DiagnosticCollection;
@@ -181,7 +179,6 @@ interface ReconcileDeps {
    *  `session.pluginsTree`, which `applyLoadOrderToTree` below owns. */
   recordBrowser: PluginTreeProvider;
   outputChannel: vscode.LogOutputChannel;
-  showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
   setStatusText: (text: string) => void;
   notifyConflictsComputed: () => void;
   reporter: Reporter;
@@ -202,7 +199,7 @@ function applySyncedFilterState(
 // happens to it from there, and what comes back is reported and applied here.
 function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
   const {
-    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel,
     setStatusText, notifyConflictsComputed, reporter,
   } = deps;
   const run = async (): Promise<void> => {
@@ -214,6 +211,12 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
     const { plugins, dataFolder } = snapshot;
     const treeProgress = makeTreeProgressHandler(session);
     outputChannel.info(`[toolbox] handing mEdit the load order snapshot (${plugins.length} plugin copies)`);
+    // The Index's own known refusal rides a tick, never the put's own outcome (ADR-0013) — this
+    // is the only place it is seen, so it is checked on every one, not folded into treeProgress.
+    const onProgress = (status: LoadOrderProgress): void => {
+      reportIndexRefusal(status, { setStatusText });
+      treeProgress.onProgress(status);
+    };
     // A release the table can't translate is sent as MO2's own spelling rather than a guess: the
     // backend then rejects it visibly instead of quietly answering about the wrong game.
     const result = await sender.send({
@@ -221,8 +224,8 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
       gameDirectory: dataFolder,
       instanceRoot,
       gameRelease: gameReleaseForGame(instance.value.gameRelease) ?? instance.value.gameRelease,
-    }, { onProgress: treeProgress.onProgress });
-    await applyLoadOrderOutcome(plugins, result, treeProgress.lastTotalPlugins(), {
+    }, { onProgress });
+    await applyLoadOrderOutcome(plugins, result, treeProgress.lastFailures(), treeProgress.lastTotalPlugins(), {
       log: (m) => outputChannel.info(`[toolbox] ${m}`),
       warn: (m) => reporter.report('warning', m),
       error: (m) => reporter.report('error', m),
@@ -231,7 +234,6 @@ function makeReconcile(deps: ReconcileDeps): () => Promise<void> {
       notifyConflictsComputed,
       syncFilterState: () => applySyncedFilterState(client, session, outputChannel, reporter),
       applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(session, failures, outputChannel, reporter, totalPlugins),
-      presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
     });
   };
   // A snapshot handed over before mEdit is attached waits on the client for the connect, so
@@ -273,16 +275,21 @@ async function applyLoadOrderToTree(
 // Each tick's `totalPlugins` is the backend's count, implicit masters included — a larger number
 // than the frontend's own snapshot, and the one `applyLoadOrderToTree`'s completion log compares
 // against.
-function makeTreeProgressHandler(
-  session: ExtensionSession,
-): { onProgress: (status: LoadOrderProgress) => void; lastTotalPlugins: () => number } {
+function makeTreeProgressHandler(session: ExtensionSession): {
+  onProgress: (status: LoadOrderProgress) => void;
+  lastTotalPlugins: () => number;
+  /** The last tick's own failures — the PUT response carries none of its own (ADR-0019). */
+  lastFailures: () => PluginLoadFailure[];
+} {
   let totalPlugins = 0;
+  let failures: PluginLoadFailure[] = [];
   const applyTick = makeReconcileProgressHandler({
-    applyLoadOrder: (indexedPlugins, failures) => session.pluginsTree?.applyIndexed(indexedPlugins, failures),
+    applyLoadOrder: (indexedPlugins, tickFailures) => session.pluginsTree?.applyIndexed(indexedPlugins, tickFailures),
   });
   return {
-    onProgress: (status) => { totalPlugins = status.totalPlugins; applyTick(status); },
+    onProgress: (status) => { totalPlugins = status.totalPlugins; failures = status.failures; applyTick(status); },
     lastTotalPlugins: () => totalPlugins,
+    lastFailures: () => failures,
   };
 }
 
@@ -355,7 +362,7 @@ interface Mo2Side {
 // that is not one. Both leave the Toolbox view registered and row-less.
 function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   const {
-    outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics, showCrashRepairOffers,
+    outputChannel, session, client, recordBrowser, pluginFacts, loadDiagnostics,
     setStatusText, notifyConflictsComputed, reporterFor, ask,
   } = deps;
   // The flat log shim, for collaborators still taking a flat `(msg) => void`.
@@ -401,7 +408,7 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   const sender = own(createLoadOrderSender(client));
   session.loadOrderSender = sender;
   const reconcile = makeReconcile({
-    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel, showCrashRepairOffers,
+    session, instanceRoot, instance, sender, client, recordBrowser, outputChannel,
     setStatusText, notifyConflictsComputed, reporter: reporterFor('loadOrder'),
   });
   // The backend answers this, never the extension (ADR-0016), and it needs both the Data folder

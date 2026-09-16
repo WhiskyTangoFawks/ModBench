@@ -45,17 +45,46 @@ describe('toLoadOrderStatus', () => {
   it('keys indexedPlugins on filename alone, dropping origin and state', () => {
     const status = toLoadOrderStatus({
       state: 'Reconciling',
-      totalPlugins: 3,
+      totalPlugins: 3, version: 1,
       indexedPlugins: [{ name: 'Fallout4.esm', origin: 'Data' }, { name: 'TestMod.esp', origin: 'ModA' }],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
 
     expect(status).toEqual({
-      totalPlugins: 3,
+      totalPlugins: 3, version: 1,
       indexedPlugins: ['Fallout4.esm', 'TestMod.esp'],
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', origin: 'SomeMod', reason: 'RACE parse' }],
     });
+    expect(status.refusalMessage).toBeUndefined();
+  });
+
+  // The two states this transform does carry: nothing else here can say "another window has
+  // this instance open" or "the reconcile hit something unknown".
+  it('carries refusalMessage for the HeldElsewhere state', () => {
+    const status = toLoadOrderStatus({
+      state: 'HeldElsewhere',
+      totalPlugins: 0, version: 1,
+      indexedPlugins: [],
+      conflictsComputed: false,
+      failures: [],
+      message: 'This instance\'s index is open in another Modbench window.',
+    });
+
+    expect(status.refusalMessage).toBe('This instance\'s index is open in another Modbench window.');
+  });
+
+  it('carries refusalMessage for the Failed state', () => {
+    const status = toLoadOrderStatus({
+      state: 'Failed',
+      totalPlugins: 0, version: 1,
+      indexedPlugins: [],
+      conflictsComputed: false,
+      failures: [],
+      message: 'the reconcile threw something unexpected',
+    });
+
+    expect(status.refusalMessage).toBe('the reconcile threw something unexpected');
   });
 });

@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Serialization;
 using MEditService.Commands;
 using MEditService.Commands.Edits;
+using MEditService.Http;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
@@ -69,11 +70,14 @@ public sealed class ModFolderWatcherTests
         return new IndexedFixture(folder, pluginPath, Sha256Of(bytes));
     }
 
+    // Seeded as already indexed with the bytes on disk now — the state a prior reconcile would
+    // have left, since the comparison this route settles against is the Index's own.
     private static (ModFolderWatcher Watcher, RecordingRefreshIndex Index) WatchingIndexed(IndexedFixture fixture)
     {
         var index = new RecordingRefreshIndex();
+        index.SeedIndexed(IndexedCopy, fixture.ContentHash);
         var watcher = Projecting(index, TimeSpan.FromMilliseconds(100));
-        watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath, fixture.ContentHash);
+        watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath);
         return (watcher, index);
     }
 
@@ -183,8 +187,9 @@ public sealed class ModFolderWatcherTests
         {
             // The load order was torn down, the file was still held, …
             var index = new RecordingRefreshIndex { Refuses = true };
+            index.SeedIndexed(IndexedCopy, fixture.ContentHash);
             using var watcher = Projecting(index, TimeSpan.FromMilliseconds(100));
-            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath, fixture.ContentHash);
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath);
 
             File.WriteAllBytes(fixture.PluginPath, "changed-by-xedit"u8.ToArray());
             WaitUntil(() => index.Of("reindex").Count > 0, TimeSpan.FromSeconds(3));
@@ -225,6 +230,64 @@ public sealed class ModFolderWatcherTests
         finally
         {
             Directory.Delete(fixture.Folder, recursive: true);
+        }
+    }
+
+    // ADR-0003 (Option 2 ruling): WatchIndexed arms every non-tracked copy unconditionally — a copy
+    // the Index has never indexed still reaches it once its bytes change, with no reconcile between.
+    [Fact]
+    public void ACopyTheIndexHasNeverIndexed_IsStillArmed_AndReachesTheIndexWhenItChanges()
+    {
+        var fixture = NewIndexedBinary("original"u8.ToArray());
+        try
+        {
+            var index = new RecordingRefreshIndex(); // never seeded: nothing indexed for this copy yet.
+            using var watcher = Projecting(index, TimeSpan.FromMilliseconds(100));
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, fixture.PluginPath);
+
+            File.WriteAllBytes(fixture.PluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => index.Projections.Count > 0, TimeSpan.FromSeconds(3));
+
+            Assert.Equal(IndexedCopy, Assert.Single(index.Of("reindex")).Plugin);
+        }
+        finally
+        {
+            Directory.Delete(fixture.Folder, recursive: true);
+        }
+    }
+
+    // The rival this pins: a SubscribeTo that never wires the Changed event, so a load order arriving
+    // through holder.Apply would leave every plugin unwatched.
+    [Fact]
+    public void SubscribeTo_ArmsTheWatchWhenTheLoadOrderChanges()
+    {
+        var fixture = NewIndexedBinary("original"u8.ToArray());
+        var gameDirectory = Directory.CreateTempSubdirectory("medit-modwatch-game-").FullName;
+        try
+        {
+            var index = new RecordingRefreshIndex();
+            var holder = new LoadOrderHolder();
+            using var watcher = TestWatcher.Over(
+                holder, index, new InMemoryNotificationPublisher(), TimeSpan.FromMilliseconds(100));
+            watcher.SubscribeTo(holder);
+
+            var entry = new LoadOrderEntry(IndexedPlugin, fixture.PluginPath, IndexedOrigin, 0, Enabled: true, Winning: true);
+            holder.Apply(ForcedPlugins.Snapshot(gameDirectory, null, GameRelease.Fallout4, [entry]));
+
+            // The re-arm runs off the caller's thread, so the watch may not be live the instant
+            // Apply returns — retried until it is, rather than raced with a fixed sleep.
+            WaitUntil(() =>
+            {
+                if (index.Projections.Count == 0) File.WriteAllBytes(fixture.PluginPath, Guid.NewGuid().ToByteArray());
+                return index.Projections.Count > 0;
+            }, TimeSpan.FromSeconds(5));
+
+            Assert.Equal(IndexedCopy, Assert.Single(index.Of("reindex")).Plugin);
+        }
+        finally
+        {
+            Directory.Delete(fixture.Folder, recursive: true);
+            Directory.Delete(gameDirectory, recursive: true);
         }
     }
 
@@ -431,8 +494,9 @@ public sealed class ModFolderWatcherTests
             var original = "original"u8.ToArray();
             File.WriteAllBytes(pluginPath, original);
             var index = new RecordingRefreshIndex();
+            index.SeedIndexed(IndexedCopy, Sha256Of(original));
             using var watcher = Projecting(index, TimeSpan.FromMilliseconds(100));
-            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, pluginPath, Sha256Of(original));
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, pluginPath);
 
             Directory.CreateDirectory(Path.Combine(folder, "Textures"));
             File.WriteAllText(Path.Combine(folder, "Textures", "unrelated.txt"), "loose asset");
@@ -461,8 +525,9 @@ public sealed class ModFolderWatcherTests
             var indexedPath = Path.Combine(folder, IndexedPlugin);
             File.WriteAllBytes(indexedPath, "original"u8.ToArray());
             var index = new RecordingRefreshIndex();
+            index.SeedIndexed(IndexedCopy, Sha256Of("original"u8.ToArray()));
             using var watcher = Projecting(index, TimeSpan.FromMilliseconds(100), TimeSpan.FromSeconds(5));
-            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, indexedPath, Sha256Of("original"u8.ToArray()));
+            watcher.WatchIndexed(IndexedPlugin, IndexedOrigin, indexedPath);
 
             var sourceRoot = SourceRepository.RootIn(folder, "Tracked.esp");
             watcher.Watch(folder, sourceRoot, "Tracked.esp", "TrackedOrigin");

@@ -4,6 +4,7 @@ using System.Text.Json;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -23,7 +24,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 
     private async Task LoadOnly(ScatteredFixtureData fx, string origin)
     {
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

@@ -25,7 +25,7 @@ public sealed class EditRecordApiTests(LoadedApiFixture<TestPluginFixture> loade
 
     private async Task LoadOnly(ScatteredFixtureData fx)
     {
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

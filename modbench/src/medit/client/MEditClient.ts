@@ -1,9 +1,13 @@
 import type { components } from '../generated/api';
-import type {
-  CompileResult, RebaseResult, CrashRepairOffer, ExternalChangeActionResult, NotificationEvent,
-  TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState, MasterIssue,
-  WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock, CellReferences, CellSummary,
-  PlacedSummary, ContainerChildSummary, RecordSummary, LoadOrderStatus, UnansweredExternalChange, PluginLoadFailure,
+import {
+  CRASH_REPAIR_REASONS,
+  type CompileResult, type RebaseResult, type CrashRepairOffer, type CrashRepairReason,
+  type ExternalChangeActionResult, type NotificationEvent,
+  type TrackStatus, type PluginMetadata, type PluginDiagnosisReport, type WorkingTreeState, type MasterIssue,
+  type WorldspaceSummary, type WorldspaceBlocks, type WorldspaceBlock, type WorldspaceSubBlock,
+  type CellReferences, type CellSummary,
+  type PlacedSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus,
+  type UnansweredExternalChange, type PluginLoadFailure,
 } from './apiClient';
 import type { RecordEditEnvelope } from '../messages';
 
@@ -40,6 +44,14 @@ export function isNotificationKind(kind: string): kind is NotificationKind {
   return NOTIFICATION_KINDS.has(kind);
 }
 
+const CRASH_REPAIR_REASON_SET = new Set<string>(CRASH_REPAIR_REASONS);
+
+/** `question-open`'s `crashRepairReason` (the schema's honest `string`) narrowed to
+ *  `CrashRepairReason`, on the port for the same reason `isRefused` is. */
+export function isCrashRepairReason(reason: string): reason is CrashRepairReason {
+  return CRASH_REPAIR_REASON_SET.has(reason);
+}
+
 /** Re-exported under its own name because it is a callback contract, not merely a query return
  *  type the caller happens to see. */
 export type LoadOrderProgress = LoadOrderStatus;
@@ -56,10 +68,11 @@ export interface LoadOrderPluginInput {
   winning: boolean;
 }
 
-/** A tagged union, not a sentinel value. `abandoned` means the reconcile was superseded or the
- *  user closed mEdit; `failed`'s `message` is the whole toast the load-order sync shows. */
+/** A tagged union, not a sentinel value. `abandoned`: a newer snapshot replaced this one before
+ *  it was sent, or mEdit closed mid-flight. `applied` carries the terminal status the Index
+ *  reached, never read off the PUT alone. */
 export type LoadOrderOutcome =
-  | { outcome: 'reconciled'; failures: PluginLoadFailure[]; crashRepairOffers: CrashRepairOffer[] }
+  | { outcome: 'applied'; status: LoadOrderProgress }
   | { outcome: 'failed'; message: string }
   | { outcome: 'abandoned' };
 
@@ -172,7 +185,7 @@ export interface MEditClient {
 }
 
 export type {
-  CrashRepairOffer, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
+  CrashRepairOffer, CrashRepairReason, NotificationEvent, TrackStatus, PluginMetadata, PluginDiagnosisReport, WorkingTreeState,
   MasterIssue, RecordSummary, WorldspaceSummary, WorldspaceBlocks, WorldspaceBlock, WorldspaceSubBlock,
   CellReferences, CellSummary, PlacedSummary, ContainerChildSummary, CompileResult, RebaseResult,
   ExternalChangeActionResult, LoadOrderStatus, UnansweredExternalChange, PluginLoadFailure,

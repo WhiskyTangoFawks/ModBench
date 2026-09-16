@@ -3,12 +3,9 @@ using MEditService.Http;
 using MEditService.Http.Endpoints;
 using MEditService.Index;
 using MEditService.LoadOrder;
-using MEditService.PluginAdapter;
 using MEditService.Queries;
 using MEditService.Tests.TestSupport;
-using MEditService.Watcher;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
@@ -33,7 +30,6 @@ public sealed class EndpointReceptionLoggingTests
     [Fact]
     public void PutLoadOrder_ValidRequest_LogsReceivedWithGameDirectory()
     {
-        var holder = new LoadOrderHolder();
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var tempDir = Directory.CreateTempSubdirectory("medit-215-").FullName;
@@ -41,8 +37,7 @@ public sealed class EndpointReceptionLoggingTests
         {
             var req = new LoadOrderRequest([], tempDir, tempDir, "Fallout4");
 
-            using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, new RefusingIndexFactory());
-            LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), TestWatcher.Inert(), loggerFactory);
+            LoadOrderEndpoints.PutLoadOrder(req, TestEditService.PutLoadOrderHandler(new LoadOrderHolder()), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
         }
@@ -55,20 +50,15 @@ public sealed class EndpointReceptionLoggingTests
     [Fact]
     public void PutLoadOrder_GameDirectoryMissing_StillLogsReceived()
     {
-        var holder = new LoadOrderHolder();
-        // The reception line fires on every call, including ones that go on to fail — this
-        // request fails validation (400) before the Index is asked to project anything.
+        // The reception line fires on every call, including ones that go on to fail validation.
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        var factory = new RefusingIndexFactory();
-        using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
         var req = new LoadOrderRequest([], "Z:\\does-not-exist", "Z:\\does-not-exist", "Fallout4");
 
-        var result = LoadOrderEndpoints.PutLoadOrder(req, index, new LoadOrderHolder(), TestWatcher.Inert(), loggerFactory);
+        var result = LoadOrderEndpoints.PutLoadOrder(req, TestEditService.PutLoadOrderHandler(new LoadOrderHolder()), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
-        Assert.False(factory.Asked); // confirms this is the pre-projection validation-failure path
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Z:\\does-not-exist"));
     }
 

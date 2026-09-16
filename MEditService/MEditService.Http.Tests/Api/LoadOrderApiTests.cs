@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.LoadOrder;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -18,7 +19,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [Fact]
     public async Task PutLoadOrder_Returns200AndLoadsPlugin()
     {
-        var response = await _client.PutAsJsonAsync("/load-order", new
+        var response = await _client.PutLoadOrderAndAwaitReady(new
         {
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameDirectory = _fixture.DataFolder,
@@ -35,7 +36,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
     [Fact]
     public async Task PutLoadOrder_ThenGetRecords_ReturnsIndexedRecords()
     {
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameDirectory = _fixture.DataFolder,
@@ -58,7 +59,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
 
-        var response = await _client.PutAsJsonAsync("/load-order", new
+        var response = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
@@ -84,7 +85,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var plugins = fx.Plugins.Append(new LoadOrderEntry("Bad.esp", badPath, PluginOrigin.DataDirectory, Slot: 99, Enabled: true, Winning: true))
             .Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning });
 
-        var response = await _client.PutAsJsonAsync("/load-order", new
+        var response = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
@@ -93,9 +94,8 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<LoadOrderResponseDto>();
-        Assert.NotNull(body);
-        var failure = Assert.Single(body!.Failures);
+        var status = await _client.GetFromJsonAsync<LoadOrderStatusDto>("/load-order/status");
+        var failure = Assert.Single(status!.Failures);
         Assert.Equal("Bad.esp", failure.Name);
     }
 
@@ -112,7 +112,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var loser = fx.Plugins.Single(p => p.Origin == "ModB") with { Slot = winner.Slot, Winning = false };
         await System.IO.File.WriteAllTextAsync(loser.Path, "this is not a plugin");
 
-        var response = await _client.PutAsJsonAsync("/load-order", new
+        var response = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
@@ -121,13 +121,13 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<LoadOrderResponseDto>();
-        var failure = Assert.Single(body!.Failures);
+        var status = await _client.GetFromJsonAsync<LoadOrderStatusDto>("/load-order/status");
+        var failure = Assert.Single(status!.Failures);
         Assert.Equal("Shared.esp", failure.Name);
         Assert.Equal("ModB", failure.Origin);
     }
 
-    private sealed record LoadOrderResponseDto(string Status, IReadOnlyList<PluginLoadFailureDto> Failures);
+    private sealed record LoadOrderStatusDto(IReadOnlyList<PluginLoadFailureDto> Failures);
     private sealed record PluginLoadFailureDto(string Name, string Origin, string Reason);
 
     [Fact]

@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Mutagen.Bethesda;
@@ -34,7 +35,7 @@ public sealed class ReconcileApiTests : IDisposable
         var fx = new PluginFixtureBuilder("api-reconcile")
             .WithPlugin(Plugin, mod => mod.Npcs.AddNew("ReconcileNpc"), origin: Origin)
             .BuildScattered();
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

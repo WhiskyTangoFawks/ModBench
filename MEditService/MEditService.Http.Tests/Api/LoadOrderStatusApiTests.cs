@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -40,7 +41,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .Build();
 
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameDirectory = fx.DataFolder,
@@ -62,8 +63,10 @@ public sealed class LoadOrderStatusApiTests : IDisposable
         Assert.Empty(status.GetProperty("failures").EnumerateArray());
     }
 
+    // Applied answers as soon as the snapshot lands, never once the sweep has run — the sweep is
+    // Load order state's own progress, learned by polling or subscribing status, not the PUT.
     [Fact]
-    public async Task PutLoadOrder_StillReturnsOnlyOnceTheSweepHasRun()
+    public async Task PutLoadOrder_AnswersAppliedAtOnce_AndStatusReachesReadySeparately()
     {
         using var fx = new PluginFixtureBuilder("api-status-contract")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
@@ -78,12 +81,11 @@ public sealed class LoadOrderStatusApiTests : IDisposable
             gameRelease = "Fallout4",
         });
 
-        // The POST is the completion signal; status reports progress alongside it. Returning
-        // before the sweep would leave every caller reading unswept winners.
         Assert.Equal(HttpStatusCode.OK, load.StatusCode);
         var body = await load.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("reconciled", body.GetProperty("status").GetString());
+        Assert.True(body.GetProperty("applied").GetBoolean());
 
+        await _client.AwaitTerminalLoadOrderStatus(body.GetProperty("version").GetInt64());
         var status = await _client.GetFromJsonAsync<JsonElement>("/load-order/status");
         Assert.Equal("Ready", status.GetProperty("state").GetString());
         Assert.True(status.GetProperty("conflictsComputed").GetBoolean());

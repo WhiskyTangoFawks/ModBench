@@ -16,6 +16,7 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
     private readonly object _gate = new();
     private readonly List<RecordedProjection> _projections = [];
     private readonly System.Diagnostics.Stopwatch _since = System.Diagnostics.Stopwatch.StartNew();
+    private readonly Dictionary<PluginKey, string> _indexedHashes = new(PluginKey.Comparer);
     private int _scope;
 
     public IndexWriteGate WriteGate { get; init; } = new();
@@ -62,25 +63,34 @@ internal sealed class RecordingRefreshIndex : IRefreshIndex
         return [];
     }
 
-    public Task ReindexPlugin(PluginKey key)
+    /// <summary>Seeds this copy as already indexed with this hash — the state a prior reconcile
+    /// would have left, for a test that arranges "already indexed" before watching.</summary>
+    public void SeedIndexed(PluginKey key, string hash) => _indexedHashes[key] = hash;
+
+    public Task<bool> RefreshBinary(PluginKey key, string path)
     {
+        if (!File.Exists(path))
+        {
+            Record("unindex", key, []);
+            Refuse();
+            _indexedHashes.Remove(key);
+            return Task.FromResult(true);
+        }
+
+        var onDisk = ContentHashOnDisk(path);
+        if (_indexedHashes.TryGetValue(key, out var indexed) && indexed == onDisk) return Task.FromResult(false);
+
         Record("reindex", key, []);
         Refuse();
-        return Task.CompletedTask;
+        // Advanced only past the refusal above: a refused write must not leave the recorder
+        // believing bytes it never actually landed are now indexed.
+        _indexedHashes[key] = onDisk!;
+        return Task.FromResult(true);
     }
-
-    public void UnindexPlugin(PluginKey key)
-    {
-        Record("unindex", key, []);
-        Refuse();
-    }
-
-    // No rows for any copy: the recorder is a listener, never a store with a baseline to compare.
-    public string? IndexedContentHash(PluginKey key) => null;
 
     // The real hash of the real file: the watcher's binary settle is about the bytes on disk, and a
     // recorder that invented one would decide the test's outcome.
-    public string? ContentHashOnDisk(string pluginPath) =>
+    private static string? ContentHashOnDisk(string pluginPath) =>
         File.Exists(pluginPath)
             ? Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(pluginPath)))
             : null;

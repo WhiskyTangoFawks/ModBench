@@ -101,6 +101,10 @@ public static class CommandHandlers
         services.AddSingleton(sp => new ContinueRebaseEditBranchHandler(
             sp.GetRequiredService<LoadOrderHolder>()));
 
+        services.AddSingleton(sp => new PutLoadOrderHandler(
+            sp.GetRequiredService<LoadOrderHolder>(),
+            sp.GetRequiredService<SchemaReflector>()));
+
         return services;
     }
 }

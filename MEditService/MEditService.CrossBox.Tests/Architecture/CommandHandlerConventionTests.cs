@@ -29,6 +29,7 @@ public sealed class CommandHandlerConventionTests
         (typeof(CreatePluginHandler), "Applied"),
         (typeof(RebaseEditBranchHandler), "Applied"),
         (typeof(ContinueRebaseEditBranchHandler), "Applied"),
+        (typeof(PutLoadOrderHandler), "Applied"),
     ];
 
     // What the gestures answer and report through, each with its own refusal vocabulary. The carrier
@@ -38,6 +39,8 @@ public sealed class CommandHandlerConventionTests
         typeof(AbsorbResult),
         typeof(ExternalChangeLandResult),
         typeof(PluginCreateResult),
+        typeof(PutLoadOrderRefusal),
+        typeof(PutLoadOrderResult),
         typeof(TrackRefusal),
         typeof(TrackResult),
     ];

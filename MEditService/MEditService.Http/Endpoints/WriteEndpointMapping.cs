@@ -54,6 +54,13 @@ internal static class WriteEndpointMapping
         },
         extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
 
+    /// <summary>Put load order's own refusal: a bad request, since the only one this handler
+    /// answers is discovered by validating the release, never by touching the Index.</summary>
+    internal static IResult Refusal(PutLoadOrderResult result) => Results.Problem(
+        detail: result.Message,
+        statusCode: 400,
+        extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
+
     /// <summary>A write to a working tree Modbench does not own exclusively can fail; the caller
     /// builds <paramref name="detail"/> because it is wire body that differs per site, so one shared
     /// message would change what every client reads.</summary>

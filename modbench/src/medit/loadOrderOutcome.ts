@@ -1,7 +1,8 @@
 import type {
-  CrashRepairOffer, LoadOrderOutcome, LoadOrderPluginInput, PluginLoadFailure, WriteRefused,
+  LoadOrderOutcome, LoadOrderPluginInput, PluginLoadFailure, WriteRefused,
 } from './client';
 import { isRefused } from './client';
+import { reportIndexRefusal } from './loadOrderProgress';
 import { reportSkippedPlugins } from './pluginFailures';
 
 /** Each callback is exactly one ADR-0019 surface — `warn`/`error` toast, `log` writes the
@@ -16,21 +17,24 @@ export interface LoadOrderOutcomeDeps {
   refreshTree: () => void;
 }
 
-/** Everything a settled `putLoadOrder` needs reported, pulled out of the load-order sync's own
- *  `vscode` wiring so it is testable without a VS Code harness. `abandoned` reports nothing —
- *  a superseded or closed reconcile owns no view to update. */
+/** Everything a settled `putLoadOrder` needs reported, testable without a VS Code harness.
+ *  `abandoned` reports nothing — a superseded or closed reconcile owns no view. `failures` is
+ *  the caller's own last progress tick, never this outcome's. */
 export function reportLoadOrderResult(
   plugins: LoadOrderPluginInput[],
   result: LoadOrderOutcome,
+  failures: PluginLoadFailure[],
   deps: LoadOrderOutcomeDeps,
 ): void {
   if (result.outcome === 'failed') {
     deps.error(result.message);
     return;
   }
-  if (result.outcome !== 'reconciled') return; // 'abandoned'
+  if (result.outcome !== 'applied') return; // 'abandoned'
+  // A terminal refusal: the status bar carries it, and nothing here claims Ready over it.
+  if (reportIndexRefusal(result.status, deps)) return;
 
-  reportSkippedPlugins(result.failures, deps);
+  reportSkippedPlugins(failures, deps);
   // Participation is derived — enabled AND winning AND listed — and the snapshot is every copy,
   // so a non-empty one can still have nothing that participates (ADR-0013).
   if (!plugins.some((p) => p.enabled && p.winning && p.slot !== null)) {
@@ -48,32 +52,30 @@ export function reportLoadOrderResult(
   deps.notifyConflictsComputed();
 }
 
-/** The three steps a reconciled load order still owes its surfaces, each injected so this file
- *  stays free of `vscode`. */
+/** The two steps a settled load order still owes its surfaces, each injected so this file stays
+ *  free of `vscode`. A repair offer is the question-open coordinator's own affair now. */
 export interface LoadOrderApplyDeps extends LoadOrderOutcomeDeps {
   syncFilterState: () => Promise<void>;
   /** The completed reconcile's whole hand-off to the tree, so no caller can apply one part of
    *  it without the rest. */
   applyReconciled: (failures: PluginLoadFailure[], totalPlugins: number) => Promise<void>;
-  presentCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
 }
 
-/** ADR-0013: a settled PUT, reported and then applied. A failed PUT tore nothing down and an
- *  abandoned one belongs to the snapshot that replaced it, so neither reaches a surface. */
+/** ADR-0013: a settled PUT, reported and then applied. `failures`/`totalPlugins` are the
+ *  caller's own last progress tick, never read off `result`. */
 export async function applyLoadOrderOutcome(
   plugins: LoadOrderPluginInput[],
   result: LoadOrderOutcome,
-  /** The backend's own count, implicit masters included — larger than `plugins.length`. */
+  failures: PluginLoadFailure[],
   totalPlugins: number,
   deps: LoadOrderApplyDeps,
 ): Promise<void> {
-  reportLoadOrderResult(plugins, result, deps);
-  if (result.outcome !== 'reconciled') return;
+  reportLoadOrderResult(plugins, result, failures, deps);
+  // A terminal refusal is not ready: neither the filter sync nor the tree's own hand-off is the
+  // completed reconcile's, since there was none.
+  if (result.outcome !== 'applied' || result.status.refusalMessage !== undefined) return;
   await deps.syncFilterState();
-  await deps.applyReconciled(result.failures, totalPlugins);
-  // Awaited and sequential — one native modal at a time. Declining clears nothing, so the offer
-  // re-appears at the next reconcile by construction.
-  if (result.crashRepairOffers.length > 0) await deps.presentCrashRepairOffers(result.crashRepairOffers);
+  await deps.applyReconciled(failures, totalPlugins);
 }
 
 /** What a synced filter read needs reported once it resolves — a read failure degrades to

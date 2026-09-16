@@ -45,7 +45,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** @description Reconciles the load order against this snapshot (ADR-0013): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Blocks until the sweep has run; poll GET /load-order/status alongside for progress. */
+        /** @description Reconciles the load order against this snapshot (ADR-0013): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Answers as soon as the snapshot is applied; the sweep runs after, reported on GET /load-order/status and the load-order-status notification. */
         put: operations["PutLoadOrder"];
         post?: never;
         delete?: never;
@@ -683,13 +683,6 @@ export interface components {
             parseDiagnosis?: string | null;
             hasParseFailure: boolean;
         };
-        CrashRepairOffer: {
-            plugin: string;
-            origin: string;
-            reason: components["schemas"]["CrashRepairReason"];
-        };
-        /** @enum {string} */
-        CrashRepairReason: "InterruptedCompile" | "MissingOrUnreadableBinary";
         CreatePluginRequest: {
             name: string;
             path: string;
@@ -786,12 +779,12 @@ export interface components {
             gameRelease: string;
         };
         LoadOrderResponse: {
-            status: string;
-            failures: components["schemas"]["PluginLoadFailure"][];
-            crashRepairOffers: components["schemas"]["CrashRepairOffer"][];
+            applied: boolean;
+            /** Format: int64 */
+            version: number;
         };
         /** @enum {string} */
-        LoadOrderState: "None" | "Reconciling" | "Ready";
+        LoadOrderState: "None" | "Reconciling" | "Ready" | "HeldElsewhere" | "Failed";
         LoadOrderStatus: {
             state: components["schemas"]["LoadOrderState"];
             /** Format: int32 */
@@ -799,6 +792,9 @@ export interface components {
             indexedPlugins: components["schemas"]["IndexedPlugin"][];
             conflictsComputed: boolean;
             failures: components["schemas"]["PluginLoadFailure"][];
+            message?: string | null;
+            /** Format: int64 */
+            version: number;
         };
         MasterIssue: {
             masterName: string;
@@ -822,6 +818,7 @@ export interface components {
             externalChangeOldVersion?: string | null;
             externalChangeNewVersion?: string | null;
             externalChangeTrackedFiles?: string[] | null;
+            crashRepairReason?: string | null;
         };
         PathHop: {
             kind: string;
@@ -843,6 +840,8 @@ export interface components {
             origin: string;
             /** Format: int32 */
             slot?: number | null;
+            /** Format: int64 */
+            version: number;
         };
         PluginDiagnosisReport: {
             plugin: string;
@@ -1185,24 +1184,6 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Locked */
-            423: {
                 headers: {
                     [name: string]: unknown;
                 };

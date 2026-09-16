@@ -2,11 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace MEditService.SourceRepo;
 
-/// <summary>A tracked plugin whose binary is stale or missing since Modbench last knew it. A loud
-/// "rebuild it" offer, never the external-change dialog, whose "keep as mine" answer has no
-/// meaning for a half-written binary.</summary>
-public sealed record CrashRepairOffer(string Plugin, string Origin, CrashRepairReason Reason);
-
 /// <summary>Both reasons are detected only at reconcile, never by the live watcher: neither can
 /// newly arise while this Modbench process keeps running.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]

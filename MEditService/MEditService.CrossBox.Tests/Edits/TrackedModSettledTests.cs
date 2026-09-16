@@ -86,7 +86,12 @@ public sealed class TrackedModSettledTests : IDisposable
 
         Assert.Equal(TrackedModSettledOutcome.CrashRecovery, outcome);
         Assert.Equal("a question already open before the crash", SourceRepository.UnansweredExternalChange(_mod.ModFolder));
-        Assert.Empty(_notifications.Notifications);
+        // Assert.Single is also "never both": the repair offer and the external-change dialog's
+        // own question must never fire together for one event.
+        var pending = Assert.Single(_notifications.Notifications.OfType<QuestionOpenNotification>());
+        Assert.Equal(IndexedModFixture.ModFolderOrigin, pending.Origin);
+        Assert.Equal([IndexedModFixture.PluginName], pending.Plugins);
+        Assert.Equal(nameof(CrashRepairReason.InterruptedCompile), pending.CrashRepairReason);
     }
 
     // The rival this pins: naming the mod from the load-order copy that raised the question,

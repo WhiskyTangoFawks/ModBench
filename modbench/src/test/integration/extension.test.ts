@@ -106,10 +106,14 @@ type MockLoadOrderStatus = {
   indexedPlugins: { name: string; origin: string }[];
   conflictsComputed: boolean;
   failures: { name: string; origin: string; reason: string }[];
+  version: number;
 };
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
-  { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [] };
+  { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [], version: 0 };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
+// Mirrors the real Holder's own counter: one higher per PUT, carried on the wire response and
+// every status tick that answers for it.
+let loadOrderVersion = 0;
 // When set, PUT /load-order does not answer until the test releases it — the real backend's load
 // blocks for the whole indexing run, and the progressive-load assertions are about that window.
 let releasePutLoadOrder: (() => void) | null = null;
@@ -147,6 +151,7 @@ function resetMockBackend(): void {
   rebuildIndexShouldFail = false;
   getPluginsShouldFail = false;
   loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
+  loadOrderVersion = 0;
   holdPutLoadOrder = false;
   releasePutLoadOrder?.();
   releasePutLoadOrder = null;
@@ -164,6 +169,7 @@ function setIndexed(names: string[], extra: Partial<MockLoadOrderStatus> = {}): 
     indexedPlugins: names.map((name) => ({ name, origin: 'Data' })),
     conflictsComputed: false,
     failures: [],
+    version: loadOrderVersion,
     ...extra,
   };
   pushLoadOrderStatus();
@@ -204,18 +210,25 @@ function createMockBackend(): http.Server {
           res.end(JSON.stringify({ error: 'simulated load failure' }));
           return;
         }
+        // One higher per PUT, like the real Holder's own Apply — carried on the wire response
+        // and on every status tick answering for it.
+        loadOrderVersion += 1;
+        const version = loadOrderVersion;
         // The real load publishes its progress from the moment it starts, which is why the
         // extension subscribes before the PUT.
+        loadOrderStatus = { ...loadOrderStatus, version };
         pushLoadOrderStatus();
 
         // The real load blocks for the whole indexing run. Held open so a test can observe
         // the tree mid-load; answered immediately otherwise, as most suites expect.
         const answer = () => {
           loadOrderHeld = true;
+          // The real PUT answers before the sweep, which runs on Load order state's own
+          // subscriber — modeled here as the terminal tick this answer publishes alongside it.
+          loadOrderStatus = { ...loadOrderStatus, state: 'Ready', conflictsComputed: true, version };
+          pushLoadOrderStatus();
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          // The full LoadOrderResponse — `status` and `crashRepairOffers` are non-nullable on the
-          // wire, so a body without them is one the backend cannot send.
-          res.end(JSON.stringify({ status: 'reconciled', failures: [], crashRepairOffers: [] }));
+          res.end(JSON.stringify({ applied: true, version }));
         };
         // One-shot, like the health hold: the first PUT is the launch's cold reconcile and is
         // parked; a follow-up snapshot (a watcher event coalesced behind it) is the real backend's
@@ -730,7 +743,10 @@ describe('Notification stream connects only while the backend is up', () => {
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
-    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
+    // Awaited so this suite's own enterEditing/exitEditing race no other, unarmed reconcile a
+    // late-settling watcher write would otherwise still send after the test believes it is done.
+    await writeAndAwaitInstance(() =>
+      fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n'));
   });
 
   after(async () => {
@@ -782,6 +798,9 @@ describe('Launch mEdit populates the editing plugin tree', () => {
 
   after(async () => {
     if (!root) return;
+    // The launch below is never closed inside this suite's own test — leaving the backend
+    // attached would bleed a live session (and its stream) into the next suite's own launch.
+    exitEditing();
     await vscode.workspace.getConfiguration('modbench').update(
       'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
     fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');

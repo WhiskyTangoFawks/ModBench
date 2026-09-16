@@ -122,17 +122,17 @@ public sealed class ArchitectureTests
         }
     }
 
-    // ADR-0013: PUT /load-order is the only arrival; a second reconciler makes the Index's Status
-    // lie, and a writer outside the API makes the shared kernel disagree with the index.
+    // ADR-0013: the handler is the only writer, the composition root's own subscription the only
+    // reconciler — a second one of either makes the Index's Status lie.
     [Fact]
     public void LoadOrder_ArrivesOnlyThroughTheApiEndpoints()
     {
         var root = SolutionDirectory();
-        // The reconcile request is the load-order endpoint's alone. ADR-0007's created copy is
-        // registered by the create endpoint and reaches the Index through the next snapshot, so
-        // create writes the kernel and never reconciles.
-        string[] reconcilers = ["LoadOrderEndpoints.cs"];
-        string[] writers = ["LoadOrderEndpoints.cs", "PluginEndpoints.cs"];
+        // ADR-0007's created copy reaches the Index through the next snapshot, so create
+        // never reconciles. Reconcile itself is called only from OnLoadOrderChanged — no
+        // `.Reconcile(` exists elsewhere to allow.
+        string[] reconcilers = [];
+        string[] writers = ["PluginEndpoints.cs", "PutLoadOrderHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
         var applies = HolderWrites(root, Projects, "Apply");
@@ -142,8 +142,8 @@ public sealed class ArchitectureTests
             .Distinct()
             .ToList();
         Assert.True(offenders.Count == 0,
-            "The load order is reconciled outside LoadOrderEndpoints.cs, or written outside "
-            + "LoadOrderEndpoints.cs and PluginEndpoints.cs, in:\n" + string.Join("\n", offenders));
+            "The load order is reconciled outside Load order state's own Changed subscriber, or "
+            + "written outside PluginEndpoints.cs and PutLoadOrderHandler.cs, in:\n" + string.Join("\n", offenders));
 
         var dead = DeadAllowances(reconcilers, reconciles).Concat(DeadAllowances(writers, applies)).ToList();
         Assert.True(dead.Count == 0,

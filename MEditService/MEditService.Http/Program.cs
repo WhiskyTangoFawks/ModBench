@@ -101,6 +101,12 @@ try
 
     var app = builder.Build();
 
+    // ADR-0013/ADR-0014 invariant 3: the Index and the watcher each subscribe to Load order
+    // state independently — the endpoint names neither, and each handles its own failures.
+    var holder = app.Services.GetRequiredService<LoadOrderHolder>();
+    app.Services.GetRequiredService<IndexProjector>().SubscribeTo(holder);
+    app.Services.GetRequiredService<ModFolderWatcher>().SubscribeTo(holder);
+
     // Most endpoint guards return a 4xx without logging, so without the selector a deliberate failure
     // would be invisible; at Information a success line would flood. The appsettings
     // Microsoft.AspNetCore override is a different category and does not touch this line.

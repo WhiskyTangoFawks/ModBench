@@ -38,7 +38,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
 
     private async Task Load(ScatteredFixtureData fx)
     {
-        var load = await _client.PutAsJsonAsync("/load-order", new
+        var load = await _client.PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

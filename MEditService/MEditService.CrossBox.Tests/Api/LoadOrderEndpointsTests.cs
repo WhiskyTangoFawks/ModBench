@@ -1,11 +1,10 @@
 using MEditService.Codec.Schema;
+using MEditService.Commands;
 using MEditService.Http;
 using MEditService.Http.Endpoints;
 using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
-using MEditService.Ports;
-using MEditService.SourceRepo;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using MEditService.Watcher;
@@ -15,40 +14,56 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>Thin, mapping-only assertions proving the response carries what the hook found, not a
-/// re-derivation of every hook-level scenario.</summary>
-public sealed class LoadOrderEndpointsTests : IDisposable
+/// <summary>Thin, mapping-only assertions proving the response carries what the handler found, not
+/// a re-derivation of every handler-level scenario.</summary>
+public sealed class LoadOrderEndpointsTests
 {
-    private readonly IndexedModFixture _mod = IndexedModFixture.Tracked();
+    private static LoadOrderRequest Request(PluginFixtureData data) => new(
+        [.. data.Plugins.Select(p => new LoadOrderPlugin(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning))],
+        data.DataFolder, data.InstanceRoot, "Fallout4");
 
-    public void Dispose() => _mod.Dispose();
-
-    private LoadOrderRequest SnapshotRequest() => new(
-        [new LoadOrderPlugin(IndexedModFixture.PluginName,
-            System.IO.Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName),
-            IndexedModFixture.ModFolderOrigin, 0, true, true)],
-        _mod.GameDirectory, _mod.InstanceRoot, "Fallout4");
-
-    // The kernel and the index must agree once the request returns: a snapshot the index never
-    // registered must not be left advertised as the current load order.
     [Fact]
-    public void PutLoadOrder_RestoresThePreviousSnapshot_WhenTheReconcileFails()
+    public void PutLoadOrder_AnswersApplied_ForAValidSnapshot()
     {
+        using var data = new PluginFixtureBuilder("put-load-order-applied").WithPlugin("A.esp").Build();
         var holder = new LoadOrderHolder();
-        var previous = new LoadOrderSnapshot(_mod.GameDirectory, _mod.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([]));
-        holder.Apply(previous);
 
-        var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), new IndexProjector(holder, MutagenPluginAdapter.Instance, new RefusingIndexFactory()), holder,
-            TestWatcher.Inert(), NullLoggerFactory.Instance);
+        var result = LoadOrderEndpoints.PutLoadOrder(Request(data), TestEditService.PutLoadOrderHandler(holder), NullLoggerFactory.Instance);
 
-        Assert.Equal(500, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
-        Assert.Equal(previous, holder.Current);
+        var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
+        Assert.True(ok.Value!.Applied);
+        Assert.Contains(holder.Current.Copies, c => c.Name == "A.esp");
     }
 
-    // Two plugins, parked before the first: a create that cancelled this reconcile would be caught
-    // by the token check the second plugin makes, and the endpoint's revert then drops the created
-    // copy from the kernel.
+    [Fact]
+    public void PutLoadOrder_Answers400_ForAMissingGameDirectory()
+    {
+        var holder = new LoadOrderHolder();
+        var missing = Path.Combine(Path.GetTempPath(), $"no-such-dir-{Guid.NewGuid():N}");
+        var request = new LoadOrderRequest([], missing, missing, "Fallout4");
+
+        var result = LoadOrderEndpoints.PutLoadOrder(request, TestEditService.PutLoadOrderHandler(holder), NullLoggerFactory.Instance);
+
+        Assert.Equal(400, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
+        Assert.Equal(LoadOrderSnapshot.Empty, holder.Current);
+    }
+
+    [Fact]
+    public void PutLoadOrder_Answers400_WhenAPluginEntryOmitsARequiredField()
+    {
+        var holder = new LoadOrderHolder();
+        using var data = new PluginFixtureBuilder("put-load-order-bad-entry").WithPlugin("A.esp").Build();
+        var request = new LoadOrderRequest(
+            [new LoadOrderPlugin("A.esp", data.Plugins[0].Path, "", 0, true, true)],
+            data.DataFolder, data.InstanceRoot, "Fallout4");
+
+        var result = LoadOrderEndpoints.PutLoadOrder(request, TestEditService.PutLoadOrderHandler(holder), NullLoggerFactory.Instance);
+
+        Assert.Equal(400, Assert.IsAssignableFrom<ProblemHttpResult>(result).StatusCode);
+    }
+
+    // Two plugins, parked before the first: a create that lands mid-reconcile is neither waited on
+    // nor cancelled by it, and the kernel ends up holding both.
     [Fact]
     public async Task CreatePlugin_DuringAnInFlightReconcile_NeitherWaitsForItNorCancelsIt()
     {
@@ -59,8 +74,9 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         using var factory = new GatedIndexRepositoryFactory(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), gateBefore: "A.esp");
         using var index = new IndexProjector(holder, MutagenPluginAdapter.Instance, factory);
-        var put = Task.Run(() => LoadOrderEndpoints.PutLoadOrder(
-            Request(data), index, holder, TestWatcher.Inert(), NullLoggerFactory.Instance));
+        var snapshot = ForcedPlugins.Snapshot(data.DataFolder, data.InstanceRoot, GameRelease.Fallout4, data.Plugins);
+        holder.Apply(snapshot);
+        var reconcile = Task.Run(() => index.Reconcile(snapshot));
         await factory.WaitUntilParkedAsync();
 
         var create = Task.Run(() => PluginEndpoints.CreatePlugin(
@@ -68,68 +84,14 @@ public sealed class LoadOrderEndpointsTests : IDisposable
             index, holder, TestEditService.PluginCreateHandler(holder), TestWatcher.Inert(), NullLoggerFactory.Instance));
         var created = await create.WaitAsync(TimeSpan.FromSeconds(10));
         factory.Release();
+        await reconcile;
 
         Assert.IsAssignableFrom<Ok<PluginCreatedResponse>>(created);
-        Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(await put);
         Assert.NotNull(holder.Current.Copy(new PluginKey("Interleaved.esp", "InterleavedMod")));
         Assert.Contains(holder.Current.Copies, c => c.Name == "A.esp");
     }
 
-    private static LoadOrderRequest Request(PluginFixtureData data) => new(
-        [.. data.Plugins.Select(p => new LoadOrderPlugin(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning))],
-        data.DataFolder, data.InstanceRoot, "Fallout4");
-
-    [Fact]
-    public void PutLoadOrder_ReportsACrashRepairOffer_WhenATrackedPluginHasAnUnfinishedJournalMarker()
-    {
-        Assert.ThrowsAny<Exception>(() =>
-            CompileJournal.RunBatch(_mod.ModFolder, [IndexedModFixture.PluginName],
-                _ => throw new InvalidOperationException("simulated crash between source and binary write")));
-
-        var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), TestWatcher.Inert(), NullLoggerFactory.Instance);
-
-        var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
-        var offer = Assert.Single(ok.Value!.CrashRepairOffers);
-        Assert.Equal(IndexedModFixture.PluginName, offer.Plugin);
-        Assert.Equal(IndexedModFixture.ModFolderOrigin, offer.Origin);
-        Assert.Equal(CrashRepairReason.InterruptedCompile, offer.Reason);
-    }
-
-    [Fact]
-    public void PutLoadOrder_ReportsNoCrashRepairOffers_WhenNothingIsUnanswered()
-    {
-        var result = LoadOrderEndpoints.PutLoadOrder(
-            SnapshotRequest(), _mod.Index, new LoadOrderHolder(), TestWatcher.Inert(), NullLoggerFactory.Instance);
-
-        var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
-        Assert.Empty(ok.Value!.CrashRepairOffers);
-    }
-
-    // ADR-0009 point 5: 423 names the cause, so a client can tell "another window holds this
-    // instance" from a failed reconcile (500) and from a superseded snapshot (409).
-    [ForeignIndexHolderFact]
-    public void PutLoadOrder_Answers423NamingTheOtherWindow_WhenAnotherProcessHoldsTheInstance()
-    {
-        var holder = new LoadOrderHolder();
-        using var data = new PluginFixtureBuilder("second-window-put").WithPlugin("A.esp").Build();
-        using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
-        var request = new LoadOrderRequest(
-            data.Plugins.Select(p => new LoadOrderPlugin(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning)).ToList(),
-            data.DataFolder, data.InstanceRoot, "Fallout4");
-        var reflector = SharedSchemaReflector.Instance;
-        using var thisWindow = new IndexProjector(holder, MutagenPluginAdapter.Instance, new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-
-        var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new LoadOrderHolder(), TestWatcher.Inert(), NullLoggerFactory.Instance);
-
-        var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
-        Assert.Equal(423, problem.StatusCode);
-        Assert.Contains("another Modbench window", problem.ProblemDetails.Detail, StringComparison.Ordinal);
-        Assert.Equal(LoadOrderState.None, thisWindow.Status.State);
-    }
-
-    // ADR-0014: the rebuild endpoint's own refusal, at the handler seam — mirrors PutLoadOrder's
-    // 423 above.
+    // ADR-0014: the rebuild endpoint's own refusal, at the handler seam.
     [ForeignIndexHolderFact]
     public void PostRebuildIndex_Answers423NamingTheOtherWindow_WhenAnotherProcessHoldsTheInstance()
     {

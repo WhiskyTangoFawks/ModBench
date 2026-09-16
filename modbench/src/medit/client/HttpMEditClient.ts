@@ -1,7 +1,7 @@
 import type { RecordEditEnvelope } from '../messages';
 import {
-  createApiClient, errorText, openNotificationStream,
-  toLoadOrderStatus, type ApiClient,
+  createApiClient, errorText, isTerminalLoadOrderStatusFor, openNotificationStream,
+  toLoadOrderStatus, type ApiClient, type LoadOrderStatus,
 } from './apiClient';
 import { createUnlimitedFetch } from './unlimitedFetch';
 import { BackendLifecycle, type BackendLifecycleOptions } from './backendLifecycle';
@@ -9,7 +9,7 @@ import { SseNotificationSubscriber } from './notificationStream';
 import {
   type BackendStatus, type CellPage, type CellReferences, type CompileResult,
   type ContainerChildSummary, type ExternalChangeActionResult, type LoadOrderOptions, type LoadOrderOutcome,
-  type LoadOrderPluginInput, type MEditClient, type NotificationEvent, type NotificationKind,
+  type LoadOrderPluginInput, type LoadOrderProgress, type MEditClient, type NotificationEvent, type NotificationKind,
   type PluginCreatedResponse, type PluginDiagnosisReport, type PluginMetadata, type PluginRecordTypeCount,
   type RebaseResult, type RecordCopyAsNewRecordResponse, type RecordCopyAsOverrideResponse,
   type RecordCreateResponse, type RecordDeleteResponse, type RecordEditOutcome, type RecordPage,
@@ -48,6 +48,9 @@ export class HttpMEditClient implements MEditClient {
   private readonly timeoutMs: number;
   private readonly lifecycle: BackendLifecycle;
   private readonly notifications: SseNotificationSubscriber;
+  // The most recent load-order-status tick, held from construction on — so a version this call's
+  // own PUT answers with, already reached before this call ever subscribes, is not missed.
+  private lastLoadOrderStatus: LoadOrderStatus | undefined;
 
   constructor(deps: HttpMEditClientDeps) {
     this.log = deps.log ?? (() => {});
@@ -56,6 +59,9 @@ export class HttpMEditClient implements MEditClient {
     this.notifications = new SseNotificationSubscriber({
       openStream: (signal) => openNotificationStream(this.apiClient, signal),
       log: deps.log,
+    });
+    this.notifications.subscribe('load-order-status', (event) => {
+      if (event.loadOrderStatus) this.lastLoadOrderStatus = toLoadOrderStatus(event.loadOrderStatus);
     });
     this.lifecycle = new BackendLifecycle(deps.backend);
     // ADR-0014 invariant 2: the stream is open exactly while the backend is attached, so no
@@ -131,7 +137,7 @@ export class HttpMEditClient implements MEditClient {
       this.log(`[HttpMEditClient] createPlugin failed (${response.status}): ${text}`);
       return { refused: true, message: `mEdit: Failed to create plugin — ${text}` };
     }
-    return data ?? { name, path, origin, slot: null };
+    return data ?? { name, path, origin, slot: null, version: 0 };
   }
 
   /** ADR-0014: Refresh's first step — drops the instance's index file and reopens it empty,
@@ -160,15 +166,22 @@ export class HttpMEditClient implements MEditClient {
     gameRelease: string,
     options: LoadOrderOptions = {},
   ): Promise<LoadOrderOutcome> {
-    // The PUT stays blocking and the generated openapi-fetch client has no streaming path, so
-    // progress rides the load-order-status notification alongside the still in-flight PUT.
-    const unsubscribe = this.subscribeStatus(
-      'load-order-status', (event) => (event.loadOrderStatus ? toLoadOrderStatus(event.loadOrderStatus) : undefined),
-      options.onProgress,
-    );
     // The backend publishes its first tick as this PUT lands, so a PUT that outran the stream
     // loses every tick published before it connects — and with them the progressive chevrons.
     await this.notifications.whenConnected();
+
+    let resolveTerminal: (status: LoadOrderProgress) => void;
+    const terminal = new Promise<LoadOrderProgress>((resolve) => { resolveTerminal = resolve; });
+    // A box, not a `let`: the subscriber below closes over it before this call's own PUT answers
+    // with the version it holds.
+    const applying: { version?: number } = {};
+    const unsubscribe = this.notifications.subscribe('load-order-status', (event) => {
+      if (!event.loadOrderStatus) return;
+      const status = toLoadOrderStatus(event.loadOrderStatus);
+      options.onProgress?.(status);
+      if (applying.version !== undefined && isTerminalLoadOrderStatusFor(status, applying.version)) resolveTerminal(status);
+    });
+
     let result;
     try {
       result = await this.apiClient.PUT('/load-order', {
@@ -177,28 +190,54 @@ export class HttpMEditClient implements MEditClient {
         ...(options.signal ? { signal: options.signal } : {}),
       });
     } catch (e) {
+      unsubscribe();
       if (this.wasDeliberatelyAborted(options.signal)) return { outcome: 'abandoned' };
       throw e;
-    } finally {
+    }
+
+    const { error, response, data } = result;
+    if (!response.ok || !data) {
       unsubscribe();
-    }
-    const { data, error, response } = result;
-    // 409 is the backend saying this snapshot was superseded: treating it as a failure would make
-    // the caller act on a load order the newer snapshot now owns. Checked before `!response.ok`,
-    // which would otherwise swallow it.
-    if (response.status === 409) {
-      this.log(`[HttpMEditClient] putLoadOrder was superseded (409): ${errorText(error)}`);
-      return { outcome: 'abandoned' };
-    }
-    if (!response.ok) {
       const text = errorText(error);
       this.log(`[HttpMEditClient] putLoadOrder failed (${response.status}): ${text}`);
       return { outcome: 'failed', message: `mEdit: Failed to send the load order — ${text}` };
     }
-    // `data` is undefined only on a non-ok response, already returned above; both lists are
-    // non-nullable on the wire, so there is nothing left to coalesce per field.
-    const reconciled = data ?? { failures: [], crashRepairOffers: [] };
-    return { outcome: 'reconciled', failures: reconciled.failures, crashRepairOffers: reconciled.crashRepairOffers };
+
+    // Applied answers at once; the Index catches up on its own subscription, learned here by
+    // version, never a tick a fast reconcile can publish before this call even subscribes.
+    applying.version = data.version;
+    // Already known, from a tick this call's own subscription was too late to catch.
+    if (this.lastLoadOrderStatus && isTerminalLoadOrderStatusFor(this.lastLoadOrderStatus, applying.version)) {
+      unsubscribe();
+      return { outcome: 'applied', status: this.lastLoadOrderStatus };
+    }
+
+    const status = await this.awaitTerminalOrAbort(terminal, options.signal);
+    unsubscribe();
+    return status === undefined ? { outcome: 'abandoned' } : { outcome: 'applied', status };
+  }
+
+  // A close mid-reconcile abandons the wait, as an unsent snapshot is. The backend leaving
+  // 'attached' abandons it too — once the stream is gone, nothing is left to hear its tick.
+  private awaitTerminalOrAbort(
+    terminal: Promise<LoadOrderProgress>, signal: AbortSignal | undefined,
+  ): Promise<LoadOrderProgress | undefined> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (status: LoadOrderProgress | undefined): void => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', onAbort);
+        unlisten();
+        resolve(status);
+      };
+      const onAbort = (): void => settle(undefined);
+      signal?.addEventListener('abort', onAbort, { once: true });
+      const unlisten = this.lifecycle.onStatusChanged((status) => {
+        if (status !== 'attached') settle(undefined);
+      });
+      void terminal.then(settle);
+    });
   }
 
   // An abort is the one rejection that is not a failure: the teardown is already underway.

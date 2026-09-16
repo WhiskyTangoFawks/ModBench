@@ -45,16 +45,39 @@ public sealed class ModFolderWatcher : IDisposable
         _maxWindow = maxWindow ?? TimeSpan.FromSeconds(2);
     }
 
+    /// <summary>Load order state's own Changed subscriber (ADR-0014 invariant 3): subscribes
+    /// itself, off the caller's thread — Rearm does disk work no writer should wait on.</summary>
+    public void SubscribeTo(LoadOrderHolder holder) => holder.Changed += (snapshot, _) => RunLongRunning(() => RearmSafely(snapshot));
+
+    // A dedicated thread, not the shared pool: Rearm's own disk work should not queue behind
+    // whatever else the pool is busy with.
+    private static void RunLongRunning(Action action) =>
+        Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    // No status of its own to carry an unknown failure as data (unlike the Index) — logged, the
+    // last resort, since nothing else here answers for it.
+    private void RearmSafely(LoadOrderSnapshot snapshot)
+    {
+        try
+        {
+            Rearm(snapshot);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Re-arming the watcher after a load order change failed unexpectedly");
+        }
+    }
+
     /// <summary>The watch set the load order now implies, and the check for everything that changed
-    /// while no watcher ran. Returns what only a repair can answer for.</summary>
-    public IReadOnlyList<CrashRepairOffer> Rearm(LoadOrderSnapshot order)
+    /// while no watcher ran. What it finds is Commands' own notification, never this method's
+    /// return.</summary>
+    public void Rearm(LoadOrderSnapshot order)
     {
         // A watch must never outlive the load order that asked for it, or a plugin the load order
         // does not hold would keep projecting itself into the Index.
         UnwatchAll();
         UnwatchAllIndexed();
 
-        var offers = new List<CrashRepairOffer>();
         // Grouped by mod folder: Commands settles once per mod (ADR-0003), covering every tracked
         // plugin the mod holds in one pass, exactly as the live watcher's settle does.
         var byModFolder = new Dictionary<string, List<(string Name, string Origin)>>(StringComparer.Ordinal);
@@ -69,10 +92,9 @@ public sealed class ModFolderWatcher : IDisposable
             if (SourceRepository.TrackedModFolderOf(order, key) is not { } modFolder)
             {
                 // ADR-0009: every other indexed binary, the game's Data/ masters included, gets an
-                // indexed-binary watch: a write by another tool is answered by re-reading it, not by
-                // asking the user. No indexed hash, nothing to compare against.
-                if (_index.IndexedContentHash(key) is { } contentHash)
-                    WatchIndexed(plugin.Name, plugin.Origin, plugin.Path, contentHash);
+                // indexed-binary watch. Armed unconditionally — the comparison against what the
+                // Index already holds is the settle's own poke to make, never this method's.
+                WatchIndexed(plugin.Name, plugin.Origin, plugin.Path);
                 continue;
             }
 
@@ -84,9 +106,10 @@ public sealed class ModFolderWatcher : IDisposable
             }
             catch (IOException ex)
             {
-                // Unreadable: a repair offer, never Commands' own question.
+                // Unreadable: a repair offer, never Commands' own external-change question.
                 _logger.LogWarning(ex, "Could not read {Plugin} for the external-change load-time check", plugin.Name);
-                offers.Add(new CrashRepairOffer(plugin.Name, plugin.Origin, CrashRepairReason.MissingOrUnreadableBinary));
+                TrackedModSettled.RaiseCrashRepair(
+                    order, modFolder, [plugin.Name], CrashRepairReason.MissingOrUnreadableBinary, _notifications);
                 continue;
             }
 
@@ -97,16 +120,13 @@ public sealed class ModFolderWatcher : IDisposable
             Watch(modFolder, plugin.Name, plugin.Path);
         }
 
-        foreach (var (modFolder, entries) in byModFolder)
-            SettleAtLoad(order, modFolder, entries, offers);
-
-        return offers;
+        foreach (var modFolder in byModFolder.Keys)
+            SettleAtLoad(order, modFolder);
     }
 
-    // "A tracked mod settled" (ADR-0015), fired once per mod at load. A crash-recovery verdict
-    // becomes this mod's repair offers; any other verdict is Commands' own affair.
-    private void SettleAtLoad(
-        LoadOrderSnapshot order, string modFolder, List<(string Name, string Origin)> entries, List<CrashRepairOffer> offers)
+    // "A tracked mod settled" (ADR-0015), fired once per mod at load. Logging only — whichever
+    // question or offer Handle found, it already published.
+    private void SettleAtLoad(LoadOrderSnapshot order, string modFolder)
     {
         switch (TrackedModSettled.Handle(order, modFolder, _notifications))
         {
@@ -116,12 +136,8 @@ public sealed class ModFolderWatcher : IDisposable
                 break;
 
             case TrackedModSettledOutcome.CrashRecovery:
-                foreach (var (name, origin) in entries)
-                {
-                    if (_logger.IsEnabled(LogLevel.Information))
-                        _logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", name, origin);
-                    offers.Add(new CrashRepairOffer(name, origin, CrashRepairReason.InterruptedCompile));
-                }
+                if (_logger.IsEnabled(LogLevel.Information))
+                    _logger.LogInformation("Interrupted compile detected at load for {ModFolder}", modFolder);
                 break;
         }
     }
@@ -172,9 +188,9 @@ public sealed class ModFolderWatcher : IDisposable
         }
     }
 
-    /// <summary>ADR-0009: every other indexed binary, tracked or not, re-reads on change with no
-    /// question asked. <paramref name="contentHash"/> is the baseline a settle compares against.</summary>
-    internal void WatchIndexed(string pluginName, string origin, string pluginPath, string contentHash)
+    /// <summary>ADR-0009: every other indexed binary, tracked or not. A settle pokes the Index with
+    /// the key and path; the Index owns the comparison against its own baseline.</summary>
+    internal void WatchIndexed(string pluginName, string origin, string pluginPath)
     {
         var modFolder = Path.GetDirectoryName(pluginPath)
             ?? throw new ArgumentException($"'{pluginPath}' has no containing directory.", nameof(pluginPath));
@@ -188,7 +204,6 @@ public sealed class ModFolderWatcher : IDisposable
             plugin.Path = pluginPath;
             plugin.Origin = origin;
             plugin.IndexedArmed = true;
-            plugin.RememberedHash = contentHash;
         }
     }
 
@@ -210,10 +225,7 @@ public sealed class ModFolderWatcher : IDisposable
         {
             foreach (var mod in _mods.Values)
                 foreach (var plugin in mod.Plugins.Values)
-                {
                     plugin.IndexedArmed = false;
-                    plugin.RememberedHash = null;
-                }
         }
     }
 
@@ -505,80 +517,35 @@ public sealed class ModFolderWatcher : IDisposable
     }
 
 
-    // Content, never events: identical bytes raise nothing, so a touch is free. The remembered hash
-    // moves ahead of the projection and is put back on failure only if nothing newer has landed.
+    // Content, never events: identical bytes raise nothing, so a touch is free — the Index's own
+    // comparison, never a hash this watcher remembers.
     private void SettleIndexed(PluginEntry plugin)
     {
-        var pluginPath = plugin.Path!;
-        IndexedBinaryEvent settled;
-        string? previousHash;
-        string? reportedHash;
+        bool armed;
+        PluginKey key;
+        string path;
         lock (_gate)
         {
-            if (!plugin.IndexedArmed) return;
-            previousHash = plugin.RememberedHash;
-
-            if (!File.Exists(pluginPath))
-            {
-                // Already reported gone: a delete raises several events and the file stays absent, so
-                // without this every one of them would remove the same rows again.
-                if (previousHash == null) return;
-                reportedHash = null;
-                settled = new IndexedBinaryEvent(plugin.Name, plugin.Origin ?? "", IndexedBinaryChange.Deleted);
-            }
-            else
-            {
-                if (_index.ContentHashOnDisk(pluginPath) is not { } observed || observed == previousHash) return;
-                reportedHash = observed;
-                settled = new IndexedBinaryEvent(plugin.Name, plugin.Origin ?? "", IndexedBinaryChange.Modified);
-            }
-
-            plugin.RememberedHash = reportedHash;
+            armed = plugin.IndexedArmed;
+            key = new PluginKey(plugin.Name, plugin.Origin ?? "");
+            path = plugin.Path!;
         }
-
-        if (ProjectIndexedBinary(settled)) return;
-
-        lock (_gate)
-        {
-            if (plugin.RememberedHash == reportedHash) plugin.RememberedHash = previousHash;
-        }
-    }
-
-    // ADR-0009's runtime half. Nothing escapes it: it runs on a timer thread where an exception is a
-    // process crash, and a false answer puts the remembered hash back.
-    private bool ProjectIndexedBinary(IndexedBinaryEvent change)
-    {
-        var key = new PluginKey(change.PluginName, change.Origin);
+        if (!armed) return;
         try
         {
-            switch (change.Change)
-            {
-                case IndexedBinaryChange.Modified:
-                    if (_logger.IsEnabled(LogLevel.Information))
-                    {
-                        _logger.LogInformation(
-                            "{Plugin} ({Origin}) changed on disk; re-indexing it", change.PluginName, change.Origin);
-                    }
-                    _index.ReindexPlugin(key).GetAwaiter().GetResult();
-                    break;
+            // ADR-0009's runtime half: key and path only, never a locally remembered hash — the
+            // Index owns the comparison against whatever baseline it already holds, if any.
+            if (!_index.RefreshBinary(key, path).GetAwaiter().GetResult()) return;
 
-                case IndexedBinaryChange.Deleted:
-                    _index.UnindexPlugin(key);
-                    break;
-            }
-
-            // ADR-0014: the plugin watcher's own re-index, so the whole plugin changed rather than
-            // named rows — the same event Track's own reindex would raise if it went through here.
-            _notifications.Publish(new PluginChangedNotification(key, _index.Sequence));
-            return true;
+            // The plugin watcher's own re-index, so the whole plugin changed rather than named rows
+            // — the same event Track's own reindex would raise if it went through here.
+            _index.Announce(() => _notifications.Publish(new PluginChangedNotification(key, _index.Sequence)));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
                 "Could not project the on-disk change to {Plugin} ({Origin}) into the index; it will be retried " +
-                "the next time that file settles, and re-checked at the next reconcile",
-                change.PluginName, change.Origin);
-            return false;
+                "the next time that file settles, and re-checked at the next reconcile", plugin.Name, plugin.Origin);
         }
     }
 
@@ -665,21 +632,11 @@ public sealed class ModFolderWatcher : IDisposable
         public string? SourceRoot { get; set; }
         public bool ClassificationArmed { get; set; }
         public bool IndexedArmed { get; set; }
-        public string? RememberedHash { get; set; }
         public HashSet<string> DocumentPaths { get; } = new(StringComparer.Ordinal);
         public bool WholePlugin { get; set; }
         public bool FileTouched { get; set; }
     }
 }
-
-internal enum IndexedBinaryChange
-{
-    Modified,
-    Deleted,
-}
-
-/// <summary>ADR-0009: one indexed binary's disk event, as the settle observed it.</summary>
-internal sealed record IndexedBinaryEvent(string PluginName, string Origin, IndexedBinaryChange Change);
 
 /// <summary>Which projection the batch asks for: the named documents, or the whole copy when a ref
 /// moved, the operating system dropped events, or the burst was wider than one batch is worth.</summary>

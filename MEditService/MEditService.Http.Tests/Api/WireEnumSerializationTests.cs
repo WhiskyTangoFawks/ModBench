@@ -48,16 +48,6 @@ public sealed class WireEnumSerializationTests
     }
 
     [Fact]
-    public async Task CrashRepairReason_SerializesAsMemberName()
-    {
-        var options = await AppSerializerOptionsAsync();
-        var json = JsonSerializer.Serialize(
-            new CrashRepairOffer("MyPatch.esp", "ModA", CrashRepairReason.InterruptedCompile), options);
-
-        Assert.Contains("\"reason\":\"InterruptedCompile\"", json, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task LoadOrderState_SerializesAsMemberName()
     {
         var options = await AppSerializerOptionsAsync();

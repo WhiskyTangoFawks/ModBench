@@ -48,19 +48,19 @@ public sealed record TrackProgressNotification(TrackProgress Progress) : Notific
     public override NotificationEvent ToEvent() => new(Kind, "", Progress.Origin ?? "", [], 0, TrackProgress: Progress);
 }
 
-/// <summary>A question is open for this mod, with its default: Commands classified a genuine
-/// external change and is awaiting the user's Absorb/Keep answer. The mod folder is never on the
-/// wire — Origin names it.</summary>
+/// <summary>A question is open for this mod: a genuine external change awaiting Absorb/Keep, or,
+/// when <paramref name="CrashRepairReason"/> is set, a repair offer instead. The mod folder is
+/// never on the wire — Origin names it.</summary>
 public sealed record QuestionOpenNotification(
     string Origin, IReadOnlyList<string> Plugins, IReadOnlyList<string> TrackedFiles,
-    bool MetaChanged, string? OldVersion, string? NewVersion)
+    bool MetaChanged, string? OldVersion, string? NewVersion, string? CrashRepairReason = null)
     : Notification("question-open")
 {
     // Keys carries Plugins: the generic string list every other kind already has, repurposed rather
     // than adding a field only this kind would fill.
     public override NotificationEvent ToEvent() => new(Kind, "", Origin, Plugins, 0,
         ExternalChangeMetaChanged: MetaChanged, ExternalChangeOldVersion: OldVersion, ExternalChangeNewVersion: NewVersion,
-        ExternalChangeTrackedFiles: TrackedFiles);
+        ExternalChangeTrackedFiles: TrackedFiles, CrashRepairReason: CrashRepairReason);
 }
 
 /// <summary>The one wire shape every notification kind serializes to. Kind is the discriminator; the
@@ -72,4 +72,5 @@ public sealed record NotificationEvent(
     bool? ExternalChangeMetaChanged = null,
     string? ExternalChangeOldVersion = null,
     string? ExternalChangeNewVersion = null,
-    IReadOnlyList<string>? ExternalChangeTrackedFiles = null);
+    IReadOnlyList<string>? ExternalChangeTrackedFiles = null,
+    string? CrashRepairReason = null);

@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MEditService.Http;
 using MEditService.SourceRepo;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -35,7 +36,7 @@ public sealed class StatusNotificationStreamApiTests : IDisposable
             .BuildScattered();
 
     private Task<HttpResponseMessage> PutLoadOrder(ScatteredFixtureData fx, HttpClient? client = null) =>
-        (client ?? _client).PutAsJsonAsync("/load-order", new
+        (client ?? _client).PutLoadOrderAndAwaitReady(new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,

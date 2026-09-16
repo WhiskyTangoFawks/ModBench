@@ -17,3 +17,14 @@ export function makeReconcileProgressHandler(deps: {
     deps.applyLoadOrder(status.indexedPlugins, status.failures);
   };
 }
+
+/** The Index's own known refusal — the put's outcome answers applied regardless, so a tick
+ *  carrying this is the only place either reaches the extension. True while it holds, so a
+ *  caller skips Ready. */
+export function reportIndexRefusal(
+  status: LoadOrderProgress, deps: { setStatusText: (text: string) => void },
+): boolean {
+  if (status.refusalMessage === undefined) return false;
+  deps.setStatusText(`$(error) mEdit: ${status.refusalMessage}`);
+  return true;
+}

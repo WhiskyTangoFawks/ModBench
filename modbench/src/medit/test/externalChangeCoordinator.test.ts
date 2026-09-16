@@ -28,6 +28,7 @@ function makeDeps(
     showError: vi.fn(),
     refreshTree: vi.fn(),
     refreshMatchingPlugins: vi.fn(),
+    presentCrashRepair: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -149,6 +150,49 @@ describe('subscribeQuestionOpen', () => {
     await flush();
 
     expect(log).toHaveBeenCalledWith(expect.stringContaining('backend down'));
+  });
+
+  // The rival: routing every question-open notification to Absorb/Keep regardless of verdict
+  // would open the wrong dialog for a repair offer.
+  it('a repair-offer verdict presents crash repair, never the Absorb/Keep dialog', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const deps = makeDeps(client);
+    subscribeQuestionOpen(deps, client);
+
+    client.emit(pendingEvent({ crashRepairReason: 'InterruptedCompile', keys: ['Fixture.esp'] }));
+    await flush();
+
+    expect(deps.presentCrashRepair).toHaveBeenCalledWith([
+      { plugin: 'Fixture.esp', origin: 'ModA', reason: 'InterruptedCompile' },
+    ]);
+    expect(deps.showDialog).not.toHaveBeenCalled();
+    expect(client.calls.filter((c) => c.method !== 'subscribe')).toEqual([]);
+  });
+
+  it('explodes a mod-wide repair offer to one entry per named plugin', async () => {
+    const client = clientScriptedForKeepAndAbsorb();
+    const deps = makeDeps(client);
+    subscribeQuestionOpen(deps, client);
+
+    client.emit(pendingEvent({ crashRepairReason: 'MissingOrUnreadableBinary', keys: ['A.esp', 'B.esp'] }));
+    await flush();
+
+    expect(deps.presentCrashRepair).toHaveBeenCalledWith([
+      { plugin: 'A.esp', origin: 'ModA', reason: 'MissingOrUnreadableBinary' },
+      { plugin: 'B.esp', origin: 'ModA', reason: 'MissingOrUnreadableBinary' },
+    ]);
+  });
+
+  it('a rejected presentCrashRepair logs rather than throwing', async () => {
+    const log = vi.fn();
+    const client = clientScriptedForKeepAndAbsorb();
+    const deps = makeDeps(client, { log, presentCrashRepair: vi.fn().mockRejectedValue(new Error('modal failed')) });
+    subscribeQuestionOpen(deps, client);
+
+    client.emit(pendingEvent({ crashRepairReason: 'InterruptedCompile' }));
+    await flush();
+
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('modal failed'));
   });
 
   it('reports nothing further once unsubscribed', async () => {

@@ -19,6 +19,15 @@ public enum LoadOrderState
 
     /// <summary>Every plugin has been indexed and the winner sweep has run.</summary>
     Ready,
+
+    /// <summary>ADR-0009 point 5: another Modbench window holds this instance's index file.
+    /// <see cref="LoadOrderStatus.Message"/> names it; nothing here is held.</summary>
+    HeldElsewhere,
+
+    /// <summary>The reconcile threw something neither known refusal names.
+    /// <see cref="LoadOrderStatus.Message"/> names it (ADR-0019: failures are data, never only
+    /// a log line).</summary>
+    Failed,
 }
 
 /// <summary>Carries origin as well as filename because two copies of one filename can be held at
@@ -33,7 +42,13 @@ public sealed record LoadOrderStatus(
     int TotalPlugins,
     IReadOnlyList<IndexedPlugin> IndexedPlugins,
     bool ConflictsComputed,
-    IReadOnlyList<PluginLoadFailure> Failures)
+    IReadOnlyList<PluginLoadFailure> Failures,
+    // Non-null only for HeldElsewhere or Failed: the ready-to-show reason, carried here because
+    // neither ever reaches the put's own response.
+    string? Message = null,
+    // The Apply this status answers for — a client waits for this to reach its own Apply's
+    // version, never for a tick a fast or no-op reconcile can settle before one is subscribed.
+    long Version = 0)
 {
     public static readonly LoadOrderStatus None =
         new(LoadOrderState.None, 0, [], ConflictsComputed: false, []);

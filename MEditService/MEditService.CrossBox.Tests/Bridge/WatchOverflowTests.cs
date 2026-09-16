@@ -44,8 +44,7 @@ public sealed class WatchOverflowTests : IDisposable
         var pluginPath = Path.Combine(_mod.ModFolder, IndexedModFixture.PluginName);
         using var watcher = TestWatcher.Over(new LoadOrderHolder(), index, _notifications);
         watcher.Watch(_mod.ModFolder, IndexedModFixture.PluginName, pluginPath);
-        watcher.WatchIndexed(
-            IndexedModFixture.PluginName, IndexedModFixture.ModFolderOrigin, pluginPath, "the-baseline-hash");
+        watcher.WatchIndexed(IndexedModFixture.PluginName, IndexedModFixture.ModFolderOrigin, pluginPath);
 
         watcher.Interrupted(_mod.ModFolder);
 

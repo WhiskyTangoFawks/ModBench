@@ -174,6 +174,7 @@ public static class PluginEndpoints
         LoadOrderSnapshot registered;
         RegisteredCopy copy;
         IReadOnlyCollection<PluginKey> held;
+        long version;
         try
         {
             held = HeldCopies(index);
@@ -182,9 +183,10 @@ public static class PluginEndpoints
                 req.Name, req.Origin, Path.Combine(req.Path, req.Name), NextSlot(previous),
                 Enabled: true, Winning: true);
             registered = previous.With(copy);
-            // ADR-0007: a participant before the file exists, so the Track inside this gesture and
-            // every later reader see it without waiting for the snapshot that lists it.
-            holder.Apply(registered);
+            // ADR-0007: a participant before the file exists, so the Track inside this gesture
+            // and every later reader see it — and the created copy reaches the Index through
+            // this same snapshot change.
+            version = holder.Apply(registered);
         }
         catch (InvalidOperationException ex)
         {
@@ -210,7 +212,7 @@ public static class PluginEndpoints
 
             // A destination folder this gesture made itself was not on disk to be watched above.
             watcher.WatchSourceOf(req.Origin);
-            return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot));
+            return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot, version));
         }
         catch (ArgumentException ex)
         {
@@ -477,7 +479,7 @@ public record CreatePluginRequest(string Name, string Path, string Origin);
 
 // What the create gesture wrote and registered, not a plugin row: masters, flags and record count
 // are the Index's to state, and it has not seen this copy yet. Slot is 0 off a bare load order.
-public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot);
+public record PluginCreatedResponse(string Name, string Path, string Origin, int? Slot, long Version = 0);
 
 // Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — no Plugin/Path
 // needed: Origin alone is enough for TrackService to resolve every plugin sharing that mod folder.

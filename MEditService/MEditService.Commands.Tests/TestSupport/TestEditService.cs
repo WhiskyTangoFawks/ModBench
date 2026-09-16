@@ -67,4 +67,7 @@ internal static class TestEditService
 
     internal static RenumberRecordHandler RenumberHandler(LoadOrderHolder holder) =>
         Over(holder).GetRequiredService<RenumberRecordHandler>();
+
+    internal static PutLoadOrderHandler PutLoadOrderHandler(LoadOrderHolder holder) =>
+        Over(holder).GetRequiredService<PutLoadOrderHandler>();
 }

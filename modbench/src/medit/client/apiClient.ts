@@ -40,10 +40,20 @@ export interface UnansweredExternalChange {
 /** ADR-0013: names the copy that failed — two copies of one name are two registrations. */
 export type PluginLoadFailure = Schemas['PluginLoadFailure'];
 
-/** Rides `PUT /load-order`'s own response: either reason can newly arise only from a compile this
- *  process drives, or from a restart, and every reconcile observes both (ADR-0019). */
-export type CrashRepairReason = Schemas['CrashRepairReason'];
-export type CrashRepairOffer = Schemas['CrashRepairOffer'];
+/** The one list `CrashRepairReason` and `isCrashRepairReason` both derive from, since the enum
+ *  left the wire with the load-order response's failures — nothing generates it for us. */
+export const CRASH_REPAIR_REASONS = ['InterruptedCompile', 'MissingOrUnreadableBinary'] as const;
+
+/** A transform of `question-open`'s own `crashRepairReason` string. */
+export type CrashRepairReason = typeof CRASH_REPAIR_REASONS[number];
+
+/** One `question-open` notification's crash-repair verdict, exploded to one offer per plugin it
+ *  named — the shape the dialog presents one modal per. */
+export interface CrashRepairOffer {
+  plugin: string;
+  origin: string;
+  reason: CrashRepairReason;
+}
 
 /** Baseline / apply's shared result — a refusal (e.g. apply's same-record collision) is a typed,
  *  successful answer, the same posture {@link CompileResult} uses. */
@@ -96,18 +106,34 @@ export interface LoadOrderStatus {
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
    *  the reconcile finishes (ADR-0019). */
   failures: PluginLoadFailure[];
+  /** Set for the wire's `HeldElsewhere` or `Failed` state (ADR-0009 point 5; ADR-0019) — the one
+   *  place either reaches the extension, since the put's own outcome reports applied regardless. */
+  refusalMessage?: string;
+  /** The Apply this status answers for. A client waits for this to reach its own Apply's
+   *  version, never for a tick a fast or no-op reconcile can settle before it subscribes. */
+  version: number;
 }
 
-/** The transform a `load-order-status` notification's nested payload needs before it is this
- *  side's {@link LoadOrderStatus}: the wire's `indexedPlugins` carries each entry's origin too,
- *  and the consumer keys on filename alone. */
+const REFUSAL_STATES = new Set<Schemas['LoadOrderStatus']['state']>(['HeldElsewhere', 'Failed']);
+
+/** The transform a `load-order-status` payload needs before it is this side's
+ *  {@link LoadOrderStatus}: `indexedPlugins` carries each entry's origin too, and the
+ *  consumer keys on filename alone; `state` is dropped except for its two refusal values. */
 export function toLoadOrderStatus(wire: Schemas['LoadOrderStatus']): LoadOrderStatus {
   return {
     totalPlugins: wire.totalPlugins,
     indexedPlugins: wire.indexedPlugins.map((p) => p.name),
     conflictsComputed: wire.conflictsComputed,
     failures: wire.failures,
+    refusalMessage: REFUSAL_STATES.has(wire.state) ? (wire.message ?? undefined) : undefined,
+    version: wire.version,
   };
+}
+
+/** Ready, or either refusal, and for the version an Apply actually answers — a status still
+ *  settling an older version, or one a no-op resend left untouched, is not this one's answer. */
+export function isTerminalLoadOrderStatusFor(status: LoadOrderStatus, appliedVersion: number): boolean {
+  return status.version >= appliedVersion && (status.conflictsComputed || status.refusalMessage !== undefined);
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {
