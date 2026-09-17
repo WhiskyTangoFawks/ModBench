@@ -185,7 +185,7 @@ public sealed partial class SourceRepository
     /// <summary>Whether <paramref name="leaf"/> names the record with <paramref name="formKey"/> — asked
     /// in the one unambiguous direction, since an EditorID containing <c>" - "</c> makes splitting a
     /// name undecidable.</summary>
-    public static bool NameCarriesFormKey(string leaf, string formKey)
+    internal static bool NameCarriesFormKey(string leaf, string formKey)
     {
         var filesafe = FilesafeFormKey(formKey);
         return NameCarries(leaf, filesafe) || NameCarries(leaf, filesafe + JsonSuffix);

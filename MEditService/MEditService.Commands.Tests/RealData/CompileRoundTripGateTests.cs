@@ -120,7 +120,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             {
                 var expected = children.Select(c => c.FormKey.ToString()).ToList();
                 foreach (var child in expected)
-                    Assert.DoesNotContain(documents, f => SourceRepository.NameCarriesFormKey(Path.GetFileName(f), child));
+                    Assert.Null(SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, child));
                 if (expected.Count == 0)
                 {
                     Assert.Null(root[slot]);
@@ -134,7 +134,10 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             foreach (var topic in quest.DialogTopics)
             {
                 foreach (var response in topic.Responses)
-                    Assert.DoesNotContain(documents, f => SourceRepository.NameCarriesFormKey(Path.GetFileName(f), response.FormKey.ToString()));
+                {
+                    Assert.Null(SourceRepository.PathCarrying(
+                        documents, CutDownPluginFixture.PluginFileName, response.FormKey.ToString()));
+                }
                 var inline = RequireNode(root[nameof(Quest.DialogTopics)], nameof(Quest.DialogTopics)).AsArray()
                     .Single(t => FormKeyOf(t) == topic.FormKey.ToString())
                     ?? throw new InvalidOperationException($"Expected {topic.FormKey} to be present among inlined dialog topics.");
