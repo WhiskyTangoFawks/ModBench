@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import type { PluginDiagnosisReport } from './client';
+import type { PluginDiagnosisReport } from '../client';
 // Type only, so nothing of Mod Management is linked in: the contract for "where this origin's
 // files live" belongs beside the rows that answer it.
 import type { OriginFolder } from '../instance/loadOrderSnapshot';

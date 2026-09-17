@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../trackedRepositories';
 import { isTracked } from '../../mo2Files/files';
-import type { PluginMetadata } from '../client';
+import type { PluginMetadata } from '../../client';
 
 function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin: string }): PluginMetadata {
   return {

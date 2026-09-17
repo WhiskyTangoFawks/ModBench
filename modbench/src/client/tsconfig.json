@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/client"
+  },
+  "references": [
+    { "path": "../wire" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

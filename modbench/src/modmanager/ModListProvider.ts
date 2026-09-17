@@ -16,7 +16,7 @@ import {
   reorderSeparatorBlock as reorderSeparatorBlockCommand,
   setModEnabled as setModEnabledCommand,
   type ModlistCommandResult,
-} from './commands/modlist';
+} from '../modlist/modlist';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 

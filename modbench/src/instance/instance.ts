@@ -6,7 +6,10 @@ import { errnoCode } from '../ports/errno';
 import type { ModlistEntry } from '../mo2Codecs/modlistText';
 import type { PluginEntry } from '../mo2Codecs/pluginsText';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
-import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
+import {
+  buildLoadOrderRows, readDataFolderPlugins,
+  type DataFolderPlugins, type LoadOrderPlugin, type LoadOrderPluginLine,
+} from './loadOrderSnapshot';
 import { createDebouncedFsWatcher } from './fsWatcher';
 import { createModsWatcher } from './modsWatcher';
 import { createModlistWatcher } from './modlistWatcher';
@@ -21,7 +24,7 @@ import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
   downloadFile, downloadSidecarFile, downloadsDir, modDir, modMetaFile, modlistFile, modsDir, overwriteDir,
-  pluginsFile, settingsFile,
+  pluginsFile, profilesDir, settingsFile,
 } from '../mo2Files/layout';
 import type { GameDirectory, GameDirectoryResolver } from '../mo2Files/gameDirectory';
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
@@ -55,8 +58,13 @@ export interface InstanceValue {
   readonly mods: readonly ModlistEntry[];
   /** Every directory under mods/ the active profile's modlist.txt has no line for, sorted.
    *  Disjoint from `mods` and rendered by no tree: it is what adoption is handed, so that no
-   *  command walks the instance (ADR-0015 invariant 1). */
+   *  command walks the instance itself. */
   readonly unlistedFolders: readonly string[];
+  /** Every directory under mods/, listed or not: the new-empty-mod refusal's own input. */
+  readonly modFolders: readonly string[];
+  /** Every directory under profiles/, the switch's choices; a stray file MO2 left there is not
+   *  one. */
+  readonly profiles: readonly string[];
   /** The winning enabled provider of every relative path, and its contenders. */
   readonly files: FileWinners;
   /** Each enabled mod's own files. */
@@ -73,6 +81,9 @@ export interface InstanceValue {
   readonly gameRelease: string;
   /** Setting, then MO2's `gamePath`, then autodetect; undefined when none resolve. */
   readonly gameDirectory: GameDirectory | undefined;
+  /** What the game's Data folder holds at its root — presence, never provision — or the reason
+   *  it could not be read. */
+  readonly dataFolderPlugins: DataFolderPlugins;
   /** Whether mods/.medit-manifest.json is present — Modbench's own standalone deploy. */
   readonly deployed: boolean;
   /** Each mod's conflict/override/missing-mod status, keyed by mod name — the Mods tree's
@@ -136,6 +147,18 @@ async function readPluginEntries(instanceRoot: string, profile: string): Promise
   return parsePlugins(await get(pluginsFile(instanceRoot, profile)));
 }
 
+// An instance with no profiles/ offers no profile rather than failing the recompute, as a
+// missing mods/ lists no mod.
+async function readProfileNames(instanceRoot: string): Promise<string[]> {
+  try {
+    const dirents = await listDir(profilesDir(instanceRoot));
+    return dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+  } catch (err) {
+    if (errnoCode(err) === 'ENOENT') return [];
+    throw err;
+  }
+}
+
 const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePaths => ({
   overwriteDir: overwriteDir(instanceRoot),
   downloadsDir: downloadsDir(instanceRoot),
@@ -145,6 +168,8 @@ const pathsOf = (instanceRoot: string, modNames: readonly string[]): InstancePat
 const emptyValue = (instanceRoot: string): InstanceValue => ({
   mods: [],
   unlistedFolders: [],
+  modFolders: [],
+  profiles: [],
   files: new FileConflictLookup(),
   filesByMod: new Map(),
   plugins: [],
@@ -152,6 +177,7 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   activeProfile: '',
   gameRelease: '',
   gameDirectory: undefined,
+  dataFolderPlugins: { kind: 'unresolved' },
   deployed: false,
   modStatuses: new Map(),
   overwriteFileCount: 0,
@@ -309,17 +335,21 @@ export class Instance implements vscode.Disposable {
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
-    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount, modFolderNames] = await Promise.all([
+    const [index, pluginLines, downloadEntries, deployed, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
       scanDownloads(instanceRoot),
       exists(manifestFile(instanceRoot)),
       countOverwriteFiles(overwriteDir(instanceRoot)),
       readModFolderNames(instanceRoot),
+      readProfileNames(instanceRoot),
+      // The ini read above is handed to the resolver as-is, so a rewrite cannot land two
+      // generations in one value; beside the reads above, the game side costs no round trip.
+      resolveGameDirectory(iniText).then(async (gameDirectory) => ({
+        gameDirectory, dataFolderPlugins: await readDataFolderPlugins(gameDirectory?.dataFolder, log),
+      })),
     ]);
-    // The ini is read once above and handed to the resolver as-is, so a rewrite between it and
-    // activeProfile/gameRelease below cannot land two generations in one value.
-    const gameDirectory = await resolveGameDirectory(iniText);
+    const { gameDirectory, dataFolderPlugins } = game;
     // Both derive from the same index generation, so they run concurrently.
     const [plugins, modStatuses] = await Promise.all([
       // An unresolved game directory loses only the Data-folder copies' paths: every
@@ -342,6 +372,8 @@ export class Instance implements vscode.Disposable {
     return {
       mods: entries,
       unlistedFolders: unlistedModNames(modFolderNames, entries),
+      modFolders: modFolderNames,
+      profiles,
       files: index.files,
       filesByMod: index.filesByMod,
       plugins,
@@ -355,6 +387,7 @@ export class Instance implements vscode.Disposable {
       activeProfile: profile,
       gameRelease: readGameName(iniText),
       gameDirectory,
+      dataFolderPlugins,
       deployed,
       modStatuses,
       overwriteFileCount,

@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import type { PluginMetadata } from './client';
+import type { PluginMetadata } from '../client';
 
 /** Whether a mod folder is tracked. Injected: MO2 files answers it, and this box holds no door
  *  onto the instance of its own (ADR-0007). */

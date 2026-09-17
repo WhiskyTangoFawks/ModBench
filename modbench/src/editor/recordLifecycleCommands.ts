@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { isRefused, type MEditClient } from '../medit/client';
+import { isRefused, type MEditClient } from '../client';
 import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';
 import { resolveOrigin } from '../medit/resolveOrigin';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';

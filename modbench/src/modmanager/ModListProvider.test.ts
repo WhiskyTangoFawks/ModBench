@@ -10,7 +10,7 @@ import {
 } from '../test/vscodeMock';
 import type {
   setModEnabled, reorderMod, moveModToSeparator, reorderSeparatorBlock,
-} from './commands/modlist';
+} from '../modlist/modlist';
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
@@ -28,7 +28,7 @@ const {
   moveModToSeparatorMock: vi.fn<typeof moveModToSeparator>(),
   reorderSeparatorBlockMock: vi.fn<typeof reorderSeparatorBlock>(),
 }));
-vi.mock('./commands/modlist', () => ({
+vi.mock('../modlist/modlist', () => ({
   setModEnabled: (...args: Parameters<typeof setModEnabledMock>) => setModEnabledMock(...args),
   reorderMod: (...args: Parameters<typeof reorderModMock>) => reorderModMock(...args),
   moveModToSeparator: (...args: Parameters<typeof moveModToSeparatorMock>) => moveModToSeparatorMock(...args),

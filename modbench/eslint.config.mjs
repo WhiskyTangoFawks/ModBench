@@ -83,7 +83,7 @@ export default tseslint.config(
     {
         files: ['src/modmanager/**/*.ts'],
         rules: {
-            'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**'], message: 'Mod Management never calls the backend.' }] }],
+            'no-restricted-imports': ['error', { patterns: [{ group: ['**/medit/**', '**/client/**'], message: 'Mod Management never calls the backend.' }] }],
         },
     },
 
@@ -115,7 +115,7 @@ export default tseslint.config(
     // The mEdit client takes no VS Code types, so any caller (its own in-memory adapter today,
     // a tool handler or a test tomorrow) can call it without pulling in the extension host.
     {
-        files: ['src/medit/client/**/*.ts'],
+        files: ['src/client/**/*.ts'],
         rules: {
             'no-restricted-imports': ['error', { paths: [{ name: 'vscode', message: 'The mEdit client takes no VS Code types.' }] }],
         },
@@ -135,6 +135,12 @@ export default tseslint.config(
                     './src/ports/tsconfig.json',
                     './src/mo2Files/tsconfig.json',
                     './src/instance/tsconfig.json',
+                    './src/modlist/tsconfig.json',
+                    './src/pluginsCommands/tsconfig.json',
+                    './src/instanceCommands/tsconfig.json',
+                    './src/install/tsconfig.json',
+                    './src/deploy/tsconfig.json',
+                    './src/client/tsconfig.json',
                 ],
                 tsconfigRootDir: import.meta.dirname,
             },

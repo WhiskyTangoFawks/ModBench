@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   buttonsInDefaultOrder, messageFor, runExternalChangeDialogs, BASELINE_BUTTON, APPLY_BUTTON,
 } from '../externalChangeDialog';
-import type { UnansweredExternalChange } from '../../medit/client';
+import type { UnansweredExternalChange } from '../../client';
 import type { AskQuestion } from '../../ports/dialog';
 import { present } from '../../ports/present';
 

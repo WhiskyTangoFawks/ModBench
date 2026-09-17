@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { resolveOrigin } from '../resolveOrigin';
-import { InMemoryMEditClient, type PluginMetadata } from '../client';
+import { InMemoryMEditClient, type PluginMetadata } from '../../client';
 
 function makePlugins(count: number): PluginMetadata[] {
   return Array.from({ length: count }, (_, i) => ({

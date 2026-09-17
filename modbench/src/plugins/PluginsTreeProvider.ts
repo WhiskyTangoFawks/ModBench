@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
-import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../medit/client';
+import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../client';
 import type { InstanceValue, InstanceView } from '../instance/instance';
 import { firstReadOf, type FirstRead } from '../modmanager/instanceFirstRead';
 import type { PluginEntry } from '../modmanager/model';
 import type { Reporter } from '../ports/reporter';
 import { dropIndexForMove } from '../mo2Codecs/pluginsText';
-import type { ImplicitMasterSource } from '../modmanager/commands/plugins';
+import type { ImplicitMasterSource } from '../pluginsCommands/plugins';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
 import { ErrorNode } from '../errorNode';

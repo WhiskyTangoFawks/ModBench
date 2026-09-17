@@ -11,11 +11,11 @@ import { join, extname, relative, dirname } from 'node:path';
 const SENDS = 'toolbox.ts';
 // The sender owns connect-before-the-first-PUT, one PUT at a time and supersession, so a second
 // caller of the port verb would be a second implementation of the arrow.
-const PUTS = join('medit', 'client', 'loadOrderSender.ts');
+const PUTS = join('client', 'loadOrderSender.ts');
 // The port declares the verb and its two adapters implement it; what the scan forbids is a
 // *third* party calling it.
 const PORT = ['MEditClient.ts', 'HttpMEditClient.ts', 'InMemoryMEditClient.ts']
-  .map((name) => join('medit', 'client', name));
+  .map((name) => join('client', name));
 
 const SEND_CALL = /\.send\s*\(/;
 const PUT_CALL = /\bputLoadOrder\s*\(/;

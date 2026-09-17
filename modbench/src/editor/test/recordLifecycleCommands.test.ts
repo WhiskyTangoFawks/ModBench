@@ -24,8 +24,8 @@ vi.mock('vscode', () => ({
 import {
   registerRecordLifecycleCommands, registerRecordCopyCommands, recordIdentity, recordTypeIdentity,
 } from '../recordLifecycleCommands';
-import { InMemoryMEditClient } from '../../medit/client';
-import { pluginMetadataFixture, referenceResultFixture } from '../../medit/client/test/fixtures';
+import { InMemoryMEditClient } from '../../client';
+import { pluginMetadataFixture, referenceResultFixture } from '../../client/test/fixtures';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';

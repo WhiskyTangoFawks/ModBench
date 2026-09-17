@@ -545,7 +545,7 @@ user did) and `ModOrganizer.ini` — and a burst across any of them settles into
 ([ADR-0015](../adr/0015-edits-reach-the-read-model-through-the-watcher.md) invariant 7). No
 polling. Toolbox, the composition root that joins the two contexts, builds the snapshot from each
 landed value (`loadOrderSnapshotOf`) and hands it to the mEdit client's sender
-(`medit/client/loadOrderSender.ts`), which holds the sequencing: connect before the first PUT, one
+(`client/loadOrderSender.ts`), which holds the sequencing: connect before the first PUT, one
 PUT at a time, and the newest snapshot is the one that lands — a snapshot superseded before it is
 sent resolves `abandoned` and never reaches the wire, so a value arriving mid-PUT becomes exactly
 one more PUT after it and never a race. There is no health pre-check: a PUT against a backend that
@@ -710,7 +710,7 @@ overflow, then native **Collapse All** last.
   whitespace resolves to the same plugin name as one without, and its `*` marker is read and
   spliced at the marker's true byte offset rather than at the line's start — so padding survives a
   toggle untouched instead of being written into.
-- The write side is `modmanager/commands/plugins.ts`: toggle a line's `*` prefix, reorder lines,
+- The write side is `pluginsCommands/plugins.ts`: toggle a line's `*` prefix, reorder lines,
   append one, reconcile the file with disk — the same free-function shape as the `modlist.txt`
   commands (`moveModToSeparator`, `reorderSeparatorBlock`).
 - **Current mutation path**: reorder, enable and disable all still apply immediately and
@@ -806,7 +806,7 @@ overflow, then native **Collapse All** last.
 - **Record-browsing unit seam**: `PluginTreeProvider` takes the mEdit client port (`MEditClient`),
   never the generated client directly — unit-tested without VS Code (Vitest, `npm run
   test:unit`) against `InMemoryMEditClient`. New data queries go on `MEditClient` and are
-  implemented in `HttpMEditClient` (`medit/client/`).
+  implemented in `HttpMEditClient` (`client/`).
 - **Tree seam**: `PluginsTreeProvider`'s own `getChildren`/`getTreeItem`/`applyReconciled` —
   rows off a fixture Instance value, that every row stays collapsible whatever the client reports,
   a row's content on expand (records, "still indexing", or the error node) in each state, every

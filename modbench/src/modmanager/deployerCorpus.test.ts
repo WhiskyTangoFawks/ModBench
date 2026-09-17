@@ -6,7 +6,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseModlist } from '../mo2Codecs/modlistText';
 import { parseManifest } from '../mo2Files/files';
-import { deployMods, purgeMods } from './commands/deployment';
+import { deployMods, purgeMods } from '../deploy/deployment';
 import { buildFileConflictIndex } from '../instance/fileConflictIndex';
 import type { GameDirectory } from '../mo2Files/gameDirectory';
 import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST, snapshotTree } from './test/corpusFixture';

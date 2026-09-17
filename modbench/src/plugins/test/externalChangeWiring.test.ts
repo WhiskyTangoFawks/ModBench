@@ -22,7 +22,7 @@ vi.mock('../externalChangeCoordinator', () => ({
 
 import { wireQuestionOpen } from '../externalChangeWiring';
 import { PluginTreeProvider } from '../PluginTreeProvider';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient } from '../../client';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';

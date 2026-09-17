@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { backendStatusText, wireBackendStatus, enterEditingAcrossRestarts } from '../backendStatus';
-import { InMemoryMEditClient, createLoadOrderSender } from '../client';
+import { InMemoryMEditClient, createLoadOrderSender } from '../../client';
 import { present } from '../../ports/present';
 
 function makeViews() {

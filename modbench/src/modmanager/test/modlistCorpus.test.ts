@@ -12,9 +12,9 @@ import {
   reorderMod,
   reorderSeparatorBlock,
   setModEnabled,
-} from '../commands/modlist';
+} from '../../modlist/modlist';
 import {
-  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, readModlistEntries, snapshotTree,
+  assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, modFolderNames, readModlistEntries, snapshotTree,
 } from './corpusFixture';
 import type { Mod, Separator } from '../model';
 import { present } from '../../ports/present';
@@ -138,7 +138,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
 
   it('createEmptyMod adds one empty mods/ folder and one disabled modlist line, and nothing else', async () => {
     const before = await snapshotTree(dir);
-    await createEmptyMod(dir, PROFILE, 'QA Empty Mod');
+    await createEmptyMod(dir, PROFILE, 'QA Empty Mod', await modFolderNames(dir));
     const after = await snapshotTree(dir);
     // An empty directory holds no files, so the whole change is visible in modlist.txt.
     assertOnlyChanged(before, after, new Set([MODLIST]));

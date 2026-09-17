@@ -32,6 +32,11 @@ export const readPluginLines = async (root: string, profile = 'Default'): Promis
 export const readActiveProfile = async (root: string): Promise<string> =>
   readSelectedProfile(await readFile(join(root, 'ModOrganizer.ini'), 'utf8'));
 
+/** The `mods/` folders the Instance's value carries, for a test handing a command the argument
+ *  it takes instead of probing. */
+export const modFolderNames = async (root: string): Promise<string[]> =>
+  (await readdir(join(root, 'mods'), { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+
 /** The winners the Instance's value carries for a tree on disk, built through the value's own
  *  builder: a test handing the plugins reconcile its argument fakes no walk of its own. */
 export async function providedPluginsIn(

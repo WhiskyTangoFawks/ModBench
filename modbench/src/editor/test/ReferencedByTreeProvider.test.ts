@@ -12,9 +12,9 @@ import {
   NoActiveRecordNode,
   referencedByCopyText,
 } from '../ReferencedByTreeProvider';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient } from '../../client';
 import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
-import type { ReferenceResult } from '../../medit/client';
+import type { ReferenceResult } from '../../client';
 import { present } from '../../ports/present';
 
 function reference(overrides: Partial<ReferenceResult> & { formKey: string }): ReferenceResult {

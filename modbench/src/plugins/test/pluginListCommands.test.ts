@@ -23,11 +23,11 @@ vi.mock('vscode', () => ({
   Uri: { file: (p: string) => ({ fsPath: p }) },
 }));
 
-vi.mock('../../modmanager/commands/plugins', () => ({ appendPlugin: vi.fn() }));
+vi.mock('../../pluginsCommands/plugins', () => ({ appendPlugin: vi.fn() }));
 
 import { registerCreatePluginCommand, registerRevealInExplorerCommand } from '../pluginListCommands';
-import { appendPlugin } from '../../modmanager/commands/plugins';
-import { InMemoryMEditClient } from '../../medit/client';
+import { appendPlugin } from '../../pluginsCommands/plugins';
+import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
 import { present } from '../../ports/present';

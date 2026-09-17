@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { backendStatusText, wireBackendStatus } from './medit/backendStatus';
-import { HttpMEditClient, type BackendLifecycleOptions, type CrashRepairOffer } from './medit/client';
+import { HttpMEditClient, type BackendLifecycleOptions, type CrashRepairOffer } from './client';
 import { subscribeTreeToNotifications, subscribeRecordPanelsToNotifications } from './medit/notificationWiring';
 import { PluginTreeProvider } from './plugins/PluginTreeProvider';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';

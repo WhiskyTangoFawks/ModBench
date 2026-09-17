@@ -17,7 +17,20 @@ const DRIVEN_BOXES: Record<string, string[]> = {
   instance: ['mo2Codecs', 'mo2Files', 'ports'],
 };
 
-const BOXES = [...KERNEL_BOXES, ...Object.keys(DRIVEN_BOXES)];
+// The core column, same rule. An arrow the diagram draws that the code has no use for is left
+// out here and reported, never referenced to make the picture symmetric.
+const CORE_BOXES: Record<string, string[]> = {
+  modlist: ['mo2Codecs', 'mo2Files', 'ports'],
+  pluginsCommands: ['instance', 'mo2Codecs', 'mo2Files'],
+  instanceCommands: ['mo2Codecs', 'mo2Files'],
+  install: ['mo2Codecs', 'mo2Files', 'ports'],
+  deploy: ['instance', 'mo2Files'],
+  client: ['wire'],
+};
+
+const REFERENCING_BOXES = { ...DRIVEN_BOXES, ...CORE_BOXES };
+
+const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 
 const ROOT_SOLUTION = 'tsconfig.json';
 const LEGACY_PROJECT = 'tsconfig.legacy.json';
@@ -81,9 +94,16 @@ describe('one composite project per box', () => {
     expect(parsed(kernelProject('instance')).options.types).toEqual(['node', 'vscode']);
   });
 
-  // The rule the compiler enforces for the driven column: each box references exactly the arrows
-  // the diagram draws for it, so a new dependency fails `tsc -b` rather than compiling quietly.
-  it.each(Object.entries(DRIVEN_BOXES))('%s references exactly the boxes the diagram draws', (box, references) => {
+  // A command writes through MO2 files and forgets, and the client is the one seam a tool
+  // handler could call without an extension host: neither holds a host type.
+  it.each(Object.keys(CORE_BOXES))('%s sees the Node types and no others', (box) => {
+    expect(parsed(kernelProject(box)).options.types).toEqual(['node']);
+  });
+
+  // The rule the compiler enforces for the driven and core columns: each box references exactly
+  // the arrows the diagram draws for it, so a new dependency fails `tsc -b` rather than
+  // compiling quietly.
+  it.each(Object.entries(REFERENCING_BOXES))('%s references exactly the boxes the diagram draws', (box, references) => {
     expect(referencePaths(kernelProject(box))).toEqual(references.map((r) => join('src', r)).sort());
   });
 

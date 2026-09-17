@@ -1,4 +1,4 @@
-import type { MEditClient } from './client';
+import type { MEditClient } from '../client';
 
 /** The port has no `resolveOrigin` — derived here from `getPlugins()`. A transport failure
  *  degrades to `undefined` (ADR-0019), logged rather than thrown. Shared by Plugins and Editor,

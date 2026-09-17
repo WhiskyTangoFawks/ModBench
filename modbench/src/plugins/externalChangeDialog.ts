@@ -1,4 +1,4 @@
-import type { UnansweredExternalChange } from '../medit/client';
+import type { UnansweredExternalChange } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 
 /** The glossary's Edit branch entry: the fixed branch name every Track creates, matching the

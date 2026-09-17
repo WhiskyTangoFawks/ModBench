@@ -1,4 +1,4 @@
-import type { PluginMetadata } from '../medit/client';
+import type { PluginMetadata } from '../client';
 
 // 'copy-as-override' excludes every plugin that already carries the record (xEdit's CopyInto
 // module filter): offering one would silently replace that override's content. 'copy-as-new'

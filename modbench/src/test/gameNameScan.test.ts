@@ -25,7 +25,7 @@ const GENERATED_DIR = 'generated';
 
 // detectRoot.ts's DATA_DIRS names the Bethesda Data folder layout, not a game — except f4se and
 // skse, each a game-specific directory name, which is why it needs the exemption below.
-const ALLOWLIST = [join('modmanager', 'install', 'detectRoot.ts')];
+const ALLOWLIST = [join('install', 'detectRoot.ts')];
 
 // Script-extender projects each name exactly one release, in their own alphabet — data the scan
 // needs as much as the two tables' own literals, so it lives here rather than in a third table.
@@ -127,7 +127,7 @@ describe('no extension file names a game outside the two tables', () => {
   });
 
   it('the allowlist is exactly the one stated exemption', () => {
-    expect(ALLOWLIST).toEqual([join('modmanager', 'install', 'detectRoot.ts')]);
+    expect(ALLOWLIST).toEqual([join('install', 'detectRoot.ts')]);
   });
 
   // Rival: a second exemption added beside it — an allowlist that can grow silently is how this

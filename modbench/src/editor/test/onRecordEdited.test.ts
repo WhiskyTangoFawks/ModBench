@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
 import { makeOnRecordEdited, type RecordTreeSync } from '../onRecordEdited';
 import type { RecordDecorationProvider } from '../RecordDecorationProvider';
 import { subscribeRecordPanelsToNotifications } from '../../medit/notificationWiring';
-import { InMemoryMEditClient } from '../../medit/client';
+import { InMemoryMEditClient } from '../../client';
 
 function fakeTreeProvider(markResult = true): RecordTreeSync {
   return {

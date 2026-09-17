@@ -18,11 +18,11 @@ const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
   installFromFolder: vi.fn(),
 }));
 
-vi.mock('./commands/install', () => ({ installFromArchive, installFromFolder }));
+vi.mock('../install/install', () => ({ installFromArchive, installFromFolder }));
 
 const { uninstallMod } = vi.hoisted(() => ({ uninstallMod: vi.fn() }));
 
-vi.mock('./commands/modlist', () => ({
+vi.mock('../modlist/modlist', () => ({
   createEmptyMod: vi.fn(), deleteSeparator: vi.fn(), insertSeparator: vi.fn(),
   moveModToSeparator: vi.fn(), renameSeparator: vi.fn(), uninstallMod,
 }));
@@ -38,10 +38,14 @@ function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   return Promise.resolve(call[1](...args));
 }
 
+// Deliberately not the fixture's usual game: a gameName hardcoded at the call site would pass
+// against Fallout 4 and reach meta.ini wrong for every other install.
+const GAME_RELEASE = 'Skyrim Special Edition';
+
 function deps(over: Partial<ModInstallDeps> = {}): ModInstallDeps {
   return {
     instanceRoot: '/instance',
-    instance: { value: instanceValueFixture() },
+    instance: { value: instanceValueFixture({ gameRelease: GAME_RELEASE }) },
     runModAction: async (_label, _fail, action) => action(),
     promptModName: vi.fn(),
     warnIfFomod: vi.fn(),
@@ -65,9 +69,9 @@ describe('registerModInstallCommands: the install target', () => {
     expect(promptModName).not.toHaveBeenCalled();
     expect(installFromArchive).toHaveBeenCalledWith(
       '/instance', { kind: 'upgrade', name: 'Existing Mod' }, '/archive/foo.7z',
-      { modID: '111', fileID: '222', version: '3.0' },
+      { gameName: GAME_RELEASE, modID: '111', fileID: '222', version: '3.0' },
     );
-    expect(succeeded).toBe(true);
+    expect(succeeded).toEqual({ installed: true, downloadRefusal: undefined });
   });
 
   it('a new-mod choice reaches the name prompt and installs as a new mod', async () => {
@@ -80,9 +84,9 @@ describe('registerModInstallCommands: the install target', () => {
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
       '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
-      { modID: undefined, fileID: undefined, version: undefined },
+      { gameName: GAME_RELEASE, modID: undefined, fileID: undefined, version: undefined },
     );
-    expect(succeeded).toBe(true);
+    expect(succeeded).toEqual({ installed: true, downloadRefusal: undefined });
   });
 
   // Rival: default the absent choice to an upgrade of the prompted name. The Mods-view entry
@@ -97,9 +101,9 @@ describe('registerModInstallCommands: the install target', () => {
     expect(promptModName).toHaveBeenCalledWith('foo', expect.any(Function));
     expect(installFromArchive).toHaveBeenCalledWith(
       '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
-      { modID: undefined, fileID: undefined, version: undefined },
+      { gameName: GAME_RELEASE, modID: undefined, fileID: undefined, version: undefined },
     );
-    expect(succeeded).toBe(true);
+    expect(succeeded).toEqual({ installed: true, downloadRefusal: undefined });
   });
 
   it('no choice and a cancelled prompt installs nothing', async () => {
@@ -109,7 +113,7 @@ describe('registerModInstallCommands: the install target', () => {
     const succeeded = await invoke('modbench.modList.installFromArchive', '/archive/foo.7z');
 
     expect(installFromArchive).not.toHaveBeenCalled();
-    expect(succeeded).toBe(false);
+    expect(succeeded).toEqual({ installed: false });
   });
 
   it('the Mods-view folder entry installs as a new mod under the prompted name', async () => {
@@ -122,7 +126,7 @@ describe('registerModInstallCommands: the install target', () => {
 
     expect(promptModName).toHaveBeenCalledWith('Loose Files', expect.any(Function));
     expect(installFromFolder).toHaveBeenCalledWith(
-      '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files',
+      '/instance', { kind: 'new', name: 'New Mod' }, '/somewhere/Loose Files', { gameName: GAME_RELEASE },
     );
   });
 });

@@ -31,6 +31,7 @@ function tsFiles(dir: string): string[] {
 }
 
 const EDITING_DIR = 'medit';
+const CLIENT_DIR = 'client';
 const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
 const MOD_MANAGEMENT_DIR = 'modmanager';
@@ -70,6 +71,7 @@ function isExcluded(relativePath: string): boolean {
   if (segments[0] === WIRE_DIR) return true; // the kernel's wire protocol, generated or transcribed, not a decision
   if (segments[0] === PLUGINS_VIEW_DIR) return true; // a record browser by design
   if (segments[0] === EDITING_DIR) return true; // Editing's own context, not the MO2 side this rule binds
+  if (segments[0] === CLIENT_DIR) return true; // the seam Editing speaks through — the backend's own vocabulary
   if (segments[0] === EDITOR_DIR) return true; // Editor's own context — record vocabulary by design, same as Plugins
   if (COMPOSITION_ROOT.includes(relativePath)) return true; // each entry's own reason is stated above
   if (isTestSupport(relativePath)) return true; // prose and corpus, not a decision
@@ -103,8 +105,8 @@ function findOffenders(root: string): Offense[] {
     // Every context a MO2-side file must never reach into: Editing's client, the Plugins view's
     // record browser, and Editor — all carry record types and FormKeys just as directly.
     const crossContext = [
-      ...importsFromDir(imports, EDITING_DIR), ...importsFromDir(imports, PLUGINS_VIEW_DIR),
-      ...importsFromDir(imports, EDITOR_DIR),
+      ...importsFromDir(imports, EDITING_DIR), ...importsFromDir(imports, CLIENT_DIR),
+      ...importsFromDir(imports, PLUGINS_VIEW_DIR), ...importsFromDir(imports, EDITOR_DIR),
     ];
     const vocab = domainVocabIn(text);
     if (crossContext.length > 0 || vocab.length > 0) offenses.push({ path: relPath, crossContext, vocab });
@@ -308,7 +310,7 @@ describe('composition-root modules import from neither context', () => {
 // Editing. It restates the snapshot's shape rather than importing it, so the arrow carries a
 // value and not a dependency.
 describe('the load-order sender belongs to Editing alone', () => {
-  const SENDER = 'medit/client/loadOrderSender.ts';
+  const SENDER = 'client/loadOrderSender.ts';
 
   it('imports nothing but its own port module', () => {
     expect(importsOf(read(SENDER))).toEqual(['./MEditClient']);

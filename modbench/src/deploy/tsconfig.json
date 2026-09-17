@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/deploy"
+  },
+  "references": [
+    { "path": "../instance" },
+    { "path": "../mo2Files" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

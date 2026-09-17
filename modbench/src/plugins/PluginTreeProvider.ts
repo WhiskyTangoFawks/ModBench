@@ -4,7 +4,7 @@ import type {
   RecordSummary,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
   ContainerChildSummary, MEditClient,
-} from '../medit/client';
+} from '../client';
 import { recordResourceUri } from '../medit/recordResourceUri';
 import { failurePrefixIcon } from '../failurePrefixIcon';
 import { present } from '../ports/present';

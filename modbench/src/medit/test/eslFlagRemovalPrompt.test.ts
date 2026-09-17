@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { offerEslFlagRemoval } from '../eslFlagRemovalPrompt';
-import { InMemoryMEditClient } from '../client';
+import { InMemoryMEditClient } from '../../client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 
 const TARGET = { name: 'MyPatch.esp', origin: 'ModA' };

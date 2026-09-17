@@ -138,7 +138,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     await writeMeta(root, 'foo.7z');
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
@@ -151,7 +151,7 @@ describe('registerDownloadsSingleRowCommands', () => {
   it('carries the row\'s modID, fileID and version into the install command, reading no sidecar', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z', { modID: '123', fileID: '456', version: '2.0' }));
@@ -172,7 +172,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const archive = await writeArchive(root, 'foo.7z');
     await writeArchive(root, 'other.7z');
     await writeMeta(root, 'foo.7z');
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z'), [node(root, 'foo.7z'), node(root, 'other.7z')]);
@@ -183,27 +183,28 @@ describe('registerDownloadsSingleRowCommands', () => {
     expect(executeCommand).toHaveBeenCalledTimes(1);
   });
 
-  it('install: on success, writes installed=true back to the .meta sidecar', async () => {
+  // Rival: the view marking the sidecar itself. Install owns that write, so a `.meta` the view
+  // touched would be a second writer of MO2's own file.
+  it('install: writes no sidecar of its own — the mark is install\'s', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
-    executeCommand.mockResolvedValueOnce(true);
+    const before = await readFile(meta, 'utf8');
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
 
-    await vi.waitFor(async () => {
-      expect(await readFile(meta, 'utf8')).toContain('installed=true');
+    await vi.waitFor(() => {
+      expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, undefined, undefined, undefined, { kind: 'new' });
     });
-    expect(executeCommand).toHaveBeenCalledWith('modbench.modList.installFromArchive', archive, undefined, undefined, undefined, { kind: 'new' });
+    expect(await readFile(meta, 'utf8')).toBe(before);
   });
 
   it('install: a failed mark installed is reported as a warning, and the install stands', async () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
-    // A directory where the sidecar belongs: the mark fails, the mod is installed all the same.
-    await mkdir(join(root, 'downloads', 'foo.7z.meta'));
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true, downloadRefusal: 'EISDIR: illegal operation on a directory' });
     const report = recordingReporter();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), report);
@@ -222,7 +223,7 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'foo.7z');
     const meta = await writeMeta(root, 'foo.7z');
-    executeCommand.mockResolvedValueOnce(false);
+    executeCommand.mockResolvedValueOnce({ installed: false });
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
@@ -345,7 +346,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     showQuickPick.mockResolvedValueOnce({ label: 'Harder VATS (v1.0)', choice: { kind: 'upgrade', name: 'Harder VATS' } });
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
@@ -362,7 +363,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
     showQuickPick.mockResolvedValueOnce({ label: 'Install as a new mod…', choice: { kind: 'new' } });
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
@@ -392,7 +393,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z'));
@@ -409,7 +410,7 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     const root = await makeInstanceRoot();
     const archive = await writeArchive(root, 'foo.7z');
     const instance = fakeInstance([mod({ name: 'Harder VATS', nexusId: '111', version: '1.0' })]);
-    executeCommand.mockResolvedValueOnce(true);
+    executeCommand.mockResolvedValueOnce({ installed: true });
 
     registerDownloadsSingleRowCommands(root, instance, recordingReporter());
     invoke('modbench.downloads.install', node(root, 'foo.7z', { modID: '222' }));
