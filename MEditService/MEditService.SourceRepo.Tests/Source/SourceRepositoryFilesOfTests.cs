@@ -5,7 +5,7 @@ using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>A plugin's whole source as the carrier Track hands in — relative path and bytes — at the
 /// working tree or at a named ref. What compile takes instead of a directory.</summary>

@@ -178,13 +178,11 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             Assert.True(bytes.AsSpan().SequenceEqual(trackedGroupDocuments[path]), $"{path} is not the library's own document.");
     }
 
-    // A record's document is the file carrying its FormKey, or the RecordData.json of the directory
-    // that does: the layout is the serialization library's, so both shapes are admitted here.
+    // The layout is the repository's, so which file holds a record is asked of it rather than
+    // spelled here.
     internal static string SourceDocumentOf(IReadOnlyList<string> documents, string formKey) =>
-        documents.Single(f =>
-            SourceRepository.NameCarriesFormKey(Path.GetFileName(f), formKey)
-            || (Path.GetFileName(f) == SourceRepository.RecordDataFileName
-                && SourceRepository.NameCarriesFormKey(Path.GetFileName(PathShape.DirectoryOf(f)), formKey)));
+        SourceRepository.PathCarrying(documents, CutDownPluginFixture.PluginFileName, formKey)
+            ?? throw new InvalidOperationException($"No document in the tracked tree holds {formKey}.");
 
     // This cell because its timestamps are a real deep-copied value, not a coincidental zero that
     // would pass whether or not the field was suppressed.

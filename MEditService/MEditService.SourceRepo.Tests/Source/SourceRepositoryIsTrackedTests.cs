@@ -1,6 +1,6 @@
 using MEditService.SourceRepo;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Tracked is the presence of <c>.git</c> in the mod folder and nothing broader
 /// (ADR-0007): a folder that merely exists is not tracked.</summary>

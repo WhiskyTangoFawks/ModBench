@@ -5,7 +5,7 @@ using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Which unit holds a record, as a caller outside the repository is told it: embedded or
 /// not, whose document it is, directory-per-record or not, and that document's path.</summary>

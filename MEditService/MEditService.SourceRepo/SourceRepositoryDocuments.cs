@@ -35,14 +35,7 @@ public sealed partial class SourceRepository
     /// <summary>The FormKey the document at <paramref name="filePath"/> declares — an embedded child's
     /// owner's, since the file is the owner's document. Null when it cannot be read or declares
     /// none.</summary>
-    public static string? FormKeyDeclaredBy(string filePath, string modFolder, string pluginFileName) =>
-        DeclaredBy(filePath, modFolder, pluginFileName).FormKey;
-
-    /// <summary>Both the members a caller identifying the document needs, from the one read: a
-    /// separate call per member would read the file twice and could straddle another tool's
-    /// write.</summary>
-    public static (string? FormKey, string? EditorId) DeclaredBy(
-        string filePath, string modFolder, string pluginFileName)
+    public static string? FormKeyDeclaredBy(string filePath, string modFolder, string pluginFileName)
     {
         byte[] bytes;
         try
@@ -53,23 +46,21 @@ public sealed partial class SourceRepository
         {
             // Never exclusive owners of the file: it may have been deleted, moved or locked between
             // the event and this read.
-            return (null, null);
+            return null;
         }
 
-        var text = Encoding.UTF8.GetString(StripUtf8Bom(bytes));
-        return (
-            FormKeyDeclaredIn(text, filePath, HeaderDocumentIn(modFolder, pluginFileName), pluginFileName),
-            RootStringIn(text, "EditorID"));
+        return FormKeyDeclaredIn(
+            Encoding.UTF8.GetString(StripUtf8Bom(bytes)), filePath, modFolder, pluginFileName);
     }
 
     /// <summary>The same answer for a caller holding the text already, so a whole-tree pass reads each
     /// file once.</summary>
     public static string? FormKeyDeclaredIn(
-        string text, string filePath, string headerDocumentPath, string pluginFileName)
+        string text, string filePath, string modFolder, string pluginFileName)
     {
         // The header's document carries a ModKey rather than a FormKey; PluginHeader computes the
         // FormKey the index files it under.
-        if (filePath.Equals(headerDocumentPath, StringComparison.Ordinal))
+        if (filePath.Equals(HeaderDocumentIn(modFolder, pluginFileName), StringComparison.Ordinal))
             return PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName));
 
         return RootStringIn(text, "FormKey");

@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Noggog;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>"Does this plugin's tree hold that FormKey at either ref" — the collision check every
 /// allocation runs. Its working-tree arm answers the same questions the identity read does: the

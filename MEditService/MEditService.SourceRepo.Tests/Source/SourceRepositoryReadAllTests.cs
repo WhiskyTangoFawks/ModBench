@@ -4,7 +4,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Whole-plugin reads over a real tracked tree, with no index in the fixture: the working
 /// tree's own documents, and the same question answered at a named ref through git.</summary>

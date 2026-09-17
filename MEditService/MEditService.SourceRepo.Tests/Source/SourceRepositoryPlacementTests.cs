@@ -2,7 +2,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The whole taxonomy, on the tree a put leaves behind: a flat record is a file in its
 /// group folder, a container a directory, a Cell a directory under a block pair — inside the

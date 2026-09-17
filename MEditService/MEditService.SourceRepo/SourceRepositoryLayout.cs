@@ -31,7 +31,7 @@ public sealed partial class SourceRepository
 
     /// <summary>The whole-mod door's own name for a container's field file, and for the header's
     /// document at the plugin tree's root.</summary>
-    public const string RecordDataFileName = "RecordData.json";
+    internal const string RecordDataFileName = "RecordData.json";
 
     /// <summary>The whole-mod door's own name for a group or block level's metadata file, written for
     /// every minted level, empty unless the level has non-default metadata.</summary>
@@ -190,6 +190,48 @@ public sealed partial class SourceRepository
         var filesafe = FilesafeFormKey(formKey);
         return NameCarries(leaf, filesafe) || NameCarries(leaf, filesafe + JsonSuffix);
     }
+
+    /// <summary>Which of <paramref name="paths"/> holds <paramref name="formKey"/>'s document, or null
+    /// when none does. Both separators are read, so a git listing and a walk of the working tree ask
+    /// alike.</summary>
+    public static string? PathCarrying(IEnumerable<string> paths, string pluginFileName, string formKey)
+    {
+        var headerDocument = Segments(HeaderDocumentFor(pluginFileName));
+
+        foreach (var path in paths)
+        {
+            var segments = Segments(path);
+            var leaf = segments[^1];
+
+            if (leaf.Equals(RecordDataFileName, StringComparison.Ordinal))
+            {
+                // The header's document has a fixed path and a name that carries no FormKey; every
+                // other one is named by the directory holding it.
+                if (EndsWith(segments, headerDocument))
+                {
+                    if (formKey.Equals(
+                        PluginHeader.FormKeyFor(ModKey.FromFileName(pluginFileName)), StringComparison.Ordinal))
+                    {
+                        return path;
+                    }
+                    continue;
+                }
+
+                if (segments.Length < 2) continue;
+                leaf = segments[^2];
+            }
+
+            if (NameCarriesFormKey(leaf, formKey)) return path;
+        }
+        return null;
+    }
+
+    private static string[] Segments(string path) =>
+        path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool EndsWith(string[] segments, string[] tail) =>
+        segments.Length >= tail.Length
+        && segments.AsSpan(segments.Length - tail.Length).SequenceEqual(tail);
 
     // The whole-mod door's two name shapes: the filesafe FormKey alone, or "<EditorID> - " ahead of it.
     // Anchored at both ends so a name that merely embeds the text cannot match.

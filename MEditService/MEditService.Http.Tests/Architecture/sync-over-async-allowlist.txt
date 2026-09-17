@@ -7,6 +7,4 @@ MEditService.Commands/AbsorbExternalChangeHandler.cs: GetAwaiter().GetResult(): 
 MEditService.Commands/Edits/PluginCompileService.cs: GetAwaiter().GetResult(): 3
 MEditService.Index/IndexProjector.cs: .Wait(): 1
 MEditService.Index/IndexProjector.cs: GetAwaiter().GetResult(): 1
-MEditService.SourceRepo/GitCli.cs: GetAwaiter().GetResult(): 2
-MEditService.SourceRepo/GitCli.cs: Task.WaitAll(: 1
 MEditService.Watcher/ModFolderWatcher.cs: GetAwaiter().GetResult(): 1

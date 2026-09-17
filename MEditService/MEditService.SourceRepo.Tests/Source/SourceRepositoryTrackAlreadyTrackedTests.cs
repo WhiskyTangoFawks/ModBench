@@ -2,7 +2,7 @@ using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>Checked before touching git at all: an unguarded second Track would <c>git init</c> (a no-op),
 /// fail at <c>checkout -b edit</c>, then delete the real <c>.git</c> as its own half-init.</summary>

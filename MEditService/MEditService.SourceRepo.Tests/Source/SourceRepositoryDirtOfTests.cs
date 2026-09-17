@@ -6,7 +6,7 @@ using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary>The tree's dirt as DirtOf sees it: which record an unstaged edit moved, and what a git
 /// path under the plugin's own tree that names no record defers to (ADR-0003).</summary>

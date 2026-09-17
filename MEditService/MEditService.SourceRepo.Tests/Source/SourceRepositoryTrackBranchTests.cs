@@ -1,8 +1,9 @@
 using MEditService.Codec.Serialization;
 using MEditService.SourceRepo;
+using MEditService.SourceRepo.Tests.TestSupport;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Source;
+namespace MEditService.SourceRepo.Tests.Source;
 
 /// <summary><c>git diff main &lt;branch&gt;</c> must be genuinely empty right after Track, not
 /// empty because no distinct branch exists (ADR-0007: Modified vs Authored is repo topology).</summary>

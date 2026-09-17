@@ -12,7 +12,7 @@ internal static class EmbeddedChildSplice
 {
     /// <summary>The class name the owner's slots are keyed by: from the record type its path decides,
     /// or from the document's own discriminator when the path cannot name one.</summary>
-    public static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
+    internal static string? ContainerTypeName(string? ownerRecordType, byte[] ownerBytes, GameRelease release) =>
         EmbeddedChildLocator.ContainerTypeName(ownerRecordType, ownerBytes, release);
 
     /// <summary>Where <paramref name="formKey"/> sits inside <paramref name="ownerBytes"/>, or null
@@ -23,7 +23,7 @@ internal static class EmbeddedChildSplice
 
     /// <summary>The same text for a caller holding the owner and asking by identity. Null when no
     /// embedded slot of the owner carries <paramref name="formKey"/>.</summary>
-    public static string? TextOf(byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release) =>
+    internal static string? TextOf(byte[] ownerBytes, string? ownerTypeName, string formKey, GameRelease release) =>
         Find(ownerBytes, ownerTypeName, formKey, release) is { } span ? Extract(ownerBytes, span, release) : null;
 
     /// <summary>The child's own text as the codec spells it standalone: the span de-indented, and

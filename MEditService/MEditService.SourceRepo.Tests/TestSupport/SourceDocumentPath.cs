@@ -3,7 +3,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.SourceRepo.Tests.TestSupport;
 
 /// <summary>The file a record's own document sits in, asked of the repository.</summary>
 public static class SourceDocumentPath
