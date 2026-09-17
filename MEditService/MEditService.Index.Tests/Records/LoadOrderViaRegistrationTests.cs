@@ -1,3 +1,4 @@
+using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -50,7 +51,12 @@ public class LoadOrderViaRegistrationTests
 
         // The reorder re-read no plugin and re-derived no document.
         Assert.Equal(openedBefore, opens.OpenedTotal);
-        Assert.Equal(beforeA.Select(d => (d.FormKey, d.Body)), reads.GetDocuments(aKey).Select(d => (d.FormKey, d.Body)));
-        Assert.Equal(beforeB.Select(d => (d.FormKey, d.Body)), reads.GetDocuments(bKey).Select(d => (d.FormKey, d.Body)));
+        Assert.Equal(ByFormKey(beforeA), ByFormKey(reads.GetDocuments(aKey)));
+        Assert.Equal(ByFormKey(beforeB), ByFormKey(reads.GetDocuments(bKey)));
     }
+
+    // GetDocuments is a set of rows with no order of its own, so the comparison imposes one:
+    // a row order that varies under load is not a re-derived document.
+    private static IReadOnlyList<(string FormKey, string? Body)> ByFormKey(IReadOnlyList<RecordDocument> documents) =>
+        [.. documents.Select(d => (d.FormKey, d.Body)).OrderBy(d => d.FormKey, StringComparer.Ordinal)];
 }
