@@ -305,9 +305,11 @@ describe('registerDownloadsSingleRowCommands', () => {
     const root = await makeInstanceRoot();
 
     registerDownloadsSingleRowCommands(root, fakeInstance(), recordingReporter(), installDeps());
+    // The handler's own missing-modID guard returns before scheduling anything, so the check
+    // needs no wait at all — a wait here would only be proving nothing about a schedule that
+    // was never made.
     invoke('modbench.downloads.visitNexus', node(root, 'foo.7z'));
 
-    await new Promise((r) => setTimeout(r, 50));
     expect(openExternal).not.toHaveBeenCalled();
   });
 
@@ -429,7 +431,9 @@ describe('registerDownloadsSingleRowCommands: the upgrade pick', () => {
     invoke('modbench.downloads.install', node(root, 'foo.7z', NEXUS_IDS));
 
     await vi.waitFor(() => expect(showQuickPick).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 50));
+    // A macrotask boundary, not a microtask one: the resolved pick still has to unwind through
+    // pickUpgradeChoice's and installArchive's own awaits before the early return lands.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(installFromArchive).not.toHaveBeenCalled();
   });
 
@@ -574,7 +578,9 @@ describe('registerDownloadsMultiRowCommands', () => {
     invoke('modbench.downloads.delete', node(root, 'foo.7z'));
 
     await vi.waitFor(() => expect(ask.asked).toHaveLength(1));
-    await new Promise((r) => setTimeout(r, 50));
+    // A macrotask boundary, not a microtask one: the scripted answer still has to unwind through
+    // confirm's and trashOneArchive's own awaits before the early return lands.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(fsDelete).not.toHaveBeenCalled();
   });
 
