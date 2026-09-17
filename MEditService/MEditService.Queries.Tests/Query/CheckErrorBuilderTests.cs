@@ -2,7 +2,7 @@ using System.Text.Json;
 using MEditService.Codec.Schema;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 public class CheckErrorBuilderTests
 {

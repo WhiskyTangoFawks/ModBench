@@ -1,7 +1,7 @@
 using MEditService.Index;
 using MEditService.LoadOrder;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Queries.Tests.Query;
 
 public class ColumnKeyTests
 {

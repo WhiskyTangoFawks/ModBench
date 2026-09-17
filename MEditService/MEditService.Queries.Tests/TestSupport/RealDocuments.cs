@@ -3,11 +3,12 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Queries.Tests.TestSupport;
 
 /// <summary>A <see cref="RecordDocument"/> hand-built from the real codec's own text and the named
 /// fields a test reads, never a loop over every column a record type happens to have.</summary>

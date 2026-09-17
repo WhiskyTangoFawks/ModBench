@@ -17,8 +17,7 @@ public record PluginDiagnosisReport(
     string Text);
 
 /// <summary>One plugin row as the read side answers it: the load order's copy, what reading the file
-/// told the Index, and what a filter and a parse failure add. Tracked is the repository's
-/// answer.</summary>
+/// told the Index, and what a filter, a parse failure and the rows' own derivation add.</summary>
 public sealed record PluginRow(
     RegisteredCopy Copy,
     PluginContent Content,
@@ -30,7 +29,10 @@ public sealed record PluginRow(
     bool HasMatchingRecords,
     // HasParseFailure: whether this plugin holds a record Mutagen could not read. The plugin-level
     // load failure (LoadOrderResponse.Failures) stays its own channel for a file that never indexed.
-    bool HasParseFailure);
+    bool HasParseFailure,
+    // IsTracked (ADR-0007 invariant 3): this copy's rows came from its source tree, as the Index
+    // holds it. Whether a .git is on disk now is the Source repository's (ADR-0007 invariant 2).
+    bool IsTracked);
 
 public record RecordDetail(
     string FormKey,
