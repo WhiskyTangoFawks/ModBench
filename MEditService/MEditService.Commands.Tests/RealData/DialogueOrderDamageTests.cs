@@ -1,8 +1,6 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
-using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
@@ -23,29 +21,23 @@ public sealed class DialogueOrderDamageTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-order-damage-game-").FullName;
-    private readonly IndexProjector _index;
     private readonly PluginCopyKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public DialogueOrderDamageTests()
     {
-        var holder = new LoadOrderHolder();
         var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        _index = Indexes.Open(holder);
-        _index.Reconcile(holder,
-            _gameDirectory,
-            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)],
-            GameRelease.Fallout4);
+        var loadOrder = new LoadOrderSnapshot(_gameDirectory, instanceRoot: null, GameRelease.Fallout4,
+            SnapshotCopies.Of([new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_index, holder, _plugin.Origin, SourcePreset.Edits)
+            .TrackAsync(loadOrder, [_plugin], _plugin.Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _index.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }

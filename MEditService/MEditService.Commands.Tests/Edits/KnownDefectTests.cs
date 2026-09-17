@@ -11,8 +11,12 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>A member a KnownDefects row governs: the schema names it and says why it is read-only,
 /// and every path reaching it is refused by name rather than written.</summary>
-public sealed class KnownDefectTests
+public sealed class KnownDefectTests : IDisposable
 {
+    private readonly DocumentEditFixture _fixture = new();
+
+    public void Dispose() => _fixture.Dispose();
+
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private static readonly RecordTableSchema Scenes =
@@ -22,14 +26,16 @@ public sealed class KnownDefectTests
         Scenes.RecordColumns.Single(c => c.Name == "Actions").Field.ElementSpec.Require().SubFields.Require()
             .Single(f => f.Name == "Type");
 
-    private static string OneSceneWithAnAction()
+    // A Scene has no file of its own; it exists only embedded in a Quest's document.
+    private string OneSceneWithAnAction()
     {
-        var scene = new Scene(FormKey.Factory("000800:KnownDefect.esp"), Fallout4Release.Fallout4)
-        {
-            EditorID = "DefectScene",
-        };
+        var mod = new Fallout4Mod(ModKey.FromFileName("DocEdit.esp"), Fallout4Release.Fallout4);
+        var quest = mod.Quests.AddNew("DefectQuest");
+        var scene = new Scene(mod) { EditorID = "DefectScene" };
         scene.Actions.Add(new SceneAction { Name = "First" });
-        return DocumentEdits.Serialize(scene);
+        quest.Scenes.Add(scene);
+        _fixture.Seed(quest, "qust");
+        return scene.FormKey.ToString();
     }
 
     [Fact]
@@ -45,24 +51,26 @@ public sealed class KnownDefectTests
     [Fact]
     public void APathReachingTheGovernedMember_IsRefusedByName()
     {
-        var before = OneSceneWithAnAction();
+        var formKey = OneSceneWithAnAction();
+        var before = _fixture.Document(formKey);
 
-        var refused = DocumentEdits.Apply(
-            before, Scenes, SetAt(Json("{}"), Member("Actions"), At(0), Member("Type")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("{}"), Member("Actions"), At(0), Member("Type")));
 
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, refused?.Refusal);
-        Assert.Contains("'Type' is read-only", refused.Require().Message, StringComparison.Ordinal);
-        Assert.Equal(before, written);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
+        Assert.Contains("'Type' is read-only", result.Message, StringComparison.Ordinal);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]
     public void AWholeElementSpellingTheGovernedMember_IsRefusedByName()
     {
-        var refused = DocumentEdits.Apply(
-            OneSceneWithAnAction(), Scenes,
-            SetAt(Json("""{"Name": "Second", "Type": {}}"""), Member("Actions"), At(0)), out _);
+        var formKey = OneSceneWithAnAction();
 
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, refused?.Refusal);
-        Assert.Contains("'Type' is read-only", refused.Require().Message, StringComparison.Ordinal);
+        var (result, _) = _fixture.Apply(
+            formKey, SetAt(Json("""{"Name": "Second", "Type": {}}"""), Member("Actions"), At(0)));
+
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
+        Assert.Contains("'Type' is read-only", result.Message, StringComparison.Ordinal);
     }
 }

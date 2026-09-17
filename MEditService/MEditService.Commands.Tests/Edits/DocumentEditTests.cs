@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Commands;
 using MEditService.Commands.Edits;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -12,11 +13,14 @@ using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
 
-/// <summary>Document text, envelope and metadata in; document text or one refusal out, no index
-/// and no disk (ADR-0005). Every gesture is asserted as whole-document equality: the output is the
-/// input with exactly the edited path changed.</summary>
-public sealed class DocumentEditTests
+/// <summary>Document text, envelope and metadata in; a gesture's output is the input with exactly
+/// the edited path changed, through the real <see cref="EditRecordHandler"/>.</summary>
+public sealed class DocumentEditTests : IDisposable
 {
+    private readonly DocumentEditFixture _fixture = new();
+
+    public void Dispose() => _fixture.Dispose();
+
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
@@ -61,14 +65,15 @@ public sealed class DocumentEditTests
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private static RecordEditResult? Apply(string text, string table, RecordEditEnvelope envelope, out string written) =>
-        DocumentEdits.Apply(text, Schemas[table], envelope, out written);
+    private string SeedNpc() => _fixture.Seed(_npc, "npc_");
+    private string SeedCobj() => _fixture.Seed(_cobj, "cobj");
+    private string SeedGlobalInt() => _fixture.Seed(_globalInt, "glob");
 
-    private static string Applied(string text, string table, RecordEditEnvelope envelope)
+    private string Applied(string formKey, RecordEditEnvelope envelope)
     {
-        var refusal = Apply(text, table, envelope, out var written);
-        Assert.Null(refusal);
-        return written;
+        var (result, after) = _fixture.Apply(formKey, envelope);
+        Assert.True(result.Applied, result.Message);
+        return after ?? throw new InvalidOperationException("Expected an applied edit to report its document.");
     }
 
     // Every difference between the documents sits under the edited path, and there is one.
@@ -91,9 +96,10 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_TopLevelScalar_ChangesExactlyThatPath()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "npc_", SetAt(Json("0.75"), Member("HeightMax")));
+        var after = Applied(formKey, SetAt(Json("0.75"), Member("HeightMax")));
 
         Assert.Equal(["HeightMax: 1.0 -> 0.75"], ConditionEditTests.DocumentDiff(before, after));
     }
@@ -101,9 +107,10 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_MemberOfANestedStruct_ChangesExactlyThatPath()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "npc_", SetAt(Json("0.5"), Member("Weight"), Member("Thin")));
+        var after = Applied(formKey, SetAt(Json("0.5"), Member("Weight"), Member("Thin")));
 
         // The struct was absent, so the document gains it holding exactly the one member.
         Assert.Equal(["Weight: <absent> -> {\"Thin\":0.5}"], ConditionEditTests.DocumentDiff(before, after));
@@ -112,9 +119,10 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_MemberOfAnArrayElement_ChangesExactlyThatPath()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "cobj", SetAt(Json("\"LessThan\""), Member("Conditions"), At(0), Member("CompareOperator")));
+        var after = Applied(formKey, SetAt(Json("\"LessThan\""), Member("Conditions"), At(0), Member("CompareOperator")));
 
         Assert.Equal(["Conditions[0].CompareOperator: \"GreaterThan\" -> \"LessThan\""], ConditionEditTests.DocumentDiff(before, after));
     }
@@ -122,9 +130,10 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_ThroughTwoKeyHops_ChangesExactlyThatPath()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "npc_", SetAt(Json("9"), Member("VirtualMachineAdapter"), Member("Scripts"), Key("Alpha"), Member("Properties"), Key("Count"), Member("Data")));
+        var after = Applied(formKey, SetAt(Json("9"), Member("VirtualMachineAdapter"), Member("Scripts"), Key("Alpha"), Member("Properties"), Key("Count"), Member("Data")));
 
         Assert.Equal(["VirtualMachineAdapter.Scripts[0].Properties[0].Data: 1 -> 9"], ConditionEditTests.DocumentDiff(before, after));
     }
@@ -132,9 +141,10 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_Null_ClearsTheMemberSoItReadsAsItsDefault()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "npc_", Clear(Member("HeightMax")));
+        var after = Applied(formKey, Clear(Member("HeightMax")));
 
         Assert.Equal(["HeightMax: 1.0 -> <absent>"], ConditionEditTests.DocumentDiff(before, after));
     }
@@ -144,9 +154,10 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_Discriminator_KeepsSharedMembersAndDropsTheMemberTheNewLeafShapesDifferently()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "cobj", SetAt(Json("\"ConditionGlobal\""), Member("Conditions"), At(0), Member("MutagenObjectType")));
+        var after = Applied(formKey, SetAt(Json("\"ConditionGlobal\""), Member("Conditions"), At(0), Member("MutagenObjectType")));
 
         Assert.Equal(
             [
@@ -171,9 +182,9 @@ public sealed class DocumentEditTests
               }
             }
             """;
+        _fixture.SeedRaw("000801:DocEdit.esp", "mgef", null, before);
 
-        var after = Applied(before, "mgef",
-            SetAt(Json("\"MagicEffectLightArchetype\""), Member("Archetype"), Member("MutagenObjectType")));
+        var after = Applied("000801:DocEdit.esp", SetAt(Json("\"MagicEffectLightArchetype\""), Member("Archetype"), Member("MutagenObjectType")));
 
         Assert.Equal(
             [
@@ -186,14 +197,16 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_Discriminator_ToALeafTheUnionLacks_IsRefusedByName()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "cobj", SetAt(Json("\"ConditionMaybe\""), Member("Conditions"), At(0), Member("MutagenObjectType")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("\"ConditionMaybe\""), Member("Conditions"), At(0), Member("MutagenObjectType")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, refusal.Refusal);
-        Assert.Equal("Conditions[0].MutagenObjectType", refusal.Path);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
+        Assert.Equal("Conditions[0].MutagenObjectType", result.Path);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     // ── add, remove, move ───────────────────────────────────────────────────
@@ -201,17 +214,18 @@ public sealed class DocumentEditTests
     [Fact]
     public void Add_Remove_Move_OnAPositionalArray_ChangeThatArrayAlone()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var added = Applied(before, "npc_", AddAt(Json($"\"{_otherKeyword.FormKey}\""), Member("Keywords")));
+        var added = Applied(formKey, AddAt(Json($"\"{_otherKeyword.FormKey}\""), Member("Keywords")));
         AssertOnlyChanged(before, added, "Keywords[1]");
         Assert.Equal(2, Node(added, "Keywords").AsArray().Count);
 
-        var moved = Applied(added, "npc_", MoveTo(0, Member("Keywords"), At(1)));
+        var moved = Applied(formKey, MoveTo(0, Member("Keywords"), At(1)));
         Assert.Equal([_otherKeyword.FormKey.ToString(), _keyword.FormKey.ToString()], Node(moved, "Keywords").AsArray().Select(k => k.Require().GetValue<string>()));
         AssertOnlyChanged(added, moved, "Keywords[");
 
-        var removed = Applied(moved, "npc_", RemoveAt(Member("Keywords"), At(0)));
+        var removed = Applied(formKey, RemoveAt(Member("Keywords"), At(0)));
         Assert.Equal([_keyword.FormKey.ToString()], Node(removed, "Keywords").AsArray().Select(k => k.Require().GetValue<string>()));
         AssertOnlyChanged(moved, removed, "Keywords[");
     }
@@ -219,9 +233,10 @@ public sealed class DocumentEditTests
     [Fact]
     public void Add_WithoutAValue_AppendsTheElementTypesDefault()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "cobj", AddAt(Member("Conditions")));
+        var after = Applied(formKey, AddAt(Member("Conditions")));
 
         AssertOnlyChanged(before, after, "Conditions[2]");
         var elementSpec = Schemas["cobj"].RecordColumns.Single(c => c.Name == "Conditions").Field.ElementSpec
@@ -235,23 +250,25 @@ public sealed class DocumentEditTests
     [Fact]
     public void Add_OnAKeyedArray_LandsInKeyOrder_AndAKeyHopFindsIt()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var added = Applied(before, "npc_", AddAt(Json("""{"Name": "Aardvark", "Flags": "Local"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
+        var added = Applied(formKey, AddAt(Json("""{"Name": "Aardvark", "Flags": "Local"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
 
         Assert.Equal(["Aardvark", "Alpha", "Beta"], Node(added, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
         AssertOnlyChanged(before, added, "VirtualMachineAdapter.Scripts[");
 
-        var removed = Applied(added, "npc_", RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark")));
+        var removed = Applied(formKey, RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark")));
         Assert.Equal(["Alpha", "Beta"], Node(removed, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
     }
 
     [Fact]
     public void Set_OfAKeyMember_MovesTheElementToItsNewKeysPlace()
     {
-        var before = Applied(DocumentEdits.Serialize(_npc), "npc_", AddAt(Json("""{"Name": "Aardvark", "Flags": "Local"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
+        var formKey = SeedNpc();
+        Applied(formKey, AddAt(Json("""{"Name": "Aardvark", "Flags": "Local"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
 
-        var after = Applied(before, "npc_", SetAt(Json("\"Zulu\""), Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark"), Member("Name")));
+        var after = Applied(formKey, SetAt(Json("\"Zulu\""), Member("VirtualMachineAdapter"), Member("Scripts"), Key("Aardvark"), Member("Name")));
 
         Assert.Equal(["Alpha", "Beta", "Zulu"], Node(after, "VirtualMachineAdapter.Scripts").AsArray().Select(s => s.Require()["Name"].Require().GetValue<string>()));
     }
@@ -263,43 +280,49 @@ public sealed class DocumentEditTests
     [InlineData(RecordEditEnvelope.Set)]
     public void AnElementPastTheEnd_IsRefusedNamingThePathAndTheLength_OnEveryOperation(string op)
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
         var envelope = new RecordEditEnvelope(op, [Member("Keywords"), At(7)], Json("0"));
 
-        var refusal = Apply(before, "npc_", envelope, out var written);
+        var (result, after) = _fixture.Apply(formKey, envelope);
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
-        Assert.Equal("Keywords[7]", refusal.Path);
-        Assert.Contains("holds 1 element", refusal.Message, StringComparison.Ordinal);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("Keywords[7]", result.Path);
+        Assert.Contains("holds 1 element", result.Message, StringComparison.Ordinal);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]
     public void AKeyNoElementCarries_IsRefusedNamingThePathAndTheLength()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "npc_", RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Gamma")), out var written);
+        var (result, after) = _fixture.Apply(formKey, RemoveAt(Member("VirtualMachineAdapter"), Member("Scripts"), Key("Gamma")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
-        Assert.Equal("VirtualMachineAdapter.Scripts[Gamma]", refusal.Path);
-        Assert.Contains("holds 2 element", refusal.Message, StringComparison.Ordinal);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("VirtualMachineAdapter.Scripts[Gamma]", result.Path);
+        Assert.Contains("holds 2 element", result.Message, StringComparison.Ordinal);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]
     public void Move_ToADestinationOutsideTheArray_IsRefusedNamingThatPosition()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "npc_", MoveTo(3, Member("Keywords"), At(0)), out var written);
+        var (result, after) = _fixture.Apply(formKey, MoveTo(3, Member("Keywords"), At(0)));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
-        Assert.Equal("Keywords[3]", refusal.Path);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("Keywords[3]", result.Path);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     // ── the cascade is the writer's ─────────────────────────────────────────
@@ -307,10 +330,11 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_GoverningMember_IdlesEverySlotTheNewValueDoesNotUse()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
         Assert.Equal(10, Node(before, "Conditions")[0].Require()["Data"].Require()["ParameterTwoNumber"].Require().GetValue<int>());
 
-        var after = Applied(before, "cobj", SetAt(Json("\"HasKeyword\""), Member("Conditions"), At(0), Member("Data"), Member("Function")));
+        var after = Applied(formKey, SetAt(Json("\"HasKeyword\""), Member("Conditions"), At(0), Member("Data"), Member("Function")));
 
         var data = Node(after, "Conditions")[0].Require()["Data"].Require().AsObject();
         Assert.Equal("HasKeyword", data["Function"].Require().GetValue<string>());
@@ -322,10 +346,11 @@ public sealed class DocumentEditTests
     [Fact]
     public void Set_RunOnLeavingReference_ClearsTheReference()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
         Assert.Equal(_npc.FormKey.ToString(), Node(before, "Conditions")[1].Require()["Data"].Require()["Reference"].Require().GetValue<string>());
 
-        var after = Applied(before, "cobj", SetAt(Json("\"Subject\""), Member("Conditions"), At(1), Member("Data"), Member("RunOnType")));
+        var after = Applied(formKey, SetAt(Json("\"Subject\""), Member("Conditions"), At(1), Member("Data"), Member("RunOnType")));
 
         Assert.Equal(
             [
@@ -340,45 +365,54 @@ public sealed class DocumentEditTests
     [Fact]
     public void UnknownTopLevelPath_IsRefusedByName_AndNothingLandsSilently()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "npc_", SetAt(Json("1"), Member("NoSuchField")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("1"), Member("NoSuchField")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
-        Assert.Equal("NoSuchField", refusal.Path);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("NoSuchField", result.Path);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]
     public void UnknownNestedPath_IsRefusedNamingTheHopThatFailed()
     {
-        var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", SetAt(Json("1"), Member("Weight"), Member("Bogus")), out _);
+        var formKey = SeedNpc();
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
-        Assert.Equal("Weight.Bogus", refusal.Path);
+        var (result, _) = _fixture.Apply(formKey, SetAt(Json("1"), Member("Weight"), Member("Bogus")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal("Weight.Bogus", result.Path);
     }
 
     [Fact]
     public void MemberOfAnotherRecordClass_IsRefusedByName()
     {
-        var refusal = Apply(DocumentEdits.Serialize(_globalInt), "glob", SetAt(Json("true"), Member("OutputChar")), out _);
+        var formKey = SeedGlobalInt();
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
-        Assert.Contains(nameof(GlobalInt), refusal.Message, StringComparison.Ordinal);
+        var (result, _) = _fixture.Apply(formKey, SetAt(Json("true"), Member("OutputChar")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Contains(nameof(GlobalInt), result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ReadOnlyColumn_IsRefusedWithItsReason()
     {
-        var refusal = Apply(Encoding.UTF8.GetString(HeaderDocument.Write(_mod)), PluginHeader.RecordType, SetAt(Json("\"me\""), Member("Author")), out _);
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, Encoding.UTF8.GetString(HeaderDocument.Write(_mod)));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldReadOnly, refusal.Refusal);
+        var (result, _) = _fixture.Apply(headerFormKey, SetAt(Json("\"me\""), Member("Author")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         // SchemaRefusals.HeaderNoWritePathReason's wording (Codec-internal).
-        Assert.Contains("the header has no write path for this column", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("the header has no write path for this column", result.Message, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -387,43 +421,49 @@ public sealed class DocumentEditTests
     [InlineData("""{"MutagenObjectType": "ConditionMaybe"}""")]
     public void UnionElement_WithoutALeadingDiscriminatorNamingALeaf_IsRefused(string element)
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "cobj", AddAt(Json(element), Member("Conditions")), out var written);
+        var (result, after) = _fixture.Apply(formKey, AddAt(Json(element), Member("Conditions")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, refusal.Refusal);
-        Assert.Equal("Conditions[2]", refusal.Path);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.DiscriminatorInvalid, result.Refusal);
+        Assert.Equal("Conditions[2]", result.Path);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]
     public void DuplicateKey_IsRefusedNamingTheKeyAndTheArray()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "npc_", AddAt(Json("""{"Name": "Alpha"}"""), Member("VirtualMachineAdapter"), Member("Scripts")), out var written);
+        var (result, after) = _fixture.Apply(formKey, AddAt(Json("""{"Name": "Alpha"}"""), Member("VirtualMachineAdapter"), Member("Scripts")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, refusal.Refusal);
-        Assert.Equal("VirtualMachineAdapter.Scripts", refusal.Path);
-        Assert.Contains("'Alpha'", refusal.Message, StringComparison.Ordinal);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.DuplicateKeyInKeyedArray, result.Refusal);
+        Assert.Equal("VirtualMachineAdapter.Scripts", result.Path);
+        Assert.Contains("'Alpha'", result.Message, StringComparison.Ordinal);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]
     public void HexOfAnotherLength_IsRefusedNamingBothLengths()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
         Assert.Equal("0x000000", Node(before, "Conditions")[0].Require()["Unknown1"].Require().GetValue<string>());
 
-        var refusal = Apply(before, "cobj", SetAt(Json("\"0x0102\""), Member("Conditions"), At(0), Member("Unknown1")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("\"0x0102\""), Member("Conditions"), At(0), Member("Unknown1")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.HexLengthMismatch, refusal.Refusal);
-        Assert.Contains("3 bytes", refusal.Message, StringComparison.Ordinal);
-        Assert.Contains("2 bytes", refusal.Message, StringComparison.Ordinal);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.HexLengthMismatch, result.Refusal);
+        Assert.Contains("3 bytes", result.Message, StringComparison.Ordinal);
+        Assert.Contains("2 bytes", result.Message, StringComparison.Ordinal);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     // Shape is the codec's and nothing else is (ADR-0015 invariant 5): what a FormKey points at is
@@ -433,20 +473,23 @@ public sealed class DocumentEditTests
     [InlineData("kywd")]
     public void LinkTarget_DanglingOrOfTheWrongType_Lands(string target)
     {
-        var formKey = target == "kywd" ? _keyword.FormKey.ToString() : target;
+        var formKey = SeedNpc();
+        var linkTarget = target == "kywd" ? _keyword.FormKey.ToString() : target;
 
-        var after = Applied(DocumentEdits.Serialize(_npc), "npc_", SetAt(Json($"\"{formKey}\""), Member("Race")));
+        var after = Applied(formKey, SetAt(Json($"\"{linkTarget}\""), Member("Race")));
 
-        Assert.Equal(formKey, Node(after, "Race").GetValue<string>());
+        Assert.Equal(linkTarget, Node(after, "Race").GetValue<string>());
     }
 
     [Fact]
     public void KeyHop_IntoAnArrayTheSchemaDoesNotKey_IsRefused()
     {
-        var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", RemoveAt(Member("Keywords"), Key("x")), out _);
+        var formKey = SeedNpc();
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, refusal.Refusal);
+        var (result, _) = _fixture.Apply(formKey, RemoveAt(Member("Keywords"), Key("x")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
 
     [Theory]
@@ -456,13 +499,14 @@ public sealed class DocumentEditTests
     [InlineData("move", "Keywords[0]", "\"up\"")]
     public void MalformedEnvelope_IsRefusedAsSuch(string op, string path, string? value)
     {
+        var formKey = SeedNpc();
         var hops = path == "Keywords[0]" ? new[] { Member("Keywords"), At(0) } : [Member(path)];
         var envelope = new RecordEditEnvelope(op, hops, value == null ? null : Json(value));
 
-        var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", envelope, out _);
+        var (result, _) = _fixture.Apply(formKey, envelope);
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.InvalidEnvelope, refusal.Refusal);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.InvalidEnvelope, result.Refusal);
     }
 
     // ── the codec is the one shape gate ─────────────────────────────────────
@@ -470,36 +514,41 @@ public sealed class DocumentEditTests
     [Fact]
     public void CodecRejection_NamesThePathAndQuotesMutagen()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "npc_", SetAt(Json("\"tall\""), Member("HeightMax")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("\"tall\""), Member("HeightMax")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.CodecRejected, refusal.Refusal);
-        Assert.Equal("HeightMax", refusal.Path);
-        Assert.Contains("tall", refusal.Message, StringComparison.Ordinal);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
+        Assert.Equal("HeightMax", result.Path);
+        Assert.Contains("tall", result.Message, StringComparison.Ordinal);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Theory]
-    [InlineData("npc_", "EnergyLevel", "256")]
-    [InlineData("npc_", "XpValueOffset", "32768")]
-    [InlineData("npc_", "AggroRadiusWarn", "-1")]
-    public void IntegerWidth_IsTheCodecs(string table, string column, string value)
+    [InlineData("EnergyLevel", "256")]
+    [InlineData("XpValueOffset", "32768")]
+    [InlineData("AggroRadiusWarn", "-1")]
+    public void IntegerWidth_IsTheCodecs(string column, string value)
     {
-        var refusal = Apply(DocumentEdits.Serialize(_npc), table, SetAt(Json(value), Member(column)), out _);
+        var formKey = SeedNpc();
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.CodecRejected, refusal.Refusal);
-        Assert.Equal(column, refusal.Path);
+        var (result, _) = _fixture.Apply(formKey, SetAt(Json(value), Member(column)));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
+        Assert.Equal(column, result.Path);
     }
 
     [Fact]
     public void NormalizedValue_CountsAsApplied_InTheCodecsOwnSpelling()
     {
-        var before = DocumentEdits.Serialize(_cobj);
+        var formKey = SeedCobj();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "cobj", SetAt(Json("\"0x0a0b0c\""), Member("Conditions"), At(0), Member("Unknown1")));
+        var after = Applied(formKey, SetAt(Json("\"0x0a0b0c\""), Member("Conditions"), At(0), Member("Unknown1")));
 
         Assert.Equal(["Conditions[0].Unknown1: \"0x000000\" -> \"0x0A0B0C\""], ConditionEditTests.DocumentDiff(before, after));
     }
@@ -507,22 +556,25 @@ public sealed class DocumentEditTests
     [Fact]
     public void ValueTheCodecDrops_IsRefusedNamingIt_NeverReportedAsSuccess()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "npc_", SetAt(Json("""{"Thin": 0.5, "Bogus": 1}"""), Member("Weight")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("""{"Thin": 0.5, "Bogus": 1}"""), Member("Weight")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.CodecDroppedValue, refusal.Refusal);
-        Assert.Equal("Weight.Bogus", refusal.Path);
-        Assert.Equal(before, written);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CodecDroppedValue, result.Refusal);
+        Assert.Equal("Weight.Bogus", result.Path);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
     }
 
     [Fact]
     public void TranslatedString_IsWrittenInTheDocumentsOwnObjectForm()
     {
-        var before = DocumentEdits.Serialize(_npc);
+        var formKey = SeedNpc();
+        var before = _fixture.Document(formKey);
 
-        var after = Applied(before, "npc_", SetAt(Json("""{"Value": "Named"}"""), Member("Name")));
+        var after = Applied(formKey, SetAt(Json("""{"Value": "Named"}"""), Member("Name")));
 
         Assert.Equal("Named", Node(after, "Name.Value").GetValue<string>());
         AssertOnlyChanged(before, after, "Name");
@@ -533,13 +585,15 @@ public sealed class DocumentEditTests
     [Fact]
     public void Header_IsSmallMaster_WritesTheFlagsMemberAndNothingElse()
     {
+        var headerFormKey = PluginHeader.FormKeyFor(_mod.ModKey);
         var before = Encoding.UTF8.GetString(HeaderDocument.Write(_mod));
+        _fixture.SeedRaw(headerFormKey, PluginHeader.RecordType, null, before);
 
-        var set = Applied(before, PluginHeader.RecordType, SetAt(Json("true"), Member("IsSmallMaster")));
+        var set = Applied(headerFormKey, SetAt(Json("true"), Member("IsSmallMaster")));
         Assert.True(HeaderDocument.IsLight(Encoding.UTF8.GetBytes(set)));
         AssertOnlyChanged(before, set, "ModHeader.Flags");
 
-        var cleared = Applied(set, PluginHeader.RecordType, SetAt(Json("false"), Member("IsSmallMaster")));
+        var cleared = Applied(headerFormKey, SetAt(Json("false"), Member("IsSmallMaster")));
         Assert.Equal(before, cleared);
     }
 
@@ -547,40 +601,45 @@ public sealed class DocumentEditTests
     public void PartialForm_WritesExactlyItsBitOfTheHeaderFlags_AndTheCodecsOwnViewsOfIt()
     {
         var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = 0x0400 };
-        var before = DocumentEdits.Serialize(cell);
+        var formKey = _fixture.Seed(cell, "cell");
+        var before = _fixture.Document(formKey);
 
-        var set = Applied(before, "cell", SetAt(Json("true"), Member("IsPartialForm")));
+        var set = Applied(formKey, SetAt(Json("true"), Member("IsPartialForm")));
 
         Assert.Equal(0x4400, Node(set, "MajorRecordFlagsRaw").GetValue<int>());
         Assert.All(ConditionEditTests.DocumentDiff(before, set),
             d => Assert.Contains(d.Split(':')[0].Split('[')[0], new[] { "MajorRecordFlagsRaw", "Fallout4MajorRecordFlags", "MajorFlags" }));
 
-        var cleared = Applied(set, "cell", SetAt(Json("false"), Member("IsPartialForm")));
+        var cleared = Applied(formKey, SetAt(Json("false"), Member("IsPartialForm")));
         Assert.Equal(before, cleared);
     }
 
     [Fact]
     public void PartialForm_OnATypeThatCannotCarryIt_IsRefusedByName()
     {
-        var refusal = Apply(DocumentEdits.Serialize(_npc), "npc_", SetAt(Json("true"), Member("IsPartialForm")), out _);
+        var formKey = SeedNpc();
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, refusal.Refusal);
+        var (result, _) = _fixture.Apply(formKey, SetAt(Json("true"), Member("IsPartialForm")));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
     }
 
     [Fact]
     public void PartialFormRecord_RefusesItsOwnFields_ButNotTheFlagOrTheEditorId()
     {
         var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f, MajorRecordFlagsRaw = PartialFormFlag.Bit };
-        var before = DocumentEdits.Serialize(cell);
+        var formKey = _fixture.Seed(cell, "cell");
+        var before = _fixture.Document(formKey);
 
-        var refusal = Apply(before, "cell", SetAt(Json("9.0"), Member("WaterHeight")), out var written);
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.PartialFormFieldReadOnly, refusal.Refusal);
-        Assert.Equal(before, written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("9.0"), Member("WaterHeight")));
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.PartialFormFieldReadOnly, result.Refusal);
+        Assert.Null(after);
+        Assert.Equal(before, _fixture.Document(formKey));
 
-        Assert.Null(Apply(before, "cell", SetAt(Json("\"Renamed\""), Member("EditorID")), out _));
-        Assert.Null(Apply(before, "cell", SetAt(Json("false"), Member("IsPartialForm")), out _));
+        Assert.True(_fixture.Apply(formKey, SetAt(Json("\"Renamed\""), Member("EditorID"))).Result.Applied);
+        Assert.True(_fixture.Apply(formKey, SetAt(Json("false"), Member("IsPartialForm"))).Result.Applied);
     }
 
     // ── container children ──────────────────────────────────────────────────
@@ -591,13 +650,13 @@ public sealed class DocumentEditTests
         var cell = new Cell(_mod) { EditorID = "C", WaterHeight = 5f };
         var placed = new PlacedObject(_mod) { EditorID = "Ref", Scale = 1f };
         cell.Temporary.Add(placed);
-        var before = DocumentEdits.Serialize(cell);
+        var cellKey = _fixture.Seed(cell, "cell");
+        var before = _fixture.Document(cellKey);
 
-        var refusal = DocumentEdits.Apply(
-            before, Schemas["refr"], SetAt(Json("2.5"), Member("Scale")), out var after,
-            prefix: [Member("Temporary"), At(0)], ownerRecordType: "cell");
+        var (result, _) = _fixture.Apply(placed.FormKey.ToString(), SetAt(Json("2.5"), Member("Scale")));
 
-        Assert.Null(refusal);
+        Assert.True(result.Applied, result.Message);
+        var after = _fixture.Document(cellKey);
         Assert.Equal(["Temporary[0].Scale: 1.0 -> 2.5"], ConditionEditTests.DocumentDiff(before, after));
     }
 }

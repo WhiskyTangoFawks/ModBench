@@ -47,8 +47,8 @@ public sealed class BinaryRoundTripGateTests
         }
     }
 
-    // Built fresh from the plugin's current on-disk state each call, the same shape IndexProjector
-    // builds from a live load order.
+    // A fresh overlay and link cache built from the plugin's current on-disk state each call, not
+    // one held across saves.
     private static async Task ProductionSave(string pluginPath, PluginWriter writer)
     {
         using var overlay = ModFactory.ImportGetter(

@@ -1,10 +1,14 @@
+using System.Text;
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Codec.Serialization;
 using MEditService.Commands.Edits;
 using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 using static MEditService.Tests.TestSupport.Envelopes;
 
 namespace MEditService.Tests.Edits;
@@ -12,50 +16,52 @@ namespace MEditService.Tests.Edits;
 /// <summary>A member the union's leaves shape differently is written through the leaf the
 /// document names, a record-level scalar and an OMOD property value alike; the result is the
 /// codec's own document (ADR-0005).</summary>
-public sealed class UnionVariantEditTests
+public sealed class UnionVariantEditTests : IDisposable
 {
-    private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
-        SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+    private readonly DocumentEditFixture _fixture = new();
+    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    private static readonly FormKey Key = FormKey.Factory("000801:UnionVariant.esp");
+    public void Dispose() => _fixture.Dispose();
+
+    private static readonly FormKey Key = FormKey.Factory("000801:DocEdit.esp");
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
+    private static string Serialize(IMajorRecordGetter record) =>
+        Encoding.UTF8.GetString(Codec.SerializeToBytesAsync(record, GameRelease.Fallout4).GetAwaiter().GetResult());
 
     [Fact]
     public void GameSettingFloat_Data_IsWrittenAsTheFloatItsLeafDeclares()
     {
-        var before = DocumentEdits.Serialize(new GameSettingFloat(Key, Fallout4Release.Fallout4) { EditorID = "fTest", Data = 1.5f });
+        var formKey = _fixture.Seed(new GameSettingFloat(Key, Fallout4Release.Fallout4) { EditorID = "fTest", Data = 1.5f }, "gmst");
 
-        var refusal = DocumentEdits.Apply(before, Schemas["gmst"], SetAt(Json("2.5"), Member("Data")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("2.5"), Member("Data")));
 
-        Assert.Null(refusal);
-        Assert.Equal(
-            DocumentEdits.Serialize(new GameSettingFloat(Key, Fallout4Release.Fallout4) { EditorID = "fTest", Data = 2.5f }),
-            written);
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(Serialize(new GameSettingFloat(Key, Fallout4Release.Fallout4) { EditorID = "fTest", Data = 2.5f }), after);
     }
 
     [Fact]
     public void GameSettingBool_Data_RefusesAFloat_BecauseItsOwnLeafHoldsABool()
     {
-        var before = DocumentEdits.Serialize(new GameSettingBool(Key, Fallout4Release.Fallout4) { EditorID = "bTest", Data = true });
+        var formKey = _fixture.Seed(new GameSettingBool(Key, Fallout4Release.Fallout4) { EditorID = "bTest", Data = true }, "gmst");
 
-        var refusal = DocumentEdits.Apply(before, Schemas["gmst"], SetAt(Json("2.5"), Member("Data")), out _);
+        var (result, _) = _fixture.Apply(formKey, SetAt(Json("2.5"), Member("Data")));
 
-        Assert.NotNull(refusal);
-        Assert.Equal(RecordEditRefusal.CodecRejected, refusal.Refusal);
-        Assert.Contains("Data", refusal.Message, StringComparison.Ordinal);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CodecRejected, result.Refusal);
+        Assert.Contains("Data", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ObjectModIntProperty_Value_IsWrittenAsTheIntItsLeafDeclares()
     {
-        var before = DocumentEdits.Serialize(ArmorMod(value: 5));
+        var formKey = _fixture.Seed(ArmorMod(value: 5), "omod");
 
-        var refusal = DocumentEdits.Apply(
-            before, Schemas["omod"], SetAt(Json("42"), Member("Properties"), At(0), Member("Value")), out var written);
+        var (result, after) = _fixture.Apply(formKey, SetAt(Json("42"), Member("Properties"), At(0), Member("Value")));
 
-        Assert.Null(refusal);
-        Assert.Equal(DocumentEdits.Serialize(ArmorMod(value: 42)), written);
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(Serialize(ArmorMod(value: 42)), after);
     }
 
     private static ArmorModification ArmorMod(uint value)
