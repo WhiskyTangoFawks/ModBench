@@ -96,12 +96,12 @@ function offenders(): Record<string, string[]> {
   return found;
 }
 
-// A driven or core box may reach the boxes the diagram draws an arrow to, and node: builtins
-// including the file system — MO2 files is the one door onto the instance, and it is one of
-// these. A bare specifier that is not `vscode` is a package, which only the client may name:
-// its HTTP adapter is the one place a dependency of the wire lives.
+// A bare specifier that is not `vscode` is a package, which only the client may name: its HTTP
+// adapter is the one place a dependency of the wire lives.
 const PACKAGE_IMPORTERS = new Set(['client']);
 
+// A driven or core box may reach the boxes the diagram draws an arrow to, and node: builtins
+// including the file system — MO2 files is the one door onto the instance, and it is one of these.
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
   if (spec === 'vscode') return box === 'instance';

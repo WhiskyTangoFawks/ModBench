@@ -1,6 +1,5 @@
-// The download sidecar, which install owns: a free function per gesture taking the instance root
-// and the download's filename, returning applied or a refusal (ADR-0015 invariant 2). Each writes
-// and returns — the downloads watcher is how the change comes back.
+// The download sidecar, which install owns: a free function per gesture, applied or a refusal
+// (ADR-0015 invariant 2). Each writes and returns — the downloads watcher is how it comes back.
 
 import { setHiddenInText, setInstalledInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile } from '../mo2Files/layout';

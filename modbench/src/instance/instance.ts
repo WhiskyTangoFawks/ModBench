@@ -350,9 +350,6 @@ export class Instance implements vscode.Disposable {
     const profile = readSelectedProfile(iniText);
     const entries = await this.readMods(profile);
     // One read of plugins.txt per recompute, shared by the order and the enabled subset below.
-    // The ini is read once above and handed to the resolver as-is, so a rewrite between it and
-    // activeProfile/gameRelease below cannot land two generations in one value; the game side
-    // runs beside the instance reads, so it costs the recompute no round trip of its own.
     const [index, pluginLines, downloadEntries, deployed, overwriteFileCount, modFolderNames, profiles, game] = await Promise.all([
       buildFileConflictIndex(entries, instanceRoot, log),
       readPluginEntries(instanceRoot, profile),
@@ -361,6 +358,8 @@ export class Instance implements vscode.Disposable {
       countOverwriteFiles(overwriteDir(instanceRoot)),
       readModFolderNames(instanceRoot),
       readProfileNames(instanceRoot),
+      // The ini read above is handed to the resolver as-is, so a rewrite cannot land two
+      // generations in one value; beside the reads above, the game side costs no round trip.
       resolveGameDirectory(iniText).then(async (gameDirectory) => ({
         gameDirectory, dataFolderPlugins: await readDataFolderPlugins(gameDirectory?.dataFolder, log),
       })),
