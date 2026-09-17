@@ -54,9 +54,10 @@ public sealed class TrackedProjectionTests : IDisposable
         // Dirty, so the head reconcile has baselines to write: a clean tree short-circuits it and
         // would leave the multi-advance case untested.
         RenameByHand(_npc, NpcEditorId, "RenamedByHand");
+        PluginBinaries.Touch(_mod.Path);
         var before = _index.Sequence;
 
-        await _index.ReindexPlugin(_mod.KeyOf());
+        Assert.True(await _index.RefreshBinary(_mod.KeyOf(), _mod.Path));
 
         Assert.Equal(before + 1, _index.Sequence);
     }

@@ -130,8 +130,8 @@ public class RegistrationScopingTests
 
         fx.Reconcile(fx.WithoutBeta);
 
-        // The rows remain: the copy is indexed and unregistered.
-        Assert.NotNull(fx.Index.IndexedContentHash(BetaKey));
+        // Unregistered, not unindexed: Register_AfterUnregister_AnswersAgainWithoutReindex is the
+        // rows' own witness.
         Assert.False(fx.Index.Registers(BetaKey));
 
         // Documents.
@@ -211,16 +211,15 @@ public class RegistrationScopingTests
     // Unindex is the file-gone verb: the inverse of indexing, rows and registration alike, so the
     // copy's return is a fresh read of the binary.
     [Fact]
-    public void Unindex_RemovesTheRowsThemselves()
+    public async Task Unindex_RemovesTheRowsThemselves()
     {
         using var fx = Build("registration-unindex");
         var betaPath = fx.Plugins.Plugins.Single(p => p.Name == BetaKey.Name).Path;
         var opened = fx.Opens.OpenedTotal;
 
         File.Delete(betaPath);
-        fx.Index.UnindexPlugin(BetaKey);
+        Assert.True(await fx.Index.RefreshBinary(BetaKey, betaPath));
 
-        Assert.Null(fx.Index.IndexedContentHash(BetaKey));
         Assert.False(fx.Index.Registers(BetaKey));
         Assert.Empty(fx.Reads.GetDocuments(BetaKey));
 
@@ -231,6 +230,6 @@ public class RegistrationScopingTests
         fx.Reconcile(fx.Plugins.Plugins);
 
         Assert.Equal(opened + 1, fx.Opens.OpenedTotal);
-        Assert.NotNull(fx.Index.IndexedContentHash(BetaKey));
+        Assert.NotEmpty(fx.Reads.GetDocuments(BetaKey));
     }
 }

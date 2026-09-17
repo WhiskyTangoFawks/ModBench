@@ -129,7 +129,8 @@ public sealed class RenumberRederivationTests : IDisposable
         const string newWorldspaceKey = "F00020:WorldspaceRenumber.esp";
 
         RenumberWorldspace(fixture, newWorldspaceKey);
-        await fixture.Index.ReindexPlugin(fixture.Plugin);
+        PluginBinaries.Touch(fixture.Entry.Path);
+        Assert.True(await fixture.Index.RefreshBinary(fixture.Plugin, fixture.Entry.Path));
 
         var after = Assert.NotNull(fixture.Reads.GetCellLocation(fixture.Plugin, fixture.ExteriorCell));
         Assert.Equal(newWorldspaceKey, after.ParentWorldspace);

@@ -7,7 +7,7 @@ namespace MEditService.Tests.Plugins;
 
 /// <summary>A "gone from disk" report can outlive the load order it was watching: a superseded watch
 /// still names the plugin key, which the next load order may hold at another path.</summary>
-public sealed class UnindexPluginChecksDiskTests : IDisposable
+public sealed class GoneReportChecksDiskTests : IDisposable
 {
     private readonly PluginFixtureData _data = new PluginFixtureBuilder()
         .WithPlugin("Held.esp", mod => mod.Npcs.AddNew("HeldNpc"))
@@ -17,8 +17,9 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
     private readonly IndexProjector _index;
 
     private PluginCopyKey Key => new(_data.Plugins[0].Name, _data.Plugins[0].Origin);
+    private string HeldPath => _data.Plugins[0].Path;
 
-    public UnindexPluginChecksDiskTests()
+    public GoneReportChecksDiskTests()
     {
         _index = Indexes.Open(_holder);
         _index.Reconcile(_holder, _data.DataFolder, _data.Plugins, GameRelease.Fallout4);
@@ -33,21 +34,21 @@ public sealed class UnindexPluginChecksDiskTests : IDisposable
     private int HeldRows() => _index.Projected().GetRecordTypeCounts(Key).Sum(c => c.Count);
 
     [Fact]
-    public void UnindexPlugin_WhileTheHeldCopyIsStillOnDisk_KeepsItsRows()
+    public async Task AGoneReport_WhileTheHeldCopyIsStillOnDisk_KeepsItsRows()
     {
         Assert.True(HeldRows() > 0, "positive control: the plugin indexed");
 
-        _index.UnindexPlugin(Key);
+        await _index.RefreshBinary(Key, Path.Combine(_data.DataFolder, "a-superseded-path", Key.Name));
 
         Assert.True(HeldRows() > 0, "a stale 'gone from disk' report removed a copy that is still on disk");
     }
 
     [Fact]
-    public void UnindexPlugin_OnceTheHeldCopyIsGone_RemovesItsRows()
+    public async Task AGoneReport_OnceTheHeldCopyIsGone_RemovesItsRows()
     {
-        File.Delete(_data.Plugins[0].Path);
+        File.Delete(HeldPath);
 
-        _index.UnindexPlugin(Key);
+        await _index.RefreshBinary(Key, HeldPath);
 
         Assert.Equal(0, HeldRows());
     }

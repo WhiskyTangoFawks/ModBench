@@ -16,15 +16,13 @@ namespace MEditService.Index;
 internal sealed class HeldPlugins
 {
     private readonly List<PluginMetadata> _plugins = [];
-    private readonly Dictionary<string, PluginLoadFailure> _loadFailures = new(StringComparer.OrdinalIgnoreCase);
     private readonly IPluginAdapter _adapter;
     private readonly ILogger _logger;
 
     // ADR-0012: keyed by the compound (origin, filename) identity — two copies of one filename are
-    // ordinarily held at once, and a filename-keyed key would silently drop one. Joined into one
-    // string so a single OrdinalIgnoreCase comparer covers both halves.
-    private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
-    private static string KeyOf(PluginCopyKey key) => KeyOf(key.Origin, key.Name);
+    // ordinarily held at once, and a filename-keyed key would silently drop one. Compared as every
+    // other keyed lookup compares it, the kernel's own comparer.
+    private readonly Dictionary<PluginCopyKey, PluginLoadFailure> _loadFailures = new(PluginCopyKey.Comparer);
 
     // What is open is read while it is being reconciled, so readers see an immutable snapshot.
     // Copy-on-write, not copy-on-read: opens are a few hundred per cold reconcile, while reads walk
@@ -63,9 +61,7 @@ internal sealed class HeldPlugins
     }
 
     public PluginMetadata? Find(PluginCopyKey key) =>
-        Plugins.FirstOrDefault(p =>
-            p.Name.Equals(key.Name, StringComparison.OrdinalIgnoreCase)
-            && p.Origin.Equals(key.Origin, StringComparison.OrdinalIgnoreCase));
+        Plugins.FirstOrDefault(p => PluginCopyKey.Comparer.Equals(p.Key, key));
 
     /// <summary>A copy that cannot be opened or parsed must not abort the whole reconcile: it is
     /// recorded in <see cref="Failures"/> and nothing is held for it. A success clears any
@@ -134,11 +130,10 @@ internal sealed class HeldPlugins
     {
         lock (_mutation)
         {
-            var key = KeyOf(metadata.Origin, metadata.Name);
-            _plugins.RemoveAll(p => KeyOf(p.Origin, p.Name).Equals(key, StringComparison.OrdinalIgnoreCase));
+            _plugins.RemoveAll(p => PluginCopyKey.Comparer.Equals(p.Key, metadata.Key));
             _plugins.Add(metadata);
             PublishPlugins();
-            _loadFailures.Remove(key);
+            _loadFailures.Remove(metadata.Key);
             Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
         }
     }
@@ -157,9 +152,8 @@ internal sealed class HeldPlugins
     {
         lock (_mutation)
         {
-            var joined = KeyOf(key);
-            var removed = _plugins.RemoveAll(p => KeyOf(p.Origin, p.Name).Equals(joined, StringComparison.OrdinalIgnoreCase)) > 0;
-            if (_loadFailures.Remove(joined))
+            var removed = _plugins.RemoveAll(p => PluginCopyKey.Comparer.Equals(p.Key, key)) > 0;
+            if (_loadFailures.Remove(key))
             {
                 Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
                 removed = true;
@@ -183,9 +177,7 @@ internal sealed class HeldPlugins
 
         lock (_mutation)
         {
-            var index = _plugins.FindIndex(p =>
-                p.Name.Equals(previous.Name, StringComparison.OrdinalIgnoreCase)
-                && p.Origin.Equals(previous.Origin, StringComparison.OrdinalIgnoreCase));
+            var index = _plugins.FindIndex(p => PluginCopyKey.Comparer.Equals(p.Key, previous.Key));
             if (index < 0)
                 throw new KeyNotFoundException($"No plugin '{previous.Name}' from origin '{previous.Origin}' is held.");
 
@@ -207,7 +199,7 @@ internal sealed class HeldPlugins
     {
         lock (_mutation)
         {
-            _loadFailures[KeyOf(key)] = new PluginLoadFailure(key.Name, key.Origin, reason);
+            _loadFailures[key] = new PluginLoadFailure(key.Name, key.Origin, reason);
             Volatile.Write(ref _loadFailuresSnapshot, [.. _loadFailures.Values]);
         }
     }

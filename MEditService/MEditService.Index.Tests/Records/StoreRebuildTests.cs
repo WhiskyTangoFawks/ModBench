@@ -48,9 +48,10 @@ public sealed class StoreRebuildTests : IDisposable
     {
         Reconcile(instanceRoot: null);
         Assert.Equal(1, _opens.OpenedTotal);
-        _index.Close();
+        _index.Dispose();
 
-        Reconcile(instanceRoot: null);
+        using var next = Indexes.Open(_holder, _opens);
+        next.Reconcile(_holder, _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(2, _opens.OpenedTotal);
     }
@@ -63,11 +64,10 @@ public sealed class StoreRebuildTests : IDisposable
 
         _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
 
-        Assert.Null(_index.Reads);
+        Assert.Throws<NoLoadOrderException>(() => _index.RequireReads());
         Assert.Equal(LoadOrderState.None, _index.Status.State);
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(2, _opens.OpenedTotal);
-        Assert.NotNull(_index.IndexedContentHash(Key));
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
     }
 
@@ -93,8 +93,8 @@ public sealed class StoreRebuildTests : IDisposable
     [ForeignIndexHolderFact]
     public void Rebuild_RefusesAndNeverDeletes_WhenAnotherProcessHoldsTheFile()
     {
-        Reconcile(_fixture.InstanceRoot);
-        _index.Close();
+        using (var earlier = Indexes.Open(new LoadOrderHolder(), _opens))
+            earlier.Reconcile(new LoadOrderHolder(), _fixture.GameDirectory, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
         var indexPath = IndexFiles.In(_fixture.InstanceRoot);
         var bytesBeforeHold = File.ReadAllBytes(indexPath);
         using var otherWindow = ForeignIndexHolder.Hold(indexPath);
@@ -119,7 +119,7 @@ public sealed class StoreRebuildTests : IDisposable
             {
                 try
                 {
-                    if (_index.Reads?.GetDocuments(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
+                    if (_index.RequireReads().GetDocuments(Key) is { Count: > 0 }) Interlocked.Increment(ref answered);
                 }
                 catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException)
                 {

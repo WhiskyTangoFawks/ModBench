@@ -37,10 +37,14 @@ public sealed class IndexProjectorTests
         new(fx.GameDirectory, fx.InstanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(plugins ?? fx.Plugins));
 
     // The load-order endpoint's order: the value lands in the kernel, then the Index reconciles it.
-    private static void Reconcile(IndexProjector projector, LoadOrderHolder holder, LoadOrderSnapshot snapshot)
+    private static void Reconcile(IndexProjector projector, LoadOrderHolder holder, LoadOrderSnapshot snapshot) =>
+        projector.Reconcile(snapshot, holder.Apply(snapshot));
+
+    // The binary watch's re-derivation: bytes that differ, then the settle's own poke.
+    private static async Task ReDerive(IndexProjector projector, LoadOrderEntry entry)
     {
-        holder.Apply(snapshot);
-        projector.Reconcile(snapshot);
+        PluginBinaries.Touch(entry.Path);
+        Assert.True(await projector.RefreshBinary(entry.KeyOf(), entry.Path));
     }
 
     private static string SharedNpc(IndexProjector projector) =>
@@ -70,7 +74,7 @@ public sealed class IndexProjectorTests
 
         var b = fx.Plugins.Single(p => p.Name == "B.esp");
         holder.Apply(Snapshot(fx, [.. fx.Plugins.Select(p => p.Name == "B.esp" ? p with { Winning = false } : p)]));
-        await projector.ReindexPlugin(new PluginCopyKey("B.esp", b.Origin));
+        await ReDerive(projector, b);
 
         Assert.Equal("A.esm", WinnerOf(projector, npc));
     }
@@ -137,9 +141,10 @@ public sealed class IndexProjectorTests
         using var fx = TwoProviders("projector-one-advance");
         using var projector = MakeProjector(holder);
         Reconcile(projector, holder, Snapshot(fx));
+        PluginBinaries.Touch(fx.Plugins.Single(p => p.Name == "B.esp").Path);
         var before = projector.Sequence;
 
-        await projector.ReindexPlugin(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
+        Assert.True(await projector.RefreshBinary(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), fx.Plugins.Single(p => p.Name == "B.esp").Path));
 
         Assert.Equal(before + 1, projector.Sequence);
     }
@@ -151,12 +156,13 @@ public sealed class IndexProjectorTests
         using var fx = TwoProviders("projector-batch");
         using var projector = MakeProjector(holder);
         Reconcile(projector, holder, Snapshot(fx));
+        foreach (var entry in fx.Plugins) PluginBinaries.Touch(entry.Path);
         var before = projector.Sequence;
 
         using (projector.BeginProjection())
         {
-            await projector.ReindexPlugin(new PluginCopyKey("A.esm", PluginOrigin.DataDirectory));
-            await projector.ReindexPlugin(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory));
+            foreach (var entry in fx.Plugins)
+                Assert.True(await projector.RefreshBinary(entry.KeyOf(), entry.Path));
         }
 
         Assert.Equal(before + 1, projector.Sequence);

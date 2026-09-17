@@ -123,7 +123,8 @@ public class HeaderIndexingTests
         using var index = Indexes.Reconciled(fixture);
         var key = new PluginCopyKey("ReindexHeader.esp", "Data");
 
-        await index.ReindexPlugin(key);
+        PluginBinaries.Touch(fixture.Plugins.Single().Path);
+        Assert.True(await index.RefreshBinary(key, fixture.Plugins.Single().Path));
 
         var stack = index.RequireReads().GetOverrideStack("000000:ReindexHeader.esp");
         Assert.NotNull(stack);

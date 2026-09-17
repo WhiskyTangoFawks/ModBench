@@ -454,7 +454,6 @@ public class RecordReadsTests(TestPluginFixture fixture)
     {
         using var index = Indexes.Open(new LoadOrderHolder());
         Assert.Throws<NoLoadOrderException>(() => index.RequireReads());
-        Assert.Null(index.Reads);
     }
 
     // --- SQL injection (parameterized query contract) ---

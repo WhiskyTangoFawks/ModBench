@@ -37,8 +37,7 @@ public sealed class ProgressiveIndexingTests
 
         // Parked before B.esp is indexed: the load order exists, and A.esp — indexed one step ago — is
         // fully queryable — not published only after the whole load order has been indexed and swept.
-        var reads = manager.Reads;
-        Assert.NotNull(reads);
+        var reads = manager.RequireReads();
         Assert.Equal(1, reads.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
         // And B.esp — the one being indexed right now — reads as absent rather than half-there.
         Assert.Equal(0, reads.CountOf(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), "npc_"));
@@ -46,8 +45,7 @@ public sealed class ProgressiveIndexingTests
         gate.Release();
         await load;
 
-        var readsAfterLoad = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads after the load finished.");
+        var readsAfterLoad = manager.RequireReads();
         Assert.Equal(1, readsAfterLoad.CountOf(new PluginCopyKey("B.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
@@ -82,7 +80,7 @@ public sealed class ProgressiveIndexingTests
         Assert.True(ready.ConflictsComputed);
         Assert.Empty(ready.Failures);
 
-        manager.Close();
+        manager.Dispose();
         Assert.Equal(LoadOrderState.None, manager.Status.State);
     }
 
@@ -158,8 +156,7 @@ public sealed class ProgressiveIndexingTests
 
         // Interleaved exactly rather than raced: begin an enumeration, let the load open one more plugin,
         // then keep enumerating, which is the shape that throws on a plain List<T>, deterministically.
-        var reads = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads while the load is parked.");
+        var reads = manager.RequireReads();
         var opened = reads.OpenedCopies;
         using var enumerator = opened.GetEnumerator();
         Assert.True(enumerator.MoveNext());
@@ -195,15 +192,15 @@ public sealed class ProgressiveIndexingTests
         // Unload must wait for the load to stop touching the repository before disposing it: disposing a
         // DuckDB connection under an in-flight index is a native crash, not an exception, and it takes the
         // whole backend down with it.
-        var unload = Task.Run(manager.Close);
+        var unload = Task.Run(manager.Dispose);
         var premature = await Task.WhenAny(unload, Task.Delay(TimeSpan.FromMilliseconds(500)));
         Assert.NotSame(unload, premature); // disposed while the load was still running
 
         gate.Release();
         await unload;
-        await Assert.ThrowsAsync<OperationCanceledException>(() => load);
+        await load;
 
-        Assert.Null(manager.Reads);
+        Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
         Assert.Equal(LoadOrderState.None, manager.Status.State);
         // The load stopped where it was told to rather than running to completion first.
         Assert.DoesNotContain("C.esp", gate.Opened);
@@ -220,8 +217,7 @@ public sealed class ProgressiveIndexingTests
 
         var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
-        var readsWhileParked = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads while the load is parked.");
+        var readsWhileParked = manager.RequireReads();
 
         // A second snapshot while a reconcile is running is an ordinary event (a watcher firing
         // during activation), not an edge case.
@@ -230,17 +226,17 @@ public sealed class ProgressiveIndexingTests
         Assert.NotSame(second, premature); // the second reconcile waited for the first to stop
 
         gate.Release();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => first);
+        await first;
         await second;
 
         // ADR-0013: the same instance is reconciled in place, one index rather than a second replacing the
         // first. What the superseded reconcile landed stays, and its successor finishes the set.
-        Assert.Same(readsWhileParked, manager.Reads);
+        Assert.Same(readsWhileParked, manager.RequireReads());
         Assert.Equal(LoadOrderState.Ready, manager.Status.State);
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(manager.Status.ConflictsComputed);
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
-        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -261,8 +257,7 @@ public sealed class ProgressiveIndexingTests
 
         var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, beforeTheCreate, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
-        var readsWhileParked = manager.Reads
-            ?? throw new InvalidOperationException("Expected an active reads while the load is parked.");
+        var readsWhileParked = manager.RequireReads();
 
         // ADR-0007: a create registers its copy on the holder before the Index hears of it, so the
         // arriving snapshot names a copy the parked reconcile never knew about.
@@ -280,11 +275,10 @@ public sealed class ProgressiveIndexingTests
         gate.Release();
         // Superseded or run to completion: once the gate opens, either ordering is the projector's
         // to choose and everything below holds for both.
-        var superseded = await Record.ExceptionAsync(() => first);
-        Assert.True(superseded is null or OperationCanceledException, $"the parked reconcile failed: {superseded}");
+        await first;
         await second;
 
-        Assert.Same(readsWhileParked, manager.Reads);
+        Assert.Same(readsWhileParked, manager.RequireReads());
         Assert.Equal(LoadOrderState.Ready, manager.Status.State);
         Assert.True(manager.Status.ConflictsComputed);
         Assert.Equal(
@@ -293,8 +287,8 @@ public sealed class ProgressiveIndexingTests
         // Opened once each across both reconciles: the arriving snapshot adds a copy to the scope
         // rather than restarting it.
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
-        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
-        Assert.Equal(1, manager.Reads.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
+        Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
     [Fact]
@@ -311,11 +305,7 @@ public sealed class ProgressiveIndexingTests
 
         // A load holding the load order lock end to end returns nothing at all until the whole load order
         // is indexed and swept. A timeout is the only way to tell "answered" from "eventually answered".
-        var read = Task.Run(() =>
-        {
-            var repo = manager.Reads;
-            return repo == null ? (int?)null : repo.CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_");
-        });
+        var read = Task.Run(() => manager.RequireReads().CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
         var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));
 
         Assert.Same(read, finished); // timed out = a read is blocked behind the load again

@@ -115,9 +115,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             Unindex(key);
     }
 
-    // ADR-0014: the rebuild endpoint's whole job on an already-opened index — construction already
-    // refused (IndexHeldElsewhereException) if another process held the file, so nothing here
-    // re-checks that. atLeastSequence keeps Sequence monotonic within this process across the drop.
+    // ADR-0009 invariant 5: the rebuild's whole job on an already-opened index — construction
+    // already refused (IndexHeldElsewhereException) if another process held the file, so nothing
+    // here re-checks that. atLeastSequence keeps Sequence monotonic within this process.
     internal void RebuildEmpty(GameRelease release, long atLeastSequence)
     {
         _indexStore.RebuildFile();
@@ -127,8 +127,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Indexing ---
 
-    public void Index(IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath = null) =>
-        Index(documents, registration, key.Name, key.Origin, filePath);
+    public void Index(IPluginDocuments documents, Registration registration, PluginCopyKey key, string? filePath, DerivedFrom derivedFrom) =>
+        Index(documents, registration, key.Name, key.Origin, filePath, derivedFrom);
 
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginCopyKey key) => _indexStore.IndexedContentHash(key);
@@ -145,7 +145,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
     // ADR-0012: origin is threaded into every per-plugin delete/upsert/append so a plugin is
     // identified by (origin, plugin) together, never filename alone.
     private void Index(
-        IPluginDocuments documents, Registration registration, string plugin, string origin, string? filePath)
+        IPluginDocuments documents, Registration registration, string plugin, string origin, string? filePath,
+        DerivedFrom derivedFrom)
     {
         var schemas = RequireSchemas();
 
@@ -157,8 +158,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         // One `registrations` row per indexed plugin, in the same transaction as its rows: ADR-0009
         // makes registration visibility, so rows arriving without it would answer nothing.
         UpsertRegistration(plugin, origin, registration);
-        // And the disk claim these rows are about, replaced with them rather than beside them.
-        _indexStore.StampIndexedFile(plugin, origin, filePath);
+        // And the facts about these rows — the disk claim, the derivation, the diagnosis — replaced
+        // with them rather than beside them.
+        _indexStore.StampCopy(plugin, origin, filePath, derivedFrom);
 
         // Must run before the appender is created.
         RequirePluginIngest().DeletePriorDocuments(plugin, origin);
@@ -195,9 +197,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
 
         RequirePluginIngest().DeleteAllRowsFor(plugin, origin);
-        // The file claim goes with the rows it describes — Unindex is the file-gone verb, so leaving
-        // it behind would leave the files table asserting rows the index does not hold.
-        _indexStore.DeleteIndexedFile(plugin, origin);
+        // The copy's facts go with the rows they describe — Unindex is the file-gone verb, so leaving
+        // them behind would leave the files table asserting rows the index does not hold.
+        _indexStore.DeleteCopyFacts(plugin, origin);
         DeleteRegistration(plugin, origin);
         _indexStore.BumpSequence();
 
@@ -364,8 +366,8 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             tx.Commit();
         }
 
-        // ADR-0014: after the commit, so a subscriber re-reading on receipt sees the rows this
-        // names — embedded children included, since a record panel open on a placed ref inside a
+        // ADR-0015 invariant 3: after the commit, so a subscriber re-reading on receipt sees the rows
+        // this names — embedded children included, since a record panel open on a placed ref inside a
         // refreshed cell has no other signal.
         _indexStore.Announce(() => _notifications?.Publish(new RowsChangedNotification(key, touched, Sequence)));
     }
@@ -502,7 +504,7 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             ResweepWinners();
         }
 
-        // ADR-0014: too many rows to name, exactly as the plugin watcher's own re-index reports it.
+        // ADR-0015 invariant 3: too many rows to name, so the copy is named, at the sequence it landed on.
         _indexStore.Announce(() => _notifications?.Publish(new PluginChangedNotification(key, Sequence)));
     }
 
@@ -851,6 +853,45 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
         /// <summary>Both halves of "could not be read": a record whose own document failed, and a
         /// record type whose enumeration did. Keyed by <c>ColumnKey.Of</c> rather than a bare
         /// filename, which two loaded copies can share.</summary>
+        public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses()
+        {
+            using var connection = owner.OpenRead();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT plugin, origin, anchor, defect_class, tail, message
+                FROM {TableDdlBuilder.PluginDiagnosisTable}
+                ORDER BY plugin, origin, ordinal
+                """;
+            using var reader = cmd.ExecuteReader();
+
+            var rows = new List<PluginDiagnosisRow>();
+            while (reader.Read())
+            {
+                rows.Add(new PluginDiagnosisRow(
+                    new PluginCopyKey(reader.GetString(0), reader.GetString(1)),
+                    new PluginDiagnosis(
+                        reader.IsDBNull(2) ? null : reader.GetString(2),
+                        reader.GetString(3),
+                        reader.IsDBNull(4) ? null : reader.GetString(4),
+                        reader.GetString(5))));
+            }
+            return rows;
+        }
+
+        public IReadOnlySet<PluginCopyKey> GetTrackedCopies()
+        {
+            using var connection = owner.OpenRead();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = $"SELECT plugin, origin FROM {TableDdlBuilder.CopySourceTable} WHERE derived_from = $1";
+            AddParams(cmd, [DerivedFrom.SourceTree.ToString()]);
+            using var reader = cmd.ExecuteReader();
+
+            var tracked = new HashSet<PluginCopyKey>(PluginCopyKey.Comparer);
+            while (reader.Read())
+                tracked.Add(new PluginCopyKey(reader.GetString(0), reader.GetString(1)));
+            return tracked;
+        }
+
         public IReadOnlySet<string> GetPluginsWithParseFailures()
         {
             using var connection = owner.OpenRead();

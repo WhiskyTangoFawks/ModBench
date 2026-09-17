@@ -131,10 +131,9 @@ public sealed class ArchitectureTests
     public void LoadOrder_ArrivesOnlyThroughTheApiEndpoints()
     {
         var root = SolutionDirectory();
-        // ADR-0007's created copy reaches the Index through the next snapshot, so create
-        // never reconciles. Reconcile itself is called only from OnLoadOrderChanged — no
-        // `.Reconcile(` exists elsewhere to allow.
-        string[] reconcilers = [];
+        // Create never reconciles: its copy reaches the Index through the next snapshot. The
+        // composition root is the one caller of the reconcile door. debt #946: the watcher takes the call.
+        string[] reconcilers = ["Program.cs"];
         string[] writers = ["PluginEndpoints.cs", "PutLoadOrderHandler.cs"];
 
         var reconciles = Offenders(root, Projects, [".Reconcile("], []);
