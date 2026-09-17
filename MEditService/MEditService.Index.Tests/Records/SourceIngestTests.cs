@@ -64,8 +64,6 @@ public sealed class SourceIngestTests : IDisposable
 
     private string RootDocument => Path.Combine(ModFolder, SourceRepository.RootFor(PluginName), "RecordData.json");
 
-    // ---- The working tree is Effective ----
-
     [Fact]
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()
     {
@@ -78,8 +76,6 @@ public sealed class SourceIngestTests : IDisposable
 
         Assert.Equal("ExternallyRenamed", reloaded.RequireReads().DocumentOf(_npc, Plugin).EditorId);
     }
-
-    // ---- The reappearing-record gap, resolved by construction ----
 
     [Fact]
     public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
@@ -113,8 +109,6 @@ public sealed class SourceIngestTests : IDisposable
         // The Head row is HEAD's own bytes, not a reconstruction: same text `git show` serves.
         Assert.Equal(_entry.Git("show", $"HEAD:{relativePath.Replace('\\', '/')}"), head.Body);
     }
-
-    // ---- HEAD is Head, the working tree is Effective, and they diverge ----
 
     [Fact]
     public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
@@ -189,8 +183,6 @@ public sealed class SourceIngestTests : IDisposable
         Assert.Equal(WorkingTreeState.None, byFormKey[_race].WorkingTreeState);
     }
 
-    // ---- Re-indexing a tracked copy reads its tree, never its binary ----
-
     [Fact]
     public async Task ReindexPlugin_OnATrackedCopy_ReDerivesFromItsSourceTree_UnderALiveLoadOrder()
     {
@@ -205,8 +197,6 @@ public sealed class SourceIngestTests : IDisposable
 
         Assert.Equal("ExternallyRenamed", index.Projected().DocumentOf(_npc, Plugin).EditorId);
     }
-
-    // ---- A source tree that cannot be read degrades to the binary, visibly ----
 
     [Fact]
     public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheFailures()
@@ -237,7 +227,10 @@ public sealed class SourceIngestTests : IDisposable
 
         File.WriteAllText(RootDocument, "{ this is not json");
 
-        await Assert.ThrowsAnyAsync<Exception>(() => index.ReindexPlugin(Plugin));
+        // The half-written root document surfaces as the JSON reader's own failure, propagated
+        // rather than swallowed into a null downstream. Its subclass is not public, so the base
+        // is what a caller can match.
+        await Assert.ThrowsAnyAsync<JsonException>(() => index.ReindexPlugin(Plugin));
 
         // The binary was never consulted: it holds the fixture's untouched height_max, and what
         // still answers is the edited 0.75 the source-derived rows already carried.
@@ -295,8 +288,6 @@ public sealed class SourceIngestTests : IDisposable
         Assert.NotNull(stack);
         Assert.Single(stack.Entries);
     }
-
-    // ---- A renamed source unit is one dirty record, not two half-records ----
 
     [Fact]
     public void AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete()

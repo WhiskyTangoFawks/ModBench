@@ -10,9 +10,9 @@ using Noggog;
 
 namespace MEditService.Tests.TestSupport;
 
-/// <summary>Regenerates the committed cut-down plugin from a locally installed Fallout 4. Acts only
-/// when <c>MEDIT_REGEN_TESTDATA=1</c> and a game install is found, otherwise skips; review and
-/// commit the updated <c>TestData/mEditTestSubset.esm</c>.</summary>
+/// <summary>Regenerates the committed cut-down plugin from a locally installed Fallout 4. A tool,
+/// not an assertion: without <c>MEDIT_REGEN_TESTDATA=1</c> and a game install it does nothing.
+/// Commit the updated <c>TestData/mEditTestSubset.esm</c>.</summary>
 public sealed class CutDownPluginGenerator
 {
     private const int RecordsPerType = 4;

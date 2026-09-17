@@ -4,9 +4,8 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.Records;
 
-/// <summary>Runs against <see cref="ContainerMod"/>: the flat fixture holds no containers, which is
-/// how a container regression once shipped unseen. <c>SourceIngestParityTests</c> covers the same
-/// ground at scale.</summary>
+/// <summary>Runs against <see cref="ContainerMod"/>, whose records nest: a flat fixture exercises
+/// no container at all. <c>SourceIngestParityTests</c> covers the same ground at scale.</summary>
 public sealed class SourceIngestContainerTests : IDisposable
 {
     private readonly ContainerMod _fixture = new();
