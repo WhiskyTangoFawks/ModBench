@@ -1,15 +1,13 @@
 import * as vscode from 'vscode';
 import { join } from 'node:path';
 import type { MasterIssue, PluginDiagnosisReport, PluginLoadFailure, PluginMetadata, MEditClient } from '../client';
-import type { InstanceValue, InstanceView } from '../instance/instance';
-import { firstReadOf, type FirstRead } from '../modmanager/instanceFirstRead';
-import type { PluginEntry } from '../modmanager/model';
+import type { InstanceValue, InstanceView, PluginEntry } from '../instance/instance';
+import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import type { Reporter } from '../ports/reporter';
-import { dropIndexForMove } from '../mo2Codecs/pluginsText';
-import type { ImplicitMasterSource } from '../pluginsCommands/plugins';
-import { failurePrefixIcon } from '../failurePrefixIcon';
+import type { ImplicitMasterSource, PluginsDrop } from '../pluginsCommands/plugins';
+import { failurePrefixIcon } from './failurePrefixIcon';
 import { IndexingNode, type PluginTreeNode, type PluginTreeProvider } from './PluginTreeProvider';
-import { ErrorNode } from '../errorNode';
+import { ErrorNode } from './errorNode';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -35,7 +33,7 @@ const NO_IMPLICIT_MASTERS: ImplicitMasterSource = () => Promise.resolve([]);
  *  profile by the composition root; a refused command reaches this provider as a rejection. */
 export interface PluginListSource {
   setPluginEnabled(pluginName: string, enabled: boolean): Promise<void>;
-  reorderPlugins(pluginNames: string[], toIndex: number): Promise<void>;
+  reorderPlugins(pluginNames: string[], drop: PluginsDrop): Promise<void>;
 }
 
 /** The mEdit reads every plugin-keyed fact comes from — the port narrowed to what this tree
@@ -295,8 +293,8 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The write reaches disk; the Instance's own watcher is what brings the result back
-   *  (ADR-0015 invariant 2). `invalidate()` here drops the cache and re-renders ahead of it. */
+  /** The write reaches disk and returns (ADR-0015 invariant 2); the Instance owns the watcher
+   *  that brings the result back (invariant 7). `invalidate()` drops the cache ahead of it. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
@@ -631,10 +629,10 @@ export class PluginsTreeProvider
     if (!payload || !isDropPayload(payload.value)) return;
     const { names } = payload.value;
     if (names.length === 0) return;
-    const toIndex = this.dropIndexFor(target, names);
-    if (toIndex === undefined) return;
+    const drop = this.dropFor(target);
+    if (drop === undefined) return;
     try {
-      await this.source.reorderPlugins(names, toIndex);
+      await this.source.reorderPlugins(names, drop);
     } catch (e) {
       // ADR-0019: an explicit user action failed — notify + log, then resync the
       // moved rows against disk so the tree never shows a phantom reorder.
@@ -647,11 +645,12 @@ export class PluginsTreeProvider
   // VS Code can hand the drop a row this controller never produced, and "not one of my rows" is
   // not "past the last row" — the latter means the losing end, so a foreign row must not fall
   // through to it.
-  private dropIndexFor(target: PluginsTreeNode | undefined, names: string[]): number | undefined {
+  private dropFor(target: PluginsTreeNode | undefined): PluginsDrop | undefined {
     if (target !== undefined && !OWN_ROW_KINDS.has((target as { kind?: string }).kind ?? '')) return undefined;
-    if (target instanceof ImplicitMasterNode) return 0;
-    const targetName = target instanceof PluginNode ? target.plugin.name : undefined;
-    return dropIndexForMove(this.lastOrder, names, targetName);
+    // An implicit master's row is above every plugins.txt line, so a drop on one is the top.
+    if (target instanceof ImplicitMasterNode) return { kind: 'winningEnd' };
+    if (target instanceof PluginNode) return { kind: 'before', name: target.plugin.name };
+    return { kind: 'losingEnd' };
   }
 }
 

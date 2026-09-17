@@ -165,7 +165,7 @@ requires a deploy.**
 - This spec covers the **Mods surface**: the Mods tree, install, conflict/status
   badges, deploy/purge, launching executables as tasks, the modlist source-adapter model,
   profile switching, and the editing-backend lifecycle hook this surface owns.
-- The mod manager is a subsystem of the VS Code extension (`modbench/src/modmanager/`). It
+- The mod manager is a subsystem of the VS Code extension (`modbench/src/mods/`). It
   is file/HTTP/JSON work and **parses no plugin binary at all**: a plugin's declared masters,
   and which plugins load with no `plugins.txt` line, come from the backend through the
   generated client, and `pluginBinaryScan.test.ts` is the gate. The C# backend stays a pure
@@ -400,7 +400,7 @@ The extension owns the editing backend process
 - **A new mod** is one rename: meta.ini is written into the staged tree first, then the whole
   tree lands in one filesystem event, so the folder is never seen
   half-built. The installer writes **no `modlist.txt` line**. The Instance's recompute off
-  `mods/**` lands a value the modlist adoption (`modmanager/modAdoptionTrigger.ts`) reads,
+  `mods/**` lands a value the modlist adoption (`modAdoptionTrigger.ts`) reads,
   registering the new folder as a **disabled** entry — the same path a folder dropped in by MO2
   or by hand takes — so an install is one signal with one owner.
 - **An upgrade** replaces the folder in place: every entry but `.git` is removed,
@@ -703,7 +703,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
   aborting the deploy.
 - **Prior art**: `modlistText.test.ts`, `metaIni.test.ts`, `modOrganizerIni.test.ts`,
   `statusChecker.test.ts` — fixture-in / value-out style; real MO2 instance fixtures live
-  under `modbench/src/modmanager/test/fixtures/`.
+  under `modbench/src/test/mo2/fixtures/`.
 - **Task-provider seams** (Vitest, no VS Code): parsing `[customExecutables]` into entries —
   Qt's `<n>\key` array numbering, `Z:` versus `C:` drive translation, staging-relative binary
   detection — asserted fixture-in / value-out against a real `ModOrganizer.ini`; and the

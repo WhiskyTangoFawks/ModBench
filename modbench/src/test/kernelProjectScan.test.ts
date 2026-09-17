@@ -2,7 +2,7 @@
 // a root solution over both. The reference lists are the maintainer's, drawn in
 // target-architecture-references.d2.
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
@@ -14,7 +14,7 @@ const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
 // the arrows that leave the box, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
   mo2Files: ['mo2Codecs', 'ports', 'tables'],
-  instance: ['mo2Codecs', 'mo2Files', 'ports'],
+  instance: ['mo2Codecs', 'mo2Files', 'ports', 'tables'],
 };
 
 // The core column, same rule. An arrow the diagram draws that the code has no use for is left
@@ -28,7 +28,17 @@ const CORE_BOXES: Record<string, string[]> = {
   client: ['wire'],
 };
 
-const REFERENCING_BOXES = { ...DRIVEN_BOXES, ...CORE_BOXES };
+
+// The driving band: each view reads a value and fires a command, with the reference list
+// target-architecture-references.d2 draws for it.
+const VIEW_BOXES: Record<string, string[]> = {
+  mods: ['install', 'instance', 'modlist', 'ports'],
+  downloads: ['install', 'instance', 'ports'],
+  plugins: ['client', 'instance', 'pluginsCommands', 'ports'],
+  editor: ['client', 'ports', 'wire'],
+};
+
+const REFERENCING_BOXES = { ...DRIVEN_BOXES, ...CORE_BOXES, ...VIEW_BOXES };
 
 const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 
@@ -58,6 +68,16 @@ const referencePaths = (relativePath: string): string[] =>
 const testFiles = (box: string): string[] =>
   fileNames(kernelProject(box)).concat(fileNames(LEGACY_PROJECT))
     .filter((f) => f.startsWith(join('src', box) + '/') && f.includes('.test.'));
+
+// Off the disk, not off a project's file list: a test belonging to no project is invisible to
+// every list there is, which is the very state this has to catch.
+function testFilesOnDisk(box: string): string[] {
+  const walk = (dir: string): string[] => readdirSync(join(MODBENCH, dir), { withFileTypes: true })
+    .flatMap((entry) => (entry.isDirectory()
+      ? walk(join(dir, entry.name))
+      : (entry.name.endsWith('.test.ts') ? [join(dir, entry.name)] : [])));
+  return walk(join('src', box));
+}
 
 describe('one composite project per box', () => {
   it.each(BOXES)('%s has its own tsconfig', (box) => {
@@ -98,6 +118,20 @@ describe('one composite project per box', () => {
   // handler could call without an extension host: neither holds a host type.
   it.each(Object.keys(CORE_BOXES))('%s sees the Node types and no others', (box) => {
     expect(parsed(kernelProject(box)).options.types).toEqual(['node']);
+  });
+
+  // A view is a driving adapter onto VS Code's own trees, panels and palette — the one band
+  // whose whole reason to exist is the extension host.
+  it.each(Object.keys(VIEW_BOXES))('%s sees the Node and VS Code types', (box) => {
+    expect(parsed(kernelProject(box)).options.types).toEqual(['node', 'vscode']);
+  });
+
+  // Rival: a view reaching a codec for a splice or a table for a game name. Read off the
+  // tsconfig on disk, one assertion per box, so either box alone fails it.
+  it.each(Object.keys(VIEW_BOXES))('%s references neither the codecs nor the tables', (box) => {
+    const references = referencePaths(kernelProject(box));
+    expect(references).not.toContain(join('src', 'mo2Codecs'));
+    expect(references).not.toContain(join('src', 'tables'));
   });
 
   // The rule the compiler enforces for the driven and core columns: each box references exactly
@@ -146,6 +180,17 @@ describe('the legacy project holds every file not yet moved', () => {
   // containment check above vacuously.
   it('finds the codecs box’s own tests', () => {
     expect(testFiles('mo2Codecs').length).toBeGreaterThan(5);
+  });
+
+  // Rival: a test left beside its source rather than under the box's `test/`. The legacy
+  // project's glob swallows it and the box's own project excludes it, so it compiles in neither.
+  it.each(BOXES)('compiles every test on disk under %s', (box) => {
+    const compiled = new Set(fileNames(LEGACY_PROJECT));
+    expect(testFilesOnDisk(box).filter((f) => !compiled.has(f))).toEqual([]);
+  });
+
+  it.each(Object.keys(VIEW_BOXES))('finds %s’s own tests on disk', (box) => {
+    expect(testFilesOnDisk(box).length).toBeGreaterThan(0);
   });
 });
 

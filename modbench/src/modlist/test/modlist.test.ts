@@ -38,7 +38,7 @@ import {
 } from '../modlist';
 import { parseModlist } from '../../mo2Codecs/modlistText';
 
-const fixture = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance');
+const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 
 // The fixture's own mods/ folders, as the value lists them for the new-empty-mod refusal.
 const MOD_FOLDERS = [
@@ -111,15 +111,37 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   it('reorderMod writes the new line order', async () => {
-    const outcome = await reorderMod(dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', 0);
+    const outcome = await reorderMod(dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'winningEnd' });
     expect(outcome).toEqual({ applied: true, wrote: true });
     const names = (await readModlist()).map((e) => e.name);
     expect(names[0]).toBe('Cracked and Smudged Pip-Boy Screen');
   });
 
+  // The two sides must land one slot apart, or a tree running losing-at-top puts every drop one
+  // row off from where the user let go.
+  it('reorderMod settles a drop before its target', async () => {
+    const outcome = await reorderMod(
+      dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'before', name: 'Unofficial Fallout 4 Patch' });
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names.slice(2, 5)).toEqual([
+      '[NODELETE] Radfall', 'Cracked and Smudged Pip-Boy Screen', 'Unofficial Fallout 4 Patch',
+    ]);
+  });
+
+  it('reorderMod settles a drop after its target, one slot further on', async () => {
+    const outcome = await reorderMod(
+      dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'after', name: 'Unofficial Fallout 4 Patch' });
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names.slice(2, 5)).toEqual([
+      '[NODELETE] Radfall', 'Unofficial Fallout 4 Patch', 'Cracked and Smudged Pip-Boy Screen',
+    ]);
+  });
+
   it('reorderMod refuses an unknown mod', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    const outcome = await reorderMod(dir, 'Default', 'No Such Mod', 0);
+    const outcome = await reorderMod(dir, 'Default', 'No Such Mod', { kind: 'winningEnd' });
     assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
@@ -191,9 +213,11 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
   });
 
   it('reorderSeparatorBlock moves the separator and its members together', async () => {
-    // toIndex counts entries with the block already removed; 2 lands it after Unofficial
-    // Fallout 4 Patch — genuinely moved, not the no-op its current front position would be.
-    const outcome = await reorderSeparatorBlock(dir, 'Default', 'Unassigned (Modlist Development)', 2);
+    // Dropped onto the next separator — genuinely moved, not the no-op its current front
+    // position would be.
+    const outcome = await reorderSeparatorBlock(
+      dir, 'Default', 'Unassigned (Modlist Development)',
+      { kind: 'before', name: 'Radfall - All-In-One Survival Overhaul' });
     expect(outcome).toEqual({ applied: true, wrote: true });
     const names = (await readModlist()).map((e) => e.name);
     expect(names[2]).toBe('SKK Fast Start new game (Fallout 4)');
@@ -202,7 +226,7 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
 
   it('reorderSeparatorBlock refuses an unknown separator', async () => {
     const before = await readFile(modlistPath(), 'utf8');
-    const outcome = await reorderSeparatorBlock(dir, 'Default', 'No Such Separator', 0);
+    const outcome = await reorderSeparatorBlock(dir, 'Default', 'No Such Separator', { kind: 'winningEnd' });
     assertRefusal(outcome);
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });

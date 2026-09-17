@@ -21,6 +21,12 @@ export interface InstallMeta {
   installedFiles?: readonly InstalledFileId[];
 }
 
+/** What a new mod is called before the user says otherwise: the archive's own name, stripped of
+ *  the extension install knows how to extract. */
+export function defaultModName(archivePath: string): string {
+  return basename(archivePath).replace(/\.(zip|7z|rar)$/i, '');
+}
+
 /** Install's refusal when a new mod's folder is already there, shared with the name prompt so
  *  both readings of the same collision say the same thing. */
 export function modNameCollisionRefusal(name: string): string {

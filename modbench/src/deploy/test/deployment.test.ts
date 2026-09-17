@@ -6,7 +6,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { deployMods, purgeMods } from '../deployment';
-import { makeDeployerFixture, makeIndex, type DeployerFixture } from '../../modmanager/test/deployerFixture';
+import { makeDeployerFixture, makeIndex, type DeployerFixture } from '../../test/mo2/deployerFixture';
 
 const PROFILE = 'Default';
 const MANIFEST = join('mods', '.medit-manifest.json');

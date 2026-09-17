@@ -24,16 +24,17 @@ import { wireQuestionOpen } from '../externalChangeWiring';
 import { PluginTreeProvider } from '../PluginTreeProvider';
 import { InMemoryMEditClient } from '../../client';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
-import { scriptedDialog } from '../../test/surfacingDoubles';
+import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { present } from '../../ports/present';
 
 function wire(askQuestion = scriptedDialog(), presentCrashRepair = vi.fn().mockResolvedValue(undefined)) {
   const outputChannel = new FakeLogOutputChannel();
   const client = new InMemoryMEditClient();
   const treeProvider = new PluginTreeProvider(client);
-  wireQuestionOpen(client, outputChannel, treeProvider, vi.fn(), askQuestion, presentCrashRepair);
+  const reporter = recordingReporter();
+  wireQuestionOpen(client, outputChannel, treeProvider, vi.fn(), askQuestion, presentCrashRepair, reporter);
   return {
-    outputChannel,
+    outputChannel, reporter,
     deps: present(subscribeQuestionOpen.mock.calls[0], "wireQuestionOpen's call to the coordinator")[0],
   };
 }
@@ -53,13 +54,14 @@ describe('wireQuestionOpen', () => {
     expect(wire(scriptedDialog(), presentCrashRepair).deps.presentCrashRepair).toBe(presentCrashRepair);
   });
 
-  it('routes a gesture refusal through the reporter: logged and toasted with the "Modbench: " prefix', () => {
-    const { outputChannel, deps } = wire();
+  // How an error reaches the user is the reporter port's (ADR-0019); what this wiring owes is
+  // that the coordinator's refusal reaches the reporter at all, at the error tier.
+  it('routes a gesture refusal to the reporter it was handed', () => {
+    const { reporter, deps } = wire();
     deps.showError('Could not keep "ModA" as your own edit — x');
 
-    expect(outputChannel.error).toHaveBeenCalledWith(
-      '[externalChange] error: Could not keep "ModA" as your own edit — x',
-    );
-    expect(showErrorMessage).toHaveBeenCalledWith('Modbench: Could not keep "ModA" as your own edit — x');
+    expect(reporter.reports).toEqual([
+      { severity: 'error', message: 'Could not keep "ModA" as your own edit — x', detail: undefined },
+    ]);
   });
 });

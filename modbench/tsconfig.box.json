@@ -4,6 +4,10 @@
     // Composite is what lets another project reference this one. `types: ["node"]` keeps every
     // other @types package out of scope, so a VS Code ambient global is a compile error; an
     // explicit `import 'vscode'` still resolves, and kernelImportScan.test.ts is what refuses it.
+    // A box's whole purpose is to fail the build on an import its reference list does not draw,
+    // and such an import is outside `rootDir`: without this, that failing build still scatters
+    // the offending box's output beside the sources it reached into.
+    "noEmitOnError": true,
     "composite": true,
     "declaration": true,
     "declarationMap": true,

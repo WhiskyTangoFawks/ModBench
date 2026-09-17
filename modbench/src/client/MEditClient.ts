@@ -11,6 +11,10 @@ import {
 } from './apiClient';
 import type { RecordEditEnvelope } from '../wire/messages';
 
+/** What `editRecord` is handed. Re-exported because a caller of the one write path names this
+ *  type, and the client is the seam it reaches the backend through (ADR-0007). */
+export type { RecordEditEnvelope } from '../wire/messages';
+
 /** The backend process as the extension reports it: starting while it comes up, attached while
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */
 export type BackendStatus = 'starting' | 'attached' | 'disconnected' | 'stopped';

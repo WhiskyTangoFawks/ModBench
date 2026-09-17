@@ -355,7 +355,7 @@ describe('the extension opens no plugin file for reading', () => {
   });
 
   it('holds the undecoded-read rule to production files, exempting test support', () => {
-    expect(isTestSupport(join('src', 'modmanager', 'test', 'corpusFixture.ts'))).toBe(true);
+    expect(isTestSupport(join('src', 'test', 'mo2', 'corpusFixture.ts'))).toBe(true);
     expect(isTestSupport(join('src', 'modmanager', 'instance.test.ts'))).toBe(true);
     expect(isTestSupport(join('src', 'modmanager', 'instance.ts'))).toBe(false);
   });

@@ -4,12 +4,12 @@ import { mkdtemp, mkdir, writeFile, rm, symlink, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import type { Mod, Separator, ModlistEntry } from '../../modmanager/model';
+import type { Mod, Separator, ModlistEntry } from '../instance';
 import { buildFileConflictIndex, rootLevelWinners, foldPath } from '../fileConflictIndex';
 import { parseModlist } from '../../mo2Codecs/modlistText';
 import { computeModStatuses } from '../statusChecker';
 import { deployToGameData, type DeployLink } from '../../mo2Files/files';
-import { makeDeployerFixture } from '../../modmanager/test/deployerFixture';
+import { makeDeployerFixture } from '../../test/mo2/deployerFixture';
 import { present } from '../../ports/present';
 
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
@@ -19,8 +19,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, stat: vi.fn(actual.stat) };
 });
 
-const fixture = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'conflict-instance');
-const caseFixture = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'case-conflict-instance');
+const fixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'conflict-instance');
+const caseFixture = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'case-conflict-instance');
 
 const mod = (name: string, enabled = true): Mod => ({ kind: 'mod', name, enabled });
 const separator = (name: string, enabled = true): Separator => ({ kind: 'separator', name, enabled });

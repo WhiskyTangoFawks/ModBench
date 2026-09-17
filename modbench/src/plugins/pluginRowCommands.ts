@@ -1,22 +1,30 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
+import * as path from 'node:path';
 import { isRefused, type MEditClient, type CompileResult } from '../client';
 import { headerFormKeyFor, type PluginTreeProvider } from './PluginTreeProvider';
-import { resolveCompileTarget } from '../medit/compileTarget';
-import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';
-import { resolveOrigin } from '../medit/resolveOrigin';
+import { resolveCompileTarget } from './compileTarget';
+import { offerEslFlagRemoval } from './eslFlagRemovalPrompt';
+import { resolveOrigin } from './resolveOrigin';
 import type { OriginFolder } from '../instance/loadOrderSnapshot';
 import {
   trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf, type IsTracked,
-} from '../medit/trackedRepositories';
+} from './trackedRepositories';
 import { runRebase } from './externalChangeGestures';
 import { makeMergeEditorOpener } from './externalChangeWiring';
-import { trackProgressMessage } from '../medit/trackProgress';
+import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
-import { withPluginsViewProgress, type ExtensionSession } from '../session';
-import { say } from '../editingTeardown';
+
+/** The Plugins tree's one progress surface (ADR-0002): a spinner over the view while the work
+ *  runs, and the view's own message line. The composition root holds the `TreeView`, so it
+ *  supplies both. */
+export interface PluginsViewProgress {
+  /** Runs `work` under the spinner, clearing the message on every exit path. */
+  while: (work: () => Promise<void>) => Promise<void>;
+  /** `undefined` gives the line back to whatever else had something to say. */
+  say: (message: string | undefined) => void;
+}
 
 // Everything Save & Compile and Compile at Ref call: resolving an origin and a record's owner,
 // compiling, and (on an ESL contradiction) editing the header to retry.
@@ -26,7 +34,7 @@ type CompileClient = Pick<MEditClient, 'getPlugins' | 'getRecordOwner' | 'compil
 // mega-plugin's serialization is a one-time, worst-case tens-of-seconds cost (ADR-0007), so this
 // runs under the Plugins-view progress indicator.
 export function registerTrackCommand(
-  session: ExtensionSession, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
+  progress: PluginsViewProgress, client: Pick<MEditClient, 'getPlugins' | 'track'>, outputChannel: vscode.LogOutputChannel,
   reporter: Reporter, treeProvider: PluginTreeProvider, onTracked: () => Promise<void>,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode | undefined) => {
@@ -48,10 +56,10 @@ export function registerTrackCommand(
     );
     if (!choice) return;
 
-    await withPluginsViewProgress(session, async () => {
-      say(session, trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
+    await progress.while(async () => {
+      progress.say(trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
       const result = await client.track(origin, choice.label, {
-        onProgress: (status) => say(session, trackProgressMessage(origin, status)),
+        onProgress: (status) => { progress.say(trackProgressMessage(origin, status)); },
       });
       if (isRefused(result)) { reporter.report('error', result.message); return; }
       // Tracked-ness isn't plugin metadata the tree renders, but the row needs to gain its Track

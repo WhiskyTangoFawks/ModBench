@@ -35,7 +35,7 @@ vi.mock('../workspaceConfig', () => ({ meditConfig: () => ({ get: () => undefine
 import { registerToolboxCommands, DEPLOY_CONFIRM_BUTTON, DEPLOY_DECLINED, type ToolboxCommandDeps } from '../toolboxCommands';
 import { recordingReporter, scriptedDialog } from './surfacingDoubles';
 import type { AskQuestion } from '../ports/dialog';
-import { instanceValueFixture } from '../modmanager/test/instanceValueFixture';
+import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
 import { FakeLogOutputChannel } from './fakeOutputChannel';
 import { present } from '../ports/present';
 

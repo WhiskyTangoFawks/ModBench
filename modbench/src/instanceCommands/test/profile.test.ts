@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { switchProfile } from '../profile';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../modmanager/test/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 
 const INI = 'ModOrganizer.ini';
 

@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
+import * as path from 'node:path';
 import type { CrashRepairOffer, MEditClient } from '../client';
 import {
   subscribeQuestionOpen, type OpenMergeEditor,
 } from './externalChangeCoordinator';
 import type { PluginTreeProvider } from './PluginTreeProvider';
-import { makeReporter } from '../reporter';
+import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 
 // Its own file, not externalChangeGestures.ts: `subscribeQuestionOpen` (a value import)
@@ -21,11 +21,11 @@ export function wireQuestionOpen(
   treeProvider: PluginTreeProvider, refreshMatchingPlugins: () => void,
   askQuestion: AskQuestion,
   presentCrashRepair: (offers: CrashRepairOffer[]) => Promise<void>,
+  reporter: Reporter,
 ): () => void {
   // `log` is a compat shim (defaults to .info) for modules taking a flat `(msg) => void`, built
   // here at the boundary so the flat shape stops at the collaborator that needs it.
   const log = (msg: string) => outputChannel.info(msg);
-  const reporter = makeReporter(outputChannel, 'externalChange');
   return subscribeQuestionOpen({
     client,
     showDialog: askQuestion,

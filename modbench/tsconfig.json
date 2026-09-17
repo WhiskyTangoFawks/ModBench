@@ -13,6 +13,10 @@
     { "path": "./src/install" },
     { "path": "./src/deploy" },
     { "path": "./src/client" },
+    { "path": "./src/mods" },
+    { "path": "./src/downloads" },
+    { "path": "./src/plugins" },
+    { "path": "./src/editor" },
     { "path": "./tsconfig.legacy.json" }
   ]
 }

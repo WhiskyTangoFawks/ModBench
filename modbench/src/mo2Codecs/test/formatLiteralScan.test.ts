@@ -295,7 +295,7 @@ describe('mo2 layout names', () => {
 
   it('leaves test files to spell their own fixtures', () => {
     expect(isTestFile(join('src', 'instance', 'test', 'instance.test.ts'))).toBe(true);
-    expect(isTestFile(join('src', 'modmanager', 'test', 'corpusFixture.ts'))).toBe(true);
+    expect(isTestFile(join('src', 'test', 'mo2', 'corpusFixture.ts'))).toBe(true);
     expect(isTestFile(join('webview', 'src', 'RecordPanel.test.tsx'))).toBe(true);
     expect(isTestFile(join('src', 'instance', 'instance.ts'))).toBe(false);
     expect(isTestFile(join('webview', 'src', 'RecordPanel.tsx'))).toBe(false);

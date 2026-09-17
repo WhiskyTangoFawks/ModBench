@@ -19,6 +19,7 @@ import { createDownloadsWatcher } from './downloadsWatcher';
 import { scanDownloads } from './downloadsScan';
 import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from '../mo2Codecs/downloads';
 import { SETTINGS_FILE_NAME, readGameName, readSelectedProfile } from '../mo2Codecs/modOrganizerIni';
+import { nexusSlugForGame } from '../tables/gamePaths';
 import { parseModlist, unlistedModNames } from '../mo2Codecs/modlistText';
 import { parsePlugins } from '../mo2Codecs/pluginsText';
 import { parseMetaIni } from '../mo2Codecs/metaIni';
@@ -30,6 +31,14 @@ import type { GameDirectory, GameDirectoryResolver } from '../mo2Files/gameDirec
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
 import { exists, get, listDir, manifestFile } from '../mo2Files/files';
+
+/** The rows this value is made of. A view names a row's shape through the read model that
+ *  publishes it, never through the codec that parsed the file behind it. */
+export type { InstalledFileId } from '../mo2Codecs/metaIni';
+export type { Mod, ModlistEntry, Separator } from '../mo2Codecs/modlistText';
+export { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
+export type { PluginEntry } from '../mo2Codecs/pluginsText';
+export type { DownloadRow, DownloadStatus } from '../mo2Codecs/downloads';
 
 /** How long an MO2 write takes to settle: the wait a burst coalesces into one recompute on, and
  *  the wait before an empty modlist read is believed. */
@@ -79,6 +88,8 @@ export interface InstanceValue {
   readonly activeProfile: string;
   /** ModOrganizer.ini's `gameName`. */
   readonly gameRelease: string;
+  /** The Nexus domain for that release, so a view linking to a mod page names no game itself. */
+  readonly nexusSlug: string;
   /** Setting, then MO2's `gamePath`, then autodetect; undefined when none resolve. */
   readonly gameDirectory: GameDirectory | undefined;
   /** What the game's Data folder holds at its root — presence, never provision — or the reason
@@ -176,6 +187,7 @@ const emptyValue = (instanceRoot: string): InstanceValue => ({
   downloads: [],
   activeProfile: '',
   gameRelease: '',
+  nexusSlug: '',
   gameDirectory: undefined,
   dataFolderPlugins: { kind: 'unresolved' },
   deployed: false,
@@ -350,6 +362,7 @@ export class Instance implements vscode.Disposable {
       })),
     ]);
     const { gameDirectory, dataFolderPlugins } = game;
+    const gameName = readGameName(iniText);
     // Both derive from the same index generation, so they run concurrently.
     const [plugins, modStatuses] = await Promise.all([
       // An unresolved game directory loses only the Data-folder copies' paths: every
@@ -385,7 +398,8 @@ export class Instance implements vscode.Disposable {
         }))
         : [],
       activeProfile: profile,
-      gameRelease: readGameName(iniText),
+      gameRelease: gameName,
+      nexusSlug: nexusSlugForGame(gameName),
       gameDirectory,
       dataFolderPlugins,
       deployed,

@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.box.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/plugins",
+    // A view is a driving adapter: it reads a value and fires a command through VS Code's own
+    // trees, panels and palette, so the extension host is its whole reason to exist.
+    "types": ["node", "vscode"]
+  },
+  "references": [
+    { "path": "../client" },
+    { "path": "../instance" },
+    { "path": "../pluginsCommands" },
+    { "path": "../ports" }
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

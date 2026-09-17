@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
 import type { PluginMetadata } from '../../client';
 import type { ActivateExports } from '../../extension';
-import { DownloadNode, type DownloadsTreeNode } from '../../modmanager/DownloadsProvider';
+import { DownloadNode, type DownloadsTreeNode } from '../../downloads/DownloadsProvider';
 import { present } from '../../ports/present';
 
 const TEST_PORT = 15172;
