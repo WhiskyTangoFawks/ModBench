@@ -1,8 +1,10 @@
+using System.Text.Json;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.Tests.Traces;
 
@@ -14,17 +16,36 @@ public sealed class AChangeFromAnotherToolTraceTests : HostedTests
     private const string Plugin = "Shared.esp";
     private const string Origin = "SharedMod";
     private const string Npc = "SharedNpc";
+    private const string Quest = "SharedQuest";
+    private const string Cell = "SharedCell";
+    private const string PlacedRef = "SharedRef";
 
     private async Task<ScatteredFixtureData> ATrackedMod()
     {
         var fx = new PluginFixtureBuilder("trace-another-tool")
-            .WithPlugin(Plugin, mod => mod.Npcs.AddNew(Npc).HeightMax = 0.5f, origin: Origin)
+            .WithPlugin(Plugin, mod =>
+            {
+                mod.Npcs.AddNew(Npc).HeightMax = 0.5f;
+                mod.Quests.Add(new Quest(mod) { EditorID = Quest, Filter = "OriginalFilter" });
+                var cell = new Cell(mod) { EditorID = Cell };
+                cell.Temporary.Add(new PlacedObject(mod) { EditorID = PlacedRef, Position = new P3Float(1f, 2f, 3f), Scale = 1f });
+                var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+                subBlock.Cells.Add(cell);
+                var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
+                block.SubBlocks.Add(subBlock);
+                mod.Cells.Records.Add(block);
+            }, origin: Origin)
             .BuildScattered();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         (await Client.Track(Origin)).EnsureSuccessStatusCode();
         (await Client.PutLoadOrder(fx)).EnsureSuccessStatusCode();
         return fx;
     }
+
+    private async Task<JsonElement> Field(string formKey, string name) =>
+        (await Client.Record(formKey)).GetProperty("fields").EnumerateArray()
+            .Single(f => f.GetProperty("metadata").GetProperty("name").GetString() == name)
+            .GetProperty("value");
 
     // A hand edit under the source tree is a change Modbench did not make, and it comes back as the
     // same rows-changed push an edit through the API produces.
@@ -57,5 +78,46 @@ public sealed class AChangeFromAnotherToolTraceTests : HostedTests
         var question = Assert.Single(await stream.EventsUntil("question-open"));
         Assert.Equal(Origin, question.GetProperty("origin").GetString());
         Assert.Contains(Plugin, question.GetProperty("keys").EnumerateArray().Select(k => k.GetString()));
+    }
+
+    // A container record's document is one the repository lays out on its own terms, and a revert
+    // by git is a write Modbench did not make: it reaches the next read the same way a flat
+    // record's does.
+    [Fact]
+    public async Task AGitRevertOfAQuestsDocument_ReachesTheNextRead()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var quest = await Client.FirstFormKey(Plugin, "qust");
+        var before = await Client.Sequence();
+        (await Client.Edit(quest, Plugin, Origin, "Filter", "EditedFilter")).EnsureSuccessStatusCode();
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal("EditedFilter", (await Field(quest, "Filter")).GetString());
+        var afterEdit = await Client.Sequence();
+
+        OtherTool.RevertsASourceDocument(modFolder, Plugin, "EditedFilter");
+
+        await Client.SequenceReaches(afterEdit + 1);
+        Assert.Equal("OriginalFilter", (await Field(quest, "Filter")).GetString());
+    }
+
+    // An embedded child lives in its owning cell's document, so the revert of that one file is
+    // what brings the placed ref back.
+    [Fact]
+    public async Task AGitRevertOfAPlacedRefsOwningCellDocument_ReachesTheNextRead()
+    {
+        using var fx = await ATrackedMod();
+        var modFolder = OtherTool.ModFolderOf(fx, Origin);
+        var placedRef = await Client.FirstFormKey(Plugin, "refr");
+        var before = await Client.Sequence();
+        (await Client.Edit(placedRef, Plugin, Origin, "Scale", 2.5)).EnsureSuccessStatusCode();
+        await Client.SequenceReaches(before + 1);
+        Assert.Equal(2.5f, (await Field(placedRef, "Scale")).GetSingle());
+        var afterEdit = await Client.Sequence();
+
+        OtherTool.RevertsASourceDocument(modFolder, Plugin, "2.5");
+
+        await Client.SequenceReaches(afterEdit + 1);
+        Assert.Equal(1f, (await Field(placedRef, "Scale")).GetSingle());
     }
 }

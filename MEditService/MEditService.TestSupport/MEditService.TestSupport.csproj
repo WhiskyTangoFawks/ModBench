@@ -16,6 +16,7 @@
     <!-- The collecting logger implements ILogger, and Mutagen's transitive 6.0.1 declares it with
          the pre-nullable shape. Pinned to what every test project already resolves, so the fake
          compiles against the same interface its consumers see. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />

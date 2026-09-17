@@ -1,8 +1,8 @@
 using MEditService.Index;
-using MEditService.Tests.TestSupport;
+using MEditService.Watcher.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 
-namespace MEditService.Tests.Bridge;
+namespace MEditService.Watcher.Tests.Bridge;
 
 /// <summary>ADR-0019: the timer callback that raises a settled batch has no caller to propagate to,
 /// so a fault must reach the injected logger rather than vanishing.</summary>
@@ -11,13 +11,12 @@ public sealed class SettleFaultLoggingTests
     private const string Origin = "OneMod";
     private const string PluginName = "A.esp";
 
-    private static WatchedTree Watching(IndexWriteGate? writeGate = null)
+    private static async Task<WatchedTree> Watching(IndexWriteGate? writeGate = null)
     {
         var tree = new WatchedTree(writeGate);
         var modFolder = tree.AddMod(Origin, PluginName);
         WatchedTree.Track(modFolder, PluginName);
-        tree.ApplyLoadOrder();
-        tree.Watcher.WatchSourceOf(Origin);
+        await tree.ApplyLoadOrder();
         return tree;
     }
 
@@ -26,7 +25,7 @@ public sealed class SettleFaultLoggingTests
     [Fact]
     public async Task ASettledBatch_IsLoggedRatherThanLost_WhenAnotherWriterHoldsTheGate()
     {
-        using var tree = Watching(new IndexWriteGate(TimeSpan.FromMilliseconds(100)));
+        using var tree = await Watching(new IndexWriteGate(TimeSpan.FromMilliseconds(100)));
 
         using var held = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
@@ -57,7 +56,7 @@ public sealed class SettleFaultLoggingTests
     [Fact]
     public async Task ASettleThatFaultsOutright_IsLoggedRatherThanLost()
     {
-        using var tree = Watching();
+        using var tree = await Watching();
         tree.Index.RefusesProjectionScope = true;
 
         WatchedTree.WriteUnnamedDocument(ModFolderOf(tree), PluginName);
