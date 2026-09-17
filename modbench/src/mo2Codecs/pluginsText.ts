@@ -138,19 +138,3 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
     return lines.join('');
   });
 }
-
-/** A drag names a pre-removal target row, but `movePluginsInText` counts from the
- *  list with the moved names gone, so every moved row above the target shifts it
- *  left. An absent or unknown `targetName` appends. */
-export function dropIndexForMove(
-  order: string[],
-  movedNames: string[],
-  targetName: string | undefined,
-): number {
-  const moved = new Set(movedNames);
-  const found = targetName === undefined ? -1 : order.indexOf(targetName);
-  const targetIndex = found < 0 ? order.length : found;
-  let movedBefore = 0;
-  for (const name of order.slice(0, targetIndex)) if (moved.has(name)) movedBefore++;
-  return targetIndex - movedBefore;
-}

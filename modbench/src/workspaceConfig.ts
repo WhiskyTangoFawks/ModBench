@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { GameDirectoryOverrides } from './mo2Files/gameDirectory';
-import { mo2InstanceContext } from './modmanager/mo2InstanceContext';
+import { mo2InstanceContext } from './mo2InstanceContext';
 
 /** Vocabulary-neutral workspace facts both bounded contexts read, so they belong to neither
  *  context's folder nor to the composition root. */

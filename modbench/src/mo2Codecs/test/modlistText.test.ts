@@ -16,9 +16,9 @@ import {
   unlistedModNames,
   writeModlist,
 } from '../modlistText';
-import type { Mod, ModlistEntry, Separator } from '../../modmanager/model';
+import type { Mod, ModlistEntry, Separator } from '../modlistText';
 
-const fixtureDir = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance');
+const fixtureDir = join(__dirname, '..', '..', 'test', 'mo2', 'fixtures', 'mo2-instance');
 const defaultModlist = () =>
   readFileSync(join(fixtureDir, 'profiles', 'Default', 'modlist.txt'), 'utf8');
 

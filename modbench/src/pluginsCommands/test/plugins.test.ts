@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { appendPlugin, pluginLinesDelta, reconcilePlugins, reorderPlugins, setPluginEnabled } from '../plugins';
-import { providedPluginsIn } from '../../modmanager/test/corpusFixture';
+import { providedPluginsIn } from '../../test/mo2/corpusFixture';
 import { isPluginFile } from '../../mo2Files/pluginFile';
 import type { DataFolderPlugins } from '../../instance/loadOrderSnapshot';
 
@@ -49,13 +49,13 @@ describe('plugins.txt commands — each verb writes bytes or returns a refusal',
     expect(await mtime()).toEqual(LONG_AGO);
   });
 
-  it('reorderPlugins writes the moved line at the requested slot', async () => {
-    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], 0)).toEqual({ applied: true, wrote: true });
+  it('reorderPlugins writes the moved line at the winning end', async () => {
+    expect(await reorderPlugins(dir, PROFILE, ['Other.esp'], { kind: 'winningEnd' })).toEqual({ applied: true, wrote: true });
     expect(await plugins()).toBe('# header\r\nOther.esp\r\n*Base.esp\r\n');
   });
 
   it('reorderPlugins refuses a name with no line, naming it, and writes nothing', async () => {
-    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], 0), 'No Such.esp');
+    assertRefusal(await reorderPlugins(dir, PROFILE, ['No Such.esp'], { kind: 'winningEnd' }), 'No Such.esp');
     expect(await plugins()).toBe(INITIAL);
     expect(await mtime()).toEqual(LONG_AGO);
   });

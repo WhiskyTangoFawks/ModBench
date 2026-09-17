@@ -12,14 +12,14 @@ import { Instance, SETTLE_MS, loadOrderSnapshotOf } from './instance/instance';
 import { refreshOnGameDirectoryChange } from './gameDirectorySetting';
 import { gameDirectoryResolver } from './mo2Files/gameDirectory';
 import { isMo2Instance } from './mo2Files/files';
-import { ModListProvider } from './modmanager/ModListProvider';
+import { ModListProvider } from './mods/ModListProvider';
 import { PluginsTreeProvider, type PluginFactsClient, type PluginsTreeNode, type PluginListSource } from './plugins/PluginsTreeProvider';
 import { gameReleaseForGame } from './tables/gamePaths';
 import type { Reporter } from './ports/reporter';
 import type { AskQuestion } from './ports/dialog';
 import { originFolder, type DataFolderPlugins } from './instance/loadOrderSnapshot';
-import { DownloadsProvider } from './modmanager/DownloadsProvider';
-import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
+import { DownloadsProvider } from './downloads/DownloadsProvider';
+import { ImplicitMasterDecorationProvider } from './plugins/ImplicitMasterDecorationProvider';
 import { makeRefreshAll } from './refreshAll';
 import { ToolboxProvider } from './ToolboxProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
@@ -27,11 +27,13 @@ import { enterEditingAcrossRestarts } from './medit/backendStatus';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
 import { reconcilePlugins, reorderPlugins, setPluginEnabled, type ImplicitMasterSource, type PluginsCommandResult } from './pluginsCommands/plugins';
 import { adoptMods } from './modlist/modlist';
-import { registerModAdoption } from './modmanager/modAdoptionTrigger';
-import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
+import { registerModAdoption } from './modAdoptionTrigger';
+import { registerPluginsReconcile } from './pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
-import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerModListCoreCommands } from './modmanager/modManagementCommands';
-import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
+import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerModListCoreCommands } from './mods/modManagementCommands';
+import { createModListView, registerDownloadsView, registerNotMo2InstanceWelcome } from './mo2TreeViews';
+import { onModCheckboxChanged } from './mods/modCheckboxHandler';
+import { collidingModName } from './mods/modNameCollision';
 import { gameDirectoryOverrides, setMo2InstanceContext } from './workspaceConfig';
 import { registerToolboxCommands } from './toolboxCommands';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
@@ -93,8 +95,8 @@ function pluginListSource(instanceRoot: string, instance: Instance): PluginListS
   return {
     setPluginEnabled: (name, enabled) =>
       applyOrThrow(setPluginEnabled(instanceRoot, instance.value.activeProfile, name, enabled)),
-    reorderPlugins: (names, toIndex) =>
-      applyOrThrow(reorderPlugins(instanceRoot, instance.value.activeProfile, names, toIndex)),
+    reorderPlugins: (names, drop) =>
+      applyOrThrow(reorderPlugins(instanceRoot, instance.value.activeProfile, names, drop)),
   };
 }
 
@@ -474,7 +476,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // in the applied outcome is logged here, because no caller is left to hear it.
   own(instance.subscribe(() => void reconcile().catch((e: unknown) => outputChannel.error(
     `[toolbox] handing mEdit the load order threw: ${e instanceof Error ? e.message : String(e)}`))));
-  own(modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)));
+  own(modListView.onDidChangeCheckboxState((e) =>
+    onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));
   ownAll(own, registerToolboxCommands({
     instanceRoot, instance, outputChannel, updateProfileDescription, reporterFor, ask,
@@ -488,7 +491,10 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     instance, (profile, unlistedFolders) => adoptMods(instanceRoot, profile, unlistedFolders),
     () => modListProvider.invalidate(), outputChannel));
   own(registerPluginsReconcile(instance, runPluginsReconcile));
-  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask);
+  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, {
+    nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
+    warnIfFomod,
+  });
   // ADR-0014: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
   // a rebuild failure is reported through the injected reporter, never a bare toast (modbench/CLAUDE.md).
   const refreshAll = makeRefreshAll({

@@ -12,8 +12,10 @@ import {
   parseModlist,
   removeModFromText,
   renameSeparatorInText,
+  separatorBlockNames,
   setEnabledInText,
 } from '../mo2Codecs/modlistText';
+import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
 import { setUninstalledInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile, modDir, modlistFile } from '../mo2Files/layout';
 import { ensureDir, exists, put, putIfChanged, remove } from '../mo2Files/files';
@@ -47,11 +49,21 @@ export function setModEnabled(
   return spliceModlist(instanceRoot, profile, (text) => setEnabledInText(text, modName, enabled));
 }
 
-/** Move a mod to `toIndex` among entry lines (drag-reorder). */
+/** Where a drag landed in the Mods tree. Re-exported so the view names the drop without naming
+ *  the codec that settles it into an index. */
+export type { Drop as ModlistDrop } from '../mo2Codecs/dropIndex';
+
+// Settled against the text the splice is about to rewrite, so a tree a generation behind
+// modlist.txt cannot land the block at a stale index.
+const entryIndexOf = (text: string, movedNames: readonly string[], drop: Drop): number =>
+  dropIndexIn(parseModlist(text).map((e) => e.name), movedNames, drop);
+
+/** Move a mod to where the drag landed. */
 export function reorderMod(
-  instanceRoot: string, profile: string, modName: string, toIndex: number,
+  instanceRoot: string, profile: string, modName: string, drop: Drop,
 ): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => moveModInText(text, modName, toIndex));
+  return spliceModlist(instanceRoot, profile, (text) =>
+    moveModInText(text, modName, entryIndexOf(text, [modName], drop)));
 }
 
 /** Insert a new enabled separator after `afterEntryName`; when that entry is itself a
@@ -94,11 +106,12 @@ export function moveModToSeparator(
   return spliceModlist(instanceRoot, profile, (text) => moveModToSeparatorEndInText(text, modName, separatorName));
 }
 
-/** Move a separator and every mod it wraps, as one block, to entry-index `toIndex`. */
+/** Move a separator and every mod it wraps, as one block, to where the drag landed. */
 export function reorderSeparatorBlock(
-  instanceRoot: string, profile: string, separatorName: string, toIndex: number,
+  instanceRoot: string, profile: string, separatorName: string, drop: Drop,
 ): Promise<ModlistCommandResult> {
-  return spliceModlist(instanceRoot, profile, (text) => moveSeparatorBlockInText(text, separatorName, toIndex));
+  return spliceModlist(instanceRoot, profile, (text) => moveSeparatorBlockInText(
+    text, separatorName, entryIndexOf(text, separatorBlockNames(parseModlist(text), separatorName), drop)));
 }
 
 // A mod outlives its download, so an archive that is gone is left alone: a sidecar beside no

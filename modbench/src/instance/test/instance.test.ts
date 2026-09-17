@@ -2,9 +2,9 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { watchers, fakeVscodeModule, type FakeWatcher } from '../../modmanager/test/fakeVscodeWatcher';
+import { watchers, fakeVscodeModule, type FakeWatcher } from '../../test/mo2/fakeVscodeWatcher';
 import { present } from '../../ports/present';
-import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../modmanager/test/corpusFixture';
+import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from '../../test/mo2/corpusFixture';
 import { setEnabledInText } from '../../mo2Codecs/modlistText';
 import { setSelectedProfileInText } from '../../mo2Codecs/modOrganizerIni';
 import type { GameDirectoryResolver } from '../../mo2Files/gameDirectory';
@@ -558,6 +558,7 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     );
     expect(instance.value.activeProfile).toBe('Default');
     expect(instance.value.gameRelease).toBe('Fallout 4');
+    expect(instance.value.nexusSlug).toBe('fallout4');
     expect(instance.value.gameDirectory).toEqual({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
     expect(instance.value.deployed).toBe(false);
 

@@ -12,8 +12,8 @@ import {
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
   headerFormKeyFor,
 } from '../PluginTreeProvider';
-import { ErrorNode } from '../../errorNode';
-import { recordResourceUri } from '../../medit/recordResourceUri';
+import { ErrorNode } from '../errorNode';
+import { recordResourceUri } from '../recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
 import { present } from '../../ports/present';
 

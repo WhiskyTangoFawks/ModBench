@@ -15,9 +15,9 @@ import { presentCrashRepairOffers } from './plugins/crashRepairOffer';
 import { makeReporter } from './reporter';
 import { askQuestion } from './dialog';
 import { registerEditorCommands, ActiveRecordTracker } from './editor';
-import { exitEditing, refreshMatchingPlugins } from './editingTeardown';
+import { exitEditing, refreshMatchingPlugins, say } from './editingTeardown';
 import { createToolbox } from './toolbox';
-import type { ExtensionSession } from './session';
+import { withPluginsViewProgress, type ExtensionSession } from './session';
 import { meditConfig } from './workspaceConfig';
 import { isTracked } from './mo2Files/files';
 import {
@@ -171,6 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
         () => { void refreshMatchingPlugins(session); },
         askQuestion,
         showCrashRepairOffers,
+        makeReporter(outputChannel, 'externalChange'),
       ),
     },
     referencedByTreeView,
@@ -188,6 +189,8 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeSync: treeProvider, meditClient, referencedByTreeView, outputChannel,
+      reporterFor: (tag) => makeReporter(outputChannel, tag),
+      ask: askQuestion,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session); },
       refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
@@ -237,7 +240,8 @@ function registerPluginRowCommands(deps: PluginRowCommandDeps): vscode.Disposabl
   const refreshMatchingPluginsFor = () => { void refreshMatchingPlugins(session); };
   return [
     registerTrackCommand(
-      session, client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
+      { while: (work) => withPluginsViewProgress(session, work), say: (message) => say(session, message) },
+      client, outputChannel, makeReporter(outputChannel, 'pluginListTree.track'), treeProvider,
       async () => {
         await registerHeldTrackedRepositories(
           client, outputChannel, (repos) => { session.pluginRepositories = repos; }, isTracked);

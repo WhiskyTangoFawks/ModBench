@@ -16,7 +16,11 @@
     { "path": "./src/instanceCommands" },
     { "path": "./src/install" },
     { "path": "./src/deploy" },
-    { "path": "./src/client" }
+    { "path": "./src/client" },
+    { "path": "./src/mods" },
+    { "path": "./src/downloads" },
+    { "path": "./src/plugins" },
+    { "path": "./src/editor" }
   ],
   "include": ["src"],
   "exclude": [
@@ -35,6 +39,10 @@
     "src/instanceCommands/*.ts",
     "src/install/*.ts",
     "src/deploy/*.ts",
-    "src/client/*.ts"
+    "src/client/*.ts",
+    "src/mods/*.ts",
+    "src/downloads/*.ts",
+    "src/plugins/*.ts",
+    "src/editor/*.ts"
   ]
 }

@@ -7,7 +7,7 @@ import { watch } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { installFromArchive, installFromFolder } from '../install';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../modmanager/test/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from '../../test/mo2/corpusFixture';
 import type { Runner } from '../extractArchive';
 import { writeMetaIni } from '../../mo2Codecs/metaIni';
 import { present } from '../../ports/present';
