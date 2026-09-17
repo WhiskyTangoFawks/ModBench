@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 const SCHEME = 'medit-record';
 

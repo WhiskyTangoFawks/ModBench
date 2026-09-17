@@ -30,7 +30,7 @@ import { appendPlugin } from '../../modmanager/commands/plugins';
 import { InMemoryMEditClient } from '../../medit/client';
 import { recordingReporter } from '../../test/surfacingDoubles';
 import { instanceValueFixture } from '../../modmanager/test/instanceValueFixture';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 beforeEach(() => {
   handlers.clear();

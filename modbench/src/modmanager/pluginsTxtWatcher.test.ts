@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { watchers, fakeVscodeModule } from './test/fakeVscodeWatcher';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 vi.mock('vscode', () => fakeVscodeModule());
 

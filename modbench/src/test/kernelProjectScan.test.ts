@@ -1,0 +1,116 @@
+// One composite project per kernel box, a legacy project for what has not moved, and a root
+// solution over both. The reference lists are the maintainer's, drawn in
+// target-architecture-references.d2.
+import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import ts from 'typescript';
+
+const MODBENCH = join(__dirname, '..', '..');
+
+const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
+
+const ROOT_SOLUTION = 'tsconfig.json';
+const LEGACY_PROJECT = 'tsconfig.legacy.json';
+
+const kernelProject = (box: string): string => join('src', box, 'tsconfig.json');
+
+// TypeScript's own resolution of include, exclude and `extends`, so what is asserted is what the
+// compiler builds, not the globs and the inheritance chain that happen to spell it.
+function parsed(relativePath: string): ts.ParsedCommandLine {
+  const path = join(MODBENCH, relativePath);
+  const result = ts.getParsedCommandLineOfConfigFile(path, undefined, {
+    ...ts.sys,
+    onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, ' ')); },
+  });
+  if (!result) throw new Error(`No parsed command line for ${relativePath}`);
+  return result;
+}
+
+const fileNames = (relativePath: string): string[] =>
+  parsed(relativePath).fileNames.map((f) => relative(MODBENCH, f));
+
+const referencePaths = (relativePath: string): string[] =>
+  (parsed(relativePath).projectReferences ?? []).map((r) => relative(MODBENCH, r.path)).sort();
+
+const testFiles = (box: string): string[] =>
+  fileNames(kernelProject(box)).concat(fileNames(LEGACY_PROJECT))
+    .filter((f) => f.startsWith(join('src', box) + '/') && f.includes('.test.'));
+
+describe('one composite project per kernel box', () => {
+  it.each(KERNEL_BOXES)('%s has its own tsconfig', (box) => {
+    expect(existsSync(join(MODBENCH, kernelProject(box)))).toBe(true);
+  });
+
+  // Composite is what lets another project reference it, and what lets `tsc -b` skip a box
+  // whose inputs have not changed.
+  it.each(KERNEL_BOXES)('%s is composite', (box) => {
+    expect(parsed(kernelProject(box)).options.composite).toBe(true);
+  });
+
+  // The rule the compiler enforces: a kernel box references nothing, so a box that starts
+  // needing another box fails `tsc -b` rather than compiling quietly.
+  it.each(KERNEL_BOXES)('%s references nothing', (box) => {
+    expect(referencePaths(kernelProject(box))).toEqual([]);
+  });
+
+  // `types: ["node"]` is the other half of the same rule: without it every @types package,
+  // `@types/vscode` included, is ambient in a box the record panel also reads.
+  it.each(KERNEL_BOXES)('%s sees the Node types and no others', (box) => {
+    expect(parsed(kernelProject(box)).options.types).toEqual(['node']);
+  });
+
+  it.each(KERNEL_BOXES)('%s emits outside src, so no build output lands beside a source file', (box) => {
+    expect(relative(MODBENCH, parsed(kernelProject(box)).options.outDir ?? '')).toBe(join('out', 'projects', box));
+  });
+
+  it.each(KERNEL_BOXES)('%s compiles its own production files and no test', (box) => {
+    const files = fileNames(kernelProject(box));
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every((f) => f.startsWith(join('src', box) + '/'))).toBe(true);
+    expect(files.filter((f) => f.includes('.test.'))).toEqual([]);
+  });
+});
+
+describe('the legacy project holds every file not yet moved', () => {
+  it('references every kernel project, so an un-moved file still compiles against the boxes', () => {
+    expect(referencePaths(LEGACY_PROJECT)).toEqual(KERNEL_BOXES.map((box) => join('src', box)).sort());
+  });
+
+  it('compiles the whole extension source tree', () => {
+    expect(fileNames(LEGACY_PROJECT).length).toBeGreaterThan(150);
+  });
+
+  // A box's production file belongs to the box's own project and to no other, or the same
+  // source would be typed twice and the reference would buy nothing.
+  it.each(KERNEL_BOXES)('compiles none of %s’s production files', (box) => {
+    const boxFiles = new Set(fileNames(kernelProject(box)));
+    expect(fileNames(LEGACY_PROJECT).filter((f) => boxFiles.has(f))).toEqual([]);
+  });
+
+  // A box test may reach outside the kernel — the codecs' own tests read fixtures from disk —
+  // so every one of them compiles here, and none inside the box's project.
+  it.each(KERNEL_BOXES)('compiles every test that sits under %s', (box) => {
+    expect(fileNames(LEGACY_PROJECT)).toEqual(expect.arrayContaining(testFiles(box)));
+    expect(fileNames(kernelProject(box)).filter((f) => f.includes('.test.'))).toEqual([]);
+  });
+
+  // Rival: the codecs box holds eight of them, so a walk finding none would satisfy the
+  // containment check above vacuously.
+  it('finds the codecs box’s own tests', () => {
+    expect(testFiles('mo2Codecs').length).toBeGreaterThan(5);
+  });
+});
+
+describe('the root solution builds every project', () => {
+  it('references the four kernel projects and the legacy project, and nothing else', () => {
+    expect(referencePaths(ROOT_SOLUTION))
+      .toEqual([...KERNEL_BOXES.map((box) => join('src', box)), LEGACY_PROJECT].sort());
+  });
+
+  // A solution file lists projects, never sources: an empty file list is what stops `tsc -b`
+  // compiling the tree twice, once through the solution and once through a project.
+  it('compiles no file of its own', () => {
+    expect(fileNames(ROOT_SOLUTION)).toEqual([]);
+  });
+});

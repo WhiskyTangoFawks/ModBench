@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.kernel.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../out/projects/tables"
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["test", "**/*.test.ts"]
+}

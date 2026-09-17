@@ -2,7 +2,7 @@
 // MO2-side watchers, holds one whole value, and is built only by watching.
 
 import type * as vscode from 'vscode';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../ports/errno';
 import type { ModlistEntry, PluginEntry } from './model';
 import { buildFileConflictIndex, FileConflictLookup, type FileWinners } from './fileConflictIndex';
 import { buildLoadOrderRows, type LoadOrderPlugin, type LoadOrderPluginLine } from './loadOrderSnapshot';
@@ -13,12 +13,12 @@ import { createOverwriteWatcher } from './overwriteWatcher';
 import { createPluginsTxtWatcher } from './pluginsTxtWatcher';
 import { createDownloadsWatcher } from './downloadsWatcher';
 import { scanDownloads } from './downloadsScan';
-import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from './mo2/downloads';
-import { SETTINGS_FILE_NAME, modMetaFile, modlistFile, modsDir, overwriteDir, pluginsFile, settingsFile } from './mo2/layout';
-import { readGameName, readSelectedProfile } from './mo2/modOrganizerIni';
-import { parseModlist, unlistedModNames } from './mo2/modlistText';
-import { parsePlugins } from './mo2/pluginsText';
-import { parseMetaIni } from './mo2/metaIni';
+import { buildDownloadRows, modsByInstallationFile, type DownloadRow } from '../mo2Codecs/downloads';
+import { SETTINGS_FILE_NAME, modMetaFile, modlistFile, modsDir, overwriteDir, pluginsFile, settingsFile } from '../mo2Codecs/layout';
+import { readGameName, readSelectedProfile } from '../mo2Codecs/modOrganizerIni';
+import { parseModlist, unlistedModNames } from '../mo2Codecs/modlistText';
+import { parsePlugins } from '../mo2Codecs/pluginsText';
+import { parseMetaIni } from '../mo2Codecs/metaIni';
 import {
   resolveGameDirectory,
   type ConfigLike, type DetectPaths, type DetectWinePrefix, type GameDirectory, type OnConfigChange,

@@ -25,7 +25,7 @@ import { PluginTreeProvider } from '../PluginTreeProvider';
 import { InMemoryMEditClient } from '../../medit/client';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { scriptedDialog } from '../../test/surfacingDoubles';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 function wire(askQuestion = scriptedDialog(), presentCrashRepair = vi.fn().mockResolvedValue(undefined)) {
   const outputChannel = new FakeLogOutputChannel();

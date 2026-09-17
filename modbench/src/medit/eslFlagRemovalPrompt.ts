@@ -1,7 +1,7 @@
 import { headerFormKeyFor } from './formKeyIdentity';
 import type { MEditClient } from './client';
-import type { AskQuestion } from '../dialog';
-import type { Reporter } from '../reporter';
+import type { AskQuestion } from '../ports/dialog';
+import type { Reporter } from '../ports/reporter';
 
 /** Deliberately not `CompileTarget`: create and copy-as-new reach this refusal too, so the
  *  shape is not named for one gesture. */

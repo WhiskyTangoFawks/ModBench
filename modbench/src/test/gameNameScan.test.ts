@@ -1,21 +1,21 @@
-// The only per-game knowledge left in the extension is two tables keyed by release —
-// modmanager/mo2/gamePaths.ts and modmanager/mo2/loadOrderDestination.ts. Scoped to src/:
+// The only per-game knowledge left in the extension is the per-release tables box —
+// tables/gamePaths.ts and tables/loadOrderDestination.ts. Scoped to src/:
 // webview/src/presentation.ts's per-game schema is Editing's own concern.
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
-import { knownReleases, gamePathInfoForRelease } from '../modmanager/mo2/gamePaths';
-import { loadOrderAppDataFolder } from '../modmanager/mo2/loadOrderDestination';
-import { present } from '../present';
+import { knownReleases, gamePathInfoForRelease } from '../tables/gamePaths';
+import { loadOrderAppDataFolder } from '../tables/loadOrderDestination';
+import { present } from '../ports/present';
 
 const SRC = join(__dirname, '..');
 const SELF = 'gameNameScan.test.ts';
 
 const TABLE_FILES = [
-  join('modmanager', 'mo2', 'gamePaths.ts'),
-  join('modmanager', 'mo2', 'loadOrderDestination.ts'),
+  join('tables', 'gamePaths.ts'),
+  join('tables', 'loadOrderDestination.ts'),
 ];
 
 // The generated client mirrors the backend's schema rather than carrying a decision.
@@ -144,8 +144,8 @@ describe('no extension file names a game outside the two tables', () => {
   // Rival: nexusSlug.ts (or gameRelease.ts) resurrected as a standalone table — the slug must
   // stay a column of gamePaths.ts, not split back into a table of its own.
   it('the Nexus slug and the release translation stay columns of gamePaths.ts', () => {
-    expect(existsSync(join(SRC, 'modmanager', 'mo2', 'nexusSlug.ts'))).toBe(false);
-    expect(existsSync(join(SRC, 'modmanager', 'mo2', 'gameRelease.ts'))).toBe(false);
+    expect(existsSync(join(SRC, 'tables', 'nexusSlug.ts'))).toBe(false);
+    expect(existsSync(join(SRC, 'tables', 'gameRelease.ts'))).toBe(false);
     expect(gamePathInfoForRelease('Fallout4')?.nexusSlug).toBe('fallout4');
   });
 });

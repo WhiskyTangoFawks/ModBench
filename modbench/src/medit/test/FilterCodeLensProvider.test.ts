@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type * as vscode from 'vscode';
 import { FilterCodeLensProvider } from '../FilterCodeLensProvider';
 import { fakeUri } from '../../test/vscodeMock';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 vi.mock('vscode', () => ({
   CodeLens: class {

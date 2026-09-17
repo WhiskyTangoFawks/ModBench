@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
-import type { AskQuestion } from '../dialog';
-import type { Reporter, Severity } from '../reporter';
-import { present } from '../present';
+import type { AskQuestion } from '../ports/dialog';
+import type { Reporter, Severity } from '../ports/reporter';
+import { present } from '../ports/present';
 
 export interface RecordedReport { severity: Severity; message: string; detail?: string }
 

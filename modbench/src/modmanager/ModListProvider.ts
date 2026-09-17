@@ -1,12 +1,12 @@
 import * as vscode from 'vscode';
-import { OVERWRITE_DIR_NAME, overwriteDir } from './mo2/layout';
+import { OVERWRITE_DIR_NAME, overwriteDir } from '../mo2Codecs/layout';
 import type { Mod, ModlistEntry, Separator } from './model';
 import { groupModlist, type ModlistTree } from './modlistTree';
 import type { ModStatus, ModStatusResult } from './statusChecker';
 // Pure drop-index reconciliation, shared with PluginsTreeProvider. A neutral
 // home would be warranted if a third consumer appears; not worth the churn yet.
-import { dropIndexForMove } from './mo2/pluginsText';
-import type { Reporter } from '../reporter';
+import { dropIndexForMove } from '../mo2Codecs/pluginsText';
+import type { Reporter } from '../ports/reporter';
 import type { InstanceValue, InstanceView } from './instance';
 import { firstReadOf, type FirstRead } from './instanceFirstRead';
 import { ErrorNode } from '../errorNode';

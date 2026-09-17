@@ -15,7 +15,7 @@ import {
 import { ErrorNode } from '../../errorNode';
 import { recordResourceUri } from '../../medit/recordResourceUri';
 import { expectInstanceOf, expectInstanceOfOrUndefined, expectInstancesOf } from '../../test/expectInstanceOf';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 

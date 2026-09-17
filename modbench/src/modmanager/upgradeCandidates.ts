@@ -2,7 +2,7 @@
 // names. Filename is never consulted — meta.ini's mod id and file id are the only identity.
 
 import type { InstanceValue } from './instance';
-import type { DownloadRow } from './mo2/downloads';
+import type { DownloadRow } from '../mo2Codecs/downloads';
 import type { Mod } from './model';
 
 export interface UpgradeCandidate {

@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { watchers, fakeVscodeModule, type FakeWatcher } from './test/fakeVscodeWatcher';
-import { present } from '../present';
+import { present } from '../ports/present';
 import { cloneCorpusFixture, DEFAULT_MODLIST, DEFAULT_PLUGINS } from './test/corpusFixture';
-import { setEnabledInText } from './mo2/modlistText';
-import { setSelectedProfileInText } from './mo2/modOrganizerIni';
+import { setEnabledInText } from '../mo2Codecs/modlistText';
+import { setSelectedProfileInText } from '../mo2Codecs/modOrganizerIni';
 import type { ConfigLike, DetectPaths, DetectWinePrefix } from './gameDirectory';
 import type { ConfigChangeEvent } from './gameDirectory';
 

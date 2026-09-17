@@ -6,11 +6,11 @@ import { tmpdir, homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import type { Mod, Separator, ModlistEntry } from './model';
 import { buildFileConflictIndex, rootLevelWinners, foldPath } from './fileConflictIndex';
-import { parseModlist } from './mo2/modlistText';
+import { parseModlist } from '../mo2Codecs/modlistText';
 import { computeModStatuses } from './statusChecker';
 import { deployToGameData, type DeployLink } from './mo2Files';
 import { makeDeployerFixture } from './test/deployerFixture';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // Passthrough by default, so one test can divert a path to a synthetic non-ENOENT error:
 // chmod-based permission denial is silently bypassed when the runner is root.

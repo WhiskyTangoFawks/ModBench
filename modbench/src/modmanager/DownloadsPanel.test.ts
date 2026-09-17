@@ -11,7 +11,7 @@ const { executeCommand, registerCommand, showErrorMessage, showTextDocument, sho
 }));
 
 import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../test/vscodeMock';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
@@ -37,7 +37,7 @@ import {
   registerDownloadsSortCommand,
 } from './DownloadsPanel';
 import { DownloadNode, type DownloadsProvider } from './DownloadsProvider';
-import type { DownloadRow } from './mo2/downloads';
+import type { DownloadRow } from '../mo2Codecs/downloads';
 import type { Instance, InstanceValue } from './instance';
 import { recordingReporter, scriptedDialog, assertAskedOnce } from '../test/surfacingDoubles';
 import { downloadRowFixture } from './test/downloadRowFixture';

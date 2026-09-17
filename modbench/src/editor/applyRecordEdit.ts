@@ -1,6 +1,6 @@
-import type { Reporter } from '../reporter';
+import type { Reporter } from '../ports/reporter';
 import type { MEditClient } from '../medit/client';
-import type { RecordEditEnvelope } from '../medit/messages';
+import type { RecordEditEnvelope } from '../wire/messages';
 
 /** What any record-panel gesture needs to write, whichever surface it arrives from — the webview's
  *  inline and keyboard edits through the message router, the right-click menus straight from the

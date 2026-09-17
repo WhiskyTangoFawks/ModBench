@@ -1,4 +1,4 @@
-import type { components } from '../generated/api';
+import type { components } from '../../wire/generated/api';
 import {
   CRASH_REPAIR_REASONS,
   type CompileResult, type RebaseResult, type CrashRepairOffer, type CrashRepairReason,
@@ -9,7 +9,7 @@ import {
   type PlacedSummary, type ContainerChildSummary, type RecordSummary, type LoadOrderStatus,
   type UnansweredExternalChange, type PluginLoadFailure,
 } from './apiClient';
-import type { RecordEditEnvelope } from '../messages';
+import type { RecordEditEnvelope } from '../../wire/messages';
 
 /** The backend process as the extension reports it: starting while it comes up, attached while
  *  it answers, disconnected when it has gone, stopped when the extension took it down. */

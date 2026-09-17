@@ -1,5 +1,5 @@
 import type { UnansweredExternalChange } from '../medit/client';
-import type { AskQuestion } from '../dialog';
+import type { AskQuestion } from '../ports/dialog';
 
 /** The glossary's Edit branch entry: the fixed branch name every Track creates, matching the
  *  backend's `SourceRepository.EditBranchName` — never derived per repository. */

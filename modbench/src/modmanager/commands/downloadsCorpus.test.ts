@@ -11,7 +11,7 @@ import {
   unhideDownload,
 } from './downloads';
 import { scanDownloads } from '../downloadsScan';
-import { buildDownloadRows, modsByInstallationFile, parseDownloadMeta, type DownloadRow } from '../mo2/downloads';
+import { buildDownloadRows, modsByInstallationFile, parseDownloadMeta, type DownloadRow } from '../../mo2Codecs/downloads';
 import { assertOnlyChanged, cloneCorpusFixture, readModlistEntries, snapshotTree } from '../test/corpusFixture';
 
 const NAME = 'Unofficial Fallout 4 Patch-4598-2-1-5-1679096028.7z';

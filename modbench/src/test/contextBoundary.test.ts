@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { extname, join, relative, sep } from 'node:path';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // CONTEXT.md/ADR-0012: Mods, Downloads, Toolbox and the Instance key a plugin by filename and
 // origin, never by FormKey, and never reach the backend. The Plugins view is excluded — it
@@ -35,6 +35,7 @@ const PLUGINS_VIEW_DIR = 'plugins';
 const EDITOR_DIR = 'editor';
 const MOD_MANAGEMENT_DIR = 'modmanager';
 const GENERATED_DIR = 'generated';
+const WIRE_DIR = 'wire';
 
 // Wires every context together (CONTEXT.md calls the Toolbox also the extension's composition
 // root). `toolboxClientCalls.ts` is toolbox.ts's own port calls, pulled out for testability —
@@ -65,6 +66,7 @@ function isTestSupport(relativePath: string): boolean {
 function isExcluded(relativePath: string): boolean {
   const segments = relativePath.split(sep);
   if (segments.includes(GENERATED_DIR)) return true; // mirrors the backend's schema, not a decision
+  if (segments[0] === WIRE_DIR) return true; // the kernel's wire protocol, generated or transcribed, not a decision
   if (segments[0] === PLUGINS_VIEW_DIR) return true; // a record browser by design
   if (segments[0] === EDITING_DIR) return true; // Editing's own context, not the MO2 side this rule binds
   if (segments[0] === EDITOR_DIR) return true; // Editor's own context — record vocabulary by design, same as Plugins
@@ -136,7 +138,13 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
   });
 
   it('the generated API client is excluded because it mirrors the backend schema', () => {
-    expect(isExcluded(join(EDITING_DIR, GENERATED_DIR, 'api.ts'))).toBe(true);
+    expect(isExcluded(join(WIRE_DIR, GENERATED_DIR, 'api.ts'))).toBe(true);
+  });
+
+  // The webview message protocol names a record and a FormKey because that is what crosses the
+  // wire; it decides nothing, the same as the schema beside it.
+  it('the wire box is excluded, protocol and schema alike', () => {
+    expect(isExcluded(join(WIRE_DIR, 'messages.ts'))).toBe(true);
   });
 
   it('the composition-root allowlist is exactly these six files', () => {

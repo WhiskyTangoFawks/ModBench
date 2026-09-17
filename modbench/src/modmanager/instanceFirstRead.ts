@@ -2,7 +2,7 @@
 // so a view wanting the first failure surfaced once, through its own reporter, wraps it here.
 
 import type * as vscode from 'vscode';
-import type { Reporter } from '../reporter';
+import type { Reporter } from '../ports/reporter';
 import type { Instance } from './instance';
 
 /** A tree's first-render gate: `settled` resolves on the first landed value or the first failed

@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net';
 
 import { BackendLifecycle } from '../backendLifecycle';
 import type { BackendStatus } from '../MEditClient';
-import { present } from '../../../present';
+import { present } from '../../../ports/present';
 
 // `Server.address()` types as `string | AddressInfo | null` for the pipe/unbound cases neither
 // test below hits, since both bind to 127.0.0.1 on an OS-assigned port.

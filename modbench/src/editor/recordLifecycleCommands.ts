@@ -4,8 +4,8 @@ import { offerEslFlagRemoval } from '../medit/eslFlagRemovalPrompt';
 import { resolveOrigin } from '../medit/resolveOrigin';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
 import { renumberConfirmMessage } from './renumberConfirm';
-import type { Reporter } from '../reporter';
-import type { AskQuestion } from '../dialog';
+import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
 import type { RecordTreeSync } from './onRecordEdited';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a

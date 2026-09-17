@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { lineRanges, detectEol } from './lineScan';
+import { lineRanges, detectEol } from '../lineScan';
 
 describe('lineRanges', () => {
   it('treats a bare LF blank line as its own line, not merged with its neighbor', () => {

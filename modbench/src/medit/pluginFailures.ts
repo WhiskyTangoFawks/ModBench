@@ -2,7 +2,7 @@
 // missing from the load order, so ADR-0019's integrity tier forbids silence — warn and log every
 // reason.
 
-import type { components } from './generated/api';
+import type { components } from '../wire/generated/api';
 
 export interface FailureSink {
   log: (msg: string) => void;

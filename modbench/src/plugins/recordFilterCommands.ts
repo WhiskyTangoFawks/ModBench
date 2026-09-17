@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { MEditClient } from '../medit/client';
-import type { Reporter } from '../reporter';
+import type { Reporter } from '../ports/reporter';
 import type { InteriorLoadMoreNode, PluginTreeProvider } from './PluginTreeProvider';
 
 // The row's own load-more gesture: a partial record page grew a synthetic "load more" leaf, and

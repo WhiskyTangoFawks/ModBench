@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'node:path';
 import { PLUGIN_DESTINATION_OPTIONS, resolvePluginDestination } from './pluginDestination';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 describe('resolvePluginDestination', () => {
   it('overwrite resolves to the instance\'s overwrite/ folder with the reserved origin', () => {

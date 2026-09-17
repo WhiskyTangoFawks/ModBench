@@ -17,7 +17,7 @@ const MESSAGE_API_SITES = [
 ];
 
 export default tseslint.config(
-    { ignores: ['src/medit/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
+    { ignores: ['src/wire/generated/**', 'out/**', 'webview/dist/**', 'node_modules/**'] },
 
     eslint.configs.recommended,
     tseslint.configs.strictTypeChecked,
@@ -121,12 +121,19 @@ export default tseslint.config(
         },
     },
 
-    // Extension source (tsconfig.json)
+    // Extension source: every project the root solution builds, because a solution file lists
+    // projects and holds no source of its own.
     {
         files: ['src/**/*.ts'],
         languageOptions: {
             parserOptions: {
-                project: './tsconfig.json',
+                project: [
+                    './tsconfig.legacy.json',
+                    './src/mo2Codecs/tsconfig.json',
+                    './src/tables/tsconfig.json',
+                    './src/wire/tsconfig.json',
+                    './src/ports/tsconfig.json',
+                ],
                 tsconfigRootDir: import.meta.dirname,
             },
         },

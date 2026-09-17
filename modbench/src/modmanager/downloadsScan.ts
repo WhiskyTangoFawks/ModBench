@@ -1,8 +1,8 @@
 import { join } from 'node:path';
-import type { DownloadEntry } from './mo2/downloads';
-import { DOWNLOAD_SIDECAR_SUFFIX, downloadsDir } from './mo2/layout';
+import type { DownloadEntry } from '../mo2Codecs/downloads';
+import { DOWNLOAD_SIDECAR_SUFFIX, downloadsDir } from '../mo2Codecs/layout';
 import { factsOf, get, listDir } from './mo2Files';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../ports/errno';
 
 // A metaless archive is a valid Downloaded row, so an absent sidecar is undefined, not an error.
 async function readMetaText(path: string): Promise<string | undefined> {

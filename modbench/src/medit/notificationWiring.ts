@@ -1,6 +1,6 @@
 import type * as vscode from 'vscode';
 import type { MEditClient } from './client';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from '../wire/messages';
 
 // Any reconcile-free record change is reason enough for a whole refresh() — the tree has no
 // per-row identity to check against the event (ADR-0015 invariant 3).

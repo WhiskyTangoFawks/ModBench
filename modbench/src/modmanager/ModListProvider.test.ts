@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from './model';
-import { parseModlist, moveModInText, moveSeparatorBlockInText, writeModlist } from './mo2/modlistText';
+import { parseModlist, moveModInText, moveSeparatorBlockInText, writeModlist } from '../mo2Codecs/modlistText';
 import type { InstanceValue } from './instance';
 import type { ModStatusResult } from './statusChecker';
-import { present } from '../present';
+import { present } from '../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFile, DataTransferItem, DataTransfer, FakeCancellationToken, fakeUri,
@@ -40,7 +40,7 @@ import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../test/surfacingDoubles';
 import { expectInstanceOf, expectInstancesOf } from '../test/expectInstanceOf';
 import { instanceValueFixture } from './test/instanceValueFixture';
-import type { Reporter } from '../reporter';
+import type { Reporter } from '../ports/reporter';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';

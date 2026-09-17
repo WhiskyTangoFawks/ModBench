@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
-import { present } from '../../present';
+import { present } from '../../ports/present';
 
 // ADR-0015 invariant 2: commands write and forget. One that read the Instance would make the read
 // model an input to the write side, and a write's own effect would come back to it twice.

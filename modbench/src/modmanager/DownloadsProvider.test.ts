@@ -17,9 +17,9 @@ import { ErrorNode } from '../errorNode';
 import { recordingReporter } from '../test/surfacingDoubles';
 import { expectInstanceOf } from '../test/expectInstanceOf';
 import { instanceValueFixture } from './test/instanceValueFixture';
-import type { DownloadRow } from './mo2/downloads';
+import type { DownloadRow } from '../mo2Codecs/downloads';
 import type { InstanceValue } from './instance';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // The narrowing is deliberate: a read-failure row here has no `row`, and the throw is the finding.
 const rowNames = (nodes: DownloadsTreeNode[]): string[] => nodes.map((n) => expectInstanceOf(n, DownloadNode).row.name);

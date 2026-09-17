@@ -7,12 +7,12 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
-import { modsDir as modsDirOf, overwriteDir } from './mo2/layout';
+import { modsDir as modsDirOf, overwriteDir } from '../mo2Codecs/layout';
 import type { GameDirectory } from './gameDirectory';
-import { errnoCode } from '../errno';
+import { errnoCode } from '../ports/errno';
 
 // The Instance's watcher modules ask here rather than naming MO2's layout themselves.
-export { MODS_GLOB, MODLIST_GLOB, PLUGINS_GLOB, OVERWRITE_GLOB, DOWNLOADS_GLOB } from './mo2/layout';
+export { MODS_GLOB, MODLIST_GLOB, PLUGINS_GLOB, OVERWRITE_GLOB, DOWNLOADS_GLOB } from '../mo2Codecs/layout';
 
 // One chain per path in flight: a file with no writer pending costs nothing, and two different
 // paths never serialize against each other. Module-level, so every command shares one adapter.

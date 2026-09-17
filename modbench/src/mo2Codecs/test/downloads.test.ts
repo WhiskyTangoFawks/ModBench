@@ -11,8 +11,8 @@ import {
   sortDownloadRows,
   type DownloadEntry,
   type DownloadRow,
-} from './downloads';
-import { present } from '../../present';
+} from '../downloads';
+import { present } from '../../ports/present';
 
 describe('parseDownloadMeta', () => {
   it('installed=true -> Installed status', () => {

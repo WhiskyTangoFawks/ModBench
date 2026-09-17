@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseMetaIni, writeMetaIni, setOwnedKeysInText } from './metaIni';
+import { parseMetaIni, writeMetaIni, setOwnedKeysInText } from '../metaIni';
 
-const modsDir = join(__dirname, '..', 'test', 'fixtures', 'mo2-instance', 'mods');
+const modsDir = join(__dirname, '..', '..', 'modmanager', 'test', 'fixtures', 'mo2-instance', 'mods');
 const meta = (mod: string) => readFileSync(join(modsDir, mod, 'meta.ini'), 'utf8');
 
 describe('parseMetaIni', () => {

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { DownloadRow, DownloadSortColumn } from './mo2/downloads';
-import { downloadFile, downloadSidecarFile } from './mo2/layout';
+import type { DownloadRow, DownloadSortColumn } from '../mo2Codecs/downloads';
+import { downloadFile, downloadSidecarFile } from '../mo2Codecs/layout';
 import {
   deleteDownload,
   hideDownload,
@@ -8,14 +8,14 @@ import {
   unhideDownload,
   type DownloadCommandResult,
 } from './commands/downloads';
-import { nexusSlugForGame } from './mo2/gamePaths';
+import { nexusSlugForGame } from '../tables/gamePaths';
 import type { InstallChoice } from './commands/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { Instance } from './instance';
-import type { Reporter } from '../reporter';
-import type { AskQuestion } from '../dialog';
+import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
 import { selectUpgradeCandidates, type UpgradeCandidate } from './upgradeCandidates';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // The host's trash, the one capability a command cannot hold itself.
 const trashFile = async (path: string): Promise<void> => {

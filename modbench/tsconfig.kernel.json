@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // Composite is what lets another project reference this one. `types: ["node"]` keeps every
+    // other @types package out of scope, so a VS Code ambient global is a compile error; an
+    // explicit `import 'vscode'` still resolves, and kernelImportScan.test.ts is what refuses it.
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "types": ["node"]
+  }
+}

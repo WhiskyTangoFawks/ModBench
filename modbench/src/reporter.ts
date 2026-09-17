@@ -1,20 +1,8 @@
 import * as vscode from 'vscode';
+import type { Reporter } from './ports/reporter';
 
-/** ADR-0019 surfacing: injected so business logic stays free of vscode types. Homed here, next
- *  to the one function that builds it, rather than in any one consumer's own module. */
-export type Severity = 'error' | 'warning';
-export interface Reporter {
-  // Arrow-typed properties, not methods: neither ever needs its own `this`, and this shape lets
-  // a test hold a bare reference to one (`vi.mocked(reporter.report)`) without an
-  // unbound-method warning.
-  report: (severity: Severity, message: string, detail?: string) => void;
-  /** A gesture the user invoked landed: ADR-0019's success tier, an information toast and no log
-   *  line. Nothing went wrong, so there is no detail to go back and read. */
-  landed: (message: string) => void;
-}
-
-/** ADR-0019 surfacing: log at the level matching severity, toast for warning and error; a landing
- *  toasts at information level and writes nothing. */
+/** ADR-0019 invariant 3 surfacing: log at the level matching severity, toast for warning and
+ *  error; a landing toasts at information level and writes nothing. */
 export function makeReporter(channel: Pick<vscode.LogOutputChannel, 'warn' | 'error'>, tag: string): Reporter {
   return {
     landed: (message) => { void vscode.window.showInformationMessage(`Modbench: ${message}`); },

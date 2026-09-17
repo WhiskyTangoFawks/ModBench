@@ -5,7 +5,7 @@ import {
   runExternalChangeDialogs, buttonsInDefaultOrder, messageFor, BASELINE_BUTTON, APPLY_BUTTON,
 } from '../plugins/externalChangeDialog';
 import type { UnansweredExternalChange } from '../medit/client';
-import type { RecordEditEnvelope } from '../medit/messages';
+import type { RecordEditEnvelope } from '../wire/messages';
 
 const EDIT: RecordEditEnvelope = { op: 'set', path: [{ kind: 'member', name: 'EditorID' }], value: 'X' };
 

@@ -1,5 +1,5 @@
 import type { CrashRepairOffer } from '../medit/client';
-import type { AskQuestion } from '../dialog';
+import type { AskQuestion } from '../ports/dialog';
 
 /** Working tree first, so VS Code focuses it: an interrupted compile means the user was compiling
  *  their own working tree, so recovering to it matches intent. */

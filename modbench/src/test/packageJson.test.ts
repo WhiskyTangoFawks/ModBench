@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { present } from '../present';
+import { present } from '../ports/present';
 
 // This file's one parse point for package.json: checks the fields every read below assumes and
 // throws rather than handing back an unproven shape (mo2Files.ts's parseManifest, same posture).
