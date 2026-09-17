@@ -1,10 +1,12 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 // The registration lookup and the held-copies lookup share one name comparison, the kernel's
 // PluginCopyKey.Comparer: a key that differs only in case names the same copy at both doors.

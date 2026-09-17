@@ -1,6 +1,8 @@
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // ADR-0009: one index file per MO2 instance, inside the instance root. `origin` is a mod folder
 // name unique only within an instance and every row is keyed (plugin, origin), so the instance is

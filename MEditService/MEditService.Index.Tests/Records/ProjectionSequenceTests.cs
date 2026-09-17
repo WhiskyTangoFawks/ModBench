@@ -1,14 +1,16 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
-/// <summary>ADR-0014: the projection sequence advances exactly once per row-changing projection,
-/// whichever door landed it, and never for a call that changed nothing.</summary>
+/// <summary>The projection sequence advances exactly once per row-changing projection, whichever
+/// door landed it, and never for a call that changed nothing.</summary>
 public sealed class ProjectionSequenceTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture;

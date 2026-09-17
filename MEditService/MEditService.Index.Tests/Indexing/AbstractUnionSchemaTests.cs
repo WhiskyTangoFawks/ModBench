@@ -1,11 +1,14 @@
 using System.Text.Json;
 using MEditService.Codec.Schema;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>Mutagen's "A&lt;Name&gt;" convention: a base getter interface with no reflectable
 /// ClassType siblings; the per-subclass data lives on concrete classes inheriting from the base,

@@ -1,10 +1,12 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // The sequence await measures its timeout on the injected clock, so "not yet" is a clock answer
 // and never a wall-clock one: a test moves the clock, and nothing here waits real time out.

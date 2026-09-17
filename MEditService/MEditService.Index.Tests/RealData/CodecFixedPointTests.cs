@@ -2,13 +2,15 @@ using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Xunit.Abstractions;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Whole-document equality means nothing unless the codec is a fixed point: deserializing
 /// a stored document and serializing it again gives the same bytes, over every record of the real

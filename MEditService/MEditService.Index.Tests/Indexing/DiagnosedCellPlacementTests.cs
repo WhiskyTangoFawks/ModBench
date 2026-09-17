@@ -1,13 +1,15 @@
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>The placement reads come from the GRUP hierarchy (ADR-0005), read without the codec,
 /// so a cell whose document the codec refuses still lists and still holds its contents.</summary>

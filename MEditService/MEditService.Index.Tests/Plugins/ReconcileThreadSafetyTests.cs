@@ -1,9 +1,11 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 [Collection(TestPluginFixtureCollection.Name)]
 public class ReconcileThreadSafetyTests(TestPluginFixture fixture)

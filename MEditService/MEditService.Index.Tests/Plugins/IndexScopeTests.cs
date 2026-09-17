@@ -1,14 +1,16 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 /// <summary>The Index's scope — the store it opens, the copies it holds open in it, and the filter
 /// materialized over it — across a reconcile, a replacement, a close and a dispose.</summary>

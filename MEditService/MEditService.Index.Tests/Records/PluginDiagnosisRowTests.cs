@@ -1,11 +1,13 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // The malformed-plugin diagnosis is a row: projected in the pass that hashes the binary, read
 // through the reads, validated by that hash, re-derived with the copy and gone with its rows.

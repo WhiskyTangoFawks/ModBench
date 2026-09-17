@@ -1,10 +1,13 @@
+using System.Collections.Concurrent;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 /// <summary>Each test drives a load to a known point with <see cref="GatedPluginAdapter"/> and
 /// asserts at that instant: no sleeps, no timing assumptions (ADR-0013).</summary>
@@ -18,7 +21,7 @@ public sealed class ProgressiveIndexingTests
 
     private static ScatteredFixtureData ThreePlugins(string prefix) =>
         new PluginFixtureBuilder(prefix)
-            .WithPlugin("Fallout4.esm")
+            .WithPlugin("Master.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .BuildScattered();
@@ -66,7 +69,7 @@ public sealed class ProgressiveIndexingTests
         var loading = manager.Status;
         Assert.Equal(LoadOrderState.Reconciling, loading.State);
         Assert.Equal(3, loading.TotalPlugins);
-        Assert.Equal(["Fallout4.esm", "A.esp"], loading.IndexedPlugins.Select(p => p.Name));
+        Assert.Equal(["Master.esm", "A.esp"], loading.IndexedPlugins.Select(p => p.Name));
         // Conflict information is not merely absent here, it is
         // *reported* absent. Nothing downstream may read an unmarked record as conflict-free.
         Assert.False(loading.ConflictsComputed);
@@ -76,7 +79,7 @@ public sealed class ProgressiveIndexingTests
 
         var ready = manager.Status;
         Assert.Equal(LoadOrderState.Ready, ready.State);
-        Assert.Equal(["Fallout4.esm", "A.esp", "B.esp"], ready.IndexedPlugins.Select(p => p.Name));
+        Assert.Equal(["Master.esm", "A.esp", "B.esp"], ready.IndexedPlugins.Select(p => p.Name));
         Assert.True(ready.ConflictsComputed);
         Assert.Empty(ready.Failures);
 
@@ -89,7 +92,7 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-progressive-failure")
-            .WithPlugin("Fallout4.esm")
+            .WithPlugin("Master.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
@@ -142,7 +145,7 @@ public sealed class ProgressiveIndexingTests
         // A plugin is appended when it is opened, one step before it is indexed, so parking before
         // B's index leaves only C.esp still to be appended.
         using var fx = new PluginFixtureBuilder("sm-progressive-enumeration")
-            .WithPlugin("Fallout4.esm")
+            .WithPlugin("Master.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
@@ -171,41 +174,50 @@ public sealed class ProgressiveIndexingTests
 
     private static ScatteredFixtureData FourPlugins(string prefix) =>
         new PluginFixtureBuilder(prefix)
-            .WithPlugin("Fallout4.esm")
+            .WithPlugin("Master.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
             .BuildScattered();
 
+    // Absence by order, never by elapsed time: disposing under an in-flight load is a native
+    // crash, so "unload-done" must land only after the main thread has released the parked load.
     [Fact]
-    public async Task UnloadMidLoad_StopsTheLoad_AndLeavesNoLoadOrderBehind()
+    public async Task UnloadMidLoad_EntersOnlyAfterTheLoadStops()
     {
         var holder = new LoadOrderHolder();
         using var fx = FourPlugins("sm-progressive-unload");
         var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
+        var order = new ConcurrentQueue<string>();
 
         var load = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        // Unload must wait for the load to stop touching the repository before disposing it: disposing a
-        // DuckDB connection under an in-flight index is a native crash, not an exception, and it takes the
-        // whole backend down with it.
-        var unload = Task.Run(manager.Dispose);
-        var premature = await Task.WhenAny(unload, Task.Delay(TimeSpan.FromMilliseconds(500)));
-        Assert.NotSame(unload, premature); // disposed while the load was still running
+        using var unloadAttempting = new ManualResetEventSlim();
+        var unload = Task.Run(() =>
+        {
+            unloadAttempting.Set();
+            manager.Dispose();
+            order.Enqueue("unload-done");
+        });
+        Assert.True(unloadAttempting.Wait(TimeSpan.FromSeconds(5)));
 
         gate.Release();
+        order.Enqueue("gate-released");
         await unload;
         await load;
 
+        Assert.Equal(["gate-released", "unload-done"], order);
         Assert.Throws<NoLoadOrderException>(() => manager.RequireReads());
         Assert.Equal(LoadOrderState.None, manager.Status.State);
         // The load stopped where it was told to rather than running to completion first.
         Assert.DoesNotContain("C.esp", gate.Opened);
     }
 
+    // Absence by order, never by elapsed time: "second-done" must land only after the main
+    // thread has released the parked first reconcile.
     [Fact]
     public async Task ASecondLoadMidLoad_DrainsTheFirst_AndTheSurvivorIsWhollyTheSecond()
     {
@@ -214,6 +226,7 @@ public sealed class ProgressiveIndexingTests
         var (manager, gate) = MakeGatedManager(holder, gateBefore: "B.esp");
         using var _ = manager;
         using var __ = gate;
+        var order = new ConcurrentQueue<string>();
 
         var first = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
@@ -221,21 +234,28 @@ public sealed class ProgressiveIndexingTests
 
         // A second snapshot while a reconcile is running is an ordinary event (a watcher firing
         // during activation), not an edge case.
-        var second = Task.Run(() => manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
-        var premature = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500)));
-        Assert.NotSame(second, premature); // the second reconcile waited for the first to stop
+        using var secondAttempting = new ManualResetEventSlim();
+        var second = Task.Run(() =>
+        {
+            secondAttempting.Set();
+            manager.Reconcile(holder, fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+            order.Enqueue("second-done");
+        });
+        Assert.True(secondAttempting.Wait(TimeSpan.FromSeconds(5)));
 
         gate.Release();
+        order.Enqueue("gate-released");
         await first;
         await second;
 
+        Assert.Equal(["gate-released", "second-done"], order);
         // ADR-0013: the same instance is reconciled in place, one index rather than a second replacing the
         // first. What the superseded reconcile landed stays, and its successor finishes the set.
         Assert.Same(readsWhileParked, manager.RequireReads());
         Assert.Equal(LoadOrderState.Ready, manager.Status.State);
-        Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
+        Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(manager.Status.ConflictsComputed);
-        Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
+        Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp"], gate.Opened);
         Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("C.esp", PluginOrigin.DataDirectory), "npc_"));
     }
 
@@ -244,7 +264,7 @@ public sealed class ProgressiveIndexingTests
     {
         var holder = new LoadOrderHolder();
         using var fx = new PluginFixtureBuilder("sm-progressive-arriving-copy")
-            .WithPlugin("Fallout4.esm")
+            .WithPlugin("Master.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .WithPlugin("C.esp", mod => mod.Npcs.AddNew("FromC"))
@@ -282,11 +302,11 @@ public sealed class ProgressiveIndexingTests
         Assert.Equal(LoadOrderState.Ready, manager.Status.State);
         Assert.True(manager.Status.ConflictsComputed);
         Assert.Equal(
-            ["Fallout4.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
+            ["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"],
             manager.Status.IndexedPlugins.Select(p => p.Name));
         // Opened once each across both reconciles: the arriving snapshot adds a copy to the scope
         // rather than restarting it.
-        Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
+        Assert.Equal(["Master.esm", "A.esp", "B.esp", "C.esp", "Minted.esp"], gate.Opened);
         Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("Minted.esp", PluginOrigin.DataDirectory), "npc_"));
         Assert.Equal(1, manager.RequireReads().CountOf(new PluginCopyKey("A.esp", PluginOrigin.DataDirectory), "npc_"));
     }

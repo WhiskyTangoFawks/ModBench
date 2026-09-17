@@ -1,8 +1,10 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Query;
+namespace MEditService.Index.Tests.Query;
 
 [Collection(TestPluginFixtureCollection.Name)]
 public class FilterTests(TestPluginFixture fixture)

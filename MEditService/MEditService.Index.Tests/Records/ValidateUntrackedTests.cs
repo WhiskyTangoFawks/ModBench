@@ -1,11 +1,13 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>ADR-0015 invariant 4 over the other system of record: an untracked copy's rows came from
 /// its binary, which carries no unit smaller than itself, so validate reports and the projector

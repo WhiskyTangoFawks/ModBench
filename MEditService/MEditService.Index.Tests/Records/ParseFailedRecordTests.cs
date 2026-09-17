@@ -1,13 +1,15 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary><c>SKI_PlasmaAutocannon.esp</c> carries exactly one record Mutagen cannot read: a PERK
 /// whose entry-point parameter flags it refuses.</summary>

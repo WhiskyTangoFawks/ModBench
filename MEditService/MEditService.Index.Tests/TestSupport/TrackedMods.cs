@@ -3,10 +3,12 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.SourceRepo;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>A tracked mod folder made the Source repository's own way: the binary read as the tree
 /// it would commit, committed as the baseline. The Index then reads the tree, never the

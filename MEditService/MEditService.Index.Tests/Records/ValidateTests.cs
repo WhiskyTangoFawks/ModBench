@@ -1,11 +1,13 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>ADR-0015 invariant 4: the projector compares what it holds against the system of record
 /// and repairs the difference. Over a real git working tree, because what git answers is under

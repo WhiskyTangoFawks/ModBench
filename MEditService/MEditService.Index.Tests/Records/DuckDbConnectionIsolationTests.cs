@@ -1,7 +1,10 @@
 using System.Globalization;
 using DuckDB.NET.Data;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>Characterization of DuckDB.NET, not of ours: a duplicated connection sees the same database and
 /// does not see another connection's uncommitted transaction.</summary>

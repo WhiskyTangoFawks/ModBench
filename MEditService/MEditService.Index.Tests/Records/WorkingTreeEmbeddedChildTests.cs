@@ -1,5 +1,7 @@
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -8,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>A container's document is the only thing a write hands the index; every embedded
 /// descendant's row follows from it.</summary>

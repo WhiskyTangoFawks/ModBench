@@ -2,11 +2,13 @@ using System.Text;
 using System.Text.RegularExpressions;
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.SourceRepo;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Both ingest paths land the same rows over the same mod shape, so there is no second
 /// extraction to drift; this checks it on 3,940 authentic records.</summary>

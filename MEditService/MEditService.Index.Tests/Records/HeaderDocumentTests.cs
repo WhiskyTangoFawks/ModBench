@@ -1,12 +1,15 @@
 using System.Text;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>Tests-side deliberately: the check compares against the generated whole-mod mixin,
 /// which <c>RecordTextCodecGeneratorSeedTests</c>' whitelist keeps out of Core.</summary>

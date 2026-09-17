@@ -1,11 +1,13 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>Pinned at the listing seam: <c>Search</c>, not <c>GetOverrideStack</c>, is what the
 /// Plugins tree calls, and it is the only real producer of a non-None value.</summary>

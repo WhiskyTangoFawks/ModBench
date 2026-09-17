@@ -1,5 +1,7 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -7,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // ADR-0009: registration is visibility. A copy the snapshot stops naming keeps its rows and
 // answers nothing anywhere; naming it again makes them answer with no re-read.

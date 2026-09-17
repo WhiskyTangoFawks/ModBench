@@ -1,13 +1,15 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
-// ADR-0014's Refresh: a rebuild drops every trace of what the file held, because it must fix a row
-// no hash-validate can (a wrong but self-consistent body). The next reconcile fills the file cold.
+// ADR-0009 invariant 5's Refresh: a rebuild drops every trace of what the file held, because it must
+// fix a row no hash-validate can (a wrong but self-consistent body). The next reconcile fills the file cold.
 public sealed class StoreRebuildTests : IDisposable
 {
     private readonly ScatteredFixtureData _fixture = new PluginFixtureBuilder("store-rebuild")
@@ -71,9 +73,8 @@ public sealed class StoreRebuildTests : IDisposable
         Assert.NotEmpty(_index.RequireReads().GetDocuments(Key));
     }
 
-    // ADR-0014: the process may already have answered a caller with a sequence value the fresh
-    // file's own table does not know about; the rebuild must never let Sequence regress within one
-    // process.
+    // The process may already have answered a caller with a sequence value the fresh file's own
+    // table does not know about; the rebuild must never let Sequence regress within one process.
     [Fact]
     public void Rebuild_SeedsTheSequence_AtLeastTheValueAlreadyHandedOut()
     {
@@ -88,7 +89,7 @@ public sealed class StoreRebuildTests : IDisposable
             $"rebuilt sequence {_index.Sequence} regressed below the prior process value {priorSequence}");
     }
 
-    // ADR-0009 point 5: the same refusal PutLoadOrder answers with, at the seam that actually
+    // ADR-0009 invariant 5: the same refusal PutLoadOrder answers with, at the seam that actually
     // guards it — deleting an open file succeeds on POSIX and destroys a live index.
     [ForeignIndexHolderFact]
     public void Rebuild_RefusesAndNeverDeletes_WhenAnotherProcessHoldsTheFile()
@@ -128,12 +129,10 @@ public sealed class StoreRebuildTests : IDisposable
             }
         })).ToArray();
 
-        await Task.Delay(50);
+        Assert.True(await Waits.Until(() => Volatile.Read(ref answered) > 0), "no read ever landed before the rebuild");
         _index.RebuildStore(GameRelease.Fallout4, _fixture.InstanceRoot);
         await rebuilding.CancelAsync();
         await Task.WhenAll(readers);
-
-        Assert.True(answered > 0, "sanity: reads were being served before the rebuild");
         Reconcile(_fixture.InstanceRoot);
         Assert.Equal(2, _opens.OpenedTotal);
     }

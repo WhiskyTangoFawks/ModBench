@@ -1,9 +1,11 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 /// <summary>A "gone from disk" report can outlive the load order it was watching: a superseded watch
 /// still names the plugin key, which the next load order may hold at another path.</summary>

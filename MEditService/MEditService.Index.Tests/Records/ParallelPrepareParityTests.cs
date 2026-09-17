@@ -1,14 +1,16 @@
 using System.Text;
 using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // Ingest prepares records in parallel and appends sequentially, so the stored document must be the
 // codec's own sequential output byte for byte: the committed form of the byte-identical check the

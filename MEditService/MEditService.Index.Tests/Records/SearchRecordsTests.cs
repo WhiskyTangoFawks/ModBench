@@ -1,9 +1,11 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 [Collection(TestPluginFixtureCollection.Name)]
 public class SearchRecordsTests(TestPluginFixture fixture)
