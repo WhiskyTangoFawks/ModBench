@@ -1,6 +1,7 @@
 using MEditService.Codec.Serialization;
 using MEditService.Index;
 using MEditService.LoadOrder;
+using MEditService.Ports;
 using MEditService.Queries;
 using MEditService.Queries.Tests.TestSupport;
 using Mutagen.Bethesda;
@@ -115,6 +116,24 @@ public sealed class MalformedPluginQueryServiceTests
             [("First.esp", "fixed-size-subrecord-short"), ("First.esp", "trailing-bytes"),
              ("Second.esp", "fixed-size-subrecord-short")],
             reports.Select(r => (r.Plugin, r.DefectClass)));
+    }
+
+    // MEditService/CLAUDE.md: a whole-plugin-set derivation gates on Status, because a copy the
+    // projection has not reached has no rows yet and would read clean. GetPlugins answers its own
+    // whole-set fact the same way while reconciling.
+    [Fact]
+    public void GetLoadOrderDiagnoses_WhileReconciling_AnswersNothing()
+    {
+        var copy = Copy(Malformed);
+        var reads = new FakeReads(new Dictionary<PluginCopyKey, PluginContent>(), []) { Diagnoses = [Row(copy, Short)] };
+        var reconciling = new LoadOrderStatus(
+            LoadOrderState.Reconciling, TotalPlugins: 1, [], ConflictsComputed: false, []);
+
+        var reports = new MalformedPluginQueryService(
+            new FakeIndex(reads, reconciling), FakeLoadOrder.Of(GameRelease.Fallout4, copy))
+            .GetLoadOrderDiagnoses();
+
+        Assert.Empty(reports);
     }
 
     [Fact]

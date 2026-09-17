@@ -30,8 +30,8 @@ public sealed class ImplicitMasterQueryServiceTests
         Assert.Equal(["Fallout4.esm", "DLCRobot.esm", "ccBGSFO4001-PipBoy.esl"], names);
     }
 
-    // ADR-0013 invariant 2: forced is "loaded with no list line of its own". A copy a line names is
-    // not one, whatever slot it sits at.
+    // RegisteredCopy.IsForced is the fact, never the slot: a copy a plugins.txt line names is not a
+    // forced name, wherever it sits.
     [Fact]
     public void GetImplicitMasters_ACopyAListLineNames_IsNotOne()
     {
