@@ -36,30 +36,20 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// group's document names its own class, which is the codec's spelling, not the schema's
     /// table.</summary>
     internal IMajorRecord Deserialize(string text, GameRelease gameRelease, string? recordType) =>
-        DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(text), gameRelease, recordType).GetAwaiter().GetResult();
+        DeserializeFromBytes(Encoding.UTF8.GetBytes(text), gameRelease, recordType);
 
     /// <summary>The record as the text a source document carries: what
-    /// <see cref="SerializeToBytesAsync"/> produces, decoded.</summary>
+    /// <see cref="SerializeToBytes"/> produces, decoded.</summary>
     public string SerializeToText(IMajorRecordGetter record, GameRelease gameRelease) =>
-        Encoding.UTF8.GetString(SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
-
-    /// <summary>Two serializations, one for the caller and one for disk; this codec producing
-    /// identical bytes for both is what makes what the index is told and what lands the same
-    /// text.</summary>
-    internal string SerializeAndWrite(IMajorRecordGetter record, string path, GameRelease gameRelease)
-    {
-        var text = SerializeToText(record, gameRelease);
-        SerializeAsync(record, path, gameRelease).GetAwaiter().GetResult();
-        return text;
-    }
+        Encoding.UTF8.GetString(SerializeToBytes(record, gameRelease));
 
     /// <summary>The same bytes <see cref="SerializeAsync"/> writes, without the filesystem: the
     /// index stores a document byte-identical to the source file (ADR-0007), and indexing produces
     /// millions, so a temp-file round trip is not an option.</summary>
-    public async Task<byte[]> SerializeToBytesAsync(IMajorRecordGetter record, GameRelease gameRelease, CancellationToken cancel = default)
+    public byte[] SerializeToBytes(IMajorRecordGetter record, GameRelease gameRelease, CancellationToken cancel = default)
     {
         // No directory: nothing here writes a file, so there is nothing to resolve against.
-        var bytes = await SerializeCoreAsync(record, gameRelease, directory: string.Empty, cancel).ConfigureAwait(false);
+        var bytes = SerializeCore(record, gameRelease, directory: string.Empty, cancel);
         if (logger.IsEnabled(LogLevel.Trace))
         {
             logger.LogTrace("Serialized record {FormKey} to {ByteCount} bytes", record.FormKey, bytes.Length);
@@ -71,7 +61,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     {
         // No Directory.CreateDirectory here, deliberately: directory-creation policy is the caller's.
         var directory = Path.GetDirectoryName(filePath);
-        var bytes = await SerializeCoreAsync(record, gameRelease, directory ?? string.Empty, cancel).ConfigureAwait(false);
+        var bytes = SerializeCore(record, gameRelease, directory ?? string.Empty, cancel);
 
         // Write-then-rename: File.Create truncates before any new byte lands, so an interrupted
         // direct write leaves a 0-byte or partial record that dirty detection reads as an edit.
@@ -98,7 +88,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     // Buffered rather than streamed: Newtonsoft's JsonTextWriter has no public NewLine to pin (it
     // reads its private inner TextWriter's), so newline normalization has to happen after the fact.
-    private static async Task<byte[]> SerializeCoreAsync(
+    private static byte[] SerializeCore(
         object record, GameRelease gameRelease, string directory, CancellationToken cancel)
     {
         using var buffer = new MemoryStream();
@@ -115,9 +105,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var serialize = RecordTypeDispatch.For(gameRelease).IsPathAmbiguous(record.GetType())
             ? ResolveCheckedSerializeMethod(gameRelease)
             : ResolveConcreteSerializeMethod(generated);
-        var task = (Task)(serialize.Invoke(null, [writer, record, WriterKernel, metaData])
+        var written = (Task)(serialize.Invoke(null, [writer, record, WriterKernel, metaData])
             ?? throw new InvalidOperationException($"Expected '{serialize.Name}' to return a Task."));
-        await task.ConfigureAwait(false);
+        InlineSerialization.Finished(written);
         WriterKernel.Finalize(streamPackage, writer);
 
         // No \r anywhere: the kernel's indentation uses the platform newline. No trailing newline:
@@ -128,12 +118,12 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     /// <summary><paramref name="recordType"/> is the index's own record_type; null means the
     /// document names its own type, true only of the path-ambiguous types.</summary>
-    public async Task<IMajorRecord> DeserializeAsync(
+    public IMajorRecord DeserializeFile(
         string filePath, GameRelease gameRelease, string? recordType, CancellationToken cancel = default)
     {
         using var stream = File.OpenRead(filePath);
-        var record = await DeserializeCoreAsync(
-            stream, Path.GetDirectoryName(filePath) ?? string.Empty, gameRelease, recordType, cancel).ConfigureAwait(false);
+        var record = DeserializeCore(
+            stream, Path.GetDirectoryName(filePath) ?? string.Empty, gameRelease, recordType, cancel);
 
         if (logger.IsEnabled(LogLevel.Trace))
         {
@@ -145,11 +135,11 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <summary>The index holds bytes, never a parsed graph. A document names its own type only when
     /// its path could not, so the caller states the record_type it knows (either spelling); null
     /// means self-describing.</summary>
-    public async Task<IMajorRecord> DeserializeFromBytesAsync(
+    public IMajorRecord DeserializeFromBytes(
         byte[] bytes, GameRelease gameRelease, string? recordType, CancellationToken cancel = default)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        var record = await DeserializeCoreAsync(stream, string.Empty, gameRelease, recordType, cancel).ConfigureAwait(false);
+        var record = DeserializeCore(stream, string.Empty, gameRelease, recordType, cancel);
 
         if (logger.IsEnabled(LogLevel.Trace))
         {
@@ -161,8 +151,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <summary>The instance the codec builds for an empty document of a Loqui class: every member
     /// at its declared default. A major record's empty document is its FormKey alone, the identity
     /// the codec requires first.</summary>
-    public static Task<object> DeserializeEmptyAsync(Type loquiType, GameRelease gameRelease) =>
-        DeserializeTextAsync(loquiType, typeof(IMajorRecordGetter).IsAssignableFrom(loquiType) ? EmptyMajorRecord : "{}", gameRelease);
+    public static object DeserializeEmpty(Type loquiType, GameRelease gameRelease) =>
+        DeserializeText(loquiType, typeof(IMajorRecordGetter).IsAssignableFrom(loquiType) ? EmptyMajorRecord : "{}", gameRelease);
 
     /// <summary>The empty document of a major record: the identity the codec requires first.</summary>
     public const string EmptyMajorRecord = "{\"FormKey\":\"Null\"}";
@@ -172,39 +162,38 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// constructing one. A minted document fed back as the identity is its round trip.</summary>
     public static string BlankDocument(Type loquiType, GameRelease gameRelease, JsonObject identity)
     {
-        var instance = DeserializeTextAsync(loquiType, identity.ToJsonString(), gameRelease).GetAwaiter().GetResult();
-        var bytes = SerializeCoreAsync(instance, gameRelease, directory: string.Empty, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var instance = DeserializeText(loquiType, identity.ToJsonString(), gameRelease);
+        var bytes = SerializeCore(instance, gameRelease, directory: string.Empty, CancellationToken.None);
         return Encoding.UTF8.GetString(bytes);
     }
 
     /// <summary>The instance the codec builds for <paramref name="json"/> read as a Loqui class,
     /// which is how a fact about the class is asked of the codec rather than of reflection.</summary>
-    public static async Task<object> DeserializeTextAsync(Type loquiType, string json, GameRelease gameRelease)
+    public static object DeserializeText(Type loquiType, string json, GameRelease gameRelease)
     {
         using var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json), writable: false);
-        return await DeserializeObjectAsync(stream, string.Empty, gameRelease,
-            readerType => ResolveConcreteDeserializeMethod(loquiType, readerType), CancellationToken.None).ConfigureAwait(false);
+        return DeserializeObject(stream, string.Empty, gameRelease,
+            readerType => ResolveConcreteDeserializeMethod(loquiType, readerType), CancellationToken.None);
     }
 
-    private static async Task<IMajorRecord> DeserializeCoreAsync(
+    private static IMajorRecord DeserializeCore(
         Stream stream, string directory, GameRelease gameRelease, string? recordType, CancellationToken cancel)
     {
         // The reverse of SerializeCoreAsync's dispatch, driven by the same RecordTypeDispatch fact so
         // the two directions cannot disagree. An unknown recordType reads as ambiguous, so it takes
         // the self-describing path and fails loudly rather than constructing a guessed type.
         var dispatch = RecordTypeDispatch.For(gameRelease);
-        var record = await DeserializeObjectAsync(stream, directory, gameRelease,
+        var record = DeserializeObject(stream, directory, gameRelease,
             readerType => recordType is not null
                 && dispatch.ConcreteFor(recordType) is { } concrete
                 && !dispatch.IsPathAmbiguous(recordType)
                     ? ResolveConcreteDeserializeMethod(concrete, readerType)
                     : ResolveCheckedDeserializeMethod(gameRelease, readerType),
-            cancel).ConfigureAwait(false);
+            cancel);
         return (IMajorRecord)record;
     }
 
-    private static async Task<object> DeserializeObjectAsync(
+    private static object DeserializeObject(
         Stream stream, string directory, GameRelease gameRelease, Func<Type, MethodInfo> resolve, CancellationToken cancel)
     {
         var streamPackage = new StreamPackage(stream, directory);
@@ -212,11 +201,11 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
         var deserialize = resolve(reader.GetType());
-        var task = (Task)(deserialize.Invoke(null, [reader, ReaderKernel, metaData])
+        var read = (Task)(deserialize.Invoke(null, [reader, ReaderKernel, metaData])
             ?? throw new InvalidOperationException($"Expected '{deserialize.Name}' to return a Task."));
         try
         {
-            await task.ConfigureAwait(false);
+            InlineSerialization.Finished(read);
         }
         catch (Exception ex) when (ex is NotImplementedException or NullReferenceException)
         {
@@ -229,9 +218,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
         // "Result": Task<T> for a T only known at runtime, so nameof(Task<object>.Result) would
         // name the banned property; the already-awaited value comes back through reflection instead.
-        var resultProperty = task.GetType().GetProperty("Result")
-            ?? throw new InvalidOperationException($"Expected '{task.GetType().Name}' to declare 'Result'.");
-        return resultProperty.GetValue(task)
+        var resultProperty = read.GetType().GetProperty("Result")
+            ?? throw new InvalidOperationException($"Expected '{read.GetType().Name}' to declare 'Result'.");
+        return resultProperty.GetValue(read)
             ?? throw new InvalidOperationException("Expected the deserialized record to be non-null.");
     }
 

@@ -87,14 +87,14 @@ public sealed class EditRecordHandlerTests : IDisposable
     }
 
     [Fact]
-    public async Task EditField_WritesTheNewValueIntoTheSourceFile_AsRealCodecText()
+    public void EditField_WritesTheNewValueIntoTheSourceFile_AsRealCodecText()
     {
         _mod.EditHandler.Set(_mod.Plugin, _mod.Npc.ToString(), "HeightMax", Json("0.75"));
 
         // Re-parsed through the codec rather than string-matched: the file has to remain a document
         // the source can round-trip, not merely text that happens to contain the right number.
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var reparsed = await codec.DeserializeAsync(_mod.NpcSourceFile, GameRelease.Fallout4, "npc_");
+        var reparsed = codec.DeserializeFile(_mod.NpcSourceFile, GameRelease.Fallout4, "npc_");
         Assert.Equal(_mod.Npc, reparsed.FormKey);
         Assert.Equal(0.75f, ((Mutagen.Bethesda.Fallout4.INpcGetter)reparsed).HeightMax);
     }

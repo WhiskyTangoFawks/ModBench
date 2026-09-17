@@ -78,7 +78,7 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
     private byte[] Serialize(IMajorRecordGetter record) =>
-        _codec.SerializeToBytesAsync(record, Release).GetAwaiter().GetResult();
+        _codec.SerializeToBytes(record, Release);
 
     private SourceRepository Repository =>
         SourceRepository.Open(_modFolder, Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");
@@ -139,11 +139,11 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     }
 
     [Fact]
-    public async Task Put_OfAnEmbeddedChild_SpellsItInlineSoTheCodecStillReadsTheOwner()
+    public void Put_OfAnEmbeddedChild_SpellsItInlineSoTheCodecStillReadsTheOwner()
     {
         PutRenamedPersistentRef();
 
-        var owner = await _codec.DeserializeFromBytesAsync(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
+        var owner = _codec.DeserializeFromBytes(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
 
         Assert.Equal(["RenamedRef"], ((Cell)owner).Persistent.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());
     }
@@ -187,11 +187,11 @@ public sealed class EmbeddedChildSpliceTests : IDisposable
     }
 
     [Fact]
-    public async Task Remove_OfAnEmbeddedChild_LeavesTheOwnerReadableByTheCodec()
+    public void Remove_OfAnEmbeddedChild_LeavesTheOwnerReadableByTheCodec()
     {
         Repository.Remove(Plugin, Identity(_persistentRef, "refr"));
 
-        var owner = (Cell)await _codec.DeserializeFromBytesAsync(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
+        var owner = (Cell)_codec.DeserializeFromBytes(File.ReadAllBytes(FullPath(CellPath)), Release, "cell");
 
         Assert.Empty(owner.Persistent);
         Assert.Equal(["TempRef"], owner.Temporary.Select(placed => placed.EditorID ?? throw new InvalidOperationException("Expected a placed ref to carry its EditorID.")).ToArray());

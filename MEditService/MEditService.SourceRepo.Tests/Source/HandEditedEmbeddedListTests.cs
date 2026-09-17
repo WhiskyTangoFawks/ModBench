@@ -51,7 +51,7 @@ public sealed class HandEditedEmbeddedListTests : IDisposable
             SourcePreset.Edits,
             [
                 new TreeFile(SourceRepository.HeaderDocumentFor(PluginName), HeaderDocument.Write(_mod)),
-                new TreeFile(_questPath, _codec.SerializeToBytesAsync(_quest, Release).GetAwaiter().GetResult()),
+                new TreeFile(_questPath, _codec.SerializeToBytes(_quest, Release)),
             ],
             new TrackProvenance(null, null, new Dictionary<string, string>()));
     }

@@ -100,7 +100,7 @@ public sealed class SourceRepositoryEmbeddedTests : IDisposable
         $"{record.EditorID} - {record.FormKey.ID:X6}_{record.FormKey.ModKey.FileName}";
 
     private byte[] Serialize(IMajorRecordGetter record) =>
-        _codec.SerializeToBytesAsync(record, Release).GetAwaiter().GetResult();
+        _codec.SerializeToBytes(record, Release);
 
     private SourceRepository Repository =>
         SourceRepository.Open(_modFolder, Release) ?? throw new InvalidOperationException($"Expected '{_modFolder}' to already be tracked.");

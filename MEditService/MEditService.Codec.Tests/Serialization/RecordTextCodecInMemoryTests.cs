@@ -33,10 +33,22 @@ public class RecordTextCodecInMemoryTests
 
     private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
+    // The door answers on the calling thread, so its cancellation has to arrive as a throw rather
+    // than as a task nobody looks at.
     [Fact]
-    public async Task SerializeToBytesAsync_ForAFixedWeapon_ProducesThePinnedGoldenBytes()
+    public void SerializeToBytes_WithACancelledToken_Throws()
     {
-        var actual = await Codec().SerializeToBytesAsync(MakeWeapon(), GameRelease.Fallout4);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(
+            () => Codec().SerializeToBytes(MakeWeapon(), GameRelease.Fallout4, cancelled.Token));
+    }
+
+    [Fact]
+    public async Task SerializeToBytes_ForAFixedWeapon_ProducesThePinnedGoldenBytes()
+    {
+        var actual = Codec().SerializeToBytes(MakeWeapon(), GameRelease.Fallout4);
 
         var golden = await File.ReadAllBytesAsync(
             Path.Combine(AppContext.BaseDirectory, "TestData", "weapon-dispatch-golden.json"));
@@ -44,7 +56,7 @@ public class RecordTextCodecInMemoryTests
     }
 
     [Fact]
-    public async Task SerializeToBytesAsync_ForARealRecord_MatchesWhatSerializeAsyncWrites()
+    public async Task SerializeToBytes_ForARealRecord_MatchesWhatSerializeAsyncWrites()
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
@@ -58,7 +70,7 @@ public class RecordTextCodecInMemoryTests
             await codec.SerializeAsync(record, filePath, GameRelease.Fallout4);
 
             var fromFile = await File.ReadAllBytesAsync(filePath);
-            var fromMemory = await codec.SerializeToBytesAsync(record, GameRelease.Fallout4);
+            var fromMemory = codec.SerializeToBytes(record, GameRelease.Fallout4);
 
             Assert.NotEmpty(fromFile);
             Assert.Equal(fromFile, fromMemory);
@@ -72,13 +84,13 @@ public class RecordTextCodecInMemoryTests
     // The leaf-count guard is load-bearing for the same reason it is in RecordTextCodecTests:
     // Assert.Empty(divergent) alone passes just as happily when the walker visits nothing.
     [Fact]
-    public async Task DeserializeFromBytesAsync_RoundTripsFieldFaithfully()
+    public void DeserializeFromBytes_RoundTripsFieldFaithfully()
     {
         var codec = Codec();
         var original = MakeWeapon();
 
-        var bytes = await codec.SerializeToBytesAsync(original, GameRelease.Fallout4);
-        var roundTripped = (Weapon)await codec.DeserializeFromBytesAsync(bytes, GameRelease.Fallout4, "weap");
+        var bytes = codec.SerializeToBytes(original, GameRelease.Fallout4);
+        var roundTripped = (Weapon)codec.DeserializeFromBytes(bytes, GameRelease.Fallout4, "weap");
 
         var mask = original.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -89,7 +101,7 @@ public class RecordTextCodecInMemoryTests
     }
 
     [Fact]
-    public async Task SerializeToBytesAsync_ForAPopulatedContainer_TouchesNoFilesystem()
+    public void SerializeToBytes_ForAPopulatedContainer_TouchesNoFilesystem()
     {
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
@@ -102,7 +114,7 @@ public class RecordTextCodecInMemoryTests
         var workingDirectory = Directory.GetCurrentDirectory();
         var before = Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal);
 
-        var bytes = await Codec().SerializeToBytesAsync(quest, GameRelease.Fallout4);
+        var bytes = Codec().SerializeToBytes(quest, GameRelease.Fallout4);
 
         Assert.NotEmpty(bytes);
         Assert.Equal(before, Directory.GetDirectories(workingDirectory).ToHashSet(StringComparer.Ordinal));

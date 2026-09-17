@@ -28,7 +28,7 @@ public sealed class UnionVariantEditTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     private static string Serialize(IMajorRecordGetter record) =>
-        Encoding.UTF8.GetString(Codec.SerializeToBytesAsync(record, GameRelease.Fallout4).GetAwaiter().GetResult());
+        Encoding.UTF8.GetString(Codec.SerializeToBytes(record, GameRelease.Fallout4));
 
     [Fact]
     public void GameSettingFloat_Data_IsWrittenAsTheFloatItsLeafDeclares()

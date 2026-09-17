@@ -15,13 +15,12 @@ public sealed class SourceCodecReadScanTests
         ("RoundTrip", new Regex(@"\bRoundTrip\b", RegexOptions.Compiled)),
         ("Deserialize", new Regex(@"\bDeserialize\b", RegexOptions.Compiled)),
         ("SerializeToText", new Regex(@"\bSerializeToText\b", RegexOptions.Compiled)),
-        ("SerializeAndWrite", new Regex(@"\bSerializeAndWrite\b", RegexOptions.Compiled)),
-        ("SerializeToBytesAsync", new Regex(@"\bSerializeToBytesAsync\b", RegexOptions.Compiled)),
+        ("SerializeToBytes", new Regex(@"\bSerializeToBytes\b", RegexOptions.Compiled)),
         ("SerializeAsync", new Regex(@"\bSerializeAsync\b", RegexOptions.Compiled)),
-        ("DeserializeAsync", new Regex(@"\bDeserializeAsync\b", RegexOptions.Compiled)),
-        ("DeserializeFromBytesAsync", new Regex(@"\bDeserializeFromBytesAsync\b", RegexOptions.Compiled)),
-        ("DeserializeEmptyAsync", new Regex(@"\bDeserializeEmptyAsync\b", RegexOptions.Compiled)),
-        ("DeserializeTextAsync", new Regex(@"\bDeserializeTextAsync\b", RegexOptions.Compiled)),
+        ("DeserializeFile", new Regex(@"\bDeserializeFile\b", RegexOptions.Compiled)),
+        ("DeserializeFromBytes", new Regex(@"\bDeserializeFromBytes\b", RegexOptions.Compiled)),
+        ("DeserializeEmpty", new Regex(@"\bDeserializeEmpty\b", RegexOptions.Compiled)),
+        ("DeserializeText", new Regex(@"\bDeserializeText\b", RegexOptions.Compiled)),
         ("EmptyMajorRecord", new Regex(@"\bEmptyMajorRecord\b", RegexOptions.Compiled)),
     ];
 

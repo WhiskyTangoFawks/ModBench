@@ -39,7 +39,7 @@ public static class ModDocuments
                 new RecordIdentity(
                     record.FormKey.ToString(), RecordTableName.Of(record, schemas), record.EditorID),
                 Encoding.UTF8.GetString(
-                    codec.SerializeToBytesAsync(record, mod.GameRelease).GetAwaiter().GetResult()));
+                    codec.SerializeToBytes(record, mod.GameRelease)));
         }
     }
 }
@@ -124,7 +124,7 @@ internal sealed class MutagenModDocuments(
         try
         {
             var text = Encoding.UTF8.GetString(
-                _codec.SerializeToBytesAsync(record, mod.GameRelease).GetAwaiter().GetResult());
+                _codec.SerializeToBytes(record, mod.GameRelease));
             return Placed(new PluginDocument(tableName, formKey, text), formKey);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

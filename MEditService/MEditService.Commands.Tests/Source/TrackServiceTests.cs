@@ -129,7 +129,7 @@ public sealed class TrackServiceTests
             Assert.True(File.Exists(sourceFile2), $"expected {sourceFile2}");
 
             var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-            var roundTripped = await codec.DeserializeAsync(sourceFile1, GameRelease.Fallout4, "npc_");
+            var roundTripped = codec.DeserializeFile(sourceFile1, GameRelease.Fallout4, "npc_");
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
             // Spriggit has no role in v1 (ADR-0006) — the root document holds the mod

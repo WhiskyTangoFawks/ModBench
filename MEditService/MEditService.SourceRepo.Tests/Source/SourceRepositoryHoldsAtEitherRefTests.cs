@@ -57,7 +57,7 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
     }
 
     [Fact]
-    public async Task AnUncommittedEmbeddedChild_IsHeld_UnderAnyFormKeySpellingThatParses()
+    public void AnUncommittedEmbeddedChild_IsHeld_UnderAnyFormKeySpellingThatParses()
     {
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var child = new PlacedObject(mod) { EditorID = "TopCellRef", Position = new P3Float(7f, 8f, 9f), Scale = 6f };
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryHoldsAtEitherRefTests : IDisposable
             $"{worldspace.EditorID} - {worldspace.FormKey.ID:X6}_{worldspace.FormKey.ModKey.FileName}", "RecordData.json");
 
         var repository = Tracked(
-            new TreeFile(worldspacePath, await _codec.SerializeToBytesAsync(worldspace, Release)));
+            new TreeFile(worldspacePath, _codec.SerializeToBytes(worldspace, Release)));
 
         // Renumbered in the working tree alone: at HEAD the child still sits under its old key, so
         // only the working tree can answer, and only through the document that inlines it.

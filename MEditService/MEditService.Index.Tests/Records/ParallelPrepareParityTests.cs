@@ -16,7 +16,7 @@ namespace MEditService.Tests.Records;
 public class ParallelPrepareParityTests
 {
     [Fact]
-    public async Task IndexedDocuments_AreByteIdenticalToSequentialCodecOutput()
+    public void IndexedDocuments_AreByteIdenticalToSequentialCodecOutput()
     {
         using var fixture = new PluginFixtureBuilder("parity")
             .WithPlugin("Parity.esp", mod =>
@@ -38,7 +38,7 @@ public class ParallelPrepareParityTests
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var all = index.RequireReads().GetDocuments(key);
         // The plugin header is a document this codec cannot produce: a ModHeader is not an
-        // IMajorRecordGetter, so it is neither enumerated nor reachable through SerializeToBytesAsync.
+        // IMajorRecordGetter, so it is neither enumerated nor reachable through SerializeToBytes.
         // Counted rather than filtered silently, so "one per record, plus the header" stays an assertion.
         var header = Assert.Single(all, d => d.RecordType == PluginHeader.RecordType);
         Assert.NotNull(header.Body);
@@ -50,7 +50,7 @@ public class ParallelPrepareParityTests
         Assert.Equal(records.Count, stored.Count);
         foreach (IMajorRecordGetter record in records)
         {
-            var expected = Encoding.UTF8.GetString(await codec.SerializeToBytesAsync(record, GameRelease.Fallout4));
+            var expected = Encoding.UTF8.GetString(codec.SerializeToBytes(record, GameRelease.Fallout4));
             Assert.Equal(expected, stored[record.FormKey.ToString()]);
         }
     }

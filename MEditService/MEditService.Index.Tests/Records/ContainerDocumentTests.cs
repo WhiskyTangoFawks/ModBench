@@ -25,14 +25,14 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         GameRelease.Fallout4);
 
     [Fact]
-    public async Task Index_ForACellWithChildren_StoresThemEmbeddedInTheCellsOwnDocument()
+    public void Index_ForACellWithChildren_StoresThemEmbeddedInTheCellsOwnDocument()
     {
         using var overlay = OpenPlugin();
 
         var withInlinedChildren = new List<(ICellGetter Cell, string[] Fields)>();
         foreach (var cell in overlay.EnumerateMajorRecords<ICellGetter>(throwIfUnknown: false))
         {
-            using var doc = JsonDocument.Parse(await Codec.SerializeToBytesAsync(cell, GameRelease.Fallout4));
+            using var doc = JsonDocument.Parse(Codec.SerializeToBytes(cell, GameRelease.Fallout4));
             var present = CellChildFields.Where(f => doc.RootElement.TryGetProperty(f, out _)).ToArray();
             if (present.Length > 0) withInlinedChildren.Add((cell, present));
         }
@@ -58,7 +58,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
     }
 
     [Fact]
-    public async Task Index_ForAContainer_StoresTheSameBytesTheSourcePathWould()
+    public void Index_ForAContainer_StoresTheSameBytesTheSourcePathWould()
     {
         var setterMod = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(RealDataPlugin.PluginFileName), RealDataPlugin.PluginPath),
@@ -67,7 +67,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         var quest = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
 
         // Exactly what a Track writes into a source file — which is nothing but the codec call itself.
-        var sourceBytes = await Codec.SerializeToBytesAsync(quest, GameRelease.Fallout4);
+        var sourceBytes = Codec.SerializeToBytes(quest, GameRelease.Fallout4);
 
         var body = StoredBody(quest.FormKey.ToString());
 
@@ -76,12 +76,12 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
     }
 
     [Fact]
-    public async Task Index_ForANonContainer_StoresTheCodecsBytesUnchanged()
+    public void Index_ForANonContainer_StoresTheCodecsBytesUnchanged()
     {
         using var overlay = OpenPlugin();
 
         var weapon = ((IFallout4ModGetter)overlay).Weapons.First();
-        var expected = await Codec.SerializeToBytesAsync(weapon, GameRelease.Fallout4);
+        var expected = Codec.SerializeToBytes(weapon, GameRelease.Fallout4);
 
         Assert.Equal(Encoding.UTF8.GetString(expected), StoredBody(weapon.FormKey.ToString()));
     }

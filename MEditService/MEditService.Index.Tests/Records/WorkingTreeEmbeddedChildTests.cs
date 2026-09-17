@@ -29,10 +29,10 @@ public sealed class WorkingTreeEmbeddedChildTests : IDisposable
     // object graph, written back through the codec.
     private string CellBodyAfter(Action<IMajorRecord> change)
     {
-        var cell = Codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(CellBody()), GameRelease.Fallout4, "cell")
-            .GetAwaiter().GetResult();
+        var cell = Codec.DeserializeFromBytes(Encoding.UTF8.GetBytes(CellBody()), GameRelease.Fallout4, "cell")
+            ;
         change(cell);
-        return Encoding.UTF8.GetString(Codec.SerializeToBytesAsync(cell, GameRelease.Fallout4).GetAwaiter().GetResult());
+        return Encoding.UTF8.GetString(Codec.SerializeToBytes(cell, GameRelease.Fallout4));
     }
 
     [Fact]

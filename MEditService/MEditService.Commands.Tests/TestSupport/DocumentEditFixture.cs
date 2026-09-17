@@ -43,7 +43,7 @@ internal sealed class DocumentEditFixture : IDisposable
     /// its FormKey.</summary>
     internal string Seed(IMajorRecordGetter record, string recordType)
     {
-        var body = Codec.SerializeToBytesAsync(record, GameRelease.Fallout4).GetAwaiter().GetResult();
+        var body = Codec.SerializeToBytes(record, GameRelease.Fallout4);
         SeedRaw(record.FormKey.ToString(), recordType, record.EditorID, System.Text.Encoding.UTF8.GetString(body));
         return record.FormKey.ToString();
     }
