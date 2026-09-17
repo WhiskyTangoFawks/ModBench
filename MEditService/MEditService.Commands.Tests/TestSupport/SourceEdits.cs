@@ -19,9 +19,7 @@ public static class SourceEdits
         where T : class, IMajorRecord
     {
         var body = repository.Get(plugin, identity).Require().Body;
-        var record = (T)Codec
-            .DeserializeFromBytes(Encoding.UTF8.GetBytes(body), release, identity.RecordType)
-            ;
+        var record = (T)Codec.DeserializeFromBytes(Encoding.UTF8.GetBytes(body), release, identity.RecordType);
         change(record);
         Write(repository, plugin, record, identity.RecordType, release);
     }

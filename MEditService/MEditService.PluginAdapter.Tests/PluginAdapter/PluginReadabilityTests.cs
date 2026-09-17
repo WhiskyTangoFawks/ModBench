@@ -4,8 +4,8 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.PluginAdapter;
 
-/// <summary>Whether a registered copy's bytes are there to be read, asked of real files. Another
-/// tool owns them too, so the answer is about this moment and no other.</summary>
+/// <summary>Whether a registered copy's file opens for the read that follows, asked of real files.
+/// Another tool owns them too, so the answer is about this moment and no other.</summary>
 public sealed class PluginReadabilityTests : IDisposable
 {
     private const string PluginName = "Readable.esp";

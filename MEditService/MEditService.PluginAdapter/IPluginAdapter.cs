@@ -30,8 +30,8 @@ public interface IPluginAdapter
         GameRelease gameRelease,
         IReadOnlyDictionary<string, RecordTableSchema> schemas);
 
-    /// <summary>Whether the plugin's bytes read end to end right now — the file is there and no
-    /// other tool holds it against a reader. Never a parse.</summary>
+    /// <summary>Whether the plugin's file opens for reading right now — it is there, and no other
+    /// tool holds it against a reader. Neither a read of its bytes nor a parse.</summary>
     bool CanRead(ModPath modPath);
 
     /// <summary>The plugins the install at <paramref name="dataFolder"/> loads with no load-order

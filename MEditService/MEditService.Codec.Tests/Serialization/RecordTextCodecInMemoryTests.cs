@@ -33,8 +33,6 @@ public class RecordTextCodecInMemoryTests
 
     private static RecordTextCodec Codec() => new(NullLogger<RecordTextCodec>.Instance);
 
-    // The door answers on the calling thread, so its cancellation has to arrive as a throw rather
-    // than as a task nobody looks at.
     [Fact]
     public void SerializeToBytes_WithACancelledToken_Throws()
     {
