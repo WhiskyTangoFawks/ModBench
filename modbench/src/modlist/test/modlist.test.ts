@@ -117,6 +117,28 @@ describe('modlist.txt commands — bytes written, or a refusal returned', () => 
     expect(names[0]).toBe('Cracked and Smudged Pip-Boy Screen');
   });
 
+  // The two sides must land one slot apart, or a tree running losing-at-top puts every drop one
+  // row off from where the user let go.
+  it('reorderMod settles a drop before its target', async () => {
+    const outcome = await reorderMod(
+      dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'before', name: 'Unofficial Fallout 4 Patch' });
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names.slice(2, 5)).toEqual([
+      '[NODELETE] Radfall', 'Cracked and Smudged Pip-Boy Screen', 'Unofficial Fallout 4 Patch',
+    ]);
+  });
+
+  it('reorderMod settles a drop after its target, one slot further on', async () => {
+    const outcome = await reorderMod(
+      dir, 'Default', 'Cracked and Smudged Pip-Boy Screen', { kind: 'after', name: 'Unofficial Fallout 4 Patch' });
+    expect(outcome).toEqual({ applied: true, wrote: true });
+    const names = (await readModlist()).map((e) => e.name);
+    expect(names.slice(2, 5)).toEqual([
+      '[NODELETE] Radfall', 'Unofficial Fallout 4 Patch', 'Cracked and Smudged Pip-Boy Screen',
+    ]);
+  });
+
   it('reorderMod refuses an unknown mod', async () => {
     const before = await readFile(modlistPath(), 'utf8');
     const outcome = await reorderMod(dir, 'Default', 'No Such Mod', { kind: 'winningEnd' });

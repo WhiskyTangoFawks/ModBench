@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dropIndexForMove } from '../dropIndex';
+import { dropIndexForMove, dropIndexIn } from '../dropIndex';
 import { movePluginsInText } from '../pluginsText';
 
 // A drag hands over a pre-removal row index, but movePluginsInText counts among
@@ -52,5 +52,39 @@ describe('dropIndexForMove — pre-removal drop target → post-removal toIndex'
     const toIndex = dropIndexForMove(order, ['A'], 'D');
     const out = movePluginsInText(text, ['A'], toIndex);
     expect(out).toBe('*B\r\n*C\r\n*A\r\n*D\r\n*E\r\n');
+  });
+});
+
+// Which side of the target a tree means is its own view direction's answer; turning that answer
+// into the index a splice writes at is this module's.
+describe('dropIndexIn — a drop in a tree\'s terms → the index a splice writes at', () => {
+  const order = ['A', 'B', 'C', 'D', 'E'];
+
+  it('the winning end is index 0, whatever else the list holds', () => {
+    expect(dropIndexIn(order, ['D'], { kind: 'winningEnd' })).toBe(0);
+    expect(dropIndexIn(order, ['A', 'B'], { kind: 'winningEnd' })).toBe(0);
+    expect(dropIndexIn([], [], { kind: 'winningEnd' })).toBe(0);
+  });
+
+  it('the losing end is past the last row that survives the move', () => {
+    expect(dropIndexIn(order, ['B'], { kind: 'losingEnd' })).toBe(4);
+    expect(dropIndexIn(order, ['A', 'B'], { kind: 'losingEnd' })).toBe(3);
+  });
+
+  it('before a row is that row\'s own post-removal index', () => {
+    expect(dropIndexIn(order, ['A'], { kind: 'before', name: 'D' })).toBe(2);
+    expect(dropIndexIn(order, ['E'], { kind: 'before', name: 'B' })).toBe(1);
+  });
+
+  // The two sides must differ by exactly one, or a tree running losing-at-top lands every drop
+  // one row off from where the user let go.
+  it('after a row is one past before it', () => {
+    expect(dropIndexIn(order, ['A'], { kind: 'after', name: 'D' })).toBe(3);
+    expect(dropIndexIn(order, ['E'], { kind: 'after', name: 'B' })).toBe(2);
+  });
+
+  it('an unknown target name lands at the end, on either side', () => {
+    expect(dropIndexIn(order, ['A'], { kind: 'before', name: 'Nope' })).toBe(4);
+    expect(dropIndexIn(order, ['A'], { kind: 'after', name: 'Nope' })).toBe(5);
   });
 });

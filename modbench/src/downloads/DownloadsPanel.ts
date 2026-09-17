@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from './downloadRows';
-import { deleteDownload, hideDownload, unhideDownload, type DownloadCommandResult } from '../install/downloadSidecar';
+import { deleteDownload, hideDownload, unhideDownload } from '../install/downloadSidecar';
 import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadFile, Instance } from '../instance/instance';
@@ -18,7 +18,9 @@ const message = (err: unknown): string => (err instanceof Error ? err.message : 
 
 // A refusal becomes a throw, so one catch-and-report path serves a rejected promise and an
 // `{ applied: false }` result alike.
-function applyOrThrow(outcome: DownloadCommandResult): void {
+function applyOrThrow<T extends { applied: true } | { applied: false; refusal: string }>(
+  outcome: T,
+): asserts outcome is Extract<T, { applied: true }> {
   if (!outcome.applied) throw new Error(outcome.refusal);
 }
 
@@ -89,7 +91,7 @@ async function installArchive(
     const outcome = await installFromArchive(instanceRoot, target, row.path, {
       gameName: instance.value.gameRelease, modID: row.modID, fileID: row.fileID, version: row.version,
     });
-    if (!outcome.applied) throw new Error(outcome.refusal);
+    applyOrThrow(outcome);
     deps.warnIfFomod(target.name, outcome.isFomod);
     downloadRefusal = outcome.downloadRefusal;
   } catch (err) {

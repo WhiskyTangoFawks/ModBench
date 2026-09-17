@@ -126,13 +126,12 @@ describe('one composite project per box', () => {
     expect(parsed(kernelProject(box)).options.types).toEqual(['node', 'vscode']);
   });
 
-  // Rival this forbids: a view reaching a codec for a splice or a table for a game name, which
-  // is what the Instance publishing the value it renders exists to make unnecessary.
+  // Rival: a view reaching a codec for a splice or a table for a game name. Read off the
+  // tsconfig on disk, one assertion per box, so either box alone fails it.
   it.each(Object.keys(VIEW_BOXES))('%s references neither the codecs nor the tables', (box) => {
-    expect(referencePaths(kernelProject(box)))
-      .not.toEqual(expect.arrayContaining([join('src', 'mo2Codecs'), join('src', 'tables')]));
-    expect(VIEW_BOXES[box]).not.toContain('mo2Codecs');
-    expect(VIEW_BOXES[box]).not.toContain('tables');
+    const references = referencePaths(kernelProject(box));
+    expect(references).not.toContain(join('src', 'mo2Codecs'));
+    expect(references).not.toContain(join('src', 'tables'));
   });
 
   // The rule the compiler enforces for the driven and core columns: each box references exactly

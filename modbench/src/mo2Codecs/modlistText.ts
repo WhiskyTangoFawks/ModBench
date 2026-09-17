@@ -233,8 +233,6 @@ export function moveModToSeparatorEndInText(
   });
 }
 
-/** The block is the separator plus the mods it wraps; `toIndex` counts the
- *  entries remaining once that block is removed. */
 /** The entries one separator wraps, itself last — the same block
  *  {@link moveSeparatorBlockInText} splices, named rather than moved. */
 export function separatorBlockNames(entries: readonly ModlistEntry[], separatorName: string): string[] {

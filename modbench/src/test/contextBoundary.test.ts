@@ -280,8 +280,16 @@ describe('the MO2 side keys plugins by filename and origin, never by FormKey', (
   });
 });
 
+// A decoration primitive reaching for a client or a record type would carry the record browser
+// into every row it touches.
+describe('the Plugins view\'s failure prefix stays a decoration', () => {
+  it('imports nothing but vscode', () => {
+    expect(importsOf(read(join('plugins', 'failurePrefixIcon.ts')))).toEqual(['vscode']);
+  });
+});
+
 // Held to the stricter "imports from neither context" bar: unlike Mods, Downloads, Toolbox and
-// the Instance, these have no legitimate reason to import either side's vocabulary at all.
+// the Instance, these have no reason to import either side's vocabulary at all.
 describe('composition-root modules import from neither context', () => {
   // The name filter serves views from both contexts, so it belongs to neither folder and lives
   // at the composition root; the same structural-deps check keeps that honest.

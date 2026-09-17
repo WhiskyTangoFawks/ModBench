@@ -40,8 +40,6 @@ export function setPluginEnabled(
   });
 }
 
-/** `toIndex` counts entries with the moved lines already removed. Refuses if a name has no
- *  entry line. */
 /** Where a drag landed in the Plugins tree. Re-exported so the view names the drop without
  *  naming the codec that settles it into an index. */
 export type { Drop as PluginsDrop } from '../mo2Codecs/dropIndex';

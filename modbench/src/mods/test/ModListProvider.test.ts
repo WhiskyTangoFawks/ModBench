@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mod, ModlistEntry, Separator } from '../../instance/instance';
-import { parseModlist, moveModInText, moveSeparatorBlockInText, separatorBlockNames, writeModlist } from '../../mo2Codecs/modlistText';
-import { dropIndexIn, type Drop } from '../../mo2Codecs/dropIndex';
+import type { Drop } from '../../mo2Codecs/dropIndex';
 
 // The entry names a splice counts its index among — the same read the command makes.
-const entryNames = (text: string): string[] => parseModlist(text).map((e) => e.name);
 import type { InstanceValue } from '../../instance/instance';
 import type { ModStatusResult } from '../../instance/statusChecker';
 import { present } from '../../ports/present';
@@ -428,21 +426,21 @@ describe('ModListProvider', () => {
       return { provider };
     }
 
-    // Real modlist.txt transforms applied to an in-memory `text`, so tests assert the drop's
-    // final entry order against `order()`, not the row provider's own un-refreshed rendering.
-    function makeApplyingProvider() {
-      let text = writeModlist(dndEntries);
+    // What this view owes is the drop it asks for. What modlist.txt then looks like is the
+    // command's, in modlist/test/modlist.test.ts.
+    interface RecordedDrop { command: 'reorderMod' | 'reorderSeparatorBlock'; name: string; drop: Drop }
+
+    function makeRecordingProvider(entries: ModlistEntry[] = dndEntries) {
+      const drops: RecordedDrop[] = [];
       reorderModMock.mockImplementation((_root: string, _profile: string, name: string, drop: Drop) => {
-        text = moveModInText(text, name, dropIndexIn(entryNames(text), [name], drop));
+        drops.push({ command: 'reorderMod', name, drop });
         return Promise.resolve({ applied: true, wrote: true });
       });
-      reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, sepName: string, drop: Drop) => {
-        const block = separatorBlockNames(parseModlist(text), sepName);
-        text = moveSeparatorBlockInText(text, sepName, dropIndexIn(entryNames(text), block, drop));
+      reorderSeparatorBlockMock.mockImplementation((_root: string, _profile: string, name: string, drop: Drop) => {
+        drops.push({ command: 'reorderSeparatorBlock', name, drop });
         return Promise.resolve({ applied: true, wrote: true });
       });
-      const provider = makeProvider(dndEntries);
-      return { provider, order: () => parseModlist(text).map((e) => e.name) };
+      return { provider: makeProvider(entries), drops };
     }
 
     async function childrenOf(provider: ModListProvider, sepName: string): Promise<ModNode[]> {
@@ -479,108 +477,94 @@ describe('ModListProvider', () => {
       expect(moveModToSeparatorMock).toHaveBeenCalledWith(INSTANCE_ROOT, ACTIVE_PROFILE, 'Alpha', 'Group A');
     });
 
-    // Down-drag off-by-one: passing the pre-removal target index would land Alpha one slot
-    // too low.
-    it('winning-at-top down-drag: drop mod onto a lower mod lands it before that mod', async () => {
-      const { provider, order } = makeApplyingProvider();
+    it('winning-at-top down-drag: asks for the block before the row it landed on', async () => {
+      const { provider, drops } = makeRecordingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       const gammaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Gamma'), "the 'Gamma' node");
       await drop(provider, gammaNode, modItem('Alpha'));
-      expect(order()).toEqual(['Group A', 'Beta', 'Alpha', 'Gamma', 'Group B', 'Delta']);
+      expect(drops).toEqual([{ command: 'reorderMod', name: 'Alpha', drop: { kind: 'before', name: 'Gamma' } }]);
     });
 
-    // Regression: up-drags were never affected (nothing moved sits above the
-    // target, so no shift) — must stay correct.
-    // Beta is Group B's member (it precedes Group B's line), not Group A's.
-    it('winning-at-top up-drag: drop mod onto a higher mod lands it before that mod', async () => {
-      const { provider, order } = makeApplyingProvider();
+    // Beta is Group B's member (it precedes Group B's line), not Group A's: a drag up the tree
+    // names its target the same way a drag down does.
+    it('winning-at-top up-drag: asks for the block before the row it landed on', async () => {
+      const { provider, drops } = makeRecordingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       const betaNode = present((await childrenOf(provider, 'Group B')).find((n) => n.label === 'Beta'), "the 'Beta' node");
       await drop(provider, betaNode, modItem('Delta'));
-      expect(order()).toEqual(['Alpha', 'Group A', 'Delta', 'Beta', 'Gamma', 'Group B']);
+      expect(drops).toEqual([{ command: 'reorderMod', name: 'Delta', drop: { kind: 'before', name: 'Beta' } }]);
     });
 
-    it('winning-at-top: drop mod onto empty space appends it to the end', async () => {
-      const { provider, order } = makeApplyingProvider();
+    it('winning-at-top: drop onto empty space asks for the losing end, the view\u2019s own bottom', async () => {
+      const { provider, drops } = makeRecordingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       await provider.getChildren(); // populate cache
       await drop(provider, undefined, modItem('Alpha'));
-      expect(order()).toEqual(['Group A', 'Beta', 'Gamma', 'Group B', 'Delta', 'Alpha']);
+      expect(drops).toEqual([{ command: 'reorderMod', name: 'Alpha', drop: { kind: 'losingEnd' } }]);
     });
 
-    // The whole block is removed before toIndex is counted, so every block member above the
-    // target shifts it — otherwise the block is flung to the bottom.
-    it('winning-at-top down-drag: drop separator block onto a lower mod lands the block before it', async () => {
-      const { provider, order } = makeApplyingProvider();
+    // A separator drags its whole block, and the view names only the separator: which mods
+    // travel with it is the command's reading of modlist.txt, not the tree's.
+    it('winning-at-top down-drag: a separator asks the block command, naming the separator alone', async () => {
+      const { provider, drops } = makeRecordingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
       const roots = await provider.getChildren();
       const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
       await drop(provider, deltaNode, sepItem('Group A'));
-      expect(order()).toEqual(['Beta', 'Gamma', 'Group B', 'Alpha', 'Group A', 'Delta']);
+      expect(drops).toEqual([
+        { command: 'reorderSeparatorBlock', name: 'Group A', drop: { kind: 'before', name: 'Delta' } },
+      ]);
     });
 
     // The pinned Overwrite fixture is not a modlist.txt position — a drop
     // onto it must be a no-op, never falling through to "move to end".
-    it('drop onto the Overwrite node is a no-op', async () => {
-      const { provider, order } = makeApplyingProvider();
-      const before = order();
+    it('drop onto the Overwrite node asks for nothing at all', async () => {
+      const { provider, drops } = makeRecordingProvider();
       const overwriteNode = new OverwriteNode(fakeUri('/x'), 1);
       await drop(provider, overwriteNode, modItem('Alpha'));
-      expect(order()).toEqual(before);
+      expect(drops).toEqual([]);
     });
 
-    // In the default losing-at-top view the file runs opposite to the view, so these assert
-    // the on-disk (file) order the drop produces, translated from the intended view position.
+    // The default view runs losing-at-top while modlist.txt runs winning-first, so "just above
+    // the target in the view" is "just after it in the file".
     describe('honors the view direction', () => {
-      function makeSimpleProvider() {
-        let text = '+Winning\n+Middle\n+Losing\n'; // file order: winning-first
-        reorderModMock.mockImplementation((_root: string, _profile: string, name: string, drop: Drop) => {
-          text = moveModInText(text, name, dropIndexIn(entryNames(text), [name], drop));
-          return Promise.resolve({ applied: true, wrote: true });
-        });
-        const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];
-        const provider = makeProvider(simpleEntries);
-        return { provider, order: () => parseModlist(text).map((e) => e.name) };
-      }
+      const simpleEntries: ModlistEntry[] = [mod('Winning'), mod('Middle'), mod('Losing')];
 
       it('sanity: default (losing-at-top) view reverses file order', async () => {
-        const { provider } = makeSimpleProvider();
+        const { provider } = makeRecordingProvider(simpleEntries);
         const labels = (await provider.getChildren()).filter((n): n is ModNode => n instanceof ModNode).map((n) => n.label);
         expect(labels).toEqual(['Losing', 'Middle', 'Winning']);
       });
 
-      // View target ['Losing', 'Winning', 'Middle'] => file order ['Middle','Winning','Losing'].
-      it('default (losing-at-top): dropping the winning mod onto the middle row lands it just above that row in the view', async () => {
-        const { provider, order } = makeSimpleProvider();
+      it('default (losing-at-top): a drop onto a row asks for the block after it', async () => {
+        const { provider, drops } = makeRecordingProvider(simpleEntries);
         const middle = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Middle'), "the 'Middle' node");
         await drop(provider, middle, modItem('Winning'));
-        expect(order()).toEqual(['Middle', 'Winning', 'Losing']);
+        expect(drops).toEqual([{ command: 'reorderMod', name: 'Winning', drop: { kind: 'after', name: 'Middle' } }]);
       });
 
-      // View target ['Middle', 'Losing', 'Winning'] => file order ['Winning','Losing','Middle'].
-      it('default (losing-at-top): dragging a top (losing) row down onto a lower row lands it just above that row in the view', async () => {
-        const { provider, order } = makeSimpleProvider();
+      it('default (losing-at-top): dragging a top row down onto a lower one asks for the same side', async () => {
+        const { provider, drops } = makeRecordingProvider(simpleEntries);
         const winning = present((await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Winning'), "the 'Winning' node");
         await drop(provider, winning, modItem('Losing')); // Losing (view top) dropped onto Winning (view bottom)
-        expect(order()).toEqual(['Winning', 'Losing', 'Middle']);
+        expect(drops).toEqual([{ command: 'reorderMod', name: 'Losing', drop: { kind: 'after', name: 'Winning' } }]);
       });
 
-      // View target (winning end, bottom) ['Middle','Winning','Losing'] => file ['Losing','Winning','Middle'].
-      it('default (losing-at-top): dropping onto empty space sends the mod to the winning end (bottom of the view)', async () => {
-        const { provider, order } = makeSimpleProvider();
+      it('default (losing-at-top): empty space asks for the winning end, the view\u2019s own bottom', async () => {
+        const { provider, drops } = makeRecordingProvider(simpleEntries);
         await provider.getChildren(); // populate cache
         await drop(provider, undefined, modItem('Losing'));
-        expect(order()).toEqual(['Losing', 'Winning', 'Middle']);
+        expect(drops).toEqual([{ command: 'reorderMod', name: 'Losing', drop: { kind: 'winningEnd' } }]);
       });
 
-      it('default (losing-at-top): dropping a separator block onto a row lands the block just above it in the view', async () => {
-        // Delta is the losing-most row in the default view, so just above it in the view is
-        // just after it in the file.
-        const { provider, order } = makeApplyingProvider();
+      it('default (losing-at-top): a separator block takes the same side as a mod', async () => {
+        const { provider, drops } = makeRecordingProvider();
         const roots = await provider.getChildren();
         const deltaNode = present(roots.find((n): n is ModNode => n instanceof ModNode && n.label === 'Delta'), "the 'Delta' node");
         await drop(provider, deltaNode, sepItem('Group A'));
-        expect(order()).toEqual(['Beta', 'Gamma', 'Group B', 'Delta', 'Alpha', 'Group A']);
+        expect(drops).toEqual([
+          { command: 'reorderSeparatorBlock', name: 'Group A', drop: { kind: 'after', name: 'Delta' } },
+        ]);
       });
     });
   });

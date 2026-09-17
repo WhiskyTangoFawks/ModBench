@@ -238,7 +238,7 @@ reached nine navigation icons with nothing in overflow, which VS Code silently c
    **This is the one rule with no test seam.** `showCollapseAll` is a `createTreeView` option
    with no declarative contribution and no readable property on the returned `TreeView`, so it
    is checked by reading the `createTreeView` call sites (`toolbox.ts` for Plugins,
-   `mods/modManagementCommands.ts` for Mods) rather than by a test.
+   `mo2TreeViews.ts` for Mods and Downloads) rather than by a test.
 
 ## Testing
 

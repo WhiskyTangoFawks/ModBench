@@ -138,7 +138,3 @@ export function movePluginsInText(text: string, pluginNames: string[], toIndex: 
     return lines.join('');
   });
 }
-
-/** A drag names a pre-removal target row, but `movePluginsInText` counts from the
- *  list with the moved names gone, so every moved row above the target shifts it
- *  left. An absent or unknown `targetName` appends. */
