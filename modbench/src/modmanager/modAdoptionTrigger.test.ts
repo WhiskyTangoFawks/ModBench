@@ -112,7 +112,7 @@ describe('registerModAdoption — driven by the Instance value', () => {
     }
   });
 
-  // ADR-0015 invariant 1: the folders come off the value, so the command never lists mods/.
+  // The folders come off the value, so the command never lists mods/.
   // Rival this catches: a trigger that lists the directory itself and hands that instead.
   it('hands the command the value\'s own unlisted folders, not a listing of its own', async () => {
     const { root, instance, handed } = await wiredInstance();

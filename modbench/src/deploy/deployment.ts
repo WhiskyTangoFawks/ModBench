@@ -13,7 +13,7 @@ import type { GameDirectory } from '../mo2Files/gameDirectory';
 export type { DeployWarning };
 
 /** The slice of the Instance's value deploy needs, named on its own rather than imported from
- *  `../instance` — commands never read the read model (ADR-0015 invariant 2). */
+ *  `../instance` — commands never read the read model (ADR-0015 invariant 1). */
 export interface DeployableValue {
   activeProfile: string;
   files: FileWinners;

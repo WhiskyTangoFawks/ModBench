@@ -320,8 +320,8 @@ describe('adoptMods — the unlisted folders it is handed get a modlist.txt line
     expect(await readFile(modlistPath(), 'utf8')).toBe(before);
   });
 
-  // ADR-0015 invariant 1: the folders arrive from the Instance value, so the command has no
-  // reason to look at mods/ and must not fail when it cannot.
+  // The folders arrive from the Instance value, so the command has no reason to look at mods/
+  // and must not fail when it cannot.
   it('adopts what it is handed with no mods/ directory on disk at all', async () => {
     await rm(join(dir, 'mods'), { recursive: true, force: true });
 
@@ -336,7 +336,7 @@ describe('adoptMods — the unlisted folders it is handed get a modlist.txt line
   });
 });
 
-// ADR-0015 invariant 2: a command never reads the Instance, the read model built only by watching.
+// ADR-0015 invariant 1: a command never reads the Instance, the read model built only by watching.
 // src/test/commandInstanceScan.test.ts scans every command box too; this is this file's own guard.
 describe('modlist commands never import the Instance', () => {
   it('names no import from ../instance and no `Instance` identifier', () => {

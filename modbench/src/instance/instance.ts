@@ -58,7 +58,7 @@ export interface InstanceValue {
   readonly mods: readonly ModlistEntry[];
   /** Every directory under mods/ the active profile's modlist.txt has no line for, sorted.
    *  Disjoint from `mods` and rendered by no tree: it is what adoption is handed, so that no
-   *  command walks the instance (ADR-0015 invariant 1). */
+   *  command walks the instance itself. */
   readonly unlistedFolders: readonly string[];
   /** Every directory under mods/, listed or not: the new-empty-mod refusal's own input. */
   readonly modFolders: readonly string[];

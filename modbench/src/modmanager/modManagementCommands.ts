@@ -134,7 +134,8 @@ export function registerModContextCommands(
   return [
       vscode.commands.registerCommand('modbench.modList.mod.openInExplorer', async (node: ModNode | undefined) => {
         if (node?.kind !== 'mod') return;
-        // The value's own folder for this row, never a path joined here (ADR-0015 invariant 1).
+        // The value's own folder for this row, never a path joined here: MO2 files owns every
+        // path function, and the value carries its answer.
         const folder = instance.value.paths.modDirs.get(node.mod.name);
         if (folder === undefined) return;
         await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(folder));
@@ -172,8 +173,8 @@ export function registerModContextCommands(
         if (answer !== 'Uninstall') return;
         await runModAction('uninstall', `Failed to uninstall "${node.mod.name}".`, async () => {
           const profile = instance.value.activeProfile;
-          // The download to mark comes off the row the tree already holds (ADR-0015 invariant 1),
-          // so the command walks nothing to find it.
+          // The download to mark comes off the row the tree already holds, so the command walks
+          // nothing to find it.
           applyOrThrow(await uninstallMod(instanceRoot, profile, node.mod.name, node.mod.archiveFilename));
         });
       }),
