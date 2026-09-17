@@ -50,11 +50,10 @@ export function registerModListCoreCommands(modListProvider: ModListProvider): v
       }),
   ];
 }
-/** What the Downloads view hears back: whether a mod landed, and — when one did — the sidecar
- *  write that failed beside it. */
+/** What the gesture answers its invoker: whether a mod landed. A cancelled picker, a cancelled
+ *  name prompt and a refused install are one answer, since each leaves nothing installed. */
 export interface InstallFromArchiveOutcome {
   installed: boolean;
-  downloadRefusal?: string;
 }
 
 export interface ModInstallDeps {
@@ -79,7 +78,6 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         archivePath?: string, modID?: string, fileID?: string, version?: string,
         choice: InstallChoice = { kind: 'new' },
       ): Promise<InstallFromArchiveOutcome> => {
-        let downloadRefusal: string | undefined;
         let archive = archivePath;
         if (!archive) {
           const picked = await vscode.window.showOpenDialog({
@@ -100,10 +98,9 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
             { gameName: instance.value.gameRelease, modID, fileID, version });
           if (!outcome.applied) throw new Error(outcome.refusal);
           warnIfFomod(target.name, outcome.isFomod);
-          downloadRefusal = outcome.downloadRefusal;
           succeeded = true;
         });
-        return { installed: succeeded, downloadRefusal };
+        return { installed: succeeded };
       }),
       vscode.commands.registerCommand('modbench.modList.installFromFolder', async () => {
         const picked = await vscode.window.showOpenDialog({

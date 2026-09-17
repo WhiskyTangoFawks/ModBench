@@ -74,7 +74,7 @@ describe('registerModInstallCommands: the install target', () => {
       '/instance', { kind: 'upgrade', name: 'Existing Mod' }, '/archive/foo.7z',
       { gameName: GAME_RELEASE, modID: '111', fileID: '222', version: '3.0' },
     );
-    expect(succeeded).toEqual({ installed: true, downloadRefusal: undefined });
+    expect(succeeded).toEqual({ installed: true });
   });
 
   it('a new-mod choice reaches the name prompt and installs as a new mod', async () => {
@@ -89,7 +89,7 @@ describe('registerModInstallCommands: the install target', () => {
       '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
       { gameName: GAME_RELEASE, modID: undefined, fileID: undefined, version: undefined },
     );
-    expect(succeeded).toEqual({ installed: true, downloadRefusal: undefined });
+    expect(succeeded).toEqual({ installed: true });
   });
 
   // Rival: default the absent choice to an upgrade of the prompted name. The Mods-view entry
@@ -106,7 +106,7 @@ describe('registerModInstallCommands: the install target', () => {
       '/instance', { kind: 'new', name: 'New Mod' }, '/archive/foo.7z',
       { gameName: GAME_RELEASE, modID: undefined, fileID: undefined, version: undefined },
     );
-    expect(succeeded).toEqual({ installed: true, downloadRefusal: undefined });
+    expect(succeeded).toEqual({ installed: true });
   });
 
   it('no choice and a cancelled prompt installs nothing', async () => {
