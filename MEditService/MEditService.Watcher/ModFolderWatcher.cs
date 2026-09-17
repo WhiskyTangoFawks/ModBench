@@ -59,42 +59,45 @@ public sealed class ModFolderWatcher : IDisposable
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
     }
 
-    // The reconcile runs outside the in-flight scope: the Index owns its own cancellation on
-    // disposal, and a disposed watcher speaks for no snapshot.
+    // Arming comes first, so no stale watch settles after it; the reconcile then goes on its own
+    // thread beside the settles, since the progressive reconcile (ADR-0013 invariant 1) never
+    // waits on a git status per tracked mod.
     private void ArmSettleAndReconcile(LoadOrderSnapshot snapshot, long version)
     {
-        bool superseded;
         try
         {
-            superseded = !ArmAndSettle(snapshot, version);
+            if (Armed(snapshot, version) is not { } tracked) return;
+
+            // Outside the in-flight scope: the Index owns its own cancellation on disposal, and a
+            // disposed watcher speaks for no snapshot.
+            if (!IsDisposed)
+            {
+                Task.Factory.StartNew(
+                    () => _sinks.Reconcile(snapshot, version),
+                    CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+            }
+
+            foreach (var mod in tracked) RaiseSafely(() => SettleAtLoad(snapshot, mod));
         }
         finally
         {
             Exit();
         }
-
-        if (superseded || IsDisposed) return;
-        _sinks.Reconcile(snapshot, version);
     }
 
-    // False when a newer change was armed already. No status of its own carries an unknown
-    // failure as data (unlike the Index), so the log is the last resort.
-    private bool ArmAndSettle(LoadOrderSnapshot snapshot, long version)
+    // Null when a newer change was armed already; empty when arming failed, which the log carries,
+    // since no status of its own carries an unknown failure as data (unlike the Index).
+    private IReadOnlyList<TrackedMod>? Armed(LoadOrderSnapshot snapshot, long version)
     {
-        IReadOnlyList<TrackedMod> tracked;
         try
         {
-            if (_watches.Arm(snapshot, version) is not { } armed) return false;
-            tracked = armed;
+            return _watches.Arm(snapshot, version);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             _logger.LogError(ex, "Re-arming the watcher after a load order change failed unexpectedly");
-            return true;
+            return [];
         }
-
-        foreach (var mod in tracked) RaiseSafely(() => SettleAtLoad(snapshot, mod));
-        return true;
     }
 
     // One read of each tracked binary serves both the readability probe and the classification.
@@ -118,12 +121,11 @@ public sealed class ModFolderWatcher : IDisposable
         }
 
         if (unreadable.Count > 0)
-        {
             foreach (var name in unreadable) _sinks.OfferRepairForUnreadable(order, mod.ModFolder, name);
-            return;
-        }
+        else
+            _sinks.SettleAtLoad(order, mod.ModFolder, observed);
 
-        _sinks.SettleAtLoad(order, mod.ModFolder, observed);
+        if (_logger.IsEnabled(LogLevel.Debug)) _logger.LogDebug("Load-time settle of {ModFolder} done", mod.ModFolder);
     }
 
     // Fired by either of the mod's own timers. A tracked mod's binaries and other files are

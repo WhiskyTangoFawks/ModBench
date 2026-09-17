@@ -6,6 +6,7 @@ using MEditService.LoadOrder;
 using MEditService.SourceRepo;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using FakeClock = Microsoft.Extensions.Time.Testing.FakeTimeProvider;
 
@@ -33,8 +34,15 @@ internal sealed class WatchedTree : IDisposable
     internal RecordingRefreshIndex Index { get; }
     internal InMemoryNotificationPublisher Notifications { get; } = new();
     internal LoadOrderHolder Holder { get; } = new();
-    internal List<LogEntry> LogEntries { get; } = [];
     internal ModFolderWatcher Watcher { get; }
+
+    private readonly List<LogEntry> _log = [];
+
+    /// <summary>What the watcher reported: everything above the Debug trace lines.</summary>
+    internal IReadOnlyList<LogEntry> LogEntries
+    {
+        get { lock (_log) return [.. _log.Where(e => e.Level > LogLevel.Debug)]; }
+    }
 
     internal string InstanceRoot { get; }
     internal string GameDirectory { get; }
@@ -57,7 +65,7 @@ internal sealed class WatchedTree : IDisposable
         InstanceRoot = Directory.CreateTempSubdirectory("medit-watch-").FullName;
         GameDirectory = Directory.CreateDirectory(Path.Combine(InstanceRoot, "Data")).FullName;
         Watcher = new ModFolderWatcher(
-            Holder, Index, Settled(Notifications), new CollectingLogger(LogEntries), Quiet, MaxWindow, Clock);
+            Holder, Index, Settled(Notifications), new CollectingLogger(_log), Quiet, MaxWindow, Clock);
         Watcher.Subscribe();
     }
 
@@ -113,14 +121,29 @@ internal sealed class WatchedTree : IDisposable
     internal LoadOrderSnapshot Snapshot() =>
         new(GameDirectory, InstanceRoot, GameRelease.Fallout4, [.. _copies]);
 
-    /// <summary>Hands the load order to the holder and returns once the watcher has reconciled it.
-    /// The reconcile is the last thing a change does, so from here every watch is armed and every
-    /// load-time settle has run.</summary>
+    /// <summary>Hands the load order to the holder and returns once the watcher has reconciled it
+    /// and every tracked mod's load-time settle has run, the two awaited on their own since they
+    /// run beside each other.</summary>
     internal async Task ApplyLoadOrder()
     {
-        var before = Index.Reconciles.Count;
+        var reconciled = Index.Reconciles.Count;
+        var expected = LoadSettles() + TrackedModsInSnapshot();
         Holder.Apply(Snapshot());
-        Assert.True(await Reached(() => Index.Reconciles.Count > before), "the load-order change never reconciled");
+        Assert.True(await Reached(() => Index.Reconciles.Count > reconciled), "the load-order change never reconciled");
+        Assert.True(await Reached(() => LoadSettles() >= expected), "a tracked mod's load-time settle never ran");
+    }
+
+    private int TrackedModsInSnapshot() =>
+        _copies.Select(c => LoadOrderSnapshot.ModFolderOf(c.Origin, c.Path))
+            .Where(folder => folder is not null && SourceRepository.IsTracked(folder))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+    // The watcher's own trace line per tracked mod, one level below anything a test reads as a
+    // report.
+    private int LoadSettles()
+    {
+        lock (_log) return _log.Count(e => e.Message.StartsWith("Load-time settle of ", StringComparison.Ordinal));
     }
 
     /// <summary>A document whose body names the record it carries, which is what lets the batch be

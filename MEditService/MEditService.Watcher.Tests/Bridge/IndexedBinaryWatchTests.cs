@@ -45,10 +45,15 @@ public sealed class IndexedBinaryWatchTests
     {
         var (tree, pluginPath) = await Watching();
         using var _ = tree;
+        using var oracle = WatchedTree.ArmOracleIn(Path.GetDirectoryName(pluginPath) ?? throw new InvalidOperationException("no folder"));
 
         File.WriteAllBytes(pluginPath, "original"u8.ToArray());
+        // Every event one write raises is queued before the window closes, so the one poke is one
+        // window's rather than the operating system's event count.
+        Assert.True(await oracle.Delivered(), "the rewrite never reached a watch on the mod folder");
 
-        Assert.True(await tree.Settles(() => tree.Index.BinaryPokes.Count > 0));
+        tree.AdvancePastBothWindows();
+
         Assert.Equal((Copy, pluginPath), Assert.Single(tree.Index.BinaryPokes));
         Assert.Empty(tree.Notifications.Published);
     }
