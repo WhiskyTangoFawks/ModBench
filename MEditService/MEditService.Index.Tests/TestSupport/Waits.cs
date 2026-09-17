@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>A subscribed reconcile runs on its own thread, so a test asserting its outcome waits
 /// for the status it publishes rather than for a call to return.</summary>

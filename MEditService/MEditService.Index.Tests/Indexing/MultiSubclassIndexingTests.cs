@@ -1,6 +1,8 @@
 using System.Text.Json;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -8,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 // A GRUP signature backed by several concrete subclasses, discriminated per record rather than per
 // table, must not take its schema from whichever subclass discovery enumerates first: that leaves

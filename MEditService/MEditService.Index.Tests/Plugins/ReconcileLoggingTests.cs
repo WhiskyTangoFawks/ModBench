@@ -1,10 +1,12 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 // Only per-plugin progress lines stay at Info; every other pipeline milestone is Debug. Level is
 // what these assert, which the broader Plugins suite never does.

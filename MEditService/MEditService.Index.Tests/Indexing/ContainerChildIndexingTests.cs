@@ -1,12 +1,14 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Indexing;
+namespace MEditService.Index.Tests.Indexing;
 
 /// <summary>Slots already answered by the placement reads must not get a second, competing copy
 /// among the container children.</summary>

@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>An in-between count is the failure (ADR-0013): a plugin reading as "412 records" while
 /// 1,588 are still being written is worse than absent, since nothing distinguishes it from one that

@@ -1,11 +1,13 @@
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>ADR-0014 invariant 2, the in-memory adapter: the Index verbs the write API reaches
 /// publish rows-changed through the port with no HTTP or SSE stream involved, proving the port —
@@ -44,11 +46,11 @@ public sealed class RowsChangedNotificationTests
 
         // A hand edit to a child inside its owner's document: the child has no file of its own, and
         // the projector is asked about the owner alone.
-        var document = fixture.Mod.SourceFileContaining(ContainerMod.TemporaryRefEditorId);
+        var document = fixture.Mod.SourceFileContaining(ContainerModPlugin.TemporaryRefEditorId);
         File.WriteAllText(
             document,
             File.ReadAllText(document).Replace(
-                $"\"{ContainerMod.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+                $"\"{ContainerModPlugin.TemporaryRefEditorId}\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
         fixture.Index.RefreshKeys(fixture.Plugin, [fixture.EmbedCell]);
 

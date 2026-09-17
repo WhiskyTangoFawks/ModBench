@@ -1,8 +1,10 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>Runs against <see cref="ContainerMod"/>, whose records nest: a flat fixture exercises
 /// no container at all. <c>SourceIngestParityTests</c> covers the same ground at scale.</summary>
@@ -23,7 +25,7 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         var record = reloaded.RequireReads().GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(record);
-        Assert.Equal(ContainerMod.TemporaryRefEditorId, record.EditorId);
+        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, record.EditorId);
         Assert.NotNull(reloaded.RequireReads().Resolve(_fixture.TemporaryRef.ToString()));
     }
 
@@ -60,9 +62,9 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         var cell = reloaded.RequireReads().GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(cell);
-        Assert.Equal(ContainerMod.EmbedCellEditorId, cell.EditorId);
+        Assert.Equal(ContainerModPlugin.EmbedCellEditorId, cell.EditorId);
         // The child is embedded in the parent's document, which is what gives it no file of its own.
-        Assert.Contains(ContainerMod.TemporaryRefEditorId, cell.Body, StringComparison.Ordinal);
+        Assert.Contains(ContainerModPlugin.TemporaryRefEditorId, cell.Body, StringComparison.Ordinal);
     }
 
     // ---- Container Head reconciliation ----
@@ -70,10 +72,10 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnExternallyEditedContainer_ReconcilesItsHeadState_ThroughStructuralDiff()
     {
-        var file = _fixture.SourceFileContaining(ContainerMod.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         File.WriteAllText(
             file,
-            File.ReadAllText(file).Replace(ContainerMod.EmbedCellEditorId, "RenamedCell", StringComparison.Ordinal));
+            File.ReadAllText(file).Replace(ContainerModPlugin.EmbedCellEditorId, "RenamedCell", StringComparison.Ordinal));
 
         using var reloaded = Reloaded();
 
@@ -86,7 +88,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         // Head now holds the true, pre-edit baseline — not Effective's own value.
         var head = reloaded.RequireReads().HeadDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(head);
-        Assert.Equal(ContainerMod.EmbedCellEditorId, head.EditorId);
+        Assert.Equal(ContainerModPlugin.EmbedCellEditorId, head.EditorId);
     }
 
     [Fact]
@@ -110,11 +112,11 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedChildEditedInPlace_ReconcilesItsOwnHeadState()
     {
-        var file = _fixture.SourceFileContaining(ContainerMod.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         File.WriteAllText(
             file,
             File.ReadAllText(file).Replace(
-                $"\"EditorID\": \"{ContainerMod.TemporaryRefEditorId}\"",
+                $"\"EditorID\": \"{ContainerModPlugin.TemporaryRefEditorId}\"",
                 "\"EditorID\": \"RenamedTempRef\"", StringComparison.Ordinal));
 
         using var reloaded = Reloaded();
@@ -125,21 +127,21 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.Equal("RenamedTempRef", effective.EditorId);
         var head = reloaded.RequireReads().HeadDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(head);
-        Assert.Equal(ContainerMod.TemporaryRefEditorId, head.EditorId);
+        Assert.Equal(ContainerModPlugin.TemporaryRefEditorId, head.EditorId);
     }
 
     [Fact]
     public void AnEmbeddedChildAddedInTheWorkingTree_AnswersOnlyAtEffective()
     {
         var newFormKey = $"000900:{ContainerMod.PluginName}";
-        var file = _fixture.SourceFileContaining(ContainerMod.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var original = File.ReadAllText(file);
-        var temporaryChild = ChildObject(original, ContainerMod.TemporaryRefEditorId);
+        var temporaryChild = ChildObject(original, ContainerModPlugin.TemporaryRefEditorId);
         var withNewChild = original.Replace(
             temporaryChild,
             temporaryChild + ",\n" + temporaryChild
                 .Replace(_fixture.TemporaryRef.ToString(), newFormKey, StringComparison.Ordinal)
-                .Replace(ContainerMod.TemporaryRefEditorId, "BrandNewRef", StringComparison.Ordinal),
+                .Replace(ContainerModPlugin.TemporaryRefEditorId, "BrandNewRef", StringComparison.Ordinal),
             StringComparison.Ordinal);
         Assert.NotEqual(original, withNewChild); // the replace actually matched — a guard against a silent no-op
         File.WriteAllText(file, withNewChild);
@@ -156,9 +158,9 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnEmbeddedChildDeletedInTheWorkingTree_IsAbsentAtEffective()
     {
-        var file = _fixture.SourceFileContaining(ContainerMod.EmbedCellEditorId);
+        var file = _fixture.SourceFileContaining(ContainerModPlugin.EmbedCellEditorId);
         var original = File.ReadAllText(file);
-        var persistentChild = ChildObject(original, ContainerMod.PersistentRefEditorId);
+        var persistentChild = ChildObject(original, ContainerModPlugin.PersistentRefEditorId);
         var withoutPersistentChild = original.Replace(persistentChild, string.Empty, StringComparison.Ordinal);
         Assert.NotEqual(original, withoutPersistentChild); // the replace actually matched
         File.WriteAllText(file, withoutPersistentChild);

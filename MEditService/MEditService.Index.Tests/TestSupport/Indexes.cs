@@ -2,10 +2,12 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
 using MEditService.Ports;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>The Index as the composition root builds it: the public constructor over the real
 /// adapter, reconciled over a fixture's plugins.</summary>

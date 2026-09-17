@@ -1,10 +1,12 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 // ADR-0013: the held set of plugin copies, opened one at a time from the copies a snapshot
 // registers, and mutated in place as copies arrive, leave, or move, as the reads and the status
@@ -20,6 +22,8 @@ public sealed class HeldPluginsTests
 
     // ── Open ────────────────────────────────────────────────────────────────────
 
+    // The slots PutLoadOrderHandler would assign (ADR-0013 invariant 2): a forced copy at slot 0,
+    // the sent entries offset behind it.
     [Fact]
     public void Open_ForcedMaster_LoadsBeforeTheSnapshotPlugin()
     {
@@ -27,8 +31,15 @@ public sealed class HeldPluginsTests
             .WithPlugin("Fallout4.esm", listed: false)
             .WithPlugin(UserPlugin)
             .Build();
+        RegisteredCopy[] forced = [RegisteredCopy.Forced(data.DataFolder, "Fallout4.esm", slot: 0)];
+        var snapshot = new LoadOrderSnapshot(
+            data.DataFolder, instanceRoot: null, GameRelease.Fallout4,
+            [.. forced, .. data.Plugins.Select(e => RegisteredCopy.Of(e, slotOffset: forced.Length))]);
+        var holder = new LoadOrderHolder();
+        var version = holder.Apply(snapshot);
+        using var held = Indexes.Open(holder);
 
-        using var held = Open(data);
+        held.Reconcile(snapshot, version);
 
         Assert.Equal(["Fallout4.esm", UserPlugin], held.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(held.Registers(Key("Fallout4.esm")));

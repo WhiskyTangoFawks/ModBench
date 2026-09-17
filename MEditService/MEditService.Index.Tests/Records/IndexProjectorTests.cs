@@ -1,14 +1,16 @@
 using System.Collections.Concurrent;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
 using MEditService.Ports;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 /// <summary>ADR-0015 invariant 3 and ADR-0013 invariant 4, at the Index's own seam: a load order
 /// value in, registrations and one sequence advance out, over a real DuckDB.</summary>

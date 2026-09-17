@@ -1,5 +1,7 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -7,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Strings;
 using Noggog;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Indexes a real Cell through the real <see cref="DuckDbRecordIndex"/> pipeline rather
 /// than stubbing the DTO layer: the JSON-path guess driving <c>json_extract_string</c> is unproven

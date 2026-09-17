@@ -2,30 +2,20 @@ using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Ports;
 using MEditService.SourceRepo;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Noggog;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
-/// <summary>A tracked mod whose records nest: cells holding placed references, a navigation mesh
-/// and a landscape, and a worldspace holding a top cell that holds its own reference. The flat
-/// fixtures cannot exercise a container at all.</summary>
+/// <summary>A tracked mod over <see cref="ContainerModPlugin"/>'s shared shape, the one records the
+/// flat fixtures cannot exercise.</summary>
 internal sealed class ContainerMod : IDisposable
 {
     public const string PluginName = "ContainerFixture.esp";
     public const string Origin = "ContainerFixtureMod";
-
-    public const string CellEditorId = "FixtureCell";
-    public const string EmbedCellEditorId = "EmbedCell";
-    public const string TemporaryRefEditorId = "TempRef";
-    public const string PersistentRefEditorId = "PersistRef";
-    public const string NavmeshEditorId = "EmbedNavmesh";
-    public const string LandscapeEditorId = "EmbedLandscape";
-    public const string WorldspaceEditorId = "EmbedWorld";
-    public const string TopCellEditorId = "EmbedTopCell";
-    public const string TopCellRefEditorId = "TopCellRef";
     public const string NpcEditorId = "FixtureNpc";
 
     private readonly ScatteredFixtureData _fixture;
@@ -45,51 +35,13 @@ internal sealed class ContainerMod : IDisposable
 
     public ContainerMod()
     {
-        FormKey cell = default, embedCell = default, temporaryRef = default, persistentRef = default;
-        FormKey worldspace = default, topCell = default, topCellRef = default, npc = default;
+        var keys = default(ContainerModPlugin.Keys);
+        FormKey npc = default;
 
         _fixture = new PluginFixtureBuilder("container-mod")
             .WithPlugin(PluginName, mod =>
             {
-                var interior = new Cell(mod) { EditorID = CellEditorId, WaterHeight = 100f };
-                AddInteriorCell(mod, interior, blockNumber: 0);
-                cell = interior.FormKey;
-
-                var embed = new Cell(mod) { EditorID = EmbedCellEditorId, WaterHeight = 10f };
-                var temporary = new PlacedObject(mod)
-                {
-                    EditorID = TemporaryRefEditorId,
-                    Position = new P3Float(11f, 22f, 33f),
-                    Scale = 1f,
-                };
-                var persistent = new PlacedObject(mod)
-                {
-                    EditorID = PersistentRefEditorId,
-                    Position = new P3Float(1f, 2f, 3f),
-                    Scale = 4f,
-                };
-                var mesh = new NavigationMesh(mod) { EditorID = NavmeshEditorId };
-                var land = new Landscape(mod) { EditorID = LandscapeEditorId };
-                embed.Temporary.Add(temporary);
-                embed.Persistent.Add(persistent);
-                embed.NavigationMeshes.Add(mesh);
-                embed.Landscape = land;
-                AddInteriorCell(mod, embed, blockNumber: 1);
-                (embedCell, temporaryRef, persistentRef) = (embed.FormKey, temporary.FormKey, persistent.FormKey);
-
-                var world = new Worldspace(mod) { EditorID = WorldspaceEditorId };
-                var top = new Cell(mod) { EditorID = TopCellEditorId, WaterHeight = 5f };
-                var topRef = new PlacedObject(mod)
-                {
-                    EditorID = TopCellRefEditorId,
-                    Position = new P3Float(7f, 8f, 9f),
-                    Scale = 6f,
-                };
-                top.Temporary.Add(topRef);
-                world.TopCell = top;
-                mod.Worldspaces.Add(world);
-                (worldspace, topCell, topCellRef) = (world.FormKey, top.FormKey, topRef.FormKey);
-
+                keys = ContainerModPlugin.AddTo(mod);
                 // Allocated last, so every container FormKey above keeps the value it had before a
                 // flat record joined the fixture.
                 npc = mod.Npcs.AddNew(NpcEditorId).FormKey;
@@ -98,9 +50,8 @@ internal sealed class ContainerMod : IDisposable
             .Tracked();
 
         Entry = _fixture.Plugins.Single();
-        Cell = cell;
-        (EmbedCell, TemporaryRef, PersistentRef) = (embedCell, temporaryRef, persistentRef);
-        (Worldspace, TopCell, TopCellRef) = (worldspace, topCell, topCellRef);
+        (Cell, EmbedCell, TemporaryRef, PersistentRef, Worldspace, TopCell, TopCellRef) =
+            (keys.Cell, keys.EmbedCell, keys.TemporaryRef, keys.PersistentRef, keys.Worldspace, keys.TopCell, keys.TopCellRef);
         Npc = npc;
     }
 
@@ -112,15 +63,6 @@ internal sealed class ContainerMod : IDisposable
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
     public void Dispose() => _fixture.Dispose();
-
-    private static void AddInteriorCell(Fallout4Mod mod, Cell cell, int blockNumber)
-    {
-        var subBlock = new CellSubBlock { BlockNumber = blockNumber, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = blockNumber, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-    }
 }
 
 /// <summary>The container mod with an index over it, reconciled the way the composition root

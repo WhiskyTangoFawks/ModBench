@@ -1,8 +1,10 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Field values only, not <c>FieldMetadata</c>: metadata is schema-derived, identical by
 /// construction, and would bury the values under thousands of lines of enum domains.</summary>

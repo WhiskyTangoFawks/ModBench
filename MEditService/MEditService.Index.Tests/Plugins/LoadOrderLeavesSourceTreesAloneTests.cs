@@ -1,11 +1,13 @@
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 /// <summary>Text a user or Track put in a mod folder is not Modbench's to remove because a binary
 /// went missing (ADR-0007, never assume exclusive ownership). The load itself is the positive

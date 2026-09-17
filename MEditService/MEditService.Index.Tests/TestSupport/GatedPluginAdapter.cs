@@ -2,10 +2,12 @@ using MEditService.Codec.Schema;
 using MEditService.Codec.Serialization;
 using MEditService.LoadOrder;
 using MEditService.PluginAdapter;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.TestSupport;
+namespace MEditService.Index.Tests.TestSupport;
 
 /// <summary>Forwards every member to the real adapter so a double states only the verb it cares
 /// about: these tests want real plugins read with one seam intercepted, not a fake adapter.</summary>

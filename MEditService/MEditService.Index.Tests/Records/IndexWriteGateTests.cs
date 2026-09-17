@@ -1,35 +1,42 @@
+using System.Collections.Concurrent;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
+using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 public sealed class IndexWriteGateTests
 {
+    // Absence by order, never by elapsed time: the first caller releases only once it has heard
+    // the second is attempting entry, so a non-exclusive gate shows "second-in" before "first-out".
     [Fact]
-    public async Task ASecondCaller_WaitsUntilTheFirstReleases()
+    public async Task ASecondCaller_EntersOnlyAfterTheFirstReleases()
     {
         var gate = new IndexWriteGate();
+        var order = new ConcurrentQueue<string>();
         using var firstIsIn = new ManualResetEventSlim();
-        using var secondIsIn = new ManualResetEventSlim();
+        using var secondAttempting = new ManualResetEventSlim();
 
         var first = Task.Run(() =>
         {
             using var _ = gate.Enter();
+            order.Enqueue("first-in");
             firstIsIn.Set();
-            // Long enough that a gateless implementation would let the second caller in meanwhile,
-            // short enough not to slow the suite.
-            Thread.Sleep(500);
+            Assert.True(secondAttempting.Wait(TimeSpan.FromSeconds(5)));
+            order.Enqueue("first-out");
         });
 
         Assert.True(firstIsIn.Wait(TimeSpan.FromSeconds(5)));
         var second = Task.Run(() =>
         {
+            secondAttempting.Set();
             using var _ = gate.Enter();
-            secondIsIn.Set();
+            order.Enqueue("second-in");
         });
 
-        Assert.False(secondIsIn.Wait(TimeSpan.FromMilliseconds(200)), "the second caller got in while the first held the gate");
         await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
-        Assert.True(secondIsIn.IsSet);
+        Assert.Equal(["first-in", "first-out", "second-in"], order);
     }
 
     // Reentrancy is load-bearing: the source watcher's batch takes the gate and then calls Index

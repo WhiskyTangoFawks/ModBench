@@ -1,12 +1,14 @@
 using MEditService.Codec.Schema;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
-namespace MEditService.Tests.Plugins;
+namespace MEditService.Index.Tests.Plugins;
 
 // ADR-0009: one index file per MO2 instance. The two instances share one game directory on purpose,
 // the shape the bug lives in: keyed by the Data install both get one index file; keyed by the

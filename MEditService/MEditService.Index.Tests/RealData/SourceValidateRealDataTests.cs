@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Xunit.Abstractions;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Validate on 3,900-odd authentic records, freshly ingested from their own source tree, so
 /// validate must find nothing. A synthetic fixture cannot make this claim: it holds no containers,

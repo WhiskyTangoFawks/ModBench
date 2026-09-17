@@ -1,12 +1,14 @@
 using MEditService.Codec.Schema;
+using MEditService.Index.Tests.TestSupport;
 using MEditService.LoadOrder;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // Point-reading one document per record costs two DuckDB round trips each, so the seam carries a
 // bulk read: every document one plugin's copy holds, in one query.

@@ -1,3 +1,5 @@
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -5,7 +7,7 @@ using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
-namespace MEditService.Tests.Records;
+namespace MEditService.Index.Tests.Records;
 
 // A per-plugin summary line duplicates the progress milestone the reconcile logs at Info, so it
 // logs at Debug and per-record processing logs at Trace. Only log level and content are asserted

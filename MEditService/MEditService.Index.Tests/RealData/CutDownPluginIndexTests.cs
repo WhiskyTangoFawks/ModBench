@@ -1,8 +1,10 @@
 using System.Text.Json;
 using MEditService.Index;
+using MEditService.Index.Tests.TestSupport;
+using MEditService.Tests;
 using MEditService.Tests.TestSupport;
 
-namespace MEditService.Tests.RealData;
+namespace MEditService.Index.Tests.RealData;
 
 /// <summary>Existence/count assertions on purpose: the curated slice is regenerable, so pinning
 /// exact FormKeys would make it brittle. The script read is the exception, since "returns without
