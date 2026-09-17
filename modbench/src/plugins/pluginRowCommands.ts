@@ -15,6 +15,7 @@ import { trackProgressMessage } from './trackProgress';
 import { pluginFileOf, type PluginListNode } from './PluginsTreeProvider';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
+import { errorMessage } from '../ports/errorMessage';
 
 /** The Plugins tree's one progress surface (ADR-0002): a spinner over the view while the work
  *  runs, and the view's own message line. The composition root holds the `TreeView`, so it
@@ -290,7 +291,7 @@ export async function registerHeldTrackedRepositories(
       (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
     setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories));
   } catch (err) {
-    outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
+    outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${errorMessage(err)}`);
   }
 }
 
@@ -303,6 +304,6 @@ export function refreshSourceControlFor(
   const repo = pluginRepositories?.get(plugin);
   if (!repo) return;
   void repo.status().then(undefined, (err: unknown) => {
-    outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${err instanceof Error ? err.message : String(err)}`);
+    outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${errorMessage(err)}`);
   });
 }

@@ -1,4 +1,5 @@
 import type { BackendStatus, MEditClient } from '../client';
+import { errorMessage } from '../ports/errorMessage';
 
 type StatusSource = Pick<MEditClient, 'onStatusChanged'>;
 
@@ -51,7 +52,7 @@ export function enterEditingAcrossRestarts(
     if (status === 'disconnected') { crashed = true; return; }
     if (status !== 'attached' || !crashed) return;
     void enter().catch((err: unknown) =>
-      log(`reload after backend restart failed: ${err instanceof Error ? err.message : String(err)}`),
+      log(`reload after backend restart failed: ${errorMessage(err)}`),
     );
   });
   return { enter, dispose: unsubscribe };

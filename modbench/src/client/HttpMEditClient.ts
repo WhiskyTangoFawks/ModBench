@@ -16,6 +16,7 @@ import {
   type RecordRenumberResponse, type ReferenceResult, type TrackResponse, type TrackStatus,
   type WorldspaceBlocks, type WorldspaceSummary, type WriteRefused,
 } from './MEditClient';
+import { errorMessage } from '../ports/errorMessage';
 
 // No convention in ADR-0019 or docs/specs/plugins.md anchors this: 30s is an ordinary
 // HTTP-client default. A slow call and a hung one look the same to the tree, so nothing tries to
@@ -124,7 +125,7 @@ export class HttpMEditClient implements MEditClient {
       }
       return data;
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = errorMessage(e);
       this.log(`[HttpMEditClient] ${spec.op} threw: ${message}`);
       return { refused: true, message: `${spec.failMsg} — ${message}` };
     }
@@ -548,8 +549,8 @@ export class HttpMEditClient implements MEditClient {
       }
       return null;
     } catch (e) {
-      this.log(`[HttpMEditClient] setFilter failed: ${e instanceof Error ? e.message : String(e)}`);
-      return e instanceof Error ? e.message : String(e);
+      this.log(`[HttpMEditClient] setFilter failed: ${errorMessage(e)}`);
+      return errorMessage(e);
     }
   }
 
@@ -558,7 +559,7 @@ export class HttpMEditClient implements MEditClient {
       const { error, response } = await this.apiClient.DELETE('/load-order/filter', {});
       if (!response.ok) this.log(`[HttpMEditClient] clearFilter failed (${response.status}): ${errorText(error)}`);
     } catch (e) {
-      this.log(`[HttpMEditClient] clearFilter failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.log(`[HttpMEditClient] clearFilter failed: ${errorMessage(e)}`);
     }
   }
 
@@ -630,7 +631,7 @@ export class HttpMEditClient implements MEditClient {
     try {
       result = await this.apiClient.GET('/implicit-masters', { params: { query: { gameDirectory, gameRelease } } });
     } catch (e) {
-      this.log(`[HttpMEditClient] implicitMasters failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.log(`[HttpMEditClient] implicitMasters failed: ${errorMessage(e)}`);
       return undefined;
     }
     if (!result.response.ok || result.data === undefined) {

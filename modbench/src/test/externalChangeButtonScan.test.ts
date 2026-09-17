@@ -2,24 +2,14 @@
 // a retired string never survives under a new name or a stray test fixture.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, extname } from 'node:path';
+import { join } from 'node:path';
+import { tsFiles } from './tsFiles';
 
 const RETIRED_STRINGS = ['Absorb Upstream Update', 'Keep as My Edit'];
 
 const SELF = 'externalChangeButtonScan.test.ts';
-
-function tsFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'generated') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...tsFiles(path));
-    else if (extname(entry.name) === '.ts' || extname(entry.name) === '.tsx') out.push(path);
-  }
-  return out;
-}
 
 function retiredStringsIn(text: string): string[] {
   return RETIRED_STRINGS.filter((s) => text.includes(s));
@@ -29,7 +19,7 @@ function retiredStringsIn(text: string): string[] {
 // silently-excluded directory — fails both the same way, not just the matcher.
 function findOffenders(root: string): Record<string, string[]> {
   const offenders: Record<string, string[]> = {};
-  for (const path of tsFiles(root).filter((p) => !p.endsWith(SELF))) {
+  for (const path of tsFiles(root, { exclude: ['generated'] }).filter((p) => !p.endsWith(SELF))) {
     const hits = retiredStringsIn(readFileSync(path, 'utf8'));
     if (hits.length > 0) offenders[path] = hits;
   }
@@ -39,7 +29,7 @@ function findOffenders(root: string): Record<string, string[]> {
 describe('the two new external-change button strings are the only ones in the extension', () => {
   it('covers the whole extension source tree', () => {
     const root = join(__dirname, '..'); // src/
-    expect(tsFiles(root).filter((p) => !p.endsWith(SELF)).length).toBeGreaterThan(100);
+    expect(tsFiles(root, { exclude: ['generated'] }).filter((p) => !p.endsWith(SELF)).length).toBeGreaterThan(100);
   });
 
   it('no source or test file names a retired button string', () => {

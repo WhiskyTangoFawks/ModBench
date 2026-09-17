@@ -31,6 +31,7 @@ import type { GameDirectory, GameDirectoryResolver } from '../mo2Files/gameDirec
 import { computeModStatuses, type ModStatusResult } from './statusChecker';
 import { countOverwriteFiles } from './overwriteFolder';
 import { exists, get, listDir, manifestFile } from '../mo2Files/files';
+import { errorMessage } from '../ports/errorMessage';
 
 /** The rows this value is made of. A view names a row's shape through the read model that
  *  publishes it, never through the codec that parsed the file behind it. */
@@ -123,8 +124,6 @@ export interface InstanceOptions {
   resolveGameDirectory: GameDirectoryResolver;
   log: (msg: string) => void;
 }
-
-const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 // A mod with no meta.ini has no metadata; a present-but-unreadable one is a real failure.
 async function readMeta(instanceRoot: string, modName: string): Promise<Partial<ModlistEntry>> {
@@ -301,7 +300,7 @@ export class Instance implements vscode.Disposable {
     try {
       next = await this.read();
     } catch (err) {
-      const failure = message(err);
+      const failure = errorMessage(err);
       this.options.log(`[instance] recompute failed, keeping the value at sequence ${this.seq}: ${failure}`);
       this.failure = failure;
       this.notify(this.failureListeners, (listener) => listener(failure));
@@ -320,7 +319,7 @@ export class Instance implements vscode.Disposable {
       try {
         call(listener);
       } catch (err) {
-        this.options.log(`[instance] subscriber threw at sequence ${this.seq}: ${message(err)}`);
+        this.options.log(`[instance] subscriber threw at sequence ${this.seq}: ${errorMessage(err)}`);
       }
     }
   }

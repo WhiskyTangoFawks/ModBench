@@ -14,6 +14,7 @@ import { registerRecordPanelContextCommands } from './recordPanelContextCommands
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
+import { errorMessage } from '../ports/errorMessage';
 
 export interface EditorCommandDeps {
   context: vscode.ExtensionContext;
@@ -132,7 +133,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
           await vscode.env.clipboard.writeText(text);
         } catch (err) {
           deps.reporterFor('referencedByTree.copy').report(
-            'error', 'Could not copy to the clipboard.', err instanceof Error ? err.message : String(err));
+            'error', 'Could not copy to the clipboard.', errorMessage(err));
         }
       }),
   ];

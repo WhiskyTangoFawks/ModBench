@@ -1,6 +1,7 @@
 import { isCrashRepairReason, type CrashRepairOffer, type MEditClient, type UnansweredExternalChange } from '../client';
 import type { AskQuestion } from '../ports/dialog';
 import { handleUnanswered } from './externalChangeGestures';
+import { errorMessage } from '../ports/errorMessage';
 
 /** `origin` rides along explicitly because re-deriving it from the unanswered queue when the
  *  merge editor opens would race the very MarkAnswered call that caused this rebase. */
@@ -35,7 +36,7 @@ export function subscribeQuestionOpen(
       const reason = event.crashRepairReason;
       const offers: CrashRepairOffer[] = event.keys.map((plugin) => ({ plugin, origin: event.origin, reason }));
       deps.presentCrashRepair(offers).catch((e: unknown) => {
-        log(`[externalChangeCoordinator] presenting the repair offer for ${event.origin} failed: ${e instanceof Error ? e.message : String(e)}`);
+        log(`[externalChangeCoordinator] presenting the repair offer for ${event.origin} failed: ${errorMessage(e)}`);
       });
       return;
     }
@@ -52,7 +53,7 @@ export function subscribeQuestionOpen(
     // ADR-0019: a dialog/dispatch failure gets a log line, never a second toast on top of
     // whatever the dialog or the mutate call already surfaced.
     handleUnanswered(deps, [change]).catch((e: unknown) => {
-      log(`[externalChangeCoordinator] handling ${change.origin} failed: ${e instanceof Error ? e.message : String(e)}`);
+      log(`[externalChangeCoordinator] handling ${change.origin} failed: ${errorMessage(e)}`);
     });
   });
 }

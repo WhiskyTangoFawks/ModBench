@@ -7,6 +7,7 @@ import { renumberConfirmMessage } from './renumberConfirm';
 import type { Reporter } from '../ports/reporter';
 import type { AskQuestion } from '../ports/dialog';
 import type { RecordTreeSync } from './onRecordEdited';
+import { errorMessage } from '../ports/errorMessage';
 
 /** Read off whatever object a gesture is invoked with — a tree row from the Plugins view or a
  *  plain identity literal, the way `recordOpenIdentity` (recordPanelHost.ts) already reads an
@@ -132,7 +133,7 @@ export function registerRecordLifecycleCommands(
       } catch (e) {
         // Background/recoverable (ADR-0019): the input box still works with no prefill, so this is
         // a log line, not a toast — the command is not blocked on it.
-        outputChannel.warn(`[recordLifecycle] record.renumber could not fetch a suggested FormKey: ${e instanceof Error ? e.message : String(e)}`);
+        outputChannel.warn(`[recordLifecycle] record.renumber could not fetch a suggested FormKey: ${errorMessage(e)}`);
       }
 
       const input = await vscode.window.showInputBox({
@@ -150,7 +151,7 @@ export function registerRecordLifecycleCommands(
         confirmMessage = renumberConfirmMessage(
           identity.formKey, input || suggested || '(next free)', await client.getReferences(identity.formKey));
       } catch (e) {
-        outputChannel.warn(`[recordLifecycle] record.renumber could not fetch referencers for the confirm: ${e instanceof Error ? e.message : String(e)}`);
+        outputChannel.warn(`[recordLifecycle] record.renumber could not fetch referencers for the confirm: ${errorMessage(e)}`);
         confirmMessage = `Change FormID of ${identity.formKey}? Its references could not be counted — ` +
           'every referencing record in a tracked plugin will be updated with it.';
       }
@@ -193,7 +194,7 @@ async function pickCopyDestination(
     });
     return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = errorMessage(error);
     // gesture goes in `detail`, not `message` — it's context for the Output channel, not
     // something the toast (already carrying `detail`) needs to repeat.
     reporter.report('error', `Could not look up destination plugins: ${detail}`, gesture);

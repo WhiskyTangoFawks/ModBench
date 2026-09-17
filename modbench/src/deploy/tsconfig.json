@@ -6,7 +6,8 @@
   },
   "references": [
     { "path": "../instance" },
-    { "path": "../mo2Files" }
+    { "path": "../mo2Files" },
+    { "path": "../ports" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

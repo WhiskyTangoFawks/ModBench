@@ -4,6 +4,7 @@
 import { setHiddenInText, setInstalledInText } from '../mo2Codecs/downloads';
 import { downloadFile, downloadSidecarFile } from '../mo2Files/layout';
 import { exists, put } from '../mo2Files/files';
+import { refuse } from '../ports/refuse';
 
 /** Every verb here writes unconditionally — a splice of the sidecar, or a trash — so `applied`
  *  carries no `wrote` flag of its own (ADR-0014 invariant 4). */
@@ -14,11 +15,6 @@ export type DownloadCommandResult =
 /** Moves one file to the system trash. Injected because the trash belongs to the host, and this
  *  box holds no host types. */
 export type TrashFile = (path: string) => Promise<void>;
-
-const refuse = (err: unknown): DownloadCommandResult => ({
-  applied: false,
-  refusal: err instanceof Error ? err.message : String(err),
-});
 
 // The one splice point every sidecar verb goes through. An absent sidecar splices empty text
 // rather than refusing: a manually-dropped archive has none, and MO2's QSettings creates one on
