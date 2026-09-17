@@ -44,11 +44,11 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // The same lifetime as _heldElsewhereMessage, for the reconcile's other known-unknown outcome.
     private string? _failureMessage;
     // The version the reconcile door last finished answering for — never a superseded attempt's,
-    // since that one returns before reaching its own update (ADR-0013 invariant 1).
+    // since that one returns before reaching its own update.
     private long _version;
 
     /// <summary>The composition root's door: the Index opens its own store, so nothing outside this
-    /// project names the store, its factory or how a file is opened (ADR-0009 invariant 3).</summary>
+    /// project names the store, its factory or how a file is opened (ADR-0014 invariant 5).</summary>
     public IndexProjector(
         LoadOrderHolder holder,
         IPluginAdapter adapter,
@@ -315,8 +315,7 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
     // instance, so a fresh open finds whatever the last run left there, and `origin` (a mod folder
     // name) is unique only within one.
 
-    // Published before any plugin is opened, which is what makes the reconcile progressive
-    // (ADR-0013 invariant 1).
+    // Published before any plugin is opened, which is what makes the reconcile progressive.
     private (HeldPlugins Held, IRecordIndex Index) EnsureScope(LoadOrderSnapshot snapshot)
     {
         lock (_lock)
@@ -431,9 +430,9 @@ public sealed class IndexProjector : IQueryIndex, IRefreshIndex, IDisposable
             index.Register(metadata.Key, metadata.Registration);
         }
 
-        // Two numbers ADR-0013 invariant 1 makes distinct — time to the first queryable plugin (the
-        // tree becomes usable) and time to the winner sweep completing. Measured here rather than
-        // client-side, where the 500 ms status poll caps the resolution.
+        // Two distinct numbers — time to the first queryable plugin (the tree becomes usable) and
+        // time to the winner sweep completing. Measured here rather than client-side, where the
+        // 500 ms status poll caps the resolution.
         var timer = Stopwatch.StartNew();
         long? firstUsableMs = null;
 

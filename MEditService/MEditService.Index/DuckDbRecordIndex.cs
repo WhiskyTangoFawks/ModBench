@@ -850,9 +850,6 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return result;
         }
 
-        /// <summary>Both halves of "could not be read": a record whose own document failed, and a
-        /// record type whose enumeration did. Keyed by <c>ColumnKey.Of</c> rather than a bare
-        /// filename, which two loaded copies can share.</summary>
         public IReadOnlyList<PluginDiagnosisRow> GetPluginDiagnoses()
         {
             using var connection = owner.OpenRead();
@@ -892,6 +889,9 @@ internal sealed class DuckDbRecordIndex : IRecordIndex
             return tracked;
         }
 
+        /// <summary>Both halves of "could not be read": a record whose own document failed, and a
+        /// record type whose enumeration did. Keyed by <c>ColumnKey.Of</c> rather than a bare
+        /// filename, which two loaded copies can share.</summary>
         public IReadOnlySet<string> GetPluginsWithParseFailures()
         {
             using var connection = owner.OpenRead();
