@@ -59,7 +59,7 @@ public sealed class CompileFixture : IDisposable
             _gameDirectory, _instanceRoot, Release,
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, PluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_loadOrder, [Plugin], Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

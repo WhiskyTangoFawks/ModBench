@@ -23,22 +23,19 @@ public sealed class TrackService(
     // ADR-0014: null in every test that does not care, and nothing is published when it is.
     private readonly INotificationPublisher? _notifications = notifications;
 
-    private static bool Held(IReadOnlyCollection<PluginCopyKey> heldCopies, RegisteredCopy copy) =>
-        heldCopies.Any(k =>
-            k.Name.Equals(copy.Name, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(k.Origin, copy.Origin, StringComparison.OrdinalIgnoreCase));
+    // Asked of the Plugin adapter, never the Index (ADR-0015 invariant 1): a copy whose file
+    // cannot be read has no bytes to deep-parse, so Track passes over it rather than failing the
+    // whole origin on it.
+    private bool Readable(RegisteredCopy copy) => adapter.CanRead(copy);
 
     public async Task<TrackResult> TrackAsync(
         LoadOrderSnapshot loadOrder,
-        IReadOnlyCollection<PluginCopyKey> heldCopies,
         string origin,
         SourcePreset preset,
         CancellationToken cancel = default)
     {
-        // A copy the Index could not open has no bytes to deep-parse, so Track passes over it
-        // rather than failing the whole origin on it.
         var plugins = loadOrder.Copies
-            .Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase) && Held(heldCopies, p))
+            .Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase) && Readable(p))
             .ToList();
         if (plugins.Count == 0)
             return TrackResult.Refused(TrackRefusal.NoPluginWithOrigin, $"No loaded plugin has origin '{origin}' to track.");

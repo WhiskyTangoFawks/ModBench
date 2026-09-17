@@ -63,6 +63,18 @@ public sealed class CreatePluginApiTests : HostedTests
         (await CreateARecordIn("Minted.esp", "MintedMod")).EnsureSuccessStatusCode();
     }
 
+    // The copy reaches the Index through the create's own snapshot change, so the file must be
+    // there when that change lands: a copy the reconcile cannot open is not a row.
+    [Fact]
+    public async Task CreatingAPlugin_ListsItOnTheNextPluginsRead()
+    {
+        using var fx = await Loaded();
+
+        await CreateAndAwait("Listed.esp", Path.Combine(fx.Root, "mod-listed"), "ListedMod");
+
+        Assert.Contains(await Client.Plugins(), p => p.GetProperty("name").GetString() == "Listed.esp");
+    }
+
     // One past the highest slot the value carries; a reused one would give two participants a single
     // index.
     [Fact]

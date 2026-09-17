@@ -17,12 +17,12 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     [Fact]
-    public void Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheSourceFileNotJustTheRawExceptionText()
+    public async Task Compile_WhenTheTrackedSourceHoldsAMalformedFormKey_NamesTheSourceFileNotJustTheRawExceptionText()
     {
         Corrupt(_mod.NpcSourceFile);
 
         var compileService = _mod.CompileService();
-        var result = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains("Npcs", result.RefusalReason);
@@ -35,11 +35,11 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
     // Mod-folder relative, so the named file joins straight onto the mod folder for the Problems
     // panel, whichever source the compile read.
     [Fact]
-    public void Compile_WhenTheWorkingTreeHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
+    public async Task Compile_WhenTheWorkingTreeHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
     {
         Corrupt(_mod.NpcSourceFile);
 
-        var result = _mod.CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+        var result = await _mod.CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Contains(
@@ -47,14 +47,14 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
     }
 
     [Fact]
-    public void Compile_WhenTheCompiledRefHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
+    public async Task Compile_WhenTheCompiledRefHoldsAMalformedFormKey_NamesTheFileRelativeToTheModFolder()
     {
         var healthy = File.ReadAllText(_mod.NpcSourceFile);
         Corrupt(_mod.NpcSourceFile);
         _mod.CommitWorkingTree("a malformed FormKey");
         File.WriteAllText(_mod.NpcSourceFile, healthy);
 
-        var result = _mod.CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("HEAD"));
+        var result = await _mod.CompileService().CompileAsync(_mod.Plugin, new CompileSource.AtRef("HEAD"));
 
         Assert.False(result.Succeeded);
         Assert.Contains(

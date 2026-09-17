@@ -31,9 +31,9 @@ public abstract class ReadOnlyPluginAdapter : IPluginAdapter
         ModPath modPath, GameRelease gameRelease, PluginStrings? strings = null) =>
         Real.ReadContent(modPath, gameRelease, strings);
 
-    public bool CanRead(ModPath modPath) => Real.CanRead(modPath);
+    public virtual bool CanRead(ModPath modPath) => Real.CanRead(modPath);
 
-    public IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
+    public virtual IReadOnlyList<string> ImplicitPluginsIn(string dataFolder, GameRelease gameRelease) =>
         Real.ImplicitPluginsIn(dataFolder, gameRelease);
 
     public PluginFormIds ReadFormIds(ModPath modPath, GameRelease gameRelease) =>

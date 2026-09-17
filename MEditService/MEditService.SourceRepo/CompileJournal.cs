@@ -14,8 +14,8 @@ public static class CompileJournal
     /// <summary>The marker is written before the first compile, rewritten after each landed plugin, and
     /// deleted only once every plugin has landed. A refusal stops the batch and leaves the rest
     /// unlanded — deliberately indistinguishable from a crash.</summary>
-    public static IReadOnlyList<string> RunBatch(
-        string modFolder, IReadOnlyList<string> plugins, Func<string, bool> compileOne)
+    public static async Task<IReadOnlyList<string>> RunBatchAsync(
+        string modFolder, IReadOnlyList<string> plugins, Func<string, Task<bool>> compileOne)
     {
         if (plugins.Count == 0) return [];
 
@@ -24,7 +24,7 @@ public static class CompileJournal
         var landed = new List<string>();
         foreach (var plugin in plugins)
         {
-            if (!compileOne(plugin)) break;
+            if (!await compileOne(plugin)) break;
 
             landed.Add(plugin);
             WriteMarker(modFolder, plugins, landed);

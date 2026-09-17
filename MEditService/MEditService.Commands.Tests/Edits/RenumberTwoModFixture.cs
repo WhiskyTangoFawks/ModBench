@@ -73,8 +73,8 @@ public sealed class RenumberTwoModFixture : IDisposable
         ];
         LoadOrder = new LoadOrderSnapshot(GameDirectory, GameDirectory, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
-        Track(TargetOrigin, TargetPlugin);
-        if (trackReferencer) Track(ReferencerOrigin, ReferencerPlugin);
+        Track(TargetOrigin);
+        if (trackReferencer) Track(ReferencerOrigin);
 
         holder.Apply(LoadOrder);
         RenumberHandler = TestEditService.RenumberHandler(holder);
@@ -82,9 +82,9 @@ public sealed class RenumberTwoModFixture : IDisposable
 
     public static RenumberTwoModFixture Create(bool trackReferencer) => new(trackReferencer);
 
-    private void Track(string origin, PluginCopyKey plugin) =>
+    private void Track(string origin) =>
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(LoadOrder, [plugin], origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackAsync(LoadOrder, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     public string ModFolderOf(PluginCopyKey plugin) =>
         plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder;

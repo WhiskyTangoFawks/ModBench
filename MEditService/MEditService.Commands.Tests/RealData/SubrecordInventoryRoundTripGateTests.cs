@@ -76,7 +76,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
 
         public Task<TrackResult> TrackAsync() =>
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(_loadOrder, [.. _loadOrder.Copies.Select(c => c.Key)], "TrueStormsMod", SourcePreset.Edits);
+                .TrackAsync(_loadOrder, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()
         {

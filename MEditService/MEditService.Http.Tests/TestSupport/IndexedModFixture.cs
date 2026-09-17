@@ -77,7 +77,7 @@ public sealed class IndexedModFixture : IDisposable
         {
             beforeTrack?.Invoke(ModFolder);
             new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-                .TrackAsync(Index, Holder, ModFolderOrigin, preset)
+                .TrackAsync(Holder.Current, ModFolderOrigin, preset)
                 .GetAwaiter().GetResult();
         }
     }

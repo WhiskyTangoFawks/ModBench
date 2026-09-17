@@ -52,7 +52,7 @@ public sealed class TwoPluginModDeferralTests : IDisposable
         var loadOrder = new LoadOrderSnapshot(gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(entries));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(loadOrder, [new PluginCopyKey(PluginA, Origin), new PluginCopyKey(PluginB, Origin)], Origin, SourcePreset.Edits)
+            .TrackAsync(loadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         holder.Apply(loadOrder);
@@ -86,13 +86,13 @@ public sealed class TwoPluginModDeferralTests : IDisposable
     }
 
     [Fact]
-    public void UnansweredDeferral_RefusesCompilingTheSiblingPlugin_LeavingItsBinaryUntouched()
+    public async Task UnansweredDeferral_RefusesCompilingTheSiblingPlugin_LeavingItsBinaryUntouched()
     {
         RaiseExternalChangeOnA();
         var pathB = Path.Combine(_modFolder, PluginB);
         var bytesB = File.ReadAllBytes(pathB);
 
-        var result = _compileHandler.Compile(new PluginCopyKey(PluginB, Origin), new CompileSource.WorkingTree());
+        var result = await _compileHandler.CompileAsync(new PluginCopyKey(PluginB, Origin), new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);

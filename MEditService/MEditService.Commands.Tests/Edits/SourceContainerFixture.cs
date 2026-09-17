@@ -61,7 +61,7 @@ public sealed class SourceContainerFixture : IDisposable
         LoadOrder = new LoadOrderSnapshot(GameDirectory, instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of(Entries));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(LoadOrder, [Plugin], Origin, SourcePreset.Edits)
+            .TrackAsync(LoadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         holder.Apply(LoadOrder);

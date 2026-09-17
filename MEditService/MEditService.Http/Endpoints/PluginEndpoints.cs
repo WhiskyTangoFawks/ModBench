@@ -1,6 +1,5 @@
 using MEditService.Commands;
 using MEditService.Commands.Edits;
-using MEditService.Index;
 using MEditService.LoadOrder;
 using MEditService.Queries;
 using MEditService.SourceRepo;
@@ -164,80 +163,47 @@ public static class PluginEndpoints
     // Edits — the one-keystroke "Enter accepts overwrite/" framing rules out a second prompt.
     // Never touches plugins.txt; that append is the caller's.
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, IQueryIndex index, LoadOrderHolder holder, CreatePluginHandler create,
-        ModFolderWatcher watcher, ILoggerFactory loggerFactory)
+        CreatePluginRequest req, CreatePluginHandler create, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (Malformed(req) is { } malformed) return malformed;
 
-        LoadOrderSnapshot previous;
-        LoadOrderSnapshot registered;
-        RegisteredCopy copy;
-        IReadOnlyCollection<PluginCopyKey> held;
-        long version;
         try
         {
-            held = HeldCopies(index);
-            previous = holder.Require();
-            copy = new RegisteredCopy(
-                req.Name, req.Origin, Path.Combine(req.Path, req.Name), NextSlot(previous),
-                Enabled: true, Winning: true);
-            registered = previous.With(copy);
-            // ADR-0007: a participant before the file exists, so the Track inside this gesture
-            // and every later reader see it — and the created copy reaches the Index through
-            // this same snapshot change.
-            version = holder.Apply(registered);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
-            return Results.Problem(ex.Message, statusCode: 503);
-        }
-
-        watcher.WatchSourceOf(req.Origin);
-
-        try
-        {
-            var result = await create.CreatePlugin(registered, copy, held);
+            var result = await create.CreatePlugin(req.Name, Path.Combine(req.Path, req.Name), req.Origin);
             if (result.Track is { Applied: false } refused)
             {
-                // Loud, not silent: the plugin file and load order entry already landed, but
-                // plugins.txt is never appended without a 2xx, so no load order can name this
-                // half-created plugin. The orphaned entry is accepted residue.
+                // Loud, not silent: the plugin file already landed, but plugins.txt is never
+                // appended without a 2xx, so no load order can name this half-created plugin.
                 logger.LogError(
                     "Refused to track {Origin} while creating {Name}: {Refusal}",
                     req.Origin, req.Name, refused.Refusal);
                 return WriteEndpointMapping.Refusal(refused);
             }
 
-            // A destination folder this gesture made itself was not on disk to be watched above.
-            watcher.WatchSourceOf(req.Origin);
-            return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot, version));
+            var copy = result.Copy;
+            return Results.Ok(new PluginCreatedResponse(copy.Name, copy.Path, copy.Origin, copy.Slot, result.Version));
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (ArgumentException ex)
         {
             // Mutagen refuses the filename the request passed the extension check with.
-            holder.Apply(Unregistered(holder.Current, previous, copy.Key));
             logger.LogError(ex, "Invalid argument creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 400);
         }
         catch (System.IO.IOException ex)
         {
-            holder.Apply(Unregistered(holder.Current, previous, copy.Key));
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
         }
     }
 
-    // No file was created, so the registration goes; only it, because a snapshot may have landed
-    // meanwhile, and the copy this one displaced under the same identity goes back.
-    internal static LoadOrderSnapshot Unregistered(LoadOrderSnapshot current, LoadOrderSnapshot previous, PluginCopyKey key) =>
-        previous.Copy(key) is { } displaced
-            ? current.Without(key).With(displaced)
-            : current.Without(key);
-
-    // The refusals a malformed request earns, taken before the holder is written so a name that
-    // could never be a plugin file registers no copy.
+    // The refusals a malformed request earns, taken before the door so a name that could never be
+    // a plugin file writes nothing.
     private static IResult? Malformed(CreatePluginRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Name))
@@ -254,20 +220,11 @@ public static class PluginEndpoints
                 $"Invalid plugin extension '{extension}'. Must be .esp, .esm, or .esl.", statusCode: 400);
     }
 
-    // One past the highest slot, not the count: a reused slot would give two participants one index.
-    private static int NextSlot(LoadOrderSnapshot loadOrder) =>
-        loadOrder.Copies.Count == 0 ? 0 : loadOrder.Copies.Max(copy => copy.Slot ?? 0) + 1;
-
-    // Which registered copies Editing actually holds: the copies the Index has open. A copy it
-    // could not open is registered like any other but has no bytes to read.
-    private static IReadOnlyCollection<PluginCopyKey> HeldCopies(IQueryIndex index) =>
-        [.. index.RequireReads().OpenedCopies.Keys];
-
     // ADR-0007: the Track gesture. Origin names the mod folder (every loaded plugin sharing
     // it gets tracked together — a mod can hold more than one plugin); the load order resolves
     // which physical folder that is.
     internal static async Task<IResult> Track(
-        TrackRequest req, IQueryIndex index, LoadOrderHolder holder, TrackHandler trackHandler,
+        TrackRequest req, LoadOrderHolder holder, TrackHandler trackHandler,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
@@ -282,9 +239,7 @@ public static class PluginEndpoints
 
         try
         {
-            // Which copies this origin registers is the load order's answer, read from the shared
-            // kernel; which of them opened is the Index's, and only that reaches HeldCopies.
-            var result = await trackHandler.TrackAsync(holder.Current, HeldCopies(index), req.Origin, preset);
+            var result = await trackHandler.TrackAsync(holder.Require(), req.Origin, preset);
             if (result.Applied)
                 return Results.Ok(new TrackResponse(req.Origin));
 
@@ -300,7 +255,7 @@ public static class PluginEndpoints
 
     // req.Ref, when given, is CompileSource.AtRef rather than the default WorkingTree — the
     // extension supplies "main" for the compile-at-main gesture, behind its own confirmation.
-    internal static IResult Compile(string plugin, CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Compile(string plugin, CompileRequest req, CompilePluginHandler compileHandler, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
@@ -312,7 +267,7 @@ public static class PluginEndpoints
         try
         {
             CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
-            var result = compileHandler.Compile(WriteEndpointMapping.PluginCopyKeyOf(plugin, req.Origin), source);
+            var result = await compileHandler.CompileAsync(WriteEndpointMapping.PluginCopyKeyOf(plugin, req.Origin), source);
             return Results.Ok(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -363,7 +318,7 @@ public static class PluginEndpoints
 
     // Absorb, origin-scoped: every plugin the mod holds is re-parsed together, so
     // the baseline it commits covers the whole mod in one go.
-    internal static IResult AbsorbExternalChange(
+    internal static async Task<IResult> AbsorbExternalChange(
         ExternalChangeActionRequest req, LoadOrderHolder holder, AbsorbExternalChangeHandler handler,
         ModFolderWatcher watcher, ILoggerFactory loggerFactory)
     {
@@ -377,7 +332,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = handler.Absorb(modFolder, plugins, loadOrder);
+            var result = await handler.AbsorbAsync(modFolder, plugins, loadOrder);
             if (result.Applied)
                 foreach (var plugin in plugins) watcher.Watch(modFolder, plugin.Name, plugin.Path);
             var rebase = result.Rebase is { } r ? new RebaseResponse(r.Outcome, r.RefusalReason, r.ConflictedPaths) : null;

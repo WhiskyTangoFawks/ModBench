@@ -18,7 +18,7 @@ public sealed class PluginCompileServiceAtRefSourceTests : IDisposable
     // Committed and then deleted from the working tree: the working-tree compile succeeding is what
     // makes the refusal at the ref an answer about the ref.
     [Fact]
-    public void Compile_AtARefWhoseSourceHasTwoDocumentsClaimingOneFormKey_RefusesNamingTheFormKey()
+    public async Task Compile_AtARefWhoseSourceHasTwoDocumentsClaimingOneFormKey_RefusesNamingTheFormKey()
     {
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "Keyword", CompileFixture.NpcEditorId);
         Directory.CreateDirectory(PathShape.DirectoryOf(collidingPath));
@@ -26,8 +26,8 @@ public sealed class PluginCompileServiceAtRefSourceTests : IDisposable
         _mod.CommitWorkingTree("two documents, one FormKey");
         File.Delete(collidingPath);
 
-        var workingTree = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
-        var atRef = CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("HEAD"));
+        var workingTree = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.WorkingTree());
+        var atRef = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.AtRef("HEAD"));
 
         Assert.True(workingTree.Succeeded, workingTree.RefusalReason);
         Assert.False(atRef.Succeeded);
@@ -35,9 +35,9 @@ public sealed class PluginCompileServiceAtRefSourceTests : IDisposable
     }
 
     [Fact]
-    public void Compile_AtARef_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
+    public async Task Compile_AtARef_NamesADiagnosticsOwnDocument_RelativeToTheModFolder()
     {
-        var result = CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("HEAD"));
+        var result = await CompileService().CompileAsync(_mod.Plugin, new CompileSource.AtRef("HEAD"));
 
         Assert.True(result.Succeeded, result.RefusalReason);
         var diagnostic = result.Diagnostics.First(d => d.FormKey == _mod.Race.ToString());

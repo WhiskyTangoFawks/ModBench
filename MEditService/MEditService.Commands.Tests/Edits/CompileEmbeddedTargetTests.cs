@@ -66,9 +66,9 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
             ]));
 
         var trackService = new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance);
-        trackService.TrackAsync(_loadOrder, [new PluginCopyKey(TargetName, TargetOrigin)], TargetOrigin, SourcePreset.Edits)
+        trackService.TrackAsync(_loadOrder, TargetOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
-        trackService.TrackAsync(_loadOrder, [_referrer], ReferrerOrigin, SourcePreset.Edits)
+        trackService.TrackAsync(_loadOrder, ReferrerOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -103,9 +103,9 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     // The target's own file carries the record and the link cache names it from there, so a
     // "could not be resolved" diagnostic would be false.
     [Fact]
-    public void Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
+    public async Task Compile_ForALinkToARecordEmbeddedInAnotherTrackedPlugin_ReportsNothingAboutIt()
     {
-        var result = CompileServices.Over(_loadOrder).Compile(_referrer, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(_loadOrder).CompileAsync(_referrer, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.DoesNotContain(
@@ -115,12 +115,12 @@ public sealed class CompileEmbeddedTargetTests : IDisposable
     // ADR-0013: a registered copy the game does not load is not where the link points, so its file
     // carrying the record proves nothing and the link is dangling like any other.
     [Fact]
-    public void Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
+    public async Task Compile_ForALinkIntoATrackedCopyTheLoadOrderDoesNotLoad_ReportsItUnresolved()
     {
         var notLoaded = new LoadOrderSnapshot(
             _gameDirectory, _instanceRoot, GameRelease.Fallout4, SnapshotCopies.Of([Target(enabled: false), Referrer]));
 
-        var result = CompileServices.Over(notLoaded).Compile(_referrer, new CompileSource.WorkingTree());
+        var result = await CompileServices.Over(notLoaded).CompileAsync(_referrer, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
         Assert.Contains(

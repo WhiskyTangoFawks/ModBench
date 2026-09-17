@@ -7,7 +7,7 @@ namespace MEditService.Commands.Edits;
 /// <summary>Shared by the live watcher, the load-time hash check and the write gate: a mod changed
 /// externally when a plugin's bytes differ from Modbench's own write, or a tracked file differs
 /// from source control.</summary>
-public static class ExternalChangeClassifier
+internal static class ExternalChangeClassifier
 {
     /// <summary>Null for an untracked mod folder, and null when neither half of the rule found
     /// anything — meta.ini alone included, since it is neither a tracked file nor a plugin's
@@ -62,7 +62,7 @@ public static class ExternalChangeClassifier
 
 /// <summary>What classification answers. Never both a crash and an external change for one
 /// settle.</summary>
-public abstract record ExternalChangeClassification
+internal abstract record ExternalChangeClassification
 {
     /// <summary>An interrupted compile: routes to the repair offer, never this dialog.</summary>
     public sealed record CrashRecovery : ExternalChangeClassification;

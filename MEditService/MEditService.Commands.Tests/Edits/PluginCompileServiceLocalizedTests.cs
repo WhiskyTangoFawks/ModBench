@@ -39,7 +39,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
             SnapshotCopies.Of([new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)]));
 
         new TrackService(NullLogger<TrackService>.Instance, MutagenPluginAdapter.Instance)
-            .TrackAsync(_loadOrder, [new PluginCopyKey(PluginName, Origin)], Origin, SourcePreset.Edits)
+            .TrackAsync(_loadOrder, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -53,7 +53,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
     // rooted at the temp write path when none is supplied, which Commit never moves: a byte-compare
     // against files compile never touched would otherwise pass vacuously.
     [Fact]
-    public void Compile_ALocalizedPlugin_WritesStringsBesideItByteIdenticalToTheInput()
+    public async Task Compile_ALocalizedPlugin_WritesStringsBesideItByteIdenticalToTheInput()
     {
         var pluginPath = Path.Combine(_modFolder, PluginName);
         var stringsDir = Path.Combine(_modFolder, "Strings");
@@ -70,7 +70,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
         var plugin = new PluginCopyKey(PluginName, Origin);
         var compileService = CompileServices.Over(_loadOrder);
-        var result = compileService.Compile(plugin, new CompileSource.WorkingTree());
+        var result = await compileService.CompileAsync(plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
 

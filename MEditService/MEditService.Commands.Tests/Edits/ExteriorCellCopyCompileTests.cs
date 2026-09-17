@@ -28,13 +28,13 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         CompileServices.Over(_fixture.LoadOrder);
 
     [Fact]
-    public void CopyExteriorPlacedReference_CompilesToBinary_AndPlacesTheRefUnderTheSourcesOwnBlockAndSubBlock()
+    public async Task CopyExteriorPlacedReference_CompilesToBinary_AndPlacesTheRefUnderTheSourcesOwnBlockAndSubBlock()
     {
         var copyResult = CopyHandler().CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.ExteriorPersistentRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(copyResult.Applied, copyResult.Message);
 
-        var compileResult = CompileService().Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
+        var compileResult = await CompileService().CompileAsync(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
@@ -63,7 +63,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     // The second copy lands its new block/sub-block inside the one existing worldspace directory,
     // never a sibling dir for the same WRLD.
     [Fact]
-    public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheWorldspaceOnly_LandsInsideTheExistingWorldspaceDirectory()
+    public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheWorldspaceOnly_LandsInsideTheExistingWorldspaceDirectory()
     {
         var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
@@ -85,7 +85,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             Path.GetFileName(d)
                 .Equals($"{ContainerCopyFixture.OtherSubX}, {ContainerCopyFixture.OtherSubY}", StringComparison.Ordinal));
 
-        var compiled = ImportCompiled();
+        var compiled = await ImportCompiled();
         var worldspace = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace);
         var otherBlock = worldspace.SubCells.Single(
             b => b.BlockNumberX == ContainerCopyFixture.OtherBlockX && b.BlockNumberY == ContainerCopyFixture.OtherBlockY);
@@ -103,7 +103,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     // Shape 2: only the sub-block and the cell are new. The compiled block is one block carrying
     // both sub-blocks; a sibling block directory would compile into two, or fail the round-trip gate.
     [Fact]
-    public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheBlock_CreatesTheSubBlockInsideIt()
+    public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheBlock_CreatesTheSubBlockInsideIt()
     {
         var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
@@ -122,7 +122,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
                 .Equals($"{ContainerCopyFixture.ExteriorBlockX}, {ContainerCopyFixture.ExteriorBlockY}", StringComparison.Ordinal));
         Assert.Equal(2, Directory.EnumerateDirectories(blockDir).Count());
 
-        var compiled = ImportCompiled();
+        var compiled = await ImportCompiled();
         var block = compiled.Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
             .SubCells.Single(
                 b => b.BlockNumberX == ContainerCopyFixture.ExteriorBlockX && b.BlockNumberY == ContainerCopyFixture.ExteriorBlockY);
@@ -135,7 +135,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     // Shape 3: WRLD, block and sub-block all exist, so the copy adds exactly one cell directory
     // inside the existing sub-block and every pre-existing file keeps its exact bytes.
     [Fact]
-    public void CopyExteriorCell_WhenDestinationAlreadyOverridesTheSubBlock_AddsTheCellAndTouchesNothingElse()
+    public async Task CopyExteriorCell_WhenDestinationAlreadyOverridesTheSubBlock_AddsTheCellAndTouchesNothingElse()
     {
         var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
@@ -163,7 +163,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         var newCellFile = Assert.Single(added);
         Assert.Contains(ContainerCopyFixture.SameSubBlockCellEditorId, File.ReadAllText(newCellFile), StringComparison.Ordinal);
 
-        var subBlock = ImportCompiled().Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
+        var subBlock = (await ImportCompiled()).Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
             .SubCells.Single(
                 b => b.BlockNumberX == ContainerCopyFixture.ExteriorBlockX && b.BlockNumberY == ContainerCopyFixture.ExteriorBlockY)
             .Items.Single(
@@ -176,7 +176,7 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     // overwrite rule): no second cell directory, no refusal, and the compiled worldspace still
     // carries exactly one copy.
     [Fact]
-    public void CopyExteriorCell_WhenDestinationAlreadyHoldsTheCellItself_ReplacesItInPlace()
+    public async Task CopyExteriorCell_WhenDestinationAlreadyHoldsTheCellItself_ReplacesItInPlace()
     {
         var service = CopyHandler();
         Assert.True(service.CopyRecordAsOverride(
@@ -186,15 +186,15 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
             _fixture.SourcePlugin, _fixture.ExteriorCell.ToString(), _fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var compiledCells = ImportCompiled().Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
+        var compiledCells = (await ImportCompiled()).Worldspaces.Records.Single(w => w.FormKey == _fixture.Worldspace)
             .SubCells.SelectMany(b => b.Items).SelectMany(sb => sb.Items)
             .Where(c => c.FormKey == _fixture.ExteriorCell);
         Assert.Single(compiledCells);
     }
 
-    private IFallout4ModGetter ImportCompiled()
+    private async Task<IFallout4ModGetter> ImportCompiled()
     {
-        var compileResult = CompileService().Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
+        var compileResult = await CompileService().CompileAsync(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
@@ -208,13 +208,13 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
 
     // The Temporary half of "REFR in the same Persistent/Temporary slot as the source", at the wire.
     [Fact]
-    public void CopyExteriorTemporaryPlacedReference_CompilesToBinary_InTheTemporarySlot()
+    public async Task CopyExteriorTemporaryPlacedReference_CompilesToBinary_InTheTemporarySlot()
     {
         var copyResult = CopyHandler().CopyRecordAsOverride(
             _fixture.SourcePlugin, _fixture.ExteriorTemporaryRef.ToString(), _fixture.DestinationPlugin);
         Assert.True(copyResult.Applied, copyResult.Message);
 
-        var compileResult = CompileService().Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
+        var compileResult = await CompileService().CompileAsync(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 
         var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);

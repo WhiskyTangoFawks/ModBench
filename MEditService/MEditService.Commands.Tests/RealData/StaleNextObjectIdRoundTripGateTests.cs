@@ -69,7 +69,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
         await scratch.TrackAsync();
 
-        var result = scratch.CompileService().Compile(scratch.Plugin, new CompileSource.WorkingTree());
+        var result = await scratch.CompileService().CompileAsync(scratch.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var compiled = Fallout4Mod.CreateFromBinary(
@@ -149,7 +149,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
             new TrackService(
                     NullLogger<TrackService>.Instance,
                     deserialize is { } forged ? new ForgedTreeWriteAdapter(forged) : MutagenPluginAdapter.Instance)
-                .TrackAsync(_loadOrder, [.. _loadOrder.Copies.Select(c => c.Key)], Plugin.Origin, SourcePreset.Edits);
+                .TrackAsync(_loadOrder, Plugin.Origin, SourcePreset.Edits);
 
         public PluginCompileService CompileService() =>
             CompileServices.Over(Holder.Current);
