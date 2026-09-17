@@ -558,6 +558,7 @@ describe('Instance — downloads, profile, game directory and deploy state', () 
     );
     expect(instance.value.activeProfile).toBe('Default');
     expect(instance.value.gameRelease).toBe('Fallout 4');
+    expect(instance.value.nexusSlug).toBe('fallout4');
     expect(instance.value.gameDirectory).toEqual({ root: dirname(DATA_FOLDER), dataFolder: DATA_FOLDER });
     expect(instance.value.deployed).toBe(false);
 

@@ -1,6 +1,6 @@
-// ADR-0015 invariant 2: the Downloads view renders the value and fires commands. A file it read
-// is a second generation of a row the value holds; a file it wrote is a gesture that skipped the
-// commands box.
+// The Downloads view renders the Instance's value and fires commands. A file it read of its own
+// is a second generation of a row that value already holds (ADR-0015 invariant 6); a file it
+// wrote is a gesture that skipped the commands box.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

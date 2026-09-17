@@ -14,7 +14,7 @@ const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
 // the arrows that leave the box, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
   mo2Files: ['mo2Codecs', 'ports', 'tables'],
-  instance: ['mo2Codecs', 'mo2Files', 'ports'],
+  instance: ['mo2Codecs', 'mo2Files', 'ports', 'tables'],
 };
 
 // The core column, same rule. An arrow the diagram draws that the code has no use for is left

@@ -213,8 +213,8 @@ describe('ModListProvider', () => {
     expect(fired).toBe(true);
   });
 
-  // The command returns a refusal rather than throwing (ADR-0015 invariant 2); the provider turns
-  // that into a rejected promise so existing callers (the checkbox handler) keep their contract.
+  // A modlist command answers applied or a refusal and never throws for one; the provider turns
+  // a refusal into a rejected promise, so the checkbox handler has one failure path, not two.
   it('setModEnabled throws when the command refuses, and fires no refresh', async () => {
     setModEnabledMock.mockResolvedValue({ applied: false, refusal: 'nope' });
     const provider = makeProvider([mod('A')]);

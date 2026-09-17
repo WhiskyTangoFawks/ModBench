@@ -10,7 +10,8 @@
   "references": [
     { "path": "../mo2Codecs" },
     { "path": "../mo2Files" },
-    { "path": "../ports" }
+    { "path": "../ports" },
+    { "path": "../tables" }
   ],
   "include": ["**/*.ts"],
   "exclude": ["test", "**/*.test.ts"]

@@ -32,6 +32,7 @@ import { registerPluginsReconcile } from './modmanager/pluginsReconcileTrigger';
 import { say, exitEditing } from './editingTeardown';
 import { registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerCreateEmptyModCommand, registerOverwriteView, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
+import { collidingModName } from './modmanager/modNameCollision';
 import { gameDirectoryOverrides, setMo2InstanceContext } from './workspaceConfig';
 import { registerToolboxCommands } from './toolboxCommands';
 import { withPluginsViewProgress, type ExtensionSession, type Own } from './session';
@@ -488,7 +489,10 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
     instance, (profile, unlistedFolders) => adoptMods(instanceRoot, profile, unlistedFolders),
     () => modListProvider.invalidate(), outputChannel));
   own(registerPluginsReconcile(instance, runPluginsReconcile));
-  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask);
+  const downloadsProvider = registerDownloadsView(own, instanceRoot, instance, reporterFor('downloadList'), ask, {
+    nameNewMod: (defaultName) => promptModName(defaultName, (name) => collidingModName(instance, name)),
+    warnIfFomod,
+  });
   // ADR-0014: rebuild before resend before the tree re-reads (refreshAll.ts owns the sequence);
   // a rebuild failure is reported through the injected reporter, never a bare toast (modbench/CLAUDE.md).
   const refreshAll = makeRefreshAll({

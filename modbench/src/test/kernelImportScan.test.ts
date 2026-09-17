@@ -18,7 +18,7 @@ const KERNEL_BOXES = ['mo2Codecs', 'tables', 'wire', 'ports'];
 // arrows that leave it, plus its column's kernel by the band's rule.
 const DRIVEN_BOXES: Record<string, string[]> = {
   mo2Files: ['mo2Codecs', 'ports', 'tables'],
-  instance: ['mo2Codecs', 'mo2Files', 'ports'],
+  instance: ['mo2Codecs', 'mo2Files', 'ports', 'tables'],
 };
 
 // The core column, read off the same picture.
@@ -216,7 +216,7 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
   it('flags an import of a box no arrow reaches', () => {
     const planted = join(boxRoot('instance'), 'planted.ts');
     expect(isAllowedDrivenSpecifier('../modmanager/ModListProvider', planted, 'instance')).toBe(false);
-    expect(isAllowedDrivenSpecifier('../tables/gamePaths', planted, 'instance')).toBe(false);
+    expect(isAllowedDrivenSpecifier('../client/MEditClient', planted, 'instance')).toBe(false);
   });
 
   // Rival: MO2 files taking a VS Code type, which puts the extension host behind the one door

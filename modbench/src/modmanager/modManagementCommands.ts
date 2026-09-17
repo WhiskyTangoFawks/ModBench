@@ -2,11 +2,10 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './ModListProvider';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
-import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand } from './DownloadsPanel';
+import { registerDownloadsHiddenToggleCommands, registerDownloadsMultiRowCommands, registerDownloadsSingleRowCommands, registerDownloadsSortCommand, type DownloadInstallDeps } from './DownloadsPanel';
 import { DownloadsProvider } from './DownloadsProvider';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import type { Instance, InstanceView } from '../instance/instance';
-import { nexusSlugForGame } from '../tables/gamePaths';
 import { OVERWRITE_DIR_NAME } from '../mo2Codecs/modlistText';
 import type { Own } from '../session';
 import type { Reporter } from '../ports/reporter';
@@ -21,7 +20,7 @@ import {
   renameSeparator,
   uninstallMod,
 } from '../modlist/modlist';
-import { installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from '../install/install';
+import { defaultModName, installFromArchive, installFromFolder, type InstallChoice, type InstallTarget } from '../install/install';
 import { collidingModName } from './modNameCollision';
 
 // A refusal becomes a throw here, so `runModAction`'s existing catch-and-report keeps its one
@@ -93,7 +92,7 @@ export function registerModInstallCommands(deps: ModInstallDeps): vscode.Disposa
         }
         if (!archive) return { installed: false };
         const resolvedArchive = archive;
-        const target = await resolveTarget(choice, path.basename(resolvedArchive).replace(/\.(zip|7z|rar)$/i, ''));
+        const target = await resolveTarget(choice, defaultModName(resolvedArchive));
         if (!target) return { installed: false };
         let succeeded = false;
         await runModAction('installFromArchive', `Failed to install "${target.name}".`, async () => {
@@ -182,9 +181,8 @@ export function registerModContextCommands(
         if (node?.kind !== 'mod' || !node.mod.nexusId) return;
         const nexusId = node.mod.nexusId;
         await runModAction('viewOnNexus', 'Failed to open Nexus page.', async () => {
-          const slug = nexusSlugForGame(instance.value.gameRelease);
           await vscode.env.openExternal(
-            vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${nexusId}`),
+            vscode.Uri.parse(`https://www.nexusmods.com/${instance.value.nexusSlug}/mods/${nexusId}`),
           );
         });
       }),
@@ -315,6 +313,7 @@ export function registerDownloadsView(
   instance: InstanceView,
   reporter: Reporter,
   ask: AskQuestion,
+  install: DownloadInstallDeps,
 ): DownloadsProvider {
   const downloadsProvider = own(new DownloadsProvider({ // disposes its Instance subscriptions
     instance, reporter,
@@ -336,7 +335,7 @@ export function registerDownloadsView(
   own(registerDownloadsSortCommand(downloadsProvider));
   for (const disposable of [
     ...registerDownloadsHiddenToggleCommands(downloadsProvider),
-    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter),
+    ...registerDownloadsSingleRowCommands(instanceRoot, instance, reporter, install),
     ...registerDownloadsMultiRowCommands(instanceRoot, reporter, ask),
   ]) own(disposable);
   return downloadsProvider;

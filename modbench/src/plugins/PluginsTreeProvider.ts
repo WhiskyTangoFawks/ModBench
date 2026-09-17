@@ -295,8 +295,8 @@ export class PluginsTreeProvider
     this.render();
   }
 
-  /** The write reaches disk; the Instance's own watcher is what brings the result back
-   *  (ADR-0015 invariant 2). `invalidate()` here drops the cache and re-renders ahead of it. */
+  /** The write reaches disk and returns (ADR-0015 invariant 2); the Instance owns the watcher
+   *  that brings the result back (invariant 7). `invalidate()` drops the cache ahead of it. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();

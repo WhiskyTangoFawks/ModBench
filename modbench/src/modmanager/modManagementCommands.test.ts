@@ -18,7 +18,10 @@ const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
   installFromFolder: vi.fn(),
 }));
 
-vi.mock('../install/install', () => ({ installFromArchive, installFromFolder }));
+vi.mock('../install/install', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../install/install')>()),
+  installFromArchive, installFromFolder,
+}));
 
 const { uninstallMod } = vi.hoisted(() => ({ uninstallMod: vi.fn() }));
 

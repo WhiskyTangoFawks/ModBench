@@ -15,6 +15,7 @@ export function instanceValueFixture(overrides: Partial<InstanceValue> = {}): In
     downloads: [],
     activeProfile: 'Default',
     gameRelease: 'Fallout4',
+    nexusSlug: 'fallout4',
     gameDirectory: undefined,
     dataFolderPlugins: { kind: 'unresolved' },
     deployed: false,

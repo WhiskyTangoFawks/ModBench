@@ -1,9 +1,7 @@
 import * as vscode from 'vscode';
 import type { DownloadSortColumn } from '../mo2Codecs/downloads';
 import { deleteDownload, hideDownload, unhideDownload, type DownloadCommandResult } from '../install/downloadSidecar';
-import { nexusSlugForGame } from '../tables/gamePaths';
-import type { InstallChoice } from '../install/install';
-import type { InstallFromArchiveOutcome } from './modManagementCommands';
+import { defaultModName, installFromArchive, type InstallChoice, type InstallTarget } from '../install/install';
 import type { DownloadNode, DownloadsProvider } from './DownloadsProvider';
 import type { DownloadFile, Instance } from '../instance/instance';
 import type { Reporter } from '../ports/reporter';
@@ -52,14 +50,33 @@ async function pickUpgradeChoice(name: string, candidates: readonly UpgradeCandi
   return picked?.choice;
 }
 
-// Pre-supplying the archive path keeps the install command's file-picker from appearing. The
-// row's own mod id, file id and version are what it is told: the view re-reads no sidecar, and
-// install marks it installed.
+/** What installing the clicked row needs beyond the row itself: the name only the user can give
+ *  a new mod, already validated against the instance, and the FOMOD notice. Both are the
+ *  composition root's, which is what lets this view call install itself. */
+export interface DownloadInstallDeps {
+  /** `undefined` is the user declining to name it, which installs nothing. */
+  nameNewMod: (defaultName: string) => Thenable<string | undefined>;
+  warnIfFomod: (name: string, isFomod: boolean) => void;
+}
+
+// An upgrade arrives already confirmed from the pick above and names its own folder, so only a
+// new mod reaches the name prompt.
+async function resolveTarget(
+  choice: InstallChoice, archivePath: string, nameNewMod: DownloadInstallDeps['nameNewMod'],
+): Promise<InstallTarget | undefined> {
+  if (choice.kind === 'upgrade') return choice;
+  const name = await nameNewMod(defaultModName(archivePath));
+  return name ? { kind: 'new', name } : undefined;
+}
+
+// The row holds the archive's path and its own mod id, file id and version, so the view re-reads
+// no sidecar; install is called for what it is, and install marks the download installed.
 async function installArchive(
-  row: DownloadFile, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  row: DownloadFile, instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  deps: DownloadInstallDeps,
 ): Promise<void> {
   const { name } = row;
-  let outcome: InstallFromArchiveOutcome;
+  let downloadRefusal: string | undefined;
   try {
     const candidates = selectUpgradeCandidates(instance.value, row);
     let choice: InstallChoice = { kind: 'new' };
@@ -68,23 +85,27 @@ async function installArchive(
       if (!picked) return; // Esc: install nothing
       choice = picked;
     }
-    outcome = (await vscode.commands.executeCommand<InstallFromArchiveOutcome | undefined>(
-      'modbench.modList.installFromArchive',
-      row.path, row.modID, row.fileID, row.version, choice,
-    )) ?? { installed: false };
+    const target = await resolveTarget(choice, row.path, deps.nameNewMod);
+    if (!target) return;
+    const outcome = await installFromArchive(instanceRoot, target, row.path, {
+      gameName: instance.value.gameRelease, modID: row.modID, fileID: row.fileID, version: row.version,
+    });
+    if (!outcome.applied) throw new Error(outcome.refusal);
+    deps.warnIfFomod(target.name, outcome.isFomod);
+    downloadRefusal = outcome.downloadRefusal;
   } catch (err) {
     // ADR-0019: explicit user action failed -> error notification + log.
     reporter.report('error', `Failed to install "${name}".`, message(err));
     return;
   }
-  if (!outcome.installed || outcome.downloadRefusal === undefined) return;
+  if (downloadRefusal === undefined) return;
   // ADR-0019: integrity/silent-wrong-state (partial save) — the mod IS installed, only its
   // Downloads bookkeeping failed. Must not read as "install failed", or the user may retry and
   // get a duplicate mod.
   reporter.report(
     'warning',
     `"${name}" was installed, but its Downloads status could not be updated — see the Modbench output log.`,
-    outcome.downloadRefusal,
+    downloadRefusal,
   );
 }
 
@@ -147,28 +168,27 @@ export async function deleteArchives(
   for (const name of names) await trashOneArchive(instanceRoot, name, reporter, () => Promise.resolve(true));
 }
 
-// The game and the mod id both come from the value, which holds them already.
-async function visitOnNexus(gameRelease: string, modID: string): Promise<void> {
-  const slug = nexusSlugForGame(gameRelease);
-  await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${slug}/mods/${modID}`));
+// The slug and the mod id both come from the value, which holds them already.
+async function visitOnNexus(nexusSlug: string, modID: string): Promise<void> {
+  await vscode.env.openExternal(vscode.Uri.parse(`https://www.nexusmods.com/${nexusSlug}/mods/${modID}`));
 }
 
 /** Clicked row only, ignoring the rest of any multi-selection: MO2 does not batch Install
  *  either, and batching the navigational actions is "open five browser tabs". VS Code's
  *  `(clickedItem, selectedItems[])` selection argument is unused here. */
 export function registerDownloadsSingleRowCommands(
-  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter,
+  instanceRoot: string, instance: Pick<Instance, 'value'>, reporter: Reporter, install: DownloadInstallDeps,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('modbench.downloads.install', (node?: DownloadNode) => {
-      if (node?.row.name) void installArchive(node.row, instance, reporter);
+      if (node?.row.name) void installArchive(node.row, instanceRoot, instance, reporter, install);
     }),
     // A no-op without a mod id; the native menu's `hasModID` `when` clause is the other guard.
     vscode.commands.registerCommand('modbench.downloads.visitNexus', (node?: DownloadNode) => {
       const row = node?.row;
       if (!row?.modID) return;
       const modID = row.modID;
-      void runRowAction('Visit on Nexus', row.name, reporter, () => visitOnNexus(instance.value.gameRelease, modID));
+      void runRowAction('Visit on Nexus', row.name, reporter, () => visitOnNexus(instance.value.nexusSlug, modID));
     }),
     // OS-open the archive in the system's associated application.
     vscode.commands.registerCommand('modbench.downloads.openFile', (node?: DownloadNode) => {
