@@ -2,10 +2,11 @@
 // module asks it, and the three files below open the extension's own storage, never the instance.
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { extname, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import ts from 'typescript';
+import { tsFiles } from '../../test/tsFiles';
 
 const SRC = join(__dirname, '..', '..');
 const BOX = join('mo2Files') + sep;
@@ -23,16 +24,8 @@ const NOT_THE_INSTANCE = [
 ];
 
 // Production files only: a test builds a real MO2 tree of its own and opens it directly.
-function productionFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name === 'generated' || entry.name === 'test') continue;
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...productionFiles(path));
-    else if (extname(entry.name) === '.ts' && !entry.name.endsWith('.test.ts')) out.push(path);
-  }
-  return out;
-}
+const productionFiles = (dir: string): string[] =>
+  tsFiles(dir, { exclude: ['generated', 'test'], tsx: false, includeTests: false });
 
 function importSpecifiers(sourceText: string, fileName: string): string[] {
   const source = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true);
