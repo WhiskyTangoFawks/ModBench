@@ -7,9 +7,9 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
-import { fakeUri } from '../test/vscodeMock';
-import { present } from '../ports/present';
+import { HiddenDownloadDecorationProvider } from '../HiddenDownloadDecorationProvider';
+import { fakeUri } from '../../test/vscodeMock';
+import { present } from '../../ports/present';
 
 describe('HiddenDownloadDecorationProvider', () => {
   const instanceRoot = '/instance';

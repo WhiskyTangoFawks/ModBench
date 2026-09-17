@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
+import * as path from 'node:path';
 import { ModListProvider, ModNode, OverwriteNode, OVERWRITE_NODE_KIND, SeparatorNode } from './ModListProvider';
 import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
 import type { Instance } from '../instance/instance';

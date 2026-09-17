@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile } from '../test/vscodeMock';
+import { TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor, uriFile } from '../../test/vscodeMock';
 
 const { registerCommand, showOpenDialog } = vi.hoisted(() => ({
   registerCommand: vi.fn((_id: string, handler: (...args: unknown[]) => unknown) => ({ dispose: vi.fn(), handler })),
@@ -18,22 +18,22 @@ const { installFromArchive, installFromFolder } = vi.hoisted(() => ({
   installFromFolder: vi.fn(),
 }));
 
-vi.mock('../install/install', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../install/install')>()),
+vi.mock('../../install/install', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../install/install')>()),
   installFromArchive, installFromFolder,
 }));
 
 const { uninstallMod } = vi.hoisted(() => ({ uninstallMod: vi.fn() }));
 
-vi.mock('../modlist/modlist', () => ({
+vi.mock('../../modlist/modlist', () => ({
   createEmptyMod: vi.fn(), deleteSeparator: vi.fn(), insertSeparator: vi.fn(),
   moveModToSeparator: vi.fn(), renameSeparator: vi.fn(), uninstallMod,
 }));
 
-import { registerModContextCommands, registerModInstallCommands, type ModInstallDeps } from './modManagementCommands';
-import { ModNode } from './ModListProvider';
-import { scriptedDialog } from '../test/surfacingDoubles';
-import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
+import { registerModContextCommands, registerModInstallCommands, type ModInstallDeps } from '../modManagementCommands';
+import { ModNode } from '../ModListProvider';
+import { scriptedDialog } from '../../test/surfacingDoubles';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 function invoke(commandId: string, ...args: unknown[]): Promise<unknown> {
   const call = registerCommand.mock.calls.find((c) => c[0] === commandId);

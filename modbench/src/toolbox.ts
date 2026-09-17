@@ -476,7 +476,8 @@ function buildMo2Side(own: Own, deps: ToolboxDeps): Mo2Side | undefined {
   // in the applied outcome is logged here, because no caller is left to hear it.
   own(instance.subscribe(() => void reconcile().catch((e: unknown) => outputChannel.error(
     `[toolbox] handing mEdit the load order threw: ${e instanceof Error ? e.message : String(e)}`))));
-  own(modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)));
+  own(modListView.onDidChangeCheckboxState((e) =>
+    onModCheckboxChanged(e, modListProvider, reporterFor('modList.checkbox'))));
   ownAll(own, registerModListCoreCommands(modListProvider));
   ownAll(own, registerToolboxCommands({
     instanceRoot, instance, outputChannel, updateProfileDescription, reporterFor, ask,

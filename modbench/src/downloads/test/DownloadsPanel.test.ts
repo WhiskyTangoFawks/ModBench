@@ -10,8 +10,8 @@ const { executeCommand, registerCommand, showErrorMessage, showTextDocument, sho
   fsDelete: vi.fn(),
 }));
 
-import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../test/vscodeMock';
-import { present } from '../ports/present';
+import { TreeItem, TreeItemCollapsibleState, ThemeIcon, ThemeColor, MarkdownString, type FakeUri } from '../../test/vscodeMock';
+import { present } from '../../ports/present';
 
 vi.mock('vscode', () => ({
   commands: { executeCommand, registerCommand },
@@ -28,8 +28,8 @@ vi.mock('vscode', () => ({
 
 const { installFromArchive } = vi.hoisted(() => ({ installFromArchive: vi.fn() }));
 
-vi.mock('../install/install', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../install/install')>()),
+vi.mock('../../install/install', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../install/install')>()),
   installFromArchive,
 }));
 
@@ -43,13 +43,13 @@ import {
   registerDownloadsSingleRowCommands,
   registerDownloadsSortCommand,
   type DownloadInstallDeps,
-} from './DownloadsPanel';
-import { DownloadNode, type DownloadsProvider } from './DownloadsProvider';
-import type { DownloadRow } from '../mo2Codecs/downloads';
-import type { Instance, InstanceValue } from '../instance/instance';
-import { recordingReporter, scriptedDialog, assertAskedOnce } from '../test/surfacingDoubles';
-import { downloadRowFixture } from '../test/mo2/downloadRowFixture';
-import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
+} from '../DownloadsPanel';
+import { DownloadNode, type DownloadsProvider } from '../DownloadsProvider';
+import type { DownloadRow } from '../../mo2Codecs/downloads';
+import type { Instance, InstanceValue } from '../../instance/instance';
+import { recordingReporter, scriptedDialog, assertAskedOnce } from '../../test/surfacingDoubles';
+import { downloadRowFixture } from '../../test/mo2/downloadRowFixture';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
 
 // The row the Instance would publish for this instance root: its two paths are what the panel
 // opens, so every gesture is driven by the same tree the test wrote.

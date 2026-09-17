@@ -1,11 +1,16 @@
 // A file the Downloads view read of its own is a second generation of a row the Instance's value
 // already holds (ADR-0015 invariant 6); a file it wrote skipped the commands box.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { present } from '../ports/present';
+import { present } from '../../ports/present';
 
-const VIEW_FILES = ['DownloadsPanel.ts', 'DownloadsProvider.ts', 'HiddenDownloadDecorationProvider.ts'];
+const VIEW_DIR = join(__dirname, '..');
+
+// Walked, never listed: a file added to the box is bound by the rule the day it lands.
+const VIEW_FILES = readdirSync(VIEW_DIR)
+  .filter((name) => name.endsWith('.ts') && !name.endsWith('.test.ts'))
+  .sort();
 
 const FS_MODULES = ['fs', 'fs/promises', 'node:fs', 'node:fs/promises'];
 
@@ -28,10 +33,14 @@ function fileAccessIn(source: string): string[] {
   return [...imported, ...FS_CALLS.filter((call) => new RegExp(`\\b${call}\\(`).test(code(source)))];
 }
 
-const read = (file: string): string => readFileSync(join(__dirname, file), 'utf8');
+const read = (file: string): string => readFileSync(join(VIEW_DIR, file), 'utf8');
 
 describe('the Downloads view imports no filesystem module and names no filesystem call', () => {
-  it('names every file the view is made of', () => {
+  it('walks every file the view is made of', () => {
+    expect(VIEW_FILES).toEqual(expect.arrayContaining([
+      'DownloadsPanel.ts', 'DownloadsProvider.ts', 'HiddenDownloadDecorationProvider.ts',
+      'downloadRows.ts', 'errorNode.ts', 'instanceFirstRead.ts', 'upgradeCandidates.ts',
+    ]));
     for (const file of VIEW_FILES) expect(read(file).length).toBeGreaterThan(0);
   });
 

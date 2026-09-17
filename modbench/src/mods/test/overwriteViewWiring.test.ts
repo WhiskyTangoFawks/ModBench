@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon, ThemeColor,
   uriFile, fakeUri, DataTransferItem, DataTransfer,
-} from '../test/vscodeMock';
+} from '../../test/vscodeMock';
 
 const { registerFileDecorationProvider, registerCommand } = vi.hoisted(() => ({
   registerFileDecorationProvider: vi.fn((provider: unknown) => ({ dispose: vi.fn(), provider })),
@@ -19,14 +19,14 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-import { ModListProvider, OverwriteNode } from './ModListProvider';
-import { registerOverwriteView } from './modManagementCommands';
-import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import type { InstanceValue, InstanceView } from '../instance/instance';
-import { recordingReporter } from '../test/surfacingDoubles';
-import { present } from '../ports/present';
-import { expectInstanceOf } from '../test/expectInstanceOf';
-import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
+import { ModListProvider, OverwriteNode } from '../ModListProvider';
+import { registerOverwriteView } from '../modManagementCommands';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import type { InstanceValue, InstanceView } from '../../instance/instance';
+import { recordingReporter } from '../../test/surfacingDoubles';
+import { present } from '../../ports/present';
+import { expectInstanceOf } from '../../test/expectInstanceOf';
+import { OverwriteDecorationProvider } from '../OverwriteDecorationProvider';
 
 const ROOT = join('/my', 'mo2', 'instance');
 

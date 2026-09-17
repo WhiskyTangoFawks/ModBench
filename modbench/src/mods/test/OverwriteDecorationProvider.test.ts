@@ -6,9 +6,9 @@ vi.mock('vscode', () => ({
   Uri: { file: (p: string) => ({ fsPath: p, toString: () => `file://${p}` }) },
 }));
 
-import { OverwriteDecorationProvider } from './OverwriteDecorationProvider';
-import { fakeUri } from '../test/vscodeMock';
-import { present } from '../ports/present';
+import { OverwriteDecorationProvider } from '../OverwriteDecorationProvider';
+import { fakeUri } from '../../test/vscodeMock';
+import { present } from '../../ports/present';
 
 describe('OverwriteDecorationProvider', () => {
   const instanceRoot = '/instance';

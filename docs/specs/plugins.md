@@ -834,7 +834,7 @@ overflow, then native **Collapse All** last.
   surface rather than covered by a test that would only restate the call.
 - **Prior art**: `modlistText.test.ts`, `metaIni.test.ts`, `statusChecker.test.ts` — same
   fixture-in/value-out style; instance fixtures live under
-  `modbench/src/modmanager/test/fixtures/`.
+  `modbench/src/test/mo2/fixtures/`.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the tree renders from
   `plugins.txt` before mEdit has ever launched; checkbox toggle, drag-reorder and the name filter
   round-trip whatever the client reports; a client that stops disturbs neither the load order, the

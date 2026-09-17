@@ -28,7 +28,17 @@ const CORE_BOXES: Record<string, string[]> = {
   client: ['wire'],
 };
 
-const REFERENCING_BOXES = { ...DRIVEN_BOXES, ...CORE_BOXES };
+
+// The driving band: each view reads a value and fires a command, with the reference list
+// target-architecture-references.d2 draws for it.
+const VIEW_BOXES: Record<string, string[]> = {
+  mods: ['install', 'instance', 'modlist', 'ports'],
+  downloads: ['install', 'instance', 'ports'],
+  plugins: ['client', 'instance', 'pluginsCommands', 'ports'],
+  editor: ['client', 'ports', 'wire'],
+};
+
+const REFERENCING_BOXES = { ...DRIVEN_BOXES, ...CORE_BOXES, ...VIEW_BOXES };
 
 const BOXES = [...KERNEL_BOXES, ...Object.keys(REFERENCING_BOXES)];
 
@@ -100,6 +110,21 @@ describe('one composite project per box', () => {
     expect(parsed(kernelProject(box)).options.types).toEqual(['node']);
   });
 
+  // A view is a driving adapter onto VS Code's own trees, panels and palette — the one band
+  // whose whole reason to exist is the extension host.
+  it.each(Object.keys(VIEW_BOXES))('%s sees the Node and VS Code types', (box) => {
+    expect(parsed(kernelProject(box)).options.types).toEqual(['node', 'vscode']);
+  });
+
+  // Rival this forbids: a view reaching a codec for a splice or a table for a game name, which
+  // is what the Instance publishing the value it renders exists to make unnecessary.
+  it.each(Object.keys(VIEW_BOXES))('%s references neither the codecs nor the tables', (box) => {
+    expect(referencePaths(kernelProject(box)))
+      .not.toEqual(expect.arrayContaining([join('src', 'mo2Codecs'), join('src', 'tables')]));
+    expect(VIEW_BOXES[box]).not.toContain('mo2Codecs');
+    expect(VIEW_BOXES[box]).not.toContain('tables');
+  });
+
   // The rule the compiler enforces for the driven and core columns: each box references exactly
   // the arrows the diagram draws for it, so a new dependency fails `tsc -b` rather than
   // compiling quietly.
@@ -146,6 +171,12 @@ describe('the legacy project holds every file not yet moved', () => {
   // containment check above vacuously.
   it('finds the codecs box’s own tests', () => {
     expect(testFiles('mo2Codecs').length).toBeGreaterThan(5);
+  });
+
+  // The same vacuity, one level down: a view's tests sit under its own `test/`, and the legacy
+  // project's per-box exclusion is a glob that would swallow one left beside the source.
+  it.each(Object.keys(VIEW_BOXES))('finds %s’s own tests', (box) => {
+    expect(testFiles(box).length).toBeGreaterThan(0);
   });
 });
 

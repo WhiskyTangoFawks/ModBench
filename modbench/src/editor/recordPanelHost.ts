@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as os from 'os';
+import * as path from 'node:path';
+import * as os from 'node:os';
 import type { MEditClient } from '../client';
 import { ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode } from './ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './ActiveRecordTracker';
@@ -12,8 +12,8 @@ import { RecordDecorationProvider } from './RecordDecorationProvider';
 import { makeOnRecordEdited, type RecordTreeSync } from './onRecordEdited';
 import { registerRecordPanelContextCommands } from './recordPanelContextCommands';
 import { registerRecordLifecycleCommands, registerRecordCopyCommands } from './recordLifecycleCommands';
-import { makeReporter } from '../reporter';
-import { askQuestion } from '../dialog';
+import type { Reporter } from '../ports/reporter';
+import type { AskQuestion } from '../ports/dialog';
 
 export interface EditorCommandDeps {
   context: vscode.ExtensionContext;
@@ -43,6 +43,10 @@ export interface EditorCommandDeps {
   refreshMatchingPlugins: () => void;
   refreshSourceControlFor: (plugin: string) => void;
   outputChannel: vscode.LogOutputChannel;
+  // The two ports (ADR-0019), built over the window API by the composition root: this box
+  // surfaces a failure and asks a question, and implements neither.
+  reporterFor: (tag: string) => Reporter;
+  ask: AskQuestion;
 }
 // ADR-0007: the single write path. A panel showing this record re-reads on rows-changed from the
 // notification stream (ADR-0015 invariant 3), not a broadcast from here.
@@ -57,7 +61,7 @@ function recordPanelWriteDeps(
       (plugin) => deps.refreshSourceControlFor(plugin),
     ),
     // ADR-0019 surfacing for a refused edit, and for a failed clipboard write.
-    reporter: makeReporter(deps.outputChannel, 'recordPanel'),
+    reporter: deps.reporterFor('recordPanel'),
   };
 }
 
@@ -86,9 +90,9 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
     // Editor owns the record gestures (create/delete/renumber/copy) — registered once, here,
     // rather than from the Plugins-row command registration.
     ...registerRecordLifecycleCommands(
-      meditClient, outputChannel, makeReporter(outputChannel, 'recordLifecycle'), askQuestion, treeSync, refreshMatchingPlugins),
+      meditClient, outputChannel, deps.reporterFor('recordLifecycle'), deps.ask, treeSync, refreshMatchingPlugins),
     ...registerRecordCopyCommands(
-      meditClient, outputChannel, makeReporter(outputChannel, 'recordCopy'), askQuestion, treeSync, refreshMatchingPlugins),
+      meditClient, outputChannel, deps.reporterFor('recordCopy'), deps.ask, treeSync, refreshMatchingPlugins),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
@@ -127,7 +131,7 @@ export function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposab
         try {
           await vscode.env.clipboard.writeText(text);
         } catch (err) {
-          makeReporter(outputChannel, 'referencedByTree.copy').report(
+          deps.reporterFor('referencedByTree.copy').report(
             'error', 'Could not copy to the clipboard.', err instanceof Error ? err.message : String(err));
         }
       }),

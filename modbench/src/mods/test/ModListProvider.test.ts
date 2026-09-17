@@ -1,20 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Mod, ModlistEntry, Separator } from '../instance/instance';
-import { parseModlist, moveModInText, moveSeparatorBlockInText, separatorBlockNames, writeModlist } from '../mo2Codecs/modlistText';
-import { dropIndexIn, type Drop } from '../mo2Codecs/dropIndex';
+import type { Mod, ModlistEntry, Separator } from '../../instance/instance';
+import { parseModlist, moveModInText, moveSeparatorBlockInText, separatorBlockNames, writeModlist } from '../../mo2Codecs/modlistText';
+import { dropIndexIn, type Drop } from '../../mo2Codecs/dropIndex';
 
 // The entry names a splice counts its index among — the same read the command makes.
 const entryNames = (text: string): string[] => parseModlist(text).map((e) => e.name);
-import type { InstanceValue } from '../instance/instance';
-import type { ModStatusResult } from '../instance/statusChecker';
-import { present } from '../ports/present';
+import type { InstanceValue } from '../../instance/instance';
+import type { ModStatusResult } from '../../instance/statusChecker';
+import { present } from '../../ports/present';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFile, DataTransferItem, DataTransfer, FakeCancellationToken, fakeUri,
-} from '../test/vscodeMock';
+} from '../../test/vscodeMock';
 import type {
   setModEnabled, reorderMod, moveModToSeparator, reorderSeparatorBlock,
-} from '../modlist/modlist';
+} from '../../modlist/modlist';
 
 vi.mock('vscode', () => ({
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
@@ -32,19 +32,19 @@ const {
   moveModToSeparatorMock: vi.fn<typeof moveModToSeparator>(),
   reorderSeparatorBlockMock: vi.fn<typeof reorderSeparatorBlock>(),
 }));
-vi.mock('../modlist/modlist', () => ({
+vi.mock('../../modlist/modlist', () => ({
   setModEnabled: (...args: Parameters<typeof setModEnabledMock>) => setModEnabledMock(...args),
   reorderMod: (...args: Parameters<typeof reorderModMock>) => reorderModMock(...args),
   moveModToSeparator: (...args: Parameters<typeof moveModToSeparatorMock>) => moveModToSeparatorMock(...args),
   reorderSeparatorBlock: (...args: Parameters<typeof reorderSeparatorBlockMock>) => reorderSeparatorBlockMock(...args),
 }));
 
-import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from './ModListProvider';
-import { ErrorNode } from './errorNode';
-import { recordingReporter } from '../test/surfacingDoubles';
-import { expectInstanceOf, expectInstancesOf } from '../test/expectInstanceOf';
-import { instanceValueFixture } from '../test/mo2/instanceValueFixture';
-import type { Reporter } from '../ports/reporter';
+import { ModListProvider, CountNode, SeparatorNode, ModNode, OverwriteNode, type ModlistNode } from '../ModListProvider';
+import { ErrorNode } from '../errorNode';
+import { recordingReporter } from '../../test/surfacingDoubles';
+import { expectInstanceOf, expectInstancesOf } from '../../test/expectInstanceOf';
+import { instanceValueFixture } from '../../test/mo2/instanceValueFixture';
+import type { Reporter } from '../../ports/reporter';
 
 const INSTANCE_ROOT = '/instance';
 const ACTIVE_PROFILE = 'Default';

@@ -5,14 +5,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
 
 vi.mock('vscode', () => fakeVscodeModule());
 
-import { Instance } from '../instance/instance';
-import { resolvePluginDestination, type PluginDestinationChoice } from './pluginDestination';
-import { appendPlugin } from '../pluginsCommands/plugins';
-import { present } from '../ports/present';
+import { Instance } from '../../instance/instance';
+import { resolvePluginDestination, type PluginDestinationChoice } from '../pluginDestination';
+import { appendPlugin } from '../../pluginsCommands/plugins';
+import { present } from '../../ports/present';
 
 const PROFILE = 'Default';
 

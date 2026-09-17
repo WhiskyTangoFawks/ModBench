@@ -31,7 +31,17 @@ const CORE_BOXES: Record<string, string[]> = {
   client: ['wire'],
 };
 
-const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES };
+
+// The driving band: each view reads a value and fires a command, with the reference list
+// target-architecture-references.d2 draws for it.
+const VIEW_BOXES: Record<string, string[]> = {
+  mods: ['install', 'instance', 'modlist', 'ports'],
+  downloads: ['install', 'instance', 'ports'],
+  plugins: ['client', 'instance', 'pluginsCommands', 'ports'],
+  editor: ['client', 'ports', 'wire'],
+};
+
+const REFERENCING_BOXES: Record<string, string[]> = { ...DRIVEN_BOXES, ...CORE_BOXES, ...VIEW_BOXES };
 
 const boxRoot = (box: string): string => join(SRC, box);
 
@@ -104,7 +114,7 @@ const PACKAGE_IMPORTERS = new Set(['client']);
 // including the file system — MO2 files is the one door onto the instance, and it is one of these.
 function isAllowedDrivenSpecifier(spec: string, fromFile: string, box: string): boolean {
   if (spec.startsWith('node:')) return true;
-  if (spec === 'vscode') return box === 'instance';
+  if (spec === 'vscode') return box === 'instance' || box in VIEW_BOXES;
   if (!spec.startsWith('.')) return PACKAGE_IMPORTERS.has(box);
   const resolved = resolve(dirname(fromFile), spec);
   const roots = [boxRoot(box), ...present(REFERENCING_BOXES[box], `a reference list for "${box}"`).map(boxRoot)];
@@ -200,6 +210,10 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
       .toEqual(['modlist', 'pluginsCommands', 'instanceCommands', 'install', 'deploy', 'client']);
   });
 
+  it('names the four views the driving band draws, less the Toolbox', () => {
+    expect(Object.keys(VIEW_BOXES)).toEqual(['mods', 'downloads', 'plugins', 'editor']);
+  });
+
   it('every box is a real directory holding production files', () => {
     for (const box of Object.keys(REFERENCING_BOXES)) {
       expect(existsSync(boxRoot(box))).toBe(true);
@@ -239,6 +253,30 @@ describe('a driven or core box reaches only the boxes the diagram draws an arrow
   it('allows a package only in the client', () => {
     expect(isAllowedDrivenSpecifier('openapi-fetch', join(boxRoot('client'), 'p.ts'), 'client')).toBe(true);
     expect(isAllowedDrivenSpecifier('openapi-fetch', join(boxRoot('install'), 'p.ts'), 'install')).toBe(false);
+  });
+
+  // Rival: a view taking a splice helper or a game name straight from the kernel instead of
+  // from the value the Instance publishes and the reply a command gives it.
+  it('refuses a codec and a table in every view', () => {
+    for (const box of Object.keys(VIEW_BOXES)) {
+      expect(isAllowedDrivenSpecifier('../mo2Codecs/modlistText', join(boxRoot(box), 'p.ts'), box)).toBe(false);
+      expect(isAllowedDrivenSpecifier('../tables/gamePaths', join(boxRoot(box), 'p.ts'), box)).toBe(false);
+    }
+  });
+
+  // A view is the one band whose whole reason to exist is the extension host.
+  it('allows vscode in every view', () => {
+    for (const box of Object.keys(VIEW_BOXES)) {
+      expect(isAllowedDrivenSpecifier('vscode', join(boxRoot(box), 'p.ts'), box)).toBe(true);
+    }
+  });
+
+  // Rival: one view reaching another's tree — three views own a copy of the error row rather
+  // than sharing one, so a shared import is a boundary crossing, not a convenience.
+  it('refuses one view reaching into another', () => {
+    expect(isAllowedDrivenSpecifier('../downloads/errorNode', join(boxRoot('mods'), 'p.ts'), 'mods')).toBe(false);
+    expect(isAllowedDrivenSpecifier('../plugins/PluginTreeProvider', join(boxRoot('editor'), 'p.ts'), 'editor')).toBe(false);
+    expect(isAllowedDrivenSpecifier('../mods/ModListProvider', join(boxRoot('plugins'), 'p.ts'), 'plugins')).toBe(false);
   });
 
   it('allows the boxes each one does reference', () => {

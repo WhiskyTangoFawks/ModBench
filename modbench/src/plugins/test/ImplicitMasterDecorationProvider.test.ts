@@ -6,9 +6,9 @@ vi.mock('vscode', () => ({
 }));
 
 import * as vscode from 'vscode';
-import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
-import { fakeUri } from '../test/vscodeMock';
-import { present } from '../ports/present';
+import { ImplicitMasterDecorationProvider } from '../ImplicitMasterDecorationProvider';
+import { fakeUri } from '../../test/vscodeMock';
+import { present } from '../../ports/present';
 
 // MO2 grays a `forceLoaded` row's name (`pluginlist.cpp`) — the one piece of its
 // forced-master presentation the platform lets this surface adopt verbatim.

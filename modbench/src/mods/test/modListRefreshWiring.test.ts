@@ -6,12 +6,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fakeVscodeModule } from '../test/mo2/fakeVscodeWatcher';
-import { cloneCorpusFixture, DEFAULT_MODLIST } from '../test/mo2/corpusFixture';
+import { fakeVscodeModule } from '../../test/mo2/fakeVscodeWatcher';
+import { cloneCorpusFixture, DEFAULT_MODLIST } from '../../test/mo2/corpusFixture';
 import {
   TreeItem, TreeItemCollapsibleState, TreeItemCheckboxState, EventEmitter, ThemeIcon,
   uriFile, DataTransferItem, DataTransfer,
-} from '../test/vscodeMock';
+} from '../../test/vscodeMock';
 
 vi.mock('vscode', () => ({
   ...fakeVscodeModule(),
@@ -19,8 +19,8 @@ vi.mock('vscode', () => ({
   Uri: { file: uriFile }, DataTransferItem, DataTransfer,
 }));
 
-import { Instance } from '../instance/instance';
-import { ModListProvider, ModNode } from './ModListProvider';
+import { Instance } from '../../instance/instance';
+import { ModListProvider, ModNode } from '../ModListProvider';
 
 async function setup() {
   const root = await cloneCorpusFixture();

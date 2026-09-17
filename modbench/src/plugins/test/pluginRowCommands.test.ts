@@ -32,7 +32,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics,
+  registerTrackCommand, registerRebaseCommand, compileAndReport, publishCompileDiagnostics, type PluginsViewProgress,
   registerSaveAndCompileCommand, registerCompileAtRefCommand,
 } from '../pluginRowCommands';
 import { originFolder } from '../../instance/loadOrderSnapshot';
@@ -43,7 +43,6 @@ import { recordingReporter, scriptedDialog } from '../../test/surfacingDoubles';
 import { FakeLogOutputChannel } from '../../test/fakeOutputChannel';
 import { FakeDiagnosticCollection } from '../../test/vscodeMock';
 import { pluginMetadataFixture, compileResultFixture } from '../../client/test/fixtures';
-import type { ExtensionSession } from '../../session';
 import { present } from '../../ports/present';
 
 beforeEach(() => {
@@ -65,14 +64,15 @@ function clientWithOrigin(name: string, origin: string): InMemoryMEditClient {
 
 describe('registerTrackCommand', () => {
   function invokeTrack(client: InMemoryMEditClient, onTracked = vi.fn().mockResolvedValue(undefined)) {
-    const session: ExtensionSession = { pluginsTreeView: undefined, pluginsNameFilter: undefined };
+    const said: (string | undefined)[] = [];
+    const progress: PluginsViewProgress = { while: (work) => work(), say: (message) => said.push(message) };
     const reporter = recordingReporter();
     const treeProvider = new PluginTreeProvider(client);
     const refresh = vi.spyOn(treeProvider, 'refresh').mockImplementation(() => { /* no-op */ });
-    registerTrackCommand(session, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked);
+    registerTrackCommand(progress, client, new FakeLogOutputChannel(), reporter, treeProvider, onTracked);
     return {
       handler: present(handlers.get('modbench.pluginListTree.track'), 'the track command registerTrackCommand registers'),
-      onTracked, reporter, refresh,
+      onTracked, reporter, refresh, said,
     };
   }
 

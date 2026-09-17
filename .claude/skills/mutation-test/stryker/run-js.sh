@@ -58,7 +58,7 @@ fi
 
 MUTATE_CSV=""
 if $ALL; then
-    SCOPE="config scope (src/modmanager + src/medit)"
+    SCOPE="config scope (the views + src/medit)"
 elif [[ -n "$FILE_FILTER" ]]; then
     # Config exclusions are not applied: naming a file *is* the request to mutate it.
     [[ "$FILE_FILTER" == */* ]] && MUTATE_CSV="$FILE_FILTER" || MUTATE_CSV="src/**/$FILE_FILTER"
@@ -75,8 +75,9 @@ else
     # `/` after `**`, which silently skips files at the top of the directory; a bare `*`
     # crosses slashes. Keep these roots in step with `mutate` in stryker.config.json — a
     # root listed there but missing here mutates on `--all` and never on a diff.
-    CHANGED=$( { git diff --name-only --relative "$FULL_SHA" -- 'src/modmanager/*.ts' 'src/medit/*.ts' || true; \
-                 git ls-files --others --exclude-standard -- 'src/modmanager/*.ts' 'src/medit/*.ts' || true; } | sort -u)
+    ROOTS=('src/mods/*.ts' 'src/downloads/*.ts' 'src/plugins/*.ts' 'src/editor/*.ts' 'src/medit/*.ts')
+    CHANGED=$( { git diff --name-only --relative "$FULL_SHA" -- "${ROOTS[@]}" || true; \
+                 git ls-files --others --exclude-standard -- "${ROOTS[@]}" || true; } | sort -u)
     MUTATE_LIST=$(printf '%s\n' "$CHANGED" | python3 -c '
 import fnmatch, json, sys
 neg = [p[1:] for p in json.load(open(sys.argv[1]))["mutate"] if p.startswith("!")]
@@ -88,7 +89,7 @@ for line in sys.stdin:
         print(f)
 ' "$CONFIG")
     if [[ -z "$MUTATE_LIST" ]]; then
-        echo "Scope: nothing to mutate — no modmanager TypeScript changes vs ${SINCE_REF} (${FULL_SHA:0:8})."
+        echo "Scope: nothing to mutate — no view TypeScript changes vs ${SINCE_REF} (${FULL_SHA:0:8})."
         exit 3
     fi
     MUTATE_CSV=$(printf '%s\n' "$MUTATE_LIST" | paste -sd,)

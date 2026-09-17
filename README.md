@@ -51,8 +51,9 @@ board: each numbered milestone is an epic in priority order, its issues are the 
 
 ```
 modbench/          VS Code extension (TypeScript) + React webview for the compare grid
-  src/modmanager/    Mod Management — pure TS/Node, reads and writes the MO2 instance in place,
-                     never calls the backend
+  src/mods/          Mods view — the modlist tree and every mod gesture, never calling the
+                     backend
+  src/downloads/     Downloads view — the downloads/ tree, its row actions and the upgrade pick
   src/plugins/       Plugins view — the one tree, rows from the Instance and records from the
                      mEdit client, and every plugin gesture (ADR-0017)
   src/editor/        Editor view — the record panel, its message router, the active record and
