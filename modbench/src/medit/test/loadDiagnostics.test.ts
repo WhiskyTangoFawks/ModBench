@@ -3,7 +3,7 @@ import { Diagnostic, Range, DiagnosticSeverity, FakeDiagnosticCollection, fakeUr
 
 vi.mock('vscode', () => ({ Diagnostic, Range, DiagnosticSeverity, Uri: { file: fakeUri } }));
 
-import { publishLoadDiagnoses, groupDiagnosesByPlugin } from '../loadDiagnostics';
+import { publishLoadDiagnoses } from '../loadDiagnostics';
 import type { OriginFolder } from '../../instance/loadOrderSnapshot';
 import type { PluginDiagnosisReport } from '../../client';
 import { present } from '../../ports/present';
@@ -79,16 +79,5 @@ describe('publishLoadDiagnoses', () => {
 
     const [, groupedDiagnostics] = present(entriesOf(collection)[0], 'the sole grouped diagnostic-collection entry');
     expect(groupedDiagnostics.map((d) => d.message)).toEqual(['first', 'second']);
-  });
-});
-
-describe('groupDiagnosesByPlugin', () => {
-  it('keys texts by plugin filename for the tree decoration hand-off', () => {
-    const grouped = groupDiagnosesByPlugin([
-      report('A.esp', 'M', 'first'), report('A.esp', 'M', 'second'), report('B.esp', 'N', 'third'),
-    ]);
-
-    expect(grouped.get('A.esp')).toEqual(['first', 'second']);
-    expect(grouped.get('B.esp')).toEqual(['third']);
   });
 });

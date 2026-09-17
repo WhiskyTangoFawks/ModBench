@@ -60,14 +60,6 @@ export function parseModlist(text: string): ModlistEntry[] {
   return entries;
 }
 
-/** `parseModlist`'s inverse: one `+`/`-` line per entry, in array order. For building a whole
- *  file from scratch — a real edit stays a byte-faithful splice via the functions below. */
-export function writeModlist(entries: readonly ModlistEntry[]): string {
-  return entries
-    .map((e) => `${e.enabled ? '+' : '-'}${e.name}${e.kind === 'separator' ? SEPARATOR_SUFFIX : ''}\n`)
-    .join('');
-}
-
 function findModPrefixIndex(text: string, modName: string): number {
   for (const { start, contentEnd } of lineRanges(text)) {
     if (matchesModLine(text.slice(start, contentEnd), modName)) return start;

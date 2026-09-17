@@ -201,32 +201,8 @@ async function buildRows(
 
 const defaultBuildIndex: BuildIndex = (entries, root) => buildFileConflictIndex(entries, root, () => {});
 
-/** A disabled plugins.txt line is still sent: its missing `*` becomes `enabled: false` rather
- *  than deciding whether the line appears at all (ADR-0013). */
-export async function buildLoadOrderSnapshot(
-  source: Source,
-  instanceRoot: string,
-  dataFolder: string,
-  // The real caller passes an outputChannel-backed buildIndex, so the walker's surfacing does
-  // reach the Output channel; this no-op default only fires for a caller that supplies none.
-  buildIndex: BuildIndex = defaultBuildIndex,
-): Promise<LoadOrderPlugin[]> {
-  const rows = await buildRows(source, instanceRoot, dataFolder, buildIndex);
-  // A definite dataFolder means resolvePluginPaths covers every name, so no row here is ever a
-  // line-only one — checked below rather than assumed.
-  return rows.map(assertResolvedPath);
-}
-
-function assertResolvedPath(row: LoadOrderPlugin | LoadOrderPluginLine): LoadOrderPlugin {
-  if (row.path === undefined) {
-    throw new Error(`Expected "${row.name}" to resolve a physical path with a Data folder set.`);
-  }
-  return row;
-}
-
-/** Same rows `buildLoadOrderSnapshot` computes, over the one read `dataFolder` optional: a listed
- *  name with no mod or overwrite/ copy still gets a row (existence, slot, enabled) rather than
- *  being dropped, its `path` undefined instead of a guess. */
+/** A disabled plugins.txt line is still sent, `enabled: false` (ADR-0013). A listed name with no
+ *  mod or overwrite/ copy still gets a row, its `path` undefined rather than a guess. */
 export async function buildLoadOrderRows(
   source: Source,
   instanceRoot: string,

@@ -26,15 +26,3 @@ export function publishLoadDiagnoses(
   }
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
-
-/** The same reports keyed by plugin filename — one derivation shared by both surfaces, so they
- *  can never disagree. */
-export function groupDiagnosesByPlugin(reports: PluginDiagnosisReport[]): Map<string, string[]> {
-  const byPlugin = new Map<string, string[]>();
-  for (const r of reports) {
-    const list = byPlugin.get(r.plugin) ?? [];
-    list.push(r.text);
-    byPlugin.set(r.plugin, list);
-  }
-  return byPlugin;
-}
